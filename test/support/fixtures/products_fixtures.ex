@@ -17,7 +17,9 @@ defmodule ThamaniDawa.ProductsFixtures do
   @doc "Creates a product under a fresh organization unless `organization_id` is given."
   def product_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {:ok, product} =
       attrs

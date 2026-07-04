@@ -32,7 +32,10 @@ defmodule ThamaniDawaWeb.MonthlyLogComponents do
     """
   end
 
-  attr :entries, :map, required: true, doc: "a %{\"1\" => %{...}, \"2\" => %{...}} map, string-keyed"
+  attr :entries, :map,
+    required: true,
+    doc: "a %{\"1\" => %{...}, \"2\" => %{...}} map, string-keyed"
+
   attr :key_label, :string, default: "#"
 
   slot :col, required: true do

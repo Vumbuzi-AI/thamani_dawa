@@ -47,7 +47,12 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     case GS1Decoder.parse(raw_gs1) do
       {:ok, parsed} ->
         changes =
-          %{gtin: parsed.gtin, batch_no: parsed.batch_no, manufacture_date: parsed.production_date, expiry: parsed.expiry_date}
+          %{
+            gtin: parsed.gtin,
+            batch_no: parsed.batch_no,
+            manufacture_date: parsed.production_date,
+            expiry: parsed.expiry_date
+          }
           |> Enum.reject(fn {_k, v} -> is_nil(v) end)
           |> Map.new()
 
@@ -77,7 +82,13 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     case Batches.create_batch(scope.organization_id, attrs) do
       {:ok, batch} ->
         if socket.assigns.gs1_used do
-          ScanEvents.log_scan_event(scope.organization_id, :receipt, batch.id, user.id, socket.assigns.raw_gs1)
+          ScanEvents.log_scan_event(
+            scope.organization_id,
+            :receipt,
+            batch.id,
+            user.id,
+            socket.assigns.raw_gs1
+          )
         end
 
         {:noreply,
@@ -90,15 +101,26 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     end
   end
 
-  def handle_event("record_usage", %{"batch_id" => batch_id, "quantity" => quantity} = attrs, socket) do
+  def handle_event(
+        "record_usage",
+        %{"batch_id" => batch_id, "quantity" => quantity} = attrs,
+        socket
+      ) do
     scope = socket.assigns.current_scope
 
     opts = [
-      lab_order_id: blank_to_nil(attrs["lab_order_id"]) && String.to_integer(attrs["lab_order_id"]),
+      lab_order_id:
+        blank_to_nil(attrs["lab_order_id"]) && String.to_integer(attrs["lab_order_id"]),
       purpose: blank_to_nil(attrs["purpose"])
     ]
 
-    case LabOrders.record_consumable_usage(scope.organization_id, String.to_integer(batch_id), scope.user.id, String.to_integer(quantity), opts) do
+    case LabOrders.record_consumable_usage(
+           scope.organization_id,
+           String.to_integer(batch_id),
+           scope.user.id,
+           String.to_integer(quantity),
+           opts
+         ) do
       {:ok, _usage} ->
         usable_batches =
           scope.organization_id
@@ -122,7 +144,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
 
   defp batch_label(batch, products_by_id) do
     product = products_by_id[batch.product_id]
-    name = product && (product.generic_name || product.name) || "(unknown product)"
+    name = (product && (product.generic_name || product.name)) || "(unknown product)"
     "#{name} — #{batch.batch_no} (#{batch.remaining_quantity} left, exp. #{batch.expiry})"
   end
 
@@ -146,7 +168,9 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
       <form phx-submit="record_usage" class="flex flex-wrap gap-2 items-end">
         <select name="batch_id" class="select">
           <option value="">Choose a batch</option>
-          <option :for={batch <- @usable_batches} value={batch.id}>{batch_label(batch, @products_by_id)}</option>
+          <option :for={batch <- @usable_batches} value={batch.id}>
+            {batch_label(batch, @products_by_id)}
+          </option>
         </select>
         <input type="number" name="quantity" placeholder="Quantity" class="input" required />
         <input type="number" name="lab_order_id" placeholder="Lab order ID (optional)" class="input" />

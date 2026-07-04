@@ -22,7 +22,6 @@ defmodule ThamaniDawa.GS1Decoder do
   @variable_length_ais ~w(10 21)
   @known_ais Map.keys(@fixed_length_ais) ++ @variable_length_ais
 
-  
   @field_by_ai %{
     "01" => :gtin,
     "10" => :batch_no,
@@ -32,7 +31,14 @@ defmodule ThamaniDawa.GS1Decoder do
     "414" => :gln
   }
 
-  @empty_result %{gtin: nil, batch_no: nil, production_date: nil, expiry_date: nil, serial: nil, gln: nil}
+  @empty_result %{
+    gtin: nil,
+    batch_no: nil,
+    production_date: nil,
+    expiry_date: nil,
+    serial: nil,
+    gln: nil
+  }
 
   @doc """
   Parses a raw GS1 element string into `%{gtin:, batch_no:, production_date:,

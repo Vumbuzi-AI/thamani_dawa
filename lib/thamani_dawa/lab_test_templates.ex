@@ -74,7 +74,8 @@ defmodule ThamaniDawa.LabTestTemplates do
     end)
   end
 
-  defp flag_for(%FieldDefinition{low: low, high: high}, value) when not is_nil(low) and not is_nil(high) do
+  defp flag_for(%FieldDefinition{low: low, high: high}, value)
+       when not is_nil(low) and not is_nil(high) do
     case to_number(value) do
       {:ok, v} when v < low -> "low"
       {:ok, v} when v > high -> "high"

@@ -84,10 +84,16 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       <.header class="mt-6">
         Pending prescriptions
       </.header>
-      <.table id="pending-prescriptions" rows={@pending_prescriptions} row_click={&(~p"/pharmacy/prescriptions/#{&1.id}")}>
+      <.table
+        id="pending-prescriptions"
+        rows={@pending_prescriptions}
+        row_click={&~p"/pharmacy/prescriptions/#{&1.id}"}
+      >
         <:col :let={prescription} label="Status">{Phoenix.Naming.humanize(prescription.status)}</:col>
         <:col :let={prescription} label="Total">{prescription.total_amount}</:col>
-        <:col :let={prescription} label="Paid">{if prescription.has_paid, do: "Yes", else: "No"}</:col>
+        <:col :let={prescription} label="Paid">
+          {if prescription.has_paid, do: "Yes", else: "No"}
+        </:col>
       </.table>
     </Layouts.app_shell>
     """

@@ -79,7 +79,13 @@ defmodule ThamaniDawa.ScanEventsTest do
     setup do
       organization = organization_fixture()
       user = user_fixture(%{organization_id: organization.id})
-      batch = batch_fixture(%{organization_id: organization.id, gtin: "00614141000012", batch_no: "LOT-42"})
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          gtin: "00614141000012",
+          batch_no: "LOT-42"
+        })
 
       %{organization: organization, user: user, batch: batch}
     end
@@ -88,7 +94,13 @@ defmodule ThamaniDawa.ScanEventsTest do
       scanned = "01#{ctx.batch.gtin}10#{ctx.batch.batch_no}"
 
       assert {:ok, %ScanEvent{} = event} =
-               ScanEvents.log_scan_event(ctx.organization.id, :dispense, ctx.batch.id, ctx.user.id, scanned)
+               ScanEvents.log_scan_event(
+                 ctx.organization.id,
+                 :dispense,
+                 ctx.batch.id,
+                 ctx.user.id,
+                 scanned
+               )
 
       assert event.gtin == ctx.batch.gtin
       assert event.batch_no == ctx.batch.batch_no
@@ -101,12 +113,24 @@ defmodule ThamaniDawa.ScanEventsTest do
       scanned = "01#{ctx.batch.gtin}10#{ctx.batch.batch_no}414#{"1234567890123"}"
 
       assert {:ok, %ScanEvent{gln: "1234567890123"}} =
-               ScanEvents.log_scan_event(ctx.organization.id, :transfer_in, ctx.batch.id, ctx.user.id, scanned)
+               ScanEvents.log_scan_event(
+                 ctx.organization.id,
+                 :transfer_in,
+                 ctx.batch.id,
+                 ctx.user.id,
+                 scanned
+               )
     end
 
     test "returns an error when the scanned payload doesn't parse", ctx do
       assert {:error, {:unrecognized_ai, _rest}} =
-               ScanEvents.log_scan_event(ctx.organization.id, :receipt, ctx.batch.id, ctx.user.id, "99garbage")
+               ScanEvents.log_scan_event(
+                 ctx.organization.id,
+                 :receipt,
+                 ctx.batch.id,
+                 ctx.user.id,
+                 "99garbage"
+               )
     end
   end
 end

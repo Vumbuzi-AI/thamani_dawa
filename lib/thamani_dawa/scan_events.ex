@@ -43,7 +43,8 @@ defmodule ThamaniDawa.ScanEvents do
   doesn't parse (see `ThamaniDawa.GS1Decoder.parse/1`).
   """
   def log_scan_event(organization_id, event_type, reference_id, user_id, scanned_gs1_data)
-      when is_integer(organization_id) and event_type in @event_types and is_binary(scanned_gs1_data) do
+      when is_integer(organization_id) and event_type in @event_types and
+             is_binary(scanned_gs1_data) do
     with {:ok, %{gtin: gtin, batch_no: batch_no, gln: gln}} <- GS1Decoder.parse(scanned_gs1_data) do
       create_scan_event(organization_id, %{
         gtin: gtin,

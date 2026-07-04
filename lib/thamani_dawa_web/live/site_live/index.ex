@@ -77,7 +77,9 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
       <div :if={@live_action in [:new, :edit]} class="card bg-base-200 mb-4">
         <div class="card-body">
-          <h2 class="font-semibold mb-2">{if @live_action == :new, do: "Add a site", else: "Edit site"}</h2>
+          <h2 class="font-semibold mb-2">
+            {if @live_action == :new, do: "Add a site", else: "Edit site"}
+          </h2>
           <form phx-submit="save">
             <.input field={@form[:name]} label="Name" required />
             <.input

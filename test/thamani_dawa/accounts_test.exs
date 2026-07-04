@@ -37,7 +37,10 @@ defmodule ThamaniDawa.AccountsTest do
       other_organization = organization_fixture()
 
       assert {:error, changeset} =
-               Accounts.register_user(other_organization.id, valid_user_attributes(%{email: email}))
+               Accounts.register_user(
+                 other_organization.id,
+                 valid_user_attributes(%{email: email})
+               )
 
       assert %{email: ["has already been taken"]} = errors_on(changeset)
     end
@@ -96,7 +99,10 @@ defmodule ThamaniDawa.AccountsTest do
       organization = organization_fixture()
 
       assert {:error, changeset} =
-               Accounts.invite_user(organization.id, nil, %{name: "New Hire", email: valid_user_email()})
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "New Hire",
+                 email: valid_user_email()
+               })
 
       assert %{role: ["can't be blank"]} = errors_on(changeset)
     end

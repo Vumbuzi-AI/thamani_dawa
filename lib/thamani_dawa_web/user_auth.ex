@@ -10,7 +10,6 @@ defmodule ThamaniDawaWeb.UserAuth do
   use ThamaniDawaWeb, :verified_routes
 
   import Plug.Conn
-  import Phoenix.Controller
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.Accounts.Scope
@@ -70,7 +69,8 @@ defmodule ThamaniDawaWeb.UserAuth do
   end
 
   def on_mount(:require_authenticated, _params, session, socket) do
-    socket = Phoenix.Component.assign_new(socket, :current_scope, fn -> scope_for_session(session) end)
+    socket =
+      Phoenix.Component.assign_new(socket, :current_scope, fn -> scope_for_session(session) end)
 
     if socket.assigns.current_scope && socket.assigns.current_scope.user do
       {:cont, socket}

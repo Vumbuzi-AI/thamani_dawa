@@ -56,7 +56,14 @@ defmodule ThamaniDawa.PharmacyLogsTest do
     test "enforces uniqueness of (organization_id, log_type, month, year)" do
       organization = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})
-      pharmacy_log_fixture(%{organization_id: organization.id, site_id: site.id, log_type: "humidity", month: 3, year: 2026})
+
+      pharmacy_log_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        log_type: "humidity",
+        month: 3,
+        year: 2026
+      })
 
       assert {:error, changeset} =
                PharmacyLogs.create_pharmacy_log(organization.id, %{
@@ -71,7 +78,14 @@ defmodule ThamaniDawa.PharmacyLogsTest do
 
     test "allows the same (log_type, month, year) in a different organization" do
       site_a = site_fixture()
-      pharmacy_log_fixture(%{organization_id: site_a.organization_id, site_id: site_a.id, log_type: "humidity", month: 3, year: 2026})
+
+      pharmacy_log_fixture(%{
+        organization_id: site_a.organization_id,
+        site_id: site_a.id,
+        log_type: "humidity",
+        month: 3,
+        year: 2026
+      })
 
       organization_b = organization_fixture()
       site_b = site_fixture(%{organization_id: organization_b.id})

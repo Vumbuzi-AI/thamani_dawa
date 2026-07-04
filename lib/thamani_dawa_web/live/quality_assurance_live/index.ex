@@ -106,7 +106,15 @@ defmodule ThamaniDawaWeb.QualityAssuranceLive.Index do
         <div class="card-body">
           <h2 class="font-semibold mb-2">Add entry</h2>
           <form phx-submit="add_entry" class="flex flex-wrap gap-2 items-end">
-            <input type="number" name="day" placeholder="Day (1-31)" min="1" max="31" class="input" required />
+            <input
+              type="number"
+              name="day"
+              placeholder="Day (1-31)"
+              min="1"
+              max="31"
+              class="input"
+              required
+            />
             <input type="text" name="reading" placeholder="Reading" class="input" required />
             <input type="text" name="notes" placeholder="Notes" class="input" />
             <.button variant="primary">Add entry</.button>

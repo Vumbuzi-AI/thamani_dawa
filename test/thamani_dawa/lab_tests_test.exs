@@ -19,7 +19,10 @@ defmodule ThamaniDawa.LabTestsTest do
       organization = organization_fixture()
 
       assert {:ok, %LabTest{} = lab_test} =
-               LabTests.create_lab_test(organization.id, %{name: "Full Blood Count", price: Decimal.new("500.00")})
+               LabTests.create_lab_test(organization.id, %{
+                 name: "Full Blood Count",
+                 price: Decimal.new("500.00")
+               })
 
       assert lab_test.organization_id == organization.id
       assert lab_test.is_active == true

@@ -28,7 +28,10 @@ defmodule ThamaniDawa.LabOrdersTest do
       patient = patient_fixture(%{organization_id: organization.id})
 
       assert {:ok, %LabOrder{} = lab_order} =
-               LabOrders.create_lab_order(organization.id, %{site_id: site.id, patient_id: patient.id})
+               LabOrders.create_lab_order(organization.id, %{
+                 site_id: site.id,
+                 patient_id: patient.id
+               })
 
       assert lab_order.organization_id == organization.id
       assert lab_order.status == :pending
@@ -85,7 +88,12 @@ defmodule ThamaniDawa.LabOrdersTest do
         lab_order_test_fixture(%{organization_id: ctx.organization.id, template_id: template.id})
 
       assert {:ok, %LabOrderTest{} = updated} =
-               LabOrders.record_result(ctx.organization.id, lab_order_test.id, ctx.technician.id, %{"wbc" => 20.0})
+               LabOrders.record_result(
+                 ctx.organization.id,
+                 lab_order_test.id,
+                 ctx.technician.id,
+                 %{"wbc" => 20.0}
+               )
 
       assert %{"wbc" => %{"value" => 20.0, "flag" => "high"}} = updated.results
       assert updated.status == :completed
@@ -97,21 +105,39 @@ defmodule ThamaniDawa.LabOrdersTest do
       lab_order_test = lab_order_test_fixture(%{organization_id: ctx.organization.id})
 
       assert {:ok, %LabOrderTest{results: results}} =
-               LabOrders.record_result(ctx.organization.id, lab_order_test.id, ctx.technician.id, %{"note" => "clear"})
+               LabOrders.record_result(
+                 ctx.organization.id,
+                 lab_order_test.id,
+                 ctx.technician.id,
+                 %{"note" => "clear"}
+               )
 
       assert %{"note" => %{"value" => "clear"}} = results
     end
 
-    test "moves the parent lab order to in_progress once one of several tests is completed", ctx do
+    test "moves the parent lab order to in_progress once one of several tests is completed",
+         ctx do
       lab_order = lab_order_fixture(%{organization_id: ctx.organization.id})
 
-      test_1 = lab_order_test_fixture(%{organization_id: ctx.organization.id, lab_order_id: lab_order.id})
-      _test_2 = lab_order_test_fixture(%{organization_id: ctx.organization.id, lab_order_id: lab_order.id})
+      test_1 =
+        lab_order_test_fixture(%{
+          organization_id: ctx.organization.id,
+          lab_order_id: lab_order.id
+        })
+
+      _test_2 =
+        lab_order_test_fixture(%{
+          organization_id: ctx.organization.id,
+          lab_order_id: lab_order.id
+        })
 
       assert {:ok, _updated} =
-               LabOrders.record_result(ctx.organization.id, test_1.id, ctx.technician.id, %{"note" => "ok"})
+               LabOrders.record_result(ctx.organization.id, test_1.id, ctx.technician.id, %{
+                 "note" => "ok"
+               })
 
-      assert %LabOrder{status: :in_progress} = LabOrders.get_lab_order!(ctx.organization.id, lab_order.id)
+      assert %LabOrder{status: :in_progress} =
+               LabOrders.get_lab_order!(ctx.organization.id, lab_order.id)
     end
   end
 
@@ -122,25 +148,42 @@ defmodule ThamaniDawa.LabOrdersTest do
       verifier = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
       lab_order_test = lab_order_test_fixture(%{organization_id: organization.id})
 
-      %{organization: organization, performer: performer, verifier: verifier, lab_order_test: lab_order_test}
+      %{
+        organization: organization,
+        performer: performer,
+        verifier: verifier,
+        lab_order_test: lab_order_test
+      }
     end
 
     test "returns :not_completed when results haven't been entered yet", ctx do
       assert {:error, :not_completed} =
-               LabOrders.verify_lab_order_test(ctx.organization.id, ctx.lab_order_test.id, ctx.verifier.id)
+               LabOrders.verify_lab_order_test(
+                 ctx.organization.id,
+                 ctx.lab_order_test.id,
+                 ctx.verifier.id
+               )
     end
 
     test "returns :same_technician when the verifier performed the test", ctx do
       {:ok, performed} =
-        LabOrders.record_result(ctx.organization.id, ctx.lab_order_test.id, ctx.performer.id, %{"note" => "ok"})
+        LabOrders.record_result(ctx.organization.id, ctx.lab_order_test.id, ctx.performer.id, %{
+          "note" => "ok"
+        })
 
       assert {:error, :same_technician} =
-               LabOrders.verify_lab_order_test(ctx.organization.id, performed.id, ctx.performer.id)
+               LabOrders.verify_lab_order_test(
+                 ctx.organization.id,
+                 performed.id,
+                 ctx.performer.id
+               )
     end
 
     test "marks the test verified and rolls the lab order status to verified", ctx do
       {:ok, performed} =
-        LabOrders.record_result(ctx.organization.id, ctx.lab_order_test.id, ctx.performer.id, %{"note" => "ok"})
+        LabOrders.record_result(ctx.organization.id, ctx.lab_order_test.id, ctx.performer.id, %{
+          "note" => "ok"
+        })
 
       assert {:ok, %LabOrderTest{status: :verified} = verified} =
                LabOrders.verify_lab_order_test(ctx.organization.id, performed.id, ctx.verifier.id)
@@ -165,7 +208,11 @@ defmodule ThamaniDawa.LabOrdersTest do
 
     test "decrements the batch and records usage", ctx do
       assert {:ok, usage} =
-               LabOrders.record_consumable_usage(ctx.organization.id, ctx.batch.id, ctx.technician.id, 10,
+               LabOrders.record_consumable_usage(
+                 ctx.organization.id,
+                 ctx.batch.id,
+                 ctx.technician.id,
+                 10,
                  purpose: "reagent draw"
                )
 
@@ -180,7 +227,12 @@ defmodule ThamaniDawa.LabOrdersTest do
 
     test "rolls back when quantity would take the batch below zero", ctx do
       assert {:error, _changeset} =
-               LabOrders.record_consumable_usage(ctx.organization.id, ctx.batch.id, ctx.technician.id, 999)
+               LabOrders.record_consumable_usage(
+                 ctx.organization.id,
+                 ctx.batch.id,
+                 ctx.technician.id,
+                 999
+               )
 
       updated_batch = Batches.get_batch!(ctx.organization.id, ctx.batch.id)
       assert updated_batch.remaining_quantity == ctx.batch.remaining_quantity

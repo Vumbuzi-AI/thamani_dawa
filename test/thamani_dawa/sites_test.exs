@@ -49,8 +49,11 @@ defmodule ThamaniDawa.SitesTest do
     test "allows more than one site with no gln" do
       organization = organization_fixture()
 
-      assert {:ok, _site_a} = Sites.create_site(organization.id, %{name: "A", site_type: :pharmacy})
-      assert {:ok, _site_b} = Sites.create_site(organization.id, %{name: "B", site_type: :pharmacy})
+      assert {:ok, _site_a} =
+               Sites.create_site(organization.id, %{name: "A", site_type: :pharmacy})
+
+      assert {:ok, _site_b} =
+               Sites.create_site(organization.id, %{name: "B", site_type: :pharmacy})
     end
   end
 

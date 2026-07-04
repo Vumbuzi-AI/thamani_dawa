@@ -4,7 +4,10 @@ defmodule ThamaniDawa.Repo.Migrations.CreateDispensedItems do
   def change do
     create table(:dispensed_items) do
       add :organization_id, references(:organizations, on_delete: :delete_all), null: false
-      add :prescription_item_id, references(:prescription_items, on_delete: :delete_all), null: false
+
+      add :prescription_item_id, references(:prescription_items, on_delete: :delete_all),
+        null: false
+
       add :batch_id, references(:batches, on_delete: :delete_all), null: false
       add :quantity, :integer, null: false
       add :unit_price, :decimal

@@ -81,10 +81,16 @@ defmodule ThamaniDawa.ProductsTest do
       organization = organization_fixture()
 
       assert {:ok, _a} =
-               Products.create_product(organization.id, %{name: "Cotton Wool", product_type: :general_supply})
+               Products.create_product(organization.id, %{
+                 name: "Cotton Wool",
+                 product_type: :general_supply
+               })
 
       assert {:ok, _b} =
-               Products.create_product(organization.id, %{name: "Bandages", product_type: :general_supply})
+               Products.create_product(organization.id, %{
+                 name: "Bandages",
+                 product_type: :general_supply
+               })
     end
 
     test "normalizes a shorter GTIN to canonical GTIN-14 via ex_gtin" do

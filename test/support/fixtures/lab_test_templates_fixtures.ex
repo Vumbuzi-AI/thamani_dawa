@@ -24,7 +24,9 @@ defmodule ThamaniDawa.LabTestTemplatesFixtures do
   @doc "Creates a lab test category under a fresh organization unless `organization_id` is given."
   def lab_test_category_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {:ok, category} =
       attrs
@@ -37,7 +39,9 @@ defmodule ThamaniDawa.LabTestTemplatesFixtures do
   @doc "Creates a lab test template under a fresh organization unless `organization_id` is given."
   def lab_test_template_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {:ok, template} =
       attrs

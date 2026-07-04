@@ -17,19 +17,27 @@ defmodule ThamaniDawaWeb.VerificationQueueLive do
 
     lab_orders = LabOrders.list_lab_orders(organization_id)
     lab_orders_by_id = Map.new(lab_orders, &{&1.id, &1})
-    allowed_lab_order_ids = lab_orders |> SiteScoping.for_current_site(scope) |> MapSet.new(& &1.id)
+
+    allowed_lab_order_ids =
+      lab_orders |> SiteScoping.for_current_site(scope) |> MapSet.new(& &1.id)
 
     completed_tests =
       organization_id
       |> LabOrders.list_lab_order_tests()
-      |> Enum.filter(&(&1.status == :completed and MapSet.member?(allowed_lab_order_ids, &1.lab_order_id)))
+      |> Enum.filter(
+        &(&1.status == :completed and MapSet.member?(allowed_lab_order_ids, &1.lab_order_id))
+      )
 
     lab_tests_by_id = organization_id |> LabTests.list_lab_tests() |> Map.new(&{&1.id, &1})
 
-    performer_ids = completed_tests |> Enum.map(& &1.performed_by_id) |> Enum.filter(& &1) |> Enum.uniq()
+    performer_ids =
+      completed_tests |> Enum.map(& &1.performed_by_id) |> Enum.filter(& &1) |> Enum.uniq()
+
     users_by_id = Map.new(performer_ids, &{&1, Accounts.get_user!(organization_id, &1)})
 
-    patient_ids = completed_tests |> Enum.map(&lab_orders_by_id[&1.lab_order_id].patient_id) |> Enum.uniq()
+    patient_ids =
+      completed_tests |> Enum.map(&lab_orders_by_id[&1.lab_order_id].patient_id) |> Enum.uniq()
+
     patients_by_id = Map.new(patient_ids, &{&1, Patients.get_patient!(organization_id, &1)})
 
     socket
@@ -82,9 +90,13 @@ defmodule ThamaniDawaWeb.VerificationQueueLive do
       <.header>Verification queue</.header>
 
       <.table id="verification-queue" rows={@completed_tests}>
-        <:col :let={test} label="Patient">{patient_name(@patients_by_id, @lab_orders_by_id, test)}</:col>
+        <:col :let={test} label="Patient">
+          {patient_name(@patients_by_id, @lab_orders_by_id, test)}
+        </:col>
         <:col :let={test} label="Test">{test_name(@lab_tests_by_id, test.lab_test_id)}</:col>
-        <:col :let={test} label="Performed by">{performer_name(@users_by_id, test.performed_by_id)}</:col>
+        <:col :let={test} label="Performed by">
+          {performer_name(@users_by_id, test.performed_by_id)}
+        </:col>
         <:col :let={test} label="Performed on">{test.test_performed_on}</:col>
         <:action :let={test}>
           <.button type="button" variant="primary" phx-click="verify" phx-value-id={test.id}>Verify</.button>

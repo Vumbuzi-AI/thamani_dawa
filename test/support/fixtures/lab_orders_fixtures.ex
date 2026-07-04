@@ -24,7 +24,9 @@ defmodule ThamaniDawa.LabOrdersFixtures do
   """
   def lab_order_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {site_id, attrs} =
       Map.pop_lazy(attrs, :site_id, fn ->
@@ -53,7 +55,9 @@ defmodule ThamaniDawa.LabOrdersFixtures do
   """
   def lab_order_test_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {lab_order_id, attrs} =
       Map.pop_lazy(attrs, :lab_order_id, fn ->

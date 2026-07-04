@@ -42,7 +42,8 @@ defmodule ThamaniDawa.Prescriptions do
       when is_integer(organization_id) and is_list(items_attrs) do
     Repo.transaction(fn ->
       with {:ok, prescription} <- create_prescription(organization_id, attrs),
-           {:ok, items} <- create_prescription_items(organization_id, prescription.id, items_attrs) do
+           {:ok, items} <-
+             create_prescription_items(organization_id, prescription.id, items_attrs) do
         %{prescription: prescription, prescription_items: items}
       else
         {:error, changeset} -> Repo.rollback(changeset)
@@ -93,7 +94,9 @@ defmodule ThamaniDawa.Prescriptions do
   def list_dispensed_items(organization_id, prescription_item_id) do
     Repo.all(
       from d in DispensedItem,
-        where: d.organization_id == ^organization_id and d.prescription_item_id == ^prescription_item_id
+        where:
+          d.organization_id == ^organization_id and
+            d.prescription_item_id == ^prescription_item_id
     )
   end
 
@@ -113,17 +116,31 @@ defmodule ThamaniDawa.Prescriptions do
   to dispense on the item, or `{:error, changeset}` for any other
   validation failure.
   """
-  def dispense_item(organization_id, prescription_item_id, pharmacist_id, quantity, unit_price \\ nil)
+  def dispense_item(
+        organization_id,
+        prescription_item_id,
+        pharmacist_id,
+        quantity,
+        unit_price \\ nil
+      )
       when is_integer(organization_id) and is_integer(quantity) and quantity > 0 do
     Repo.transaction(fn ->
       item = get_prescription_item!(organization_id, prescription_item_id)
       prescription = get_prescription!(organization_id, item.prescription_id)
 
       with :ok <- validate_not_over_dispensed(item, quantity),
-           {:ok, batch} <- Batches.fefo_batch(organization_id, prescription.site_id, item.product_id),
+           {:ok, batch} <-
+             Batches.fefo_batch(organization_id, prescription.site_id, item.product_id),
            {:ok, _batch} <- Batches.decrement_remaining_quantity(batch, quantity),
            {:ok, dispensed_item} <-
-             insert_dispensed_item(organization_id, item, batch, pharmacist_id, quantity, unit_price),
+             insert_dispensed_item(
+               organization_id,
+               item,
+               batch,
+               pharmacist_id,
+               quantity,
+               unit_price
+             ),
            {:ok, _item} <- bump_quantity_dispensed(item, quantity),
            {:ok, _prescription} <- recompute_status(prescription) do
         dispensed_item
@@ -190,7 +207,9 @@ defmodule ThamaniDawa.Prescriptions do
   """
   def verify_dispensed_item(organization_id, dispensed_item_id, scanned_gs1_data)
       when is_integer(organization_id) and is_binary(scanned_gs1_data) do
-    dispensed_item = Repo.get_by!(DispensedItem, id: dispensed_item_id, organization_id: organization_id)
+    dispensed_item =
+      Repo.get_by!(DispensedItem, id: dispensed_item_id, organization_id: organization_id)
+
     batch = Batches.get_batch!(organization_id, dispensed_item.batch_id)
 
     with {:ok, scanned} <- GS1Decoder.parse(scanned_gs1_data),

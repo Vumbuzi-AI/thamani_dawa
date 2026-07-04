@@ -179,7 +179,11 @@ defmodule ThamaniDawa.LabOrders do
 
   defp save_verification(%LabOrderTest{} = lab_order_test, verifier_id) do
     lab_order_test
-    |> Ecto.Changeset.change(verified_by_id: verifier_id, verified_at: DateTime.utc_now(:second), status: :verified)
+    |> Ecto.Changeset.change(
+      verified_by_id: verifier_id,
+      verified_at: DateTime.utc_now(:second),
+      status: :verified
+    )
     |> Repo.update()
   end
 
@@ -216,12 +220,14 @@ defmodule ThamaniDawa.LabOrders do
   `remaining_quantity` below zero.
   """
   def record_consumable_usage(organization_id, batch_id, used_by_id, quantity, opts \\ [])
-      when is_integer(organization_id) and is_integer(batch_id) and is_integer(quantity) and quantity > 0 do
+      when is_integer(organization_id) and is_integer(batch_id) and is_integer(quantity) and
+             quantity > 0 do
     Repo.transaction(fn ->
       batch = Batches.get_batch!(organization_id, batch_id)
 
       with {:ok, _batch} <- Batches.decrement_remaining_quantity(batch, quantity),
-           {:ok, usage} <- insert_consumable_usage(organization_id, batch_id, used_by_id, quantity, opts) do
+           {:ok, usage} <-
+             insert_consumable_usage(organization_id, batch_id, used_by_id, quantity, opts) do
         usage
       else
         {:error, reason} -> Repo.rollback(reason)

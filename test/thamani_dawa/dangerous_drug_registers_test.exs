@@ -13,7 +13,8 @@ defmodule ThamaniDawa.DangerousDrugRegistersTest do
     test "requires site_id, product_id, month and year" do
       organization = organization_fixture()
 
-      assert {:error, changeset} = DangerousDrugRegisters.create_dangerous_drug_register(organization.id, %{})
+      assert {:error, changeset} =
+               DangerousDrugRegisters.create_dangerous_drug_register(organization.id, %{})
 
       assert %{
                site_id: ["can't be blank"],
@@ -44,7 +45,13 @@ defmodule ThamaniDawa.DangerousDrugRegistersTest do
     test "enforces uniqueness of (organization_id, product_id, month, year)" do
       organization = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})
-      dangerous_drug_register_fixture(%{organization_id: organization.id, product_id: product.id, month: 3, year: 2026})
+
+      dangerous_drug_register_fixture(%{
+        organization_id: organization.id,
+        product_id: product.id,
+        month: 3,
+        year: 2026
+      })
 
       assert {:error, changeset} =
                DangerousDrugRegisters.create_dangerous_drug_register(organization.id, %{
@@ -66,7 +73,9 @@ defmodule ThamaniDawa.DangerousDrugRegistersTest do
       register_a = dangerous_drug_register_fixture(%{organization_id: organization_a.id})
       dangerous_drug_register_fixture(%{organization_id: organization_b.id})
 
-      assert [%DangerousDrugRegister{id: id}] = DangerousDrugRegisters.list_dangerous_drug_registers(organization_a.id)
+      assert [%DangerousDrugRegister{id: id}] =
+               DangerousDrugRegisters.list_dangerous_drug_registers(organization_a.id)
+
       assert id == register_a.id
     end
   end

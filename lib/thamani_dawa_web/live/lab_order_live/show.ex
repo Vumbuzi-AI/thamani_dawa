@@ -50,9 +50,12 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     {:noreply, load_lab_order(socket, socket.assigns.lab_order.id)}
   end
 
-  def handle_event("add_test", %{"lab_test_id" => lab_test_id} = attrs, socket) when lab_test_id != "" do
+  def handle_event("add_test", %{"lab_test_id" => lab_test_id} = attrs, socket)
+      when lab_test_id != "" do
     organization_id = socket.assigns.current_scope.organization_id
-    attrs = Map.update(attrs, "template_id", nil, fn value -> if value == "", do: nil, else: value end)
+
+    attrs =
+      Map.update(attrs, "template_id", nil, fn value -> if value == "", do: nil, else: value end)
 
     case LabOrders.create_lab_order_test(organization_id, socket.assigns.lab_order.id, attrs) do
       {:ok, _test} -> {:noreply, load_lab_order(socket, socket.assigns.lab_order.id)}

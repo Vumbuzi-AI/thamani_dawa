@@ -97,7 +97,9 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
       <div :if={@live_action in [:new, :edit]} class="card bg-base-200 mb-4">
         <div class="card-body">
-          <h2 class="font-semibold mb-2">{if @live_action == :new, do: "Add a product", else: "Edit product"}</h2>
+          <h2 class="font-semibold mb-2">
+            {if @live_action == :new, do: "Add a product", else: "Edit product"}
+          </h2>
           <form phx-submit="save">
             <.input
               field={@form[:product_type]}
@@ -128,7 +130,11 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         <.input name="search" value={@search} placeholder="Search by name, GTIN, or category" />
       </form>
 
-      <.table id="products" rows={filtered_products(@products, @search)} row_click={&(~p"/pharmacy/products/#{&1.id}")}>
+      <.table
+        id="products"
+        rows={filtered_products(@products, @search)}
+        row_click={&~p"/pharmacy/products/#{&1.id}"}
+      >
         <:col :let={product} label="Name">{product_name(product)}</:col>
         <:col :let={product} label="Type">{Phoenix.Naming.humanize(product.product_type)}</:col>
         <:col :let={product} label="Category">{product.category}</:col>

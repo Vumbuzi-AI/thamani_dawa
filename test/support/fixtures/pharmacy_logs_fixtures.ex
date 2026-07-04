@@ -21,7 +21,9 @@ defmodule ThamaniDawa.PharmacyLogsFixtures do
   """
   def pharmacy_log_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {site_id, attrs} =
       Map.pop_lazy(attrs, :site_id, fn ->

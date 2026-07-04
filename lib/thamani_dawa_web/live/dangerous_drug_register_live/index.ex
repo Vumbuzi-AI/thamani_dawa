@@ -62,7 +62,11 @@ defmodule ThamaniDawaWeb.DangerousDrugRegisterLive.Index do
      )}
   end
 
-  def handle_event("add_entry", %{"quantity" => quantity, "balance" => balance, "dispensed_to" => dispensed_to}, socket) do
+  def handle_event(
+        "add_entry",
+        %{"quantity" => quantity, "balance" => balance, "dispensed_to" => dispensed_to},
+        socket
+      ) do
     %{organization_id: organization_id, user: user} = socket.assigns.current_scope
 
     entry_attrs = %{
@@ -129,7 +133,11 @@ defmodule ThamaniDawaWeb.DangerousDrugRegisterLive.Index do
         Choose a recording site before adding entries.
       </p>
 
-      <.entries_table :if={@product_id} entries={(@register && @register.entries) || %{}} key_label="Entry #">
+      <.entries_table
+        :if={@product_id}
+        entries={(@register && @register.entries) || %{}}
+        key_label="Entry #"
+      >
         <:col :let={entry} label="Quantity">{entry["quantity"]}</:col>
         <:col :let={entry} label="Balance">{entry["balance"]}</:col>
         <:col :let={entry} label="Dispensed to">{entry["dispensed_to"]}</:col>

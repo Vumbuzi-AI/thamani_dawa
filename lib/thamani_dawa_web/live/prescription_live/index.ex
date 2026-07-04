@@ -34,7 +34,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     |> assign(:sites, Sites.list_sites(organization_id))
     |> assign(:site_locked, not is_nil(site_id))
     |> assign(:use_new_patient, false)
-    |> assign(:header_form, to_form(Prescription.changeset(%Prescription{}, initial_attrs), as: :prescription))
+    |> assign(
+      :header_form,
+      to_form(Prescription.changeset(%Prescription{}, initial_attrs), as: :prescription)
+    )
     |> assign(:patient_form, to_form(Patient.changeset(%Patient{}, %{}), as: :patient))
     |> assign(:item_ids, [0])
     |> assign(:next_item_id, 1)
@@ -71,7 +74,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
       header_attrs = Map.put(header_attrs, "entered_by_id", socket.assigns.current_scope.user.id)
 
       with {:ok, header_attrs} <- resolve_patient(socket, organization_id, header_attrs, params),
-           {:ok, _result} <- Prescriptions.create_prescription_with_items(organization_id, header_attrs, items_attrs) do
+           {:ok, _result} <-
+             Prescriptions.create_prescription_with_items(
+               organization_id,
+               header_attrs,
+               items_attrs
+             ) do
         {:noreply,
          socket
          |> put_flash(:info, "Prescription created.")
@@ -87,7 +95,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     end
   end
 
-  defp resolve_patient(%{assigns: %{use_new_patient: true}}, organization_id, header_attrs, %{"patient" => patient_attrs}) do
+  defp resolve_patient(%{assigns: %{use_new_patient: true}}, organization_id, header_attrs, %{
+         "patient" => patient_attrs
+       }) do
     case Patients.create_patient(organization_id, patient_attrs) do
       {:ok, patient} -> {:ok, Map.put(header_attrs, "patient_id", patient.id)}
       {:error, changeset} -> {:error, changeset}
@@ -194,10 +204,16 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         </div>
       </div>
 
-      <.table id="prescriptions" rows={@prescriptions} row_click={&(~p"/pharmacy/prescriptions/#{&1.id}")}>
+      <.table
+        id="prescriptions"
+        rows={@prescriptions}
+        row_click={&~p"/pharmacy/prescriptions/#{&1.id}"}
+      >
         <:col :let={prescription} label="Status">{Phoenix.Naming.humanize(prescription.status)}</:col>
         <:col :let={prescription} label="Total">{prescription.total_amount}</:col>
-        <:col :let={prescription} label="Paid">{if prescription.has_paid, do: "Yes", else: "No"}</:col>
+        <:col :let={prescription} label="Paid">
+          {if prescription.has_paid, do: "Yes", else: "No"}
+        </:col>
         <:col :let={prescription} label="Created">{prescription.inserted_at}</:col>
       </.table>
     </Layouts.app_shell>

@@ -16,7 +16,9 @@ defmodule ThamaniDawa.PatientsFixtures do
   @doc "Creates a patient under a fresh organization unless `organization_id` is given."
   def patient_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {:ok, patient} =
       attrs

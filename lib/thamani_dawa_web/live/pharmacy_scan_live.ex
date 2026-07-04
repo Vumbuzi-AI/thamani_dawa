@@ -46,7 +46,11 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
       <.header>Scan</.header>
 
       <form phx-submit="decode">
-        <.input name="raw_gs1" label="Raw GS1 element string" placeholder="(01)0...(10)LOT1(17)261231" />
+        <.input
+          name="raw_gs1"
+          label="Raw GS1 element string"
+          placeholder="(01)0...(10)LOT1(17)261231"
+        />
         <.button variant="primary" class="mt-2">Decode</.button>
       </form>
 

@@ -223,7 +223,8 @@ defmodule ThamaniDawa.BatchesTest do
     test "decrements remaining_quantity by the given amount" do
       batch = batch_fixture(%{quantity: 50})
 
-      assert {:ok, %Batch{remaining_quantity: 40}} = Batches.decrement_remaining_quantity(batch, 10)
+      assert {:ok, %Batch{remaining_quantity: 40}} =
+               Batches.decrement_remaining_quantity(batch, 10)
     end
 
     test "rejects a decrement that would take remaining_quantity below zero" do

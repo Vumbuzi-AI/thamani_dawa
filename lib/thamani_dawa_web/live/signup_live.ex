@@ -8,7 +8,10 @@ defmodule ThamaniDawaWeb.SignupLive do
   def mount(_params, _session, socket) do
     socket =
       socket
-      |> assign(:org_form, to_form(Organization.changeset(%Organization{}, %{}), as: :organization))
+      |> assign(
+        :org_form,
+        to_form(Organization.changeset(%Organization{}, %{}), as: :organization)
+      )
       |> assign(:admin_form, to_form(User.registration_changeset(%User{}, %{}), as: :user))
 
     {:ok, socket}
@@ -29,7 +32,12 @@ defmodule ThamaniDawaWeb.SignupLive do
         {:noreply, assign(socket, :admin_form, to_form(changeset, as: :user))}
 
       {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Something went wrong setting up your organization. Please try again.")}
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Something went wrong setting up your organization. Please try again."
+         )}
     end
   end
 

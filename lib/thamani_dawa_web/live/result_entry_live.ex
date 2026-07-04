@@ -11,7 +11,10 @@ defmodule ThamaniDawaWeb.ResultEntryLive do
   defp load_test(socket, id) do
     organization_id = socket.assigns.current_scope.organization_id
     test = LabOrders.get_lab_order_test!(organization_id, id)
-    template = test.template_id && LabTestTemplates.get_lab_test_template!(organization_id, test.template_id)
+
+    template =
+      test.template_id &&
+        LabTestTemplates.get_lab_test_template!(organization_id, test.template_id)
 
     assign(socket, test: test, template: template)
   end
@@ -20,7 +23,12 @@ defmodule ThamaniDawaWeb.ResultEntryLive do
     organization_id = socket.assigns.current_scope.organization_id
     performer_id = socket.assigns.current_scope.user.id
 
-    case LabOrders.record_result(organization_id, socket.assigns.test.id, performer_id, raw_values) do
+    case LabOrders.record_result(
+           organization_id,
+           socket.assigns.test.id,
+           performer_id,
+           raw_values
+         ) do
       {:ok, test} ->
         {:noreply,
          socket
@@ -55,7 +63,7 @@ defmodule ThamaniDawaWeb.ResultEntryLive do
       </.header>
 
       <form phx-submit="save">
-        <div :if={@template} :for={field <- @template.field_definitions} class="mb-2">
+        <div :for={field <- @template.field_definitions} :if={@template} class="mb-2">
           <label class="label">{field.label} <span :if={field.unit}>({field.unit})</span></label>
           <input
             type={input_type(field.data_type)}
@@ -71,7 +79,12 @@ defmodule ThamaniDawaWeb.ResultEntryLive do
 
         <div :if={is_nil(@template)} class="mb-2">
           <label class="label">Result</label>
-          <input type="text" name="values[result]" value={current_value(@test, "result")} class="input w-full" />
+          <input
+            type="text"
+            name="values[result]"
+            value={current_value(@test, "result")}
+            class="input w-full"
+          />
         </div>
 
         <.button variant="primary" class="mt-2">Save results</.button>

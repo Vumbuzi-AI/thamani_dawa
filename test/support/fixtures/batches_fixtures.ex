@@ -19,7 +19,9 @@ defmodule ThamaniDawa.BatchesFixtures do
 
   @doc "Generates a fresh, GS1-checksum-valid GTIN-14 for test fixtures."
   def unique_gtin do
-    base = System.unique_integer([:positive]) |> Integer.to_string() |> String.pad_leading(13, "0")
+    base =
+      System.unique_integer([:positive]) |> Integer.to_string() |> String.pad_leading(13, "0")
+
     {:ok, gtin} = ThamaniDawa.Gtin.generate(base)
     gtin
   end
@@ -30,7 +32,9 @@ defmodule ThamaniDawa.BatchesFixtures do
   """
   def batch_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {product_id, attrs} =
       Map.pop_lazy(attrs, :product_id, fn ->

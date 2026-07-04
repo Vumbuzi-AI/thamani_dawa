@@ -27,7 +27,10 @@ defmodule ThamaniDawa.PrescriptionsTest do
       patient = patient_fixture(%{organization_id: organization.id})
 
       assert {:ok, %Prescription{} = prescription} =
-               Prescriptions.create_prescription(organization.id, %{site_id: site.id, patient_id: patient.id})
+               Prescriptions.create_prescription(organization.id, %{
+                 site_id: site.id,
+                 patient_id: patient.id
+               })
 
       assert prescription.organization_id == organization.id
       assert prescription.status == :pending
@@ -88,7 +91,14 @@ defmodule ThamaniDawa.PrescriptionsTest do
           quantity_prescribed: 10
         })
 
-      %{organization: organization, site: site, product: product, pharmacist: pharmacist, prescription: prescription, item: item}
+      %{
+        organization: organization,
+        site: site,
+        product: product,
+        pharmacist: pharmacist,
+        prescription: prescription,
+        item: item
+      }
     end
 
     test "FEFO-picks the soonest-expiring batch at the prescription's own site", ctx do
@@ -121,7 +131,12 @@ defmodule ThamaniDawa.PrescriptionsTest do
         })
 
       assert {:ok, %DispensedItem{} = dispensed_item} =
-               Prescriptions.dispense_item(ctx.organization.id, ctx.item.id, ctx.pharmacist.id, 10)
+               Prescriptions.dispense_item(
+                 ctx.organization.id,
+                 ctx.item.id,
+                 ctx.pharmacist.id,
+                 10
+               )
 
       assert dispensed_item.batch_id == soon_batch.id
       assert dispensed_item.quantity == 10
@@ -135,7 +150,9 @@ defmodule ThamaniDawa.PrescriptionsTest do
       updated_item = Prescriptions.get_prescription_item!(ctx.organization.id, ctx.item.id)
       assert updated_item.quantity_dispensed == 10
 
-      updated_prescription = Prescriptions.get_prescription!(ctx.organization.id, ctx.prescription.id)
+      updated_prescription =
+        Prescriptions.get_prescription!(ctx.organization.id, ctx.prescription.id)
+
       assert updated_prescription.status == :completed
     end
 
@@ -155,12 +172,18 @@ defmodule ThamaniDawa.PrescriptionsTest do
     end
 
     test "moves the prescription to partially_dispensed on a partial dispense", ctx do
-      batch_fixture(%{organization_id: ctx.organization.id, site_id: ctx.site.id, product_id: ctx.product.id})
+      batch_fixture(%{
+        organization_id: ctx.organization.id,
+        site_id: ctx.site.id,
+        product_id: ctx.product.id
+      })
 
       assert {:ok, _dispensed_item} =
                Prescriptions.dispense_item(ctx.organization.id, ctx.item.id, ctx.pharmacist.id, 4)
 
-      updated_prescription = Prescriptions.get_prescription!(ctx.organization.id, ctx.prescription.id)
+      updated_prescription =
+        Prescriptions.get_prescription!(ctx.organization.id, ctx.prescription.id)
+
       assert updated_prescription.status == :partially_dispensed
     end
 
@@ -170,10 +193,19 @@ defmodule ThamaniDawa.PrescriptionsTest do
     end
 
     test "returns :over_dispensed rather than exceeding quantity_prescribed", ctx do
-      batch_fixture(%{organization_id: ctx.organization.id, site_id: ctx.site.id, product_id: ctx.product.id})
+      batch_fixture(%{
+        organization_id: ctx.organization.id,
+        site_id: ctx.site.id,
+        product_id: ctx.product.id
+      })
 
       assert {:error, :over_dispensed} =
-               Prescriptions.dispense_item(ctx.organization.id, ctx.item.id, ctx.pharmacist.id, 11)
+               Prescriptions.dispense_item(
+                 ctx.organization.id,
+                 ctx.item.id,
+                 ctx.pharmacist.id,
+                 11
+               )
 
       updated_batch = Batches.list_batches(ctx.organization.id) |> hd()
       assert updated_batch.remaining_quantity == updated_batch.quantity
@@ -206,7 +238,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
           quantity_prescribed: 5
         })
 
-      {:ok, dispensed_item} = Prescriptions.dispense_item(organization.id, item.id, pharmacist.id, 5)
+      {:ok, dispensed_item} =
+        Prescriptions.dispense_item(organization.id, item.id, pharmacist.id, 5)
 
       %{organization: organization, batch: batch, dispensed_item: dispensed_item}
     end
@@ -215,14 +248,23 @@ defmodule ThamaniDawa.PrescriptionsTest do
       scanned = "01#{ctx.batch.gtin}10#{ctx.batch.batch_no}"
 
       assert {:ok, %DispensedItem{is_verified: true}} =
-               Prescriptions.verify_dispensed_item(ctx.organization.id, ctx.dispensed_item.id, scanned)
+               Prescriptions.verify_dispensed_item(
+                 ctx.organization.id,
+                 ctx.dispensed_item.id,
+                 scanned
+               )
     end
 
-    test "returns :mismatch when the scanned batch/lot doesn't match, leaving is_verified false", ctx do
+    test "returns :mismatch when the scanned batch/lot doesn't match, leaving is_verified false",
+         ctx do
       scanned = "01#{ctx.batch.gtin}10WRONG-LOT"
 
       assert {:error, :mismatch} =
-               Prescriptions.verify_dispensed_item(ctx.organization.id, ctx.dispensed_item.id, scanned)
+               Prescriptions.verify_dispensed_item(
+                 ctx.organization.id,
+                 ctx.dispensed_item.id,
+                 scanned
+               )
 
       assert %DispensedItem{is_verified: false} =
                ThamaniDawa.Repo.get!(DispensedItem, ctx.dispensed_item.id)

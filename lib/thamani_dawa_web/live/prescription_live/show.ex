@@ -18,7 +18,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     products_by_id = organization_id |> Products.list_products() |> Map.new(&{&1.id, &1})
 
     dispensed_by_item =
-      Map.new(items, fn item -> {item.id, Prescriptions.list_dispensed_items(organization_id, item.id)} end)
+      Map.new(items, fn item ->
+        {item.id, Prescriptions.list_dispensed_items(organization_id, item.id)}
+      end)
 
     socket
     |> assign(:prescription, prescription)
@@ -32,7 +34,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     organization_id = socket.assigns.current_scope.organization_id
     pharmacist_id = socket.assigns.current_scope.user.id
 
-    case Prescriptions.dispense_item(organization_id, String.to_integer(item_id), pharmacist_id, String.to_integer(quantity)) do
+    case Prescriptions.dispense_item(
+           organization_id,
+           String.to_integer(item_id),
+           pharmacist_id,
+           String.to_integer(quantity)
+         ) do
       {:ok, _dispensed_item} ->
         {:noreply,
          socket
@@ -50,7 +57,11 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     end
   end
 
-  def handle_event("verify", %{"dispensed_item_id" => dispensed_item_id, "raw_gs1" => raw_gs1}, socket) do
+  def handle_event(
+        "verify",
+        %{"dispensed_item_id" => dispensed_item_id, "raw_gs1" => raw_gs1},
+        socket
+      ) do
     organization_id = socket.assigns.current_scope.organization_id
     dispensed_item_id = String.to_integer(dispensed_item_id)
 
@@ -105,24 +116,41 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
       <div :for={item <- @items} class="border rounded-box border-base-300 p-3 mt-4">
         <h3 class="font-semibold">{product_name(@products_by_id, item.product_id)}</h3>
         <p class="text-sm text-base-content/70">
-          Prescribed {item.quantity_prescribed} · Dispensed {item.quantity_dispensed}
-          · {item.dosage_instructions} {item.frequency}
+          Prescribed {item.quantity_prescribed} · Dispensed {item.quantity_dispensed} · {item.dosage_instructions} {item.frequency}
         </p>
 
-        <form :if={item.quantity_dispensed < item.quantity_prescribed} phx-submit="dispense" class="flex gap-2 items-end mt-2">
+        <form
+          :if={item.quantity_dispensed < item.quantity_prescribed}
+          phx-submit="dispense"
+          class="flex gap-2 items-end mt-2"
+        >
           <input type="hidden" name="item_id" value={item.id} />
           <input type="number" name="quantity" placeholder="Quantity" class="input input-sm" required />
           <button class="btn btn-sm btn-primary">Dispense</button>
         </form>
 
-        <div :for={dispensed_item <- @dispensed_by_item[item.id]} class="mt-2 pl-3 border-l border-base-300">
+        <div
+          :for={dispensed_item <- @dispensed_by_item[item.id]}
+          class="mt-2 pl-3 border-l border-base-300"
+        >
           <p class="text-sm">
-            Dispensed {dispensed_item.quantity} ·
-            {if dispensed_item.is_verified, do: "Verified", else: "Not verified"}
+            Dispensed {dispensed_item.quantity} · {if dispensed_item.is_verified,
+              do: "Verified",
+              else: "Not verified"}
           </p>
-          <form :if={not dispensed_item.is_verified} phx-submit="verify" class="flex gap-2 items-end mt-1">
+          <form
+            :if={not dispensed_item.is_verified}
+            phx-submit="verify"
+            class="flex gap-2 items-end mt-1"
+          >
             <input type="hidden" name="dispensed_item_id" value={dispensed_item.id} />
-            <input type="text" name="raw_gs1" placeholder="Scan/paste GS1 code" class="input input-sm" required />
+            <input
+              type="text"
+              name="raw_gs1"
+              placeholder="Scan/paste GS1 code"
+              class="input input-sm"
+              required
+            />
             <button class="btn btn-sm">Verify</button>
           </form>
         </div>

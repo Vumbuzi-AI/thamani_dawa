@@ -39,7 +39,12 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
     case GS1Decoder.parse(raw_gs1) do
       {:ok, parsed} ->
         changes =
-          %{gtin: parsed.gtin, batch_no: parsed.batch_no, manufacture_date: parsed.production_date, expiry: parsed.expiry_date}
+          %{
+            gtin: parsed.gtin,
+            batch_no: parsed.batch_no,
+            manufacture_date: parsed.production_date,
+            expiry: parsed.expiry_date
+          }
           |> Enum.reject(fn {_k, v} -> is_nil(v) end)
           |> Map.new()
 
@@ -69,7 +74,13 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
     case Batches.create_batch(scope.organization_id, attrs) do
       {:ok, batch} ->
         if socket.assigns.gs1_used do
-          ScanEvents.log_scan_event(scope.organization_id, :receipt, batch.id, user.id, socket.assigns.raw_gs1)
+          ScanEvents.log_scan_event(
+            scope.organization_id,
+            :receipt,
+            batch.id,
+            user.id,
+            socket.assigns.raw_gs1
+          )
         end
 
         {:noreply,

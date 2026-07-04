@@ -48,7 +48,9 @@ defmodule ThamaniDawa.LabTestTemplatesTest do
       lab_test_template_fixture(%{organization_id: organization.id, name: "Full Blood Count"})
 
       assert {:error, changeset} =
-               LabTestTemplates.create_lab_test_template(organization.id, %{name: "Full Blood Count"})
+               LabTestTemplates.create_lab_test_template(organization.id, %{
+                 name: "Full Blood Count"
+               })
 
       assert %{name: ["has already been taken"]} = errors_on(changeset)
     end
@@ -110,7 +112,8 @@ defmodule ThamaniDawa.LabTestTemplatesTest do
     test "accepts atom keys and always returns string keys" do
       template = lab_test_template_fixture()
 
-      assert %{"wbc" => %{"flag" => "normal"}} = LabTestTemplates.compute_results(template, %{wbc: 7.0})
+      assert %{"wbc" => %{"flag" => "normal"}} =
+               LabTestTemplates.compute_results(template, %{wbc: 7.0})
     end
   end
 end

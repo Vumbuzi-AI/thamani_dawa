@@ -21,7 +21,9 @@ defmodule ThamaniDawa.AccountsFixtures do
   @doc "Creates an admin user under a fresh organization unless `organization_id` is given."
   def user_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {:ok, user} =
       attrs
@@ -38,14 +40,18 @@ defmodule ThamaniDawa.AccountsFixtures do
   """
   def staff_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {invited_by_id, attrs} = Map.pop(attrs, :invited_by_id, nil)
 
     invite_attrs =
       Enum.into(attrs, %{name: valid_user_name(), email: valid_user_email(), role: :pharmacist})
 
-    {:ok, invited, _encoded_token} = Accounts.invite_user(organization_id, invited_by_id, invite_attrs)
+    {:ok, invited, _encoded_token} =
+      Accounts.invite_user(organization_id, invited_by_id, invite_attrs)
+
     {:ok, user} = Accounts.accept_invite(invited, %{password: valid_user_password()})
     user
   end

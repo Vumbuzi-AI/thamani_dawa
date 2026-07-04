@@ -24,7 +24,11 @@ defmodule ThamaniDawaWeb.BatchFormComponents do
         <h2 class="font-semibold mb-2">Paste a GS1 code</h2>
         <form phx-submit="decode_gs1" class="flex gap-2 items-end">
           <div class="flex-1">
-            <.input name="raw_gs1" label="Raw GS1 element string" placeholder="(01)0...(10)LOT1(17)261231" />
+            <.input
+              name="raw_gs1"
+              label="Raw GS1 element string"
+              placeholder="(01)0...(10)LOT1(17)261231"
+            />
           </div>
           <.button class="mb-2">Decode &amp; prefill</.button>
         </form>

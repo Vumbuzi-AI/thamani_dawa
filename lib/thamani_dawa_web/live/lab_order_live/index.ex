@@ -34,7 +34,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
     |> assign(:site_locked, not is_nil(site_id))
     |> assign(:urgencies, @urgencies)
     |> assign(:use_new_patient, false)
-    |> assign(:header_form, to_form(LabOrder.changeset(%LabOrder{}, initial_attrs), as: :lab_order))
+    |> assign(
+      :header_form,
+      to_form(LabOrder.changeset(%LabOrder{}, initial_attrs), as: :lab_order)
+    )
     |> assign(:patient_form, to_form(Patient.changeset(%Patient{}, %{}), as: :patient))
     |> assign(:test_ids, [0])
     |> assign(:next_test_id, 1)
@@ -71,7 +74,8 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
       header_attrs = Map.put(header_attrs, "ordered_by_id", socket.assigns.current_scope.user.id)
 
       with {:ok, header_attrs} <- resolve_patient(socket, organization_id, header_attrs, params),
-           {:ok, _result} <- LabOrders.create_lab_order_with_tests(organization_id, header_attrs, tests_attrs) do
+           {:ok, _result} <-
+             LabOrders.create_lab_order_with_tests(organization_id, header_attrs, tests_attrs) do
         {:noreply,
          socket
          |> put_flash(:info, "Lab order created.")
@@ -87,7 +91,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
     end
   end
 
-  defp resolve_patient(%{assigns: %{use_new_patient: true}}, organization_id, header_attrs, %{"patient" => patient_attrs}) do
+  defp resolve_patient(%{assigns: %{use_new_patient: true}}, organization_id, header_attrs, %{
+         "patient" => patient_attrs
+       }) do
     case Patients.create_patient(organization_id, patient_attrs) do
       {:ok, patient} -> {:ok, Map.put(header_attrs, "patient_id", patient.id)}
       {:error, changeset} -> {:error, changeset}
@@ -97,7 +103,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   defp resolve_patient(_socket, _organization_id, header_attrs, _params), do: {:ok, header_attrs}
 
   defp sanitize_test_attrs(test_attrs) do
-    Map.update(test_attrs, "template_id", nil, fn value -> if value == "", do: nil, else: value end)
+    Map.update(test_attrs, "template_id", nil, fn value ->
+      if value == "", do: nil, else: value
+    end)
   end
 
   defp assign_lab_orders(socket) do
@@ -170,8 +178,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
             />
             <.input field={@header_form[:payment_type]} label="Payment type" />
             <.input field={@header_form[:has_paid]} type="checkbox" label="Paid" />
-            <.input field={@header_form[:sample_collection_date]} type="date" label="Sample collection date" />
-            <.input field={@header_form[:sample_collection_description]} label="Sample collection description" />
+            <.input
+              field={@header_form[:sample_collection_date]}
+              type="date"
+              label="Sample collection date"
+            />
+            <.input
+              field={@header_form[:sample_collection_description]}
+              label="Sample collection description"
+            />
 
             <.header class="mt-4">Tests</.header>
             <div :for={id <- @test_ids} class="border rounded-box border-base-300 p-3 mb-2">
@@ -203,7 +218,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         </div>
       </div>
 
-      <.table id="lab-orders" rows={@lab_orders} row_click={&(~p"/lab/orders/#{&1.id}")}>
+      <.table id="lab-orders" rows={@lab_orders} row_click={&~p"/lab/orders/#{&1.id}"}>
         <:col :let={lab_order} label="Status">{Phoenix.Naming.humanize(lab_order.status)}</:col>
         <:col :let={lab_order} label="Urgency">{lab_order.urgency}</:col>
         <:col :let={lab_order} label="Paid">{if lab_order.has_paid, do: "Yes", else: "No"}</:col>

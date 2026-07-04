@@ -23,7 +23,9 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
     case Accounts.invite_user(organization_id, admin.id, attrs) do
       {:ok, user, encoded_token} ->
-        Accounts.deliver_user_invite(user, encoded_token, fn token -> url(~p"/invites/#{token}") end)
+        Accounts.deliver_user_invite(user, encoded_token, fn token ->
+          url(~p"/invites/#{token}")
+        end)
 
         {:noreply,
          socket

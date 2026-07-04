@@ -21,7 +21,9 @@ defmodule ThamaniDawa.ScanEventsFixtures do
   """
   def scan_event_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {:ok, scan_event} =
       attrs

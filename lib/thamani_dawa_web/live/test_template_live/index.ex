@@ -41,15 +41,28 @@ defmodule ThamaniDawaWeb.TestTemplateLive.Index do
   end
 
   def handle_event("add_field", _params, socket) do
-    field_defs = Ecto.Changeset.get_field(socket.assigns.form.source, :field_definitions, []) ++ [%FieldDefinition{}]
-    changeset = Ecto.Changeset.put_embed(socket.assigns.form.source, :field_definitions, field_defs)
+    field_defs =
+      Ecto.Changeset.get_field(socket.assigns.form.source, :field_definitions, []) ++
+        [%FieldDefinition{}]
+
+    changeset =
+      Ecto.Changeset.put_embed(socket.assigns.form.source, :field_definitions, field_defs)
+
     {:noreply, assign(socket, :form, to_form(changeset, as: :template, action: :validate))}
   end
 
   def handle_event("remove_field", %{"index" => index}, socket) do
     index = String.to_integer(index)
-    field_defs = List.delete_at(Ecto.Changeset.get_field(socket.assigns.form.source, :field_definitions, []), index)
-    changeset = Ecto.Changeset.put_embed(socket.assigns.form.source, :field_definitions, field_defs)
+
+    field_defs =
+      List.delete_at(
+        Ecto.Changeset.get_field(socket.assigns.form.source, :field_definitions, []),
+        index
+      )
+
+    changeset =
+      Ecto.Changeset.put_embed(socket.assigns.form.source, :field_definitions, field_defs)
+
     {:noreply, assign(socket, :form, to_form(changeset, as: :template, action: :validate))}
   end
 
@@ -103,7 +116,9 @@ defmodule ThamaniDawaWeb.TestTemplateLive.Index do
 
       <div :if={@live_action in [:new, :edit]} class="card bg-base-200 mb-4">
         <div class="card-body">
-          <h2 class="font-semibold mb-2">{if @live_action == :new, do: "Add a template", else: "Edit template"}</h2>
+          <h2 class="font-semibold mb-2">
+            {if @live_action == :new, do: "Add a template", else: "Edit template"}
+          </h2>
           <form phx-change="validate" phx-submit="save">
             <.input field={@form[:name]} label="Name" required />
             <.input field={@form[:short_name]} label="Short name" />
@@ -124,7 +139,12 @@ defmodule ThamaniDawaWeb.TestTemplateLive.Index do
                 />
                 <.input field={fd_form[:low]} type="number" step="any" label="Low" />
                 <.input field={fd_form[:high]} type="number" step="any" label="High" />
-                <.button type="button" phx-click="remove_field" phx-value-index={fd_form.index} class="mt-2">
+                <.button
+                  type="button"
+                  phx-click="remove_field"
+                  phx-value-index={fd_form.index}
+                  class="mt-2"
+                >
                   Remove field
                 </.button>
               </div>

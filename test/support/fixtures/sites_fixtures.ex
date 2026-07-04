@@ -16,7 +16,9 @@ defmodule ThamaniDawa.SitesFixtures do
   @doc "Creates a site under a fresh organization unless `organization_id` is given."
   def site_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
-      Map.pop_lazy(attrs, :organization_id, fn -> OrganizationsFixtures.organization_fixture().id end)
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
     {:ok, site} =
       attrs

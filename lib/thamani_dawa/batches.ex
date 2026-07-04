@@ -33,7 +33,9 @@ defmodule ThamaniDawa.Batches do
   end
 
   defp default_remaining_quantity(attrs) do
-    has_remaining? = Map.has_key?(attrs, :remaining_quantity) or Map.has_key?(attrs, "remaining_quantity")
+    has_remaining? =
+      Map.has_key?(attrs, :remaining_quantity) or Map.has_key?(attrs, "remaining_quantity")
+
     quantity = Map.get(attrs, :quantity) || Map.get(attrs, "quantity")
 
     if has_remaining? or is_nil(quantity) do
@@ -78,7 +80,8 @@ defmodule ThamaniDawa.Batches do
   dispensing or lab consumption. Returns `{:error, changeset}` if that
   would take it below zero.
   """
-  def decrement_remaining_quantity(%Batch{} = batch, quantity) when is_integer(quantity) and quantity > 0 do
+  def decrement_remaining_quantity(%Batch{} = batch, quantity)
+      when is_integer(quantity) and quantity > 0 do
     batch
     |> Ecto.Changeset.change(remaining_quantity: batch.remaining_quantity - quantity)
     |> Ecto.Changeset.validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
