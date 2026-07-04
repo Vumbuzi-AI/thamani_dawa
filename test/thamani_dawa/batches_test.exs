@@ -1,0 +1,236 @@
+defmodule ThamaniDawa.BatchesTest do
+  use ThamaniDawa.DataCase, async: true
+
+  alias ThamaniDawa.Batches
+  alias ThamaniDawa.Batches.Batch
+
+  import ThamaniDawa.BatchesFixtures
+  import ThamaniDawa.OrganizationsFixtures
+  import ThamaniDawa.ProductsFixtures
+  import ThamaniDawa.SitesFixtures
+  import ThamaniDawa.SuppliersFixtures
+
+  describe "create_batch/2" do
+    test "requires gtin, batch_no, expiry, quantity, product_id and site_id" do
+      organization = organization_fixture()
+      assert {:error, changeset} = Batches.create_batch(organization.id, %{})
+
+      assert %{
+               gtin: ["can't be blank"],
+               batch_no: ["can't be blank"],
+               expiry: ["can't be blank"],
+               quantity: ["can't be blank"],
+               product_id: ["can't be blank"],
+               site_id: ["can't be blank"]
+             } = errors_on(changeset)
+    end
+
+    test "defaults remaining_quantity to quantity when omitted" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, %Batch{} = batch} =
+               Batches.create_batch(organization.id, %{
+                 product_id: product.id,
+                 site_id: site.id,
+                 gtin: "00614141000012",
+                 batch_no: "LOT-1",
+                 expiry: ~D[2027-01-01],
+                 quantity: 50
+               })
+
+      assert batch.organization_id == organization.id
+      assert batch.quantity == 50
+      assert batch.remaining_quantity == 50
+    end
+
+    test "keeps an explicit remaining_quantity that differs from quantity" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, %Batch{} = batch} =
+               Batches.create_batch(organization.id, %{
+                 product_id: product.id,
+                 site_id: site.id,
+                 gtin: "00614141000012",
+                 batch_no: "LOT-1",
+                 expiry: ~D[2027-01-01],
+                 quantity: 50,
+                 remaining_quantity: 10
+               })
+
+      assert batch.remaining_quantity == 10
+    end
+
+    test "sets an optional supplier_id and leaves source_batch_id nil for a direct receipt" do
+      organization = organization_fixture()
+      supplier = supplier_fixture(%{organization_id: organization.id})
+
+      batch = batch_fixture(%{organization_id: organization.id, supplier_id: supplier.id})
+
+      assert batch.supplier_id == supplier.id
+      assert is_nil(batch.source_batch_id)
+    end
+
+    test "supports lineage via source_batch_id for a transferred batch" do
+      organization = organization_fixture()
+      source_batch = batch_fixture(%{organization_id: organization.id})
+
+      transferred_batch =
+        batch_fixture(%{organization_id: organization.id, source_batch_id: source_batch.id})
+
+      assert transferred_batch.source_batch_id == source_batch.id
+    end
+
+    test "rejects a negative quantity" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert {:error, changeset} =
+               Batches.create_batch(organization.id, %{
+                 product_id: product.id,
+                 site_id: site.id,
+                 gtin: "00614141000012",
+                 batch_no: "LOT-1",
+                 expiry: ~D[2027-01-01],
+                 quantity: -5
+               })
+
+      assert %{quantity: ["must be greater than or equal to 0"]} = errors_on(changeset)
+    end
+
+    test "rejects a gtin that fails the GS1 check digit" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert {:error, changeset} =
+               Batches.create_batch(organization.id, %{
+                 product_id: product.id,
+                 site_id: site.id,
+                 gtin: "00614141000011",
+                 batch_no: "LOT-1",
+                 expiry: ~D[2027-01-01],
+                 quantity: 50
+               })
+
+      assert %{gtin: ["is not a valid GTIN"]} = errors_on(changeset)
+    end
+  end
+
+  describe "list_batches/1" do
+    test "only returns batches for the given organization" do
+      organization_a = organization_fixture()
+      organization_b = organization_fixture()
+
+      batch_a = batch_fixture(%{organization_id: organization_a.id})
+      batch_fixture(%{organization_id: organization_b.id})
+
+      assert [%Batch{id: id}] = Batches.list_batches(organization_a.id)
+      assert id == batch_a.id
+    end
+  end
+
+  describe "get_batch!/2" do
+    test "raises when the batch belongs to a different organization" do
+      other_organization = organization_fixture()
+      batch = batch_fixture()
+
+      assert_raise Ecto.NoResultsError, fn ->
+        Batches.get_batch!(other_organization.id, batch.id)
+      end
+    end
+  end
+
+  describe "fefo_batch/3" do
+    test "picks the active batch with stock, soonest expiry first" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      soon_batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          expiry: ~D[2026-08-01]
+        })
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        expiry: ~D[2027-01-01]
+      })
+
+      assert {:ok, %Batch{id: id}} = Batches.fefo_batch(organization.id, site.id, product.id)
+      assert id == soon_batch.id
+    end
+
+    test "skips a batch at a different site, even with an earlier expiry" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+      other_site = site_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: other_site.id,
+        product_id: product.id,
+        expiry: ~D[2026-01-01]
+      })
+
+      matching_batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          expiry: ~D[2027-01-01]
+        })
+
+      assert {:ok, %Batch{id: id}} = Batches.fefo_batch(organization.id, site.id, product.id)
+      assert id == matching_batch.id
+    end
+
+    test "skips a batch with no remaining stock" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        remaining_quantity: 0
+      })
+
+      assert {:error, :out_of_stock} = Batches.fefo_batch(organization.id, site.id, product.id)
+    end
+
+    test "returns :out_of_stock when no batch exists for that site/product" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert {:error, :out_of_stock} = Batches.fefo_batch(organization.id, site.id, product.id)
+    end
+  end
+
+  describe "decrement_remaining_quantity/2" do
+    test "decrements remaining_quantity by the given amount" do
+      batch = batch_fixture(%{quantity: 50})
+
+      assert {:ok, %Batch{remaining_quantity: 40}} = Batches.decrement_remaining_quantity(batch, 10)
+    end
+
+    test "rejects a decrement that would take remaining_quantity below zero" do
+      batch = batch_fixture(%{quantity: 5})
+
+      assert {:error, changeset} = Batches.decrement_remaining_quantity(batch, 10)
+      assert %{remaining_quantity: ["must be greater than or equal to 0"]} = errors_on(changeset)
+    end
+  end
+end

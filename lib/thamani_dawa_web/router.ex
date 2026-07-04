@@ -1,6 +1,8 @@
 defmodule ThamaniDawaWeb.Router do
   use ThamaniDawaWeb, :router
 
+  import ThamaniDawaWeb.UserAuth
+
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
@@ -8,6 +10,7 @@ defmodule ThamaniDawaWeb.Router do
     plug :put_root_layout, html: {ThamaniDawaWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug :fetch_current_scope_for_user
   end
 
   pipeline :api do
@@ -18,6 +21,69 @@ defmodule ThamaniDawaWeb.Router do
     pipe_through :browser
 
     get "/", PageController, :home
+
+    get "/login", SessionController, :new
+    post "/login", SessionController, :create
+    delete "/logout", SessionController, :delete
+  end
+
+  scope "/", ThamaniDawaWeb do
+    pipe_through :browser
+
+    live_session :unauthenticated, on_mount: [{ThamaniDawaWeb.UserAuth, :mount_current_scope}] do
+      live "/signup", SignupLive, :new
+      live "/invites/:token", AcceptInviteLive, :edit
+    end
+
+    live_session :organization, on_mount: [{ThamaniDawaWeb.UserAuth, :require_admin}] do
+      live "/org/team", TeamLive.Index, :index
+      live "/org/team/new", TeamLive.Index, :new
+
+      live "/org/sites", SiteLive.Index, :index
+      live "/org/sites/new", SiteLive.Index, :new
+      live "/org/sites/:id/edit", SiteLive.Index, :edit
+    end
+
+    live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
+      live "/pharmacy", PharmacyDashboardLive, :index
+      live "/pharmacy/scan", PharmacyScanLive, :index
+
+      live "/pharmacy/products", ProductLive.Index, :index
+      live "/pharmacy/products/new", ProductLive.Index, :new
+      live "/pharmacy/products/:id", ProductLive.Show, :show
+      live "/pharmacy/products/:id/edit", ProductLive.Index, :edit
+
+      live "/pharmacy/receive-stock", ReceiveStockLive, :new
+
+      live "/pharmacy/prescriptions", PrescriptionLive.Index, :index
+      live "/pharmacy/prescriptions/new", PrescriptionLive.Index, :new
+      live "/pharmacy/prescriptions/:id", PrescriptionLive.Show, :show
+
+      live "/pharmacy/dangerous-drug-register", DangerousDrugRegisterLive.Index, :index
+      live "/pharmacy/pharmacy-logs", PharmacyLogLive.Index, :index
+    end
+
+    live_session :lab, on_mount: [{ThamaniDawaWeb.UserAuth, :require_lab_access}] do
+      live "/lab", LabDashboardLive, :index
+      live "/lab/scan", LabScanLive, :index
+
+      live "/lab/orders", LabOrderLive.Index, :index
+      live "/lab/orders/new", LabOrderLive.Index, :new
+      live "/lab/orders/:id", LabOrderLive.Show, :show
+
+      live "/lab/orders/:lab_order_id/tests/:id/results", ResultEntryLive, :edit
+
+      live "/lab/verification-queue", VerificationQueueLive, :index
+
+      live "/lab/test-templates", TestTemplateLive.Index, :index
+      live "/lab/test-templates/new", TestTemplateLive.Index, :new
+      live "/lab/test-templates/:id/edit", TestTemplateLive.Index, :edit
+      live "/lab/test-categories", TestCategoryLive.Index, :index
+      live "/lab/test-categories/new", TestCategoryLive.Index, :new
+
+      live "/lab/receive-stock", LabReceiveStockLive, :new
+      live "/lab/quality-assurance", QualityAssuranceLive.Index, :index
+    end
   end
 
   # Other scopes may use custom stacks.

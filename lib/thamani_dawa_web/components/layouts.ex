@@ -5,11 +5,105 @@ defmodule ThamaniDawaWeb.Layouts do
   """
   use ThamaniDawaWeb, :html
 
+  alias ThamaniDawa.Accounts.Scope
+
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
   # and other static content.
   embed_templates "layouts/*"
+
+  @doc """
+  Renders the authenticated app shell: a nav gated by role (Team/Sites for
+  admins, Pharmacy for admin+pharmacist, Lab for admin+lab_technician),
+  current site name, theme toggle, and logout. Every authenticated LiveView
+  wraps its content in this instead of the generic `app/1`.
+
+  ## Examples
+
+      <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+        <h1>Content</h1>
+      </Layouts.app_shell>
+  """
+  attr :flash, :map, required: true, doc: "the map of flash messages"
+  attr :current_scope, :map, required: true
+
+  slot :inner_block, required: true
+
+  def app_shell(assigns) do
+    ~H"""
+    <div class="min-h-screen">
+      <header class="navbar bg-base-200 px-4 sm:px-6 lg:px-8">
+        <div class="flex-1 flex items-center gap-4">
+          <a href={~p"/"} class="font-semibold">Thamani Dawa</a>
+          <span class="text-sm text-base-content/70">{current_site_name(@current_scope)}</span>
+        </div>
+        <nav class="flex-none">
+          <ul class="flex items-center gap-2">
+            <li :if={Scope.admin?(@current_scope)}>
+              <.link navigate={~p"/org/team"} class="btn btn-ghost btn-sm">Team</.link>
+            </li>
+            <li :if={Scope.admin?(@current_scope)}>
+              <.link navigate={~p"/org/sites"} class="btn btn-ghost btn-sm">Sites</.link>
+            </li>
+            <li :if={Scope.admin?(@current_scope) or Scope.pharmacist?(@current_scope)}>
+              <.link navigate={~p"/pharmacy"} class="btn btn-ghost btn-sm">Pharmacy</.link>
+            </li>
+            <li :if={Scope.admin?(@current_scope) or Scope.lab_technician?(@current_scope)}>
+              <.link navigate={~p"/lab"} class="btn btn-ghost btn-sm">Lab</.link>
+            </li>
+            <li><.theme_toggle /></li>
+            <li>
+              <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-sm">Log out</.link>
+            </li>
+          </ul>
+        </nav>
+      </header>
+
+      <main class="px-4 py-8 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-5xl space-y-4">
+          {render_slot(@inner_block)}
+        </div>
+      </main>
+
+      <.flash_group flash={@flash} />
+    </div>
+    """
+  end
+
+  defp current_site_name(%Scope{user: %{site_id: nil}}), do: "All sites"
+
+  defp current_site_name(%Scope{user: %{site_id: site_id}, organization_id: organization_id}) do
+    ThamaniDawa.Sites.get_site!(organization_id, site_id).name
+  rescue
+    Ecto.NoResultsError -> "Unknown site"
+  end
+
+  @doc """
+  Renders a minimal, unauthenticated centered-card layout — used by signup,
+  accept-invite, and login, which have no nav to show.
+
+  ## Examples
+
+      <Layouts.unauthenticated flash={@flash}>
+        <h1>Log in</h1>
+      </Layouts.unauthenticated>
+  """
+  attr :flash, :map, required: true, doc: "the map of flash messages"
+  slot :inner_block, required: true
+
+  def unauthenticated(assigns) do
+    ~H"""
+    <div class="min-h-screen flex items-center justify-center bg-base-200 px-4">
+      <div class="card w-full max-w-md bg-base-100 shadow-xl">
+        <div class="card-body">
+          {render_slot(@inner_block)}
+        </div>
+      </div>
+    </div>
+    <.flash_group flash={@flash} />
+    """
+  end
 
   @doc """
   Renders your app layout.
