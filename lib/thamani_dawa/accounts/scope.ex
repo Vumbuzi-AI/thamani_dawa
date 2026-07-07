@@ -21,8 +21,11 @@ defmodule ThamaniDawa.Accounts.Scope do
   def role?(%__MODULE__{user: %User{role: role}}, wanted_role), do: role == wanted_role
   def role?(_scope, _wanted_role), do: false
 
-  @doc "Whether the signed-in user is an org admin (§7)."
-  def admin?(scope), do: role?(scope, :admin)
+  @doc """
+  Whether the signed-in user is an org admin (§7) whose account is still active
+  """
+  def admin?(%__MODULE__{user: %User{role: :admin, is_active: true}}), do: true
+  def admin?(_scope), do: false
 
   @doc "Whether the signed-in user is a pharmacist (§7)."
   def pharmacist?(scope), do: role?(scope, :pharmacist)

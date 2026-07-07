@@ -16,6 +16,13 @@ defmodule ThamaniDawa.Accounts.ScopeTest do
     refute Scope.admin?(Scope.for_user(pharmacist))
   end
 
+  test "admin?/1 is false for a deactivated admin" do
+    admin = user_fixture()
+    {:ok, deactivated} = admin |> change(is_active: false) |> Repo.update()
+
+    refute Scope.admin?(Scope.for_user(deactivated))
+  end
+
   test "lab_technician?/1 reflects the user's role" do
     lab_technician = staff_fixture(%{role: :lab_technician})
 
