@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Complete lab order test selection · Sprint Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <div class="mx-auto max-w-5xl px-4 py-10">
+    <a href="index.html" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">&larr; Back to sprint board</a>
+
+    <div class="mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-100 px-6 py-5">
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset bg-teal-100 text-teal-700 ring-teal-600/20">Frontend</span>
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset bg-amber-100 text-amber-700 ring-amber-600/20">High</span>
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset bg-slate-100 text-slate-700 ring-slate-600/20">Frontend Developer</span>
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset bg-slate-100 text-slate-700 ring-slate-600/20">0.5h</span>
+        </div>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900">Complete lab order test selection</h1>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Select one or several active tests for a lab order, driving total pricing and validation.</p>
+      </div>
+
+      <div class="grid gap-6 px-6 py-6 lg:grid-cols-5">
+        <div class="lg:col-span-3 space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Preview</h2>
+          <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-5">
+            <div class="space-y-2"><label class="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="flex items-center gap-2 text-sm"><input type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> Full Blood Count</span><span class="text-sm text-slate-500">KES 800</span></label><label class="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="flex items-center gap-2 text-sm"><input type="checkbox" checked class="rounded border-slate-300 text-indigo-600" /> Malaria RDT</span><span class="text-sm text-slate-500">KES 500</span></label><label class="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2"><span class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded border-slate-300 text-indigo-600" /> Widal Test</span><span class="text-sm text-slate-400">Inactive</span></label><div class="flex justify-between border-t border-slate-200 pt-2 text-sm font-semibold"><span>Total</span><span>KES 1,300</span></div></div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-2 space-y-6">
+          <div>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-2">Acceptance Criteria</h2>
+            <ul class="space-y-2">
+      <li class="flex items-start gap-2">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+        <span class="text-sm text-slate-700">Lab order form supports selecting multiple active lab tests.</span>
+      </li>
+      <li class="flex items-start gap-2">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+        <span class="text-sm text-slate-700">Total amount is calculated from selected tests.</span>
+      </li>
+      <li class="flex items-start gap-2">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+        <span class="text-sm text-slate-700">LiveView tests cover multiple tests and no-test validation.</span>
+      </li></ul>
+          </div>
+          <div>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-2">Dependencies</h2>
+            <div class="flex flex-wrap gap-1.5"><span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">Complete lab order create with inline patient</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

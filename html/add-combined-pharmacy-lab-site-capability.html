@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Add combined pharmacy/lab site capability · Sprint Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+  <div class="mx-auto max-w-5xl px-4 py-10">
+    <a href="index.html" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">&larr; Back to sprint board</a>
+
+    <div class="mt-4 rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div class="border-b border-slate-100 px-6 py-5">
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset bg-purple-100 text-purple-700 ring-purple-600/20">Backend</span>
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset bg-red-100 text-red-700 ring-red-600/20">Urgent</span>
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset bg-slate-100 text-slate-700 ring-slate-600/20">Backend Developer</span>
+          <span class="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset bg-slate-100 text-slate-700 ring-slate-600/20">0.5h</span>
+        </div>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900">Add combined pharmacy/lab site capability</h1>
+        <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">Model sites that can operate as pharmacy, lab, or both without duplicating the site record.</p>
+      </div>
+
+      <div class="grid gap-6 px-6 py-6 lg:grid-cols-5">
+        <div class="lg:col-span-3 space-y-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Preview</h2>
+          <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-5">
+            <dl class="divide-y divide-slate-100">
+      <div class="border-b border-slate-100 py-3 flex justify-between gap-4">
+        <dt class="text-sm text-slate-500">Site</dt>
+        <dd class="text-sm font-medium text-slate-800 text-right">Nairobi CBD Branch</dd>
+      </div>
+      <div class="border-b border-slate-100 py-3 flex justify-between gap-4">
+        <dt class="text-sm text-slate-500">Capability</dt>
+        <dd class="text-sm font-medium text-slate-800 text-right"><span class="rounded bg-indigo-100 px-2 py-0.5 text-indigo-700 text-xs">pharmacy + lab</span></dd>
+      </div>
+      <div class="border-b border-slate-100 py-3 flex justify-between gap-4">
+        <dt class="text-sm text-slate-500">Pharmacy-only example</dt>
+        <dd class="text-sm font-medium text-slate-800 text-right"><span class="rounded bg-teal-100 px-2 py-0.5 text-teal-700 text-xs">pharmacy</span></dd>
+      </div>
+      <div class="border-b border-slate-100 py-3 flex justify-between gap-4">
+        <dt class="text-sm text-slate-500">Lab-only example</dt>
+        <dd class="text-sm font-medium text-slate-800 text-right"><span class="rounded bg-purple-100 px-2 py-0.5 text-purple-700 text-xs">lab</span></dd>
+      </div></dl>
+          </div>
+        </div>
+
+        <div class="lg:col-span-2 space-y-6">
+          <div>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-2">Acceptance Criteria</h2>
+            <ul class="space-y-2">
+      <li class="flex items-start gap-2">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+        <span class="text-sm text-slate-700">Site schema and changeset support a combined pharmacy/lab capability.</span>
+      </li>
+      <li class="flex items-start gap-2">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+        <span class="text-sm text-slate-700">Existing pharmacy-only and lab-only sites still validate.</span>
+      </li>
+      <li class="flex items-start gap-2">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" /></svg>
+        <span class="text-sm text-slate-700">Context tests cover valid and invalid site capabilities.</span>
+      </li></ul>
+          </div>
+          <div>
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400 mb-2">Dependencies</h2>
+            <div class="flex flex-wrap gap-1.5"><span class="text-xs text-slate-400 italic">None</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
