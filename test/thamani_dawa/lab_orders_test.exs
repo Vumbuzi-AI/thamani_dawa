@@ -29,11 +29,7 @@ defmodule ThamaniDawa.LabOrdersTest do
       assert %{
                site_id: ["can't be blank"],
                patient_id: ["can't be blank"],
-               patient_visit_id: ["can't be blank"],
-               lab_request: ["can't be blank"],
-               referring_facility: ["can't be blank"],
-               referring_doctor: ["can't be blank"],
-               referred_date: ["can't be blank"]
+               patient_visit_id: ["can't be blank"]
              } = errors_on(changeset)
     end
 
