@@ -46,13 +46,18 @@ defmodule ThamaniDawaWeb.SignupLive do
     <Layouts.unauthenticated flash={@flash}>
       <h1 class="text-lg font-semibold mb-4">Set up your organization</h1>
 
-      <form phx-submit="save">
-        <.input field={@org_form[:name]} label="Organization / pharmacy name" required />
+      <form phx-submit="save" class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <.input field={@org_form[:name]} label="Organization / pharmacy name" required />
+          <.input field={@org_form[:license_number]} label="License number" required />
+        </div>
 
         <div class="divider" />
 
-        <.input field={@admin_form[:name]} label="Your name" required />
-        <.input field={@admin_form[:email]} type="email" label="Email" required />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <.input field={@admin_form[:name]} label="Your name" required />
+          <.input field={@admin_form[:email]} type="email" label="Email" required />
+        </div>
         <.input field={@admin_form[:password]} type="password" label="Password" required />
 
         <.button variant="primary" class="w-full mt-2">Create account</.button>

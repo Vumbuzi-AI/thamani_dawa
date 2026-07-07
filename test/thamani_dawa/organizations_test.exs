@@ -4,27 +4,69 @@ defmodule ThamaniDawa.OrganizationsTest do
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Organizations.Organization
   alias ThamaniDawa.Repo
+  alias ThamaniDawa.Sites.Site
 
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.OrganizationsFixtures
 
   describe "create_organization/1" do
-    test "creates an organization with a name" do
-      assert {:ok, organization} = Organizations.create_organization(%{name: "Acme Pharmacy"})
+    test "creates an organization with a name and license number" do
+      assert {:ok, organization} =
+               Organizations.create_organization(%{name: "Acme Pharmacy", license_number: "LIC-1"})
+
       assert organization.name == "Acme Pharmacy"
+      assert organization.license_number == "LIC-1"
       assert organization.is_active
     end
 
     test "requires a name" do
-      assert {:error, changeset} = Organizations.create_organization(%{})
+      assert {:error, changeset} =
+               Organizations.create_organization(%{license_number: "LIC-1"})
+
       assert %{name: ["can't be blank"]} = errors_on(changeset)
     end
 
-    test "enforces slug uniqueness when a slug is given" do
+    test "requires a license number" do
+      assert {:error, changeset} = Organizations.create_organization(%{name: "Acme Pharmacy"})
+      assert %{license_number: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "auto-generates a slug from the name when none is given" do
+      assert {:ok, organization} =
+               Organizations.create_organization(%{name: "Acme Pharmacy", license_number: "LIC-1"})
+
+      assert organization.slug == "acme-pharmacy"
+    end
+
+    test "strips accents when generating a slug" do
+      assert {:ok, organization} =
+               Organizations.create_organization(%{name: "Café Pharmacy", license_number: "LIC-1"})
+
+      assert organization.slug == "cafe-pharmacy"
+    end
+
+    test "requires a unique name" do
+      organization_fixture(%{name: "City Pharmacy"})
+
+      assert {:error, changeset} =
+               Organizations.create_organization(%{
+                 name: "City Pharmacy",
+                 slug: "unrelated-slug",
+                 license_number: "LIC-2"
+               })
+
+      assert %{name: ["has already been taken"]} = errors_on(changeset)
+    end
+
+    test "enforces slug uniqueness when a slug is given explicitly" do
       organization_fixture(%{slug: "acme"})
 
       assert {:error, changeset} =
-               Organizations.create_organization(%{name: "Other Pharmacy", slug: "acme"})
+               Organizations.create_organization(%{
+                 name: "Other Pharmacy",
+                 slug: "acme",
+                 license_number: "LIC-2"
+               })
 
       assert %{slug: ["has already been taken"]} = errors_on(changeset)
     end
@@ -39,13 +81,15 @@ defmodule ThamaniDawa.OrganizationsTest do
 
   describe "signup/2" do
     test "creates an organization, a default site, and its first admin user in one transaction" do
-      org_attrs = %{name: "Acme Pharmacy"}
+      org_attrs = %{name: "Acme Pharmacy", license_number: "LIC-1"}
       admin_attrs = valid_user_attributes(%{name: "Jane Admin"})
 
       assert {:ok, %{organization: organization, site: site, user: user}} =
                Organizations.signup(org_attrs, admin_attrs)
 
       assert organization.name == "Acme Pharmacy"
+      assert organization.license_number == "LIC-1"
+      assert organization.slug == "acme-pharmacy"
       assert site.organization_id == organization.id
       assert site.name == organization.name
       assert site.site_type == :pharmacy
@@ -55,10 +99,41 @@ defmodule ThamaniDawa.OrganizationsTest do
     end
 
     test "rolls back the whole signup if the admin user is invalid" do
-      org_attrs = %{name: "Acme Pharmacy"}
+      org_attrs = %{name: "Acme Pharmacy", license_number: "LIC-1"}
 
       assert {:error, %Ecto.Changeset{}} = Organizations.signup(org_attrs, %{})
       refute Repo.get_by(Organization, name: "Acme Pharmacy")
+
+      # The organization and default site are both created before the admin
+      # user step runs (§2.3.1 order: organization -> site -> admin), so this
+      # is the case that actually proves the *site* insert gets undone too,
+      # not just the organization — the acceptance criterion is "rolls back
+      # organization and site creation", not organization alone.
+      assert Repo.all(Site) == []
+    end
+
+    test "rolls back the whole signup if the admin's email is already taken" do
+      existing = user_fixture()
+      site_count_before = Repo.aggregate(Site, :count)
+
+      org_attrs = %{name: "Brand New Pharmacy", license_number: "LIC-9"}
+      admin_attrs = valid_user_attributes(%{email: existing.email})
+
+      assert {:error, %Ecto.Changeset{}} = Organizations.signup(org_attrs, admin_attrs)
+      refute Repo.get_by(Organization, name: "Brand New Pharmacy")
+      assert Repo.aggregate(Site, :count) == site_count_before
+    end
+
+    test "rolls back the whole signup if the organization name is already taken" do
+      organization_fixture(%{name: "Existing Pharmacy"})
+      site_count_before = Repo.aggregate(Site, :count)
+
+      org_attrs = %{name: "Existing Pharmacy", license_number: "LIC-9"}
+      admin_attrs = valid_user_attributes()
+
+      assert {:error, %Ecto.Changeset{}} = Organizations.signup(org_attrs, admin_attrs)
+      refute Repo.get_by(ThamaniDawa.Accounts.User, email: admin_attrs.email)
+      assert Repo.aggregate(Site, :count) == site_count_before
     end
 
     test "rolls back the whole signup if the organization is invalid" do

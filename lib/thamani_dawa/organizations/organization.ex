@@ -24,7 +24,30 @@ defmodule ThamaniDawa.Organizations.Organization do
       :is_subscription_active,
       :kyc_details
     ])
-    |> validate_required([:name])
+    |> validate_required([:name, :license_number])
+    |> maybe_generate_slug()
+    |> unique_constraint(:name)
     |> unique_constraint(:slug)
+  end
+
+  defp maybe_generate_slug(changeset) do
+    if get_field(changeset, :slug) do
+      changeset
+    else
+      case get_field(changeset, :name) do
+        nil -> changeset
+        name -> put_change(changeset, :slug, slugify(name))
+      end
+    end
+  end
+
+  defp slugify(text) do
+    text
+    |> String.downcase()
+    |> String.trim()
+    |> String.normalize(:nfd)
+    |> String.replace(~r/[^a-z0-9\s-]/u, " ")
+    |> String.replace(~r/[\s-]+/, "-")
+    |> String.trim("-")
   end
 end
