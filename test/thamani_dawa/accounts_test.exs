@@ -166,6 +166,15 @@ defmodule ThamaniDawa.AccountsTest do
     test "returns nil for an unknown email" do
       refute Accounts.get_user_by_email_and_password("unknown@example.com", "whatever123")
     end
+
+    test "returns nil for a deactivated user, even with the correct password" do
+      email = valid_user_email()
+      password = valid_user_password()
+      user = user_fixture(%{email: email, password: password})
+      {:ok, _deactivated} = user |> change(is_active: false) |> Repo.update()
+
+      refute Accounts.get_user_by_email_and_password(email, password)
+    end
   end
 
   describe "sessions" do
@@ -179,6 +188,16 @@ defmodule ThamaniDawa.AccountsTest do
 
     test "get_user_by_session_token/1 returns nil for a bogus token" do
       refute Accounts.get_user_by_session_token(:crypto.strong_rand_bytes(32))
+    end
+
+    test "get_user_by_session_token/1 returns nil once the user is deactivated" do
+      user = user_fixture()
+      token = Accounts.generate_user_session_token(user)
+      assert Accounts.get_user_by_session_token(token)
+
+      {:ok, _deactivated} = user |> change(is_active: false) |> Repo.update()
+
+      refute Accounts.get_user_by_session_token(token)
     end
 
     test "delete_user_session_token/1 invalidates the token" do
