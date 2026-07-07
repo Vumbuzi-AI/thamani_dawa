@@ -36,7 +36,7 @@ defmodule ThamaniDawa.Organizations.Organization do
     else
       case get_field(changeset, :name) do
         nil -> changeset
-        name -> put_change(changeset, :slug, slugify(name) <> "-" <> random_suffix())
+        name -> put_change(changeset, :slug, slugify(name))
       end
     end
   end
@@ -50,6 +50,4 @@ defmodule ThamaniDawa.Organizations.Organization do
     |> String.replace(~r/[\s-]+/, "-")
     |> String.trim("-")
   end
-
-  defp random_suffix, do: 2 |> :crypto.strong_rand_bytes() |> Base.encode16(case: :lower)
 end

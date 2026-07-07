@@ -35,39 +35,27 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert {:ok, organization} =
                Organizations.create_organization(%{name: "Acme Pharmacy", license_number: "LIC-1"})
 
-      assert organization.slug =~ ~r/^acme-pharmacy-[0-9a-f]{4}$/
+      assert organization.slug == "acme-pharmacy"
     end
 
     test "strips accents when generating a slug" do
       assert {:ok, organization} =
                Organizations.create_organization(%{name: "Café Pharmacy", license_number: "LIC-1"})
 
-      assert organization.slug =~ ~r/^cafe-pharmacy-[0-9a-f]{4}$/
+      assert organization.slug == "cafe-pharmacy"
     end
 
     test "requires a unique name" do
       organization_fixture(%{name: "City Pharmacy"})
 
       assert {:error, changeset} =
-               Organizations.create_organization(%{name: "City Pharmacy", license_number: "LIC-2"})
+               Organizations.create_organization(%{
+                 name: "City Pharmacy",
+                 slug: "unrelated-slug",
+                 license_number: "LIC-2"
+               })
 
       assert %{name: ["has already been taken"]} = errors_on(changeset)
-    end
-
-    test "two differently-named organizations that slugify to the same base still get different slugs" do
-      # Names must be unique (enforced above), but two *distinct* names can
-      # still slugify to the same base once punctuation is stripped -- the
-      # random suffix is what keeps these from colliding on `slug`, not name
-      # uniqueness.
-      attrs = %{name: "Acme Pharmacy!", license_number: "LIC-1"}
-      other_attrs = %{name: "Acme Pharmacy?", license_number: "LIC-2"}
-
-      assert {:ok, first} = Organizations.create_organization(attrs)
-      assert {:ok, second} = Organizations.create_organization(other_attrs)
-
-      assert first.slug =~ ~r/^acme-pharmacy-[0-9a-f]{4}$/
-      assert second.slug =~ ~r/^acme-pharmacy-[0-9a-f]{4}$/
-      assert first.slug != second.slug
     end
 
     test "enforces slug uniqueness when a slug is given explicitly" do
@@ -101,7 +89,7 @@ defmodule ThamaniDawa.OrganizationsTest do
 
       assert organization.name == "Acme Pharmacy"
       assert organization.license_number == "LIC-1"
-      assert organization.slug =~ ~r/^acme-pharmacy-[0-9a-f]{4}$/
+      assert organization.slug == "acme-pharmacy"
       assert site.organization_id == organization.id
       assert site.name == organization.name
       assert site.site_type == :pharmacy

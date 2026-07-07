@@ -25,7 +25,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       organization = Repo.get_by!(Organization, name: "Acme Pharmacy")
       assert organization.license_number == "LIC-1"
-      assert organization.slug =~ ~r/^acme-pharmacy-[0-9a-f]{4}$/
+      assert organization.slug == "acme-pharmacy"
     end
 
     test "shows the error on the admin form when the email is already taken", %{conn: conn} do
