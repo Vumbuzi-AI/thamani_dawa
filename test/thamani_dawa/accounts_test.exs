@@ -3,6 +3,7 @@ defmodule ThamaniDawa.AccountsTest do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.Accounts.User
+  alias ThamaniDawa.Accounts.UserToken
 
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.OrganizationsFixtures
@@ -124,6 +125,38 @@ defmodule ThamaniDawa.AccountsTest do
 
       assert {:ok, accepted} = Accounts.accept_invite(invited, %{password: valid_user_password()})
       assert is_binary(accepted.hashed_password)
+    end
+
+    test "returns nil for a reused token, once it's already been accepted" do
+      organization = organization_fixture()
+
+      {:ok, invited, encoded_token} =
+        Accounts.invite_user(organization.id, nil, %{
+          name: "New Hire",
+          email: valid_user_email(),
+          role: :pharmacist
+        })
+
+      assert {:ok, _accepted} =
+               Accounts.accept_invite(invited, %{password: valid_user_password()})
+
+      refute Accounts.get_user_by_invite_token(encoded_token)
+    end
+
+    test "returns nil for an expired token" do
+      organization = organization_fixture()
+
+      {:ok, invited, encoded_token} =
+        Accounts.invite_user(organization.id, nil, %{
+          name: "New Hire",
+          email: valid_user_email(),
+          role: :pharmacist
+        })
+
+      invited
+      |> UserToken.by_user_and_context_query("invite")
+      |> Repo.update_all(set: [inserted_at: DateTime.add(DateTime.utc_now(), -8, :day)])
+
       refute Accounts.get_user_by_invite_token(encoded_token)
     end
 

@@ -34,12 +34,20 @@ defmodule ThamaniDawa.Organizations.Organization do
     if get_field(changeset, :slug) do
       changeset
     else
-      case get_field(changeset, :name) do
-        nil -> changeset
-        name -> put_change(changeset, :slug, slugify(name))
-      end
+      generate_slug_from_name(changeset, get_field(changeset, :name))
     end
   end
+
+  defp generate_slug_from_name(changeset, nil), do: changeset
+
+  defp generate_slug_from_name(changeset, name) do
+    put_generated_slug(changeset, slugify(name))
+  end
+
+  defp put_generated_slug(changeset, ""),
+    do: add_error(changeset, :name, "must contain at least one letter or number")
+
+  defp put_generated_slug(changeset, slug), do: put_change(changeset, :slug, slug)
 
   defp slugify(text) do
     text

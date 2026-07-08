@@ -99,12 +99,22 @@ defmodule ThamaniDawa.Accounts do
   end
 
   @doc """
-  Emails the invite link to a newly-invited user. `invite_url_fun` receives
-  the encoded token and must return the full invite URL.
+  Emails the invite link to a newly-invited user.
   """
-  def deliver_user_invite(%User{} = user, encoded_token, invite_url_fun)
+  def deliver_user_invite(
+        %User{} = user,
+        organization_name,
+        invited_by_name,
+        encoded_token,
+        invite_url_fun
+      )
       when is_function(invite_url_fun, 1) do
-    UserNotifier.deliver_invite(user, invite_url_fun.(encoded_token))
+    UserNotifier.deliver_invite(
+      user,
+      organization_name,
+      invited_by_name,
+      invite_url_fun.(encoded_token)
+    )
   end
 
   @doc "Gets the invited user for a given (unexpired, unused) invite token, or nil."

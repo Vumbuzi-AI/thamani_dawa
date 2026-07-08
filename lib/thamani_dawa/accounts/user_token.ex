@@ -83,6 +83,7 @@ defmodule ThamaniDawa.Accounts.UserToken do
 
   defp validity_in_days("invite"), do: @invite_validity_in_days
   defp validity_in_days("reset_password"), do: @reset_password_validity_in_days
+  def invite_validity_in_days, do: @invite_validity_in_days
 
   @doc "Returns the query for a given token and context, e.g. for deletion."
   def by_token_and_context_query(token, context) do
