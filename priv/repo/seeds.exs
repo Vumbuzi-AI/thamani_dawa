@@ -72,7 +72,7 @@ org_result =
           insert_or_get.(
             Site,
             %{organization_id: organization.id, name: organization.name},
-            %{site_type: :pharmacy},
+            %{site_type: :pharmacy, lat: 0, long: 0},
             fn attrs ->
               Sites.create_site(organization.id, attrs)
             end
@@ -106,7 +106,9 @@ lab_site =
     %{
       site_type: :lab,
       gln: "6160001000018",
-      address: "Kimathi Street, 2nd Floor"
+      address: "Kimathi Street, 2nd Floor",
+      lat: 0,
+      long: 0
     },
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
@@ -118,7 +120,9 @@ warehouse_site =
     %{
       site_type: :warehouse,
       gln: "6160001000025",
-      address: "Industrial Area, Nairobi"
+      address: "Industrial Area, Nairobi",
+      lat: 0,
+      long: 0
     },
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )

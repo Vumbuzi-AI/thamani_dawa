@@ -18,10 +18,10 @@ defmodule ThamaniDawa.Repo.Migrations.CreateLabOrders do
       add :status, :string, null: false, default: "pending"
       add :lab_report, :text
       add :test_findings, :text
-      add :lab_request, :text, null: false
-      add :referring_facility, :text, null: false
-      add :referring_doctor, :text, null: false
-      add :referred_date, :time, null: false
+      add :lab_request, :text
+      add :referring_facility, :text
+      add :referring_doctor, :text
+      add :referred_date, :utc_datetime
 
       timestamps(type: :utc_datetime)
     end

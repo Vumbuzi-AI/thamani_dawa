@@ -76,7 +76,7 @@ defmodule ThamaniDawa.GS1Decoder do
   end
 
   defp take_fixed_value(_ai, rest, length) when byte_size(rest) >= length do
-    <<value::binary-size(length), remainder::binary>> = rest
+    <<value::binary-size(^length), remainder::binary>> = rest
     {:ok, value, remainder}
   end
 

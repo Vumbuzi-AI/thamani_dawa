@@ -15,18 +15,12 @@ defmodule ThamaniDawa.PrescriptionsTest do
   import ThamaniDawa.SitesFixtures
 
   describe "create_prescription/2" do
-    test "requires patient_visit_id and referral details" do
+    test "requires patient_visit_id" do
       organization = organization_fixture()
 
       assert {:error, changeset} = Prescriptions.create_prescription(organization.id, %{})
 
-      assert %{
-               patient_visit_id: ["can't be blank"],
-               doctors_note: ["can't be blank"],
-               source_facility: ["can't be blank"],
-               referring_doctor: ["can't be blank"],
-               referral_date: ["can't be blank"]
-             } = errors_on(changeset)
+      assert %{patient_visit_id: ["can't be blank"]} = errors_on(changeset)
     end
 
     test "defaults status to pending and scopes to the organization" do

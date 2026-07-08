@@ -39,13 +39,7 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
       :referring_doctor,
       :referral_date
     ])
-    |> validate_required([
-      :patient_visit_id,
-      :doctors_note,
-      :source_facility,
-      :referring_doctor,
-      :referral_date
-    ])
+    |> validate_required([:patient_visit_id])
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:patient_visit_id)
   end

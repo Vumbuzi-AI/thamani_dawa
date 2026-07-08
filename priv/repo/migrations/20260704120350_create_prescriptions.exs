@@ -11,11 +11,11 @@ defmodule ThamaniDawa.Repo.Migrations.CreatePrescriptions do
       add :total_amount, :decimal
       add :status, :string, null: false, default: "pending"
       add :notes, :text
-      add :doctors_note, :text, null: false
+      add :doctors_note, :text
       add :is_external, :boolean, null: false, default: false
-      add :source_facility, :text, null: false
-      add :referring_doctor, :text, null: false
-      add :referral_date, :time, null: false
+      add :source_facility, :text
+      add :referring_doctor, :text
+      add :referral_date, :time
 
       timestamps(type: :utc_datetime)
     end

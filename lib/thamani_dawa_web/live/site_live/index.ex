@@ -26,6 +26,15 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     assign(socket, form: nil, site: nil)
   end
 
+  def handle_event("validate", _, %{assigns: %{live_action: :index}} = socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("validate", %{"site" => attrs}, socket) do
+    changeset = Site.changeset(socket.assigns.site || %Site{}, attrs)
+    {:noreply, assign(socket, :form, to_form(changeset, as: :site, action: :validate))}
+  end
+
   def handle_event("save", %{"site" => attrs}, socket) do
     save_site(socket, socket.assigns.live_action, attrs)
   end
@@ -65,6 +74,15 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     assign(socket, :sites, Sites.list_sites(organization_id))
   end
 
+  defp capability_options do
+    [
+      {"Pharmacy", "Dispensing & stock", :pharmacy},
+      {"Lab", "Orders & results", :lab},
+      {"Pharmacy + Lab", "Both workflows", :pharmacy_lab},
+      {"Warehouse", "Stock holding only", :warehouse}
+    ]
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
@@ -80,19 +98,19 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           <h2 class="font-semibold mb-2">
             {if @live_action == :new, do: "Add a site", else: "Edit site"}
           </h2>
-          <form phx-submit="save">
-            <.input field={@form[:name]} label="Name" required />
-            <.input
-              field={@form[:site_type]}
-              type="select"
-              label="Type"
-              options={Enum.map(Site.site_types(), &{Phoenix.Naming.humanize(&1), &1})}
-              prompt="Choose a type"
-              required
-            />
-            <.input field={@form[:gln]} label="GLN" />
-            <.input field={@form[:address]} label="Address" />
-            <.input field={@form[:is_active]} type="checkbox" label="Active" />
+          <form id="site-form" phx-submit="save" phx-change="validate">
+            <p class="text-xs text-base-content/60 mb-3">
+              Fields marked <span class="text-error">*</span> are required.
+            </p>
+            <.input id="site-name" field={@form[:name]} label="Name" required />
+            <.input id="site-gln" field={@form[:gln]} label="GLN" required />
+            <.input id="site-address" field={@form[:address]} label="Address" required />
+            <.capability_select field={@form[:site_type]} options={capability_options()} required />
+            <.input id="site-active" field={@form[:is_active]} type="checkbox" label="Active" />
+            <div class="grid grid-cols-2 gap-2">
+              <.input id="site-lat" field={@form[:lat]} label="Latitude" type="number" step="any" />
+              <.input id="site-long" field={@form[:long]} label="Longitude" type="number" step="any" />
+            </div>
             <div class="flex gap-2 mt-2">
               <.button variant="primary">Save</.button>
               <.button navigate={~p"/org/sites"}>Cancel</.button>

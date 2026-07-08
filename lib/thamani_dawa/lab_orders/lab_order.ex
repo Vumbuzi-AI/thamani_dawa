@@ -21,7 +21,7 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
     field :lab_request, :string
     field :referring_facility, :string
     field :referring_doctor, :string
-    field :referred_date, :time
+    field :referred_date, :utc_datetime
 
     timestamps(type: :utc_datetime)
   end
@@ -47,15 +47,7 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
       :referring_doctor,
       :referred_date
     ])
-    |> validate_required([
-      :site_id,
-      :patient_id,
-      :patient_visit_id,
-      :lab_request,
-      :referring_facility,
-      :referring_doctor,
-      :referred_date
-    ])
+    |> validate_required([:site_id, :patient_id, :patient_visit_id])
     |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:patient_id)
     |> foreign_key_constraint(:patient_visit_id)

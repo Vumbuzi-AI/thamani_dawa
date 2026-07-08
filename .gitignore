@@ -35,3 +35,4 @@ thamani_dawa-*.tar
 npm-debug.log
 /assets/node_modules/
 
+.tool-versions

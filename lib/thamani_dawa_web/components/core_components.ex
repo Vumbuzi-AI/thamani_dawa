@@ -242,7 +242,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class="label mb-1">
+          {@label}<span :if={@rest[:required]} aria-hidden="true" class="text-error ml-0.5">*</span>
+        </span>
         <select
           id={@id}
           name={@name}
@@ -263,7 +265,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class="label mb-1">
+          {@label}<span :if={@rest[:required]} aria-hidden="true" class="text-error ml-0.5">*</span>
+        </span>
         <textarea
           id={@id}
           name={@name}
@@ -284,7 +288,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
     ~H"""
     <div class="fieldset mb-2">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class="label mb-1">
+          {@label}<span :if={@rest[:required]} aria-hidden="true" class="text-error ml-0.5">*</span>
+        </span>
         <input
           type={@type}
           name={@name}
@@ -309,6 +315,61 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <.icon name="hero-exclamation-circle" class="size-5" />
       {render_slot(@inner_block)}
     </p>
+    """
+  end
+
+  @doc """
+  Renders a radio-card group for choosing a site capability.
+
+  ## Examples
+
+      <.capability_select
+        field={@form[:site_type]}
+        options={[{"Pharmacy", "Dispensing & stock", :pharmacy}]}
+      />
+  """
+  attr :field, Phoenix.HTML.FormField, required: true
+  attr :options, :list, required: true, doc: "list of {label, description, value} tuples"
+  attr :id, :string, default: "site-capability"
+  attr :required, :boolean, default: false
+
+  def capability_select(assigns) do
+    errors =
+      if Phoenix.Component.used_input?(assigns.field),
+        do: Enum.map(assigns.field.errors, &translate_error/1),
+        else: []
+
+    assigns = assign(assigns, :errors, errors)
+
+    ~H"""
+    <fieldset id={@id} class="fieldset mb-4">
+      <legend class="label mb-2">
+        Capability<span :if={@required} aria-hidden="true" class="text-error ml-0.5">*</span>
+      </legend>
+      <div class="grid grid-cols-2 gap-2">
+        <label
+          :for={{label, desc, value} <- @options}
+          for={"#{@id}-#{value}"}
+          class="card border cursor-pointer p-3"
+        >
+          <div class="flex items-center gap-2">
+            <input
+              type="radio"
+              id={"#{@id}-#{value}"}
+              name={@field.name}
+              value={value}
+              checked={to_string(@field.value || "") == to_string(value)}
+              class="radio radio-sm"
+            />
+            <div>
+              <p class="font-medium text-sm">{label}</p>
+              <p class="text-xs opacity-60">{desc}</p>
+            </div>
+          </div>
+        </label>
+      </div>
+      <.error :for={msg <- @errors}>{msg}</.error>
+    </fieldset>
     """
   end
 

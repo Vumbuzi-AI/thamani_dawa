@@ -38,7 +38,10 @@ defmodule ThamaniDawa.Sites do
   owner never has to think about "sites" as a concept.
   """
   def create_default_site(organization_id, name) when is_integer(organization_id) do
-    create_site(organization_id, %{name: name, site_type: :pharmacy, lat: 0, long: 0})
+    %Site{}
+    |> Site.default_changeset(%{name: name, site_type: :pharmacy})
+    |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> Repo.insert()
   end
 
   @doc "Creates a site under the given organization."
