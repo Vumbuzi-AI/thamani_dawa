@@ -3,8 +3,8 @@ defmodule ThamaniDawa.Repo.Migrations.MakeSiteLatLongNullable do
 
   def change do
     alter table(:sites) do
-      modify :lat, :integer, null: true
-      modify :long, :integer, null: true
+      modify :lat, :float, null: true
+      modify :long, :float, null: true
     end
   end
 end

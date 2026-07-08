@@ -12,7 +12,10 @@ defmodule ThamaniDawa.OrganizationsTest do
   describe "create_organization/1" do
     test "creates an organization with a name and license number" do
       assert {:ok, organization} =
-               Organizations.create_organization(%{name: "Acme Pharmacy", license_number: "LIC-1"})
+               Organizations.create_organization(%{
+                 name: "Acme Pharmacy",
+                 license_number: "LIC-1"
+               })
 
       assert organization.name == "Acme Pharmacy"
       assert organization.license_number == "LIC-1"
@@ -33,14 +36,20 @@ defmodule ThamaniDawa.OrganizationsTest do
 
     test "auto-generates a slug from the name when none is given" do
       assert {:ok, organization} =
-               Organizations.create_organization(%{name: "Acme Pharmacy", license_number: "LIC-1"})
+               Organizations.create_organization(%{
+                 name: "Acme Pharmacy",
+                 license_number: "LIC-1"
+               })
 
       assert organization.slug == "acme-pharmacy"
     end
 
     test "strips accents when generating a slug" do
       assert {:ok, organization} =
-               Organizations.create_organization(%{name: "Café Pharmacy", license_number: "LIC-1"})
+               Organizations.create_organization(%{
+                 name: "Café Pharmacy",
+                 license_number: "LIC-1"
+               })
 
       assert organization.slug == "cafe-pharmacy"
     end
@@ -99,6 +108,7 @@ defmodule ThamaniDawa.OrganizationsTest do
     end
 
     test "rolls back the whole signup if the admin user is invalid" do
+      site_count_before = Repo.aggregate(Site, :count)
       org_attrs = %{name: "Acme Pharmacy", license_number: "LIC-1"}
 
       assert {:error, %Ecto.Changeset{}} = Organizations.signup(org_attrs, %{})
@@ -109,7 +119,7 @@ defmodule ThamaniDawa.OrganizationsTest do
       # is the case that actually proves the *site* insert gets undone too,
       # not just the organization — the acceptance criterion is "rolls back
       # organization and site creation", not organization alone.
-      assert Repo.all(Site) == []
+      assert Repo.aggregate(Site, :count) == site_count_before
     end
 
     test "rolls back the whole signup if the admin's email is already taken" do

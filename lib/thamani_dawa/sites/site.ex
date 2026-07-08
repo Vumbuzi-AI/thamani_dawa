@@ -10,8 +10,8 @@ defmodule ThamaniDawa.Sites.Site do
     field :site_type, Ecto.Enum, values: @site_types
     field :gln, :string
     field :address, :string
-    field :lat, :integer
-    field :long, :integer
+    field :lat, :float
+    field :long, :float
     field :is_active, :boolean, default: true
 
     timestamps(type: :utc_datetime)

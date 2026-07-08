@@ -358,7 +358,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               id={"#{@id}-#{value}"}
               name={@field.name}
               value={value}
-              checked={to_string(@field.value) == to_string(value)}
+              checked={to_string(@field.value || "") == to_string(value)}
               class="radio radio-sm"
             />
             <div>

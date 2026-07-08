@@ -8,8 +8,8 @@ defmodule ThamaniDawa.Repo.Migrations.CreateSites do
       add :site_type, :string, null: false
       add :gln, :string
       add :address, :string
-      add :lat, :integer
-      add :long, :integer
+      add :lat, :float
+      add :long, :float
       add :is_active, :boolean, null: false, default: true
 
       timestamps(type: :utc_datetime)
