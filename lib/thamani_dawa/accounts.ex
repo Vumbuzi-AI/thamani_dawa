@@ -17,11 +17,14 @@ defmodule ThamaniDawa.Accounts do
     Repo.get_by(User, email: email)
   end
 
-  @doc "Gets a user by email and password, across the whole platform."
+  @doc """
+  Gets a user by email and password, across the whole platform.
+  Returns `nil` if the user is not found, deactivated, or the password is incorrect.
+  """
   def get_user_by_email_and_password(email, password)
       when is_binary(email) and is_binary(password) do
     user = get_user_by_email(email)
-    if User.valid_password?(user, password), do: user
+    if User.valid_password?(user, password) and User.active?(user), do: user
   end
 
   @doc "Gets a single user scoped to an organization. Raises if not found."

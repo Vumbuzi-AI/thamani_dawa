@@ -28,13 +28,16 @@ defmodule ThamaniDawa.Accounts.UserToken do
 
   @doc """
   Returns the query to look up a user by a given session token, scoped to
-  tokens still within the session validity window.
+  tokens still within the session validity window and an active user --
+  deactivating a user must invalidate any session they're already holding,
+  not just block future logins, so this is checked on every request that
+  resolves `current_scope`, not only at login time.
   """
   def verify_session_token_query(token) do
     query =
       from token in by_token_and_context_query(token, "session"),
         join: user in assoc(token, :user),
-        where: token.inserted_at > ago(@session_validity_in_days, "day"),
+        where: token.inserted_at > ago(@session_validity_in_days, "day") and user.is_active,
         select: user
 
     {:ok, query}

@@ -129,4 +129,8 @@ defmodule ThamaniDawa.Accounts.User do
 
   @doc "The valid staff roles, per §7 of project.md."
   def roles, do: @roles
+
+  @doc "Whether the account is active. A deactivated user must not be able to log in or keep an existing session."
+  def active?(%__MODULE__{is_active: true}), do: true
+  def active?(_user), do: false
 end
