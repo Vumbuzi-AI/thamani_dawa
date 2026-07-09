@@ -72,5 +72,11 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       assert html =~ "Please enter a valid email"
     end
+
+    test "does not crash on a malformed validate event", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/signup")
+
+      assert render_change(view, "validate", %{"unexpected" => "shape"})
+    end
   end
 end

@@ -5,6 +5,7 @@ defmodule ThamaniDawa.Organizations.Organization do
   schema "organizations" do
     field :name, :string
     field :slug, :string
+    field :name_key, :string
     field :license_number, :string
     field :is_active, :boolean, default: true
     field :is_subscription_active, :boolean, default: false
@@ -27,9 +28,14 @@ defmodule ThamaniDawa.Organizations.Organization do
     |> validate_required([:name], message: "Please enter your organization name")
     |> validate_required([:license_number], message: "Please enter your license number")
     |> maybe_generate_slug()
+    |> put_name_key()
     |> unique_constraint(:name, message: "An organization with this name already exists")
     |> unique_constraint(:name,
       name: :organizations_slug_index,
+      message: "An organization with a similar name already exists"
+    )
+    |> unique_constraint(:name,
+      name: :organizations_name_key_index,
       message: "An organization with a similar name already exists"
     )
   end
@@ -52,6 +58,17 @@ defmodule ThamaniDawa.Organizations.Organization do
     do: add_error(changeset, :name, "must contain at least one letter or number")
 
   defp put_generated_slug(changeset, slug), do: put_change(changeset, :slug, slug)
+
+  # Derived from the (already accent/case-normalized) slug, with separators
+  # stripped entirely -- so "PharmaPlus", "Pharma-Plus", "Pharma Plus", and
+  # "pharmaplus" all collapse to the same key and are treated as duplicates,
+  # even though they'd produce different human-readable slugs.
+  defp put_name_key(changeset) do
+    case get_field(changeset, :slug) do
+      nil -> changeset
+      slug -> put_change(changeset, :name_key, String.replace(slug, "-", ""))
+    end
+  end
 
   defp slugify(text) do
     text

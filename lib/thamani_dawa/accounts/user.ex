@@ -27,12 +27,12 @@ defmodule ThamaniDawa.Accounts.User do
   caller can never register a user into someone else's organization or hand
   themselves a role.
   """
-  def registration_changeset(user, attrs) do
+  def registration_changeset(user, attrs, opts \\ []) do
     user
     |> cast(attrs, [:name, :email, :password])
     |> validate_required([:name], message: "Please enter your name")
     |> validate_email()
-    |> validate_password()
+    |> validate_password(opts)
   end
 
   @doc """
@@ -51,10 +51,10 @@ defmodule ThamaniDawa.Accounts.User do
   end
 
   @doc "Changeset for a user setting their password from an invite link."
-  def accept_invite_changeset(user, attrs) do
+  def accept_invite_changeset(user, attrs, opts \\ []) do
     user
     |> cast(attrs, [:password])
-    |> validate_password()
+    |> validate_password(opts)
   end
 
   @doc "Changeset for a user setting or changing their 4-digit counter-side PIN (§7)."
@@ -76,17 +76,18 @@ defmodule ThamaniDawa.Accounts.User do
     |> unique_constraint(:email, message: "This email is already registered")
   end
 
-  defp validate_password(changeset) do
+  defp validate_password(changeset, opts) do
     changeset
     |> validate_required([:password], message: "Please choose a password")
     |> validate_length(:password, min: 8, max: 72, message: "Must be at least 8 characters")
-    |> maybe_hash_password()
+    |> maybe_hash_password(opts)
   end
 
-  defp maybe_hash_password(changeset) do
+  defp maybe_hash_password(changeset, opts) do
+    hash_password? = Keyword.get(opts, :hash_password, true)
     password = get_change(changeset, :password)
 
-    if password && changeset.valid? do
+    if hash_password? && password && changeset.valid? do
       changeset
       |> put_change(:hashed_password, Bcrypt.hash_pwd_salt(password))
       |> delete_change(:password)

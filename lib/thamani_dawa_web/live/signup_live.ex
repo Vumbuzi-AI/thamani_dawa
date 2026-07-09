@@ -25,13 +25,17 @@ defmodule ThamaniDawaWeb.SignupLive do
 
     admin_changeset =
       %User{}
-      |> User.registration_changeset(admin_params)
+      |> User.registration_changeset(admin_params, hash_password: false)
       |> Map.put(:action, :validate)
 
     {:noreply,
      socket
      |> assign(:org_form, to_form(org_changeset, as: :organization))
      |> assign(:admin_form, to_form(admin_changeset, as: :user))}
+  end
+
+  def handle_event("validate", _params, socket) do
+    {:noreply, socket}
   end
 
   def handle_event("save", %{"organization" => org_params, "user" => admin_params}, socket) do

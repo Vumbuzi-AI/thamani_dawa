@@ -98,6 +98,21 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert %{name: ["An organization with a similar name already exists"]} =
                errors_on(changeset)
     end
+
+    test "rejects names that are case- and punctuation-insensitive duplicates" do
+      organization_fixture(%{name: "PharmaPlus"})
+
+      for name <- ["pharmaplus", "Pharma-Plus", "Pharma Plus"] do
+        assert {:error, changeset} =
+                 Organizations.create_organization(%{
+                   name: name,
+                   license_number: "LIC-#{System.unique_integer()}"
+                 })
+
+        assert %{name: ["An organization with a similar name already exists"]} =
+                 errors_on(changeset)
+      end
+    end
   end
 
   describe "get_organization!/1" do
