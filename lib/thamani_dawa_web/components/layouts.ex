@@ -125,12 +125,19 @@ defmodule ThamaniDawaWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
+  attr :inner_content, :any, default: nil
+  slot :inner_block, required: false
+
   def app(assigns) do
     ~H"""
     <.page_navbar current_scope={@current_scope} />
 
     <main class="w-full">
-      {@inner_content}
+      <%= if @inner_content do %>
+        {@inner_content}
+      <% else %>
+        {render_slot(@inner_block)}
+      <% end %>
     </main>
 
     <.flash_group flash={@flash} />

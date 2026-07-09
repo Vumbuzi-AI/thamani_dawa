@@ -263,7 +263,7 @@ defmodule ThamaniDawaWeb.PageComponents do
               href={"##{anchor}"}
               style="font-size: 15px; color: var(--thamani-forest); text-decoration: underline; text-underline-offset: 3px;"
             >
-              {Phoenix.HTML.raw(label)}
+              {label}
             </a>
           </li>
         <% end %>
@@ -301,7 +301,7 @@ defmodule ThamaniDawaWeb.PageComponents do
       <div class="flex items-center gap-3 mb-4">
         <span class="thamani-badge">{@number}</span>
         <h2 style="font-size: 22px; font-weight: 400; color: var(--thamani-forest); letter-spacing: -0.3px; margin: 0;">
-          {Phoenix.HTML.raw(@title)}
+          {@title}
         </h2>
       </div>
       {render_slot(@inner_block)}

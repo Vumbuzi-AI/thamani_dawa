@@ -87,6 +87,26 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       assert render(lv) =~ "Combined Branch"
     end
 
+    test "creates a warehouse site", %{conn: conn, admin: admin} do
+      {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
+
+      lv
+      |> form("#site-form",
+        site: %{
+          name: "Warehouse Branch",
+          site_type: :warehouse,
+          gln: "0612345678904",
+          address: "4 Test St"
+        }
+      )
+      |> render_submit()
+
+      assert render(lv) =~ "Warehouse Branch"
+
+      site = ThamaniDawa.Repo.get_by!(ThamaniDawa.Sites.Site, name: "Warehouse Branch")
+      assert site.site_type == :warehouse
+    end
+
     test "shows validation error when name is blank", %{conn: conn, admin: admin} do
       {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
 
