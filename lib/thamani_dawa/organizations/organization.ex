@@ -24,10 +24,14 @@ defmodule ThamaniDawa.Organizations.Organization do
       :is_subscription_active,
       :kyc_details
     ])
-    |> validate_required([:name, :license_number])
+    |> validate_required([:name], message: "Please enter your organization name")
+    |> validate_required([:license_number], message: "Please enter your license number")
     |> maybe_generate_slug()
-    |> unique_constraint(:name)
-    |> unique_constraint(:slug)
+    |> unique_constraint(:name, message: "An organization with this name already exists")
+    |> unique_constraint(:name,
+      name: :organizations_slug_index,
+      message: "An organization with a similar name already exists"
+    )
   end
 
   defp maybe_generate_slug(changeset) do

@@ -27,7 +27,11 @@ defmodule ThamaniDawa.AccountsTest do
       organization = organization_fixture()
       assert {:error, changeset} = Accounts.register_user(organization.id, %{})
 
-      assert %{name: ["can't be blank"], email: ["can't be blank"], password: ["can't be blank"]} =
+      assert %{
+               name: ["Please enter your name"],
+               email: ["Please enter your email"],
+               password: ["Please choose a password"]
+             } =
                errors_on(changeset)
     end
 
@@ -43,7 +47,7 @@ defmodule ThamaniDawa.AccountsTest do
                  valid_user_attributes(%{email: email})
                )
 
-      assert %{email: ["has already been taken"]} = errors_on(changeset)
+      assert %{email: ["This email is already registered"]} = errors_on(changeset)
     end
   end
 

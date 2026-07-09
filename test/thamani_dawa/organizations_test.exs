@@ -26,12 +26,12 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert {:error, changeset} =
                Organizations.create_organization(%{license_number: "LIC-1"})
 
-      assert %{name: ["can't be blank"]} = errors_on(changeset)
+      assert %{name: ["Please enter your organization name"]} = errors_on(changeset)
     end
 
     test "requires a license number" do
       assert {:error, changeset} = Organizations.create_organization(%{name: "Acme Pharmacy"})
-      assert %{license_number: ["can't be blank"]} = errors_on(changeset)
+      assert %{license_number: ["Please enter your license number"]} = errors_on(changeset)
     end
 
     test "auto-generates a slug from the name when none is given" do
@@ -82,7 +82,7 @@ defmodule ThamaniDawa.OrganizationsTest do
                  license_number: "LIC-2"
                })
 
-      assert %{name: ["has already been taken"]} = errors_on(changeset)
+      assert %{name: ["An organization with this name already exists"]} = errors_on(changeset)
     end
 
     test "enforces slug uniqueness when a slug is given explicitly" do
@@ -95,7 +95,8 @@ defmodule ThamaniDawa.OrganizationsTest do
                  license_number: "LIC-2"
                })
 
-      assert %{slug: ["has already been taken"]} = errors_on(changeset)
+      assert %{name: ["An organization with a similar name already exists"]} =
+               errors_on(changeset)
     end
   end
 

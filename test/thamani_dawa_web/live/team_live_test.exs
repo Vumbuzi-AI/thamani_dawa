@@ -97,7 +97,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
         )
         |> render_submit()
 
-      assert html =~ "must have the @ sign and no spaces"
+      assert html =~ "Please enter a valid email"
       refute html =~ "Invite sent to"
     end
   end

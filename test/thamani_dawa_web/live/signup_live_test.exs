@@ -40,7 +40,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       html = view |> form("form", attrs) |> render_submit()
 
-      assert html =~ "has already been taken"
+      assert html =~ "This email is already registered"
       refute Repo.get_by(Organization, name: "Other Pharmacy")
     end
 
@@ -56,8 +56,21 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       html = view |> form("form", attrs) |> render_submit()
 
-      assert html =~ "can&#39;t be blank"
+      assert html =~ "Please enter your license number"
       refute Repo.get_by(Organization, name: "Other Pharmacy")
+    end
+
+    test "validates the form on change", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/signup")
+
+      attrs = %{
+        organization: %{name: "A", license_number: ""},
+        user: %{name: "", email: "notanemail", password: ""}
+      }
+
+      html = view |> form("form", attrs) |> render_change()
+
+      assert html =~ "Please enter a valid email"
     end
   end
 end

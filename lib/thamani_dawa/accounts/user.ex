@@ -30,7 +30,7 @@ defmodule ThamaniDawa.Accounts.User do
   def registration_changeset(user, attrs) do
     user
     |> cast(attrs, [:name, :email, :password])
-    |> validate_required([:name])
+    |> validate_required([:name], message: "Please enter your name")
     |> validate_email()
     |> validate_password()
   end
@@ -68,16 +68,18 @@ defmodule ThamaniDawa.Accounts.User do
 
   defp validate_email(changeset) do
     changeset
-    |> validate_required([:email])
-    |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
+    |> validate_required([:email], message: "Please enter your email")
+    |> validate_format(:email, ~r/^[^\s]+@[^\s]+\.[a-zA-Z]{2,}$/,
+      message: "Please enter a valid email (e.g. you@example.com)"
+    )
     |> validate_length(:email, max: 160)
-    |> unique_constraint(:email)
+    |> unique_constraint(:email, message: "This email is already registered")
   end
 
   defp validate_password(changeset) do
     changeset
-    |> validate_required([:password])
-    |> validate_length(:password, min: 8, max: 72)
+    |> validate_required([:password], message: "Please choose a password")
+    |> validate_length(:password, min: 8, max: 72, message: "Must be at least 8 characters")
     |> maybe_hash_password()
   end
 
