@@ -72,7 +72,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       <div :if={@live_action == :new} class="card bg-base-200 mb-4">
         <div class="card-body">
           <h2 class="font-semibold mb-2">Invite a staff member</h2>
-          <form phx-submit="save">
+          <form id="invite-form" phx-submit="save">
             <.input field={@form[:name]} label="Name" required />
             <.input field={@form[:email]} type="email" label="Email" required />
             <.input
