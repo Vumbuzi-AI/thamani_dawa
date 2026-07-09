@@ -80,12 +80,12 @@ defmodule ThamaniDawaWeb.SignupLive do
         >
         </div>
 
-        <a
-          href="/"
+        <.link
+          navigate={~p"/"}
           style="font-size: 17px; font-weight: 500; color: var(--thamani-snow); text-decoration: none; letter-spacing: -0.01em; position: relative;"
         >
           Thamani Dawa
-        </a>
+        </.link>
 
         <div style="position: relative;">
           <span
@@ -113,13 +113,13 @@ defmodule ThamaniDawaWeb.SignupLive do
       </div>
 
       <div style="flex: 1; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
-        <a
-          href="/"
+        <.link
+          navigate={~p"/"}
           class="lg:hidden"
           style="font-size: 16px; font-weight: 500; color: var(--thamani-forest); text-decoration: none; letter-spacing: -0.01em; margin-bottom: 40px; align-self: flex-start;"
         >
           Thamani Dawa
-        </a>
+        </.link>
 
         <div style="width: 100%; max-width: 420px;">
           <ThamaniDawaWeb.Layouts.flash_group flash={@flash} />
@@ -202,15 +202,15 @@ defmodule ThamaniDawaWeb.SignupLive do
           class="lg:hidden"
           style="margin-top: 48px; display: flex; gap: 20px; align-items: center;"
         >
-          <a
-            href="/privacy"
+          <.link
+            navigate={~p"/privacy"}
             style="font-size: 12px; color: var(--thamani-subtle); text-decoration: none;"
-          >Privacy</a>
+          >Privacy</.link>
           <span style="font-size: 12px; color: var(--thamani-stone);">·</span>
-          <a
-            href="/terms"
+          <.link
+            navigate={~p"/terms"}
             style="font-size: 12px; color: var(--thamani-subtle); text-decoration: none;"
-          >Terms</a>
+          >Terms</.link>
         </div>
       </div>
     </div>

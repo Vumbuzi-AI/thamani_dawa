@@ -11,7 +11,7 @@ defmodule ThamaniDawa.Repo.Migrations.AddOrganizationsNameKey do
 
     flush()
 
-    execute "UPDATE organizations SET name_key = replace(slug, '-', '')"
+    backfill_name_keys()
 
     flush()
 
@@ -38,6 +38,26 @@ defmodule ThamaniDawa.Repo.Migrations.AddOrganizationsNameKey do
     alter table(:organizations) do
       remove :name_key
     end
+  end
+
+  defp backfill_name_keys do
+    %{rows: rows} = repo().query!("SELECT id, slug FROM organizations")
+
+    Enum.each(rows, fn [id, slug] ->
+      repo().query!("UPDATE organizations SET name_key = $1 WHERE id = $2", [
+        normalize_name_key(slug),
+        id
+      ])
+    end)
+  end
+
+  defp normalize_name_key(nil), do: nil
+
+  defp normalize_name_key(text) do
+    text
+    |> String.downcase()
+    |> String.normalize(:nfd)
+    |> String.replace(~r/[^a-z0-9]/u, "")
   end
 
   defp duplicate_name_keys do
