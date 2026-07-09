@@ -27,6 +27,17 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Test Aspirin"
     end
 
+    test "renders sidebar with correct hook for persistence", %{conn: conn, admin: admin} do
+      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      # The hook and ID must be present for localstorage persistence to work
+      assert has_element?(lv, "#sidebar-shell")
+      assert has_element?(lv, "#sidebar-toggle")
+      assert has_element?(lv, "#sidebar-aside")
+
+      assert html =~ "Sidebar"
+    end
+
     test "creates a new product", %{conn: conn, admin: admin, site: site} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
@@ -52,8 +63,12 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "New Panadol"
     end
 
-    test "edits an existing product", %{conn: conn, admin: admin, site: site} do
-      _product =
+    test "edits an existing product without duplicating it in the stream", %{
+      conn: conn,
+      admin: admin,
+      site: site
+    } do
+      product =
         product_fixture(%{
           organization_id: admin.organization_id,
           site_id: site.id,
@@ -63,7 +78,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
       # Click Edit
-      lv |> element("a", "Edit") |> render_click()
+      lv |> element("#products-#{product.id} a", "Edit") |> render_click()
 
       # Submit the form with new name
       lv
@@ -80,6 +95,9 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Product updated."
       assert html =~ "Updated Name"
       refute html =~ "Old Name"
+
+      # Assert the product is only in the stream once (not duplicated)
+      assert html |> String.split("id=\"products-#{product.id}\"") |> length() == 2
     end
 
     test "searches products", %{conn: conn, admin: admin, site: site} do

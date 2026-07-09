@@ -55,7 +55,7 @@ defmodule ThamaniDawa.LabOrdersTest do
           patient_id: patient.id
         })
 
-      assert {:ok, %{lab_order: _header, lab_order_results: [result]}} =
+      assert {:ok, %{lab_order: header, lab_order_results: [result]}} =
                LabOrders.create_lab_order_with_results(
                  organization.id,
                  Map.merge(@valid_header_extra, %{
@@ -67,6 +67,7 @@ defmodule ThamaniDawa.LabOrdersTest do
                )
 
       assert result.status == :pending
+      assert header.referred_date == ~T[09:00:00]
     end
 
     test "rolls back the header when a result is invalid" do

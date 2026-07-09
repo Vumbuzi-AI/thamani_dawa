@@ -21,7 +21,7 @@ defmodule ThamaniDawa.Prescriptions do
   def list_prescriptions(organization_id) do
     Repo.all(
       from p in Prescription,
-        join: v in PatientVisit,
+        left_join: v in PatientVisit,
         on: v.id == p.patient_visit_id,
         where: p.organization_id == ^organization_id,
         select: %{p | site_id: v.site_id}
@@ -134,6 +134,8 @@ defmodule ThamaniDawa.Prescriptions do
 
   # `prescriptions` no longer carries its own `site_id` — it's derived from
   # the `patient_visits` row it's tied to via `patient_visit_id`.
+  defp prescription_site_id(%Prescription{patient_visit_id: nil}), do: nil
+
   defp prescription_site_id(%Prescription{patient_visit_id: patient_visit_id}) do
     Repo.get!(PatientVisit, patient_visit_id).site_id
   end
