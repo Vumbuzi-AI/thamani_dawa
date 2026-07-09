@@ -54,10 +54,13 @@ defmodule ThamaniDawa.Repo.Migrations.AddOrganizationsNameKey do
   defp normalize_name_key(nil), do: nil
 
   defp normalize_name_key(text) do
-    text
-    |> String.downcase()
-    |> String.normalize(:nfd)
-    |> String.replace(~r/[^a-z0-9]/u, "")
+    case text
+         |> String.downcase()
+         |> String.normalize(:nfd)
+         |> String.replace(~r/[^a-z0-9]/u, "") do
+      "" -> nil
+      name_key -> name_key
+    end
   end
 
   defp duplicate_name_keys do

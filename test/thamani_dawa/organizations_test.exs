@@ -87,6 +87,17 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert %{name: ["must contain at least one letter or number"]} = errors_on(changeset)
     end
 
+    test "rejects an explicit slug that normalizes to nothing" do
+      assert {:error, changeset} =
+               Organizations.create_organization(%{
+                 name: "Acme Pharmacy",
+                 slug: "---",
+                 license_number: "LIC-1"
+               })
+
+      assert %{name: ["must contain at least one letter or number"]} = errors_on(changeset)
+    end
+
     test "requires a unique name" do
       organization_fixture(%{name: "City Pharmacy"})
 

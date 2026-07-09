@@ -53,9 +53,15 @@ defmodule ThamaniDawa.Organizations.Organization do
   defp put_name_key(changeset) do
     case get_field(changeset, :slug) do
       nil -> changeset
-      slug -> put_change(changeset, :name_key, normalize_name_key(slug))
+      slug -> put_normalized_name_key(changeset, normalize_name_key(slug))
     end
   end
+
+  defp put_normalized_name_key(changeset, ""),
+    do: add_error(changeset, :name, "must contain at least one letter or number")
+
+  defp put_normalized_name_key(changeset, name_key),
+    do: put_change(changeset, :name_key, name_key)
 
   defp normalize_name_key(text) do
     text
