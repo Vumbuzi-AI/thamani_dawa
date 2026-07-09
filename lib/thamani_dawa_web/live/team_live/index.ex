@@ -3,6 +3,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.Accounts.User
+  alias ThamaniDawa.Organizations
   alias ThamaniDawa.Sites
 
   def mount(_params, _session, socket) do
@@ -23,9 +24,15 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
     case Accounts.invite_user(organization_id, admin.id, attrs) do
       {:ok, user, encoded_token} ->
-        Accounts.deliver_user_invite(user, encoded_token, fn token ->
-          url(~p"/invites/#{token}")
-        end)
+        Accounts.deliver_user_invite(
+          user,
+          socket.assigns.organization.name,
+          admin.name,
+          encoded_token,
+          fn token ->
+            url(~p"/invites/#{token}")
+          end
+        )
 
         {:noreply,
          socket
@@ -47,6 +54,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
     |> assign(:users, Accounts.list_users(organization_id))
     |> assign(:sites, sites)
     |> assign(:sites_by_id, sites_by_id)
+    |> assign_new(:organization, fn -> Organizations.get_organization!(organization_id) end)
   end
 
   defp site_name(sites_by_id, site_id) do

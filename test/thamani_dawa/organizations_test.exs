@@ -54,6 +54,24 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert organization.slug == "cafe-pharmacy"
     end
 
+    test "still auto-generates a slug when the caller passes an explicit blank one" do
+      assert {:ok, organization} =
+               Organizations.create_organization(%{
+                 name: "Acme Pharmacy",
+                 slug: "",
+                 license_number: "LIC-1"
+               })
+
+      assert organization.slug == "acme-pharmacy"
+    end
+
+    test "rejects a name that slugifies to nothing" do
+      assert {:error, changeset} =
+               Organizations.create_organization(%{name: "!!!", license_number: "LIC-1"})
+
+      assert %{name: ["must contain at least one letter or number"]} = errors_on(changeset)
+    end
+
     test "requires a unique name" do
       organization_fixture(%{name: "City Pharmacy"})
 

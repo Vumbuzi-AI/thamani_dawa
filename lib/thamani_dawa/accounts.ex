@@ -58,7 +58,7 @@ defmodule ThamaniDawa.Accounts do
   Invites a staff member into `organization_id`. Creates an unconfirmed
   `users` row (no password yet) and returns a one-time invite token
   alongside it — the caller is responsible for emailing it via
-  `deliver_user_invite/3`. `organization_id` and `invited_by_id` are always
+  `deliver_user_invite/5`. `organization_id` and `invited_by_id` are always
   explicit arguments, never taken from `attrs`, so an admin can only invite
   staff into their own organization; a given `site_id` is validated to
   belong to that same organization.
@@ -99,12 +99,22 @@ defmodule ThamaniDawa.Accounts do
   end
 
   @doc """
-  Emails the invite link to a newly-invited user. `invite_url_fun` receives
-  the encoded token and must return the full invite URL.
+  Emails the invite link to a newly-invited user.
   """
-  def deliver_user_invite(%User{} = user, encoded_token, invite_url_fun)
+  def deliver_user_invite(
+        %User{} = user,
+        organization_name,
+        invited_by_name,
+        encoded_token,
+        invite_url_fun
+      )
       when is_function(invite_url_fun, 1) do
-    UserNotifier.deliver_invite(user, invite_url_fun.(encoded_token))
+    UserNotifier.deliver_invite(
+      user,
+      organization_name,
+      invited_by_name,
+      invite_url_fun.(encoded_token)
+    )
   end
 
   @doc "Gets the invited user for a given (unexpired, unused) invite token, or nil."

@@ -5,10 +5,6 @@ defmodule ThamaniDawa.Accounts.UserToken do
   @hash_algorithm :sha256
   @rand_size 32
 
-  @session_validity_in_days 60
-  @invite_validity_in_days 7
-  @reset_password_validity_in_days 1
-
   schema "users_tokens" do
     field :token, :binary
     field :context, :string
@@ -37,7 +33,7 @@ defmodule ThamaniDawa.Accounts.UserToken do
     query =
       from token in by_token_and_context_query(token, "session"),
         join: user in assoc(token, :user),
-        where: token.inserted_at > ago(@session_validity_in_days, "day") and user.is_active,
+        where: token.inserted_at > ago(^validity_in_days("session"), "day") and user.is_active,
         select: user
 
     {:ok, query}
@@ -81,8 +77,13 @@ defmodule ThamaniDawa.Accounts.UserToken do
     end
   end
 
-  defp validity_in_days("invite"), do: @invite_validity_in_days
-  defp validity_in_days("reset_password"), do: @reset_password_validity_in_days
+  defp validity_in_days("session"), do: config(:session_validity_in_days)
+  defp validity_in_days("invite"), do: config(:invite_validity_in_days)
+  defp validity_in_days("reset_password"), do: config(:reset_password_validity_in_days)
+
+  defp config(key), do: Application.get_env(:thamani_dawa, __MODULE__)[key]
+
+  def invite_validity_in_days, do: config(:invite_validity_in_days)
 
   @doc "Returns the query for a given token and context, e.g. for deletion."
   def by_token_and_context_query(token, context) do
