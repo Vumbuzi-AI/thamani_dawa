@@ -8,10 +8,12 @@ defmodule ThamaniDawa.Accounts.UserNotifier do
   alias ThamaniDawa.Mailer
 
   defp deliver(recipient, subject, body) do
+    config = Application.get_env(:thamani_dawa, __MODULE__)
+
     email =
       new()
       |> to(recipient)
-      |> from({"Thamani Dawa", "noreply@thamanidawa.example"})
+      |> from({config[:sender_name], config[:sender_email]})
       |> subject(subject)
       |> text_body(body)
 

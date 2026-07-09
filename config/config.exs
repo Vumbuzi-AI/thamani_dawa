@@ -36,6 +36,18 @@ config :phoenix_live_view,
 # at the `config/runtime.exs`.
 config :thamani_dawa, ThamaniDawa.Mailer, adapter: Swoosh.Adapters.Local
 
+# Configure the "from" address used on outgoing account emails.
+config :thamani_dawa, ThamaniDawa.Accounts.UserNotifier,
+  sender_name: "Thamani Dawa",
+  sender_email: "noreply@thamanidawa.example"
+
+# Configure how long each kind of auth token stays valid. Centralized here
+# so the windows can be tuned per environment without touching code.
+config :thamani_dawa, ThamaniDawa.Accounts.UserToken,
+  session_validity_in_days: 60,
+  invite_validity_in_days: 7,
+  reset_password_validity_in_days: 1
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",
