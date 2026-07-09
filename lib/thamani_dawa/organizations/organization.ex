@@ -2,6 +2,13 @@ defmodule ThamaniDawa.Organizations.Organization do
   use Ecto.Schema
   import Ecto.Changeset
 
+  # The signup/settings forms only render a `:name` input, not `:slug` or
+  # `:name_key` -- every uniqueness error below is deliberately attached to
+  # `:name` (via `unique_constraint`'s `:name` option pointing at the
+  # underlying DB index) so the message actually reaches the user, even
+  # though the collision is on a derived field.
+  @similar_name_message "An organization with a similar name already exists"
+
   schema "organizations" do
     field :name, :string
     field :slug, :string
@@ -30,13 +37,10 @@ defmodule ThamaniDawa.Organizations.Organization do
     |> maybe_generate_slug()
     |> put_name_key()
     |> unique_constraint(:name, message: "An organization with this name already exists")
-    |> unique_constraint(:name,
-      name: :organizations_slug_index,
-      message: "An organization with a similar name already exists"
-    )
+    |> unique_constraint(:name, name: :organizations_slug_index, message: @similar_name_message)
     |> unique_constraint(:name,
       name: :organizations_name_key_index,
-      message: "An organization with a similar name already exists"
+      message: @similar_name_message
     )
   end
 
