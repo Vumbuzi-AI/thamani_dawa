@@ -1,7 +1,7 @@
 defmodule ThamaniDawaWeb.SessionControllerTest do
   @moduledoc """
   Covers the acceptance criteria for role-based login redirects (§7):
-  admin and pharmacist land on /pharmacy, lab technician lands on /lab.
+  admin lands on /org/sites, pharmacist lands on /pharmacy, lab technician lands on /lab.
   """
 
   use ThamaniDawaWeb.ConnCase, async: true
@@ -12,13 +12,13 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
   alias ThamaniDawa.Repo
 
   describe "POST /login" do
-    test "redirects an admin to /pharmacy", %{conn: conn} do
+    test "redirects an admin to /org/sites", %{conn: conn} do
       admin = user_fixture()
 
       conn =
         post(conn, ~p"/login", %{"email" => admin.email, "password" => valid_user_password()})
 
-      assert redirected_to(conn) == ~p"/pharmacy"
+      assert redirected_to(conn) == ~p"/org/sites"
     end
 
     test "redirects a pharmacist to /pharmacy", %{conn: conn} do

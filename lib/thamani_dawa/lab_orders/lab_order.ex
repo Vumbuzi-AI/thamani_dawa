@@ -21,7 +21,7 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
     field :lab_request, :string
     field :referring_facility, :string
     field :referring_doctor, :string
-    field :referred_date, :utc_datetime
+    field :referred_date, :time
 
     timestamps(type: :utc_datetime)
   end

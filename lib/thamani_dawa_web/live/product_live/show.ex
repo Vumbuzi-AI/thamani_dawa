@@ -20,12 +20,12 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/products"}>
       <.header>
         {product_name(@product)}
         <:actions>
-          <.button navigate={~p"/pharmacy/products/#{@product.id}/edit"}>Edit</.button>
-          <.button navigate={~p"/pharmacy/products"}>Back</.button>
+          <.button variant="ghost-edit" navigate={~p"/org/products/#{@product.id}/edit"}>Edit</.button>
+          <.button navigate={~p"/org/products"}>Back</.button>
         </:actions>
       </.header>
 
@@ -46,7 +46,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
         <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
       </.table>
-    </Layouts.app_shell>
+    </Layouts.org_shell>
     """
   end
 end

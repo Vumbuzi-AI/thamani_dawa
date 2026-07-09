@@ -15,14 +15,6 @@ defmodule ThamaniDawa.PrescriptionsTest do
   import ThamaniDawa.SitesFixtures
 
   describe "create_prescription/2" do
-    test "requires patient_visit_id" do
-      organization = organization_fixture()
-
-      assert {:error, changeset} = Prescriptions.create_prescription(organization.id, %{})
-
-      assert %{patient_visit_id: ["can't be blank"]} = errors_on(changeset)
-    end
-
     test "defaults status to pending and scopes to the organization" do
       organization = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})
@@ -47,6 +39,41 @@ defmodule ThamaniDawa.PrescriptionsTest do
       assert prescription.organization_id == organization.id
       assert prescription.patient_visit_id == patient_visit.id
       assert prescription.status == :pending
+    end
+  end
+
+  describe "list_prescriptions/1" do
+    test "returns prescriptions with and without a patient visit" do
+      organization = organization_fixture()
+
+      # Prescription without visit
+      prescription_no_visit =
+        prescription_fixture(%{
+          organization_id: organization.id,
+          patient_visit_id: nil
+        })
+
+      # Prescription with visit
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+
+      patient_visit =
+        patient_visit_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          patient_id: patient.id
+        })
+
+      prescription_with_visit =
+        prescription_fixture(%{
+          organization_id: organization.id,
+          patient_visit_id: patient_visit.id
+        })
+
+      results = Prescriptions.list_prescriptions(organization.id)
+      assert length(results) == 2
+      assert Enum.any?(results, &(&1.id == prescription_no_visit.id && is_nil(&1.site_id)))
+      assert Enum.any?(results, &(&1.id == prescription_with_visit.id && &1.site_id == site.id))
     end
   end
 

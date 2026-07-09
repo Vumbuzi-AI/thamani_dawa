@@ -85,7 +85,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/sites"}>
       <.header>
         Sites
         <:actions>
@@ -129,7 +129,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           <.link navigate={~p"/org/sites/#{site.id}/edit"} class="link">Edit</.link>
         </:action>
       </.table>
-    </Layouts.app_shell>
+    </Layouts.org_shell>
     """
   end
 end

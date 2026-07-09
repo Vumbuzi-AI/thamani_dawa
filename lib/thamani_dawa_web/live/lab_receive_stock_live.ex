@@ -145,7 +145,11 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     assigns = assign(assigns, :products_by_id, products_by_id)
 
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.lab_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={~p"/lab/receive-stock"}
+    >
       <.header>Receive stock / consumables</.header>
 
       <.batch_form
@@ -156,20 +160,29 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         site_locked={@site_locked}
       />
 
-      <.header class="mt-6">Log consumable usage</.header>
-      <form phx-submit="record_usage" class="flex flex-wrap gap-2 items-end">
-        <select name="batch_id" class="select">
-          <option value="">Choose a batch</option>
-          <option :for={batch <- @usable_batches} value={batch.id}>
-            {batch_label(batch, @products_by_id)}
-          </option>
-        </select>
-        <input type="number" name="quantity" placeholder="Quantity" class="input" required />
-        <input type="number" name="lab_order_id" placeholder="Lab order ID (optional)" class="input" />
-        <input type="text" name="purpose" placeholder="Purpose" class="input" />
-        <.button variant="primary">Record usage</.button>
-      </form>
-    </Layouts.app_shell>
+      <div class="rounded-2xl p-6 mt-6" style="background: #eeeee9;">
+        <h2 class="text-base font-medium mb-4" style="color: #1c3a13;">Log consumable usage</h2>
+        <.form
+          for={%{}}
+          id="consumable-usage-form"
+          phx-submit="record_usage"
+          class="flex flex-wrap gap-3 items-end"
+        >
+          <.input
+            type="select"
+            name="batch_id"
+            label="Batch"
+            value={nil}
+            options={Enum.map(@usable_batches, &{batch_label(&1, @products_by_id), &1.id})}
+            prompt="Choose a batch"
+          />
+          <.input type="number" name="quantity" label="Quantity" required />
+          <.input type="number" name="lab_order_id" label="Lab order ID (optional)" />
+          <.input type="text" name="purpose" label="Purpose" />
+          <.button variant="primary">Record usage</.button>
+        </.form>
+      </div>
+    </Layouts.lab_shell>
     """
   end
 end

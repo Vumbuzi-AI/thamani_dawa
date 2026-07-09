@@ -73,7 +73,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/orders"}>
       <.header>
         Lab order for {@patient.full_name}
         <:actions>
@@ -116,19 +116,26 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         </:action>
       </.table>
 
-      <div class="card bg-base-200 mt-4">
-        <div class="card-body">
-          <h2 class="font-semibold mb-2">Add a test</h2>
-          <form phx-submit="add_result" class="flex flex-wrap gap-2 items-end">
-            <select name="lab_test_id" class="select">
-              <option value="">Choose a test</option>
-              <option :for={t <- @lab_tests} value={t.id}>{t.name}</option>
-            </select>
-            <.button variant="primary">Add test</.button>
-          </form>
-        </div>
+      <div class="rounded-2xl p-6 mt-4" style="background: #eeeee9;">
+        <h2 class="text-base font-medium mb-4" style="color: #1c3a13;">Add a test</h2>
+        <.form
+          for={%{}}
+          id="add-test-form"
+          phx-submit="add_result"
+          class="flex flex-wrap gap-3 items-end"
+        >
+          <.input
+            type="select"
+            name="lab_test_id"
+            label="Test"
+            value={nil}
+            options={Enum.map(@lab_tests, &{&1.name, &1.id})}
+            prompt="Choose a test"
+          />
+          <.button variant="primary">Add test</.button>
+        </.form>
       </div>
-    </Layouts.app_shell>
+    </Layouts.lab_shell>
     """
   end
 end

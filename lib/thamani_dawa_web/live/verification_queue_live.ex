@@ -66,7 +66,11 @@ defmodule ThamaniDawaWeb.VerificationQueueLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.lab_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={~p"/lab/verification-queue"}
+    >
       <.header>Completed results</.header>
 
       <.table id="verification-queue" rows={@completed_results}>
@@ -79,7 +83,7 @@ defmodule ThamaniDawaWeb.VerificationQueueLive do
         </:col>
         <:col :let={result} label="Performed on">{result.test_performed_on}</:col>
       </.table>
-    </Layouts.app_shell>
+    </Layouts.lab_shell>
     """
   end
 end

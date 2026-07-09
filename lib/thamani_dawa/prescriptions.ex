@@ -13,9 +13,19 @@ defmodule ThamaniDawa.Prescriptions do
 
   ## Prescriptions
 
-  @doc "Lists an organization's prescriptions."
+  @doc """
+  Lists an organization's prescriptions. Each returned struct has a virtual
+  `:site_id` field populated from the associated `patient_visits` row so that
+  `SiteScoping.for_current_site/2` can filter by site without a second query.
+  """
   def list_prescriptions(organization_id) do
-    Repo.all(from p in Prescription, where: p.organization_id == ^organization_id)
+    Repo.all(
+      from p in Prescription,
+        left_join: v in PatientVisit,
+        on: v.id == p.patient_visit_id,
+        where: p.organization_id == ^organization_id,
+        select: %{p | site_id: v.site_id}
+    )
   end
 
   @doc "Gets a single prescription scoped to an organization. Raises if not found."
@@ -124,6 +134,8 @@ defmodule ThamaniDawa.Prescriptions do
 
   # `prescriptions` no longer carries its own `site_id` — it's derived from
   # the `patient_visits` row it's tied to via `patient_visit_id`.
+  defp prescription_site_id(%Prescription{patient_visit_id: nil}), do: nil
+
   defp prescription_site_id(%Prescription{patient_visit_id: patient_visit_id}) do
     Repo.get!(PatientVisit, patient_visit_id).site_id
   end

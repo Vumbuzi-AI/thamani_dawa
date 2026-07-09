@@ -113,7 +113,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/orders"}>
       <.header>
         Lab orders
         <:actions>
@@ -121,12 +121,12 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         </:actions>
       </.header>
 
-      <div :if={@live_action == :new} class="card bg-base-200 mb-4">
-        <div class="card-body">
-          <h2 class="font-semibold mb-2">New lab order</h2>
+      <div :if={@live_action == :new} class="rounded-2xl p-6 mb-6" style="background: #eeeee9;">
+        <h2 class="text-base font-medium mb-5" style="color: #1c3a13;">New lab order</h2>
 
-          <form phx-submit="save">
-            <div class="flex items-center gap-2 mb-2">
+        <.form for={@header_form} id="new-lab-order-form" phx-submit="save" class="space-y-4">
+          <div class="flex items-end gap-3">
+            <div class="flex-1">
               <.input
                 :if={not @use_new_patient}
                 field={@header_form[:patient_id]}
@@ -135,31 +135,38 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                 options={Enum.map(@patients, &{&1.full_name, &1.id})}
                 prompt="Choose a patient"
               />
-              <.button type="button" phx-click="toggle_new_patient">
-                {if @use_new_patient, do: "Choose existing patient", else: "+ New patient"}
-              </.button>
             </div>
+            <.button type="button" phx-click="toggle_new_patient">
+              {if @use_new_patient, do: "Choose existing patient", else: "+ New patient"}
+            </.button>
+          </div>
 
-            <div :if={@use_new_patient} class="border rounded-box border-base-300 p-3 mb-2">
-              <.input field={@patient_form[:full_name]} label="Full name" required />
+          <div :if={@use_new_patient} class="rounded-xl p-4 space-y-3" style="background: #fcfcf7;">
+            <p class="text-sm font-medium" style="color: #1c3a13;">New patient</p>
+            <.input field={@patient_form[:full_name]} label="Full name" required />
+            <div class="grid grid-cols-2 gap-3">
               <.input field={@patient_form[:date_of_birth]} type="date" label="Date of birth" />
               <.input field={@patient_form[:age]} type="number" label="Age" />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
               <.input field={@patient_form[:gender]} label="Gender" />
               <.input field={@patient_form[:phone]} label="Phone" />
-              <.input field={@patient_form[:national_id]} label="National ID" />
             </div>
+            <.input field={@patient_form[:national_id]} label="National ID" />
+          </div>
 
-            <.input :if={@site_locked} field={@header_form[:site_id]} type="hidden" />
-            <.input
-              :if={not @site_locked}
-              field={@header_form[:site_id]}
-              type="select"
-              label="Site"
-              options={Enum.map(@sites, &{&1.name, &1.id})}
-              prompt="Choose a site"
-              required
-            />
+          <.input :if={@site_locked} field={@header_form[:site_id]} type="hidden" />
+          <.input
+            :if={not @site_locked}
+            field={@header_form[:site_id]}
+            type="select"
+            label="Site"
+            options={Enum.map(@sites, &{&1.name, &1.id})}
+            prompt="Choose a site"
+            required
+          />
 
+          <div class="grid grid-cols-2 gap-3">
             <.input field={@header_form[:prescriber_name]} label="Prescriber name" />
             <.input
               field={@header_form[:urgency]}
@@ -168,38 +175,55 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
               options={Enum.map(@urgencies, &{Phoenix.Naming.humanize(&1), &1})}
               prompt="Choose urgency"
             />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
             <.input field={@header_form[:payment_type]} label="Payment type" />
-            <.input field={@header_form[:has_paid]} type="checkbox" label="Paid" />
-            <.input field={@header_form[:lab_request]} type="textarea" label="Lab request" required />
-            <.input
-              field={@header_form[:referring_facility]}
-              label="Referring facility"
-              required
-            />
+            <div class="flex items-end pb-1">
+              <.input field={@header_form[:has_paid]} type="checkbox" label="Paid" />
+            </div>
+          </div>
+
+          <.input field={@header_form[:lab_request]} type="textarea" label="Lab request" required />
+
+          <div class="grid grid-cols-3 gap-3">
+            <.input field={@header_form[:referring_facility]} label="Referring facility" required />
             <.input field={@header_form[:referring_doctor]} label="Referring doctor" required />
-            <.input field={@header_form[:referred_date]} type="time" label="Referred date" required />
+            <.input field={@header_form[:referred_date]} type="time" label="Referred time" required />
+          </div>
 
-            <.header class="mt-4">Tests</.header>
-            <div :for={id <- @test_ids} class="border rounded-box border-base-300 p-3 mb-2">
-              <.input
-                type="select"
-                name="tests[][lab_test_id]"
-                label="Test"
-                options={Enum.map(@lab_tests, &{&1.name, &1.id})}
-                prompt="Choose a test"
-              />
-              <.button type="button" phx-click="remove_test" phx-value-id={id} class="mt-2">
-                Remove test
-              </.button>
+          <%!-- Tests --%>
+          <div>
+            <p class="text-sm font-medium mb-2" style="color: #1c3a13;">Tests</p>
+            <div class="space-y-2">
+              <div
+                :for={id <- @test_ids}
+                class="flex items-end gap-3 rounded-xl p-3"
+                style="background: #fcfcf7;"
+              >
+                <div class="flex-1">
+                  <.input
+                    type="select"
+                    name="tests[][lab_test_id]"
+                    label="Test"
+                    value={nil}
+                    options={Enum.map(@lab_tests, &{&1.name, &1.id})}
+                    prompt="Choose a test"
+                  />
+                </div>
+                <.button type="button" phx-click="remove_test" phx-value-id={id}>
+                  Remove
+                </.button>
+              </div>
             </div>
-            <.button type="button" phx-click="add_test">+ Add test</.button>
+            <.button type="button" phx-click="add_test" class="mt-2">+ Add test</.button>
+          </div>
 
-            <div class="flex gap-2 mt-4">
-              <.button variant="primary">Create order</.button>
-              <.button navigate={~p"/lab/orders"}>Cancel</.button>
-            </div>
-          </form>
-        </div>
+          <div class="flex gap-3 pt-2">
+            <.button variant="primary">Create order</.button>
+            <.button navigate={~p"/lab/orders"}>Cancel</.button>
+          </div>
+        </.form>
       </div>
 
       <.table id="lab-orders" rows={@lab_orders} row_click={&~p"/lab/orders/#{&1.id}"}>
@@ -208,7 +232,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         <:col :let={lab_order} label="Paid">{if lab_order.has_paid, do: "Yes", else: "No"}</:col>
         <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
       </.table>
-    </Layouts.app_shell>
+    </Layouts.lab_shell>
     """
   end
 end

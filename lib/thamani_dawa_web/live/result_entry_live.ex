@@ -40,7 +40,7 @@ defmodule ThamaniDawaWeb.ResultEntryLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/orders"}>
       <.header>
         Result entry
         <:actions>
@@ -48,20 +48,18 @@ defmodule ThamaniDawaWeb.ResultEntryLive do
         </:actions>
       </.header>
 
-      <form phx-submit="save">
-        <div class="mb-2">
-          <label class="label">Result</label>
-          <input
+      <div class="rounded-2xl p-6" style="background: #eeeee9;">
+        <.form for={%{}} id="result-entry-form" phx-submit="save">
+          <.input
             type="text"
             name="values[result]"
+            label="Result"
             value={current_value(@result, "result")}
-            class="input w-full"
           />
-        </div>
-
-        <.button variant="primary" class="mt-2">Save results</.button>
-      </form>
-    </Layouts.app_shell>
+          <.button variant="primary" class="mt-4">Save results</.button>
+        </.form>
+      </div>
+    </Layouts.lab_shell>
     """
   end
 end

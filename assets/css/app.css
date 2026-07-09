@@ -274,7 +274,9 @@
 
 .thamani-btn-primary:active { transform: scale(0.97); }
 
-.thamani-btn-ghost {
+.thamani-btn-ghost,
+.thamani-btn-ghost-edit,
+.thamani-btn-ghost-delete {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -287,10 +289,24 @@
   text-decoration: none;
   border: 1.5px solid var(--thamani-forest);
   cursor: pointer;
-  transition: transform 160ms ease-out;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms cubic-bezier(0.23, 1, 0.32, 1), border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.thamani-btn-ghost:active { transform: scale(0.97); }
+.thamani-btn-ghost:active,
+.thamani-btn-ghost-edit:active,
+.thamani-btn-ghost-delete:active { transform: scale(0.97); }
+
+@media (hover: hover) and (pointer: fine) {
+  .thamani-btn-ghost-edit:hover {
+    background-color: var(--thamani-forest);
+    color: white;
+  }
+  .thamani-btn-ghost-delete:hover {
+    background-color: var(--thamani-error);
+    border-color: var(--thamani-error);
+    color: white;
+  }
+}
 
 .thamani-btn-ghost-inv {
   display: inline-flex;
@@ -327,6 +343,45 @@
 }
 
 .thamani-btn-lime:active { transform: scale(0.97); }
+
+/* ============================================================
+   App UI — Thamani Inputs
+   ============================================================ */
+
+.thamani-input,
+.thamani-select {
+  display: block;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--thamani-snow);
+  color: var(--thamani-forest);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  border: 1.5px solid rgba(28, 58, 19, 0.18);
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+  appearance: none;
+}
+
+.thamani-input::placeholder { color: var(--thamani-pewter); }
+
+.thamani-input:focus,
+.thamani-select:focus {
+  border-color: var(--thamani-forest);
+  box-shadow: 0 0 0 3px rgba(28, 58, 19, 0.1);
+}
+
+.thamani-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--thamani-forest);
+  margin-bottom: 4px;
+  letter-spacing: 0.01em;
+}
+
 
 /* ============================================================
    Landing Page — Thamani Badge

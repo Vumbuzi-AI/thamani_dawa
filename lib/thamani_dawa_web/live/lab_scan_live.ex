@@ -42,12 +42,13 @@ defmodule ThamaniDawaWeb.LabScanLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/scan"}>
       <.header>Scan</.header>
 
       <form phx-submit="decode">
         <.input
           name="raw_gs1"
+          value={nil}
           label="Raw GS1 element string"
           placeholder="(01)0...(10)LOT1(17)261231"
         />
@@ -85,7 +86,7 @@ defmodule ThamaniDawaWeb.LabScanLive do
           No matching batch or site found for this code.
         </p>
       </div>
-    </Layouts.app_shell>
+    </Layouts.lab_shell>
     """
   end
 end

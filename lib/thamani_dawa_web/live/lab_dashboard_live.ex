@@ -30,7 +30,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path="/lab">
       <.header>Lab dashboard</.header>
 
       <.header class="mt-4">Pending orders</.header>
@@ -50,7 +50,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         <:col :let={lab_order} label="Status">{Phoenix.Naming.humanize(lab_order.status)}</:col>
         <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
       </.table>
-    </Layouts.app_shell>
+    </Layouts.lab_shell>
     """
   end
 end

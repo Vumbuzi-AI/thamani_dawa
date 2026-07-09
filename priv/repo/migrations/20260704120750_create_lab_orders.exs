@@ -21,7 +21,7 @@ defmodule ThamaniDawa.Repo.Migrations.CreateLabOrders do
       add :lab_request, :text
       add :referring_facility, :text
       add :referring_doctor, :text
-      add :referred_date, :utc_datetime
+      add :referred_date, :time
 
       timestamps(type: :utc_datetime)
     end

@@ -97,15 +97,18 @@ defmodule ThamaniDawaWeb.CoreComponents do
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled type)
   attr :class, :any
-  attr :variant, :string, values: ~w(primary)
+  attr :variant, :string, values: ~w(primary ghost ghost-edit ghost-delete), default: "ghost"
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
-
     assigns =
       assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
+        case assigns[:variant] do
+          "primary" -> "thamani-btn-primary"
+          "ghost-edit" -> "thamani-btn-ghost-edit"
+          "ghost-delete" -> "thamani-btn-ghost-delete"
+          _ -> "thamani-btn-ghost"
+        end
       end)
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
@@ -201,7 +204,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def input(%{type: "hidden"} = assigns) do
     ~H"""
-    <input type="hidden" id={@id} name={@name} value={@value} {@rest} />
+    <input type="hidden" id={@id} name={@name} value={assigns[:value]} {@rest} />
     """
   end
 
@@ -212,8 +215,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
       end)
 
     ~H"""
-    <div class="fieldset mb-2">
-      <label for={@id}>
+    <div class="mb-2">
+      <label for={@id} class="inline-flex items-center gap-2 cursor-pointer">
         <input
           type="hidden"
           name={@name}
@@ -221,17 +224,16 @@ defmodule ThamaniDawaWeb.CoreComponents do
           disabled={@rest[:disabled]}
           form={@rest[:form]}
         />
-        <span class="label">
-          <input
-            type="checkbox"
-            id={@id}
-            name={@name}
-            value="true"
-            checked={@checked}
-            class={@class || "checkbox checkbox-sm"}
-            {@rest}
-          />{@label}
-        </span>
+        <input
+          type="checkbox"
+          id={@id}
+          name={@name}
+          value="true"
+          checked={@checked}
+          class={@class || "checkbox checkbox-sm accent-thamani-forest"}
+          {@rest}
+        />
+        <span class="thamani-label" style="margin-bottom: 0;">{@label}</span>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
@@ -240,20 +242,24 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="mb-3">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">
-          {@label}<span :if={@rest[:required]} aria-hidden="true" class="text-error ml-0.5">*</span>
+        <span :if={@label} class="thamani-label">
+          {@label}<span
+            :if={@rest[:required]}
+            aria-hidden="true"
+            style="color: #b91c1c; margin-left: 2px;"
+          >*</span>
         </span>
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
+          class={[@class || "thamani-select", @errors != [] && (@error_class || "border-red-600")]}
           multiple={@multiple}
           {@rest}
         >
           <option :if={@prompt} value="">{@prompt}</option>
-          {Phoenix.HTML.Form.options_for_select(@options, @value)}
+          {Phoenix.HTML.Form.options_for_select(@options, assigns[:value])}
         </select>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
@@ -263,20 +269,25 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="mb-3">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">
-          {@label}<span :if={@rest[:required]} aria-hidden="true" class="text-error ml-0.5">*</span>
+        <span :if={@label} class="thamani-label">
+          {@label}<span
+            :if={@rest[:required]}
+            aria-hidden="true"
+            style="color: #b91c1c; margin-left: 2px;"
+          >*</span>
         </span>
         <textarea
           id={@id}
           name={@name}
           class={[
-            @class || "w-full textarea",
-            @errors != [] && (@error_class || "textarea-error")
+            @class || "thamani-input",
+            @errors != [] && (@error_class || "border-red-600")
           ]}
+          style="min-height: 80px; resize: vertical;"
           {@rest}
-        >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
+        >{Phoenix.HTML.Form.normalize_value("textarea", assigns[:value])}</textarea>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
@@ -286,19 +297,23 @@ defmodule ThamaniDawaWeb.CoreComponents do
   # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="mb-3">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">
-          {@label}<span :if={@rest[:required]} aria-hidden="true" class="text-error ml-0.5">*</span>
+        <span :if={@label} class="thamani-label">
+          {@label}<span
+            :if={@rest[:required]}
+            aria-hidden="true"
+            style="color: #b91c1c; margin-left: 2px;"
+          >*</span>
         </span>
         <input
           type={@type}
           name={@name}
           id={@id}
-          value={Phoenix.HTML.Form.normalize_value(@type, @value)}
+          value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
           class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
+            @class || "thamani-input",
+            @errors != [] && (@error_class || "border-red-600")
           ]}
           {@rest}
         />
@@ -657,7 +672,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           (@errors != [] && "border-thamani-error") || "border-thamani-stone"
         ]}
         {@rest}
-      >{Phoenix.HTML.Form.normalize_value("textarea", @value)}</textarea>
+      >{Phoenix.HTML.Form.normalize_value("textarea", assigns[:value])}</textarea>
       <p :for={msg <- @errors} class="text-[13px] text-thamani-error mt-1.5">
         {msg}
       </p>
@@ -692,7 +707,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         id={@input_id}
         type={@type}
         name={@name}
-        value={Phoenix.HTML.Form.normalize_value(@type, @value)}
+        value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
         placeholder={@placeholder}
         autocomplete={@autocomplete}
         class={[

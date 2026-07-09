@@ -9,9 +9,18 @@ defmodule ThamaniDawa.Products do
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
 
-  @doc "Lists an organization's products."
-  def list_products(organization_id) do
-    Repo.all(from p in Product, where: p.organization_id == ^organization_id)
+  @doc "Lists an organization's products, optionally filtered by site_id."
+  def list_products(organization_id, opts \\ []) do
+    query = from p in Product, where: p.organization_id == ^organization_id
+
+    query =
+      if site_id = Keyword.get(opts, :site_id) do
+        from q in query, where: q.site_id == ^site_id
+      else
+        query
+      end
+
+    Repo.all(query)
   end
 
   @doc "Gets a single product scoped to an organization. Raises if not found."

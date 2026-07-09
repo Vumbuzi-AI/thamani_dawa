@@ -69,7 +69,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/team"}>
       <.header>
         Team
         <:actions>
@@ -113,7 +113,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         <:col :let={user} label="Home site">{site_name(@sites_by_id, user.site_id)}</:col>
         <:col :let={user} label="Status">{status(user)}</:col>
       </.table>
-    </Layouts.app_shell>
+    </Layouts.org_shell>
     """
   end
 end
