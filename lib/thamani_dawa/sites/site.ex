@@ -34,4 +34,12 @@ defmodule ThamaniDawa.Sites.Site do
 
   @doc "The valid site types, per §4.1 of project.md."
   def site_types, do: @site_types
+
+  @doc "Returns true if the site is capable of pharmacy work."
+  def pharmacy?(%__MODULE__{site_type: type}) when type in [:pharmacy, :pharmacy_lab], do: true
+  def pharmacy?(_), do: false
+
+  @doc "Returns true if the site is capable of lab work."
+  def lab?(%__MODULE__{site_type: type}) when type in [:lab, :pharmacy_lab], do: true
+  def lab?(_), do: false
 end

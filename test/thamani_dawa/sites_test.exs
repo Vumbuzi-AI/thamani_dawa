@@ -104,4 +104,62 @@ defmodule ThamaniDawa.SitesTest do
       assert id == site_a.id
     end
   end
+
+  describe "capabilities" do
+    test "pharmacy?/1 identifies sites supporting pharmacy work" do
+      assert Site.pharmacy?(%Site{site_type: :pharmacy})
+      assert Site.pharmacy?(%Site{site_type: :pharmacy_lab})
+      refute Site.pharmacy?(%Site{site_type: :lab})
+      refute Site.pharmacy?(%Site{site_type: :warehouse})
+      refute Site.pharmacy?(nil)
+    end
+
+    test "lab?/1 identifies sites supporting lab work" do
+      assert Site.lab?(%Site{site_type: :lab})
+      assert Site.lab?(%Site{site_type: :pharmacy_lab})
+      refute Site.lab?(%Site{site_type: :pharmacy})
+      refute Site.lab?(%Site{site_type: :warehouse})
+      refute Site.lab?(nil)
+    end
+
+    test "create_site/2 validates combined pharmacy_lab capabilities" do
+      organization = organization_fixture()
+
+      # valid capabilities
+      assert {:ok, _site} =
+               Sites.create_site(organization.id, %{
+                 name: "Joint Branch",
+                 site_type: :pharmacy_lab,
+                 gln: "0614141000006",
+                 address: "Valid Address"
+               })
+
+      assert {:ok, _site} =
+               Sites.create_site(organization.id, %{
+                 name: "Pharmacy Branch",
+                 site_type: :pharmacy,
+                 gln: "0614141000007",
+                 address: "Valid Address"
+               })
+
+      assert {:ok, _site} =
+               Sites.create_site(organization.id, %{
+                 name: "Lab Branch",
+                 site_type: :lab,
+                 gln: "0614141000008",
+                 address: "Valid Address"
+               })
+
+      # invalid capability
+      assert {:error, changeset} =
+               Sites.create_site(organization.id, %{
+                 name: "Unknown Branch",
+                 site_type: :unknown_type,
+                 gln: "0614141000009",
+                 address: "Valid Address"
+               })
+
+      assert %{site_type: ["is invalid"]} = errors_on(changeset)
+    end
+  end
 end
