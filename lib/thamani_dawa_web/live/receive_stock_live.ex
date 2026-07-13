@@ -96,6 +96,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
         suppliers={@suppliers}
         sites={@sites}
         site_locked={@site_locked}
+        gs1_decode_error={@gs1_decode_error}
       />
     </Layouts.app_shell>
     """
