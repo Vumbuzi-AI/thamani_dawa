@@ -16,13 +16,14 @@ defmodule ThamaniDawaWeb.BatchFormComponents do
   attr :suppliers, :list, required: true
   attr :sites, :list, required: true
   attr :site_locked, :boolean, default: false
+  attr :gs1_decode_error, :string, default: nil
 
   def batch_form(assigns) do
     ~H"""
     <div class="card bg-base-200 mb-4">
       <div class="card-body">
         <h2 class="font-semibold mb-2">Paste a GS1 code</h2>
-        <form phx-submit="decode_gs1" class="flex gap-2 items-end">
+        <form id="receive-stock-gs1-form" phx-submit="decode_gs1" class="flex gap-2 items-end">
           <div class="flex-1">
             <.input
               name="raw_gs1"
@@ -32,6 +33,9 @@ defmodule ThamaniDawaWeb.BatchFormComponents do
           </div>
           <.button class="mb-2">Decode &amp; prefill</.button>
         </form>
+        <p :if={@gs1_decode_error} id="gs1-decode-error" class="mt-2 text-error">
+          {@gs1_decode_error}
+        </p>
       </div>
     </div>
 

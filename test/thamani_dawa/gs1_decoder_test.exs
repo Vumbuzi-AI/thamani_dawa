@@ -30,6 +30,14 @@ defmodule ThamaniDawa.GS1DecoderTest do
       assert result.gtin == nil
     end
 
+    test "parses a GLN (AI 414) followed by another fixed-length AI" do
+      data = "414" <> "0614141000005" <> "01" <> "00614141000012"
+
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.gln == "0614141000005"
+      assert result.gtin == "00614141000012"
+    end
+
     test "a variable-length field mid-string is terminated by the GS separator" do
       data = "10" <> "ABC" <> @gs <> "01" <> "00614141000012"
       assert {:ok, result} = GS1Decoder.parse(data)
@@ -71,8 +79,79 @@ defmodule ThamaniDawa.GS1DecoderTest do
       assert {:error, {:invalid_date, _}} = GS1Decoder.parse("17" <> "261340")
     end
 
+    test "errors on invalid day-00 date components" do
+      assert {:error, {:invalid_date, _}} = GS1Decoder.parse("17" <> "261300")
+    end
+
     test "errors when the GTIN isn't numeric" do
       assert {:error, {:invalid_digits, _}} = GS1Decoder.parse("01" <> "0061414100001A")
+    end
+
+    test "errors when a GLN (AI 414) is truncated" do
+      assert {:error, {:invalid_length, "414"}} = GS1Decoder.parse("414" <> "123")
+    end
+
+    test "errors when a GLN isn't numeric" do
+      assert {:error, {:invalid_digits, _}} = GS1Decoder.parse("414" <> "061414100000A")
+    end
+
+    test "GLN parse returns an error for invalid input (length or digits)" do
+      result = GS1Decoder.parse("414" <> "06141A")
+
+      case result do
+        {:error, {:invalid_length, "414"}} -> assert true
+        {:error, {:invalid_digits, _}} -> assert true
+        other -> flunk("Unexpected parse result: #{inspect(other)}")
+      end
+    end
+
+    test "empty input returns the expected GS1 keys with nil values" do
+      assert {:ok, result} = GS1Decoder.parse("")
+
+      assert result == %{
+               gtin: nil,
+               batch_no: nil,
+               production_date: nil,
+               expiry_date: nil,
+               serial: nil,
+               gln: nil
+             }
+
+      assert MapSet.new(Map.keys(result)) ==
+               MapSet.new([
+                 :gtin,
+                 :batch_no,
+                 :production_date,
+                 :expiry_date,
+                 :serial,
+                 :gln
+               ])
+    end
+
+    test "an AI present but with no value decodes to an empty string, not an error" do
+      assert {:ok, result} = GS1Decoder.parse("10")
+      assert result.batch_no == ""
+    end
+
+    test "an empty variable-length AI is empty when terminated by a GS separator" do
+      assert {:ok, result} = GS1Decoder.parse("10" <> @gs)
+      assert result.batch_no == ""
+    end
+
+    test "fixed-length AI with no value returns invalid_length" do
+      assert {:error, {:invalid_length, "01"}} = GS1Decoder.parse("01")
+    end
+
+    test "when an AI appears twice, the later occurrence wins" do
+      data = "01" <> "00614141000012" <> "01" <> "00614141000029"
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.gtin == "00614141000029"
+    end
+
+    test "duplicate variable-length AI entries overwrite earlier values" do
+      data = "10" <> "FIRST" <> @gs <> "10" <> "SECOND"
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.batch_no == "SECOND"
     end
   end
 end
