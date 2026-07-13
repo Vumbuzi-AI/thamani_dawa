@@ -79,6 +79,10 @@ defmodule ThamaniDawa.GS1DecoderTest do
       assert {:error, {:invalid_date, _}} = GS1Decoder.parse("17" <> "261340")
     end
 
+    test "errors on invalid day-00 date components" do
+      assert {:error, {:invalid_date, _}} = GS1Decoder.parse("17" <> "261300")
+    end
+
     test "errors when the GTIN isn't numeric" do
       assert {:error, {:invalid_digits, _}} = GS1Decoder.parse("01" <> "0061414100001A")
     end
@@ -108,6 +112,21 @@ defmodule ThamaniDawa.GS1DecoderTest do
              }
     end
 
+    test "empty input returns the expected GS1 keys with nil values" do
+      assert {:ok, result} = GS1Decoder.parse("")
+
+      assert MapSet.new(Map.keys(result)) == MapSet.new([
+               :gtin,
+               :batch_no,
+               :production_date,
+               :expiry_date,
+               :serial,
+               :gln
+             ])
+
+      assert Enum.all?(result, fn {_key, value} -> is_nil(value) end)
+    end
+
     test "an AI present but with no value decodes to an empty string, not an error" do
       assert {:ok, result} = GS1Decoder.parse("10")
       assert result.batch_no == ""
@@ -116,6 +135,10 @@ defmodule ThamaniDawa.GS1DecoderTest do
     test "an empty variable-length AI is empty when terminated by a GS separator" do
       assert {:ok, result} = GS1Decoder.parse("10" <> @gs)
       assert result.batch_no == ""
+    end
+
+    test "fixed-length AI with no value returns invalid_length" do
+      assert {:error, {:invalid_length, "01"}} = GS1Decoder.parse("01")
     end
 
     test "when an AI appears twice, the later occurrence wins" do
