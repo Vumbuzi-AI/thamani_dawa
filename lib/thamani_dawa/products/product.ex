@@ -4,7 +4,6 @@ defmodule ThamaniDawa.Products.Product do
 
   schema "products" do
     field :organization_id, :id
-    field :site_id, :id
     field :generic_name, :string
     field :brand_name, :string
     field :category, :string
@@ -22,7 +21,6 @@ defmodule ThamaniDawa.Products.Product do
   def changeset(product, attrs) do
     product
     |> cast(attrs, [
-      :site_id,
       :generic_name,
       :brand_name,
       :category,
@@ -33,9 +31,8 @@ defmodule ThamaniDawa.Products.Product do
       :reorder_level,
       :price
     ])
-    |> validate_required([:site_id, :price])
+    |> validate_required([:price])
     |> ThamaniDawa.Gtin.validate_gtin()
     |> unique_constraint(:gtin, name: :products_organization_id_gtin_index)
-    |> foreign_key_constraint(:site_id)
   end
 end

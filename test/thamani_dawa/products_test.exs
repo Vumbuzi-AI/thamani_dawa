@@ -6,26 +6,19 @@ defmodule ThamaniDawa.ProductsTest do
 
   import ThamaniDawa.OrganizationsFixtures
   import ThamaniDawa.ProductsFixtures
-  import ThamaniDawa.SitesFixtures
 
   describe "create_product/2" do
-    test "requires site_id and price" do
+    test "requires price" do
       organization = organization_fixture()
       assert {:error, changeset} = Products.create_product(organization.id, %{})
-
-      assert %{
-               site_id: ["can't be blank"],
-               price: ["can't be blank"]
-             } = errors_on(changeset)
+      assert %{price: ["can't be blank"]} = errors_on(changeset)
     end
 
     test "creates a product scoped to the organization" do
       organization = organization_fixture()
-      site = site_fixture(%{organization_id: organization.id})
 
       assert {:ok, %Product{} = product} =
                Products.create_product(organization.id, %{
-                 site_id: site.id,
                  price: 500,
                  generic_name: "Amoxicillin",
                  brand_name: "Amoxil",
@@ -34,7 +27,6 @@ defmodule ThamaniDawa.ProductsTest do
                })
 
       assert product.organization_id == organization.id
-      assert product.site_id == site.id
       assert product.price == 500
       assert product.generic_name == "Amoxicillin"
     end
@@ -42,12 +34,9 @@ defmodule ThamaniDawa.ProductsTest do
     test "enforces per-organization unique gtin, allowing the same gtin across organizations" do
       organization_a = organization_fixture()
       organization_b = organization_fixture()
-      site_a = site_fixture(%{organization_id: organization_a.id})
-      site_b = site_fixture(%{organization_id: organization_b.id})
 
       assert {:ok, _product} =
                Products.create_product(organization_a.id, %{
-                 site_id: site_a.id,
                  price: 100,
                  generic_name: "Surgical Gloves",
                  gtin: "00614141000012"
@@ -55,7 +44,6 @@ defmodule ThamaniDawa.ProductsTest do
 
       assert {:error, changeset} =
                Products.create_product(organization_a.id, %{
-                 site_id: site_a.id,
                  price: 100,
                  generic_name: "Surgical Gloves (dup)",
                  gtin: "00614141000012"
@@ -65,7 +53,6 @@ defmodule ThamaniDawa.ProductsTest do
 
       assert {:ok, _product} =
                Products.create_product(organization_b.id, %{
-                 site_id: site_b.id,
                  price: 100,
                  generic_name: "Surgical Gloves",
                  gtin: "00614141000012"
@@ -74,18 +61,15 @@ defmodule ThamaniDawa.ProductsTest do
 
     test "allows more than one product with no gtin" do
       organization = organization_fixture()
-      site = site_fixture(%{organization_id: organization.id})
 
       assert {:ok, _a} =
                Products.create_product(organization.id, %{
-                 site_id: site.id,
                  price: 100,
                  generic_name: "Cotton Wool"
                })
 
       assert {:ok, _b} =
                Products.create_product(organization.id, %{
-                 site_id: site.id,
                  price: 100,
                  generic_name: "Bandages"
                })
@@ -93,11 +77,9 @@ defmodule ThamaniDawa.ProductsTest do
 
     test "normalizes a shorter GTIN to canonical GTIN-14 via ex_gtin" do
       organization = organization_fixture()
-      site = site_fixture(%{organization_id: organization.id})
 
       assert {:ok, product} =
                Products.create_product(organization.id, %{
-                 site_id: site.id,
                  price: 100,
                  generic_name: "Surgical Gloves",
                  gtin: "614141000012"
@@ -108,11 +90,9 @@ defmodule ThamaniDawa.ProductsTest do
 
     test "rejects a gtin that fails the GS1 check digit" do
       organization = organization_fixture()
-      site = site_fixture(%{organization_id: organization.id})
 
       assert {:error, changeset} =
                Products.create_product(organization.id, %{
-                 site_id: site.id,
                  price: 100,
                  generic_name: "Surgical Gloves",
                  gtin: "00614141000011"

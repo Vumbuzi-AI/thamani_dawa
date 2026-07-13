@@ -3,7 +3,6 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
-  alias ThamaniDawa.Sites
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -11,7 +10,6 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     {:ok,
      socket
      |> assign(:search, "")
-     |> assign(:sites, Sites.list_sites(organization_id))
      |> stream(:products, Products.list_products(organization_id))}
   end
 
@@ -122,14 +120,6 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
               {if @live_action == :new, do: "Add a product", else: "Edit product"}
             </h2>
             <.form for={@form} id="product-form" phx-submit="save" phx-change="validate">
-              <.input
-                field={@form[:site_id]}
-                type="select"
-                label="Site"
-                options={Enum.map(@sites, &{&1.name, &1.id})}
-                prompt="Choose a site"
-                required
-              />
               <.input field={@form[:price]} type="number" label="Price" required />
               <.input field={@form[:generic_name]} label="Generic name" />
               <.input field={@form[:brand_name]} label="Brand name" />
