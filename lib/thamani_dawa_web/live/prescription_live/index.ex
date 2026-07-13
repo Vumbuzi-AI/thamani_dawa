@@ -119,7 +119,11 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.pharmacy_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/pharmacy/prescriptions"
+    >
       <.header>
         Prescriptions
         <:actions>
@@ -216,7 +220,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         </:col>
         <:col :let={prescription} label="Created">{prescription.inserted_at}</:col>
       </.table>
-    </Layouts.app_shell>
+    </Layouts.pharmacy_shell>
     """
   end
 

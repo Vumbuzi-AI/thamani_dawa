@@ -59,7 +59,11 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.pharmacy_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/pharmacy/prescriptions"
+    >
       <.header>
         Prescription for {@patient.full_name}
         <:actions>
@@ -91,7 +95,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
           <button class="btn btn-sm btn-primary">Dispense</button>
         </form>
       </div>
-    </Layouts.app_shell>
+    </Layouts.pharmacy_shell>
     """
   end
 end

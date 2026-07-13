@@ -69,11 +69,26 @@ defmodule ThamaniDawa.Batches.Batch do
     end)
   end
 
+  @doc """
+  Changeset for confirming receipt of a dispatched batch. Casting `:quantity`
+  is optional — pass it when the amount actually received differs from what
+  was dispatched, which also resets `remaining_quantity` to match (a pending
+  batch can't yet have anything dispensed from it).
+  """
   def receive_changeset(batch, attrs) do
     batch
-    |> cast(attrs, [:received_by_id, :received_at, :approver_id])
+    |> cast(attrs, [:received_by_id, :received_at, :approver_id, :quantity])
     |> validate_required([:received_by_id, :received_at, :approver_id])
+    |> validate_number(:quantity, greater_than_or_equal_to: 0)
+    |> put_remaining_quantity_from_received_quantity()
     |> foreign_key_constraint(:received_by_id)
     |> foreign_key_constraint(:approver_id)
+  end
+
+  defp put_remaining_quantity_from_received_quantity(changeset) do
+    case get_change(changeset, :quantity) do
+      nil -> changeset
+      quantity -> put_change(changeset, :remaining_quantity, quantity)
+    end
   end
 end

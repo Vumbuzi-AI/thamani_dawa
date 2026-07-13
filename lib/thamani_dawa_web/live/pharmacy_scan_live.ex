@@ -42,7 +42,11 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
+    <Layouts.pharmacy_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/pharmacy/scan"
+    >
       <.header>Scan</.header>
 
       <form phx-submit="decode">
@@ -85,7 +89,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
           No matching batch or site found for this code.
         </p>
       </div>
-    </Layouts.app_shell>
+    </Layouts.pharmacy_shell>
     """
   end
 end

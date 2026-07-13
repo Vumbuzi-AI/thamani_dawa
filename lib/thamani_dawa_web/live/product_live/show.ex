@@ -6,6 +6,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.Suppliers
 
   def mount(%{"id" => id}, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -28,6 +29,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
      |> assign(:product, product)
      |> assign(:sites_by_id, sites_by_id)
      |> assign(:users_by_id, users_by_id)
+     |> assign(:suppliers, Suppliers.list_suppliers(organization_id))
      |> stream(:batches, batches)}
   end
 
@@ -166,6 +168,13 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
               />
               <.input field={@form[:quantity]} type="number" label="Quantity" required />
               <.input field={@form[:cost_per_unit]} type="number" label="Cost per unit" step="0.01" />
+              <.input
+                field={@form[:supplier_id]}
+                type="select"
+                label="Supplier"
+                options={Enum.map(@suppliers, &{&1.name, &1.id})}
+                prompt="No supplier"
+              />
             </div>
             <div class="flex gap-2 mt-2">
               <.button variant="primary">Dispatch</.button>

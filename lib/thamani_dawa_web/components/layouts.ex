@@ -114,6 +114,36 @@ defmodule ThamaniDawaWeb.Layouts do
   end
 
   @doc """
+  Renders the authenticated pharmacy shell
+  """
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, default: ""
+
+  slot :inner_block, required: true
+
+  def pharmacy_shell(assigns) do
+    ~H"""
+    <.sidebar_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      title="Thamani Dawa"
+      section_label="Pharmacy"
+      base_path="/pharmacy"
+      nav_items={[
+        {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
+        {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
+        {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
+        {"Scan", "hero-qr-code", ~p"/pharmacy/scan"}
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
+  @doc """
   Renders the authenticated org shell: a sticky top bar plus a
   collapsible sidebar with quick-links to every org section.
   """

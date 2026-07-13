@@ -3,74 +3,185 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
 
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.BatchesFixtures
+  import ThamaniDawa.OrganizationsFixtures
+  import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
 
-  describe "GS1 decoding" do
-    test "empty GS1 input is accepted and does not produce a decode error", %{conn: conn} do
-      user = user_fixture()
-      _site = site_fixture(%{organization_id: user.organization_id})
+  alias ThamaniDawa.Batches
 
-      {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/pharmacy/receive-stock")
+  defp pharmacist_at_site(organization, site) do
+    staff_fixture(%{organization_id: organization.id, site_id: site.id})
+  end
 
-      assert has_element?(lv, "form#receive-stock-gs1-form input[name='raw_gs1']")
+  describe "pending batches list" do
+    test "shows a batch dispatched to the pharmacist's own site", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
 
-      form = form(lv, "#receive-stock-gs1-form", raw_gs1: "")
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          batch_no: "LOT-HERE",
+          pending: true
+        })
 
-      render_submit(form)
+      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
 
-      refute has_element?(lv, "#gs1-decode-error")
+      assert html =~ "LOT-HERE"
+      assert has_element?(lv, "#receive-batch-#{batch.id}")
     end
 
-    test "invalid GS1 input displays a decode error", %{conn: conn} do
-      user = user_fixture()
-      _site = site_fixture(%{organization_id: user.organization_id})
+    test "does not show a batch dispatched to a different site", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      other_site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
 
-      {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/pharmacy/receive-stock")
+      _batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: other_site.id,
+          product_id: product.id,
+          batch_no: "LOT-ELSEWHERE",
+          pending: true
+        })
 
-      assert has_element?(lv, "form#receive-stock-gs1-form input[name='raw_gs1']")
+      {:ok, _lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
 
-      invalid_form = form(lv, "#receive-stock-gs1-form", raw_gs1: "01" <> "0061414100001A")
+      refute html =~ "LOT-ELSEWHERE"
+    end
+  end
 
-      render_submit(invalid_form)
+  describe "manual receipt" do
+    test "receiving a pending batch approves it and removes it from the list", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          batch_no: "LOT-MANUAL",
+          quantity: 100,
+          pending: true
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      lv
+      |> form("#receive-batch-#{batch.id}", %{"quantity" => "100"})
+      |> render_submit()
+
+      refute has_element?(lv, "#receive-batch-#{batch.id}")
+      assert render(lv) =~ "Stock received."
+
+      received = Batches.get_batch!(organization.id, batch.id)
+      assert received.approver_id == pharmacist.id
+      assert received.received_by_id == pharmacist.id
+      assert %DateTime{} = received.received_at
+    end
+
+    test "an edited quantity on receipt becomes the batch's quantity and remaining_quantity", %{
+      conn: conn
+    } do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          batch_no: "LOT-SHORT-SHIP",
+          quantity: 100,
+          pending: true
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      lv
+      |> form("#receive-batch-#{batch.id}", %{"quantity" => "80"})
+      |> render_submit()
+
+      received = Batches.get_batch!(organization.id, batch.id)
+      assert received.quantity == 80
+      assert received.remaining_quantity == 80
+    end
+  end
+
+  describe "GS1-assisted receipt" do
+    test "a scanned code matching a pending batch's gtin and batch_no receives it", %{
+      conn: conn
+    } do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      gtin = unique_gtin()
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: gtin,
+          batch_no: "LOT-GS1",
+          pending: true
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      lv
+      |> form("#receive-stock-gs1-form", raw_gs1: "01" <> gtin <> "10" <> "LOT-GS1")
+      |> render_submit()
+
+      refute has_element?(lv, "#receive-batch-#{batch.id}")
+      assert render(lv) =~ "Stock received."
+
+      received = Batches.get_batch!(organization.id, batch.id)
+      assert received.approver_id == pharmacist.id
+    end
+
+    test "invalid GS1 input shows a decode error", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      lv
+      |> form("#receive-stock-gs1-form", raw_gs1: "01" <> "123")
+      |> render_submit()
 
       assert has_element?(lv, "#gs1-decode-error", "Couldn't decode that code")
     end
 
-    test "a successful GS1 decode clears a previous decode error", %{conn: conn} do
-      user = user_fixture()
-      _site = site_fixture(%{organization_id: user.organization_id})
+    test "a well-formed code with no matching pending batch shows a not-found error", %{
+      conn: conn
+    } do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      gtin = unique_gtin()
 
-      {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/pharmacy/receive-stock")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
 
-      invalid_form = form(lv, "#receive-stock-gs1-form", raw_gs1: "01" <> "0061414100001A")
-      render_submit(invalid_form)
-      assert has_element?(lv, "#gs1-decode-error", "Couldn't decode that code")
+      lv
+      |> form("#receive-stock-gs1-form", raw_gs1: "01" <> gtin <> "10" <> "NO-SUCH-LOT")
+      |> render_submit()
 
-      valid_form = form(lv, "#receive-stock-gs1-form", raw_gs1: "01" <> "00614141000012")
-      render_submit(valid_form)
-
-      refute has_element?(lv, "#gs1-decode-error")
-    end
-
-    test "invalid GS1 shows an error and a subsequent valid decode clears it", %{conn: conn} do
-      user = user_fixture()
-      _site = site_fixture(%{organization_id: user.organization_id})
-
-      {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/pharmacy/receive-stock")
-
-      assert has_element?(lv, "form#receive-stock-gs1-form input[name='raw_gs1']")
-
-      # Submit an invalid GS1 (truncated GTIN) -> should show error
-      invalid_form = form(lv, "#receive-stock-gs1-form", raw_gs1: "01")
-      _invalid_html = render_submit(invalid_form)
-
-      assert has_element?(lv, "#gs1-decode-error", "Couldn't decode that code")
-
-      # Now submit a valid GS1 -> error should be cleared
-      valid_form = form(lv, "#receive-stock-gs1-form", raw_gs1: "01" <> "00614141000012")
-      _valid_html = render_submit(valid_form)
-
-      refute has_element?(lv, "#gs1-decode-error")
+      assert has_element?(lv, "#gs1-decode-error", "No matching pending batch at your site")
     end
   end
 end
