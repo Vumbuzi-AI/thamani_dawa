@@ -25,6 +25,32 @@ defmodule ThamaniDawa.Batches do
     )
   end
 
+  @doc """
+  Finds the pending (not yet received) batch matching a scanned GTIN and
+  batch/lot number, for resolving a GS1 scan to the dispatch it's confirming
+  receipt of. Pass `site_id:` to narrow the search to one site.
+  """
+  def find_pending_batch(organization_id, gtin, batch_no, opts \\ []) do
+    query =
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.gtin == ^gtin,
+        where: b.batch_no == ^batch_no,
+        where: is_nil(b.received_at)
+
+    query =
+      if site_id = Keyword.get(opts, :site_id) do
+        from q in query, where: q.site_id == ^site_id
+      else
+        query
+      end
+
+    case Repo.one(query) do
+      nil -> {:error, :not_found}
+      batch -> {:ok, batch}
+    end
+  end
+
   @doc "Lists all batches for a specific product within an organization, ordered by expiry."
   def list_batches_for_product(organization_id, product_id) do
     Repo.all(
@@ -58,16 +84,22 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc """
-  Marks a batch as received by `user_id`, flipping `is_approved` to true and
-  making it active for dispensing or lab consumption.
+  Marks a batch as received by `user_id`, stamping `approver_id`/`received_at`
+  and making it active for dispensing or lab consumption. Pass a `"quantity"`
+  in `attrs` when the amount actually received differs from what was
+  dispatched — `remaining_quantity` is reset to match, since a pending batch
+  can't yet have anything dispensed from it.
   """
-  def receive_batch(%Batch{} = batch, user_id) do
+  def receive_batch(%Batch{} = batch, user_id, attrs \\ %{}) do
+    attrs =
+      Map.merge(attrs, %{
+        "received_by_id" => user_id,
+        "received_at" => DateTime.utc_now(),
+        "approver_id" => user_id
+      })
+
     batch
-    |> Batch.receive_changeset(%{
-      received_by_id: user_id,
-      received_at: DateTime.utc_now(),
-      approver_id: user_id
-    })
+    |> Batch.receive_changeset(attrs)
     |> Repo.update()
   end
 

@@ -57,15 +57,8 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.app_shell flash={@flash} current_scope={@current_scope}>
-      <.header>
-        Pharmacy dashboard
-        <:actions>
-          <.link navigate={~p"/pharmacy/receive-stock"} class="btn btn-outline btn-sm">Receive Stock</.link>
-          <.link navigate={~p"/pharmacy/prescriptions"} class="btn btn-outline btn-sm">Prescriptions</.link>
-          <.link navigate={~p"/pharmacy/scan"} class="btn btn-outline btn-sm">Scan</.link>
-        </:actions>
-      </.header>
+    <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path="/pharmacy">
+      <.header>Pharmacy dashboard</.header>
 
       <.header class="mt-4">
         Low stock
@@ -102,7 +95,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           {if prescription.has_paid, do: "Yes", else: "No"}
         </:col>
       </.table>
-    </Layouts.app_shell>
+    </Layouts.pharmacy_shell>
     """
   end
 end
