@@ -99,6 +99,48 @@ defmodule ThamaniDawa.BatchesTest do
       assert %{quantity: ["must be greater than or equal to 0"]} = errors_on(changeset)
     end
 
+    test "rejects a site_id that belongs to a different organization" do
+      organization = organization_fixture()
+      other_org = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      hostile_site = site_fixture(%{organization_id: other_org.id})
+      approver = user_fixture(%{organization_id: organization.id})
+
+      assert {:error, changeset} =
+               Batches.create_batch(organization.id, %{
+                 product_id: product.id,
+                 site_id: hostile_site.id,
+                 approver_id: approver.id,
+                 gtin: "00614141000012",
+                 batch_no: "LOT-X",
+                 expiry_date: ~D[2027-01-01],
+                 quantity: 10
+               })
+
+      assert %{site_id: ["does not belong to this organization"]} = errors_on(changeset)
+    end
+
+    test "rejects a product_id that belongs to a different organization" do
+      organization = organization_fixture()
+      other_org = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      hostile_product = product_fixture(%{organization_id: other_org.id})
+      approver = user_fixture(%{organization_id: organization.id})
+
+      assert {:error, changeset} =
+               Batches.create_batch(organization.id, %{
+                 product_id: hostile_product.id,
+                 site_id: site.id,
+                 approver_id: approver.id,
+                 gtin: "00614141000012",
+                 batch_no: "LOT-X",
+                 expiry_date: ~D[2027-01-01],
+                 quantity: 10
+               })
+
+      assert %{product_id: ["does not belong to this organization"]} = errors_on(changeset)
+    end
+
     test "rejects a gtin that fails the GS1 check digit" do
       organization = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})

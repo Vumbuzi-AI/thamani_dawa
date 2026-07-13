@@ -7,7 +7,9 @@ defmodule ThamaniDawa.Batches do
 
   import Ecto.Query, warn: false
   alias ThamaniDawa.Batches.Batch
+  alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
+  alias ThamaniDawa.Sites.Site
 
   @doc "Lists an organization's batches."
   def list_batches(organization_id) do
@@ -28,7 +30,18 @@ defmodule ThamaniDawa.Batches do
     %Batch{}
     |> Batch.changeset(default_remaining_quantity(attrs))
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> validate_belongs_to_org(:site_id, Site, organization_id)
+    |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> Repo.insert()
+  end
+
+  defp validate_belongs_to_org(changeset, field, schema, organization_id) do
+    Ecto.Changeset.validate_change(changeset, field, fn _field, id ->
+      case Repo.get_by(schema, id: id, organization_id: organization_id) do
+        nil -> [{field, "does not belong to this organization"}]
+        _record -> []
+      end
+    end)
   end
 
   defp default_remaining_quantity(attrs) do
