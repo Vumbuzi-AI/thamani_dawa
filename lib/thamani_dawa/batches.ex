@@ -25,6 +25,29 @@ defmodule ThamaniDawa.Batches do
     )
   end
 
+  @doc "Lists pending (not yet received) batches dispatched to a specific site."
+  def list_pending_batches_for_site(organization_id, site_id) do
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: is_nil(b.received_at),
+        order_by: [asc: b.expiry_date]
+    )
+  end
+
+  @doc "Lists active (received, stock remaining) batches at a specific site."
+  def list_active_batches_for_site(organization_id, site_id) do
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: not is_nil(b.approver_id),
+        where: b.remaining_quantity > 0,
+        order_by: [asc: b.expiry_date]
+    )
+  end
+
   @doc "Lists all batches for a specific product within an organization, ordered by expiry."
   def list_batches_for_product(organization_id, product_id) do
     Repo.all(
