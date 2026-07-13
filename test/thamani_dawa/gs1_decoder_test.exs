@@ -30,6 +30,14 @@ defmodule ThamaniDawa.GS1DecoderTest do
       assert result.gtin == nil
     end
 
+    test "parses a GLN (AI 414) followed by another fixed-length AI" do
+      data = "414" <> "0614141000005" <> "01" <> "00614141000012"
+
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.gln == "0614141000005"
+      assert result.gtin == "00614141000012"
+    end
+
     test "a variable-length field mid-string is terminated by the GS separator" do
       data = "10" <> "ABC" <> @gs <> "01" <> "00614141000012"
       assert {:ok, result} = GS1Decoder.parse(data)
@@ -83,6 +91,10 @@ defmodule ThamaniDawa.GS1DecoderTest do
       assert {:error, {:invalid_digits, _}} = GS1Decoder.parse("414" <> "061414100000A")
     end
 
+    test "length validation takes precedence over digit validation for GLN" do
+      assert {:error, {:invalid_length, "414"}} = GS1Decoder.parse("414" <> "06141A")
+    end
+
     test "an empty element string decodes to all-nil fields, not an error" do
       assert {:ok, result} = GS1Decoder.parse("")
 
@@ -97,7 +109,12 @@ defmodule ThamaniDawa.GS1DecoderTest do
     end
 
     test "an AI present but with no value decodes to an empty string, not an error" do
-      assert {:ok, result} = GS1Decoder.parse("10" <> "")
+      assert {:ok, result} = GS1Decoder.parse("10")
+      assert result.batch_no == ""
+    end
+
+    test "an empty variable-length AI is empty when terminated by a GS separator" do
+      assert {:ok, result} = GS1Decoder.parse("10" <> @gs)
       assert result.batch_no == ""
     end
 
@@ -105,6 +122,12 @@ defmodule ThamaniDawa.GS1DecoderTest do
       data = "01" <> "00614141000012" <> "01" <> "00614141000029"
       assert {:ok, result} = GS1Decoder.parse(data)
       assert result.gtin == "00614141000029"
+    end
+
+    test "duplicate variable-length AI entries overwrite earlier values" do
+      data = "10" <> "FIRST" <> @gs <> "10" <> "SECOND"
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.batch_no == "SECOND"
     end
   end
 end
