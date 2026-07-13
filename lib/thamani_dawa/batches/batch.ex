@@ -17,13 +17,16 @@ defmodule ThamaniDawa.Batches.Batch do
     field :supplier_id, :id
     field :received_by_id, :id
     field :received_at, :utc_datetime
-    field :is_approved, :boolean, default: false
     field :approver_id, :id
 
     timestamps(type: :utc_datetime)
   end
 
-  @doc false
+  @doc """
+  Changeset for dispatching a batch to a site. Approval fields are not set
+  here — they are stamped later via `receive_changeset/2` when staff confirm
+  physical receipt.
+  """
   def changeset(batch, attrs) do
     batch
     |> cast(attrs, [
@@ -37,11 +40,7 @@ defmodule ThamaniDawa.Batches.Batch do
       :quantity,
       :remaining_quantity,
       :cost_per_unit,
-      :supplier_id,
-      :received_by_id,
-      :received_at,
-      :is_approved,
-      :approver_id
+      :supplier_id
     ])
     |> validate_required([
       :product_id,
@@ -49,15 +48,31 @@ defmodule ThamaniDawa.Batches.Batch do
       :gtin,
       :batch_no,
       :expiry_date,
-      :quantity,
-      :approver_id
+      :quantity
     ])
     |> ThamaniDawa.Gtin.validate_gtin()
+    |> validate_expiry_date()
     |> validate_number(:quantity, greater_than_or_equal_to: 0)
     |> validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
     |> foreign_key_constraint(:product_id)
     |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:supplier_id)
+  end
+
+  defp validate_expiry_date(changeset) do
+    validate_change(changeset, :expiry_date, fn :expiry_date, date ->
+      if Date.compare(date, Date.utc_today()) == :gt do
+        []
+      else
+        [expiry_date: "must be in the future"]
+      end
+    end)
+  end
+
+  def receive_changeset(batch, attrs) do
+    batch
+    |> cast(attrs, [:received_by_id, :received_at, :approver_id])
+    |> validate_required([:received_by_id, :received_at, :approver_id])
     |> foreign_key_constraint(:received_by_id)
     |> foreign_key_constraint(:approver_id)
   end

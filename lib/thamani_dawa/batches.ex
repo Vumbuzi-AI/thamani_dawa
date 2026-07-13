@@ -11,9 +11,28 @@ defmodule ThamaniDawa.Batches do
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
-  @doc "Lists an organization's batches."
+  @doc "Lists all batches for an organization."
   def list_batches(organization_id) do
     Repo.all(from b in Batch, where: b.organization_id == ^organization_id)
+  end
+
+  @doc "Lists batches dispatched to a site but not yet received by staff."
+  def list_pending_batches(organization_id) do
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: is_nil(b.received_at)
+    )
+  end
+
+  @doc "Lists all batches for a specific product within an organization, ordered by expiry."
+  def list_batches_for_product(organization_id, product_id) do
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.product_id == ^product_id,
+        order_by: [asc: b.expiry_date]
+    )
   end
 
   @doc "Gets a single batch scoped to an organization. Raises if not found."
@@ -22,9 +41,12 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc """
-  Creates a batch under the given organization. When `remaining_quantity` is
-  omitted, it defaults to `quantity` — a freshly received batch starts fully
-  stocked.
+  Dispatches a batch to a site. Sets product, site, quantity, and lot
+  details. Approval fields (`received_by_id`, `received_at`, `approver_id`,
+  `is_approved`) are left unset — they are stamped on receipt via
+  `receive_batch/2`.
+
+  When `remaining_quantity` is omitted it defaults to `quantity`.
   """
   def create_batch(organization_id, attrs) when is_integer(organization_id) do
     %Batch{}
@@ -33,6 +55,20 @@ defmodule ThamaniDawa.Batches do
     |> validate_belongs_to_org(:site_id, Site, organization_id)
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> Repo.insert()
+  end
+
+  @doc """
+  Marks a batch as received by `user_id`, flipping `is_approved` to true and
+  making it active for dispensing or lab consumption.
+  """
+  def receive_batch(%Batch{} = batch, user_id) do
+    batch
+    |> Batch.receive_changeset(%{
+      received_by_id: user_id,
+      received_at: DateTime.utc_now(),
+      approver_id: user_id
+    })
+    |> Repo.update()
   end
 
   defp validate_belongs_to_org(changeset, field, schema, organization_id) do
@@ -65,10 +101,11 @@ defmodule ThamaniDawa.Batches do
 
   @doc """
   Picks the batch to dispense/consume from at `site_id` for `product_id`,
-  per FEFO (first-expired-first-out, §9): the active batch with stock
-  remaining, soonest expiry first. This query is what enforces §4.3's
-  "batch must be at the prescription's own site_id" for pharmacy dispensing
-  — a batch at any other site is never a candidate.
+  per FEFO (first-expired-first-out, §9): the active, approved batch with
+  stock remaining, soonest expiry first. Pending (not yet received) batches
+  are excluded. This query is what enforces §4.3's "batch must be at the
+  prescription's own site_id" for pharmacy dispensing — a batch at any other
+  site is never a candidate.
 
   Locks the returned row `FOR UPDATE`, so callers must run this inside
   `Repo.transaction/1` and decrement the batch before the transaction ends,
@@ -82,6 +119,7 @@ defmodule ThamaniDawa.Batches do
         where: b.site_id == ^site_id,
         where: b.product_id == ^product_id,
         where: b.remaining_quantity > 0,
+        where: not is_nil(b.approver_id),
         order_by: [asc: b.expiry_date],
         limit: 1,
         lock: "FOR UPDATE"

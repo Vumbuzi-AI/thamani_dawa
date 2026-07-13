@@ -1,6 +1,7 @@
 defmodule ThamaniDawaWeb.ProductLive.Show do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Products
@@ -10,15 +11,23 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
     organization_id = socket.assigns.current_scope.organization_id
     product = Products.get_product!(organization_id, id)
 
-    batches =
+    batches = Batches.list_batches_for_product(organization_id, product.id)
+
+    sites_by_id =
       organization_id
-      |> Batches.list_batches()
-      |> Enum.filter(&(&1.product_id == product.id))
+      |> Sites.list_sites()
+      |> Map.new(&{&1.id, &1})
+
+    users_by_id =
+      organization_id
+      |> Accounts.list_users()
+      |> Map.new(&{&1.id, &1})
 
     {:ok,
      socket
      |> assign(:product, product)
-     |> assign(:sites, Sites.list_sites(organization_id))
+     |> assign(:sites_by_id, sites_by_id)
+     |> assign(:users_by_id, users_by_id)
      |> stream(:batches, batches)}
   end
 
@@ -48,23 +57,33 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
     scope = socket.assigns.current_scope
     product = socket.assigns.product
 
-    attrs =
-      attrs
-      |> Map.put("product_id", product.id)
-      |> Map.put("approver_id", scope.user.id)
-      |> Map.put("received_by_id", scope.user.id)
-      |> Map.put("received_at", DateTime.utc_now())
+    attrs = Map.put(attrs, "product_id", product.id)
 
     case Batches.create_batch(scope.organization_id, attrs) do
       {:ok, batch} ->
         {:noreply,
          socket
-         |> put_flash(:info, "Batch added.")
+         |> put_flash(:info, "Batch dispatched — awaiting receipt at site.")
          |> stream_insert(:batches, batch)
          |> push_patch(to: ~p"/org/products/#{product.id}")}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
+    end
+  end
+
+  defp site_name(sites_by_id, site_id) do
+    case Map.get(sites_by_id, site_id) do
+      nil -> "—"
+      site -> site.name
+    end
+  end
+
+  defp user_display(users_by_id, user_id) do
+    case Map.get(users_by_id, user_id) do
+      nil -> "—"
+      %{name: name} when is_binary(name) and name != "" -> name
+      %{email: email} -> email
     end
   end
 
@@ -81,39 +100,12 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
             variant="primary"
             patch={~p"/org/products/#{@product.id}/batches/new"}
           >
-            + Add batch
+            + Dispatch batch to site
           </.button>
           <.button variant="ghost-edit" navigate={~p"/org/products/#{@product.id}/edit"}>Edit</.button>
           <.button navigate={~p"/org/products"}>Back</.button>
         </:actions>
       </.header>
-
-      <div :if={@live_action == :new_batch} class="card bg-base-200 mb-6">
-        <div class="card-body">
-          <h2 class="font-semibold mb-2">Add batch</h2>
-          <.form for={@form} id="batch-form" phx-submit="save" phx-change="validate">
-            <div class="grid grid-cols-2 gap-x-4">
-              <.input
-                field={@form[:site_id]}
-                type="select"
-                label="Site"
-                options={Enum.map(@sites, &{&1.name, &1.id})}
-                prompt="Choose a site"
-                required
-              />
-              <.input field={@form[:gtin]} label="GTIN" required />
-              <.input field={@form[:batch_no]} label="Batch / lot number" required />
-              <.input field={@form[:expiry_date]} type="date" label="Expiry date" required />
-              <.input field={@form[:quantity]} type="number" label="Quantity" required />
-              <.input field={@form[:cost_per_unit]} type="number" label="Cost per unit" step="0.01" />
-            </div>
-            <div class="flex gap-2 mt-2">
-              <.button variant="primary">Save</.button>
-              <.button patch={~p"/org/products/#{@product.id}"}>Cancel</.button>
-            </div>
-          </.form>
-        </div>
-      </div>
 
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-base-200 text-sm mb-6">
         <div>
@@ -150,22 +142,51 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         </div>
       </div>
 
-      <.header>
-        Batches
-        <:actions>
-          <.button
-            :if={@live_action == :show}
-            variant="primary"
-            patch={~p"/org/products/#{@product.id}/batches/new"}
-          >
-            + Add batch
-          </.button>
-        </:actions>
-      </.header>
+      <div :if={@live_action == :new_batch} class="card bg-base-200 mb-6">
+        <div class="card-body">
+          <h2 class="font-semibold mb-2">Dispatch batch to site</h2>
+          <.form for={@form} id="batch-form" phx-submit="save" phx-change="validate">
+            <div class="grid grid-cols-2 gap-x-4">
+              <.input
+                field={@form[:site_id]}
+                type="select"
+                label="Destination site"
+                options={Enum.map(@sites_by_id, fn {_id, s} -> {s.name, s.id} end)}
+                prompt="Choose a site"
+                required
+              />
+              <.input field={@form[:gtin]} label="GTIN" required />
+              <.input field={@form[:batch_no]} label="Batch / lot number" required />
+              <.input
+                field={@form[:expiry_date]}
+                type="date"
+                label="Expiry date"
+                min={Date.to_iso8601(Date.utc_today())}
+                required
+              />
+              <.input field={@form[:quantity]} type="number" label="Quantity" required />
+              <.input field={@form[:cost_per_unit]} type="number" label="Cost per unit" step="0.01" />
+            </div>
+            <div class="flex gap-2 mt-2">
+              <.button variant="primary">Dispatch</.button>
+              <.button patch={~p"/org/products/#{@product.id}"}>Cancel</.button>
+            </div>
+          </.form>
+        </div>
+      </div>
+
+      <.header class="mt-6">Batches</.header>
       <.table id="batches" rows={@streams.batches}>
-        <:col :let={{_id, batch}} label="Batch no.">{batch.batch_no}</:col>
+        <:col :let={{_id, batch}} label="Site">{site_name(@sites_by_id, batch.site_id)}</:col>
+        <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
         <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
-        <:col :let={{_id, batch}} label="Remaining">{batch.remaining_quantity}</:col>
+        <:col :let={{_id, batch}} label="Stock">{batch.remaining_quantity} / {batch.quantity}</:col>
+        <:col :let={{_id, batch}} label="Received by">
+          {user_display(@users_by_id, batch.approver_id)}
+        </:col>
+        <:col :let={{_id, batch}} label="Status">
+          {if batch.approver_id, do: "Active", else: "Pending receipt"}
+        </:col>
       </.table>
     </Layouts.org_shell>
     """

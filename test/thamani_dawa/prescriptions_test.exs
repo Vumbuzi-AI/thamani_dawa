@@ -185,7 +185,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry: ~D[2026-08-01],
+          expiry_date: ~D[2026-08-01],
           quantity: 100
         })
 
@@ -194,7 +194,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry: ~D[2027-01-01],
+          expiry_date: ~D[2027-01-01],
           quantity: 100
         })
 
@@ -204,7 +204,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
         batch_fixture(%{
           organization_id: ctx.organization.id,
           product_id: ctx.product.id,
-          expiry: ~D[2026-01-01],
+          expiry_date: ~D[2026-08-15],
           quantity: 100
         })
 

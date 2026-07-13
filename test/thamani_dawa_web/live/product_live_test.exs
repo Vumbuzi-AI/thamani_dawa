@@ -129,7 +129,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
   end
 
   describe "show" do
-    test "displays product details and batches", %{conn: conn, admin: admin, site: site} do
+    test "displays product details and active batches", %{conn: conn, admin: admin, site: site} do
       product =
         product_fixture(%{
           organization_id: admin.organization_id,
@@ -147,12 +147,35 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
           remaining_quantity: 50
         })
 
-      {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
+      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
 
       assert html =~ "Show Me Product"
       assert html =~ "99"
-      assert html =~ "BATCH-001"
-      assert html =~ "50"
+      assert has_element?(lv, "#batches", "BATCH-001")
+      assert has_element?(lv, "#batches", "Active")
+    end
+
+    test "pending batch shows Pending receipt status", %{conn: conn, admin: admin, site: site} do
+      product =
+        product_fixture(%{
+          organization_id: admin.organization_id,
+          site_id: site.id,
+          generic_name: "Pending Drug"
+        })
+
+      _pending =
+        batch_fixture(%{
+          organization_id: admin.organization_id,
+          product_id: product.id,
+          site_id: site.id,
+          batch_no: "PENDING-LOT",
+          pending: true
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
+
+      assert has_element?(lv, "#batches", "PENDING-LOT")
+      assert has_element?(lv, "#batches", "Pending receipt")
     end
 
     test "admin can add a batch to a product from the show page", %{
@@ -185,7 +208,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       assert_patch(lv, ~p"/org/products/#{product.id}")
       html = render(lv)
-      assert html =~ "Batch added."
+      assert html =~ "Batch dispatched"
       assert html =~ "LOT-ADMIN-1"
       assert html =~ "200"
     end

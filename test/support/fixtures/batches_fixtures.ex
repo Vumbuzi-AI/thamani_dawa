@@ -31,10 +31,16 @@ defmodule ThamaniDawa.BatchesFixtures do
   end
 
   @doc """
-  Creates a batch. Unless given, `organization_id` gets a fresh organization,
-  and `product_id`/`site_id` get a fresh product/site under that organization.
+  Creates a fully received (active) batch. Unless given, `organization_id`
+  gets a fresh organization, and `product_id`/`site_id` get fresh records
+  under that organization.
+
+  Pass `pending: true` to skip the receive step and leave the batch
+  awaiting receipt at the site.
   """
   def batch_fixture(attrs \\ %{}) do
+    {pending, attrs} = Map.pop(attrs, :pending, false)
+
     {organization_id, attrs} =
       Map.pop_lazy(attrs, :organization_id, fn ->
         OrganizationsFixtures.organization_fixture().id
@@ -50,19 +56,19 @@ defmodule ThamaniDawa.BatchesFixtures do
         SitesFixtures.site_fixture(%{organization_id: organization_id}).id
       end)
 
-    {approver_id, attrs} =
-      Map.pop_lazy(attrs, :approver_id, fn ->
-        AccountsFixtures.user_fixture(%{organization_id: organization_id}).id
-      end)
-
-    attrs =
-      Map.merge(attrs, %{product_id: product_id, site_id: site_id, approver_id: approver_id})
+    attrs = Map.merge(attrs, %{product_id: product_id, site_id: site_id})
 
     {:ok, batch} =
       attrs
       |> valid_batch_attributes()
       |> then(&Batches.create_batch(organization_id, &1))
 
-    batch
+    if pending do
+      batch
+    else
+      receiver = AccountsFixtures.user_fixture(%{organization_id: organization_id})
+      {:ok, received_batch} = Batches.receive_batch(batch, receiver.id)
+      received_batch
+    end
   end
 end

@@ -12,7 +12,7 @@ defmodule ThamaniDawa.BatchesTest do
   import ThamaniDawa.SuppliersFixtures
 
   describe "create_batch/2" do
-    test "requires gtin, batch_no, expiry_date, quantity, product_id, site_id and approver_id" do
+    test "requires gtin, batch_no, expiry_date, quantity, product_id, and site_id" do
       organization = organization_fixture()
       assert {:error, changeset} = Batches.create_batch(organization.id, %{})
 
@@ -22,22 +22,35 @@ defmodule ThamaniDawa.BatchesTest do
                expiry_date: ["can't be blank"],
                quantity: ["can't be blank"],
                product_id: ["can't be blank"],
-               site_id: ["can't be blank"],
-               approver_id: ["can't be blank"]
+               site_id: ["can't be blank"]
              } = errors_on(changeset)
+    end
+
+    test "does not require approver_id at dispatch time" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, %Batch{approver_id: nil}} =
+               Batches.create_batch(organization.id, %{
+                 product_id: product.id,
+                 site_id: site.id,
+                 gtin: "00614141000012",
+                 batch_no: "LOT-1",
+                 expiry_date: ~D[2027-01-01],
+                 quantity: 50
+               })
     end
 
     test "defaults remaining_quantity to quantity when omitted" do
       organization = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
-      approver = user_fixture(%{organization_id: organization.id})
 
       assert {:ok, %Batch{} = batch} =
                Batches.create_batch(organization.id, %{
                  product_id: product.id,
                  site_id: site.id,
-                 approver_id: approver.id,
                  gtin: "00614141000012",
                  batch_no: "LOT-1",
                  expiry_date: ~D[2027-01-01],
@@ -53,13 +66,11 @@ defmodule ThamaniDawa.BatchesTest do
       organization = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
-      approver = user_fixture(%{organization_id: organization.id})
 
       assert {:ok, %Batch{} = batch} =
                Batches.create_batch(organization.id, %{
                  product_id: product.id,
                  site_id: site.id,
-                 approver_id: approver.id,
                  gtin: "00614141000012",
                  batch_no: "LOT-1",
                  expiry_date: ~D[2027-01-01],
@@ -83,13 +94,11 @@ defmodule ThamaniDawa.BatchesTest do
       organization = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
-      approver = user_fixture(%{organization_id: organization.id})
 
       assert {:error, changeset} =
                Batches.create_batch(organization.id, %{
                  product_id: product.id,
                  site_id: site.id,
-                 approver_id: approver.id,
                  gtin: "00614141000012",
                  batch_no: "LOT-1",
                  expiry_date: ~D[2027-01-01],
@@ -104,13 +113,11 @@ defmodule ThamaniDawa.BatchesTest do
       other_org = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})
       hostile_site = site_fixture(%{organization_id: other_org.id})
-      approver = user_fixture(%{organization_id: organization.id})
 
       assert {:error, changeset} =
                Batches.create_batch(organization.id, %{
                  product_id: product.id,
                  site_id: hostile_site.id,
-                 approver_id: approver.id,
                  gtin: "00614141000012",
                  batch_no: "LOT-X",
                  expiry_date: ~D[2027-01-01],
@@ -125,13 +132,11 @@ defmodule ThamaniDawa.BatchesTest do
       other_org = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})
       hostile_product = product_fixture(%{organization_id: other_org.id})
-      approver = user_fixture(%{organization_id: organization.id})
 
       assert {:error, changeset} =
                Batches.create_batch(organization.id, %{
                  product_id: hostile_product.id,
                  site_id: site.id,
-                 approver_id: approver.id,
                  gtin: "00614141000012",
                  batch_no: "LOT-X",
                  expiry_date: ~D[2027-01-01],
@@ -145,13 +150,11 @@ defmodule ThamaniDawa.BatchesTest do
       organization = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
-      approver = user_fixture(%{organization_id: organization.id})
 
       assert {:error, changeset} =
                Batches.create_batch(organization.id, %{
                  product_id: product.id,
                  site_id: site.id,
-                 approver_id: approver.id,
                  gtin: "00614141000011",
                  batch_no: "LOT-1",
                  expiry_date: ~D[2027-01-01],
@@ -159,6 +162,22 @@ defmodule ThamaniDawa.BatchesTest do
                })
 
       assert %{gtin: ["is not a valid GTIN"]} = errors_on(changeset)
+    end
+  end
+
+  describe "receive_batch/2" do
+    test "stamps received_by_id, received_at, approver_id and sets is_approved true" do
+      organization = organization_fixture()
+      user = user_fixture(%{organization_id: organization.id})
+      batch = batch_fixture(%{organization_id: organization.id, pending: true})
+
+      assert is_nil(batch.approver_id)
+      assert is_nil(batch.received_at)
+
+      assert {:ok, received} = Batches.receive_batch(batch, user.id)
+      assert received.approver_id == user.id
+      assert received.received_by_id == user.id
+      assert %DateTime{} = received.received_at
     end
   end
 
@@ -172,6 +191,27 @@ defmodule ThamaniDawa.BatchesTest do
 
       assert [%Batch{id: id}] = Batches.list_batches(organization_a.id)
       assert id == batch_a.id
+    end
+  end
+
+  describe "list_pending_batches/1" do
+    test "returns only batches where received_at is nil" do
+      organization = organization_fixture()
+      pending = batch_fixture(%{organization_id: organization.id, pending: true})
+      _active = batch_fixture(%{organization_id: organization.id})
+
+      assert [%Batch{id: id}] = Batches.list_pending_batches(organization.id)
+      assert id == pending.id
+    end
+
+    test "only returns pending batches for the given organization" do
+      organization_a = organization_fixture()
+      organization_b = organization_fixture()
+
+      batch_fixture(%{organization_id: organization_a.id, pending: true})
+      batch_fixture(%{organization_id: organization_b.id, pending: true})
+
+      assert [_] = Batches.list_pending_batches(organization_a.id)
     end
   end
 
@@ -221,7 +261,7 @@ defmodule ThamaniDawa.BatchesTest do
         organization_id: organization.id,
         site_id: other_site.id,
         product_id: product.id,
-        expiry_date: ~D[2026-01-01]
+        expiry_date: ~D[2026-08-15]
       })
 
       matching_batch =
@@ -246,6 +286,21 @@ defmodule ThamaniDawa.BatchesTest do
         site_id: site.id,
         product_id: product.id,
         remaining_quantity: 0
+      })
+
+      assert {:error, :out_of_stock} = Batches.fefo_batch(organization.id, site.id, product.id)
+    end
+
+    test "skips a batch with no approver_id (not yet received)" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        pending: true
       })
 
       assert {:error, :out_of_stock} = Batches.fefo_batch(organization.id, site.id, product.id)
