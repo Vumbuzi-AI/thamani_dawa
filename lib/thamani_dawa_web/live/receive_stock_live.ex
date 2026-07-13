@@ -1,6 +1,8 @@
 defmodule ThamaniDawaWeb.ReceiveStockLive do
   use ThamaniDawaWeb, :live_view
 
+  require Logger
+
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.GS1Decoder
@@ -58,8 +60,9 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
          |> assign(:gs1_decode_error, nil)}
 
       {:error, reason} ->
-        {:noreply,
-         assign(socket, :gs1_decode_error, "Couldn't decode that code: #{inspect(reason)}")}
+        Logger.error("GS1 decode failed: #{inspect(reason)}")
+
+        {:noreply, assign(socket, :gs1_decode_error, "Couldn't decode that code")}
     end
   end
 
