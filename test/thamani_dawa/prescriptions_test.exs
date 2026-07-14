@@ -33,7 +33,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
                  doctors_note: "Take after meals",
                  source_facility: "General Hospital",
                  referring_doctor: "Dr. Jane Doe",
-                 referral_date: ~T[09:00:00]
+                 referral_date: ~T[09:00:00],
+                 payment_type: "Cash"
                })
 
       assert prescription.organization_id == organization.id
@@ -42,18 +43,159 @@ defmodule ThamaniDawa.PrescriptionsTest do
     end
   end
 
+  describe "create_prescription_for_patient/5" do
+    test "creates a PatientVisit and a Prescription in one transaction" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+
+      assert {:ok, %Prescription{} = prescription} =
+               Prescriptions.create_prescription_for_patient(
+                 organization.id,
+                 patient.id,
+                 site.id,
+                 user.id,
+                 %{
+                   doctors_note: "Take after meals",
+                   referring_doctor: "Dr. Jane Doe",
+                   payment_type: "Cash"
+                 }
+               )
+
+      assert prescription.organization_id == organization.id
+      assert prescription.status == :pending
+
+      assert not is_nil(prescription.patient_visit_id)
+
+      visit =
+        ThamaniDawa.PatientVisits.get_patient_visit!(
+          organization.id,
+          prescription.patient_visit_id
+        )
+
+      assert visit.patient_id == patient.id
+      assert visit.site_id == site.id
+      assert visit.user_id == user.id
+      assert visit.visit_type == :pharmacy
+    end
+  end
+
+  describe "create_prescription_with_new_patient/5" do
+    test "creates a Patient, PatientVisit, and Prescription in one transaction" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+
+      patient_attrs = %{
+        full_name: "New Patient Demo",
+        age: 25,
+        gsrn: 999_999,
+        national_id: "12345678",
+        phone: "0711223344"
+      }
+
+      prescription_attrs = %{
+        doctors_note: "Take after meals",
+        referring_doctor: "Dr. Jane Doe",
+        payment_type: "Cash"
+      }
+
+      assert {:ok, %Prescription{} = prescription} =
+               Prescriptions.create_prescription_with_new_patient(
+                 organization.id,
+                 patient_attrs,
+                 site.id,
+                 user.id,
+                 prescription_attrs
+               )
+
+      assert prescription.organization_id == organization.id
+      assert prescription.status == :pending
+      assert not is_nil(prescription.patient_visit_id)
+
+      visit =
+        ThamaniDawa.PatientVisits.get_patient_visit!(
+          organization.id,
+          prescription.patient_visit_id
+        )
+
+      assert visit.site_id == site.id
+      assert visit.user_id == user.id
+
+      patient = ThamaniDawa.Patients.get_patient!(organization.id, visit.patient_id)
+      assert patient.full_name == "New Patient Demo"
+    end
+
+    test "rolls back if patient creation fails" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+
+      patient_attrs = %{age: 25, phone: "invalid", gsrn: 999_998}
+      prescription_attrs = %{referring_doctor: "Dr. Jane Doe", payment_type: "Cash"}
+
+      patient_count_before = ThamaniDawa.Repo.aggregate(ThamaniDawa.Patients.Patient, :count)
+
+      assert {:error, changeset} =
+               Prescriptions.create_prescription_with_new_patient(
+                 organization.id,
+                 patient_attrs,
+                 site.id,
+                 user.id,
+                 prescription_attrs
+               )
+
+      assert changeset.data.__struct__ == ThamaniDawa.Patients.Patient
+
+      assert %{
+               full_name: ["can't be blank"],
+               phone: ["must be a valid Kenyan phone number (e.g. 0712345678 or +254712345678)"]
+             } = errors_on(changeset)
+
+      assert ThamaniDawa.Repo.aggregate(ThamaniDawa.Patients.Patient, :count) ==
+               patient_count_before
+    end
+
+    test "rolls back patient creation if prescription creation fails" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+
+      patient_attrs = %{full_name: "Rollback Test", age: 25, gsrn: 999_997}
+      prescription_attrs = %{}
+
+      patient_count_before = ThamaniDawa.Repo.aggregate(ThamaniDawa.Patients.Patient, :count)
+
+      assert {:error, changeset} =
+               Prescriptions.create_prescription_with_new_patient(
+                 organization.id,
+                 patient_attrs,
+                 site.id,
+                 user.id,
+                 prescription_attrs
+               )
+
+      assert changeset.data.__struct__ == ThamaniDawa.Prescriptions.Prescription
+
+      assert %{referring_doctor: ["can't be blank"], payment_type: ["can't be blank"]} =
+               errors_on(changeset)
+
+      assert ThamaniDawa.Repo.aggregate(ThamaniDawa.Patients.Patient, :count) ==
+               patient_count_before
+    end
+  end
+
   describe "list_prescriptions/1" do
     test "returns prescriptions with and without a patient visit" do
       organization = organization_fixture()
 
-      # Prescription without visit
       prescription_no_visit =
         prescription_fixture(%{
           organization_id: organization.id,
           patient_visit_id: nil
         })
 
-      # Prescription with visit
       site = site_fixture(%{organization_id: organization.id})
       patient = patient_fixture(%{organization_id: organization.id})
 
@@ -100,7 +242,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
                    doctors_note: "Take after meals",
                    source_facility: "General Hospital",
                    referring_doctor: "Dr. Jane Doe",
-                   referral_date: ~T[09:00:00]
+                   referral_date: ~T[09:00:00],
+                   payment_type: "Cash"
                  },
                  [%{product_id: product.id, quantity_prescribed: 20}]
                )
@@ -130,7 +273,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
                    doctors_note: "Take after meals",
                    source_facility: "General Hospital",
                    referring_doctor: "Dr. Jane Doe",
-                   referral_date: ~T[09:00:00]
+                   referral_date: ~T[09:00:00],
+                   payment_type: "Cash"
                  },
                  [%{}]
                )
@@ -198,8 +342,6 @@ defmodule ThamaniDawa.PrescriptionsTest do
           quantity: 100
         })
 
-      # A batch for the same product sitting at a different site must never
-      # be picked (§4.3: "batch must be at the prescription's own site_id").
       _other_site_batch =
         batch_fixture(%{
           organization_id: ctx.organization.id,

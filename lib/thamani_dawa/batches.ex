@@ -51,7 +51,6 @@ defmodule ThamaniDawa.Batches do
     end
   end
 
-  @doc "Lists all batches for a specific product within an organization, ordered by expiry."
   def list_batches_for_product(organization_id, product_id) do
     Repo.all(
       from b in Batch,
@@ -59,6 +58,19 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         order_by: [asc: b.expiry_date]
     )
+  end
+
+  @doc "Gets the total sum of remaining quantity of approved stock for a product at a given site."
+  def total_available_stock(organization_id, site_id, product_id) do
+    Repo.one(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: b.product_id == ^product_id,
+        where: b.remaining_quantity > 0,
+        where: not is_nil(b.approver_id),
+        select: sum(b.remaining_quantity)
+    ) || Decimal.new(0)
   end
 
   @doc "Gets a single batch scoped to an organization. Raises if not found."
