@@ -25,6 +25,29 @@ defmodule ThamaniDawa.Batches do
     )
   end
 
+  @doc "Lists pending (not yet received) batches dispatched to a specific site."
+  def list_pending_batches_for_site(organization_id, site_id) do
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: is_nil(b.received_at),
+        order_by: [asc: b.expiry_date]
+    )
+  end
+
+  @doc "Lists active (received, stock remaining) batches at a specific site."
+  def list_active_batches_for_site(organization_id, site_id) do
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: not is_nil(b.approver_id),
+        where: b.remaining_quantity > 0,
+        order_by: [asc: b.expiry_date]
+    )
+  end
+
   @doc """
   Finds the pending (not yet received) batch matching a scanned GTIN and
   batch/lot number, for resolving a GS1 scan to the dispatch it's confirming

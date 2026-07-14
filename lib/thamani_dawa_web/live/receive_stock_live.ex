@@ -47,7 +47,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
     end
   end
 
-  def handle_event("receive", %{"id" => id, "quantity" => quantity}, socket) do
+  def handle_event("receive", %{"batch_id" => id, "quantity" => quantity}, socket) do
     scope = socket.assigns.current_scope
     batch = Batches.get_batch!(scope.organization_id, id)
 
@@ -163,7 +163,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
         <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
         <:action :let={{_id, batch}}>
           <form id={"receive-batch-#{batch.id}"} phx-submit="receive" class="flex gap-2 items-center">
-            <input type="hidden" name="id" value={batch.id} />
+            <input type="hidden" name="batch_id" value={batch.id} />
             <input
               type="number"
               name="quantity"
