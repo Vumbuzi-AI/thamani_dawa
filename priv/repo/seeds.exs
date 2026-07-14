@@ -353,6 +353,7 @@ prescription =
     %{
       site_id: pharmacy_site.id,
       prescriber_name: "Dr. Demo",
+      referring_doctor: "Dr. Demo",
       entered_by_id: pharmacist.id,
       payment_type: "cash",
       has_paid: true,

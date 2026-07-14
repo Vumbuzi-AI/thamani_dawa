@@ -93,7 +93,7 @@ defmodule ThamaniDawa.Batches do
         where: b.remaining_quantity > 0,
         where: not is_nil(b.approver_id),
         select: sum(b.remaining_quantity)
-    ) || Decimal.new(0)
+    ) || 0
   end
 
   @doc "Gets a single batch scoped to an organization. Raises if not found."

@@ -105,12 +105,11 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
           <strong>Prescribed:</strong> {item.quantity_prescribed} &nbsp;&middot;&nbsp;
           <strong>Dispensed:</strong> {item.quantity_dispensed} &nbsp;&middot;&nbsp;
           <span class={
-            if @stock_by_product_id[item.product_id] |> Decimal.compare(item.quantity_prescribed) ==
-                 :lt,
-               do: "text-error font-semibold",
-               else: "text-success font-semibold"
+            if (@stock_by_product_id[item.product_id] || 0) < item.quantity_prescribed,
+              do: "text-error font-semibold",
+              else: "text-success font-semibold"
           }>
-            In Stock: {@stock_by_product_id[item.product_id]}
+            In Stock: {@stock_by_product_id[item.product_id] || 0}
           </span>
         </p>
         <p class="text-sm mt-1">
