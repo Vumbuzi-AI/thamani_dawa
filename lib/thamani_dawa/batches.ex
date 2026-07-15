@@ -212,6 +212,10 @@ defmodule ThamaniDawa.Batches do
   must execute within `Repo.transaction/1`.
   """
   def fefo_batches(organization_id, site_id, product_id) do
+    if not Repo.in_transaction?() do
+      raise "Batches.fefo_batches/3 must be called within a Repo.transaction/1 to safely lock stock"
+    end
+
     query =
       from b in Batch,
         where: b.organization_id == ^organization_id,

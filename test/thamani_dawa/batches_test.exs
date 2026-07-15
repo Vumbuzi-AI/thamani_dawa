@@ -293,7 +293,11 @@ defmodule ThamaniDawa.BatchesTest do
           expiry_date: ~D[2027-01-01]
         })
 
-      batches = Batches.fefo_batches(organization.id, site.id, product.id)
+      assert {:ok, batches} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
+
       assert [%{id: id1}, %{id: id2}] = batches
       assert id1 == soon_batch.id
       assert id2 == later_batch.id
@@ -320,7 +324,11 @@ defmodule ThamaniDawa.BatchesTest do
           expiry_date: ~D[2027-01-01]
         })
 
-      batches = Batches.fefo_batches(organization.id, site.id, product.id)
+      assert {:ok, batches} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
+
       assert [%{id: id}] = batches
       assert id == matching_batch.id
     end
@@ -337,7 +345,10 @@ defmodule ThamaniDawa.BatchesTest do
         remaining_quantity: 0
       })
 
-      assert [] = Batches.fefo_batches(organization.id, site.id, product.id)
+      assert {:ok, []} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
     end
 
     test "skips a batch with no approver_id (not yet received)" do
@@ -352,7 +363,10 @@ defmodule ThamaniDawa.BatchesTest do
         pending: true
       })
 
-      assert [] = Batches.fefo_batches(organization.id, site.id, product.id)
+      assert {:ok, []} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
     end
 
     test "returns empty when no batch exists for that site/product" do
@@ -360,7 +374,18 @@ defmodule ThamaniDawa.BatchesTest do
       product = product_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
 
-      assert [] = Batches.fefo_batches(organization.id, site.id, product.id)
+      assert {:ok, []} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
+    end
+
+    test "raises if called outside a transaction" do
+      assert_raise RuntimeError,
+                   "Batches.fefo_batches/3 must be called within a Repo.transaction/1 to safely lock stock",
+                   fn ->
+                     Batches.fefo_batches(1, 1, 1)
+                   end
     end
   end
 
