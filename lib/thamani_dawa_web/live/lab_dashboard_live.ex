@@ -3,6 +3,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
 
   alias ThamaniDawa.LabOrders
   alias ThamaniDawa.Patients
+  alias ThamaniDawa.PatientVisits
   alias ThamaniDawaWeb.SiteScoping
 
   def mount(_params, _session, socket) do
@@ -14,15 +15,20 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
 
     patients_by_id = organization_id |> Patients.list_patients() |> Map.new(&{&1.id, &1})
 
+    patient_by_visit_id =
+      organization_id
+      |> PatientVisits.list_patient_visits()
+      |> Map.new(&{&1.id, patients_by_id[&1.patient_id]})
+
     {:ok,
      socket
-     |> assign(:patients_by_id, patients_by_id)
+     |> assign(:patient_by_visit_id, patient_by_visit_id)
      |> assign(:pending, Enum.filter(lab_orders, &(&1.status == :pending)))
      |> assign(:incomplete, Enum.filter(lab_orders, &(&1.status in [:pending, :in_progress])))}
   end
 
-  defp patient_name(patients_by_id, patient_id) do
-    case patients_by_id[patient_id] do
+  defp patient_name(patient_by_visit_id, visit_id) do
+    case patient_by_visit_id[visit_id] do
       nil -> "(unknown patient)"
       patient -> patient.full_name
     end
@@ -40,7 +46,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         row_click={fn o -> JS.navigate(~p"/lab/orders/#{o.id}") end}
       >
         <:col :let={lab_order} label="Patient">
-          {patient_name(@patients_by_id, lab_order.patient_id)}
+          {patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}
         </:col>
         <:col :let={lab_order} label="Urgency">{lab_order.urgency}</:col>
         <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
@@ -53,7 +59,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         row_click={fn o -> JS.navigate(~p"/lab/orders/#{o.id}") end}
       >
         <:col :let={lab_order} label="Patient">
-          {patient_name(@patients_by_id, lab_order.patient_id)}
+          {patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}
         </:col>
         <:col :let={lab_order} label="Status">{Phoenix.Naming.humanize(lab_order.status)}</:col>
         <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>

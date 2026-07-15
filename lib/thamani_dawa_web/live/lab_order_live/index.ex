@@ -6,7 +6,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   alias ThamaniDawa.LabTests
   alias ThamaniDawa.Patients
   alias ThamaniDawa.Patients.Patient
-  alias ThamaniDawa.PatientVisits
   alias ThamaniDawa.PatientVisits.PatientVisit
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
@@ -87,10 +86,19 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         |> Map.put("total_amount", total)
 
       with {:ok, header_attrs} <- resolve_patient(socket, organization_id, header_attrs, params),
-           {:ok, visit} <- create_visit(organization_id, header_attrs, user_id),
-           header_attrs = Map.put(header_attrs, "patient_visit_id", visit.id),
+           visit_attrs = %{
+             patient_id: header_attrs["patient_id"],
+             site_id: header_attrs["site_id"],
+             user_id: user_id,
+             visit_type: :lab
+           },
            {:ok, _} <-
-             LabOrders.create_lab_order_with_results(organization_id, header_attrs, results_attrs) do
+             LabOrders.create_lab_order_with_results(
+               organization_id,
+               header_attrs,
+               results_attrs,
+               visit_attrs
+             ) do
         {:noreply,
          socket
          |> put_flash(:info, "Lab order created.")
@@ -119,15 +127,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   end
 
   defp resolve_patient(_socket, _organization_id, header_attrs, _params), do: {:ok, header_attrs}
-
-  defp create_visit(organization_id, header_attrs, user_id) do
-    PatientVisits.create_patient_visit(organization_id, %{
-      patient_id: header_attrs["patient_id"],
-      site_id: header_attrs["site_id"],
-      user_id: user_id,
-      visit_type: :lab
-    })
-  end
 
   defp selected_tests(params) do
     params

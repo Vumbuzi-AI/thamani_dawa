@@ -11,6 +11,7 @@ defmodule ThamaniDawa.LabOrders do
   import Ecto.Query, warn: false
   alias ThamaniDawa.Batches
   alias ThamaniDawa.LabOrders.{LabConsumableUsage, LabOrder, LabOrderResult}
+  alias ThamaniDawa.PatientVisits
   alias ThamaniDawa.Repo
 
   ## Lab orders
@@ -43,6 +44,26 @@ defmodule ThamaniDawa.LabOrders do
       when is_integer(organization_id) and is_list(results_attrs) do
     Repo.transaction(fn ->
       with {:ok, lab_order} <- create_lab_order(organization_id, attrs),
+           {:ok, results} <-
+             create_lab_order_results(organization_id, lab_order.id, results_attrs) do
+        %{lab_order: lab_order, lab_order_results: results}
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  @doc """
+  Creates a patient visit, then a lab order header and its results, all in one
+  transaction. If any step fails the entire transaction is rolled back — no
+  orphaned visits or headers are left behind.
+  """
+  def create_lab_order_with_results(organization_id, attrs, results_attrs, visit_attrs)
+      when is_integer(organization_id) and is_list(results_attrs) and is_map(visit_attrs) do
+    Repo.transaction(fn ->
+      with {:ok, visit} <- PatientVisits.create_patient_visit(organization_id, visit_attrs),
+           {:ok, lab_order} <-
+             create_lab_order(organization_id, Map.put(attrs, "patient_visit_id", visit.id)),
            {:ok, results} <-
              create_lab_order_results(organization_id, lab_order.id, results_attrs) do
         %{lab_order: lab_order, lab_order_results: results}
