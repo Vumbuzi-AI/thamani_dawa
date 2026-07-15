@@ -285,7 +285,8 @@ batch = fn product, site, batch_no, quantity, unit_price ->
       unit_price: Decimal.new(unit_price),
       supplier_id: supplier.id,
       received_by_id: pharmacist.id,
-      received_at: now
+      received_at: now,
+      approver_id: pharmacist.id
     },
     fn attrs -> Batches.create_batch(organization_id, attrs) end
   )

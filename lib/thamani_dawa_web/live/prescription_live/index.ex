@@ -20,13 +20,22 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     scope = socket.assigns.current_scope
     organization_id = scope.organization_id
     site_id = SiteScoping.default_site_id(scope)
-    initial_attrs = if site_id, do: %{site_id: site_id}, else: %{}
+    initial_attrs = if site_id, do: %{site_id: site_id, items: []}, else: %{items: []}
+
+    products =
+      if site_id do
+        ThamaniDawa.Products.list_active_products_for_site(organization_id, site_id)
+      else
+        []
+      end
 
     socket
     |> assign(:patients, Patients.list_patients(organization_id))
     |> assign(:sites, Sites.list_sites(organization_id))
+    |> assign(:products, products)
     |> assign(:site_locked, not is_nil(site_id))
     |> assign(:use_new_patient, false)
+    |> assign(:editing_items, MapSet.new())
     |> assign(
       :header_form,
       to_form(Prescription.changeset(%Prescription{}, initial_attrs), as: :prescription)
@@ -38,6 +47,81 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
 
   def handle_event("toggle_patient_mode", _params, socket) do
     {:noreply, assign(socket, :use_new_patient, not socket.assigns.use_new_patient)}
+  end
+
+  def handle_event("validate", params, socket) do
+    header_attrs = params["prescription"] || %{}
+    patient_attrs = params["patient"] || %{}
+
+    header_changeset =
+      %Prescription{}
+      |> Prescription.changeset(header_attrs)
+      |> Map.put(:action, :validate)
+
+    patient_changeset =
+      %Patient{}
+      |> Patient.changeset(patient_attrs)
+      |> Map.put(:action, :validate)
+
+    socket =
+      socket
+      |> assign(:header_form, to_form(header_changeset, as: :prescription))
+      |> assign(:patient_form, to_form(patient_changeset, as: :patient))
+
+    {:noreply, socket}
+  end
+
+  def handle_event("add-item", _, socket) do
+    changeset = socket.assigns.header_form.source
+    items = socket.assigns.header_form[:items].value || []
+    new_index = length(items)
+
+    changeset =
+      Ecto.Changeset.put_assoc(
+        changeset,
+        :items,
+        items ++ [%ThamaniDawa.Prescriptions.PrescriptionItem{}]
+      )
+
+    editing_items = MapSet.put(socket.assigns.editing_items, new_index)
+
+    {:noreply,
+     assign(socket,
+       header_form: to_form(changeset, as: :prescription),
+       editing_items: editing_items
+     )}
+  end
+
+  def handle_event("remove-item", %{"index" => index}, socket) do
+    index = String.to_integer(index)
+    changeset = socket.assigns.header_form.source
+    items = socket.assigns.header_form[:items].value || []
+    items = List.delete_at(items, index)
+    changeset = Ecto.Changeset.put_assoc(changeset, :items, items)
+
+    editing_items =
+      socket.assigns.editing_items
+      |> Enum.reject(&(&1 == index))
+      |> Enum.map(fn i -> if i > index, do: i - 1, else: i end)
+      |> MapSet.new()
+
+    {:noreply,
+     assign(socket,
+       header_form: to_form(changeset, as: :prescription),
+       editing_items: editing_items
+     )}
+  end
+
+  def handle_event("edit-item", %{"index" => index}, socket) do
+    index = String.to_integer(index)
+    editing_items = MapSet.put(socket.assigns.editing_items, index)
+    {:noreply, assign(socket, :editing_items, editing_items)}
+  end
+
+  def handle_event("collapse-item", %{"index" => index}, socket) do
+    index = String.to_integer(index)
+    editing_items = MapSet.delete(socket.assigns.editing_items, index)
+    {:noreply, assign(socket, :editing_items, editing_items)}
   end
 
   def handle_event("save", params, socket) do
@@ -138,7 +222,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         <div class="card-body">
           <h2 class="font-semibold mb-2">New prescription</h2>
 
-          <form phx-submit="save" class="space-y-6">
+          <form id="prescription-form" phx-change="validate" phx-submit="save" class="space-y-6">
             <!-- Step 1: Patient Information -->
             <div class="border rounded-box border-base-300 overflow-hidden">
               <div class="bg-base-300/50 px-4 py-3 border-b border-base-300 flex justify-between items-center">
@@ -179,10 +263,171 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
               </div>
             </div>
 
-            <!-- Step 2: Prescription Details -->
+            <!-- Step 2: Prescription Items -->
+            <div class="border rounded-box border-base-300 overflow-hidden">
+              <div class="bg-base-300/50 px-4 py-3 border-b border-base-300 flex justify-between items-center">
+                <h3 class="font-semibold text-lg">2. Prescription Items</h3>
+                <.button type="button" phx-click="add-item" variant="ghost">+ Add Item</.button>
+              </div>
+              <div class="p-4 bg-base-100 space-y-4">
+                <.inputs_for :let={item_form} field={@header_form[:items]}>
+                  <% is_editing = MapSet.member?(@editing_items, item_form.index) %>
+                  <div class={"border rounded-lg p-4 #{if is_editing, do: "border-base-300 bg-base-50", else: "border-base-200 bg-base-100"}"}>
+                    <div class={"flex justify-between items-center #{if is_editing, do: "mb-4"}"}>
+                      <h4 class="font-medium text-sm text-base-content/70">
+                        Item {item_form.index + 1}
+                      </h4>
+                      <div class="flex items-center gap-2">
+                        <%= if is_editing do %>
+                          <% can_collapse =
+                            not is_nil(Ecto.Changeset.get_field(item_form.source, :product_id)) and
+                              not is_nil(
+                                Ecto.Changeset.get_field(item_form.source, :quantity_prescribed)
+                              ) %>
+                          <.button
+                            type="button"
+                            phx-click="collapse-item"
+                            phx-value-index={item_form.index}
+                            variant="primary"
+                            disabled={not can_collapse}
+                          >
+                            <.icon name="hero-check" class="w-4 h-4" /> Done
+                          </.button>
+                        <% else %>
+                          <.button
+                            type="button"
+                            phx-click="edit-item"
+                            phx-value-index={item_form.index}
+                            variant="ghost-edit"
+                          >
+                            <.icon name="hero-pencil" class="w-4 h-4" /> Edit
+                          </.button>
+                        <% end %>
+                        <.button
+                          :if={
+                            is_list(@header_form[:items].value) and
+                              length(@header_form[:items].value) > 1
+                          }
+                          type="button"
+                          phx-click="remove-item"
+                          phx-value-index={item_form.index}
+                          variant="ghost-delete"
+                        >
+                          <.icon name="hero-trash" class="w-4 h-4" /> Remove
+                        </.button>
+                      </div>
+                    </div>
+
+                    <%= if is_editing do %>
+                      <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+                        <div class="md:col-span-2">
+                          <.input
+                            field={item_form[:product_id]}
+                            type="select"
+                            label="Product"
+                            options={
+                              Enum.map(
+                                @products,
+                                &{"#{&1.generic_name}#{if &1.brand_name, do: " (" <> &1.brand_name <> ")"}",
+                                 &1.id}
+                              )
+                            }
+                            prompt="Select product..."
+                            required
+                          />
+                        </div>
+                        <div class="md:col-span-1">
+                          <.input
+                            field={item_form[:quantity_prescribed]}
+                            type="number"
+                            label="Qty"
+                            required
+                            min="1"
+                          />
+                        </div>
+                        <div class="md:col-span-1">
+                          <.input
+                            field={item_form[:frequency]}
+                            type="text"
+                            label="Frequency"
+                            placeholder="e.g. 1x3"
+                          />
+                        </div>
+                        <div class="md:col-span-1">
+                          <.input
+                            field={item_form[:duration_in_days]}
+                            type="number"
+                            label="Days"
+                            min="1"
+                          />
+                        </div>
+                        <div class="md:col-span-1">
+                          <.input
+                            field={item_form[:route_of_administration]}
+                            type="text"
+                            label="Route"
+                            placeholder="e.g. Oral"
+                          />
+                        </div>
+                        <div class="md:col-span-6">
+                          <.input
+                            field={item_form[:dosage_instructions]}
+                            type="text"
+                            label="Instructions"
+                            placeholder="e.g. Take after meals"
+                          />
+                        </div>
+                      </div>
+                    <% else %>
+                      <% product_id = Ecto.Changeset.get_field(item_form.source, :product_id) %>
+                      <% product = Enum.find(@products, &(&1.id == product_id)) %>
+                      <% qty = Ecto.Changeset.get_field(item_form.source, :quantity_prescribed) %>
+                      <% freq = Ecto.Changeset.get_field(item_form.source, :frequency) %>
+                      <% days = Ecto.Changeset.get_field(item_form.source, :duration_in_days) %>
+
+                      <div class="hidden">
+                        <.input field={item_form[:product_id]} type="hidden" />
+                        <.input field={item_form[:quantity_prescribed]} type="hidden" />
+                        <.input field={item_form[:frequency]} type="hidden" />
+                        <.input field={item_form[:duration_in_days]} type="hidden" />
+                        <.input field={item_form[:route_of_administration]} type="hidden" />
+                        <.input field={item_form[:dosage_instructions]} type="hidden" />
+                      </div>
+
+                      <div class="mt-2 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div class="flex-1">
+                          <div class="font-semibold text-base-content">
+                            <%= if product do %>
+                              {product.generic_name} {if product.brand_name,
+                                do: "(#{product.brand_name})"}
+                            <% else %>
+                              <span class="italic text-base-content/50">No product selected</span>
+                            <% end %>
+                          </div>
+                          <div class="text-sm text-base-content/70 mt-1">
+                            Qty: {qty || "-"} {if freq && freq != "", do: " | #{freq}"} {if days,
+                              do: " | #{days} days"}
+                          </div>
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                </.inputs_for>
+                <div
+                  :if={
+                    not is_list(@header_form[:items].value) or Enum.empty?(@header_form[:items].value)
+                  }
+                  class="text-center text-base-content/50 py-4"
+                >
+                  No items added. Click "+ Add Item" to prescribe medicine.
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 3: Prescription Details -->
             <div class="border rounded-box border-base-300 overflow-hidden">
               <div class="bg-base-300/50 px-4 py-3 border-b border-base-300">
-                <h3 class="font-semibold text-lg">2. Prescription Details</h3>
+                <h3 class="font-semibold text-lg">3. Prescription Details</h3>
               </div>
               <div class="p-4 bg-base-100 space-y-4">
                 <.input

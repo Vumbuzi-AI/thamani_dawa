@@ -25,27 +25,61 @@ defmodule ThamaniDawa.Batches do
     )
   end
 
-  @doc "Lists pending (not yet received) batches dispatched to a specific site."
+  @doc "Lists batches dispatched to a specific site but not yet received by staff."
   def list_pending_batches_for_site(organization_id, site_id) do
     Repo.all(
       from b in Batch,
         where: b.organization_id == ^organization_id,
         where: b.site_id == ^site_id,
-        where: is_nil(b.received_at),
-        order_by: [asc: b.expiry_date]
+        where: is_nil(b.received_at)
     )
   end
 
-  @doc "Lists active (received, stock remaining) batches at a specific site."
+  @doc "Lists active (received and approved) batches at a site."
   def list_active_batches_for_site(organization_id, site_id) do
     Repo.all(
       from b in Batch,
         where: b.organization_id == ^organization_id,
         where: b.site_id == ^site_id,
+        where: not is_nil(b.received_at),
         where: not is_nil(b.approver_id),
-        where: b.remaining_quantity > 0,
-        order_by: [asc: b.expiry_date]
+        where: b.remaining_quantity > 0
     )
+  end
+
+  @doc """
+  Finds an approved batch by GTIN and batch/lot number within an organization
+  for the pharmacy scan-lookup workflow. Pass `site_id:` to narrow the search to one site.
+  """
+  def find_approved_batch_for_scan(organization_id, gtin, batch_no, opts \\ [])
+      when is_integer(organization_id) do
+    query =
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.gtin == ^gtin,
+        where: b.batch_no == ^batch_no,
+        where: not is_nil(b.approver_id)
+
+    site_id = Keyword.get(opts, :site_id)
+
+    site_query =
+      if site_id do
+        from q in query, where: q.site_id == ^site_id
+      else
+        query
+      end
+
+    case Repo.one(site_query) do
+      nil ->
+        if site_id && Repo.exists?(query) do
+          {:error, :not_at_site}
+        else
+          {:error, :not_found}
+        end
+
+      batch ->
+        {:ok, batch}
+    end
   end
 
   @doc """

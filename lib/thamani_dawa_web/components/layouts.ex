@@ -188,14 +188,14 @@ defmodule ThamaniDawaWeb.Layouts do
     ~H"""
     <div
       id="sidebar-shell"
-      class="min-h-screen"
+      class="h-screen flex flex-col overflow-hidden"
       style="background: #fcfcf7; font-family: var(--font-thamani-sans, sans-serif);"
       phx-hook=".Sidebar"
     >
       <%!-- Top navigation bar --%>
       <header
         id="sidebar-topbar"
-        class="sticky top-0 z-30 flex items-center gap-3 px-4"
+        class="shrink-0 z-30 flex items-center gap-3 px-4"
         style="background: #1c3a13; height: 56px;"
       >
         <%!-- Sidebar toggle --%>
@@ -250,11 +250,11 @@ defmodule ThamaniDawaWeb.Layouts do
         </nav>
       </header>
 
-      <div class="flex" style="min-height: calc(100vh - 56px);">
+      <div class="flex-1 flex overflow-hidden">
         <%!-- Sidebar --%>
         <aside
           id="sidebar-aside"
-          class="shrink-0 flex flex-col py-6 px-2 overflow-hidden transition-[width] duration-200 ease-in-out"
+          class="shrink-0 flex flex-col py-6 px-2 overflow-y-auto overflow-x-hidden transition-[width] duration-200 ease-in-out"
           style="background: #1c3a13; width: 224px;"
         >
           <%!-- Section label — hidden when collapsed --%>
@@ -334,7 +334,7 @@ defmodule ThamaniDawaWeb.Layouts do
         </aside>
 
         <%!-- Main content --%>
-        <main class="flex-1 px-6 py-8 overflow-auto min-w-0" style="background: #fcfcf7;">
+        <main class="flex-1 px-6 py-8 overflow-y-auto min-w-0" style="background: #fcfcf7;">
           <div class="mx-auto max-w-5xl space-y-4">
             {render_slot(@inner_block)}
           </div>

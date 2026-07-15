@@ -24,6 +24,8 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
     field :referring_doctor, :string
     field :referral_date, :time
 
+    has_many :items, ThamaniDawa.Prescriptions.PrescriptionItem, on_replace: :delete
+
     timestamps(type: :utc_datetime)
   end
 
@@ -47,6 +49,8 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
     |> validate_required([:patient_visit_id, :payment_type, :referring_doctor])
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:patient_visit_id)
+    |> cast_assoc(:items, with: &ThamaniDawa.Prescriptions.PrescriptionItem.changeset/2)
+    |> validate_length(:items, min: 1, message: "must have at least one item")
   end
 
   @doc "The valid prescription statuses (§4.3 of project.md)."

@@ -113,12 +113,32 @@ defmodule ThamaniDawa.Prescriptions do
              do: Map.put(attrs, "patient_visit_id", visit.id),
              else: Map.put(attrs, :patient_visit_id, visit.id)
            ),
+         attrs = inject_organization_id_into_items(attrs, organization_id),
          {:ok, prescription} <- create_prescription(organization_id, attrs) do
       prescription
     else
       {:error, changeset} -> Repo.rollback(changeset)
     end
   end
+
+  defp inject_organization_id_into_items(%{"items" => items} = attrs, org_id)
+       when is_map(items) do
+    items = Map.new(items, fn {k, v} -> {k, Map.put(v, "organization_id", org_id)} end)
+    %{attrs | "items" => items}
+  end
+
+  defp inject_organization_id_into_items(%{"items" => items} = attrs, org_id)
+       when is_list(items) do
+    items = Enum.map(items, &Map.put(&1, "organization_id", org_id))
+    %{attrs | "items" => items}
+  end
+
+  defp inject_organization_id_into_items(%{items: items} = attrs, org_id) when is_list(items) do
+    items = Enum.map(items, &Map.put(&1, :organization_id, org_id))
+    %{attrs | items: items}
+  end
+
+  defp inject_organization_id_into_items(attrs, _org_id), do: attrs
 
   @doc """
   Creates a prescription header together with its `prescription_items`, all
