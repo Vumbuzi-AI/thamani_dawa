@@ -90,16 +90,63 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         </:actions>
       </.header>
 
-      <.list>
-        <:item title="Status">{Phoenix.Naming.humanize(@prescription.status)}</:item>
-        <:item title="Prescriber">{@prescription.referring_doctor}</:item>
-        <:item title="Total Amount">{@prescription.total_amount}</:item>
-        <:item title="Payment type">{@prescription.payment_type}</:item>
-        <:item title="Paid">{if @prescription.has_paid, do: "Yes", else: "No"}</:item>
-        <:item title="Notes">{@prescription.notes}</:item>
-      </.list>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10 mt-6">
+        <div class="border rounded-box border-base-300 p-4 sm:p-6 bg-transparent">
+          <h3 class="font-semibold text-base-content/50 uppercase tracking-widest text-xs mb-4">
+            Status & Payment
+          </h3>
+          <div class="space-y-3 text-sm">
+            <div class="flex justify-between items-center">
+              <span class="text-base-content/70">Status</span>
+              <span class={[
+                "font-medium",
+                @prescription.status == :pending && "text-orange-600",
+                @prescription.status == :dispensed && "text-green-600"
+              ]}>
+                {Phoenix.Naming.humanize(@prescription.status)}
+              </span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-base-content/70">Payment type</span>
+              <span class="font-medium text-base-content">{@prescription.payment_type || "-"}</span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-base-content/70">Paid</span>
+              <span class={[
+                "font-medium",
+                @prescription.has_paid && "text-success",
+                !@prescription.has_paid && "text-error"
+              ]}>
+                {if @prescription.has_paid, do: "Yes", else: "No"}
+              </span>
+            </div>
+            <div class="flex justify-between items-center pt-3 border-t border-base-200">
+              <span class="text-base-content/70">Total Amount</span>
+              <span class="font-bold text-base-content">{@prescription.total_amount || "-"}</span>
+            </div>
+          </div>
+        </div>
 
-      <div :for={item <- @items} class="border rounded-box border-base-300 p-3 mt-4">
+        <div class="border rounded-box border-base-300 p-4 sm:p-6 bg-transparent flex flex-col">
+          <h3 class="font-semibold text-base-content/50 uppercase tracking-widest text-xs mb-4">
+            Prescriber & Notes
+          </h3>
+          <div class="space-y-4 text-sm flex-1">
+            <div class="flex flex-col">
+              <span class="text-base-content/70 mb-1">Prescriber</span>
+              <span class="font-medium text-base-content">{@prescription.referring_doctor || "Unknown"}</span>
+            </div>
+            <div class="flex flex-col pt-3 border-t border-base-200">
+              <span class="text-base-content/70 mb-1">Notes</span>
+              <span class={["font-medium", !@prescription.notes && "italic text-base-content/40"]}>
+                {@prescription.notes || "No notes provided"}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div :for={item <- @items} class="border rounded-box border-base-300 p-4 mt-4 bg-transparent">
         <h3 class="font-semibold text-lg">{product_name(@products_by_id, item.product_id)}</h3>
         <p class="text-sm text-base-content/70 mt-1">
           <strong>Prescribed:</strong> {item.quantity_prescribed} &nbsp;&middot;&nbsp;
@@ -113,7 +160,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
             In Stock: {@stock_by_product_id[item.product_id]}
           </span>
         </p>
-        <p class="text-sm mt-1">
+        <p class="text-sm mt-1 text-base-content/90">
           {item.dosage_instructions} {item.frequency}
           {if item.route_of_administration, do: "- #{item.route_of_administration}"}
           {if item.duration_in_days, do: "(for #{item.duration_in_days} days)"}
@@ -122,11 +169,17 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         <form
           :if={item.quantity_dispensed < item.quantity_prescribed}
           phx-submit="dispense"
-          class="flex gap-2 items-end mt-3"
+          class="flex gap-3 items-end mt-4 pt-4 border-t border-base-200"
         >
           <input type="hidden" name="item_id" value={item.id} />
-          <input type="number" name="quantity" placeholder="Quantity" class="input input-sm" required />
-          <button class="btn btn-sm btn-primary">Dispense</button>
+          <input
+            type="number"
+            name="quantity"
+            placeholder="Quantity"
+            class="input input-sm input-bordered bg-transparent"
+            required
+          />
+          <.button type="submit" variant="primary">Dispense</.button>
         </form>
       </div>
     </Layouts.pharmacy_shell>
