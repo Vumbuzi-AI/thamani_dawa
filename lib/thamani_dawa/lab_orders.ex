@@ -109,18 +109,46 @@ defmodule ThamaniDawa.LabOrders do
     |> Repo.insert()
   end
 
-  @doc "Records the date a result's sample was physically collected and who collected it."
-  def mark_sample_collected(
-        organization_id,
-        lab_order_result_id,
-        user_id,
-        date \\ Date.utc_today()
-      ) do
-    organization_id
-    |> get_lab_order_result!(lab_order_result_id)
-    |> Ecto.Changeset.change(sample_collected_on: date, collected_by_id: user_id)
-    |> Repo.update()
+  @doc """
+  Records sample collection for a result: sets the collected date, who
+  collected it, any notes, and advances the result status to `:collected`.
+  Also rolls up the parent order status in the same transaction.
+
+  `attrs` may contain `"collection_date"` (ISO-8601 string) and
+  `"collection_notes"` (free text). Both are optional.
+  """
+  def mark_sample_collected(organization_id, lab_order_result_id, user_id, attrs \\ %{}) do
+    date = parse_collection_date(Map.get(attrs, "collection_date"))
+    notes = Map.get(attrs, "collection_notes")
+
+    Repo.transaction(fn ->
+      lab_order_result = get_lab_order_result!(organization_id, lab_order_result_id)
+
+      with {:ok, updated} <-
+             lab_order_result
+             |> Ecto.Changeset.change(
+               status: :collected,
+               sample_collected_on: date,
+               collected_by_id: user_id,
+               collection_notes: notes
+             )
+             |> Repo.update(),
+           {:ok, _} <- recompute_lab_order_status(organization_id, updated.lab_order_id) do
+        updated
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
   end
+
+  defp parse_collection_date(date_str) when is_binary(date_str) and date_str != "" do
+    case Date.from_iso8601(date_str) do
+      {:ok, date} -> date
+      _ -> Date.utc_today()
+    end
+  end
+
+  defp parse_collection_date(_), do: Date.utc_today()
 
   ## Result entry (§9 "Lab order → verified result", step 2)
 
@@ -172,7 +200,7 @@ defmodule ThamaniDawa.LabOrders do
       cond do
         results == [] -> lab_order.status
         Enum.all?(results, &(&1.status == :completed)) -> :completed
-        Enum.any?(results, &(&1.status == :completed)) -> :in_progress
+        Enum.any?(results, &(&1.status in [:completed, :collected])) -> :in_progress
         true -> lab_order.status
       end
 

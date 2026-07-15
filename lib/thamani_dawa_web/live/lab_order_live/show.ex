@@ -13,6 +13,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     socket =
       socket
       |> assign(:lab_tests, LabTests.list_active_lab_tests(organization_id))
+      |> assign(:collecting_result_id, nil)
       |> load_lab_order(id)
 
     {:ok, socket}
@@ -44,11 +45,30 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     |> assign(:users_by_id, users_by_id)
   end
 
-  def handle_event("mark_collected", %{"id" => id}, socket) do
+  def handle_event("start_collect", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :collecting_result_id, String.to_integer(id))}
+  end
+
+  def handle_event("cancel_collect", _params, socket) do
+    {:noreply, assign(socket, :collecting_result_id, nil)}
+  end
+
+  def handle_event("confirm_collected", %{"result_id" => id} = attrs, socket) do
     organization_id = socket.assigns.current_scope.organization_id
     user_id = socket.assigns.current_scope.user.id
-    LabOrders.mark_sample_collected(organization_id, String.to_integer(id), user_id)
-    {:noreply, load_lab_order(socket, socket.assigns.lab_order.id)}
+
+    case LabOrders.mark_sample_collected(organization_id, String.to_integer(id), user_id, attrs) do
+      {:ok, _} ->
+        socket =
+          socket
+          |> assign(:collecting_result_id, nil)
+          |> load_lab_order(socket.assigns.lab_order.id)
+
+        {:noreply, socket}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Could not record sample collection.")}
+    end
   end
 
   def handle_event("add_result", %{"lab_test_id" => lab_test_id} = attrs, socket)
@@ -97,6 +117,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         <:col :let={result} label="Test">{test_name(@lab_tests, result.lab_test_id)}</:col>
         <:col :let={result} label="Status">{Phoenix.Naming.humanize(result.status)}</:col>
         <:col :let={result} label="Sample collected">{result.sample_collected_on}</:col>
+        <:col :let={result} label="Collection notes">{result.collection_notes}</:col>
         <:col :let={result} label="Collected by">
           {user_name(@users_by_id, result.collected_by_id)}
         </:col>
@@ -105,15 +126,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         </:col>
         <:action :let={result}>
           <.button
-            :if={is_nil(result.sample_collected_on)}
+            :if={is_nil(result.sample_collected_on) and @collecting_result_id != result.id}
             type="button"
-            phx-click="mark_collected"
+            phx-click="start_collect"
             phx-value-id={result.id}
           >
             Mark collected
           </.button>
           <.link
-            :if={result.status == :pending}
+            :if={result.status in [:pending, :collected]}
             navigate={~p"/lab/orders/#{@lab_order.id}/results/#{result.id}/edit"}
             class="link"
           >
@@ -121,6 +142,27 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
           </.link>
         </:action>
       </.table>
+
+      <div :if={@collecting_result_id} class="rounded-2xl p-6 mt-4" style="background: #eeeee9;">
+        <h2 class="text-base font-medium mb-4" style="color: #1c3a13;">Record sample collection</h2>
+        <.form
+          for={%{}}
+          id="collect-sample-form"
+          phx-submit="confirm_collected"
+          class="flex flex-wrap gap-3 items-end"
+        >
+          <input type="hidden" name="result_id" value={@collecting_result_id} />
+          <.input
+            type="date"
+            name="collection_date"
+            label="Collected on"
+            value={to_string(Date.utc_today())}
+          />
+          <.input type="text" name="collection_notes" label="Notes (optional)" value="" />
+          <.button type="submit" variant="primary">Save</.button>
+          <.button type="button" phx-click="cancel_collect">Cancel</.button>
+        </.form>
+      </div>
 
       <div class="rounded-2xl p-6 mt-4" style="background: #eeeee9;">
         <h2 class="text-base font-medium mb-4" style="color: #1c3a13;">Add a test</h2>

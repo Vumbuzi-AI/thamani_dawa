@@ -3,6 +3,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.LabOrdersFixtures
   import ThamaniDawa.LabTestsFixtures
   import ThamaniDawa.PatientsFixtures
   import ThamaniDawa.SitesFixtures
@@ -24,6 +25,57 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
     lab_test = lab_test_fixture(%{organization_id: admin.organization_id})
 
     %{admin: admin, lab_tech: lab_tech, site: site, lab_test: lab_test}
+  end
+
+  describe "show lab order" do
+    test "renders the order details and test results", ctx do
+      lab_order = lab_order_fixture(%{organization_id: ctx.admin.organization_id})
+
+      result =
+        lab_order_result_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          lab_order_id: lab_order.id,
+          lab_test_id: ctx.lab_test.id
+        })
+
+      {:ok, _view, html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/#{lab_order.id}")
+
+      assert html =~ ctx.lab_test.name
+      assert html =~ Phoenix.Naming.humanize(result.status)
+    end
+
+    test "recording a sample collection advances the result to :collected and order to :in_progress",
+         ctx do
+      lab_order = lab_order_fixture(%{organization_id: ctx.admin.organization_id})
+
+      result =
+        lab_order_result_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          lab_order_id: lab_order.id,
+          lab_test_id: ctx.lab_test.id
+        })
+
+      {:ok, view, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/#{lab_order.id}")
+
+      view
+      |> element(~s(button[phx-click="start_collect"][phx-value-id="#{result.id}"]))
+      |> render_click()
+
+      view
+      |> form("#collect-sample-form", %{
+        "collection_date" => "2026-01-15",
+        "collection_notes" => "Right antecubital fossa"
+      })
+      |> render_submit(%{"result_id" => to_string(result.id)})
+
+      updated = LabOrders.get_lab_order_result!(ctx.admin.organization_id, result.id)
+      assert updated.status == :collected
+      assert updated.sample_collected_on == ~D[2026-01-15]
+      assert updated.collection_notes == "Right antecubital fossa"
+
+      assert LabOrders.get_lab_order!(ctx.admin.organization_id, lab_order.id).status ==
+               :in_progress
+    end
   end
 
   describe "new lab order" do

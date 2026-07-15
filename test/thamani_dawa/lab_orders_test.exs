@@ -101,6 +101,60 @@ defmodule ThamaniDawa.LabOrdersTest do
     end
   end
 
+  describe "mark_sample_collected/4" do
+    setup do
+      organization = organization_fixture()
+      technician = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
+      %{organization: organization, technician: technician}
+    end
+
+    test "records the date, collector, notes, and sets result status to collected", ctx do
+      lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+
+      assert {:ok, updated} =
+               LabOrders.mark_sample_collected(
+                 ctx.organization.id,
+                 lab_order_result.id,
+                 ctx.technician.id,
+                 %{"collection_date" => "2026-01-15", "collection_notes" => "Left arm vein"}
+               )
+
+      assert updated.status == :collected
+      assert updated.sample_collected_on == ~D[2026-01-15]
+      assert updated.collected_by_id == ctx.technician.id
+      assert updated.collection_notes == "Left arm vein"
+    end
+
+    test "defaults to today's date when none is given", ctx do
+      lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+
+      assert {:ok, updated} =
+               LabOrders.mark_sample_collected(
+                 ctx.organization.id,
+                 lab_order_result.id,
+                 ctx.technician.id
+               )
+
+      assert updated.sample_collected_on == Date.utc_today()
+    end
+
+    test "advances the parent order to in_progress", ctx do
+      lab_order = lab_order_fixture(%{organization_id: ctx.organization.id})
+
+      result =
+        lab_order_result_fixture(%{
+          organization_id: ctx.organization.id,
+          lab_order_id: lab_order.id
+        })
+
+      assert {:ok, _} =
+               LabOrders.mark_sample_collected(ctx.organization.id, result.id, ctx.technician.id)
+
+      assert %LabOrder{status: :in_progress} =
+               LabOrders.get_lab_order!(ctx.organization.id, lab_order.id)
+    end
+  end
+
   describe "record_result/4" do
     setup do
       organization = organization_fixture()
