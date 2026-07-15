@@ -64,6 +64,31 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     end
   end
 
+  def handle_event("verify_item", %{"item_id" => item_id, "gtin" => gtin}, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+
+    case Prescriptions.verify_dispensed_item(
+           organization_id,
+           String.to_integer(item_id),
+           gtin
+         ) do
+      {:ok, _item} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Item verified successfully.")
+         |> load_prescription(socket.assigns.prescription.id)}
+
+      {:error, :gtin_mismatch} ->
+        {:noreply, put_flash(socket, :error, "GTIN mismatch. This is the wrong product.")}
+
+      {:error, :invalid_gtin} ->
+        {:noreply, put_flash(socket, :error, "Invalid GTIN barcode scanned.")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Couldn't verify that item.")}
+    end
+  end
+
   defp product_name(products_by_id, product_id) do
     case products_by_id[product_id] do
       nil -> "(unknown product)"
@@ -177,9 +202,37 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
             placeholder="Quantity"
             class="input input-sm input-bordered bg-transparent"
             required
+            min="1"
+            max={item.quantity_prescribed - item.quantity_dispensed}
           />
           <.button type="submit" variant="primary">Dispense</.button>
         </form>
+
+        <div
+          :if={item.quantity_dispensed > 0}
+          class="mt-4 pt-4 border-t border-base-200 flex items-center gap-3"
+        >
+          <%= if item.is_verified do %>
+            <span class="text-success font-semibold flex items-center gap-1">
+              <.icon name="hero-check-circle" class="w-5 h-5" /> Verified
+            </span>
+          <% else %>
+            <form phx-submit="verify_item" class="flex gap-3 items-end w-full">
+              <input type="hidden" name="item_id" value={item.id} />
+              <div class="flex-1 max-w-xs">
+                <input
+                  type="text"
+                  name="gtin"
+                  placeholder="Scan GTIN to verify..."
+                  class="input input-sm input-bordered bg-transparent w-full"
+                  required
+                  autofocus
+                />
+              </div>
+              <.button type="submit" variant="ghost">Verify</.button>
+            </form>
+          <% end %>
+        </div>
       </div>
     </Layouts.pharmacy_shell>
     """

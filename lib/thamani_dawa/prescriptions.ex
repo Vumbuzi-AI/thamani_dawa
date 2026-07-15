@@ -228,6 +228,29 @@ defmodule ThamaniDawa.Prescriptions do
     end)
   end
 
+  @doc """
+  Verifies a dispensed item by matching the scanned GTIN against the prescribed product's GTIN.
+  Updates `is_verified` to `true` on success.
+  """
+  def verify_dispensed_item(organization_id, prescription_item_id, scanned_gtin) do
+    item = get_prescription_item!(organization_id, prescription_item_id)
+    product = ThamaniDawa.Products.get_product!(organization_id, item.product_id)
+
+    case ExGtin.normalize(scanned_gtin) do
+      {:ok, normalized_gtin} ->
+        if product.gtin == normalized_gtin do
+          item
+          |> PrescriptionItem.changeset(%{is_verified: true})
+          |> Repo.update()
+        else
+          {:error, :gtin_mismatch}
+        end
+
+      {:error, _reason} ->
+        {:error, :invalid_gtin}
+    end
+  end
+
   defp consume_quantity_across_batches(_batches, 0), do: :ok
 
   defp consume_quantity_across_batches([], quantity_needed) when quantity_needed > 0 do

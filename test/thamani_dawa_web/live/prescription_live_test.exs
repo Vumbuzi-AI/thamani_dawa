@@ -8,6 +8,8 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
   import ThamaniDawa.BatchesFixtures
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
+  import ThamaniDawa.PatientVisitsFixtures
+  import ThamaniDawa.PrescriptionsFixtures
 
   defp pharmacist_at_site(organization, site) do
     staff_fixture(%{organization_id: organization.id, site_id: site.id})
@@ -234,6 +236,194 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
         |> render_submit()
 
       assert html =~ "can&#39;t be blank"
+    end
+  end
+
+  describe "Show" do
+    setup %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id, gtin: "12345678901231"})
+
+      patient_visit =
+        patient_visit_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          patient_id: patient.id
+        })
+
+      prescription =
+        prescription_fixture(%{
+          organization_id: organization.id,
+          patient_visit_id: patient_visit.id
+        })
+
+      item =
+        prescription_item_fixture(%{
+          organization_id: organization.id,
+          prescription_id: prescription.id,
+          product_id: product.id,
+          quantity_prescribed: 10
+        })
+
+      %{
+        organization: organization,
+        site: site,
+        patient: patient,
+        pharmacist: pharmacist,
+        product: product,
+        patient_visit: patient_visit,
+        prescription: prescription,
+        item: item,
+        conn: log_in_user(conn, pharmacist)
+      }
+    end
+
+    test "dispenses an item successfully when stock is available", %{
+      conn: conn,
+      organization: org,
+      site: site,
+      product: product,
+      prescription: prescription,
+      item: item
+    } do
+      batch =
+        batch_fixture(%{
+          organization_id: org.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 50,
+          remaining_quantity: 50
+        })
+
+      {:ok, show_live, html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
+
+      assert html =~ "Prescription for"
+      name = product.generic_name || product.brand_name || "(unnamed)"
+      assert html =~ name
+
+      assert show_live
+             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
+             |> render_submit()
+
+      assert render(show_live) =~ "Item dispensed."
+
+      updated_batch = ThamaniDawa.Batches.get_batch!(org.id, batch.id)
+      assert updated_batch.remaining_quantity == 46
+
+      # The UI should now reflect Dispensed: 4
+      assert render(show_live) =~ "Dispensed:\u003C/strong> 4"
+    end
+
+    test "displays error when there is insufficient stock", %{
+      conn: conn,
+      prescription: prescription,
+      item: item
+    } do
+      # No batches created
+
+      {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
+
+      assert show_live
+             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
+             |> render_submit()
+
+      assert render(show_live) =~ "No stock available at this site for this product."
+    end
+
+    test "displays error when trying to over-dispense", %{
+      conn: conn,
+      organization: org,
+      site: site,
+      product: product,
+      prescription: prescription,
+      item: item
+    } do
+      batch_fixture(%{
+        organization_id: org.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 50,
+        remaining_quantity: 50
+      })
+
+      {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
+
+      assert show_live
+             # Prescribed is 10
+             |> form("form", %{"item_id" => item.id, "quantity" => "11"})
+             |> render_submit()
+
+      assert render(show_live) =~ "That would dispense more than was prescribed."
+    end
+
+    test "verifies item when scanned GTIN matches the product", %{
+      conn: conn,
+      organization: org,
+      site: site,
+      product: product,
+      prescription: prescription,
+      item: item
+    } do
+      batch_fixture(%{
+        organization_id: org.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 50,
+        remaining_quantity: 50
+      })
+
+      # First dispense the item
+      {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
+
+      assert show_live
+             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
+             |> render_submit()
+
+      # Now verify it
+      assert show_live
+             |> form("form[phx-submit='verify_item']", %{
+               "item_id" => item.id,
+               "gtin" => product.gtin
+             })
+             |> render_submit()
+
+      assert render(show_live) =~ "Item verified successfully."
+      assert render(show_live) =~ "Verified"
+    end
+
+    test "fails to verify when scanned GTIN does not match", %{
+      conn: conn,
+      organization: org,
+      site: site,
+      product: product,
+      prescription: prescription,
+      item: item
+    } do
+      batch_fixture(%{
+        organization_id: org.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 50,
+        remaining_quantity: 50
+      })
+
+      {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
+
+      assert show_live
+             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
+             |> render_submit()
+
+      assert show_live
+             |> form("form[phx-submit='verify_item']", %{
+               "item_id" => item.id,
+               "gtin" => "12345678901248"
+             })
+             |> render_submit()
+
+      assert render(show_live) =~ "GTIN mismatch. This is the wrong product."
     end
   end
 end
