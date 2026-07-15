@@ -119,15 +119,19 @@ defmodule ThamaniDawa.Batches do
 
   @doc "Gets the total sum of remaining quantity of approved stock for a product at a given site."
   def total_available_stock(organization_id, site_id, product_id) do
-    Repo.one(
-      from b in Batch,
-        where: b.organization_id == ^organization_id,
-        where: b.site_id == ^site_id,
-        where: b.product_id == ^product_id,
-        where: b.remaining_quantity > 0,
-        where: not is_nil(b.approver_id),
-        select: sum(b.remaining_quantity)
-    ) || Decimal.new(0)
+    case Repo.one(
+           from b in Batch,
+             where: b.organization_id == ^organization_id,
+             where: b.site_id == ^site_id,
+             where: b.product_id == ^product_id,
+             where: b.remaining_quantity > 0,
+             where: not is_nil(b.approver_id),
+             select: sum(b.remaining_quantity)
+         ) do
+      nil -> 0
+      %Decimal{} = d -> Decimal.to_integer(d)
+      n when is_integer(n) -> n
+    end
   end
 
   @doc "Gets a single batch scoped to an organization. Raises if not found."

@@ -343,18 +343,27 @@ _second_patient =
     fn attrs -> Patients.create_patient(organization_id, attrs) end
   )
 
+pharmacy_visit =
+  insert_or_get.(
+    PatientVisit,
+    %{organization_id: organization_id, patient_id: patient.id, site_id: pharmacy_site.id},
+    %{
+      user_id: pharmacist.id,
+      visit_type: :pharmacy
+    },
+    fn attrs -> ThamaniDawa.PatientVisits.create_patient_visit(organization_id, attrs) end
+  )
+
 prescription =
   insert_or_get.(
     Prescription,
     %{
       organization_id: organization_id,
-      patient_id: patient.id,
-      prescriber_reg_no: "DOC-DEMO-01"
+      patient_visit_id: pharmacy_visit.id
     },
     %{
-      site_id: pharmacy_site.id,
-      prescriber_name: "Dr. Demo",
-      entered_by_id: pharmacist.id,
+      user_id: pharmacist.id,
+      referring_doctor: "Dr. Demo",
       payment_type: "cash",
       has_paid: true,
       total_amount: Decimal.new("250.00"),

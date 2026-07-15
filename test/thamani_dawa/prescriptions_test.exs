@@ -187,35 +187,41 @@ defmodule ThamaniDawa.PrescriptionsTest do
   end
 
   describe "list_prescriptions/1" do
-    test "returns prescriptions with and without a patient visit" do
+    test "returns prescriptions with a patient visit" do
       organization = organization_fixture()
-
-      prescription_no_visit =
-        prescription_fixture(%{
-          organization_id: organization.id,
-          patient_visit_id: nil
-        })
-
       site = site_fixture(%{organization_id: organization.id})
       patient = patient_fixture(%{organization_id: organization.id})
 
-      patient_visit =
+      patient_visit1 =
         patient_visit_fixture(%{
           organization_id: organization.id,
           site_id: site.id,
           patient_id: patient.id
         })
 
-      prescription_with_visit =
+      patient_visit2 =
+        patient_visit_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          patient_id: patient.id
+        })
+
+      prescription1 =
         prescription_fixture(%{
           organization_id: organization.id,
-          patient_visit_id: patient_visit.id
+          patient_visit_id: patient_visit1.id
+        })
+
+      prescription2 =
+        prescription_fixture(%{
+          organization_id: organization.id,
+          patient_visit_id: patient_visit2.id
         })
 
       results = Prescriptions.list_prescriptions(organization.id)
       assert length(results) == 2
-      assert Enum.any?(results, &(&1.id == prescription_no_visit.id && is_nil(&1.site_id)))
-      assert Enum.any?(results, &(&1.id == prescription_with_visit.id && &1.site_id == site.id))
+      assert Enum.any?(results, &(&1.id == prescription1.id && &1.site_id == site.id))
+      assert Enum.any?(results, &(&1.id == prescription2.id && &1.site_id == site.id))
     end
   end
 
