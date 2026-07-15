@@ -92,9 +92,17 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       product1 = product_fixture(%{organization_id: organization.id})
       product2 = product_fixture(%{organization_id: organization.id})
 
-      batch_fixture(%{organization_id: organization.id, site_id: site.id, product_id: product1.id})
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product1.id
+      })
 
-      batch_fixture(%{organization_id: organization.id, site_id: site.id, product_id: product2.id})
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product2.id
+      })
 
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")

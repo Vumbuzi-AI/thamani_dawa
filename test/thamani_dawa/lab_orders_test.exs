@@ -21,16 +21,17 @@ defmodule ThamaniDawa.LabOrdersTest do
   }
 
   describe "create_lab_order/2" do
-    test "requires site_id, patient_id, and patient_visit_id" do
+    test "requires site_id and patient_visit_id" do
       organization = organization_fixture()
 
       assert {:error, changeset} = LabOrders.create_lab_order(organization.id, %{})
 
       assert %{
                site_id: ["can't be blank"],
-               patient_id: ["can't be blank"],
                patient_visit_id: ["can't be blank"]
              } = errors_on(changeset)
+
+      refute Map.has_key?(errors_on(changeset), :patient_id)
     end
 
     test "defaults status to pending and scopes to the organization" do
@@ -38,6 +39,34 @@ defmodule ThamaniDawa.LabOrdersTest do
 
       assert %LabOrder{} = lab_order
       assert lab_order.status == :pending
+    end
+  end
+
+  describe "create_lab_order_with_results/4 (with auto-created visit)" do
+    test "sets both patient_visit_id and patient_id on the resulting order" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+      lab_test = lab_test_fixture(%{organization_id: organization.id})
+      technician = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
+
+      visit_attrs = %{
+        patient_id: patient.id,
+        site_id: site.id,
+        user_id: technician.id,
+        visit_type: :lab
+      }
+
+      assert {:ok, %{lab_order: header}} =
+               LabOrders.create_lab_order_with_results(
+                 organization.id,
+                 %{"site_id" => site.id},
+                 [%{lab_test_id: lab_test.id, sample_collection_description: 1}],
+                 visit_attrs
+               )
+
+      assert header.patient_id == patient.id
+      assert header.patient_visit_id != nil
     end
   end
 
@@ -97,6 +126,60 @@ defmodule ThamaniDawa.LabOrdersTest do
 
       assert %{lab_test_id: ["can't be blank"]} = errors_on(changeset)
       assert length(LabOrders.list_lab_orders(organization.id)) == before_count
+    end
+  end
+
+  describe "mark_sample_collected/4" do
+    setup do
+      organization = organization_fixture()
+      technician = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
+      %{organization: organization, technician: technician}
+    end
+
+    test "records the date, collector, notes, and sets result status to collected", ctx do
+      lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+
+      assert {:ok, updated} =
+               LabOrders.mark_sample_collected(
+                 ctx.organization.id,
+                 lab_order_result.id,
+                 ctx.technician.id,
+                 %{"collection_date" => "2026-01-15", "collection_notes" => "Left arm vein"}
+               )
+
+      assert updated.status == :collected
+      assert updated.sample_collected_on == ~D[2026-01-15]
+      assert updated.collected_by_id == ctx.technician.id
+      assert updated.collection_notes == "Left arm vein"
+    end
+
+    test "defaults to today's date when none is given", ctx do
+      lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+
+      assert {:ok, updated} =
+               LabOrders.mark_sample_collected(
+                 ctx.organization.id,
+                 lab_order_result.id,
+                 ctx.technician.id
+               )
+
+      assert updated.sample_collected_on == Date.utc_today()
+    end
+
+    test "advances the parent order to in_progress", ctx do
+      lab_order = lab_order_fixture(%{organization_id: ctx.organization.id})
+
+      result =
+        lab_order_result_fixture(%{
+          organization_id: ctx.organization.id,
+          lab_order_id: lab_order.id
+        })
+
+      assert {:ok, _} =
+               LabOrders.mark_sample_collected(ctx.organization.id, result.id, ctx.technician.id)
+
+      assert %LabOrder{status: :in_progress} =
+               LabOrders.get_lab_order!(ctx.organization.id, lab_order.id)
     end
   end
 

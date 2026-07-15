@@ -2,7 +2,7 @@ defmodule ThamaniDawa.LabOrders.LabOrderResult do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @statuses [:pending, :completed, :verified]
+  @statuses [:pending, :collected, :completed, :verified]
 
   schema "lab_order_results" do
     field :organization_id, :id
@@ -13,8 +13,10 @@ defmodule ThamaniDawa.LabOrders.LabOrderResult do
     field :results, :map, default: %{}
     field :status, Ecto.Enum, values: @statuses, default: :pending
     field :sample_collected_on, :date
+    field :collection_notes, :string
     field :test_performed_on, :date
     field :performed_by_id, :id
+    field :collected_by_id, :id
     field :sample_collection_description, :integer
 
     timestamps(type: :utc_datetime)
@@ -30,13 +32,16 @@ defmodule ThamaniDawa.LabOrders.LabOrderResult do
       :results,
       :status,
       :sample_collected_on,
+      :collection_notes,
       :test_performed_on,
       :performed_by_id,
+      :collected_by_id,
       :sample_collection_description
     ])
     |> validate_required([:lab_test_id, :sample_collection_description])
     |> foreign_key_constraint(:lab_order_id)
     |> foreign_key_constraint(:performed_by_id)
+    |> foreign_key_constraint(:collected_by_id)
   end
 
   @doc "The valid lab order result statuses (§4.4 of project.md)."

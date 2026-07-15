@@ -6,10 +6,12 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   alias ThamaniDawa.LabTests
   alias ThamaniDawa.Patients
   alias ThamaniDawa.Patients.Patient
+  alias ThamaniDawa.PatientVisits.PatientVisit
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
 
   @urgencies ~w(routine urgent stat)
+  @sample_types [{"Blood", 1}, {"Urine", 2}, {"Stool", 3}, {"Swab", 4}]
 
   def mount(_params, _session, socket) do
     {:ok, assign_lab_orders(socket)}
@@ -31,7 +33,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
     |> assign(:sites, Sites.list_sites(organization_id))
     |> assign(:site_locked, not is_nil(site_id))
     |> assign(:urgencies, @urgencies)
+    |> assign(:sample_types, @sample_types)
     |> assign(:use_new_patient, false)
+    |> assign(:total_amount, Decimal.new(0))
     |> assign(
       :header_form,
       to_form(LabOrder.changeset(%LabOrder{}, initial_attrs), as: :lab_order)
@@ -61,19 +65,40 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
     {:noreply, assign(socket, :test_ids, test_ids)}
   end
 
+  def handle_event("validate", params, socket) do
+    {:noreply, assign(socket, :total_amount, compute_total(params, socket.assigns.lab_tests))}
+  end
+
   def handle_event("save", params, socket) do
     %{"lab_order" => header_attrs} = params
-    results_attrs = params |> Map.get("tests", [])
+    results_attrs = selected_tests(params)
 
     if results_attrs == [] do
       {:noreply, put_flash(socket, :error, "Add at least one test to the order.")}
     else
       organization_id = socket.assigns.current_scope.organization_id
-      header_attrs = Map.put(header_attrs, "ordered_by_id", socket.assigns.current_scope.user.id)
+      user_id = socket.assigns.current_scope.user.id
+      total = compute_total(params, socket.assigns.lab_tests)
+
+      header_attrs =
+        header_attrs
+        |> Map.put("ordered_by_id", user_id)
+        |> Map.put("total_amount", total)
 
       with {:ok, header_attrs} <- resolve_patient(socket, organization_id, header_attrs, params),
-           {:ok, _result} <-
-             LabOrders.create_lab_order_with_results(organization_id, header_attrs, results_attrs) do
+           visit_attrs = %{
+             patient_id: header_attrs["patient_id"],
+             site_id: header_attrs["site_id"],
+             user_id: user_id,
+             visit_type: :lab
+           },
+           {:ok, _} <-
+             LabOrders.create_lab_order_with_results(
+               organization_id,
+               header_attrs,
+               results_attrs,
+               visit_attrs
+             ) do
         {:noreply,
          socket
          |> put_flash(:info, "Lab order created.")
@@ -82,6 +107,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
       else
         {:error, %Ecto.Changeset{data: %Patient{}} = changeset} ->
           {:noreply, assign(socket, :patient_form, to_form(changeset, as: :patient))}
+
+        {:error, %Ecto.Changeset{data: %PatientVisit{}}} ->
+          {:noreply, put_flash(socket, :error, "Please select or create a patient.")}
 
         {:error, changeset} ->
           {:noreply, assign(socket, :header_form, to_form(changeset, as: :lab_order))}
@@ -99,6 +127,29 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   end
 
   defp resolve_patient(_socket, _organization_id, header_attrs, _params), do: {:ok, header_attrs}
+
+  defp selected_tests(params) do
+    params
+    |> Map.get("tests", %{})
+    |> Map.values()
+    |> Enum.reject(&(&1["lab_test_id"] in ["", nil]))
+  end
+
+  defp compute_total(params, lab_tests) do
+    selected_ids =
+      params
+      |> Map.get("tests", %{})
+      |> Map.values()
+      |> Enum.map(& &1["lab_test_id"])
+      |> Enum.reject(&(&1 in ["", nil]))
+      |> MapSet.new()
+
+    lab_tests
+    |> Enum.filter(&(to_string(&1.id) in selected_ids))
+    |> Enum.reduce(Decimal.new(0), fn test, acc ->
+      Decimal.add(acc, test.price || Decimal.new(0))
+    end)
+  end
 
   defp assign_lab_orders(socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -124,7 +175,13 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
       <div :if={@live_action == :new} class="rounded-2xl p-6 mb-6" style="background: #eeeee9;">
         <h2 class="text-base font-medium mb-5" style="color: #1c3a13;">New lab order</h2>
 
-        <.form for={@header_form} id="new-lab-order-form" phx-submit="save" class="space-y-4">
+        <.form
+          for={@header_form}
+          id="new-lab-order-form"
+          phx-submit="save"
+          phx-change="validate"
+          class="space-y-4"
+        >
           <div class="flex items-end gap-3">
             <div class="flex-1">
               <.input
@@ -144,6 +201,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           <div :if={@use_new_patient} class="rounded-xl p-4 space-y-3" style="background: #fcfcf7;">
             <p class="text-sm font-medium" style="color: #1c3a13;">New patient</p>
             <.input field={@patient_form[:full_name]} label="Full name" required />
+            <.input field={@patient_form[:gsrn]} type="number" label="GSRN" required />
             <div class="grid grid-cols-2 gap-3">
               <.input field={@patient_form[:date_of_birth]} type="date" label="Date of birth" />
               <.input field={@patient_form[:age]} type="number" label="Age" />
@@ -184,12 +242,12 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
             </div>
           </div>
 
-          <.input field={@header_form[:lab_request]} type="textarea" label="Lab request" required />
+          <.input field={@header_form[:lab_request]} type="textarea" label="Lab request" />
 
           <div class="grid grid-cols-3 gap-3">
-            <.input field={@header_form[:referring_facility]} label="Referring facility" required />
-            <.input field={@header_form[:referring_doctor]} label="Referring doctor" required />
-            <.input field={@header_form[:referred_date]} type="time" label="Referred time" required />
+            <.input field={@header_form[:referring_facility]} label="Referring facility" />
+            <.input field={@header_form[:referring_doctor]} label="Referring doctor" />
+            <.input field={@header_form[:referred_date]} type="time" label="Referred time" />
           </div>
 
           <%!-- Tests --%>
@@ -198,25 +256,36 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
             <div class="space-y-2">
               <div
                 :for={id <- @test_ids}
-                class="flex items-end gap-3 rounded-xl p-3"
+                class="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-xl p-3"
                 style="background: #fcfcf7;"
               >
-                <div class="flex-1">
-                  <.input
-                    type="select"
-                    name="tests[][lab_test_id]"
-                    label="Test"
-                    value={nil}
-                    options={Enum.map(@lab_tests, &{&1.name, &1.id})}
-                    prompt="Choose a test"
-                  />
-                </div>
-                <.button type="button" phx-click="remove_test" phx-value-id={id}>
+                <.input
+                  type="select"
+                  name={"tests[#{id}][lab_test_id]"}
+                  label="Test"
+                  value={nil}
+                  options={Enum.map(@lab_tests, &{&1.name, &1.id})}
+                  prompt="Choose a test"
+                />
+                <.input
+                  type="select"
+                  name={"tests[#{id}][sample_collection_description]"}
+                  label="Sample type"
+                  value={nil}
+                  options={@sample_types}
+                  prompt="Choose sample type"
+                />
+                <.button type="button" phx-click="remove_test" phx-value-id={id} class="mb-1">
                   Remove
                 </.button>
               </div>
             </div>
-            <.button type="button" phx-click="add_test" class="mt-2">+ Add test</.button>
+            <div class="flex items-center gap-4 mt-2">
+              <.button type="button" phx-click="add_test">+ Add test</.button>
+              <p class="text-sm" style="color: #1c3a13;">
+                Total: <span class="font-medium">KES {@total_amount}</span>
+              </p>
+            </div>
           </div>
 
           <div class="flex gap-3 pt-2">
@@ -226,7 +295,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         </.form>
       </div>
 
-      <.table id="lab-orders" rows={@lab_orders} row_click={&~p"/lab/orders/#{&1.id}"}>
+      <.table
+        id="lab-orders"
+        rows={@lab_orders}
+        row_click={fn o -> JS.navigate(~p"/lab/orders/#{o.id}") end}
+      >
         <:col :let={lab_order} label="Status">{Phoenix.Naming.humanize(lab_order.status)}</:col>
         <:col :let={lab_order} label="Urgency">{lab_order.urgency}</:col>
         <:col :let={lab_order} label="Paid">{if lab_order.has_paid, do: "Yes", else: "No"}</:col>

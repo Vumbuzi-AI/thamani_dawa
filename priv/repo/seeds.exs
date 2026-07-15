@@ -288,7 +288,11 @@ batch = fn product, site, batch_no, quantity, unit_price ->
       received_at: now,
       approver_id: pharmacist.id
     },
-    fn attrs -> Batches.create_batch(organization_id, attrs) end
+    fn attrs ->
+      with {:ok, b} <- Batches.create_batch(organization_id, attrs) do
+        Batches.receive_batch(b, pharmacist.id)
+      end
+    end
   )
 end
 
@@ -325,7 +329,8 @@ patient =
       full_name: "Jane Wanjiku",
       age: 34,
       gender: "female",
-      phone: "+254711000111"
+      phone: "+254711000111",
+      gsrn: 616_000_100_000_000_001
     },
     fn attrs -> Patients.create_patient(organization_id, attrs) end
   )
@@ -338,7 +343,8 @@ _second_patient =
       full_name: "Peter Mwangi",
       date_of_birth: ~D[1988-05-12],
       gender: "male",
-      phone: "+254722000222"
+      phone: "+254722000222",
+      gsrn: 616_000_100_000_000_002
     },
     fn attrs -> Patients.create_patient(organization_id, attrs) end
   )
@@ -351,7 +357,7 @@ pharmacy_visit =
       user_id: pharmacist.id,
       visit_type: :pharmacy
     },
-    fn attrs -> ThamaniDawa.PatientVisits.create_patient_visit(organization_id, attrs) end
+    fn attrs -> PatientVisits.create_patient_visit(organization_id, attrs) end
   )
 
 prescription =
@@ -465,7 +471,7 @@ lab_order_result =
 
 if lab_order_result.status == :pending do
   {:ok, lab_order_result} =
-    LabOrders.mark_sample_collected(organization_id, lab_order_result.id, today)
+    LabOrders.mark_sample_collected(organization_id, lab_order_result.id, lab_technician.id)
 
   {:ok, _lab_order_result} =
     LabOrders.record_result(organization_id, lab_order_result.id, lab_technician.id, %{

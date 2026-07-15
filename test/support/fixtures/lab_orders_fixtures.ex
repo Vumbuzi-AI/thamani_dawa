@@ -62,7 +62,6 @@ defmodule ThamaniDawa.LabOrdersFixtures do
     attrs =
       Map.merge(attrs, %{
         site_id: site_id,
-        patient_id: patient_id,
         patient_visit_id: patient_visit_id
       })
 
