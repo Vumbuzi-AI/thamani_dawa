@@ -205,19 +205,13 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc """
-  Picks the batch to dispense/consume from at `site_id` for `product_id`,
-  per FEFO (first-expired-first-out, §9): the active, approved batch with
-  stock remaining, soonest expiry first. Pending (not yet received) batches
-  are excluded. This query is what enforces §4.3's "batch must be at the
-  prescription's own site_id" for pharmacy dispensing — a batch at any other
-  site is never a candidate.
+  Returns all eligible batches for dispensing at `site_id` for `product_id`,
+  ordered by soonest expiry (FEFO). Excludes pending or depleted batches.
 
-  Locks the returned row `FOR UPDATE`, so callers must run this inside
-  `Repo.transaction/1` and decrement the batch before the transaction ends,
-  to prevent two concurrent dispenses from oversubscribing the same stock.
-  Returns `{:error, :out_of_stock}` when no eligible batch exists.
+  Locks rows `FOR UPDATE` to prevent concurrent oversubscription. Callers
+  must execute within `Repo.transaction/1`.
   """
-  def fefo_batch(organization_id, site_id, product_id) do
+  def fefo_batches(organization_id, site_id, product_id) do
     query =
       from b in Batch,
         where: b.organization_id == ^organization_id,
@@ -225,14 +219,10 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         where: b.remaining_quantity > 0,
         where: not is_nil(b.approver_id),
-        order_by: [asc: b.expiry_date],
-        limit: 1,
+        order_by: [asc: b.expiry_date, asc: b.id],
         lock: "FOR UPDATE"
 
-    case Repo.one(query) do
-      nil -> {:error, :out_of_stock}
-      batch -> {:ok, batch}
-    end
+    Repo.all(query)
   end
 
   @doc """

@@ -336,24 +336,27 @@ defmodule ThamaniDawa.PrescriptionsTest do
           site_id: ctx.site.id,
           product_id: ctx.product.id,
           expiry_date: ~D[2026-08-01],
-          quantity: 100
+          quantity: 100,
+          remaining_quantity: 100
         })
 
-      _later_batch =
+      later_batch =
         batch_fixture(%{
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
           expiry_date: ~D[2027-01-01],
-          quantity: 100
+          quantity: 100,
+          remaining_quantity: 100
         })
 
-      _other_site_batch =
+      other_site_batch =
         batch_fixture(%{
           organization_id: ctx.organization.id,
           product_id: ctx.product.id,
           expiry_date: ~D[2026-08-15],
-          quantity: 100
+          quantity: 100,
+          remaining_quantity: 100
         })
 
       assert {:ok, %PrescriptionItem{} = updated_item} =
@@ -369,17 +372,147 @@ defmodule ThamaniDawa.PrescriptionsTest do
       updated_batch = Batches.get_batch!(ctx.organization.id, soon_batch.id)
       assert updated_batch.remaining_quantity == 90
 
+      updated_later_batch = Batches.get_batch!(ctx.organization.id, later_batch.id)
+      assert updated_later_batch.remaining_quantity == 100
+
+      updated_other_site_batch = Batches.get_batch!(ctx.organization.id, other_site_batch.id)
+      assert updated_other_site_batch.remaining_quantity == 100
+
       updated_prescription =
         Prescriptions.get_prescription!(ctx.organization.id, ctx.prescription.id)
 
       assert updated_prescription.status == :completed
     end
 
+    test "dispenses across multiple batches when partial fills are needed", ctx do
+      batch1 =
+        batch_fixture(%{
+          organization_id: ctx.organization.id,
+          site_id: ctx.site.id,
+          product_id: ctx.product.id,
+          expiry_date: ~D[2026-08-01],
+          quantity: 4,
+          remaining_quantity: 4
+        })
+
+      batch2 =
+        batch_fixture(%{
+          organization_id: ctx.organization.id,
+          site_id: ctx.site.id,
+          product_id: ctx.product.id,
+          expiry_date: ~D[2026-09-01],
+          quantity: 10,
+          remaining_quantity: 10
+        })
+
+      assert {:ok, %PrescriptionItem{} = updated_item} =
+               Prescriptions.dispense_item(
+                 ctx.organization.id,
+                 ctx.item.id,
+                 ctx.pharmacist.id,
+                 10
+               )
+
+      assert updated_item.quantity_dispensed == 10
+
+      # Batch 1 should be fully consumed
+      updated_batch1 = Batches.get_batch!(ctx.organization.id, batch1.id)
+      assert updated_batch1.remaining_quantity == 0
+
+      # Batch 2 should be partially consumed
+      updated_batch2 = Batches.get_batch!(ctx.organization.id, batch2.id)
+      assert updated_batch2.remaining_quantity == 4
+    end
+
+    test "rolls back and returns :out_of_stock if the combined batches cannot fulfill the requested quantity",
+         ctx do
+      batch1 =
+        batch_fixture(%{
+          organization_id: ctx.organization.id,
+          site_id: ctx.site.id,
+          product_id: ctx.product.id,
+          expiry_date: ~D[2026-08-01],
+          quantity: 4,
+          remaining_quantity: 4
+        })
+
+      batch2 =
+        batch_fixture(%{
+          organization_id: ctx.organization.id,
+          site_id: ctx.site.id,
+          product_id: ctx.product.id,
+          expiry_date: ~D[2026-09-01],
+          quantity: 5,
+          remaining_quantity: 5
+        })
+
+      # Total stock is 9, we need 10
+      assert {:error, :out_of_stock} =
+               Prescriptions.dispense_item(
+                 ctx.organization.id,
+                 ctx.item.id,
+                 ctx.pharmacist.id,
+                 10
+               )
+
+      # Ensure it rolled back and batches were not decremented
+      updated_batch1 = Batches.get_batch!(ctx.organization.id, batch1.id)
+      assert updated_batch1.remaining_quantity == 4
+
+      updated_batch2 = Batches.get_batch!(ctx.organization.id, batch2.id)
+      assert updated_batch2.remaining_quantity == 5
+
+      updated_item = Prescriptions.get_prescription_item!(ctx.organization.id, ctx.item.id)
+      assert updated_item.quantity_dispensed == 0
+    end
+
+    test "never pulls stock from another site or organization, rolling back if local stock is insufficient",
+         ctx do
+      local_batch =
+        batch_fixture(%{
+          organization_id: ctx.organization.id,
+          site_id: ctx.site.id,
+          product_id: ctx.product.id,
+          expiry_date: ~D[2026-08-01],
+          quantity: 5,
+          remaining_quantity: 5
+        })
+
+      other_site = site_fixture(%{organization_id: ctx.organization.id})
+
+      other_site_batch =
+        batch_fixture(%{
+          organization_id: ctx.organization.id,
+          site_id: other_site.id,
+          product_id: ctx.product.id,
+          expiry_date: ~D[2026-08-01],
+          quantity: 100,
+          remaining_quantity: 100
+        })
+
+      # Requesting 10, local site only has 5. Should NOT pull from other_site.
+      assert {:error, :out_of_stock} =
+               Prescriptions.dispense_item(
+                 ctx.organization.id,
+                 ctx.item.id,
+                 ctx.pharmacist.id,
+                 10
+               )
+
+      # Assert NO batches were changed
+      assert Batches.get_batch!(ctx.organization.id, local_batch.id).remaining_quantity == 5
+
+      assert Batches.get_batch!(ctx.organization.id, other_site_batch.id).remaining_quantity ==
+               100
+    end
+
     test "moves the prescription to partially_dispensed on a partial dispense", ctx do
       batch_fixture(%{
         organization_id: ctx.organization.id,
         site_id: ctx.site.id,
-        product_id: ctx.product.id
+        product_id: ctx.product.id,
+        quantity: 100,
+        remaining_quantity: 100
       })
 
       assert {:ok, _updated_item} =
@@ -397,11 +530,14 @@ defmodule ThamaniDawa.PrescriptionsTest do
     end
 
     test "returns :over_dispensed rather than exceeding quantity_prescribed", ctx do
-      batch_fixture(%{
-        organization_id: ctx.organization.id,
-        site_id: ctx.site.id,
-        product_id: ctx.product.id
-      })
+      batch =
+        batch_fixture(%{
+          organization_id: ctx.organization.id,
+          site_id: ctx.site.id,
+          product_id: ctx.product.id,
+          quantity: 100,
+          remaining_quantity: 100
+        })
 
       assert {:error, :over_dispensed} =
                Prescriptions.dispense_item(
@@ -411,12 +547,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
                  11
                )
 
-      updated_batch =
-        ctx.organization.id
-        |> Batches.list_batches()
-        |> hd()
-
-      assert updated_batch.remaining_quantity == updated_batch.quantity
+      updated_batch = Batches.get_batch!(ctx.organization.id, batch.id)
+      assert updated_batch.remaining_quantity == 100
     end
   end
 end
