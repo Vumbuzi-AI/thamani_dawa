@@ -177,6 +177,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
             placeholder="Quantity"
             class="input input-sm input-bordered bg-transparent"
             required
+            min="1"
+            max={item.quantity_prescribed - item.quantity_dispensed}
           />
           <.button type="submit" variant="primary">Dispense</.button>
         </form>
