@@ -10,6 +10,9 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
     field :patient_visit_id, :id
     # Virtual — populated by list_prescriptions/1 join for SiteScoping.for_current_site/2
     field :site_id, :id, virtual: true
+    field :patient_name, :string, virtual: true
+    field :patient_phone, :string, virtual: true
+    field :items_count, :integer, virtual: true
     field :payment_type, :string
     field :has_paid, :boolean, default: false
     field :total_amount, :decimal
@@ -41,7 +44,7 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
       :referring_doctor,
       :referral_date
     ])
-    |> validate_required([])
+    |> validate_required([:patient_visit_id, :payment_type, :referring_doctor])
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:patient_visit_id)
   end

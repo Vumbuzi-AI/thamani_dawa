@@ -13,7 +13,8 @@ defmodule ThamaniDawa.PrescriptionsFixtures do
       doctors_note: "Take after meals",
       source_facility: "General Hospital",
       referring_doctor: "Dr. Jane Doe",
-      referral_date: ~T[09:00:00]
+      referral_date: ~T[09:00:00],
+      payment_type: "Cash"
     })
   end
 

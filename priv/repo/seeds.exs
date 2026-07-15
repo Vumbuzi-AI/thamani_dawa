@@ -181,13 +181,16 @@ paracetamol =
     Product,
     %{organization_id: organization_id, gtin: paracetamol_gtin},
     %{
+      site_id: pharmacy_site.id,
       generic_name: "Paracetamol",
       brand_name: "PainAway",
       product_type: :drug,
       category: "Analgesic",
       uom: "tablet",
+      gtin: paracetamol_gtin,
       is_otc: true,
-      reorder_level: 50
+      reorder_level: 50,
+      price: 200
     },
     fn attrs -> Products.create_product(organization_id, attrs) end
   )
@@ -197,12 +200,15 @@ amoxicillin =
     Product,
     %{organization_id: organization_id, gtin: amoxicillin_gtin},
     %{
+      site_id: pharmacy_site.id,
       generic_name: "Amoxicillin",
       brand_name: "AmoxiCare",
       product_type: :drug,
       category: "Antibiotic",
       uom: "capsule",
-      reorder_level: 40
+      gtin: amoxicillin_gtin,
+      reorder_level: 40,
+      price: 250
     },
     fn attrs -> Products.create_product(organization_id, attrs) end
   )
@@ -212,13 +218,16 @@ morphine =
     Product,
     %{organization_id: organization_id, gtin: morphine_gtin},
     %{
+      site_id: pharmacy_site.id,
       generic_name: "Morphine Sulfate",
       brand_name: "M-Sulf",
       product_type: :drug,
       category: "Controlled analgesic",
       uom: "ampoule",
+      gtin: morphine_gtin,
       is_dangerous_drug: true,
-      reorder_level: 10
+      reorder_level: 10,
+      price: 450
     },
     fn attrs -> Products.create_product(organization_id, attrs) end
   )
@@ -228,11 +237,35 @@ reagent =
     Product,
     %{organization_id: organization_id, gtin: reagent_gtin},
     %{
+      site_id: lab_site.id,
       name: "CBC Reagent Pack",
       product_type: :lab_consumable,
       category: "Hematology",
       uom: "pack",
-      reorder_level: 5
+      gtin: reagent_gtin,
+      reorder_level: 5,
+      price: 1200
+    },
+    fn attrs -> Products.create_product(organization_id, attrs) end
+  )
+
+ample_gtin = gtin.("0616000100004")
+
+ample_product =
+  insert_or_get.(
+    Product,
+    %{organization_id: organization_id, gtin: ample_gtin},
+    %{
+      site_id: pharmacy_site.id,
+      generic_name: "Ample Product",
+      brand_name: "AmpleSupply",
+      product_type: :drug,
+      category: "Pharmacy Test",
+      uom: "tablet",
+      gtin: ample_gtin,
+      is_otc: true,
+      reorder_level: 20,
+      price: 180
     },
     fn attrs -> Products.create_product(organization_id, attrs) end
   )
@@ -245,7 +278,7 @@ batch = fn product, site, batch_no, quantity, unit_price ->
       site_id: site.id,
       gtin: product.gtin,
       manufacture_date: Date.add(today, -90),
-      expiry: Date.add(today, 540),
+      expiry_date: Date.add(today, 540),
       quantity: quantity,
       remaining_quantity: quantity,
       cost_per_unit: Decimal.new("20.00"),
@@ -258,10 +291,29 @@ batch = fn product, site, batch_no, quantity, unit_price ->
   )
 end
 
+pending_batch = fn product, site, batch_no, quantity, unit_price ->
+  insert_or_get.(
+    Batch,
+    %{organization_id: organization_id, product_id: product.id, batch_no: batch_no},
+    %{
+      site_id: site.id,
+      gtin: product.gtin,
+      manufacture_date: Date.add(today, -30),
+      expiry_date: Date.add(today, 365),
+      quantity: quantity,
+      supplier_id: supplier.id,
+      unit_price: Decimal.new(unit_price)
+    },
+    fn attrs -> Batches.create_batch(organization_id, attrs) end
+  )
+end
+
 paracetamol_batch = batch.(paracetamol, pharmacy_site, "PCM-2401", 240, "50.00")
 _amoxicillin_batch = batch.(amoxicillin, pharmacy_site, "AMX-2401", 120, "120.00")
 morphine_batch = batch.(morphine, pharmacy_site, "MOR-2401", 20, "450.00")
 reagent_batch = batch.(reagent, lab_site, "CBC-REAG-01", 25, "1500.00")
+pending_ample_batch = pending_batch.(ample_product, pharmacy_site, "AMPLE-2401", 100, "55.00")
+
 _warehouse_batch = batch.(paracetamol, warehouse_site, "PCM-WH-01", 500, "45.00")
 
 patient =
@@ -290,18 +342,27 @@ _second_patient =
     fn attrs -> Patients.create_patient(organization_id, attrs) end
   )
 
+pharmacy_visit =
+  insert_or_get.(
+    PatientVisit,
+    %{organization_id: organization_id, patient_id: patient.id, site_id: pharmacy_site.id},
+    %{
+      user_id: pharmacist.id,
+      visit_type: :pharmacy
+    },
+    fn attrs -> ThamaniDawa.PatientVisits.create_patient_visit(organization_id, attrs) end
+  )
+
 prescription =
   insert_or_get.(
     Prescription,
     %{
       organization_id: organization_id,
-      patient_id: patient.id,
-      prescriber_reg_no: "DOC-DEMO-01"
+      patient_visit_id: pharmacy_visit.id
     },
     %{
-      site_id: pharmacy_site.id,
-      prescriber_name: "Dr. Demo",
-      entered_by_id: pharmacist.id,
+      user_id: pharmacist.id,
+      referring_doctor: "Dr. Demo",
       payment_type: "cash",
       has_paid: true,
       total_amount: Decimal.new("250.00"),

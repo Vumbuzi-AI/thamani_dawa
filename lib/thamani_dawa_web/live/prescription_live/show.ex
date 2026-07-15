@@ -12,15 +12,29 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   defp load_prescription(socket, id) do
     organization_id = socket.assigns.current_scope.organization_id
     prescription = Prescriptions.get_prescription!(organization_id, id)
-    patient = Patients.get_patient!(organization_id, prescription.patient_id)
+
+    visit =
+      ThamaniDawa.PatientVisits.get_patient_visit!(organization_id, prescription.patient_visit_id)
+
+    patient = Patients.get_patient!(organization_id, visit.patient_id)
     items = Prescriptions.list_prescription_items(organization_id, prescription.id)
     products_by_id = organization_id |> Products.list_products() |> Map.new(&{&1.id, &1})
+
+    stock_by_product_id =
+      items
+      |> Enum.map(& &1.product_id)
+      |> Enum.uniq()
+      |> Map.new(fn product_id ->
+        {product_id,
+         ThamaniDawa.Batches.total_available_stock(organization_id, visit.site_id, product_id)}
+      end)
 
     socket
     |> assign(:prescription, prescription)
     |> assign(:patient, patient)
     |> assign(:items, items)
     |> assign(:products_by_id, products_by_id)
+    |> assign(:stock_by_product_id, stock_by_product_id)
   end
 
   def handle_event("dispense", %{"item_id" => item_id, "quantity" => quantity}, socket) do
@@ -66,6 +80,11 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     >
       <.header>
         Prescription for {@patient.full_name}
+        <:subtitle>
+          {if @patient.age, do: "#{@patient.age} yrs", else: "Age N/A"} | {if @patient.gender,
+            do: @patient.gender,
+            else: "Gender N/A"} | {@patient.phone || "No phone"}
+        </:subtitle>
         <:actions>
           <.button navigate={~p"/pharmacy/prescriptions"}>Back</.button>
         </:actions>
@@ -73,22 +92,36 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
       <.list>
         <:item title="Status">{Phoenix.Naming.humanize(@prescription.status)}</:item>
-        <:item title="Prescriber">{@prescription.prescriber_name}</:item>
+        <:item title="Prescriber">{@prescription.referring_doctor}</:item>
+        <:item title="Total Amount">{@prescription.total_amount}</:item>
         <:item title="Payment type">{@prescription.payment_type}</:item>
         <:item title="Paid">{if @prescription.has_paid, do: "Yes", else: "No"}</:item>
         <:item title="Notes">{@prescription.notes}</:item>
       </.list>
 
       <div :for={item <- @items} class="border rounded-box border-base-300 p-3 mt-4">
-        <h3 class="font-semibold">{product_name(@products_by_id, item.product_id)}</h3>
-        <p class="text-sm text-base-content/70">
-          Prescribed {item.quantity_prescribed} · Dispensed {item.quantity_dispensed} · {item.dosage_instructions} {item.frequency}
+        <h3 class="font-semibold text-lg">{product_name(@products_by_id, item.product_id)}</h3>
+        <p class="text-sm text-base-content/70 mt-1">
+          <strong>Prescribed:</strong> {item.quantity_prescribed} &nbsp;&middot;&nbsp;
+          <strong>Dispensed:</strong> {item.quantity_dispensed} &nbsp;&middot;&nbsp;
+          <span class={
+            if (@stock_by_product_id[item.product_id] || 0) < item.quantity_prescribed,
+              do: "text-error font-semibold",
+              else: "text-success font-semibold"
+          }>
+            In Stock: {@stock_by_product_id[item.product_id] || 0}
+          </span>
+        </p>
+        <p class="text-sm mt-1">
+          {item.dosage_instructions} {item.frequency}
+          {if item.route_of_administration, do: "- #{item.route_of_administration}"}
+          {if item.duration_in_days, do: "(for #{item.duration_in_days} days)"}
         </p>
 
         <form
           :if={item.quantity_dispensed < item.quantity_prescribed}
           phx-submit="dispense"
-          class="flex gap-2 items-end mt-2"
+          class="flex gap-2 items-end mt-3"
         >
           <input type="hidden" name="item_id" value={item.id} />
           <input type="number" name="quantity" placeholder="Quantity" class="input input-sm" required />

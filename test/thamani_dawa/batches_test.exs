@@ -215,6 +215,51 @@ defmodule ThamaniDawa.BatchesTest do
     end
   end
 
+  describe "total_available_stock/3" do
+    test "returns 0 when no batches exist for the site and product" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert Batches.total_available_stock(organization.id, site.id, product.id) === 0
+    end
+
+    test "sums remaining_quantity of approved batches and returns an integer" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 10,
+        remaining_quantity: 10
+      })
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 20,
+        remaining_quantity: 15
+      })
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 50,
+        remaining_quantity: 50,
+        pending: true
+      })
+
+      total = Batches.total_available_stock(organization.id, site.id, product.id)
+      assert total === 25
+      assert is_integer(total)
+    end
+  end
+
   describe "get_batch!/2" do
     test "raises when the batch belongs to a different organization" do
       other_organization = organization_fixture()

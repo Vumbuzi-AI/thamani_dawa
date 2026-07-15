@@ -19,12 +19,28 @@ defmodule ThamaniDawa.Prescriptions do
   `SiteScoping.for_current_site/2` can filter by site without a second query.
   """
   def list_prescriptions(organization_id) do
+    items_count_query =
+      from i in PrescriptionItem,
+        group_by: i.prescription_id,
+        select: %{prescription_id: i.prescription_id, count: count(i.id)}
+
     Repo.all(
       from p in Prescription,
         left_join: v in PatientVisit,
         on: v.id == p.patient_visit_id,
+        left_join: pat in ThamaniDawa.Patients.Patient,
+        on: pat.id == v.patient_id,
+        left_join: ic in subquery(items_count_query),
+        on: ic.prescription_id == p.id,
         where: p.organization_id == ^organization_id,
-        select: %{p | site_id: v.site_id}
+        select: %{
+          p
+          | site_id: v.site_id,
+            patient_name: pat.full_name,
+            patient_phone: pat.phone,
+            items_count: coalesce(ic.count, 0)
+        },
+        order_by: [desc: p.inserted_at]
     )
   end
 
@@ -39,6 +55,69 @@ defmodule ThamaniDawa.Prescriptions do
     |> Prescription.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Repo.insert()
+  end
+
+  @doc """
+  Creates a new patient and a prescription for that patient in a single transaction.
+  Rolls back if either fails to prevent orphaned records.
+  """
+  def create_prescription_with_new_patient(
+        organization_id,
+        patient_attrs,
+        site_id,
+        user_id,
+        prescription_attrs
+      )
+      when is_integer(organization_id) do
+    Repo.transaction(fn ->
+      with {:ok, patient} <- ThamaniDawa.Patients.create_patient(organization_id, patient_attrs),
+           {:ok, prescription} <-
+             create_prescription_for_patient(
+               organization_id,
+               patient.id,
+               site_id,
+               user_id,
+               prescription_attrs
+             ) do
+        prescription
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  @doc """
+  Creates a prescription header for a patient, automatically creating a
+  PatientVisit for the current site and user in the same transaction.
+  """
+  def create_prescription_for_patient(organization_id, patient_id, site_id, user_id, attrs)
+      when is_integer(organization_id) do
+    Repo.transaction(fn ->
+      do_create_prescription_for_patient(organization_id, patient_id, site_id, user_id, attrs)
+    end)
+  end
+
+  defp do_create_prescription_for_patient(organization_id, patient_id, site_id, user_id, attrs) do
+    visit_attrs = %{
+      patient_id: patient_id,
+      site_id: site_id,
+      user_id: user_id,
+      visit_type: :pharmacy
+    }
+
+    with {:ok, visit} <-
+           ThamaniDawa.PatientVisits.create_patient_visit(organization_id, visit_attrs),
+         # Stringify keys if attrs has string keys, otherwise atom keys
+         attrs =
+           if(is_map_key(attrs, "patient_visit_id") or is_map_key(attrs, "referring_doctor"),
+             do: Map.put(attrs, "patient_visit_id", visit.id),
+             else: Map.put(attrs, :patient_visit_id, visit.id)
+           ),
+         {:ok, prescription} <- create_prescription(organization_id, attrs) do
+      prescription
+    else
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
   end
 
   @doc """
