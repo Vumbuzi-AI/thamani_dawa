@@ -94,6 +94,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLiveTest do
       site: site,
       product: product
     } do
+      # Add a second batch
       batch_fixture(%{
         organization_id: org.id,
         site_id: site.id,
@@ -108,9 +109,12 @@ defmodule ThamaniDawaWeb.PharmacyScanLiveTest do
       {:ok, lv, _} = live(log_in_user(conn, p), ~p"/pharmacy/scan")
       lv |> form("#scan-form", gtin: gtin) |> render_submit()
 
+      # Should show total quantity (200 + 150 = 350)
       assert has_element?(lv, "#result-quantity", "350")
+      # Should show earliest expiry (Jan 1, 2028)
       assert has_element?(lv, "#result-expiry", "01 Jan 2028")
       assert has_element?(lv, "#result-expiry", "(Earliest)")
+      # Should show "2 batches" instead of a single lot
       assert has_element?(lv, "#result-batch-no", "2 batches")
     end
 

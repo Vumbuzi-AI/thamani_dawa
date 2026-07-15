@@ -12,7 +12,6 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Batches
-
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
@@ -69,13 +68,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
         product = Products.get_product!(organization_id, hd(batches).product_id)
         site = Sites.get_site!(organization_id, hd(batches).site_id)
 
-        total_qty =
-          Enum.reduce(batches, 0, fn b, acc ->
-            case b.remaining_quantity do
-              %Decimal{} = d -> Decimal.to_integer(d) + acc
-              n when is_integer(n) -> n + acc
-            end
-          end)
+        total_qty = calculate_total_quantity(batches)
 
         earliest_expiry =
           batches
@@ -111,6 +104,15 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
           site: nil
         )
     end
+  end
+
+  defp calculate_total_quantity(batches) do
+    Enum.reduce(batches, 0, fn b, acc ->
+      case b.remaining_quantity do
+        %Decimal{} = d -> Decimal.to_integer(d) + acc
+        n when is_integer(n) -> n + acc
+      end
+    end)
   end
 
   defp product_display_name(product) do
