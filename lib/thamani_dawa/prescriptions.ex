@@ -19,12 +19,28 @@ defmodule ThamaniDawa.Prescriptions do
   `SiteScoping.for_current_site/2` can filter by site without a second query.
   """
   def list_prescriptions(organization_id) do
+    items_count_query =
+      from i in PrescriptionItem,
+        group_by: i.prescription_id,
+        select: %{prescription_id: i.prescription_id, count: count(i.id)}
+
     Repo.all(
       from p in Prescription,
         left_join: v in PatientVisit,
         on: v.id == p.patient_visit_id,
+        left_join: pat in ThamaniDawa.Patients.Patient,
+        on: pat.id == v.patient_id,
+        left_join: ic in subquery(items_count_query),
+        on: ic.prescription_id == p.id,
         where: p.organization_id == ^organization_id,
-        select: %{p | site_id: v.site_id}
+        select: %{
+          p
+          | site_id: v.site_id,
+            patient_name: pat.full_name,
+            patient_phone: pat.phone,
+            items_count: coalesce(ic.count, 0)
+        },
+        order_by: [desc: p.inserted_at]
     )
   end
 
@@ -40,6 +56,89 @@ defmodule ThamaniDawa.Prescriptions do
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Repo.insert()
   end
+
+  @doc """
+  Creates a new patient and a prescription for that patient in a single transaction.
+  Rolls back if either fails to prevent orphaned records.
+  """
+  def create_prescription_with_new_patient(
+        organization_id,
+        patient_attrs,
+        site_id,
+        user_id,
+        prescription_attrs
+      )
+      when is_integer(organization_id) do
+    Repo.transaction(fn ->
+      with {:ok, patient} <- ThamaniDawa.Patients.create_patient(organization_id, patient_attrs),
+           {:ok, prescription} <-
+             create_prescription_for_patient(
+               organization_id,
+               patient.id,
+               site_id,
+               user_id,
+               prescription_attrs
+             ) do
+        prescription
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  @doc """
+  Creates a prescription header for a patient, automatically creating a
+  PatientVisit for the current site and user in the same transaction.
+  """
+  def create_prescription_for_patient(organization_id, patient_id, site_id, user_id, attrs)
+      when is_integer(organization_id) do
+    Repo.transaction(fn ->
+      do_create_prescription_for_patient(organization_id, patient_id, site_id, user_id, attrs)
+    end)
+  end
+
+  defp do_create_prescription_for_patient(organization_id, patient_id, site_id, user_id, attrs) do
+    visit_attrs = %{
+      patient_id: patient_id,
+      site_id: site_id,
+      user_id: user_id,
+      visit_type: :pharmacy
+    }
+
+    with {:ok, visit} <-
+           ThamaniDawa.PatientVisits.create_patient_visit(organization_id, visit_attrs),
+         # Stringify keys if attrs has string keys, otherwise atom keys
+         attrs =
+           if(is_map_key(attrs, "patient_visit_id") or is_map_key(attrs, "referring_doctor"),
+             do: Map.put(attrs, "patient_visit_id", visit.id),
+             else: Map.put(attrs, :patient_visit_id, visit.id)
+           ),
+         attrs = inject_organization_id_into_items(attrs, organization_id),
+         {:ok, prescription} <- create_prescription(organization_id, attrs) do
+      prescription
+    else
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
+  end
+
+  defp inject_organization_id_into_items(%{"items" => items} = attrs, org_id)
+       when is_map(items) do
+    items = Map.new(items, fn {k, v} -> {k, Map.put(v, "organization_id", org_id)} end)
+    %{attrs | "items" => items}
+  end
+
+  defp inject_organization_id_into_items(%{"items" => items} = attrs, org_id)
+       when is_list(items) do
+    items = Enum.map(items, &Map.put(&1, "organization_id", org_id))
+    %{attrs | "items" => items}
+  end
+
+  defp inject_organization_id_into_items(%{items: items} = attrs, org_id) when is_list(items) do
+    items = Enum.map(items, &Map.put(&1, :organization_id, org_id))
+    %{attrs | items: items}
+  end
+
+  defp inject_organization_id_into_items(attrs, _org_id), do: attrs
 
   @doc """
   Creates a prescription header together with its `prescription_items`, all
@@ -102,15 +201,12 @@ defmodule ThamaniDawa.Prescriptions do
   ## Dispensing (§9 "Walk-in prescription → dispense", steps 2-3)
 
   @doc """
-  Dispenses `quantity` of a `prescription_items` row: FEFO-picks a batch at
-  the prescription's own site, decrements its `remaining_quantity`, then
-  rolls `prescription_items`/`prescriptions` status forward. All in one
-  transaction, so stock and dispensing state never drift apart.
+  Dispenses `quantity` for a prescription item by decrementing stock from eligible
+  batches in FEFO order at the prescription's site. Updates the status of the item
+  and prescription. Operates within a transaction to guarantee data integrity.
 
-  Returns `{:error, :out_of_stock}` when no eligible batch exists at that
-  site, `{:error, :over_dispensed}` when `quantity` would exceed what's left
-  to dispense on the item, or `{:error, changeset}` for any other
-  validation failure.
+  Returns `{:error, :out_of_stock}` if stock is insufficient, `{:error, :over_dispensed}` 
+  if `quantity` exceeds the prescribed amount, or `{:error, changeset}` for validation failures.
   """
   def dispense_item(organization_id, prescription_item_id, _pharmacist_id, quantity)
       when is_integer(organization_id) and is_integer(quantity) and quantity > 0 do
@@ -120,9 +216,9 @@ defmodule ThamaniDawa.Prescriptions do
       site_id = prescription_site_id(prescription)
 
       with :ok <- validate_not_over_dispensed(item, quantity),
-           {:ok, batch} <-
-             Batches.fefo_batch(organization_id, site_id, item.product_id),
-           {:ok, _batch} <- Batches.decrement_remaining_quantity(batch, quantity),
+           :ok <- validate_site_id_present(site_id),
+           batches = Batches.fefo_batches(organization_id, site_id, item.product_id),
+           :ok <- consume_quantity_across_batches(batches, quantity),
            {:ok, updated_item} <- bump_quantity_dispensed(item, quantity),
            {:ok, _prescription} <- recompute_status(prescription) do
         updated_item
@@ -132,6 +228,29 @@ defmodule ThamaniDawa.Prescriptions do
     end)
   end
 
+  defp consume_quantity_across_batches(_batches, 0), do: :ok
+
+  defp consume_quantity_across_batches([], quantity_needed) when quantity_needed > 0 do
+    {:error, :out_of_stock}
+  end
+
+  defp consume_quantity_across_batches([%{remaining_quantity: rq} | rest], quantity_needed)
+       when rq <= 0 do
+    consume_quantity_across_batches(rest, quantity_needed)
+  end
+
+  defp consume_quantity_across_batches([batch | rest], quantity_needed) do
+    to_consume = min(batch.remaining_quantity, quantity_needed)
+
+    case Batches.decrement_remaining_quantity(batch, to_consume) do
+      {:ok, _updated_batch} ->
+        consume_quantity_across_batches(rest, quantity_needed - to_consume)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   # `prescriptions` no longer carries its own `site_id` — it's derived from
   # the `patient_visits` row it's tied to via `patient_visit_id`.
   defp prescription_site_id(%Prescription{patient_visit_id: nil}), do: nil
@@ -139,6 +258,9 @@ defmodule ThamaniDawa.Prescriptions do
   defp prescription_site_id(%Prescription{patient_visit_id: patient_visit_id}) do
     Repo.get!(PatientVisit, patient_visit_id).site_id
   end
+
+  defp validate_site_id_present(nil), do: {:error, :invalid_prescription_site}
+  defp validate_site_id_present(_site_id), do: :ok
 
   defp validate_not_over_dispensed(%PrescriptionItem{} = item, quantity) do
     if item.quantity_dispensed + quantity > item.quantity_prescribed do

@@ -25,27 +25,61 @@ defmodule ThamaniDawa.Batches do
     )
   end
 
-  @doc "Lists pending (not yet received) batches dispatched to a specific site."
+  @doc "Lists batches dispatched to a specific site but not yet received by staff."
   def list_pending_batches_for_site(organization_id, site_id) do
     Repo.all(
       from b in Batch,
         where: b.organization_id == ^organization_id,
         where: b.site_id == ^site_id,
-        where: is_nil(b.received_at),
-        order_by: [asc: b.expiry_date]
+        where: is_nil(b.received_at)
     )
   end
 
-  @doc "Lists active (received, stock remaining) batches at a specific site."
+  @doc "Lists active (received and approved) batches at a site."
   def list_active_batches_for_site(organization_id, site_id) do
     Repo.all(
       from b in Batch,
         where: b.organization_id == ^organization_id,
         where: b.site_id == ^site_id,
+        where: not is_nil(b.received_at),
         where: not is_nil(b.approver_id),
-        where: b.remaining_quantity > 0,
-        order_by: [asc: b.expiry_date]
+        where: b.remaining_quantity > 0
     )
+  end
+
+  @doc """
+  Finds approved batches by GTIN. 
+  It filters by the provided `site_id`, but will also check if the GTIN is approved at 
+  any *other* site within the organization to trigger the "Not at your site" transfer warning.
+  """
+  def find_approved_batches_by_gtin(organization_id, gtin, opts \\ [])
+      when is_integer(organization_id) do
+    query =
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.gtin == ^gtin,
+        where: not is_nil(b.approver_id)
+
+    site_id = Keyword.get(opts, :site_id)
+
+    site_query =
+      if site_id do
+        from q in query, where: q.site_id == ^site_id
+      else
+        query
+      end
+
+    case Repo.all(site_query) do
+      [] ->
+        if site_id && Repo.exists?(query) do
+          {:error, :not_at_site}
+        else
+          {:error, :not_found}
+        end
+
+      batches ->
+        {:ok, batches}
+    end
   end
 
   @doc """
@@ -74,7 +108,6 @@ defmodule ThamaniDawa.Batches do
     end
   end
 
-  @doc "Lists all batches for a specific product within an organization, ordered by expiry."
   def list_batches_for_product(organization_id, product_id) do
     Repo.all(
       from b in Batch,
@@ -82,6 +115,23 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         order_by: [asc: b.expiry_date]
     )
+  end
+
+  @doc "Gets the total sum of remaining quantity of approved stock for a product at a given site."
+  def total_available_stock(organization_id, site_id, product_id) do
+    case Repo.one(
+           from b in Batch,
+             where: b.organization_id == ^organization_id,
+             where: b.site_id == ^site_id,
+             where: b.product_id == ^product_id,
+             where: b.remaining_quantity > 0,
+             where: not is_nil(b.approver_id),
+             select: sum(b.remaining_quantity)
+         ) do
+      nil -> 0
+      %Decimal{} = d -> Decimal.to_integer(d)
+      n when is_integer(n) -> n
+    end
   end
 
   @doc "Gets a single batch scoped to an organization. Raises if not found."
@@ -155,19 +205,17 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc """
-  Picks the batch to dispense/consume from at `site_id` for `product_id`,
-  per FEFO (first-expired-first-out, §9): the active, approved batch with
-  stock remaining, soonest expiry first. Pending (not yet received) batches
-  are excluded. This query is what enforces §4.3's "batch must be at the
-  prescription's own site_id" for pharmacy dispensing — a batch at any other
-  site is never a candidate.
+  Returns all eligible batches for dispensing at `site_id` for `product_id`,
+  ordered by soonest expiry (FEFO). Excludes pending or depleted batches.
 
-  Locks the returned row `FOR UPDATE`, so callers must run this inside
-  `Repo.transaction/1` and decrement the batch before the transaction ends,
-  to prevent two concurrent dispenses from oversubscribing the same stock.
-  Returns `{:error, :out_of_stock}` when no eligible batch exists.
+  Locks rows `FOR UPDATE` to prevent concurrent oversubscription. Callers
+  must execute within `Repo.transaction/1`.
   """
-  def fefo_batch(organization_id, site_id, product_id) do
+  def fefo_batches(organization_id, site_id, product_id) do
+    if not Repo.in_transaction?() do
+      raise "Batches.fefo_batches/3 must be called within a Repo.transaction/1 to safely lock stock"
+    end
+
     query =
       from b in Batch,
         where: b.organization_id == ^organization_id,
@@ -175,14 +223,10 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         where: b.remaining_quantity > 0,
         where: not is_nil(b.approver_id),
-        order_by: [asc: b.expiry_date],
-        limit: 1,
+        order_by: [asc: b.expiry_date, asc: b.id],
         lock: "FOR UPDATE"
 
-    case Repo.one(query) do
-      nil -> {:error, :out_of_stock}
-      batch -> {:ok, batch}
-    end
+    Repo.all(query)
   end
 
   @doc """

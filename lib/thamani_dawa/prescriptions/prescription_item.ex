@@ -20,6 +20,7 @@ defmodule ThamaniDawa.Prescriptions.PrescriptionItem do
   def changeset(prescription_item, attrs) do
     prescription_item
     |> cast(attrs, [
+      :organization_id,
       :product_id,
       :quantity_prescribed,
       :dosage_instructions,

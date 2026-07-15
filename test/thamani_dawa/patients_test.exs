@@ -23,6 +23,56 @@ defmodule ThamaniDawa.PatientsTest do
       assert %{date_of_birth: ["date of birth or age is required"]} = errors_on(changeset)
     end
 
+    test "validates national_id is exactly 8 characters if provided" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Patients.create_patient(organization.id, %{
+                 full_name: "Jane Doe",
+                 age: 30,
+                 gsrn: 9,
+                 national_id: "1234567"
+               })
+
+      assert %{national_id: ["must be exactly 8 characters"]} = errors_on(changeset)
+
+      assert {:error, changeset} =
+               Patients.create_patient(organization.id, %{
+                 full_name: "Jane Doe",
+                 age: 30,
+                 gsrn: 10,
+                 national_id: "123456789"
+               })
+
+      assert %{national_id: ["must be exactly 8 characters"]} = errors_on(changeset)
+    end
+
+    test "validates phone number is a valid Kenyan format if provided" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Patients.create_patient(organization.id, %{
+                 full_name: "Jane Doe",
+                 age: 30,
+                 gsrn: 11,
+                 phone: "0812345678"
+               })
+
+      assert %{phone: ["must be a valid Kenyan phone number (e.g. 0712345678 or +254712345678)"]} =
+               errors_on(changeset)
+
+      assert {:error, changeset} =
+               Patients.create_patient(organization.id, %{
+                 full_name: "Jane Doe",
+                 age: 30,
+                 gsrn: 12,
+                 phone: "+254812345678"
+               })
+
+      assert %{phone: ["must be a valid Kenyan phone number (e.g. 0712345678 or +254712345678)"]} =
+               errors_on(changeset)
+    end
+
     test "creates a patient scoped to the organization given only an age" do
       organization = organization_fixture()
 

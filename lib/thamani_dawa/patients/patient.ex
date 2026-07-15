@@ -20,11 +20,13 @@ defmodule ThamaniDawa.Patients.Patient do
     patient
     |> cast(attrs, [:full_name, :date_of_birth, :age, :gender, :phone, :national_id, :gsrn])
     |> validate_required([:full_name, :gsrn])
+    |> validate_length(:national_id, is: 8, message: "must be exactly 8 characters")
+    |> validate_format(:phone, ~r/^(?:\+254|0)[17]\d{8}$/,
+      message: "must be a valid Kenyan phone number (e.g. 0712345678 or +254712345678)"
+    )
     |> validate_date_of_birth_or_age()
   end
 
-  # Per §4.2: a patient's age may be recorded either as a birth date or a
-  # plain age when the exact date isn't known — at least one must be given.
   defp validate_date_of_birth_or_age(changeset) do
     if get_field(changeset, :date_of_birth) || get_field(changeset, :age) do
       changeset

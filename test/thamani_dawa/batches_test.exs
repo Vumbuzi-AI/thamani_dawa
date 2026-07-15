@@ -215,6 +215,51 @@ defmodule ThamaniDawa.BatchesTest do
     end
   end
 
+  describe "total_available_stock/3" do
+    test "returns 0 when no batches exist for the site and product" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert Batches.total_available_stock(organization.id, site.id, product.id) === 0
+    end
+
+    test "sums remaining_quantity of approved batches and returns an integer" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 10,
+        remaining_quantity: 10
+      })
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 20,
+        remaining_quantity: 15
+      })
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 50,
+        remaining_quantity: 50,
+        pending: true
+      })
+
+      total = Batches.total_available_stock(organization.id, site.id, product.id)
+      assert total === 25
+      assert is_integer(total)
+    end
+  end
+
   describe "get_batch!/2" do
     test "raises when the batch belongs to a different organization" do
       other_organization = organization_fixture()
@@ -226,8 +271,8 @@ defmodule ThamaniDawa.BatchesTest do
     end
   end
 
-  describe "fefo_batch/3" do
-    test "picks the active batch with stock, soonest expiry first" do
+  describe "fefo_batches/3" do
+    test "picks active batches with stock, soonest expiry first" do
       organization = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
@@ -240,15 +285,22 @@ defmodule ThamaniDawa.BatchesTest do
           expiry_date: ~D[2026-08-01]
         })
 
-      batch_fixture(%{
-        organization_id: organization.id,
-        site_id: site.id,
-        product_id: product.id,
-        expiry_date: ~D[2027-01-01]
-      })
+      later_batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          expiry_date: ~D[2027-01-01]
+        })
 
-      assert {:ok, %Batch{id: id}} = Batches.fefo_batch(organization.id, site.id, product.id)
-      assert id == soon_batch.id
+      assert {:ok, batches} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
+
+      assert [%{id: id1}, %{id: id2}] = batches
+      assert id1 == soon_batch.id
+      assert id2 == later_batch.id
     end
 
     test "skips a batch at a different site, even with an earlier expiry" do
@@ -272,7 +324,12 @@ defmodule ThamaniDawa.BatchesTest do
           expiry_date: ~D[2027-01-01]
         })
 
-      assert {:ok, %Batch{id: id}} = Batches.fefo_batch(organization.id, site.id, product.id)
+      assert {:ok, batches} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
+
+      assert [%{id: id}] = batches
       assert id == matching_batch.id
     end
 
@@ -288,7 +345,10 @@ defmodule ThamaniDawa.BatchesTest do
         remaining_quantity: 0
       })
 
-      assert {:error, :out_of_stock} = Batches.fefo_batch(organization.id, site.id, product.id)
+      assert {:ok, []} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
     end
 
     test "skips a batch with no approver_id (not yet received)" do
@@ -303,15 +363,29 @@ defmodule ThamaniDawa.BatchesTest do
         pending: true
       })
 
-      assert {:error, :out_of_stock} = Batches.fefo_batch(organization.id, site.id, product.id)
+      assert {:ok, []} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
     end
 
-    test "returns :out_of_stock when no batch exists for that site/product" do
+    test "returns empty when no batch exists for that site/product" do
       organization = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
 
-      assert {:error, :out_of_stock} = Batches.fefo_batch(organization.id, site.id, product.id)
+      assert {:ok, []} =
+               Repo.transaction(fn ->
+                 Batches.fefo_batches(organization.id, site.id, product.id)
+               end)
+    end
+
+    test "raises if called outside a transaction" do
+      assert_raise RuntimeError,
+                   "Batches.fefo_batches/3 must be called within a Repo.transaction/1 to safely lock stock",
+                   fn ->
+                     Batches.fefo_batches(1, 1, 1)
+                   end
     end
   end
 

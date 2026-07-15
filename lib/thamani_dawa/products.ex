@@ -14,6 +14,21 @@ defmodule ThamaniDawa.Products do
     Repo.all(from p in Product, where: p.organization_id == ^organization_id)
   end
 
+  @doc "Lists products that have active, approved batches at a site."
+  def list_active_products_for_site(organization_id, site_id) do
+    Repo.all(
+      from p in Product,
+        join: b in ThamaniDawa.Batches.Batch,
+        on: b.product_id == p.id,
+        where: p.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: not is_nil(b.received_at),
+        where: not is_nil(b.approver_id),
+        where: b.remaining_quantity > 0,
+        distinct: p.id
+    )
+  end
+
   @doc "Gets a single product scoped to an organization. Raises if not found."
   def get_product!(organization_id, id) do
     Repo.get_by!(Product, id: id, organization_id: organization_id)
