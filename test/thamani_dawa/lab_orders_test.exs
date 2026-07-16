@@ -264,6 +264,74 @@ defmodule ThamaniDawa.LabOrdersTest do
     end
   end
 
+  describe "verify_result/3" do
+    setup do
+      organization = organization_fixture()
+      performer = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
+      verifier = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
+      lab_order_result = lab_order_result_fixture(%{organization_id: organization.id})
+
+      {:ok, completed} =
+        LabOrders.record_result(organization.id, lab_order_result.id, performer.id, %{
+          "note" => "ok"
+        })
+
+      %{organization: organization, performer: performer, verifier: verifier, result: completed}
+    end
+
+    test "a different user can verify a completed result", ctx do
+      assert {:ok, verified} =
+               LabOrders.verify_result(ctx.organization.id, ctx.result.id, ctx.verifier.id)
+
+      assert verified.status == :verified
+    end
+
+    test "returns :cannot_self_verify when the verifier performed the test", ctx do
+      assert {:error, :cannot_self_verify} =
+               LabOrders.verify_result(ctx.organization.id, ctx.result.id, ctx.performer.id)
+
+      assert LabOrders.get_lab_order_result!(ctx.organization.id, ctx.result.id).status ==
+               :completed
+    end
+
+    test "advances the parent order to :verified when all results are verified", ctx do
+      lab_order_id = ctx.result.lab_order_id
+
+      assert {:ok, _} =
+               LabOrders.verify_result(ctx.organization.id, ctx.result.id, ctx.verifier.id)
+
+      assert LabOrders.get_lab_order!(ctx.organization.id, lab_order_id).status == :verified
+    end
+
+    test "parent order stays :completed when only some results are verified", ctx do
+      organization = ctx.organization
+      lab_order = lab_order_fixture(%{organization_id: organization.id})
+
+      result_1 =
+        lab_order_result_fixture(%{
+          organization_id: organization.id,
+          lab_order_id: lab_order.id
+        })
+
+      result_2 =
+        lab_order_result_fixture(%{
+          organization_id: organization.id,
+          lab_order_id: lab_order.id
+        })
+
+      {:ok, completed_1} =
+        LabOrders.record_result(organization.id, result_1.id, ctx.performer.id, %{"note" => "ok"})
+
+      {:ok, _completed_2} =
+        LabOrders.record_result(organization.id, result_2.id, ctx.performer.id, %{"note" => "ok"})
+
+      assert {:ok, _} =
+               LabOrders.verify_result(organization.id, completed_1.id, ctx.verifier.id)
+
+      assert LabOrders.get_lab_order!(organization.id, lab_order.id).status == :completed
+    end
+  end
+
   describe "record_consumable_usage/5" do
     setup do
       organization = organization_fixture()

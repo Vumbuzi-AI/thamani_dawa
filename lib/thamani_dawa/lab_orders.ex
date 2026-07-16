@@ -155,6 +155,45 @@ defmodule ThamaniDawa.LabOrders do
 
   defp parse_collection_date(_), do: Date.utc_today()
 
+  @doc "Lists all lab order results with status :completed for an organization."
+  def list_results_pending_verification(organization_id) do
+    Repo.all(
+      from r in LabOrderResult,
+        where: r.organization_id == ^organization_id,
+        where: r.status == :completed
+    )
+  end
+
+  @doc """
+  Verifies a completed lab order result on behalf of `verifier_id`. Returns
+  `{:error, :cannot_self_verify}` when `verifier_id` matches the user who
+  performed the test, enforcing the two-person review requirement.
+  """
+  def verify_result(organization_id, result_id, verifier_id)
+      when is_integer(organization_id) and is_integer(verifier_id) do
+    result = get_lab_order_result!(organization_id, result_id)
+
+    if result.performed_by_id == verifier_id do
+      {:error, :cannot_self_verify}
+    else
+      do_verify_result(organization_id, result, verifier_id)
+    end
+  end
+
+  defp do_verify_result(organization_id, result, verifier_id) do
+    Repo.transaction(fn ->
+      with {:ok, verified} <-
+             result
+             |> Ecto.Changeset.change(status: :verified, verified_by_id: verifier_id)
+             |> Repo.update(),
+           {:ok, _} <- recompute_lab_order_status(organization_id, verified.lab_order_id) do
+        verified
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
   ## Result entry (§9 "Lab order → verified result", step 2)
 
   @doc """
@@ -203,10 +242,20 @@ defmodule ThamaniDawa.LabOrders do
 
     status =
       cond do
-        results == [] -> lab_order.status
-        Enum.all?(results, &(&1.status == :completed)) -> :completed
-        Enum.any?(results, &(&1.status in [:completed, :collected])) -> :in_progress
-        true -> lab_order.status
+        results == [] ->
+          lab_order.status
+
+        Enum.all?(results, &(&1.status == :verified)) ->
+          :verified
+
+        Enum.all?(results, &(&1.status in [:completed, :verified])) ->
+          :completed
+
+        Enum.any?(results, &(&1.status in [:completed, :collected, :verified])) ->
+          :in_progress
+
+        true ->
+          lab_order.status
       end
 
     lab_order

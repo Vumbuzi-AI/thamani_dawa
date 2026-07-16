@@ -32,7 +32,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
     user_ids =
       results
-      |> Enum.flat_map(&[&1.performed_by_id, &1.collected_by_id])
+      |> Enum.flat_map(&[&1.performed_by_id, &1.collected_by_id, &1.verified_by_id])
       |> Enum.filter(& &1)
       |> Enum.uniq()
 
@@ -130,6 +130,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         </:col>
         <:col :let={result} label="Performed by">
           {user_name(@users_by_id, result.performed_by_id)}
+        </:col>
+        <:col :let={result} label="Verified by">
+          {user_name(@users_by_id, result.verified_by_id)}
         </:col>
         <:col :let={result} label="Results">
           <div :if={result.results != %{}} class="space-y-0.5 text-sm">
