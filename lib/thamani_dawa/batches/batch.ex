@@ -57,6 +57,10 @@ defmodule ThamaniDawa.Batches.Batch do
     |> foreign_key_constraint(:product_id)
     |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:supplier_id)
+    |> unique_constraint(:batch_no,
+      name: :batches_org_product_site_batch_no_index,
+      message: "has already been dispatched to this site"
+    )
   end
 
   defp validate_expiry_date(changeset) do

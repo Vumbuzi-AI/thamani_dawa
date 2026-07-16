@@ -45,6 +45,7 @@ defmodule ThamaniDawaWeb.Router do
 
       live "/org/sites", SiteLive.Index, :index
       live "/org/sites/new", SiteLive.Index, :new
+      live "/org/sites/:id", SiteLive.Show, :show
       live "/org/sites/:id/edit", SiteLive.Index, :edit
 
       live "/org/products", ProductLive.Index, :index

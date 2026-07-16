@@ -35,6 +35,19 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Sidebar"
     end
 
+    test "shows a Back button instead of + Add product while on the new-product form", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/products")
+      assert html =~ "+ Add product"
+
+      html = lv |> element("a", "+ Add product") |> render_click()
+
+      assert html =~ "Back"
+      refute html =~ "+ Add product"
+    end
+
     test "creates a new product", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
@@ -47,6 +60,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
           brand_name: "Panadol",
           category: "Painkiller",
           uom: "Pack",
+          gtin: unique_gtin(),
           price: "50"
         }
       )
@@ -102,6 +116,112 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       html = render(lv)
       assert html =~ "Panadol"
       refute html =~ "Amoxil"
+    end
+
+    test "clearing the search box shows every product again", %{conn: conn, admin: admin} do
+      product_fixture(%{organization_id: admin.organization_id, generic_name: "Panadol"})
+      product_fixture(%{organization_id: admin.organization_id, generic_name: "Amoxil"})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> form("form[phx-change='search']", search: "panadol") |> render_change()
+      refute render(lv) =~ "Amoxil"
+
+      lv |> form("form[phx-change='search']", search: "") |> render_change()
+
+      html = render(lv)
+      assert html =~ "Panadol"
+      assert html =~ "Amoxil"
+    end
+
+    test "live-validates the new product form", %{conn: conn, admin: admin} do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      html =
+        lv
+        |> form("form[phx-submit='save']", product: %{generic_name: "Panadol", price: ""})
+        |> render_change()
+
+      assert html =~ "can&#39;t be blank"
+    end
+
+    test "a non-numeric GTIN shows a validation error instead of crashing", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      html =
+        lv
+        |> form("form[phx-submit='save']",
+          product: %{generic_name: "Panadol", uom: "tablet", price: "50", gtin: "abc"}
+        )
+        |> render_change()
+
+      assert html =~ "is not a valid GTIN"
+    end
+
+    test "shows an error and does not create a product when required fields are missing", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      html =
+        lv
+        |> form("form[phx-submit='save']", product: %{generic_name: "No Price Drug", price: ""})
+        |> render_submit()
+
+      assert html =~ "can&#39;t be blank"
+
+      refute Enum.any?(
+               ThamaniDawa.Products.list_products(admin.organization_id),
+               &(&1.generic_name == "No Price Drug")
+             )
+    end
+
+    test "shows an error and does not create a product with no name at all", %{
+      conn: conn,
+      admin: admin
+    } do
+      before_count = length(ThamaniDawa.Products.list_products(admin.organization_id))
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      html =
+        lv
+        |> form("form[phx-submit='save']", product: %{price: "50"})
+        |> render_submit()
+
+      assert html =~ "enter a generic or brand name"
+      assert length(ThamaniDawa.Products.list_products(admin.organization_id)) == before_count
+    end
+
+    test "shows an error and does not persist an invalid edit", %{conn: conn, admin: admin} do
+      product =
+        product_fixture(%{organization_id: admin.organization_id, generic_name: "Keep Me"})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> element("#products-#{product.id} a", "Edit") |> render_click()
+
+      html =
+        lv
+        |> form("form[phx-submit='save']", product: %{price: ""})
+        |> render_submit()
+
+      assert html =~ "can&#39;t be blank"
+
+      assert %{generic_name: "Keep Me"} =
+               ThamaniDawa.Products.get_product!(admin.organization_id, product.id)
     end
   end
 
@@ -185,6 +305,87 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Batch dispatched"
       assert html =~ "LOT-ADMIN-1"
       assert html =~ "200"
+    end
+
+    test "shows an error dispatching the same batch_no to the same site twice", %{
+      conn: conn,
+      admin: admin,
+      site: site
+    } do
+      product =
+        product_fixture(%{organization_id: admin.organization_id, gtin: unique_gtin()})
+
+      batch_fixture(%{
+        organization_id: admin.organization_id,
+        product_id: product.id,
+        site_id: site.id,
+        gtin: product.gtin,
+        batch_no: "LOT-REPEAT"
+      })
+
+      {:ok, lv, _html} =
+        live(log_in_user(conn, admin), ~p"/org/products/#{product.id}/batches/new")
+
+      html =
+        lv
+        |> form("#batch-form",
+          batch: %{
+            site_id: site.id,
+            gtin: product.gtin,
+            batch_no: "LOT-REPEAT",
+            expiry_date: "2027-06-01",
+            quantity: 50
+          }
+        )
+        |> render_submit()
+
+      assert html =~ "has already been dispatched to this site"
+
+      assert length(
+               ThamaniDawa.Batches.list_batches_for_product(admin.organization_id, product.id)
+             ) == 1
+    end
+
+    test "live-validates the dispatch batch form", %{conn: conn, admin: admin, site: site} do
+      product = product_fixture(%{organization_id: admin.organization_id})
+
+      {:ok, lv, _html} =
+        live(log_in_user(conn, admin), ~p"/org/products/#{product.id}/batches/new")
+
+      html =
+        lv
+        |> form("#batch-form", batch: %{site_id: site.id, batch_no: ""})
+        |> render_change()
+
+      assert html =~ "can&#39;t be blank"
+    end
+
+    test "shows an error and does not dispatch a batch with an invalid GTIN", %{
+      conn: conn,
+      admin: admin,
+      site: site
+    } do
+      product = product_fixture(%{organization_id: admin.organization_id})
+
+      {:ok, lv, _html} =
+        live(log_in_user(conn, admin), ~p"/org/products/#{product.id}/batches/new")
+
+      html =
+        lv
+        |> form("#batch-form",
+          batch: %{
+            site_id: site.id,
+            gtin: "00614141000011",
+            batch_no: "LOT-BAD-GTIN",
+            expiry_date: "2027-06-01",
+            quantity: 10
+          }
+        )
+        |> render_submit()
+
+      assert html =~ "is not a valid GTIN"
+
+      assert ThamaniDawa.Batches.list_batches_for_product(admin.organization_id, product.id) == []
     end
   end
 end

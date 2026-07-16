@@ -37,6 +37,26 @@ defmodule ThamaniDawa.GtinTest do
       refute changeset.valid?
       assert {"is not a valid GTIN", []} = changeset.errors[:gtin]
     end
+
+    test "rejects a non-numeric code instead of raising" do
+      changeset =
+        %{gtin: "not-a-valid-gtin"}
+        |> changeset()
+        |> Gtin.validate_gtin()
+
+      refute changeset.valid?
+      assert {"is not a valid GTIN", []} = changeset.errors[:gtin]
+    end
+
+    test "rejects a code with a stray letter mixed into otherwise-numeric digits" do
+      changeset =
+        %{gtin: "0061414100001A"}
+        |> changeset()
+        |> Gtin.validate_gtin()
+
+      refute changeset.valid?
+      assert {"is not a valid GTIN", []} = changeset.errors[:gtin]
+    end
   end
 
   describe "generate/1" do

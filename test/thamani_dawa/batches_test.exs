@@ -163,6 +163,47 @@ defmodule ThamaniDawa.BatchesTest do
 
       assert %{gtin: ["is not a valid GTIN"]} = errors_on(changeset)
     end
+
+    test "rejects dispatching the same batch_no for the same product to the same site twice" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      attrs = %{
+        product_id: product.id,
+        site_id: site.id,
+        gtin: "00614141000012",
+        batch_no: "LOT-DUP",
+        expiry_date: ~D[2027-01-01],
+        quantity: 50
+      }
+
+      assert {:ok, _batch} = Batches.create_batch(organization.id, attrs)
+      assert {:error, changeset} = Batches.create_batch(organization.id, attrs)
+
+      assert %{batch_no: ["has already been dispatched to this site"]} = errors_on(changeset)
+    end
+
+    test "allows the same batch_no for the same product across different sites" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site_a = site_fixture(%{organization_id: organization.id})
+      site_b = site_fixture(%{organization_id: organization.id})
+
+      common_attrs = %{
+        product_id: product.id,
+        gtin: "00614141000012",
+        batch_no: "LOT-SPLIT",
+        expiry_date: ~D[2027-01-01],
+        quantity: 10
+      }
+
+      assert {:ok, _batch_a} =
+               Batches.create_batch(organization.id, Map.put(common_attrs, :site_id, site_a.id))
+
+      assert {:ok, _batch_b} =
+               Batches.create_batch(organization.id, Map.put(common_attrs, :site_id, site_b.id))
+    end
   end
 
   describe "receive_batch/2" do
