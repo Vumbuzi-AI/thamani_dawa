@@ -94,6 +94,13 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
   defp user_name(users_by_id, id), do: id && Map.get(users_by_id, id, %{name: "—"}).name
 
+  defp result_unit(lab_tests, lab_test_id, key) do
+    case Enum.find(lab_tests, &(&1.id == lab_test_id)) do
+      nil -> ""
+      test -> get_in(test.field_definitions, [key, "unit"]) || ""
+    end
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/orders"}>
@@ -123,6 +130,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         </:col>
         <:col :let={result} label="Performed by">
           {user_name(@users_by_id, result.performed_by_id)}
+        </:col>
+        <:col :let={result} label="Results">
+          <div :if={result.results != %{}} class="space-y-0.5 text-sm">
+            <div :for={{key, %{"value" => value}} <- result.results}>
+              <span class="font-medium">{key}</span>
+              {" #{value} #{result_unit(@lab_tests, result.lab_test_id, key)}"}
+            </div>
+          </div>
+          <span :if={result.results == %{}}>—</span>
         </:col>
         <:action :let={result}>
           <.button

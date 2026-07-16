@@ -414,7 +414,16 @@ cbc_test =
     %{organization_id: organization_id, name: "Complete Blood Count"},
     %{
       price: Decimal.new("800.00"),
-      field_definitions: %{},
+      field_definitions: %{
+        "haemoglobin" => %{"type" => "number", "unit" => "g/dL"},
+        "wbc" => %{"type" => "number", "unit" => "×10³/µL"},
+        "rbc" => %{"type" => "number", "unit" => "×10⁶/µL"},
+        "platelets" => %{"type" => "number", "unit" => "×10³/µL"},
+        "haematocrit" => %{"type" => "number", "unit" => "%"},
+        "mcv" => %{"type" => "number", "unit" => "fL"},
+        "mch" => %{"type" => "number", "unit" => "pg"},
+        "mchc" => %{"type" => "number", "unit" => "g/dL"}
+      },
       category: "Hematology"
     },
     fn attrs -> LabTests.create_lab_test(organization_id, attrs) end
