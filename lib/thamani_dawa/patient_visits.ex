@@ -6,6 +6,7 @@ defmodule ThamaniDawa.PatientVisits do
   """
 
   import Ecto.Query, warn: false
+  alias ThamaniDawa.Patients.Patient
   alias ThamaniDawa.PatientVisits.PatientVisit
   alias ThamaniDawa.Repo
 
@@ -24,6 +25,24 @@ defmodule ThamaniDawa.PatientVisits do
     %PatientVisit{}
     |> PatientVisit.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> validate_patient_in_organization(organization_id)
     |> Repo.insert()
+  end
+
+  defp validate_patient_in_organization(changeset, organization_id) do
+    case Ecto.Changeset.get_change(changeset, :patient_id) do
+      nil ->
+        changeset
+
+      patient_id ->
+        query =
+          from p in Patient, where: p.id == ^patient_id and p.organization_id == ^organization_id
+
+        if Repo.exists?(query) do
+          changeset
+        else
+          Ecto.Changeset.add_error(changeset, :patient_id, "must belong to the same organization")
+        end
+    end
   end
 end
