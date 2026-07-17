@@ -47,6 +47,20 @@ defmodule ThamaniDawa.PatientsTest do
       assert %{national_id: ["must be exactly 8 characters"]} = errors_on(changeset)
     end
 
+    test "rejects a national_id containing letters" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Patients.create_patient(organization.id, %{
+                 full_name: "Jane Doe",
+                 age: 30,
+                 gsrn: 11,
+                 national_id: "1234567A"
+               })
+
+      assert %{national_id: ["must contain only numbers"]} = errors_on(changeset)
+    end
+
     test "validates phone number is a valid Kenyan format if provided" do
       organization = organization_fixture()
 

@@ -153,6 +153,47 @@ defmodule ThamaniDawaWeb.PharmacyScanLiveTest do
     end
   end
 
+  describe "?gtin= query param" do
+    test "auto-runs the lookup on mount, e.g. from a dashboard row-click", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      gtin = unique_gtin()
+
+      product =
+        product_fixture(%{
+          organization_id: organization.id,
+          generic_name: "Amoxicillin 500mg",
+          gtin: gtin
+        })
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        gtin: gtin,
+        batch_no: "LOT-QUERY-PARAM",
+        expiry_date: ~D[2028-06-30]
+      })
+
+      pharmacist = pharmacist_at(organization, site)
+
+      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/scan?gtin=#{gtin}")
+
+      assert html =~ "Amoxicillin 500mg"
+      assert has_element?(lv, "#scan-result-found")
+    end
+
+    test "shows the idle hint when no gtin param is given", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at(organization, site)
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/scan")
+
+      assert has_element?(lv, "#scan-idle-hint")
+    end
+  end
+
   describe "approved batch at a different site" do
     test "shows the not-at-site card, not the found card", %{conn: conn} do
       organization = organization_fixture()
@@ -252,6 +293,31 @@ defmodule ThamaniDawaWeb.PharmacyScanLiveTest do
 
       assert has_element?(lv, "#scan-result-unavailable")
       refute has_element?(lv, "#scan-result-found")
+    end
+  end
+
+  describe "product with no generic or brand name" do
+    test "shows a placeholder name instead of crashing", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at(organization, site)
+      gtin = unique_gtin()
+
+      product =
+        product_fixture(%{organization_id: organization.id, generic_name: nil, gtin: gtin})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        gtin: gtin,
+        batch_no: "LOT-UNNAMED"
+      })
+
+      {:ok, lv, _} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/scan")
+      lv |> form("#scan-form", gtin: gtin) |> render_submit()
+
+      assert has_element?(lv, "#result-product-name", "(unnamed product)")
     end
   end
 

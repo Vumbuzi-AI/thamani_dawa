@@ -13,7 +13,17 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
     organization_id = scope.organization_id
 
     products_by_id = organization_id |> Products.list_products() |> Map.new(&{&1.id, &1})
-    batches = organization_id |> Batches.list_batches() |> SiteScoping.for_current_site(scope)
+
+    active_batches =
+      organization_id
+      |> Batches.list_batches()
+      |> SiteScoping.for_current_site(scope)
+      |> Enum.filter(&(not is_nil(&1.approver_id)))
+
+    pending_batches =
+      organization_id
+      |> Batches.list_pending_batches()
+      |> SiteScoping.for_current_site(scope)
 
     prescriptions =
       organization_id
@@ -21,24 +31,40 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       |> SiteScoping.for_current_site(scope)
       |> Enum.filter(&(&1.status in [:pending, :partially_dispensed]))
 
+    {out_of_stock, low_stock} = stock_alerts(active_batches, products_by_id)
+
     {:ok,
      socket
      |> assign(:products_by_id, products_by_id)
-     |> assign(:low_stock, low_stock(batches, products_by_id))
-     |> assign(:near_expiry, near_expiry(batches))
+     |> assign(:out_of_stock, out_of_stock)
+     |> assign(:low_stock, low_stock)
+     |> assign(:near_expiry, near_expiry(active_batches))
      |> assign(:near_expiry_days, @near_expiry_days)
+     |> assign(:pending_batches_count, length(pending_batches))
      |> assign(:pending_prescriptions, prescriptions)}
   end
 
-  defp low_stock(batches, products_by_id) do
+  defp stock_alerts(batches, products_by_id) do
     batches
     |> Enum.group_by(& &1.product_id)
     |> Enum.map(fn {product_id, product_batches} ->
       {products_by_id[product_id], Enum.sum(Enum.map(product_batches, & &1.remaining_quantity))}
     end)
-    |> Enum.filter(fn {product, total} ->
-      product && product.reorder_level && total <= product.reorder_level
-    end)
+    |> Enum.filter(fn {product, _total} -> product && product.reorder_level end)
+    |> split_stock_alerts()
+  end
+
+  defp split_stock_alerts(totals) do
+    {out, low} =
+      Enum.reduce(totals, {[], []}, fn {product, total} = entry, {out, low} ->
+        cond do
+          total <= 0 -> {[entry | out], low}
+          total <= product.reorder_level -> {out, [entry | low]}
+          true -> {out, low}
+        end
+      end)
+
+    {Enum.reverse(out), Enum.reverse(low)}
   end
 
   defp near_expiry(batches) do
@@ -60,11 +86,45 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
     <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path="/pharmacy">
       <.header>Pharmacy dashboard</.header>
 
-      <.header class="mt-4">
+      <div
+        :if={@pending_batches_count > 0}
+        class="alert mt-4 flex items-center justify-between"
+        style="background: #fffbeb; border-color: #fcd34d;"
+      >
+        <span>
+          <strong>{@pending_batches_count}</strong>
+          {if @pending_batches_count == 1, do: "batch is", else: "batches are"} awaiting receipt at your site.
+        </span>
+        <.link navigate={~p"/pharmacy/receive-stock"} class="btn btn-sm btn-primary">
+          Receive stock
+        </.link>
+      </div>
+
+      <.header class="mt-6">
+        Out of stock
+        <:subtitle>Products with no remaining stock at your site</:subtitle>
+      </.header>
+      <.table
+        id="out-of-stock"
+        rows={@out_of_stock}
+        row_click={fn _row -> JS.navigate(~p"/pharmacy/receive-stock") end}
+      >
+        <:col :let={{product, _total}} label="Product">{product_name(product)}</:col>
+        <:col :let={{product, _total}} label="Reorder level">{product && product.reorder_level}</:col>
+        <:col :let={{_product, total}} label="Remaining">
+          <span class="text-error font-semibold">{total}</span>
+        </:col>
+      </.table>
+
+      <.header class="mt-6">
         Low stock
         <:subtitle>Products at or below their reorder level</:subtitle>
       </.header>
-      <.table id="low-stock" rows={@low_stock}>
+      <.table
+        id="low-stock"
+        rows={@low_stock}
+        row_click={fn _row -> JS.navigate(~p"/pharmacy/receive-stock") end}
+      >
         <:col :let={{product, _total}} label="Product">{product_name(product)}</:col>
         <:col :let={{product, _total}} label="Reorder level">{product && product.reorder_level}</:col>
         <:col :let={{_product, total}} label="Remaining">{total}</:col>
@@ -74,7 +134,11 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         Near-expiry batches
         <:subtitle>Expiring within {@near_expiry_days} days</:subtitle>
       </.header>
-      <.table id="near-expiry" rows={@near_expiry}>
+      <.table
+        id="near-expiry"
+        rows={@near_expiry}
+        row_click={fn batch -> JS.navigate(~p"/pharmacy/scan?gtin=#{batch.gtin}") end}
+      >
         <:col :let={batch} label="Product">{product_name(@products_by_id[batch.product_id])}</:col>
         <:col :let={batch} label="Batch no.">{batch.batch_no}</:col>
         <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>

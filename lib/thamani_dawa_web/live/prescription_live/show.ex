@@ -41,12 +41,26 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     organization_id = socket.assigns.current_scope.organization_id
     pharmacist_id = socket.assigns.current_scope.user.id
 
-    case Prescriptions.dispense_item(
-           organization_id,
-           String.to_integer(item_id),
-           pharmacist_id,
-           String.to_integer(quantity)
-         ) do
+    with {item_id, ""} <- Integer.parse(item_id),
+         {quantity, ""} <- Integer.parse(quantity),
+         true <- quantity > 0 do
+      do_dispense(socket, organization_id, item_id, pharmacist_id, quantity)
+    else
+      _ -> {:noreply, put_flash(socket, :error, "Enter a valid quantity.")}
+    end
+  end
+
+  def handle_event("verify_item", %{"item_id" => item_id, "gtin" => gtin}, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+
+    case Integer.parse(item_id) do
+      {item_id, ""} -> do_verify(socket, organization_id, item_id, gtin)
+      _ -> {:noreply, put_flash(socket, :error, "Couldn't verify that item.")}
+    end
+  end
+
+  defp do_dispense(socket, organization_id, item_id, pharmacist_id, quantity) do
+    case Prescriptions.dispense_item(organization_id, item_id, pharmacist_id, quantity) do
       {:ok, _item} ->
         {:noreply,
          socket
@@ -64,14 +78,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     end
   end
 
-  def handle_event("verify_item", %{"item_id" => item_id, "gtin" => gtin}, socket) do
-    organization_id = socket.assigns.current_scope.organization_id
-
-    case Prescriptions.verify_dispensed_item(
-           organization_id,
-           String.to_integer(item_id),
-           gtin
-         ) do
+  defp do_verify(socket, organization_id, item_id, gtin) do
+    case Prescriptions.verify_dispensed_item(organization_id, item_id, gtin) do
       {:ok, _item} ->
         {:noreply,
          socket
@@ -126,7 +134,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
               <span class={[
                 "font-medium",
                 @prescription.status == :pending && "text-orange-600",
-                @prescription.status == :dispensed && "text-green-600"
+                @prescription.status == :completed && "text-green-600"
               ]}>
                 {Phoenix.Naming.humanize(@prescription.status)}
               </span>
@@ -205,7 +213,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
             min="1"
             max={item.quantity_prescribed - item.quantity_dispensed}
           />
-          <.button type="submit" variant="primary">Dispense</.button>
+          <.button type="submit" variant="primary" phx-disable-with="Dispensing...">Dispense</.button>
         </form>
 
         <div

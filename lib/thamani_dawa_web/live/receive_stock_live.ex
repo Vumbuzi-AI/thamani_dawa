@@ -43,7 +43,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
          assign(socket, :gs1_decode_error, "That code is missing a GTIN or batch/lot number")}
 
       {:error, _reason} ->
-        {:noreply, assign(socket, :gs1_decode_error, "Couldn't decode that code")}
+        {:noreply, assign(socket, :gs1_decode_error, decode_error_message(raw_gs1))}
     end
   end
 
@@ -80,6 +80,17 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
         {:noreply, assign(socket, :gs1_decode_error, "No matching pending batch at your site")}
     end
   end
+
+  defp decode_error_message(raw_gs1) do
+    if bare_gtin?(raw_gs1) do
+      "That looks like a bare GTIN — scan the full barcode (it also encodes the batch/lot " <>
+        "number), or use the Receive button in the table below."
+    else
+      "Couldn't decode that code"
+    end
+  end
+
+  defp bare_gtin?(raw), do: String.match?(raw, ~r/^\d{8}$|^\d{12,14}$/)
 
   defp do_receive(socket, batch, quantity) do
     scope = socket.assigns.current_scope
@@ -171,7 +182,9 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
               min="0"
               class="input input-sm w-24"
             />
-            <.button variant="primary" class="btn-sm">Receive</.button>
+            <.button variant="primary" class="btn-sm" phx-disable-with="Receiving...">
+              Receive
+            </.button>
           </form>
         </:action>
       </.table>

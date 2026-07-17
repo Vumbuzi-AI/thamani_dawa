@@ -20,6 +20,7 @@ defmodule ThamaniDawa.Patients.Patient do
     patient
     |> cast(attrs, [:full_name, :date_of_birth, :age, :gender, :phone, :national_id, :gsrn])
     |> validate_required([:full_name, :gsrn])
+    |> validate_format(:national_id, ~r/^\d*$/, message: "must contain only numbers")
     |> validate_length(:national_id, is: 8, message: "must be exactly 8 characters")
     |> validate_format(:phone, ~r/^(?:\+254|0)[17]\d{8}$/,
       message: "must be a valid Kenyan phone number (e.g. 0712345678 or +254712345678)"

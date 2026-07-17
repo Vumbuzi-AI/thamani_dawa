@@ -260,6 +260,48 @@ defmodule ThamaniDawa.BatchesTest do
     end
   end
 
+  describe "find_approved_batches_by_gtin/3" do
+    test "finds an approved batch by gtin across the whole org when no site_id is given" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+      gtin = unique_gtin()
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: gtin
+        })
+
+      assert {:ok, [found]} = Batches.find_approved_batches_by_gtin(organization.id, gtin)
+      assert found.id == batch.id
+    end
+  end
+
+  describe "find_pending_batch/4" do
+    test "finds a pending batch by gtin and batch_no across the whole org when no site_id is given" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+      gtin = unique_gtin()
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: gtin,
+          batch_no: "LOT-NO-OPTS",
+          pending: true
+        })
+
+      assert {:ok, found} = Batches.find_pending_batch(organization.id, gtin, "LOT-NO-OPTS")
+      assert found.id == batch.id
+    end
+  end
+
   describe "get_batch!/2" do
     test "raises when the batch belongs to a different organization" do
       other_organization = organization_fixture()

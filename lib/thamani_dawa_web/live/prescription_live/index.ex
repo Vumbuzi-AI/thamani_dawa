@@ -67,13 +67,14 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
       socket
       |> assign(:header_form, to_form(header_changeset, as: :prescription))
       |> assign(:patient_form, to_form(patient_changeset, as: :patient))
+      |> maybe_reload_products(header_attrs["site_id"])
 
     {:noreply, socket}
   end
 
   def handle_event("add-item", _, socket) do
     changeset = socket.assigns.header_form.source
-    items = socket.assigns.header_form[:items].value || []
+    items = items_value(socket.assigns.header_form)
     new_index = length(items)
 
     changeset =
@@ -95,8 +96,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
   def handle_event("remove-item", %{"index" => index}, socket) do
     index = String.to_integer(index)
     changeset = socket.assigns.header_form.source
-    items = socket.assigns.header_form[:items].value || []
-    items = List.delete_at(items, index)
+    items = List.delete_at(items_value(socket.assigns.header_form), index)
     changeset = Ecto.Changeset.put_assoc(changeset, :items, items)
 
     editing_items =
@@ -126,15 +126,47 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
 
   def handle_event("save", params, socket) do
     %{"prescription" => header_attrs} = params
-    site_id = header_attrs["site_id"] || socket.assigns.current_scope.site_id
 
-    if is_nil(site_id) do
-      {:noreply, put_flash(socket, :error, "Site is required.")}
-    else
-      socket.assigns.use_new_patient
-      |> save_prescription(params, site_id, socket)
-      |> handle_save_result(socket)
+    site_id =
+      case header_attrs["site_id"] do
+        blank when blank in [nil, ""] -> SiteScoping.default_site_id(socket.assigns.current_scope)
+        site_id -> site_id
+      end
+
+    cond do
+      is_nil(site_id) ->
+        {:noreply, put_flash(socket, :error, "Site is required.")}
+
+      header_attrs["items"] in [nil, %{}] ->
+        changeset =
+          %Prescription{}
+          |> Prescription.changeset(header_attrs)
+          |> Ecto.Changeset.add_error(:items, "must have at least one item")
+          |> Map.put(:action, :insert)
+
+        handle_save_result({:error, changeset}, socket)
+
+      true ->
+        socket.assigns.use_new_patient
+        |> save_prescription(params, site_id, socket)
+        |> handle_save_result(socket)
     end
+  end
+
+  defp maybe_reload_products(socket, nil), do: socket
+  defp maybe_reload_products(socket, ""), do: socket
+
+  defp maybe_reload_products(socket, site_id) when is_binary(site_id) do
+    organization_id = socket.assigns.current_scope.organization_id
+
+    assign(
+      socket,
+      :products,
+      ThamaniDawa.Products.list_active_products_for_site(
+        organization_id,
+        String.to_integer(site_id)
+      )
+    )
   end
 
   defp save_prescription(true = _new_patient, params, site_id, socket) do
@@ -421,6 +453,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                 >
                   No items added. Click "+ Add Item" to prescribe medicine.
                 </div>
+                <p
+                  :for={msg <- Enum.map(@header_form[:items].errors, &translate_error/1)}
+                  class="mt-1.5 flex gap-2 items-center text-sm text-error"
+                >
+                  <.icon name="hero-exclamation-circle" class="size-5" />{msg}
+                </p>
               </div>
             </div>
 
@@ -445,21 +483,29 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                   required
                 />
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <.input
-                    field={@header_form[:referring_doctor]}
-                    label="Prescriber (Doctor)"
-                    required
-                  />
-                  <.input
-                    field={@header_form[:payment_type]}
-                    type="select"
-                    label="Payment Method"
-                    options={["Cash", "Mobile Money", "Insurance"]}
-                    prompt="Select payment method"
-                    required
-                  />
-                </div>
+                <.input
+                  field={@header_form[:is_external]}
+                  type="checkbox"
+                  label="This is a referral from another facility"
+                />
+
+                <.input
+                  :if={
+                    Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_external].value)
+                  }
+                  field={@header_form[:referring_doctor]}
+                  label="Referring doctor"
+                  required
+                />
+
+                <.input
+                  field={@header_form[:payment_type]}
+                  type="select"
+                  label="Payment Method"
+                  options={["Cash", "Mobile Money", "Insurance"]}
+                  prompt="Select payment method"
+                  required
+                />
 
                 <.input field={@header_form[:notes]} type="textarea" label="Additional Notes" />
               </div>
@@ -499,5 +545,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
   defp patient_label(patient) do
     id = patient.national_id || patient.phone || "Unknown ID"
     "#{patient.full_name} (#{id})"
+  end
+
+  defp items_value(form) do
+    case form[:items].value do
+      items when is_list(items) -> items
+      _ -> []
+    end
   end
 end

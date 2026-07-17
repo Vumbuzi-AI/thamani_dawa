@@ -2,7 +2,7 @@ defmodule ThamaniDawa.Prescriptions do
   @moduledoc """
   Pharmacy dispensing (§4.3, §9): a `prescriptions` header with one or more
   `prescription_items`, dispensed against a site's own `batches` stock via
-  FEFO (first-expired-first-out — `ThamaniDawa.Batches.fefo_batch/3`).
+  FEFO (first-expired-first-out — `ThamaniDawa.Batches.fefo_batches/3`).
   """
 
   import Ecto.Query, warn: false
@@ -107,9 +107,8 @@ defmodule ThamaniDawa.Prescriptions do
 
     with {:ok, visit} <-
            ThamaniDawa.PatientVisits.create_patient_visit(organization_id, visit_attrs),
-         # Stringify keys if attrs has string keys, otherwise atom keys
          attrs =
-           if(is_map_key(attrs, "patient_visit_id") or is_map_key(attrs, "referring_doctor"),
+           if(Enum.any?(Map.keys(attrs), &is_binary/1),
              do: Map.put(attrs, "patient_visit_id", visit.id),
              else: Map.put(attrs, :patient_visit_id, visit.id)
            ),
@@ -205,8 +204,9 @@ defmodule ThamaniDawa.Prescriptions do
   batches in FEFO order at the prescription's site. Updates the status of the item
   and prescription. Operates within a transaction to guarantee data integrity.
 
-  Returns `{:error, :out_of_stock}` if stock is insufficient, `{:error, :over_dispensed}` 
-  if `quantity` exceeds the prescribed amount, or `{:error, changeset}` for validation failures.
+  Returns `{:error, :out_of_stock}` if stock is insufficient, `{:error, :over_dispensed}`
+  if `quantity` exceeds the prescribed amount, `{:error, :invalid_prescription_site}` if the
+  prescription has no resolvable site, or `{:error, changeset}` for validation failures.
   """
   def dispense_item(organization_id, prescription_item_id, _pharmacist_id, quantity)
       when is_integer(organization_id) and is_integer(quantity) and quantity > 0 do
@@ -231,46 +231,37 @@ defmodule ThamaniDawa.Prescriptions do
   @doc """
   Verifies a dispensed item by matching the scanned GTIN against the prescribed product's GTIN.
   Updates `is_verified` to `true` on success.
+
+  Returns `{:error, :invalid_gtin}` if the scanned code isn't a digits-only string or doesn't
+  normalize to a valid GTIN, or `{:error, :gtin_mismatch}` if it's a valid GTIN for a different
+  product.
   """
   def verify_dispensed_item(organization_id, prescription_item_id, scanned_gtin) do
     item = get_prescription_item!(organization_id, prescription_item_id)
     product = ThamaniDawa.Products.get_product!(organization_id, item.product_id)
 
-    case ExGtin.normalize(scanned_gtin) do
-      {:ok, normalized_gtin} ->
-        if product.gtin == normalized_gtin do
-          item
-          |> PrescriptionItem.changeset(%{is_verified: true})
-          |> Repo.update()
-        else
-          {:error, :gtin_mismatch}
-        end
-
-      {:error, _reason} ->
-        {:error, :invalid_gtin}
+    with {:match, true} <- {:match, String.match?(scanned_gtin, ~r/^\d+$/)},
+         {:ok, normalized_gtin} <- ExGtin.normalize(scanned_gtin),
+         {:gtin, true} <- {:gtin, product.gtin == normalized_gtin} do
+      item
+      |> PrescriptionItem.changeset(%{is_verified: true})
+      |> Repo.update()
+    else
+      {:match, false} -> {:error, :invalid_gtin}
+      {:error, _reason} -> {:error, :invalid_gtin}
+      {:gtin, false} -> {:error, :gtin_mismatch}
     end
   end
 
-  defp consume_quantity_across_batches(_batches, 0), do: :ok
-
-  defp consume_quantity_across_batches([], quantity_needed) when quantity_needed > 0 do
-    {:error, :out_of_stock}
-  end
-
-  defp consume_quantity_across_batches([%{remaining_quantity: rq} | rest], quantity_needed)
-       when rq <= 0 do
-    consume_quantity_across_batches(rest, quantity_needed)
-  end
+  defp consume_quantity_across_batches([], _quantity_needed), do: {:error, :out_of_stock}
 
   defp consume_quantity_across_batches([batch | rest], quantity_needed) do
-    to_consume = min(batch.remaining_quantity, quantity_needed)
-
-    case Batches.decrement_remaining_quantity(batch, to_consume) do
-      {:ok, _updated_batch} ->
-        consume_quantity_across_batches(rest, quantity_needed - to_consume)
-
-      {:error, reason} ->
-        {:error, reason}
+    if batch.remaining_quantity >= quantity_needed do
+      {:ok, _} = Batches.decrement_remaining_quantity(batch, quantity_needed)
+      :ok
+    else
+      {:ok, _} = Batches.decrement_remaining_quantity(batch, batch.remaining_quantity)
+      consume_quantity_across_batches(rest, quantity_needed - batch.remaining_quantity)
     end
   end
 

@@ -16,19 +16,30 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
 
-  def mount(_params, _session, socket) do
-    {:ok,
-     assign(socket,
-       scan_state: :idle,
-       decode_error: nil,
-       gtin: nil,
-       batches: [],
-       product: nil,
-       site: nil,
-       total_qty: nil,
-       earliest_expiry: nil,
-       batch_count: 0
-     )}
+  def mount(params, _session, socket) do
+    socket =
+      assign(socket,
+        scan_state: :idle,
+        decode_error: nil,
+        gtin: nil,
+        batches: [],
+        product: nil,
+        site: nil,
+        total_qty: nil,
+        earliest_expiry: nil,
+        batch_count: 0
+      )
+
+    case params["gtin"] do
+      gtin when is_binary(gtin) and gtin != "" ->
+        organization_id = socket.assigns.current_scope.organization_id
+        site_id = SiteScoping.default_site_id(socket.assigns.current_scope)
+
+        {:ok, lookup_approved_batches(socket, organization_id, site_id, String.trim(gtin))}
+
+      _ ->
+        {:ok, socket}
+    end
   end
 
   def handle_event("decode", %{"gtin" => gtin}, socket) do
@@ -107,12 +118,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
   end
 
   defp calculate_total_quantity(batches) do
-    Enum.reduce(batches, 0, fn b, acc ->
-      case b.remaining_quantity do
-        %Decimal{} = d -> Decimal.to_integer(d) + acc
-        n when is_integer(n) -> n + acc
-      end
-    end)
+    Enum.reduce(batches, 0, fn b, acc -> b.remaining_quantity + acc end)
   end
 
   defp product_display_name(product) do

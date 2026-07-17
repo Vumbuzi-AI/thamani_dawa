@@ -77,6 +77,11 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
 
+      assert has_element?(
+               lv,
+               "#receive-batch-#{batch.id} button[phx-disable-with='Receiving...']"
+             )
+
       lv
       |> form("#receive-batch-#{batch.id}", %{"quantity" => "100"})
       |> render_submit()
@@ -117,6 +122,61 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
       received = Batches.get_batch!(organization.id, batch.id)
       assert received.quantity == 80
       assert received.remaining_quantity == 80
+    end
+
+    test "a non-numeric quantity shows a validation error", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          batch_no: "LOT-BAD-QTY",
+          quantity: 100,
+          pending: true
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      lv
+      |> form("#receive-batch-#{batch.id}", %{"quantity" => "abc"})
+      |> render_submit()
+
+      assert render(lv) =~ "Enter a valid quantity."
+      assert has_element?(lv, "#receive-batch-#{batch.id}")
+    end
+
+    test "a negative quantity fails validation and is not received", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          batch_no: "LOT-NEGATIVE-QTY",
+          quantity: 100,
+          pending: true
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      lv
+      |> form("#receive-batch-#{batch.id}", %{"quantity" => "-5"})
+      |> render_submit()
+
+      assert render(lv) =~ "Couldn&#39;t receive that batch."
+      assert has_element?(lv, "#receive-batch-#{batch.id}")
+
+      unreceived = Batches.get_batch!(organization.id, batch.id)
+      assert is_nil(unreceived.approver_id)
     end
   end
 
@@ -165,6 +225,40 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
       |> render_submit()
 
       assert has_element?(lv, "#gs1-decode-error", "Couldn't decode that code")
+    end
+
+    test "a code with a GTIN but no batch/lot number shows a specific error", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      gtin = unique_gtin()
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      lv
+      |> form("#receive-stock-gs1-form", raw_gs1: "01" <> gtin)
+      |> render_submit()
+
+      assert has_element?(
+               lv,
+               "#gs1-decode-error",
+               "That code is missing a GTIN or batch/lot number"
+             )
+    end
+
+    test "entering a bare GTIN shows a hint to scan the full barcode instead", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      gtin = unique_gtin()
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      lv
+      |> form("#receive-stock-gs1-form", raw_gs1: gtin)
+      |> render_submit()
+
+      assert has_element?(lv, "#gs1-decode-error", "That looks like a bare GTIN")
     end
 
     test "a well-formed code with no matching pending batch shows a not-found error", %{

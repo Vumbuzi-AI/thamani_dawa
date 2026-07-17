@@ -236,17 +236,6 @@ defmodule ThamaniDawaWeb.Layouts do
           >
             Sites
           </.link>
-          <.link
-            :if={
-              ThamaniDawa.Accounts.Scope.admin?(@current_scope) or
-                ThamaniDawa.Accounts.Scope.pharmacist?(@current_scope)
-            }
-            navigate={~p"/pharmacy"}
-            class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-            style="color: rgba(252,252,247,0.7);"
-          >
-            Pharmacy
-          </.link>
         </nav>
       </header>
 
