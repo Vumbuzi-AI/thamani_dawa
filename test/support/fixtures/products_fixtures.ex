@@ -3,6 +3,7 @@ defmodule ThamaniDawa.ProductsFixtures do
   Test helpers for creating entities via `ThamaniDawa.Products`.
   """
 
+  alias ThamaniDawa.BatchesFixtures
   alias ThamaniDawa.OrganizationsFixtures
   alias ThamaniDawa.Products
 
@@ -10,6 +11,7 @@ defmodule ThamaniDawa.ProductsFixtures do
     Enum.into(attrs, %{
       generic_name: "Paracetamol #{System.unique_integer()}",
       uom: "tablet",
+      gtin: BatchesFixtures.unique_gtin(),
       price: 100
     })
   end

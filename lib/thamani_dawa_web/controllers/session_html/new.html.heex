@@ -108,6 +108,17 @@
         </.thamani_btn>
       </.form>
 
+      <script>
+        document.getElementById("login-form")?.addEventListener("submit", () => {
+          const button = document.getElementById("login-submit");
+          if (button) {
+            button.disabled = true;
+            button.style.opacity = "0.7";
+            button.textContent = "Logging in…";
+          }
+        });
+      </script>
+
       <%!-- Sign-up link --%>
       <p style="text-align: center; font-size: 14px; color: var(--thamani-pewter); margin-top: 28px;">
         Don't have an account?

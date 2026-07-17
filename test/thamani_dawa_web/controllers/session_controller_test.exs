@@ -11,6 +11,28 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
 
   alias ThamaniDawa.Repo
 
+  describe "GET /login" do
+    test "renders the login form", %{conn: conn} do
+      conn = get(conn, ~p"/login")
+
+      assert html_response(conn, 200) =~ "Welcome back"
+    end
+  end
+
+  describe "DELETE /logout" do
+    test "logs the user out and redirects home", %{conn: conn} do
+      admin = user_fixture()
+
+      conn =
+        conn
+        |> log_in_user(admin)
+        |> delete(~p"/logout")
+
+      assert redirected_to(conn) == ~p"/"
+      assert get_session(conn, :user_token) == nil
+    end
+  end
+
   describe "POST /login" do
     test "redirects an admin to /org/sites", %{conn: conn} do
       admin = user_fixture()
