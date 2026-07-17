@@ -163,6 +163,47 @@ defmodule ThamaniDawa.BatchesTest do
 
       assert %{gtin: ["is not a valid GTIN"]} = errors_on(changeset)
     end
+
+    test "rejects dispatching the same batch_no for the same product to the same site twice" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      attrs = %{
+        product_id: product.id,
+        site_id: site.id,
+        gtin: "00614141000012",
+        batch_no: "LOT-DUP",
+        expiry_date: ~D[2027-01-01],
+        quantity: 50
+      }
+
+      assert {:ok, _batch} = Batches.create_batch(organization.id, attrs)
+      assert {:error, changeset} = Batches.create_batch(organization.id, attrs)
+
+      assert %{batch_no: ["has already been dispatched to this site"]} = errors_on(changeset)
+    end
+
+    test "allows the same batch_no for the same product across different sites" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site_a = site_fixture(%{organization_id: organization.id})
+      site_b = site_fixture(%{organization_id: organization.id})
+
+      common_attrs = %{
+        product_id: product.id,
+        gtin: "00614141000012",
+        batch_no: "LOT-SPLIT",
+        expiry_date: ~D[2027-01-01],
+        quantity: 10
+      }
+
+      assert {:ok, _batch_a} =
+               Batches.create_batch(organization.id, Map.put(common_attrs, :site_id, site_a.id))
+
+      assert {:ok, _batch_b} =
+               Batches.create_batch(organization.id, Map.put(common_attrs, :site_id, site_b.id))
+    end
   end
 
   describe "receive_batch/2" do
@@ -257,6 +298,48 @@ defmodule ThamaniDawa.BatchesTest do
       total = Batches.total_available_stock(organization.id, site.id, product.id)
       assert total === 25
       assert is_integer(total)
+    end
+  end
+
+  describe "find_approved_batches_by_gtin/3" do
+    test "finds an approved batch by gtin across the whole org when no site_id is given" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+      gtin = unique_gtin()
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: gtin
+        })
+
+      assert {:ok, [found]} = Batches.find_approved_batches_by_gtin(organization.id, gtin)
+      assert found.id == batch.id
+    end
+  end
+
+  describe "find_pending_batch/4" do
+    test "finds a pending batch by gtin and batch_no across the whole org when no site_id is given" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+      gtin = unique_gtin()
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: gtin,
+          batch_no: "LOT-NO-OPTS",
+          pending: true
+        })
+
+      assert {:ok, found} = Batches.find_pending_batch(organization.id, gtin, "LOT-NO-OPTS")
+      assert found.id == batch.id
     end
   end
 

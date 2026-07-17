@@ -20,4 +20,7 @@ defmodule ThamaniDawaWeb.SiteScoping do
 
   @doc "The site_id to default a new record's site picker to: the user's home site, or nil for an org-wide admin (who must then pick explicitly)."
   def default_site_id(%Scope{user: %{site_id: site_id}}), do: site_id
+
+  @doc "Filters `rows` (each with a `:site_id` field) down to exactly one given site_id — for an admin drilling into a specific site's detail, as opposed to their own home site."
+  def for_site(rows, site_id), do: Enum.filter(rows, &(&1.site_id == site_id))
 end

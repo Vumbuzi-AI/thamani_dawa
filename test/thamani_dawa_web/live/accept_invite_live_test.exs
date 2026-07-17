@@ -71,5 +71,23 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
     test "an invalid token shows a safe error and redirects to /login", %{conn: conn} do
       assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/invites/bogus-token")
     end
+
+    test "a too-short password shows a validation error and does not activate the account", %{
+      conn: conn
+    } do
+      %{organization: organization, invited: invited, encoded_token: encoded_token} =
+        invite_fixture("short-password@example.com")
+
+      {:ok, view, _html} = live(conn, ~p"/invites/#{encoded_token}")
+
+      html =
+        view
+        |> form("form", user: %{password: "short"})
+        |> render_submit()
+
+      assert html =~ "Must be at least 8 characters"
+
+      assert %{hashed_password: nil} = Accounts.get_user!(organization.id, invited.id)
+    end
   end
 end

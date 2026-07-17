@@ -109,7 +109,14 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
       <.header>
         Product catalog
         <:actions>
-          <.button variant="primary" patch={~p"/org/products/new"}>+ Add product</.button>
+          <.button
+            :if={@live_action == :index}
+            variant="primary"
+            patch={~p"/org/products/new"}
+          >
+            + Add product
+          </.button>
+          <.button :if={@live_action in [:new, :edit]} patch={~p"/org/products"}>Back</.button>
         </:actions>
       </.header>
 
@@ -120,12 +127,19 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
               {if @live_action == :new, do: "Add a product", else: "Edit product"}
             </h2>
             <.form for={@form} id="product-form" phx-submit="save" phx-change="validate">
-              <.input field={@form[:price]} type="number" label="Price" required />
-              <.input field={@form[:generic_name]} label="Generic name" />
-              <.input field={@form[:brand_name]} label="Brand name" />
+              <.input field={@form[:price]} type="number" label="Price" min="0" required />
+
+              <p class="text-xs mb-1" style="color: var(--thamani-pewter);">
+                Name <span style="color: #b91c1c;">*</span>
+                — at least one of generic or brand name is required
+              </p>
+              <div class="grid grid-cols-2 gap-x-4">
+                <.input field={@form[:generic_name]} label="Generic name" />
+                <.input field={@form[:brand_name]} label="Brand name" />
+              </div>
               <.input field={@form[:category]} label="Category" />
-              <.input field={@form[:uom]} label="Unit of measure" />
-              <.input field={@form[:gtin]} label="GTIN" />
+              <.input field={@form[:uom]} label="Unit of measure" required />
+              <.input field={@form[:gtin]} label="GTIN" required />
               <.input field={@form[:is_otc]} type="checkbox" label="Over-the-counter" />
               <.input field={@form[:is_dangerous_drug]} type="checkbox" label="Dangerous drug" />
               <.input field={@form[:reorder_level]} type="number" label="Reorder level" />

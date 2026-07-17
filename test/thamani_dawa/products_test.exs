@@ -14,6 +14,30 @@ defmodule ThamaniDawa.ProductsTest do
       assert %{price: ["can't be blank"]} = errors_on(changeset)
     end
 
+    test "requires a unit of measure" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Products.create_product(organization.id, %{
+                 price: 100,
+                 generic_name: "Test Drug"
+               })
+
+      assert %{uom: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "rejects a negative price" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Products.create_product(organization.id, %{
+                 price: -1,
+                 generic_name: "Test Drug"
+               })
+
+      assert %{price: ["must be greater than or equal to 0"]} = errors_on(changeset)
+    end
+
     test "creates a product scoped to the organization" do
       organization = organization_fixture()
 
@@ -39,6 +63,7 @@ defmodule ThamaniDawa.ProductsTest do
                Products.create_product(organization_a.id, %{
                  price: 100,
                  generic_name: "Surgical Gloves",
+                 uom: "pair",
                  gtin: "00614141000012"
                })
 
@@ -46,6 +71,7 @@ defmodule ThamaniDawa.ProductsTest do
                Products.create_product(organization_a.id, %{
                  price: 100,
                  generic_name: "Surgical Gloves (dup)",
+                 uom: "pair",
                  gtin: "00614141000012"
                })
 
@@ -55,24 +81,59 @@ defmodule ThamaniDawa.ProductsTest do
                Products.create_product(organization_b.id, %{
                  price: 100,
                  generic_name: "Surgical Gloves",
+                 uom: "pair",
                  gtin: "00614141000012"
                })
     end
 
-    test "allows more than one product with no gtin" do
+    test "rejects a product with neither a generic nor a brand name" do
       organization = organization_fixture()
 
-      assert {:ok, _a} =
+      assert {:error, changeset} = Products.create_product(organization.id, %{price: 100})
+
+      assert %{generic_name: ["enter a generic or brand name"]} = errors_on(changeset)
+    end
+
+    test "accepts a product with only a brand name" do
+      organization = organization_fixture()
+
+      assert {:ok, product} =
                Products.create_product(organization.id, %{
                  price: 100,
-                 generic_name: "Cotton Wool"
+                 brand_name: "Panadol",
+                 uom: "tablet",
+                 gtin: "00614141000012"
                })
 
-      assert {:ok, _b} =
+      assert product.brand_name == "Panadol"
+      assert is_nil(product.generic_name)
+    end
+
+    test "accepts a product with only a generic name" do
+      organization = organization_fixture()
+
+      assert {:ok, product} =
                Products.create_product(organization.id, %{
                  price: 100,
-                 generic_name: "Bandages"
+                 generic_name: "Paracetamol",
+                 uom: "tablet",
+                 gtin: "00614141000012"
                })
+
+      assert product.generic_name == "Paracetamol"
+    end
+
+    test "requires a gtin" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Products.create_product(organization.id, %{
+                 price: 100,
+                 generic_name: "Cotton Wool",
+                 uom: "roll"
+               })
+
+      assert %{gtin: ["can't be blank"]} = errors_on(changeset)
     end
 
     test "normalizes a shorter GTIN to canonical GTIN-14 via ex_gtin" do
@@ -82,6 +143,7 @@ defmodule ThamaniDawa.ProductsTest do
                Products.create_product(organization.id, %{
                  price: 100,
                  generic_name: "Surgical Gloves",
+                 uom: "pair",
                  gtin: "614141000012"
                })
 

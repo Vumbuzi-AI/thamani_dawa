@@ -20,6 +20,14 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       assert html =~ "Own Branch"
       refute html =~ "Other Branch"
     end
+
+    test "a stray validate event on the plain index view is a no-op", %{conn: conn, admin: admin} do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      html = render_change(lv, "validate", %{})
+
+      assert html =~ "Sites"
+    end
   end
 
   describe "new" do
@@ -116,6 +124,30 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       assert render(lv) =~ "can&#39;t be blank"
     end
+
+    test "shows an error and does not create a site with a duplicate GLN", %{
+      conn: conn,
+      admin: admin
+    } do
+      site_fixture(%{organization_id: admin.organization_id, gln: "0699999999999"})
+
+      {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
+
+      html =
+        lv
+        |> form("#site-form",
+          site: %{
+            name: "Second Branch",
+            site_type: :pharmacy,
+            gln: "0699999999999",
+            address: "5 Test St"
+          }
+        )
+        |> render_submit()
+
+      assert html =~ "has already been taken"
+      refute ThamaniDawa.Repo.get_by(ThamaniDawa.Sites.Site, name: "Second Branch")
+    end
   end
 
   describe "edit" do
@@ -144,6 +176,27 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       assert html =~ "New Name"
       assert html =~ "Updated St"
       assert html =~ "6291041500213"
+    end
+
+    test "shows an error and does not persist an invalid edit", %{conn: conn, admin: admin} do
+      site =
+        site_fixture(%{
+          organization_id: admin.organization_id,
+          name: "Keep This Name",
+          site_type: :pharmacy
+        })
+
+      {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}/edit")
+
+      html =
+        lv
+        |> form("#site-form", site: %{name: "", site_type: :pharmacy})
+        |> render_submit()
+
+      assert html =~ "can&#39;t be blank"
+
+      assert %{name: "Keep This Name"} =
+               ThamaniDawa.Sites.get_site!(admin.organization_id, site.id)
     end
   end
 end

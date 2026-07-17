@@ -14,6 +14,12 @@ defmodule ThamaniDawa.PrescriptionsTest do
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
 
+  describe "Prescription.statuses/0" do
+    test "returns the valid prescription statuses" do
+      assert Prescription.statuses() == [:pending, :partially_dispensed, :completed, :cancelled]
+    end
+  end
+
   describe "create_prescription/2" do
     test "defaults status to pending and scopes to the organization" do
       organization = organization_fixture()
@@ -40,6 +46,55 @@ defmodule ThamaniDawa.PrescriptionsTest do
       assert prescription.organization_id == organization.id
       assert prescription.patient_visit_id == patient_visit.id
       assert prescription.status == :pending
+    end
+
+    test "does not require a referring doctor for a non-referral (walk-in) prescription" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+
+      patient_visit =
+        patient_visit_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          patient_id: patient.id
+        })
+
+      assert {:ok, %Prescription{is_external: false, referring_doctor: nil}} =
+               Prescriptions.create_prescription(organization.id, %{
+                 patient_visit_id: patient_visit.id,
+                 payment_type: "Cash"
+               })
+    end
+
+    test "requires a referring doctor when the prescription is a referral" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+
+      patient_visit =
+        patient_visit_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          patient_id: patient.id
+        })
+
+      assert {:error, changeset} =
+               Prescriptions.create_prescription(organization.id, %{
+                 patient_visit_id: patient_visit.id,
+                 payment_type: "Cash",
+                 is_external: true
+               })
+
+      assert %{referring_doctor: ["is required for a referral"]} = errors_on(changeset)
+
+      assert {:ok, %Prescription{is_external: true, referring_doctor: "Dr. Jane Doe"}} =
+               Prescriptions.create_prescription(organization.id, %{
+                 patient_visit_id: patient_visit.id,
+                 payment_type: "Cash",
+                 is_external: true,
+                 referring_doctor: "Dr. Jane Doe"
+               })
     end
   end
 
@@ -78,6 +133,54 @@ defmodule ThamaniDawa.PrescriptionsTest do
       assert visit.site_id == site.id
       assert visit.user_id == user.id
       assert visit.visit_type == :pharmacy
+    end
+
+    test "accepts atom-keyed attrs with a list of items, injecting organization_id into each" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+
+      assert {:ok, %Prescription{} = prescription} =
+               Prescriptions.create_prescription_for_patient(
+                 organization.id,
+                 patient.id,
+                 site.id,
+                 user.id,
+                 %{
+                   payment_type: "Cash",
+                   items: [%{product_id: product.id, quantity_prescribed: 5}]
+                 }
+               )
+
+      assert [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
+      assert item.organization_id == organization.id
+      assert item.quantity_prescribed == 5
+    end
+
+    test "accepts string-keyed attrs with a list of string-keyed items" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+
+      assert {:ok, %Prescription{} = prescription} =
+               Prescriptions.create_prescription_for_patient(
+                 organization.id,
+                 patient.id,
+                 site.id,
+                 user.id,
+                 %{
+                   "payment_type" => "Cash",
+                   "items" => [%{"product_id" => product.id, "quantity_prescribed" => 5}]
+                 }
+               )
+
+      assert [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
+      assert item.organization_id == organization.id
+      assert item.quantity_prescribed == 5
     end
   end
 
@@ -178,8 +281,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
       assert changeset.data.__struct__ == ThamaniDawa.Prescriptions.Prescription
 
-      assert %{referring_doctor: ["can't be blank"], payment_type: ["can't be blank"]} =
-               errors_on(changeset)
+      assert %{payment_type: ["can't be blank"]} = errors_on(changeset)
 
       assert ThamaniDawa.Repo.aggregate(ThamaniDawa.Patients.Patient, :count) ==
                patient_count_before
@@ -549,6 +651,17 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
       updated_batch = Batches.get_batch!(ctx.organization.id, batch.id)
       assert updated_batch.remaining_quantity == 100
+    end
+
+    test "returns :invalid_prescription_site when the prescription's patient_visit_id is nil",
+         ctx do
+      Repo.update_all(
+        from(p in Prescription, where: p.id == ^ctx.prescription.id),
+        set: [patient_visit_id: nil]
+      )
+
+      assert {:error, :invalid_prescription_site} =
+               Prescriptions.dispense_item(ctx.organization.id, ctx.item.id, ctx.pharmacist.id, 1)
     end
   end
 end

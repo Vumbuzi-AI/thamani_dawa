@@ -41,12 +41,26 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     organization_id = socket.assigns.current_scope.organization_id
     pharmacist_id = socket.assigns.current_scope.user.id
 
-    case Prescriptions.dispense_item(
-           organization_id,
-           String.to_integer(item_id),
-           pharmacist_id,
-           String.to_integer(quantity)
-         ) do
+    with {item_id, ""} <- Integer.parse(item_id),
+         {quantity, ""} <- Integer.parse(quantity),
+         true <- quantity > 0 do
+      do_dispense(socket, organization_id, item_id, pharmacist_id, quantity)
+    else
+      _ -> {:noreply, put_flash(socket, :error, "Enter a valid quantity.")}
+    end
+  end
+
+  def handle_event("verify_item", %{"item_id" => item_id, "gtin" => gtin}, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+
+    case Integer.parse(item_id) do
+      {item_id, ""} -> do_verify(socket, organization_id, item_id, gtin)
+      _ -> {:noreply, put_flash(socket, :error, "Couldn't verify that item.")}
+    end
+  end
+
+  defp do_dispense(socket, organization_id, item_id, pharmacist_id, quantity) do
+    case Prescriptions.dispense_item(organization_id, item_id, pharmacist_id, quantity) do
       {:ok, _item} ->
         {:noreply,
          socket
@@ -61,6 +75,25 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Couldn't dispense that item.")}
+    end
+  end
+
+  defp do_verify(socket, organization_id, item_id, gtin) do
+    case Prescriptions.verify_dispensed_item(organization_id, item_id, gtin) do
+      {:ok, _item} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Item verified successfully.")
+         |> load_prescription(socket.assigns.prescription.id)}
+
+      {:error, :gtin_mismatch} ->
+        {:noreply, put_flash(socket, :error, "GTIN mismatch. This is the wrong product.")}
+
+      {:error, :invalid_gtin} ->
+        {:noreply, put_flash(socket, :error, "Invalid GTIN barcode scanned.")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "Couldn't verify that item.")}
     end
   end
 
@@ -101,7 +134,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
               <span class={[
                 "font-medium",
                 @prescription.status == :pending && "text-orange-600",
-                @prescription.status == :dispensed && "text-green-600"
+                @prescription.status == :completed && "text-green-600"
               ]}>
                 {Phoenix.Naming.humanize(@prescription.status)}
               </span>
@@ -177,9 +210,37 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
             placeholder="Quantity"
             class="input input-sm input-bordered bg-transparent"
             required
+            min="1"
+            max={item.quantity_prescribed - item.quantity_dispensed}
           />
-          <.button type="submit" variant="primary">Dispense</.button>
+          <.button type="submit" variant="primary" phx-disable-with="Dispensing...">Dispense</.button>
         </form>
+
+        <div
+          :if={item.quantity_dispensed > 0}
+          class="mt-4 pt-4 border-t border-base-200 flex items-center gap-3"
+        >
+          <%= if item.is_verified do %>
+            <span class="text-success font-semibold flex items-center gap-1">
+              <.icon name="hero-check-circle" class="w-5 h-5" /> Verified
+            </span>
+          <% else %>
+            <form phx-submit="verify_item" class="flex gap-3 items-end w-full">
+              <input type="hidden" name="item_id" value={item.id} />
+              <div class="flex-1 max-w-xs">
+                <input
+                  type="text"
+                  name="gtin"
+                  placeholder="Scan GTIN to verify..."
+                  class="input input-sm input-bordered bg-transparent w-full"
+                  required
+                  autofocus
+                />
+              </div>
+              <.button type="submit" variant="ghost">Verify</.button>
+            </form>
+          <% end %>
+        </div>
       </div>
     </Layouts.pharmacy_shell>
     """

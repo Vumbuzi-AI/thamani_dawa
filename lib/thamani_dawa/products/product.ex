@@ -31,8 +31,22 @@ defmodule ThamaniDawa.Products.Product do
       :reorder_level,
       :price
     ])
-    |> validate_required([:price])
+    |> validate_required([:price, :uom, :gtin])
+    |> validate_number(:price, greater_than_or_equal_to: 0)
+    |> validate_has_a_name()
     |> ThamaniDawa.Gtin.validate_gtin()
     |> unique_constraint(:gtin, name: :products_organization_id_gtin_index)
   end
+
+  defp validate_has_a_name(changeset) do
+    if blank?(get_field(changeset, :generic_name)) and blank?(get_field(changeset, :brand_name)) do
+      add_error(changeset, :generic_name, "enter a generic or brand name")
+    else
+      changeset
+    end
+  end
+
+  defp blank?(nil), do: true
+  defp blank?(""), do: true
+  defp blank?(_value), do: false
 end

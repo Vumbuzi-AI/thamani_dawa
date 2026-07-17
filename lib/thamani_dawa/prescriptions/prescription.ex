@@ -46,11 +46,20 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
       :referring_doctor,
       :referral_date
     ])
-    |> validate_required([:patient_visit_id, :payment_type, :referring_doctor])
+    |> validate_required([:patient_visit_id, :payment_type])
+    |> validate_referring_doctor_when_external()
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:patient_visit_id)
     |> cast_assoc(:items, with: &ThamaniDawa.Prescriptions.PrescriptionItem.changeset/2)
     |> validate_length(:items, min: 1, message: "must have at least one item")
+  end
+
+  defp validate_referring_doctor_when_external(changeset) do
+    if get_field(changeset, :is_external) do
+      validate_required(changeset, [:referring_doctor], message: "is required for a referral")
+    else
+      changeset
+    end
   end
 
   @doc "The valid prescription statuses (§4.3 of project.md)."

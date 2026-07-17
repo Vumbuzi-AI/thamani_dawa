@@ -119,7 +119,11 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
         </div>
       </div>
 
-      <.table id="sites" rows={@sites}>
+      <.table
+        id="sites"
+        rows={@sites}
+        row_click={fn site -> JS.navigate(~p"/org/sites/#{site.id}") end}
+      >
         <:col :let={site} label="Name">{site.name}</:col>
         <:col :let={site} label="Type">{Phoenix.Naming.humanize(site.site_type)}</:col>
         <:col :let={site} label="GLN">{site.gln}</:col>

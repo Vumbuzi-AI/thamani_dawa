@@ -100,4 +100,82 @@ defmodule ThamaniDawaWeb.UserAuthTest do
       assert socket.redirected
     end
   end
+
+  describe "on_mount :require_pharmacy_access" do
+    test "continues for an admin" do
+      user = user_fixture()
+      session = %{"user_token" => Accounts.generate_user_session_token(user)}
+
+      assert {:cont, socket} =
+               UserAuth.on_mount(:require_pharmacy_access, %{}, session, live_socket())
+
+      assert socket.assigns.current_scope.user.id == user.id
+    end
+
+    test "continues for a pharmacist" do
+      staff = staff_fixture(%{role: :pharmacist})
+      session = %{"user_token" => Accounts.generate_user_session_token(staff)}
+
+      assert {:cont, socket} =
+               UserAuth.on_mount(:require_pharmacy_access, %{}, session, live_socket())
+
+      assert socket.assigns.current_scope.user.id == staff.id
+    end
+
+    test "halts and redirects for a lab technician" do
+      staff = staff_fixture(%{role: :lab_technician})
+      session = %{"user_token" => Accounts.generate_user_session_token(staff)}
+
+      assert {:halt, socket} =
+               UserAuth.on_mount(:require_pharmacy_access, %{}, session, live_socket())
+
+      assert socket.redirected
+    end
+
+    test "halts and redirects when there is no user" do
+      assert {:halt, socket} =
+               UserAuth.on_mount(:require_pharmacy_access, %{}, %{}, live_socket())
+
+      assert socket.redirected
+    end
+  end
+
+  describe "on_mount :require_lab_access" do
+    test "continues for an admin" do
+      user = user_fixture()
+      session = %{"user_token" => Accounts.generate_user_session_token(user)}
+
+      assert {:cont, socket} =
+               UserAuth.on_mount(:require_lab_access, %{}, session, live_socket())
+
+      assert socket.assigns.current_scope.user.id == user.id
+    end
+
+    test "continues for a lab technician" do
+      staff = staff_fixture(%{role: :lab_technician})
+      session = %{"user_token" => Accounts.generate_user_session_token(staff)}
+
+      assert {:cont, socket} =
+               UserAuth.on_mount(:require_lab_access, %{}, session, live_socket())
+
+      assert socket.assigns.current_scope.user.id == staff.id
+    end
+
+    test "halts and redirects for a pharmacist" do
+      staff = staff_fixture(%{role: :pharmacist})
+      session = %{"user_token" => Accounts.generate_user_session_token(staff)}
+
+      assert {:halt, socket} =
+               UserAuth.on_mount(:require_lab_access, %{}, session, live_socket())
+
+      assert socket.redirected
+    end
+
+    test "halts and redirects when there is no user" do
+      assert {:halt, socket} =
+               UserAuth.on_mount(:require_lab_access, %{}, %{}, live_socket())
+
+      assert socket.redirected
+    end
+  end
 end
