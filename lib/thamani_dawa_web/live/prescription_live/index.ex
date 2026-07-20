@@ -250,11 +250,16 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         </:actions>
       </.header>
 
-      <div :if={@live_action == :new} class="card bg-base-200 mb-4">
-        <div class="card-body">
-          <h2 class="font-semibold mb-2">New prescription</h2>
+      <.modal
+        :if={@live_action == :new}
+        id="prescription-modal"
+        show
+        class="max-w-4xl"
+        on_cancel={JS.patch(~p"/pharmacy/prescriptions")}
+      >
+        <h2 class="font-semibold mb-2">New prescription</h2>
 
-          <form id="prescription-form" phx-change="validate" phx-submit="save" class="space-y-6">
+        <form id="prescription-form" phx-change="validate" phx-submit="save" class="space-y-6">
             <!-- Step 1: Patient Information -->
             <div class="border rounded-box border-base-300 overflow-hidden">
               <div class="bg-base-300/50 px-4 py-3 border-b border-base-300 flex justify-between items-center">
@@ -516,11 +521,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
               <.button type="submit" variant="primary">Create Prescription</.button>
             </div>
           </form>
-        </div>
-      </div>
+      </.modal>
 
       <.table
-        :if={@live_action != :new}
         id="prescriptions"
         rows={@prescriptions}
         row_click={&JS.navigate(~p"/pharmacy/prescriptions/#{&1.id}")}

@@ -73,38 +73,36 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       <.header>
         Team
         <:actions>
-          <.button variant="primary" navigate={~p"/org/team/new"}>+ Invite staff</.button>
+          <.button variant="primary" patch={~p"/org/team/new"}>+ Invite staff</.button>
         </:actions>
       </.header>
 
-      <div :if={@live_action == :new} class="card bg-base-200 mb-4">
-        <div class="card-body">
-          <h2 class="font-semibold mb-2">Invite a staff member</h2>
-          <form id="invite-form" phx-submit="save">
-            <.input field={@form[:name]} label="Name" required />
-            <.input field={@form[:email]} type="email" label="Email" required />
-            <.input
-              field={@form[:role]}
-              type="select"
-              label="Role"
-              options={Enum.map(User.roles(), &{Phoenix.Naming.humanize(&1), &1})}
-              prompt="Choose a role"
-              required
-            />
-            <.input
-              field={@form[:site_id]}
-              type="select"
-              label="Home site"
-              options={Enum.map(@sites, &{&1.name, &1.id})}
-              prompt="No home site (org-wide)"
-            />
-            <div class="flex gap-2 mt-2">
-              <.button variant="primary">Send invite</.button>
-              <.button navigate={~p"/org/team"}>Cancel</.button>
-            </div>
-          </form>
-        </div>
-      </div>
+      <.modal :if={@live_action == :new} id="invite-modal" show on_cancel={JS.patch(~p"/org/team")}>
+        <h2 class="font-semibold mb-2">Invite a staff member</h2>
+        <form id="invite-form" phx-submit="save">
+          <.input field={@form[:name]} label="Name" required />
+          <.input field={@form[:email]} type="email" label="Email" required />
+          <.input
+            field={@form[:role]}
+            type="select"
+            label="Role"
+            options={Enum.map(User.roles(), &{Phoenix.Naming.humanize(&1), &1})}
+            prompt="Choose a role"
+            required
+          />
+          <.input
+            field={@form[:site_id]}
+            type="select"
+            label="Home site"
+            options={Enum.map(@sites, &{&1.name, &1.id})}
+            prompt="No home site (org-wide)"
+          />
+          <div class="flex gap-2 mt-2">
+            <.button variant="primary">Send invite</.button>
+            <.button patch={~p"/org/team"}>Cancel</.button>
+          </div>
+        </form>
+      </.modal>
 
       <.table id="users" rows={@users}>
         <:col :let={user} label="Name">{user.name}</:col>

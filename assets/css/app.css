@@ -64,26 +64,26 @@
   default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: oklch(98% 0 0);
-  --color-base-200: oklch(96% 0.001 286.375);
-  --color-base-300: oklch(92% 0.004 286.32);
-  --color-base-content: oklch(21% 0.006 285.885);
-  --color-primary: oklch(70% 0.213 47.604);
-  --color-primary-content: oklch(98% 0.016 73.684);
-  --color-secondary: oklch(55% 0.027 264.364);
-  --color-secondary-content: oklch(98% 0.002 247.839);
-  --color-accent: oklch(0% 0 0);
-  --color-accent-content: oklch(100% 0 0);
-  --color-neutral: oklch(44% 0.017 285.786);
-  --color-neutral-content: oklch(98% 0 0);
-  --color-info: oklch(62% 0.214 259.815);
-  --color-info-content: oklch(97% 0.014 254.604);
-  --color-success: oklch(70% 0.14 182.503);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
+  --color-base-100: #FFFFFF;
+  --color-base-200: #F8FAFC;
+  --color-base-300: #E6EDF8;
+  --color-base-content: #1F2433;
+  --color-primary: #373896;
+  --color-primary-content: #FFFFFF;
+  --color-secondary: #687083;
+  --color-secondary-content: #FFFFFF;
+  --color-accent: #6667AB;
+  --color-accent-content: #FFFFFF;
+  --color-neutral: #374151;
+  --color-neutral-content: #FFFFFF;
+  --color-info: #2C66E4;
+  --color-info-content: #FFFFFF;
+  --color-success: #12B586;
+  --color-success-content: #FFFFFF;
+  --color-warning: #D79B2B;
+  --color-warning-content: #1F2433;
+  --color-error: #C21F17;
+  --color-error-content: #FFFFFF;
   --radius-selector: 0.25rem;
   --radius-field: 0.25rem;
   --radius-box: 0.5rem;
@@ -112,24 +112,31 @@
    ============================================================ */
 
 :root {
-  /* Thamani palette — single source of truth */
-  --thamani-forest:  #1c3a13;
-  --thamani-lime:    #d3fa99;
-  --thamani-snow:    #fcfcf7;
-  --thamani-stone:   #eeeee9;
-  --thamani-pewter:  #666666;
-  --thamani-frosted: #c4c7c4;
-  --thamani-subtle:  #b3b3b3;
-  --thamani-error:   #b91c1c;
+  /* Thamani palette — single source of truth (indigo/slate/white) */
+  --thamani-forest:  #373896;
+  --thamani-lime:    #E7E7FF;
+  --thamani-snow:    #FFFFFF;
+  --thamani-stone:   #E6EDF8;
+  --thamani-pewter:  #687083;
+  --thamani-frosted: #C7CFE0;
+  --thamani-subtle:  #9AA3B5;
+  --thamani-error:   #C21F17;
+  --thamani-canvas:     #F8FAFC;
+  --thamani-accent:     #6667AB;
+  --thamani-border-nav: #EDF0F8;
+
+  --shadow-card:  0 12px 28px rgba(15, 23, 42, 0.045);
+  --shadow-panel: 0 18px 38px rgba(15, 23, 42, 0.055);
+  --shadow-hero:  0 20px 42px rgba(15, 23, 42, 0.06);
 
   /* Landing page tokens — always light (Thamani palette) */
-  --brand:          #1c3a13;
-  --ld-bg:          #fcfcf7;
-  --ld-surface:     #eeeee9;
-  --ld-text:        #1c3a13;
-  --ld-text-muted:  #666666;
-  --ld-text-subtle: #b3b3b3;
-  --ld-border:      rgba(28, 58, 19, 0.1);
+  --brand:          #373896;
+  --ld-bg:          #FFFFFF;
+  --ld-surface:     #E6EDF8;
+  --ld-text:        #373896;
+  --ld-text-muted:  #687083;
+  --ld-text-subtle: #9AA3B5;
+  --ld-border:      rgba(55, 56, 150, 0.1);
   --ld-marquee-dur: 28s;
 }
 
@@ -140,14 +147,17 @@
    ============================================================ */
 
 @theme {
-  --color-thamani-forest:  #1c3a13;
-  --color-thamani-lime:    #d3fa99;
-  --color-thamani-snow:    #fcfcf7;
-  --color-thamani-stone:   #eeeee9;
-  --color-thamani-pewter:  #666666;
-  --color-thamani-frosted: #c4c7c4;
-  --color-thamani-subtle:  #b3b3b3;
-  --color-thamani-error:   #b91c1c;
+  --color-thamani-forest:  #373896;
+  --color-thamani-lime:    #E7E7FF;
+  --color-thamani-snow:    #FFFFFF;
+  --color-thamani-stone:   #E6EDF8;
+  --color-thamani-pewter:  #687083;
+  --color-thamani-frosted: #C7CFE0;
+  --color-thamani-subtle:  #9AA3B5;
+  --color-thamani-error:   #C21F17;
+  --color-thamani-canvas:     #F8FAFC;
+  --color-thamani-accent:     #6667AB;
+  --color-thamani-border-nav: #EDF0F8;
 }
 
 
@@ -359,7 +369,7 @@
   font-size: 14px;
   font-weight: 400;
   line-height: 1.5;
-  border: 1.5px solid rgba(28, 58, 19, 0.18);
+  border: 1.5px solid rgba(55, 56, 150, 0.18);
   outline: none;
   transition: border-color 150ms ease, box-shadow 150ms ease;
   appearance: none;
@@ -370,7 +380,7 @@
 .thamani-input:focus,
 .thamani-select:focus {
   border-color: var(--thamani-forest);
-  box-shadow: 0 0 0 3px rgba(28, 58, 19, 0.1);
+  box-shadow: 0 0 0 3px rgba(55, 56, 150, 0.1);
 }
 
 .thamani-label {
@@ -541,8 +551,8 @@
 }
 
 .ld-answer-bubble {
-  background: #1c3a13;
-  color: #fcfcf7;
+  background: #373896;
+  color: #FFFFFF;
   align-self: flex-start;
   max-width: 85%;
 }

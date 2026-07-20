@@ -168,12 +168,18 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
       <.header>
         Lab orders
         <:actions>
-          <.button variant="primary" navigate={~p"/lab/orders/new"}>+ New order</.button>
+          <.button variant="primary" patch={~p"/lab/orders/new"}>+ New order</.button>
         </:actions>
       </.header>
 
-      <div :if={@live_action == :new} class="rounded-2xl p-6 mb-6" style="background: #eeeee9;">
-        <h2 class="text-base font-medium mb-5" style="color: #1c3a13;">New lab order</h2>
+      <.modal
+        :if={@live_action == :new}
+        id="lab-order-modal"
+        show
+        class="max-w-3xl"
+        on_cancel={JS.patch(~p"/lab/orders")}
+      >
+        <h2 class="text-base font-medium mb-5" style="color: #373896;">New lab order</h2>
 
         <.form
           for={@header_form}
@@ -198,8 +204,8 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
             </.button>
           </div>
 
-          <div :if={@use_new_patient} class="rounded-xl p-4 space-y-3" style="background: #fcfcf7;">
-            <p class="text-sm font-medium" style="color: #1c3a13;">New patient</p>
+          <div :if={@use_new_patient} class="rounded-xl p-4 space-y-3" style="background: #FFFFFF;">
+            <p class="text-sm font-medium" style="color: #373896;">New patient</p>
             <.input field={@patient_form[:full_name]} label="Full name" required />
             <.input field={@patient_form[:gsrn]} type="number" label="GSRN" required />
             <div class="grid grid-cols-2 gap-3">
@@ -252,12 +258,12 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
 
           <%!-- Tests --%>
           <div>
-            <p class="text-sm font-medium mb-2" style="color: #1c3a13;">Tests</p>
+            <p class="text-sm font-medium mb-2" style="color: #373896;">Tests</p>
             <div class="space-y-2">
               <div
                 :for={id <- @test_ids}
                 class="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-xl p-3"
-                style="background: #fcfcf7;"
+                style="background: #FFFFFF;"
               >
                 <.input
                   type="select"
@@ -282,7 +288,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
             </div>
             <div class="flex items-center gap-4 mt-2">
               <.button type="button" phx-click="add_test">+ Add test</.button>
-              <p class="text-sm" style="color: #1c3a13;">
+              <p class="text-sm" style="color: #373896;">
                 Total: <span class="font-medium">KES {@total_amount}</span>
               </p>
             </div>
@@ -290,10 +296,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
 
           <div class="flex gap-3 pt-2">
             <.button variant="primary">Create order</.button>
-            <.button navigate={~p"/lab/orders"}>Cancel</.button>
+            <.button patch={~p"/lab/orders"}>Cancel</.button>
           </div>
         </.form>
-      </div>
+      </.modal>
 
       <.table
         id="lab-orders"

@@ -248,7 +248,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #b91c1c; margin-left: 2px;"
+            style="color: #C21F17; margin-left: 2px;"
           >*</span>
         </span>
         <select
@@ -275,7 +275,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #b91c1c; margin-left: 2px;"
+            style="color: #C21F17; margin-left: 2px;"
           >*</span>
         </span>
         <textarea
@@ -303,7 +303,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #b91c1c; margin-left: 2px;"
+            style="color: #C21F17; margin-left: 2px;"
           >*</span>
         </span>
         <input
@@ -668,7 +668,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           "w-full box-border px-4 py-3 text-[15px] text-thamani-forest bg-thamani-snow",
           "border-[1.5px] rounded-lg outline-none",
           "transition-[border-color,box-shadow] duration-150 ease-in-out",
-          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(28,58,19,0.08)]",
+          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(55, 56, 150,0.08)]",
           (@errors != [] && "border-thamani-error") || "border-thamani-stone"
         ]}
         {@rest}
@@ -714,7 +714,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           "w-full box-border px-4 py-3 text-[15px] text-thamani-forest bg-thamani-snow",
           "border-[1.5px] rounded-lg outline-none",
           "transition-[border-color,box-shadow] duration-150 ease-in-out",
-          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(28,58,19,0.08)]",
+          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(55, 56, 150,0.08)]",
           (@errors != [] && "border-thamani-error") || "border-thamani-stone"
         ]}
         {@rest}
@@ -726,7 +726,94 @@ defmodule ThamaniDawaWeb.CoreComponents do
     """
   end
 
+  @doc """
+  Renders a modal overlay.
+
+  ## Examples
+
+      <.modal id="site-modal" show on_cancel={JS.patch(~p"/org/sites")}>
+        content
+      </.modal>
+  """
+  attr :id, :string, required: true
+  attr :show, :boolean, default: false
+  attr :on_cancel, JS, default: %JS{}
+  attr :class, :any, default: nil
+  slot :inner_block, required: true
+
+  def modal(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      phx-mounted={@show && show_modal(@id)}
+      phx-remove={hide_modal(@id)}
+      data-cancel={JS.exec(@on_cancel, "phx-remove")}
+      class="relative z-50 hidden"
+    >
+      <div id={"#{@id}-bg"} class="bg-black/50 fixed inset-0 transition-opacity" aria-hidden="true" />
+      <div
+        class="fixed inset-0 overflow-y-auto"
+        aria-labelledby={"#{@id}-title"}
+        aria-describedby={"#{@id}-description"}
+        role="dialog"
+        aria-modal="true"
+        tabindex="0"
+      >
+        <div class="flex min-h-full items-center justify-center">
+          <div class={["w-full max-w-2xl p-4 sm:p-6 lg:py-8", @class]}>
+            <.focus_wrap
+              id={"#{@id}-container"}
+              phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
+              phx-key="escape"
+              phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
+              class="hidden relative rounded-2xl bg-base-100 shadow-lg ring-1 ring-black/5 p-6 transition"
+            >
+              <div class="absolute top-4 right-4">
+                <button
+                  phx-click={JS.exec("data-cancel", to: "##{@id}")}
+                  type="button"
+                  class="-m-2 p-2 opacity-40 hover:opacity-70"
+                  aria-label="close"
+                >
+                  <.icon name="hero-x-mark-solid" class="h-5 w-5" />
+                </button>
+              </div>
+              <div id={"#{@id}-content"}>
+                {render_slot(@inner_block)}
+              </div>
+            </.focus_wrap>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   ## JS Commands
+
+  def show_modal(js \\ %JS{}, id) when is_binary(id) do
+    js
+    |> JS.show(to: "##{id}")
+    |> JS.show(
+      to: "##{id}-bg",
+      transition: {"transition-all ease-out duration-300", "opacity-0", "opacity-100"}
+    )
+    |> show("##{id}-container")
+    |> JS.add_class("overflow-hidden", to: "body")
+    |> JS.focus_first(to: "##{id}-content")
+  end
+
+  def hide_modal(js \\ %JS{}, id) do
+    js
+    |> JS.hide(
+      to: "##{id}-bg",
+      transition: {"transition-all ease-in duration-200", "opacity-100", "opacity-0"}
+    )
+    |> hide("##{id}-container")
+    |> JS.hide(to: "##{id}")
+    |> JS.remove_class("overflow-hidden", to: "body")
+    |> JS.pop_focus()
+  end
 
   def show(js \\ %JS{}, selector) do
     JS.show(js,

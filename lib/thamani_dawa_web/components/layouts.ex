@@ -188,147 +188,143 @@ defmodule ThamaniDawaWeb.Layouts do
     ~H"""
     <div
       id="sidebar-shell"
-      class="h-screen flex flex-col overflow-hidden"
-      style="background: #fcfcf7; font-family: var(--font-thamani-sans, sans-serif);"
+      class="h-screen flex overflow-hidden"
+      style="background: var(--thamani-canvas); font-family: var(--font-thamani-sans, sans-serif);"
       phx-hook=".Sidebar"
     >
-      <%!-- Top navigation bar --%>
-      <header
-        id="sidebar-topbar"
-        class="shrink-0 z-30 flex items-center gap-3 px-4"
-        style="background: #1c3a13; height: 56px;"
+      <%!-- Sidebar --%>
+      <aside
+        id="sidebar-aside"
+        class="shrink-0 flex flex-col overflow-y-auto overflow-x-hidden transition-[width] duration-200 ease-in-out border-r"
+        style="background: var(--thamani-snow); border-color: var(--thamani-border-nav); width: 288px; padding: 24px 20px;"
       >
-        <%!-- Sidebar toggle --%>
-        <button
-          id="sidebar-toggle"
-          type="button"
-          aria-label="Toggle sidebar"
-          class="flex items-center justify-center rounded-lg p-1.5 transition-colors cursor-pointer"
-          style="color: rgba(252,252,247,0.7);"
-        >
-          <.icon name="hero-bars-3" class="size-5" />
-        </button>
-
-        <a
-          href={~p"/"}
-          class="font-semibold text-sm tracking-wide"
-          style="color: #fcfcf7;"
-        >
-          {@title}
-        </a>
-
-        <div class="flex-1" />
-
-        <nav class="flex items-center gap-1">
-          <.link
-            :if={ThamaniDawa.Accounts.Scope.admin?(@current_scope)}
-            navigate={~p"/org/team"}
-            class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-            style="color: rgba(252,252,247,0.7);"
-          >
-            Team
-          </.link>
-          <.link
-            :if={ThamaniDawa.Accounts.Scope.admin?(@current_scope)}
-            navigate={~p"/org/sites"}
-            class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-            style="color: rgba(252,252,247,0.7);"
-          >
-            Sites
-          </.link>
-        </nav>
-      </header>
-
-      <div class="flex-1 flex overflow-hidden">
-        <%!-- Sidebar --%>
-        <aside
-          id="sidebar-aside"
-          class="shrink-0 flex flex-col py-6 px-2 overflow-y-auto overflow-x-hidden transition-[width] duration-200 ease-in-out"
-          style="background: #1c3a13; width: 224px;"
-        >
-          <%!-- Section label — hidden when collapsed --%>
-          <p
-            id="sidebar-label"
-            class="px-3 mb-4 text-xs font-medium uppercase tracking-widest whitespace-nowrap overflow-hidden transition-opacity duration-150"
-            style="color: rgba(211,250,153,0.6);"
-          >
-            {@section_label}
-          </p>
-
-          <nav class="flex flex-col gap-0.5">
-            <%= for {label, icon, path} <- @nav_items do %>
-              <% active =
-                if path == @base_path,
-                  do: @current_path == @base_path,
-                  else: String.starts_with?(@current_path, path) %>
-              <.link
-                navigate={path}
-                class={[
-                  "group flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap overflow-hidden"
-                ]}
-                style={
-                  if active,
-                    do: "background: #d3fa99; color: #1c3a13; font-weight: 500;",
-                    else: "color: rgba(252,252,247,0.88);"
-                }
-              >
-                <.icon name={icon} class="size-4 shrink-0" />
-                <span id={"nav-label-#{path}"} class="transition-opacity duration-150">
-                  {label}
-                </span>
-              </.link>
-            <% end %>
-          </nav>
-
+        <%!-- Brand row --%>
+        <div class="flex items-center gap-3 mb-6">
           <div
-            class="mt-auto pt-4 flex flex-col gap-2 overflow-hidden transition-all duration-150"
-            style="border-top: 1px solid rgba(252,252,247,0.08);"
+            class="flex items-center justify-center shrink-0 font-bold text-[13px]"
+            style="width: 44px; height: 44px; border-radius: 12px; background: var(--thamani-lime); border: 1px solid var(--thamani-accent); color: var(--thamani-forest);"
           >
-            <div class="px-3 flex items-center gap-3">
-              <div
-                class="size-8 rounded-full flex items-center justify-center shrink-0 text-sm font-semibold"
-                style="background: rgba(252,252,247,0.1); color: #d3fa99;"
-              >
-                {String.at(@current_scope.user.name || "U", 0)}
-              </div>
-              <div
-                id="sidebar-profile"
-                class="flex flex-col transition-opacity duration-150 whitespace-nowrap overflow-hidden"
-              >
-                <span class="text-sm font-medium" style="color: #fcfcf7;">{@current_scope.user.name}</span>
-                <span class="text-xs" style="color: rgba(252,252,247,0.5);">
-                  {current_site_name(@current_scope)}
-                </span>
-              </div>
-            </div>
+            TD
+          </div>
+          <div
+            id="sidebar-brand-text"
+            class="flex flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
+          >
+            <a href={~p"/"} class="font-bold text-[17px] leading-tight" style="color: var(--thamani-forest);">
+              {@title}
+            </a>
+            <span class="text-[13px] font-medium" style="color: var(--thamani-pewter);">
+              {@section_label}
+            </span>
+          </div>
+          <button
+            id="sidebar-toggle"
+            type="button"
+            aria-label="Toggle sidebar"
+            class="ml-auto shrink-0 flex items-center justify-center rounded-xl transition-colors cursor-pointer"
+            style="width: 36px; height: 36px; background: var(--thamani-snow); border: 1px solid var(--thamani-border-nav); color: var(--thamani-forest);"
+          >
+            <span id="sidebar-toggle-icon" class="inline-flex transition-transform duration-200">
+              <.icon name="hero-chevron-left" class="size-4" />
+            </span>
+          </button>
+        </div>
 
+        <%!-- Primary navigation --%>
+        <nav class="flex flex-col gap-1">
+          <%= for {label, icon, path} <- @nav_items do %>
+            <% active =
+              if path == @base_path,
+                do: @current_path == @base_path,
+                else: String.starts_with?(@current_path, path) %>
             <.link
-              href={~p"/logout"}
-              method="delete"
-              class="mx-2 mt-1 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-3 group hover:bg-red-500/10"
-              style="color: rgba(252,252,247,0.65);"
+              navigate={path}
+              class="flex items-center gap-3 rounded-xl text-[15px] font-semibold transition-all whitespace-nowrap overflow-hidden"
+              style={
+                if active,
+                  do:
+                    "background: var(--thamani-lime); color: var(--thamani-forest); padding: 12px; min-height: 48px;",
+                  else: "color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
+              }
             >
-              <.icon
-                name="hero-arrow-right-start-on-rectangle"
-                class="size-4 shrink-0 group-hover:text-red-400 transition-colors"
-              />
-              <span
-                id="nav-label-logout"
-                class="transition-opacity duration-150 group-hover:text-red-400"
-              >
-                Log out
+              <.icon name={icon} class="size-5 shrink-0" />
+              <span id={"nav-label-#{path}"} class="transition-opacity duration-150">
+                {label}
               </span>
             </.link>
-          </div>
-        </aside>
+          <% end %>
+        </nav>
 
-        <%!-- Main content --%>
-        <main class="flex-1 px-6 py-8 overflow-y-auto min-w-0" style="background: #fcfcf7;">
-          <div class="mx-auto max-w-5xl space-y-4">
-            {render_slot(@inner_block)}
+        <%!-- Account card + utilities --%>
+        <div
+          class="mt-auto pt-4 flex flex-col gap-3"
+          style="border-top: 1px solid var(--thamani-border-nav);"
+        >
+          <div
+            id="sidebar-account-card"
+            class="flex items-center gap-3 overflow-hidden transition-opacity duration-150"
+            style="background: #FBFBFF; border: 1px solid #E8EBF3; border-radius: 16px; padding: 14px 16px;"
+          >
+            <div
+              class="rounded-full flex items-center justify-center shrink-0 font-bold text-[15px]"
+              style="width: 44px; height: 44px; background: var(--thamani-forest); color: var(--thamani-snow);"
+            >
+              {String.at(@current_scope.user.name || "U", 0)}
+            </div>
+            <div
+              id="sidebar-profile"
+              class="flex flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
+            >
+              <span class="text-[15px] font-bold truncate" style="color: #1F2433;">
+                {@current_scope.user.name}
+              </span>
+              <span class="text-[13px]" style="color: var(--thamani-pewter);">
+                {current_site_name(@current_scope)}
+              </span>
+            </div>
           </div>
-        </main>
-      </div>
+
+          <div
+            :if={ThamaniDawa.Accounts.Scope.admin?(@current_scope)}
+            id="sidebar-admin-shortcuts"
+            class="flex items-center gap-1 overflow-hidden transition-opacity duration-150"
+          >
+            <.link
+              navigate={~p"/org/team"}
+              class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+              style="color: var(--thamani-pewter);"
+            >
+              Team
+            </.link>
+            <.link
+              navigate={~p"/org/sites"}
+              class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+              style="color: var(--thamani-pewter);"
+            >
+              Sites
+            </.link>
+          </div>
+
+          <.link
+            href={~p"/logout"}
+            method="delete"
+            class="px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-3 group hover:bg-red-50"
+            style="color: var(--thamani-error);"
+          >
+            <.icon name="hero-arrow-right-start-on-rectangle" class="size-4 shrink-0" />
+            <span id="nav-label-logout" class="transition-opacity duration-150">
+              Log out
+            </span>
+          </.link>
+        </div>
+      </aside>
+
+      <%!-- Main content --%>
+      <main class="flex-1 overflow-y-auto min-w-0 px-4 py-6 lg:px-8 lg:py-8">
+        <div class="mx-auto space-y-4" style="max-width: 1600px;">
+          {render_slot(@inner_block)}
+        </div>
+      </main>
 
       <.flash_group flash={@flash} />
     </div>
@@ -338,29 +334,38 @@ defmodule ThamaniDawaWeb.Layouts do
         mounted() {
           const sidebar = document.getElementById("sidebar-aside");
           const toggleBtn = document.getElementById("sidebar-toggle");
-          const label = document.getElementById("sidebar-label");
+          const toggleIcon = document.getElementById("sidebar-toggle-icon");
+          const brandText = document.getElementById("sidebar-brand-text");
           const profile = document.getElementById("sidebar-profile");
+          const accountCard = document.getElementById("sidebar-account-card");
+          const adminShortcuts = document.getElementById("sidebar-admin-shortcuts");
           let collapsed = localStorage.getItem("sidebar-collapsed") === "true";
 
           const apply = () => {
             if (collapsed) {
-              sidebar.style.width = "56px";
+              sidebar.style.width = "72px";
               sidebar.querySelectorAll("span[id^='nav-label-']").forEach(el => {
                 el.style.opacity = "0";
                 el.style.width = "0";
                 el.style.overflow = "hidden";
               });
-              if (label) { label.style.opacity = "0"; label.style.height = "0"; label.style.marginBottom = "0"; }
+              if (brandText) brandText.style.display = "none";
               if (profile) { profile.style.opacity = "0"; profile.style.width = "0"; }
+              if (accountCard) accountCard.style.display = "none";
+              if (adminShortcuts) adminShortcuts.style.display = "none";
+              if (toggleIcon) toggleIcon.style.transform = "rotate(180deg)";
             } else {
-              sidebar.style.width = "224px";
+              sidebar.style.width = "288px";
               sidebar.querySelectorAll("span[id^='nav-label-']").forEach(el => {
                 el.style.opacity = "1";
                 el.style.width = "";
                 el.style.overflow = "";
               });
-              if (label) { label.style.opacity = "1"; label.style.height = ""; label.style.marginBottom = ""; }
+              if (brandText) brandText.style.display = "";
               if (profile) { profile.style.opacity = "1"; profile.style.width = ""; }
+              if (accountCard) accountCard.style.display = "";
+              if (adminShortcuts) adminShortcuts.style.display = "";
+              if (toggleIcon) toggleIcon.style.transform = "";
             }
             localStorage.setItem("sidebar-collapsed", collapsed);
           };
