@@ -107,7 +107,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           "patient_id" => to_string(patient.id),
           "site_id" => to_string(ctx.site.id),
           "urgency" => "routine",
-          "payment_type" => "cash"
+          "payment_type" => "Cash"
         },
         "tests" => %{
           "0" => %{
@@ -137,11 +137,10 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         "lab_order" => %{
           "site_id" => to_string(ctx.site.id),
           "urgency" => "routine",
-          "payment_type" => "cash"
+          "payment_type" => "Cash"
         },
         "patient" => %{
           "full_name" => "Inline Patient",
-          "date_of_birth" => "1996-01-01",
           "gender" => "Female",
           "phone" => "0712345678",
           "national_id" => "12345678",
@@ -154,7 +153,9 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           }
         }
       })
-      |> render_submit()
+      # The date-of-birth picker sets its hidden input via JS, so supply the
+      # value through the submit payload rather than the rendered form.
+      |> render_submit(%{"patient" => %{"date_of_birth" => "1998-01-01"}})
 
       patients = Patients.list_patients(ctx.admin.organization_id)
       new_patient = Enum.find(patients, &(&1.full_name == "Inline Patient"))
@@ -181,6 +182,99 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
       assert html =~ "Add at least one test to the order."
       assert LabOrders.list_lab_orders(ctx.admin.organization_id) == []
+    end
+
+    test "hides referral fields by default and reveals them when referral is checked", ctx do
+      {:ok, view, html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/new")
+
+      refute html =~ "Referring facility"
+
+      html =
+        view
+        |> form("#new-lab-order-form", %{"lab_order" => %{"is_referral" => "true"}})
+        |> render_change()
+
+      assert html =~ "Referring facility"
+      assert html =~ "Referring doctor"
+    end
+
+    test "referred order without facility and doctor shows validation feedback", ctx do
+      patient = patient_fixture(%{organization_id: ctx.admin.organization_id})
+
+      {:ok, view, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/new")
+
+      # Reveal the referral fields so they are part of the submitted form.
+      view
+      |> form("#new-lab-order-form", %{"lab_order" => %{"is_referral" => "true"}})
+      |> render_change()
+
+      html =
+        view
+        |> form("#new-lab-order-form", %{
+          "lab_order" => %{
+            "patient_id" => to_string(patient.id),
+            "site_id" => to_string(ctx.site.id),
+            "payment_type" => "Cash",
+            "is_referral" => "true",
+            "referring_facility" => "",
+            "referring_doctor" => ""
+          },
+          "tests" => %{
+            "0" => %{
+              "lab_test_id" => to_string(ctx.lab_test.id),
+              "sample_collection_description" => "1"
+            }
+          }
+        })
+        |> render_submit()
+
+      assert html =~ "is required for a referral"
+      assert LabOrders.list_lab_orders(ctx.admin.organization_id) == []
+    end
+
+    test "referred order saves once facility and doctor are provided", ctx do
+      patient = patient_fixture(%{organization_id: ctx.admin.organization_id})
+
+      {:ok, view, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/new")
+
+      # Reveal the referral fields before filling them in.
+      view
+      |> form("#new-lab-order-form", %{"lab_order" => %{"is_referral" => "true"}})
+      |> render_change()
+
+      view
+      |> form("#new-lab-order-form", %{
+        "lab_order" => %{
+          "patient_id" => to_string(patient.id),
+          "site_id" => to_string(ctx.site.id),
+          "payment_type" => "Cash",
+          "is_referral" => "true",
+          "referring_facility" => "General Hospital",
+          "referring_doctor" => "Dr. Jane Doe"
+        },
+        "tests" => %{
+          "0" => %{
+            "lab_test_id" => to_string(ctx.lab_test.id),
+            "sample_collection_description" => "1"
+          }
+        }
+      })
+      |> render_submit()
+
+      assert [order] = LabOrders.list_lab_orders(ctx.admin.organization_id)
+      assert order.is_referral == true
+      assert order.referring_facility == "General Hospital"
+    end
+
+    test "presents payment methods as an approved dropdown", ctx do
+      {:ok, _view, html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/new")
+
+      # Rendered as a select of approved options, not a free-text field.
+      assert html =~ ~s(<select id="lab_order_payment_type")
+
+      for method <- ThamaniDawa.PaymentMethods.all() do
+        assert html =~ ~s(<option value="#{method}">#{method}</option>)
+      end
     end
 
     test "total amount reflects the sum of selected test prices", ctx do

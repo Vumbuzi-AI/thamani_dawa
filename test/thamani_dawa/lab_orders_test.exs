@@ -42,6 +42,97 @@ defmodule ThamaniDawa.LabOrdersTest do
     end
   end
 
+  describe "referral validation" do
+    setup do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+      technician = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
+
+      {:ok, visit} =
+        ThamaniDawa.PatientVisits.create_patient_visit(organization.id, %{
+          patient_id: patient.id,
+          site_id: site.id,
+          user_id: technician.id,
+          visit_type: :lab
+        })
+
+      base = %{site_id: site.id, patient_visit_id: visit.id, payment_type: "Cash"}
+      %{organization: organization, base: base}
+    end
+
+    test "a non-referred order saves without referral details", ctx do
+      assert {:ok, %LabOrder{is_referral: false}} =
+               LabOrders.create_lab_order(ctx.organization.id, ctx.base)
+    end
+
+    test "a referred order requires the referring facility and doctor", ctx do
+      attrs = Map.put(ctx.base, :is_referral, true)
+
+      assert {:error, changeset} = LabOrders.create_lab_order(ctx.organization.id, attrs)
+
+      assert %{
+               referring_facility: ["is required for a referral"],
+               referring_doctor: ["is required for a referral"]
+             } = errors_on(changeset)
+    end
+
+    test "a referred order saves once facility and doctor are given", ctx do
+      attrs =
+        Map.merge(ctx.base, %{
+          is_referral: true,
+          referring_facility: "General Hospital",
+          referring_doctor: "Dr. Jane Doe"
+        })
+
+      assert {:ok, %LabOrder{is_referral: true, referring_facility: "General Hospital"}} =
+               LabOrders.create_lab_order(ctx.organization.id, attrs)
+    end
+  end
+
+  describe "payment method validation" do
+    setup do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+      technician = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
+
+      {:ok, visit} =
+        ThamaniDawa.PatientVisits.create_patient_visit(organization.id, %{
+          patient_id: patient.id,
+          site_id: site.id,
+          user_id: technician.id,
+          visit_type: :lab
+        })
+
+      base = %{site_id: site.id, patient_visit_id: visit.id}
+      %{organization: organization, base: base}
+    end
+
+    test "accepts every approved payment method", ctx do
+      for method <- ThamaniDawa.PaymentMethods.all() do
+        attrs = Map.put(ctx.base, :payment_type, method)
+
+        assert {:ok, %LabOrder{payment_type: ^method}} =
+                 LabOrders.create_lab_order(ctx.organization.id, attrs)
+      end
+    end
+
+    test "rejects an unsupported payment method", ctx do
+      attrs = Map.put(ctx.base, :payment_type, "Bitcoin")
+
+      assert {:error, changeset} = LabOrders.create_lab_order(ctx.organization.id, attrs)
+
+      assert %{payment_type: ["must be one of the approved payment methods"]} =
+               errors_on(changeset)
+    end
+
+    test "allows an omitted payment method", ctx do
+      assert {:ok, %LabOrder{payment_type: nil}} =
+               LabOrders.create_lab_order(ctx.organization.id, ctx.base)
+    end
+  end
+
   describe "create_lab_order_with_results/4 (with auto-created visit)" do
     test "sets both patient_visit_id and patient_id on the resulting order" do
       organization = organization_fixture()

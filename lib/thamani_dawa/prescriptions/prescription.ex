@@ -47,6 +47,9 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
       :referral_date
     ])
     |> validate_required([:patient_visit_id, :payment_type])
+    |> validate_inclusion(:payment_type, ThamaniDawa.PaymentMethods.all(),
+      message: "must be one of the approved payment methods"
+    )
     |> validate_referring_doctor_when_external()
     |> foreign_key_constraint(:user_id)
     |> foreign_key_constraint(:patient_visit_id)

@@ -29,6 +29,30 @@ defmodule ThamaniDawa.LabTestsTest do
       assert lab_test.organization_id == organization.id
       assert lab_test.is_active == true
     end
+
+    test "accepts every approved category" do
+      organization = organization_fixture()
+
+      for category <- LabTest.categories() do
+        assert {:ok, %LabTest{category: ^category}} =
+                 LabTests.create_lab_test(
+                   organization.id,
+                   valid_lab_test_attributes(%{category: category})
+                 )
+      end
+    end
+
+    test "rejects an unsupported category" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               LabTests.create_lab_test(
+                 organization.id,
+                 valid_lab_test_attributes(%{category: "Made Up Category"})
+               )
+
+      assert %{category: ["must be one of the approved categories"]} = errors_on(changeset)
+    end
   end
 
   describe "list_lab_tests/1" do
@@ -119,6 +143,30 @@ defmodule ThamaniDawa.LabTestsTest do
       lab_test_fixture(%{organization_id: organization_b.id})
 
       assert [] = LabTests.list_active_lab_tests(organization_a.id)
+    end
+
+    test "orders results by category then name" do
+      organization = organization_fixture()
+
+      lab_test_fixture(%{organization_id: organization.id, category: "Serology", name: "Widal"})
+
+      lab_test_fixture(%{
+        organization_id: organization.id,
+        category: "Biochemistry",
+        name: "Urea"
+      })
+
+      lab_test_fixture(%{
+        organization_id: organization.id,
+        category: "Biochemistry",
+        name: "Creatinine"
+      })
+
+      assert [
+               %LabTest{category: "Biochemistry", name: "Creatinine"},
+               %LabTest{category: "Biochemistry", name: "Urea"},
+               %LabTest{category: "Serology", name: "Widal"}
+             ] = LabTests.list_active_lab_tests(organization.id)
     end
   end
 end

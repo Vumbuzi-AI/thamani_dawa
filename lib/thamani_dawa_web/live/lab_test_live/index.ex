@@ -144,7 +144,14 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
         <.form for={@form} id="lab-test-form" phx-submit="save" phx-change="validate">
           <div class="grid grid-cols-2 gap-3 mb-3">
             <.input field={@form[:name]} label="Test name" required />
-            <.input field={@form[:category]} label="Category" required />
+            <.input
+              field={@form[:category]}
+              type="select"
+              label="Category"
+              options={LabTest.categories()}
+              prompt="Choose a category"
+              required
+            />
           </div>
 
           <div class="grid grid-cols-2 gap-3 mb-3">

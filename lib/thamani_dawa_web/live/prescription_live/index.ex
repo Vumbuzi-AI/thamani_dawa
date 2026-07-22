@@ -512,7 +512,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                 field={@header_form[:payment_type]}
                 type="select"
                 label="Payment Method"
-                options={["Cash", "Mobile Money", "Insurance"]}
+                options={ThamaniDawa.PaymentMethods.all()}
                 prompt="Select payment method"
                 required
               />

@@ -2,6 +2,18 @@ defmodule ThamaniDawa.LabTests.LabTest do
   use Ecto.Schema
   import Ecto.Changeset
 
+  @categories [
+    "Haematology",
+    "Biochemistry",
+    "Microbiology",
+    "Serology",
+    "Immunology",
+    "Molecular",
+    "Histopathology",
+    "Urinalysis",
+    "Parasitology"
+  ]
+
   schema "lab_tests" do
     field :organization_id, :id
     field :name, :string
@@ -18,5 +30,11 @@ defmodule ThamaniDawa.LabTests.LabTest do
     lab_test
     |> cast(attrs, [:name, :price, :is_active, :field_definitions, :category])
     |> validate_required([:name, :field_definitions, :category])
+    |> validate_inclusion(:category, @categories,
+      message: "must be one of the approved categories"
+    )
   end
+
+  @doc "The approved test categories, in display order."
+  def categories, do: @categories
 end

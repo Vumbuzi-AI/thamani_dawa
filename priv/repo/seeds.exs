@@ -371,7 +371,7 @@ prescription =
     %{
       user_id: pharmacist.id,
       referring_doctor: "Dr. Demo",
-      payment_type: "cash",
+      payment_type: "Cash",
       has_paid: true,
       total_amount: Decimal.new("250.00"),
       notes: "Seed prescription for the pharmacy workflow"
@@ -425,7 +425,7 @@ cbc_test =
         "mch" => %{"type" => "number", "unit" => "pg"},
         "mchc" => %{"type" => "number", "unit" => "g/dL"}
       },
-      category: "Hematology"
+      category: "Haematology"
     },
     fn attrs -> LabTests.create_lab_test(organization_id, attrs) end
   )
@@ -454,10 +454,11 @@ lab_order =
       patient_visit_id: patient_visit.id,
       ordered_by_id: lab_technician.id,
       urgency: "routine",
-      payment_type: "cash",
+      payment_type: "Cash",
       has_paid: true,
       total_amount: Decimal.new("800.00"),
       lab_request: "Complete blood count",
+      is_referral: true,
       referring_facility: "Demo Care Diagnostic Lab",
       referring_doctor: "Dr. Demo",
       referred_date: ~T[09:00:00]
