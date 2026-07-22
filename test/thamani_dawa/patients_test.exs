@@ -10,17 +10,61 @@ defmodule ThamaniDawa.PatientsTest do
   describe "create_patient/2" do
     test "requires a full name" do
       organization = organization_fixture()
-      assert {:error, changeset} = Patients.create_patient(organization.id, %{age: 30})
+
+      assert {:error, changeset} =
+               Patients.create_patient(organization.id, %{date_of_birth: ~D[1990-01-01]})
+
       assert %{full_name: ["can't be blank"]} = errors_on(changeset)
     end
 
-    test "requires a date of birth or an age" do
+    test "requires a date of birth" do
       organization = organization_fixture()
 
       assert {:error, changeset} =
-               Patients.create_patient(organization.id, %{full_name: "Jane Doe"})
+               Patients.create_patient(organization.id, %{full_name: "Jane Doe", gsrn: 1})
 
-      assert %{date_of_birth: ["date of birth or age is required"]} = errors_on(changeset)
+      assert %{date_of_birth: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "ignores an age param without a date of birth" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Patients.create_patient(organization.id, %{
+                 full_name: "Jane Doe",
+                 age: 34,
+                 gsrn: 1
+               })
+
+      assert %{date_of_birth: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "rejects a future date of birth" do
+      organization = organization_fixture()
+      tomorrow = Date.add(Date.utc_today(), 1)
+
+      assert {:error, changeset} =
+               Patients.create_patient(organization.id, %{
+                 full_name: "Jane Doe",
+                 gsrn: 1,
+                 date_of_birth: tomorrow
+               })
+
+      assert %{date_of_birth: ["can't be in the future"]} = errors_on(changeset)
+    end
+
+    test "accepts today as a date of birth" do
+      organization = organization_fixture()
+
+      assert {:ok, %Patient{}} =
+               Patients.create_patient(organization.id, %{
+                 full_name: "Newborn Doe",
+                 gsrn: 1,
+                 date_of_birth: Date.utc_today(),
+                 gender: "Female",
+                 phone: "0712345678",
+                 national_id: "12345678"
+               })
     end
 
     test "validates national_id is exactly 8 characters if provided" do
@@ -29,7 +73,7 @@ defmodule ThamaniDawa.PatientsTest do
       assert {:error, changeset} =
                Patients.create_patient(organization.id, %{
                  full_name: "Jane Doe",
-                 age: 30,
+                 date_of_birth: ~D[1990-01-01],
                  gsrn: 9,
                  national_id: "1234567"
                })
@@ -39,7 +83,7 @@ defmodule ThamaniDawa.PatientsTest do
       assert {:error, changeset} =
                Patients.create_patient(organization.id, %{
                  full_name: "Jane Doe",
-                 age: 30,
+                 date_of_birth: ~D[1990-01-01],
                  gsrn: 10,
                  national_id: "123456789"
                })
@@ -53,7 +97,7 @@ defmodule ThamaniDawa.PatientsTest do
       assert {:error, changeset} =
                Patients.create_patient(organization.id, %{
                  full_name: "Jane Doe",
-                 age: 30,
+                 date_of_birth: ~D[1990-01-01],
                  gsrn: 11,
                  national_id: "1234567A"
                })
@@ -67,7 +111,7 @@ defmodule ThamaniDawa.PatientsTest do
       assert {:error, changeset} =
                Patients.create_patient(organization.id, %{
                  full_name: "Jane Doe",
-                 age: 30,
+                 date_of_birth: ~D[1990-01-01],
                  gsrn: 11,
                  phone: "0812345678"
                })
@@ -78,7 +122,7 @@ defmodule ThamaniDawa.PatientsTest do
       assert {:error, changeset} =
                Patients.create_patient(organization.id, %{
                  full_name: "Jane Doe",
-                 age: 30,
+                 date_of_birth: ~D[1990-01-01],
                  gsrn: 12,
                  phone: "+254812345678"
                })
@@ -87,33 +131,21 @@ defmodule ThamaniDawa.PatientsTest do
                errors_on(changeset)
     end
 
-    test "creates a patient scoped to the organization given only an age" do
-      organization = organization_fixture()
-
-      assert {:ok, %Patient{} = patient} =
-               Patients.create_patient(organization.id, %{
-                 full_name: "Jane Doe",
-                 age: 34,
-                 gender: "female",
-                 phone: "0700000000",
-                 gsrn: 1
-               })
-
-      assert patient.organization_id == organization.id
-      assert patient.full_name == "Jane Doe"
-      assert patient.age == 34
-    end
-
-    test "creates a patient scoped to the organization given only a date of birth" do
+    test "creates a patient scoped to the organization given a date of birth" do
       organization = organization_fixture()
 
       assert {:ok, %Patient{} = patient} =
                Patients.create_patient(organization.id, %{
                  full_name: "John Doe",
                  date_of_birth: ~D[1990-01-01],
+                 gender: "Male",
+                 phone: "0712345678",
+                 national_id: "12345678",
                  gsrn: 2
                })
 
+      assert patient.organization_id == organization.id
+      assert patient.full_name == "John Doe"
       assert patient.date_of_birth == ~D[1990-01-01]
     end
 
@@ -124,14 +156,20 @@ defmodule ThamaniDawa.PatientsTest do
       assert {:ok, _} =
                Patients.create_patient(organization_a.id, %{
                  full_name: "Jane Doe",
-                 age: 30,
+                 date_of_birth: ~D[1990-01-01],
+                 gender: "Female",
+                 phone: "0712345678",
+                 national_id: "12345678",
                  gsrn: 3
                })
 
       assert {:ok, _} =
                Patients.create_patient(organization_b.id, %{
                  full_name: "Jane Doe",
-                 age: 30,
+                 date_of_birth: ~D[1990-01-01],
+                 gender: "Female",
+                 phone: "0712345678",
+                 national_id: "12345678",
                  gsrn: 4
                })
     end
@@ -158,6 +196,38 @@ defmodule ThamaniDawa.PatientsTest do
       assert_raise Ecto.NoResultsError, fn ->
         Patients.get_patient!(other_organization.id, patient.id)
       end
+    end
+  end
+
+  describe "Patient.age/2" do
+    test "returns nil when date_of_birth is nil" do
+      assert Patient.age(%Patient{date_of_birth: nil}) == nil
+    end
+
+    test "computes whole years when this year's birthday has already passed" do
+      patient = %Patient{date_of_birth: ~D[1990-01-15]}
+      assert Patient.age(patient, ~D[2026-07-21]) == 36
+    end
+
+    test "computes whole years when this year's birthday hasn't happened yet" do
+      patient = %Patient{date_of_birth: ~D[1990-12-15]}
+      assert Patient.age(patient, ~D[2026-07-21]) == 35
+    end
+
+    test "computes whole years on the exact birthday" do
+      patient = %Patient{date_of_birth: ~D[1990-07-21]}
+      assert Patient.age(patient, ~D[2026-07-21]) == 36
+    end
+  end
+
+  describe "Patient.approximate_date_of_birth_from_age/2" do
+    test "returns January 1st of the implied birth year" do
+      assert Patient.approximate_date_of_birth_from_age(34, ~D[2026-07-21]) == ~D[1992-01-01]
+    end
+
+    test "defaults the reference date to today" do
+      expected_year = Date.utc_today().year - 10
+      assert Patient.approximate_date_of_birth_from_age(10) == Date.new!(expected_year, 1, 1)
     end
   end
 end

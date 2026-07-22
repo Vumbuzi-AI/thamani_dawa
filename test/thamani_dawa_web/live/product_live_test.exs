@@ -35,17 +35,24 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Sidebar"
     end
 
-    test "shows a Back button instead of + Add product while on the new-product form", %{
+    test "opens the add-product modal and closes it again on cancel", %{
       conn: conn,
       admin: admin
     } do
       {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/products")
       assert html =~ "+ Add product"
+      refute has_element?(lv, "#product-modal")
 
       html = lv |> element("a", "+ Add product") |> render_click()
 
-      assert html =~ "Back"
-      refute html =~ "+ Add product"
+      assert has_element?(lv, "#product-modal")
+      assert html =~ "Add a product"
+      assert html =~ "+ Add product"
+
+      html = lv |> element("#product-modal a", "Cancel") |> render_click()
+
+      refute has_element?(lv, "#product-modal")
+      assert html =~ "+ Add product"
     end
 
     test "creates a new product", %{conn: conn, admin: admin} do

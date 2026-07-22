@@ -9,7 +9,10 @@ defmodule ThamaniDawa.PatientsFixtures do
   def valid_patient_attributes(attrs \\ %{}) do
     Enum.into(attrs, %{
       full_name: "Patient #{System.unique_integer()}",
-      age: 30,
+      date_of_birth: ~D[1990-01-01],
+      gender: "Female",
+      phone: "0712345678",
+      national_id: "12345678",
       gsrn: System.unique_integer([:positive])
     })
   end

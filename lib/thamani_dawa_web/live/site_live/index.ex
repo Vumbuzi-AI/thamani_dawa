@@ -89,35 +89,38 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
       <.header>
         Sites
         <:actions>
-          <.button variant="primary" navigate={~p"/org/sites/new"}>+ Add site</.button>
+          <.button variant="primary" patch={~p"/org/sites/new"}>+ Add site</.button>
         </:actions>
       </.header>
 
-      <div :if={@live_action in [:new, :edit]} class="card bg-base-200 mb-4">
-        <div class="card-body">
-          <h2 class="font-semibold mb-2">
-            {if @live_action == :new, do: "Add a site", else: "Edit site"}
-          </h2>
-          <form id="site-form" phx-submit="save" phx-change="validate">
-            <p class="text-xs text-base-content/60 mb-3">
-              Fields marked <span class="text-error">*</span> are required.
-            </p>
-            <.input id="site-name" field={@form[:name]} label="Name" required />
-            <.input id="site-gln" field={@form[:gln]} label="GLN" required />
-            <.input id="site-address" field={@form[:address]} label="Address" required />
-            <.capability_select field={@form[:site_type]} options={capability_options()} required />
-            <.input id="site-active" field={@form[:is_active]} type="checkbox" label="Active" />
-            <div class="grid grid-cols-2 gap-2">
-              <.input id="site-lat" field={@form[:lat]} label="Latitude" type="number" step="any" />
-              <.input id="site-long" field={@form[:long]} label="Longitude" type="number" step="any" />
-            </div>
-            <div class="flex gap-2 mt-2">
-              <.button variant="primary">Save</.button>
-              <.button navigate={~p"/org/sites"}>Cancel</.button>
-            </div>
-          </form>
-        </div>
-      </div>
+      <.modal
+        :if={@live_action in [:new, :edit]}
+        id="site-modal"
+        show
+        on_cancel={JS.patch(~p"/org/sites")}
+      >
+        <h2 class="font-semibold mb-2">
+          {if @live_action == :new, do: "Add a site", else: "Edit site"}
+        </h2>
+        <form id="site-form" phx-submit="save" phx-change="validate">
+          <p class="text-xs text-base-content/60 mb-3">
+            Fields marked <span class="text-error">*</span> are required.
+          </p>
+          <.input id="site-name" field={@form[:name]} label="Name" required />
+          <.input id="site-gln" field={@form[:gln]} label="GLN" required />
+          <.input id="site-address" field={@form[:address]} label="Address" required />
+          <.capability_select field={@form[:site_type]} options={capability_options()} required />
+          <.input id="site-active" field={@form[:is_active]} type="checkbox" label="Active" />
+          <div class="grid grid-cols-2 gap-2">
+            <.input id="site-lat" field={@form[:lat]} label="Latitude" type="number" step="any" />
+            <.input id="site-long" field={@form[:long]} label="Longitude" type="number" step="any" />
+          </div>
+          <div class="flex gap-2 mt-2">
+            <.button variant="primary">Save</.button>
+            <.button patch={~p"/org/sites"}>Cancel</.button>
+          </div>
+        </form>
+      </.modal>
 
       <.table
         id="sites"
@@ -130,7 +133,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
         <:col :let={site} label="Address">{site.address}</:col>
         <:col :let={site} label="Active">{if site.is_active, do: "Yes", else: "No"}</:col>
         <:action :let={site}>
-          <.link navigate={~p"/org/sites/#{site.id}/edit"} class="link">Edit</.link>
+          <.link patch={~p"/org/sites/#{site.id}/edit"} class="link">Edit</.link>
         </:action>
       </.table>
     </Layouts.org_shell>

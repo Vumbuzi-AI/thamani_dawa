@@ -178,12 +178,18 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
       <.header>
         Lab orders
         <:actions>
-          <.button variant="primary" navigate={~p"/lab/orders/new"}>+ New order</.button>
+          <.button variant="primary" patch={~p"/lab/orders/new"}>+ New order</.button>
         </:actions>
       </.header>
 
-      <div :if={@live_action == :new} class="rounded-2xl p-6 mb-6" style="background: #eeeee9;">
-        <h2 class="text-base font-medium mb-5" style="color: #1c3a13;">New lab order</h2>
+      <.modal
+        :if={@live_action == :new}
+        id="lab-order-modal"
+        show
+        class="max-w-3xl"
+        on_cancel={JS.patch(~p"/lab/orders")}
+      >
+        <h2 class="text-base font-medium mb-5" style="color: #373896;">New lab order</h2>
 
         <.form
           for={@header_form}
@@ -194,7 +200,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         >
           <div>
             <div class="flex items-center justify-between mb-1.5">
-              <p class="text-sm font-medium" style="color: #1c3a13;">Patient</p>
+              <p class="text-sm font-medium" style="color: #373896;">Patient</p>
               <.button type="button" phx-click="toggle_new_patient">
                 {if @use_new_patient, do: "Choose existing patient", else: "+ New patient"}
               </.button>
@@ -208,7 +214,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
               prompt="Choose a patient"
             />
 
-            <div :if={@use_new_patient} class="rounded-xl p-4 space-y-3" style="background: #fcfcf7;">
+            <div :if={@use_new_patient} class="rounded-xl p-4 space-y-3" style="background: #FFFFFF;">
               <.input field={@patient_form[:full_name]} label="Full name" required />
               <.input field={@patient_form[:gsrn]} type="number" label="GSRN" required />
               <.date_picker
@@ -219,10 +225,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                 required
               />
               <div class="grid grid-cols-2 gap-3">
-                <.input field={@patient_form[:gender]} label="Gender" />
-                <.input field={@patient_form[:phone]} label="Phone" />
+                <.input field={@patient_form[:gender]} label="Gender" required />
+                <.input field={@patient_form[:phone]} label="Phone" required />
               </div>
-              <.input field={@patient_form[:national_id]} label="National ID" />
+              <.input field={@patient_form[:national_id]} label="National ID" required />
             </div>
           </div>
 
@@ -268,14 +274,14 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           <%!-- Tests --%>
           <div>
             <div class="flex items-center justify-between mb-2">
-              <p class="text-sm font-medium" style="color: #1c3a13;">Tests</p>
+              <p class="text-sm font-medium" style="color: #373896;">Tests</p>
               <.button type="button" phx-click="add_test">+ Add test</.button>
             </div>
             <div class="space-y-2">
               <div
                 :for={id <- @test_ids}
                 class="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-xl p-3 [&>div]:mb-0"
-                style="background: #fcfcf7;"
+                style="background: #FFFFFF;"
               >
                 <.input
                   type="select"
@@ -303,7 +309,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                 </.button>
               </div>
             </div>
-            <p class="text-sm text-right mt-3" style="color: #1c3a13;">
+            <p class="text-sm text-right mt-3" style="color: #373896;">
               Total: <span class="font-medium">KES {@total_amount}</span>
             </p>
           </div>
@@ -323,10 +329,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
 
           <div class="flex gap-3 pt-2">
             <.button variant="primary">Create order</.button>
-            <.button navigate={~p"/lab/orders"}>Cancel</.button>
+            <.button patch={~p"/lab/orders"}>Cancel</.button>
           </div>
         </.form>
-      </div>
+      </.modal>
 
       <.table
         id="lab-orders"

@@ -144,45 +144,48 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         </div>
       </div>
 
-      <div :if={@live_action == :new_batch} class="card bg-base-200 mb-6">
-        <div class="card-body">
-          <h2 class="font-semibold mb-2">Dispatch batch to site</h2>
-          <.form for={@form} id="batch-form" phx-submit="save" phx-change="validate">
-            <div class="grid grid-cols-2 gap-x-4">
-              <.input
-                field={@form[:site_id]}
-                type="select"
-                label="Destination site"
-                options={Enum.map(@sites_by_id, fn {_id, s} -> {s.name, s.id} end)}
-                prompt="Choose a site"
-                required
-              />
-              <.input field={@form[:gtin]} label="GTIN" required />
-              <.input field={@form[:batch_no]} label="Batch / lot number" required />
-              <.input
-                field={@form[:expiry_date]}
-                type="date"
-                label="Expiry date"
-                min={Date.to_iso8601(Date.utc_today())}
-                required
-              />
-              <.input field={@form[:quantity]} type="number" label="Quantity" required />
-              <.input field={@form[:cost_per_unit]} type="number" label="Cost per unit" step="0.01" />
-              <.input
-                field={@form[:supplier_id]}
-                type="select"
-                label="Supplier"
-                options={Enum.map(@suppliers, &{&1.name, &1.id})}
-                prompt="No supplier"
-              />
-            </div>
-            <div class="flex gap-2 mt-2">
-              <.button variant="primary">Dispatch</.button>
-              <.button patch={~p"/org/products/#{@product.id}"}>Cancel</.button>
-            </div>
-          </.form>
-        </div>
-      </div>
+      <.modal
+        :if={@live_action == :new_batch}
+        id="batch-modal"
+        show
+        on_cancel={JS.patch(~p"/org/products/#{@product.id}")}
+      >
+        <h2 class="font-semibold mb-2">Dispatch batch to site</h2>
+        <.form for={@form} id="batch-form" phx-submit="save" phx-change="validate">
+          <div class="grid grid-cols-2 gap-x-4">
+            <.input
+              field={@form[:site_id]}
+              type="select"
+              label="Destination site"
+              options={Enum.map(@sites_by_id, fn {_id, s} -> {s.name, s.id} end)}
+              prompt="Choose a site"
+              required
+            />
+            <.input field={@form[:gtin]} label="GTIN" required />
+            <.input field={@form[:batch_no]} label="Batch / lot number" required />
+            <.input
+              field={@form[:expiry_date]}
+              type="date"
+              label="Expiry date"
+              min={Date.to_iso8601(Date.utc_today())}
+              required
+            />
+            <.input field={@form[:quantity]} type="number" label="Quantity" required />
+            <.input field={@form[:cost_per_unit]} type="number" label="Cost per unit" step="0.01" />
+            <.input
+              field={@form[:supplier_id]}
+              type="select"
+              label="Supplier"
+              options={Enum.map(@suppliers, &{&1.name, &1.id})}
+              prompt="No supplier"
+            />
+          </div>
+          <div class="flex gap-2 mt-2">
+            <.button variant="primary">Dispatch</.button>
+            <.button patch={~p"/org/products/#{@product.id}"}>Cancel</.button>
+          </div>
+        </.form>
+      </.modal>
 
       <.header class="mt-6">Batches</.header>
       <.table id="batches" rows={@streams.batches}>

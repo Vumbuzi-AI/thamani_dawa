@@ -109,48 +109,42 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
       <.header>
         Product catalog
         <:actions>
-          <.button
-            :if={@live_action == :index}
-            variant="primary"
-            patch={~p"/org/products/new"}
-          >
-            + Add product
-          </.button>
-          <.button :if={@live_action in [:new, :edit]} patch={~p"/org/products"}>Back</.button>
+          <.button variant="primary" patch={~p"/org/products/new"}>+ Add product</.button>
         </:actions>
       </.header>
 
-      <%= if @live_action in [:new, :edit] do %>
-        <div class="card bg-base-200 mb-4">
-          <div class="card-body">
-            <h2 class="font-semibold mb-2">
-              {if @live_action == :new, do: "Add a product", else: "Edit product"}
-            </h2>
-            <.form for={@form} id="product-form" phx-submit="save" phx-change="validate">
-              <.input field={@form[:price]} type="number" label="Price" min="0" required />
+      <.modal
+        :if={@live_action in [:new, :edit]}
+        id="product-modal"
+        show
+        on_cancel={JS.patch(~p"/org/products")}
+      >
+        <h2 class="font-semibold mb-2">
+          {if @live_action == :new, do: "Add a product", else: "Edit product"}
+        </h2>
+        <.form for={@form} id="product-form" phx-submit="save" phx-change="validate">
+          <.input field={@form[:price]} type="number" label="Price" min="0" required />
 
-              <p class="text-xs mb-1" style="color: var(--thamani-pewter);">
-                Name <span style="color: #b91c1c;">*</span>
-                — at least one of generic or brand name is required
-              </p>
-              <div class="grid grid-cols-2 gap-x-4">
-                <.input field={@form[:generic_name]} label="Generic name" />
-                <.input field={@form[:brand_name]} label="Brand name" />
-              </div>
-              <.input field={@form[:category]} label="Category" />
-              <.input field={@form[:uom]} label="Unit of measure" required />
-              <.input field={@form[:gtin]} label="GTIN" required />
-              <.input field={@form[:is_otc]} type="checkbox" label="Over-the-counter" />
-              <.input field={@form[:is_dangerous_drug]} type="checkbox" label="Dangerous drug" />
-              <.input field={@form[:reorder_level]} type="number" label="Reorder level" />
-              <div class="flex gap-2 mt-2">
-                <.button variant="primary">Save</.button>
-                <.button patch={~p"/org/products"}>Cancel</.button>
-              </div>
-            </.form>
+          <p class="text-xs mb-1" style="color: var(--thamani-pewter);">
+            Name <span style="color: #C21F17;">*</span>
+            — at least one of generic or brand name is required
+          </p>
+          <div class="grid grid-cols-2 gap-x-4">
+            <.input field={@form[:generic_name]} label="Generic name" />
+            <.input field={@form[:brand_name]} label="Brand name" />
           </div>
-        </div>
-      <% end %>
+          <.input field={@form[:category]} label="Category" />
+          <.input field={@form[:uom]} label="Unit of measure" required />
+          <.input field={@form[:gtin]} label="GTIN" required />
+          <.input field={@form[:is_otc]} type="checkbox" label="Over-the-counter" />
+          <.input field={@form[:is_dangerous_drug]} type="checkbox" label="Dangerous drug" />
+          <.input field={@form[:reorder_level]} type="number" label="Reorder level" />
+          <div class="flex gap-2 mt-2">
+            <.button variant="primary">Save</.button>
+            <.button patch={~p"/org/products"}>Cancel</.button>
+          </div>
+        </.form>
+      </.modal>
 
       <form phx-change="search" class="mb-4" id="search-form">
         <.input name="search" value={@search} placeholder="Search by name, GTIN, or category" />

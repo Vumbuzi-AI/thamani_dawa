@@ -131,12 +131,13 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
         </:actions>
       </.header>
 
-      <div
+      <.modal
         :if={@live_action in [:new, :edit]}
-        class="rounded-2xl p-6 mb-6"
-        style="background: #eeeee9;"
+        id="lab-test-modal"
+        show
+        on_cancel={JS.patch(~p"/lab/tests")}
       >
-        <h2 class="text-base font-semibold mb-4" style="color: #1c3a13;">
+        <h2 class="text-base font-semibold mb-4" style="color: #373896;">
           {if @live_action == :new, do: "New test", else: "Edit test"}
         </h2>
 
@@ -168,13 +169,13 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
               class="w-full rounded-lg border border-base-300 bg-base-100 px-3 py-2 font-mono text-xs"
               phx-debounce="blur"
             >{@field_defs_json}</textarea>
-            <p :if={@field_defs_error} class="mt-1 text-sm" style="color: #b91c1c;">
+            <p :if={@field_defs_error} class="mt-1 text-sm" style="color: #C21F17;">
               {@field_defs_error}
             </p>
             <p
               :if={!@field_defs_error && @form[:field_definitions].errors != []}
               class="mt-1 text-sm"
-              style="color: #b91c1c;"
+              style="color: #C21F17;"
             >
               can't be blank
             </p>
@@ -185,7 +186,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
             <.button patch={~p"/lab/tests"}>Cancel</.button>
           </div>
         </.form>
-      </div>
+      </.modal>
 
       <.table id="lab-tests" rows={@streams.lab_tests}>
         <:col :let={{_id, test}} label="Name">{test.name}</:col>
@@ -196,7 +197,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
             class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
             style={
               if test.is_active,
-                do: "background: #d3fa99; color: #1c3a13;",
+                do: "background: #D1FAE5; color: #065F46;",
                 else: "background: #e5e7eb; color: #6b7280;"
             }
           >

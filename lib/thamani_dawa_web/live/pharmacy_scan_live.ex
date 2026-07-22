@@ -178,7 +178,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
               <p class="text-xs font-semibold uppercase tracking-widest mb-1" style="color: #4a7a1e;">
                 Approved stock found
               </p>
-              <h2 id="result-product-name" class="text-xl font-bold" style="color: #1c3a13;">
+              <h2 id="result-product-name" class="text-xl font-bold" style="color: #373896;">
                 {product_display_name(@product)}
               </h2>
               <p class="text-sm mt-0.5" style="color: #4a7a1e;">
@@ -188,7 +188,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
             </div>
             <span
               class="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
-              style="background: #d3fa99; color: #1c3a13;"
+              style="background: #D1FAE5; color: #065F46;"
             >
               <.icon name="hero-check-circle" class="size-3.5" />Approved
             </span>

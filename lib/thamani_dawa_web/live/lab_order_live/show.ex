@@ -162,8 +162,8 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         </:action>
       </.table>
 
-      <div :if={@collecting_result_id} class="rounded-2xl p-6 mt-4" style="background: #eeeee9;">
-        <h2 class="text-base font-medium mb-4" style="color: #1c3a13;">Record sample collection</h2>
+      <div :if={@collecting_result_id} class="rounded-2xl p-6 mt-4" style="background: #E6EDF8;">
+        <h2 class="text-base font-medium mb-4" style="color: #373896;">Record sample collection</h2>
         <.form
           for={%{}}
           id="collect-sample-form"
@@ -183,8 +183,8 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         </.form>
       </div>
 
-      <div class="rounded-2xl p-6 mt-4" style="background: #eeeee9;">
-        <h2 class="text-base font-medium mb-4" style="color: #1c3a13;">Add a test</h2>
+      <div class="rounded-2xl p-6 mt-4" style="background: #E6EDF8;">
+        <h2 class="text-base font-medium mb-4" style="color: #373896;">Add a test</h2>
         <.form
           for={%{}}
           id="add-test-form"

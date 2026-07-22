@@ -136,7 +136,8 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
                |> form("form",
                  patient: %{
                    full_name: "Jane Doe",
-                   age: "30",
+                   date_of_birth: "1990-01-01",
+                   gender: "Female",
                    phone: "0712345678",
                    national_id: "12345678",
                    gsrn: "123456789"

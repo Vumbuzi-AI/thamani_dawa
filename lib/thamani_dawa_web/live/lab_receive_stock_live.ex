@@ -279,10 +279,10 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         :if={@selected_batch}
         id="batch-review-panel"
         class="rounded-2xl p-6 mb-8"
-        style="background: #eeeee9;"
+        style="background: #E6EDF8;"
       >
         <div class="flex items-start justify-between mb-5">
-          <h2 class="text-base font-semibold" style="color: #1c3a13;">
+          <h2 class="text-base font-semibold" style="color: #373896;">
             Review batch before receiving
           </h2>
           <.button phx-click="cancel_view">Cancel</.button>
@@ -293,7 +293,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
             <dt class="text-xs font-medium uppercase tracking-wide mb-0.5" style="color: #6b7280;">
               Product
             </dt>
-            <dd class="font-medium" style="color: #1c3a13;">
+            <dd class="font-medium" style="color: #373896;">
               {product_display(@selected_batch, @products_by_id)}
             </dd>
           </div>
@@ -358,8 +358,8 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         />
       </div>
 
-      <div class="rounded-2xl p-6 mt-6" style="background: #eeeee9;">
-        <h2 class="text-base font-medium mb-4" style="color: #1c3a13;">Log consumable usage</h2>
+      <div class="rounded-2xl p-6 mt-6" style="background: #E6EDF8;">
+        <h2 class="text-base font-medium mb-4" style="color: #373896;">Log consumable usage</h2>
         <.form
           for={%{}}
           id="consumable-usage-form"

@@ -251,7 +251,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #b91c1c; margin-left: 2px;"
+            style="color: #C21F17; margin-left: 2px;"
           >*</span>
         </span>
         <select
@@ -278,7 +278,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #b91c1c; margin-left: 2px;"
+            style="color: #C21F17; margin-left: 2px;"
           >*</span>
         </span>
         <textarea
@@ -306,7 +306,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #b91c1c; margin-left: 2px;"
+            style="color: #C21F17; margin-left: 2px;"
           >*</span>
         </span>
         <input
@@ -396,10 +396,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
           @errors != [] && "border-red-600"
         ]}
       >
-        <span data-dp-display data-placeholder={@placeholder} style="color: #1c3a13;">
+        <span data-dp-display data-placeholder={@placeholder} style="color: var(--thamani-forest);">
           {display_date(@iso_value) || @placeholder}
         </span>
-        <span style="color: #666666;">
+        <span style="color: var(--thamani-pewter);">
           <.icon name="hero-calendar-days" class="size-4 shrink-0" />
         </span>
       </button>
@@ -410,7 +410,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         phx-update="ignore"
         hidden
         class="absolute z-50 mt-2 w-72 p-4"
-        style="background: #fcfcf7; border: 1px solid #eeeee9; border-radius: 16px;"
+        style="background: var(--thamani-snow); border: 1px solid var(--thamani-stone); border-radius: 16px;"
       >
       </div>
 
@@ -476,10 +476,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
           if (!this.display) return
           if (this.selected) {
             this.display.textContent = this.fmt(this.selected)
-            this.display.style.color = "#1c3a13"
+            this.display.style.color = "var(--thamani-forest)"
           } else {
             this.display.textContent = this.display.dataset.placeholder || "Choose a date"
-            this.display.style.color = "#666666"
+            this.display.style.color = "var(--thamani-pewter)"
           }
         },
         toggle() { this.pop.hasAttribute("hidden") ? this.open() : this.close() },
@@ -494,7 +494,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             [data-dp-body] button[data-dp-month]:not(:disabled):hover,
             [data-dp-body] button[data-dp-year]:hover,
             [data-dp-body] button[data-dp-nav]:hover,
-            [data-dp-body] button[data-dp-open]:hover { background: #eeeee9; }`
+            [data-dp-body] button[data-dp-open]:hover { background: var(--thamani-stone); }`
           this.pop.innerHTML = `<style>${css}</style><div data-dp-body></div>`
           this.body = this.pop.querySelector("[data-dp-body]")
           this.renderCalendar()
@@ -558,10 +558,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
           this.renderDays()
         },
         listHeader(label) {
-          const back = "width:28px;height:28px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#1c3a13;flex-shrink:0;border:none;font-size:16px;"
+          const back = "width:28px;height:28px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:16px;"
           return `<div style="display:flex;align-items:center;gap:4px;margin-bottom:12px;">
               <button type="button" data-dp-open="days" aria-label="Back to days" style="${back}">&#8249;</button>
-              <span style="flex:1;text-align:center;font-size:14px;font-weight:500;color:#1c3a13;">${label}</span>
+              <span style="flex:1;text-align:center;font-size:14px;font-weight:500;color:var(--thamani-forest);">${label}</span>
               <span style="width:28px;"></span>
             </div>`
         },
@@ -569,23 +569,23 @@ defmodule ThamaniDawaWeb.CoreComponents do
           const first = new Date(this.viewYear, this.viewMonth, 1)
           const startDow = first.getDay()
           const daysInMonth = new Date(this.viewYear, this.viewMonth + 1, 0).getDate()
-          const pillBtn = "width:28px;height:28px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#1c3a13;flex-shrink:0;border:none;font-size:16px;"
-          const ctrl = "border:1px solid #eeeee9;border-radius:8px;color:#1c3a13;font-size:13px;font-weight:500;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;"
+          const pillBtn = "width:28px;height:28px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:16px;"
+          const ctrl = "border:1px solid var(--thamani-stone);border-radius:8px;color:var(--thamani-forest);font-size:13px;font-weight:500;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;"
 
           let head = `
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
               <button type="button" data-dp-nav="-1" aria-label="Previous month" style="${pillBtn}">&#8249;</button>
               <button type="button" data-dp-open="months" style="${ctrl}flex:1;">
-                <span>${MONTHS[this.viewMonth]}</span><span style="color:#666666;">&#9662;</span>
+                <span>${MONTHS[this.viewMonth]}</span><span style="color:var(--thamani-pewter);">&#9662;</span>
               </button>
               <button type="button" data-dp-open="years" style="${ctrl}">
-                <span>${this.viewYear}</span><span style="color:#666666;">&#9662;</span>
+                <span>${this.viewYear}</span><span style="color:var(--thamani-pewter);">&#9662;</span>
               </button>
               <button type="button" data-dp-nav="1" aria-label="Next month" style="${pillBtn}">&#8250;</button>
             </div>`
 
           let dow = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">`
-          DOW.forEach(d => { dow += `<span style="text-align:center;font-size:11px;color:#666666;">${d}</span>` })
+          DOW.forEach(d => { dow += `<span style="text-align:center;font-size:11px;color:var(--thamani-pewter);">${d}</span>` })
           dow += `</div>`
 
           let grid = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;">`
@@ -595,10 +595,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
             const isSel = this.selected && cur.getTime() === this.selected.getTime()
             const isToday = cur.getTime() === this.today.getTime()
             const disabled = this.max && cur.getTime() > this.max.getTime()
-            let style = "width:32px;height:32px;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:13px;margin:0 auto;border:none;color:#1c3a13;cursor:pointer;"
+            let style = "width:32px;height:32px;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:13px;margin:0 auto;border:none;color:var(--thamani-forest);cursor:pointer;"
             if (disabled) style += "color:#b3b3b3;cursor:not-allowed;"
-            else if (isSel) style += "background:#1c3a13;color:#fcfcf7;"
-            else if (isToday) style += "border:1.5px solid #d3fa99;"
+            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);"
+            else if (isToday) style += "border:1.5px solid var(--thamani-lime);"
             grid += `<button type="button" data-dp-day="${d}" ${disabled ? "disabled" : ""} style="${style}">${d}</button>`
           }
           grid += `</div>`
@@ -612,9 +612,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
           MONTHS.forEach((name, i) => {
             const isSel = i === this.viewMonth
             const disabled = i > maxMonth
-            let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:#1c3a13;cursor:pointer;text-align:center;"
+            let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:var(--thamani-forest);cursor:pointer;text-align:center;"
             if (disabled) style += "color:#b3b3b3;cursor:not-allowed;"
-            else if (isSel) style += "background:#1c3a13;color:#fcfcf7;font-weight:500;"
+            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:500;"
             grid += `<button type="button" data-dp-month="${i}" ${disabled ? "disabled" : ""} style="${style}">${name.slice(0,3)}</button>`
           })
           grid += `</div>`
@@ -625,8 +625,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
           let grid = `<div data-dp-years style="position:relative;max-height:196px;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:2px;">`
           for (let y = this.maxYear(); y >= this.minYear(); y--) {
             const isSel = y === this.viewYear
-            let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:#1c3a13;cursor:pointer;text-align:center;"
-            if (isSel) style += "background:#1c3a13;color:#fcfcf7;font-weight:500;"
+            let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:var(--thamani-forest);cursor:pointer;text-align:center;"
+            if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:500;"
             grid += `<button type="button" data-dp-year="${y}" style="${style}">${y}</button>`
           }
           grid += `</div>`
@@ -988,7 +988,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           "w-full box-border px-4 py-3 text-[15px] text-thamani-forest bg-thamani-snow",
           "border-[1.5px] rounded-lg outline-none",
           "transition-[border-color,box-shadow] duration-150 ease-in-out",
-          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(28,58,19,0.08)]",
+          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(55, 56, 150,0.08)]",
           (@errors != [] && "border-thamani-error") || "border-thamani-stone"
         ]}
         {@rest}
@@ -1034,7 +1034,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           "w-full box-border px-4 py-3 text-[15px] text-thamani-forest bg-thamani-snow",
           "border-[1.5px] rounded-lg outline-none",
           "transition-[border-color,box-shadow] duration-150 ease-in-out",
-          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(28,58,19,0.08)]",
+          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(55, 56, 150,0.08)]",
           (@errors != [] && "border-thamani-error") || "border-thamani-stone"
         ]}
         {@rest}
@@ -1046,7 +1046,94 @@ defmodule ThamaniDawaWeb.CoreComponents do
     """
   end
 
+  @doc """
+  Renders a modal overlay.
+
+  ## Examples
+
+      <.modal id="site-modal" show on_cancel={JS.patch(~p"/org/sites")}>
+        content
+      </.modal>
+  """
+  attr :id, :string, required: true
+  attr :show, :boolean, default: false
+  attr :on_cancel, JS, default: %JS{}
+  attr :class, :any, default: nil
+  slot :inner_block, required: true
+
+  def modal(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      phx-mounted={@show && show_modal(@id)}
+      phx-remove={hide_modal(@id)}
+      data-cancel={JS.exec(@on_cancel, "phx-remove")}
+      class="relative z-50 hidden"
+    >
+      <div id={"#{@id}-bg"} class="bg-black/50 fixed inset-0 transition-opacity" aria-hidden="true" />
+      <div
+        class="fixed inset-0 overflow-y-auto"
+        aria-labelledby={"#{@id}-title"}
+        aria-describedby={"#{@id}-description"}
+        role="dialog"
+        aria-modal="true"
+        tabindex="0"
+      >
+        <div class="flex min-h-full items-center justify-center">
+          <div class={["w-full max-w-2xl p-4 sm:p-6 lg:py-8", @class]}>
+            <.focus_wrap
+              id={"#{@id}-container"}
+              phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
+              phx-key="escape"
+              phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
+              class="hidden relative rounded-2xl bg-base-100 shadow-lg ring-1 ring-black/5 p-6 transition"
+            >
+              <div class="absolute top-4 right-4">
+                <button
+                  phx-click={JS.exec("data-cancel", to: "##{@id}")}
+                  type="button"
+                  class="-m-2 p-2 opacity-40 hover:opacity-70"
+                  aria-label="close"
+                >
+                  <.icon name="hero-x-mark-solid" class="h-5 w-5" />
+                </button>
+              </div>
+              <div id={"#{@id}-content"}>
+                {render_slot(@inner_block)}
+              </div>
+            </.focus_wrap>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
   ## JS Commands
+
+  def show_modal(js \\ %JS{}, id) when is_binary(id) do
+    js
+    |> JS.show(to: "##{id}")
+    |> JS.show(
+      to: "##{id}-bg",
+      transition: {"transition-all ease-out duration-300", "opacity-0", "opacity-100"}
+    )
+    |> show("##{id}-container")
+    |> JS.add_class("overflow-hidden", to: "body")
+    |> JS.focus_first(to: "##{id}-content")
+  end
+
+  def hide_modal(js \\ %JS{}, id) do
+    js
+    |> JS.hide(
+      to: "##{id}-bg",
+      transition: {"transition-all ease-in duration-200", "opacity-100", "opacity-0"}
+    )
+    |> hide("##{id}-container")
+    |> JS.hide(to: "##{id}")
+    |> JS.remove_class("overflow-hidden", to: "body")
+    |> JS.pop_focus()
+  end
 
   def show(js \\ %JS{}, selector) do
     JS.show(js,

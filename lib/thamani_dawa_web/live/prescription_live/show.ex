@@ -2,6 +2,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Patients
+  alias ThamaniDawa.Patients.Patient
   alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Products
 
@@ -114,7 +115,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
       <.header>
         Prescription for {@patient.full_name}
         <:subtitle>
-          {if @patient.age, do: "#{@patient.age} yrs", else: "Age N/A"} | {if @patient.gender,
+          {if age = Patient.age(@patient), do: "#{age} yrs", else: "Age N/A"} | {if @patient.gender,
             do: @patient.gender,
             else: "Gender N/A"} | {@patient.phone || "No phone"}
         </:subtitle>

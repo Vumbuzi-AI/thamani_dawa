@@ -192,7 +192,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
       patient_attrs = %{
         full_name: "New Patient Demo",
-        age: 25,
+        date_of_birth: ~D[1990-01-01],
+        gender: "Female",
         gsrn: 999_999,
         national_id: "12345678",
         phone: "0711223344"
@@ -235,7 +236,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
       site = site_fixture(%{organization_id: organization.id})
       user = staff_fixture(%{organization_id: organization.id})
 
-      patient_attrs = %{age: 25, phone: "invalid", gsrn: 999_998}
+      patient_attrs = %{phone: "invalid", gsrn: 999_998}
       prescription_attrs = %{referring_doctor: "Dr. Jane Doe", payment_type: "Cash"}
 
       patient_count_before = ThamaniDawa.Repo.aggregate(ThamaniDawa.Patients.Patient, :count)
@@ -253,6 +254,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
       assert %{
                full_name: ["can't be blank"],
+               date_of_birth: ["can't be blank"],
                phone: ["must be a valid Kenyan phone number (e.g. 0712345678 or +254712345678)"]
              } = errors_on(changeset)
 
@@ -265,7 +267,15 @@ defmodule ThamaniDawa.PrescriptionsTest do
       site = site_fixture(%{organization_id: organization.id})
       user = staff_fixture(%{organization_id: organization.id})
 
-      patient_attrs = %{full_name: "Rollback Test", age: 25, gsrn: 999_997}
+      patient_attrs = %{
+        full_name: "Rollback Test",
+        date_of_birth: ~D[1990-01-01],
+        gender: "Female",
+        phone: "0712345678",
+        national_id: "12345678",
+        gsrn: 999_997
+      }
+
       prescription_attrs = %{}
 
       patient_count_before = ThamaniDawa.Repo.aggregate(ThamaniDawa.Patients.Patient, :count)

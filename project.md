@@ -179,10 +179,11 @@ Every table below carries `organization_id` per [§2.2](#22-enforcement).
 
 ### 4.2 People
 
-- **`patients`** — `organization_id`, `full_name`, `date_of_birth`/`age`, `gender`, `phone`,
-  `national_id` (optional). Scoped to the *organization*, not a single site — a chain's patient
-  can be recognized at any of its branches, which is one of the real benefits of running multiple
-  sites under one tenant.
+- **`patients`** — `organization_id`, `full_name`, `date_of_birth` (required, non-future — the
+  sole source of truth for age; `age` is derived at display time via `Patient.age/2`, never
+  persisted), `gender`, `phone`, `national_id` (all required). Scoped to the *organization*, not a
+  single site — a chain's patient can be recognized at any of its branches, which is one of the
+  real benefits of running multiple sites under one tenant.
 - Staff accounts: `users` / `user_tokens`, see [§2.3](#23-signup-and-adding-staff).
 
 ### 4.3 Pharmacy (dispensing)
