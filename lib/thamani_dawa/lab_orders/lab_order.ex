@@ -50,14 +50,25 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
       :referred_date
     ])
     |> validate_required([:site_id, :patient_visit_id])
-    |> validate_inclusion(:payment_type, ThamaniDawa.PaymentMethods.all(),
-      message: "must be one of the approved payment methods"
-    )
+    |> validate_payment_type()
     |> validate_referral_details()
     |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:patient_id)
     |> foreign_key_constraint(:patient_visit_id)
     |> foreign_key_constraint(:ordered_by_id)
+  end
+
+  # Payment type is optional on a lab order; only validate it against the
+  # approved list when a value is actually supplied. (Ecto's validate_inclusion
+  # already skips nil, but the explicit guard keeps the optionality obvious.)
+  defp validate_payment_type(changeset) do
+    if get_field(changeset, :payment_type) in [nil, ""] do
+      changeset
+    else
+      validate_inclusion(changeset, :payment_type, ThamaniDawa.PaymentMethods.all(),
+        message: "must be one of the approved payment methods"
+      )
+    end
   end
 
   # A referred order must name the facility and clinician it came from; a
