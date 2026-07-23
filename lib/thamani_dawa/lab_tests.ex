@@ -44,8 +44,8 @@ defmodule ThamaniDawa.LabTests do
   end
 
   @doc "Returns a changeset for the given lab test."
-  def change_lab_test(%LabTest{} = lab_test, attrs \\ %{}) do
-    LabTest.changeset(lab_test, attrs)
+  def change_lab_test(lab_test_or_changeset, attrs \\ %{}) do
+    LabTest.changeset(lab_test_or_changeset, attrs)
   end
 
   @doc "Lists active (is_active: true) lab tests for an organization, ordered by category then name."

@@ -2,6 +2,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.LabTests
+  alias ThamaniDawa.LabTests.FieldDefinitionPresets
   alias ThamaniDawa.LabTests.LabTest
   alias ThamaniDawa.LabTests.LabTestCategory
 
@@ -32,6 +33,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     |> assign(:field_defs_json, "{}")
     |> assign(:field_defs_error, nil)
     |> assign(:use_new_category, false)
+    |> reset_preset()
     |> assign(
       :category_form,
       to_form(LabTestCategory.changeset(%LabTestCategory{}, %{}), as: :category)
@@ -48,6 +50,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     |> assign(:field_defs_json, Jason.encode!(lab_test.field_definitions || %{}, pretty: true))
     |> assign(:field_defs_error, nil)
     |> assign(:use_new_category, false)
+    |> reset_preset()
     |> assign(
       :category_form,
       to_form(LabTestCategory.changeset(%LabTestCategory{}, %{}), as: :category)
@@ -61,6 +64,13 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     |> assign(:field_defs_json, "{}")
     |> assign(:field_defs_error, nil)
     |> assign(:form, nil)
+    |> reset_preset()
+  end
+
+  defp reset_preset(socket) do
+    socket
+    |> assign(:selected_preset, "")
+    |> assign(:applied_preset_json, nil)
   end
 
   def handle_event("toggle_new_category", _params, socket) do
@@ -97,6 +107,20 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
 
       {_attrs, error} ->
         {:noreply, assign(socket, :field_defs_error, error)}
+    end
+  end
+
+  def handle_event("select_preset", %{"preset" => ""}, socket) do
+    {:noreply, assign(socket, :selected_preset, "")}
+  end
+
+  def handle_event("select_preset", %{"preset" => name}, socket) do
+    case FieldDefinitionPresets.get(name) do
+      nil ->
+        {:noreply, socket}
+
+      preset ->
+        apply_preset(socket, preset)
     end
   end
 
@@ -150,6 +174,52 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   end
 
   defp resolve_category(_socket, _organization_id, attrs, _params), do: {:ok, attrs}
+
+  defp apply_preset(socket, preset) do
+    org_id = socket.assigns.current_scope.organization_id
+
+    case find_or_create_category(socket, org_id, preset.category_name) do
+      {:ok, category} ->
+        socket =
+          socket
+          |> refresh_categories(org_id)
+          |> assign(:selected_preset, preset.name)
+
+        changeset =
+          socket.assigns.form.source
+          |> LabTests.change_lab_test(%{"name" => preset.name, "category_id" => category.id})
+
+        socket = assign(socket, :form, to_form(changeset, as: :lab_test))
+        new_json = Jason.encode!(preset.field_definitions, pretty: true)
+
+        if socket.assigns.field_defs_json in ["{}", socket.assigns.applied_preset_json] do
+          {:noreply,
+           socket
+           |> assign(:field_defs_json, new_json)
+           |> assign(:applied_preset_json, new_json)
+           |> assign(:field_defs_error, nil)}
+        else
+          {:noreply,
+           put_flash(
+             socket,
+             :info,
+             "Applied #{preset.name}'s name and category. Field definitions were already edited, so they were left as-is."
+           )}
+        end
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Couldn't apply that preset's category.")}
+    end
+  end
+
+  defp find_or_create_category(socket, org_id, category_name) do
+    case Enum.find(socket.assigns.categories_by_id, fn {_id, category} ->
+           category.name == category_name
+         end) do
+      {_id, category} -> {:ok, category}
+      nil -> LabTests.create_lab_test_category(org_id, %{name: category_name})
+    end
+  end
 
   defp save_lab_test(socket, :new, attrs) do
     org_id = socket.assigns.current_scope.organization_id
@@ -316,6 +386,17 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
         <h2 class="text-base font-semibold mb-4" style="color: #373896;">
           {if @live_action == :new, do: "New test", else: "Edit test"}
         </h2>
+
+        <form id="lab-test-preset-form" phx-change="select_preset" class="mb-3">
+          <.input
+            type="select"
+            name="preset"
+            value={@selected_preset}
+            label="Preset (optional)"
+            options={FieldDefinitionPresets.options()}
+            prompt="No preset — enter everything manually"
+          />
+        </form>
 
         <.form for={@form} id="lab-test-form" phx-submit="save" phx-change="validate">
           <div class="grid grid-cols-2 gap-3 mb-3">

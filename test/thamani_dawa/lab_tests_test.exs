@@ -116,6 +116,27 @@ defmodule ThamaniDawa.LabTestsTest do
       assert changeset.data.name == "Malaria RDT"
       assert changeset.valid?
     end
+
+    test "defaults attrs to an empty map when only the lab test is given" do
+      lab_test = lab_test_fixture(%{name: "Malaria RDT"})
+
+      changeset = LabTests.change_lab_test(lab_test)
+
+      assert changeset.data.name == "Malaria RDT"
+      assert changeset.changes == %{}
+    end
+
+    test "also accepts an existing changeset, merging new attrs onto its prior changes" do
+      lab_test = lab_test_fixture()
+
+      changeset =
+        lab_test
+        |> LabTests.change_lab_test(%{"price" => "999.00"})
+        |> LabTests.change_lab_test(%{"name" => "Renamed"})
+
+      assert Ecto.Changeset.get_change(changeset, :name) == "Renamed"
+      assert Decimal.equal?(Ecto.Changeset.get_change(changeset, :price), Decimal.new("999.00"))
+    end
   end
 
   describe "list_active_lab_tests/1" do
