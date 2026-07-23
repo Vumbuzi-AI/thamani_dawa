@@ -20,6 +20,9 @@ defmodule ThamaniDawaWeb.UserAuth do
   def log_in_user(conn, user) do
     token = Accounts.generate_user_session_token(user)
 
+    Accounts.update_user_last_logged_in(user)
+    Accounts.create_login_session(user.id)
+
     conn
     |> renew_session()
     |> put_session(@user_token_key, token)
@@ -29,7 +32,15 @@ defmodule ThamaniDawaWeb.UserAuth do
   @doc "Deletes the session token and ends the session."
   def log_out_user(conn) do
     user_token = get_session(conn, @user_token_key)
-    user_token && Accounts.delete_user_session_token(user_token)
+
+    if user_token do
+      if user = Accounts.get_user_by_session_token(user_token) do
+        Accounts.update_user_last_logged_out(user)
+        Accounts.record_logout_session(user.id)
+      end
+
+      Accounts.delete_user_session_token(user_token)
+    end
 
     conn
     |> renew_session()
@@ -108,7 +119,7 @@ defmodule ThamaniDawaWeb.UserAuth do
       {:cont, socket} ->
         scope = socket.assigns.current_scope
 
-        if Scope.admin?(scope) or Scope.pharmacist?(scope) do
+        if Scope.pharmacy_access?(scope) do
           {:cont, socket}
         else
           socket =
@@ -129,7 +140,7 @@ defmodule ThamaniDawaWeb.UserAuth do
       {:cont, socket} ->
         scope = socket.assigns.current_scope
 
-        if Scope.admin?(scope) or Scope.lab_technician?(scope) do
+        if Scope.lab_access?(scope) do
           {:cont, socket}
         else
           socket =

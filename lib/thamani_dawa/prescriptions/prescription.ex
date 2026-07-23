@@ -5,9 +5,6 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
   @statuses [:pending, :partially_dispensed, :completed, :cancelled]
 
   schema "prescriptions" do
-    field :organization_id, :id
-    field :user_id, :id
-    field :patient_visit_id, :id
     # Virtual — populated by list_prescriptions/1 join for SiteScoping.for_current_site/2
     field :site_id, :id, virtual: true
     field :patient_name, :string, virtual: true
@@ -22,7 +19,11 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
     field :is_external, :boolean, default: false
     field :source_facility, :string
     field :referring_doctor, :string
-    field :referral_date, :time
+    field :referral_date, :date
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+    belongs_to :user, ThamaniDawa.Accounts.User
+    belongs_to :patient_visit, ThamaniDawa.PatientVisits.PatientVisit
 
     has_many :items, ThamaniDawa.Prescriptions.PrescriptionItem, on_replace: :delete
 

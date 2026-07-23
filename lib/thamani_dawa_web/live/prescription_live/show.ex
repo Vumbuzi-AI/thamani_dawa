@@ -4,7 +4,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   alias ThamaniDawa.Patients
   alias ThamaniDawa.Patients.Patient
   alias ThamaniDawa.Prescriptions
-  alias ThamaniDawa.Products
 
   def mount(%{"id" => id}, _session, socket) do
     {:ok, load_prescription(socket, id)}
@@ -19,7 +18,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
     patient = Patients.get_patient!(organization_id, visit.patient_id)
     items = Prescriptions.list_prescription_items(organization_id, prescription.id)
-    products_by_id = organization_id |> Products.list_products() |> Map.new(&{&1.id, &1})
 
     stock_by_product_id =
       items
@@ -34,7 +32,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     |> assign(:prescription, prescription)
     |> assign(:patient, patient)
     |> assign(:items, items)
-    |> assign(:products_by_id, products_by_id)
     |> assign(:stock_by_product_id, stock_by_product_id)
   end
 
@@ -98,12 +95,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     end
   end
 
-  defp product_name(products_by_id, product_id) do
-    case products_by_id[product_id] do
-      nil -> "(unknown product)"
-      product -> product.generic_name || product.brand_name || "(unnamed)"
-    end
-  end
+  defp product_name(%{product: nil}), do: "(unknown product)"
+
+  defp product_name(%{product: product}),
+    do: product.generic_name || product.brand_name || "(unnamed)"
 
   def render(assigns) do
     ~H"""
@@ -175,7 +170,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
       </div>
 
       <div :for={item <- @items} class="border rounded-box border-base-300 p-4 mt-4 bg-transparent">
-        <h3 class="font-semibold text-lg">{product_name(@products_by_id, item.product_id)}</h3>
+        <h3 class="font-semibold text-lg">{product_name(item)}</h3>
         <p class="text-sm text-base-content/70 mt-1">
           <strong>Prescribed:</strong> {item.quantity_prescribed} &nbsp;&middot;&nbsp;
           <strong>Dispensed:</strong> {item.quantity_dispensed} &nbsp;&middot;&nbsp;

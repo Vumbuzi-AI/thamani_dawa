@@ -6,10 +6,12 @@ defmodule ThamaniDawa.Batches do
   """
 
   import Ecto.Query, warn: false
+  alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
+  alias ThamaniDawa.Suppliers.Supplier
 
   @doc "Lists all batches for an organization."
   def list_batches(organization_id) do
@@ -108,12 +110,17 @@ defmodule ThamaniDawa.Batches do
     end
   end
 
+  @doc "Lists a product's batches, preloaded with `site` and `approver` (both scoped to the organization)."
   def list_batches_for_product(organization_id, product_id) do
+    site_query = from s in Site, where: s.organization_id == ^organization_id
+    user_query = from u in User, where: u.organization_id == ^organization_id
+
     Repo.all(
       from b in Batch,
         where: b.organization_id == ^organization_id,
         where: b.product_id == ^product_id,
-        order_by: [asc: b.expiry_date]
+        order_by: [asc: b.expiry_date],
+        preload: [site: ^site_query, approver: ^user_query]
     )
   end
 
@@ -140,10 +147,24 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc """
+  Gets a single batch scoped to an organization, preloaded with `product`,
+  `site`, and `supplier` (each scoped to the same organization) — for
+  review-panel-style displays. Raises if not found.
+  """
+  def get_batch_with_details!(organization_id, id) do
+    product_query = from p in Product, where: p.organization_id == ^organization_id
+    site_query = from s in Site, where: s.organization_id == ^organization_id
+    supplier_query = from s in Supplier, where: s.organization_id == ^organization_id
+
+    Batch
+    |> Repo.get_by!(id: id, organization_id: organization_id)
+    |> Repo.preload(product: product_query, site: site_query, supplier: supplier_query)
+  end
+
+  @doc """
   Dispatches a batch to a site. Sets product, site, quantity, and lot
-  details. Approval fields (`received_by_id`, `received_at`, `approver_id`,
-  `is_approved`) are left unset — they are stamped on receipt via
-  `receive_batch/2`.
+  details. Approval fields (`received_at`, `approver_id`) are left unset —
+  they are stamped on receipt via `receive_batch/2`.
 
   When `remaining_quantity` is omitted it defaults to `quantity`.
   """
@@ -166,7 +187,6 @@ defmodule ThamaniDawa.Batches do
   def receive_batch(%Batch{} = batch, user_id, attrs \\ %{}) do
     attrs =
       Map.merge(attrs, %{
-        "received_by_id" => user_id,
         "received_at" => DateTime.utc_now(),
         "approver_id" => user_id
       })

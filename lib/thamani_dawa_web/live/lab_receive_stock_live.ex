@@ -50,8 +50,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
      socket
      |> assign(:products_by_id, products_by_id)
      |> assign(:suppliers, suppliers)
-     |> assign(:suppliers_by_id, Map.new(suppliers, &{&1.id, &1}))
-     |> assign(:sites_by_id, Map.new(lab_sites, &{&1.id, &1}))
+     |> assign(:lab_site_ids, MapSet.new(lab_sites, & &1.id))
      |> assign(:lab_sites, lab_sites)
      |> assign(:site_id, site_id)
      |> assign(:site_locked, not is_nil(site_id))
@@ -66,7 +65,10 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
 
   def handle_event("view_batch", %{"id" => id}, socket) do
     batch =
-      Batches.get_batch!(socket.assigns.current_scope.organization_id, String.to_integer(id))
+      Batches.get_batch_with_details!(
+        socket.assigns.current_scope.organization_id,
+        String.to_integer(id)
+      )
 
     {:noreply, assign(socket, :selected_batch, batch)}
   end
@@ -119,8 +121,12 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     site_id_str = Map.get(attrs, "site_id", "")
 
     case parse_id(site_id_str) do
-      {:ok, site_id} when not is_map_key(socket.assigns.sites_by_id, site_id) ->
-        {:noreply, put_flash(socket, :error, "Selected site cannot receive lab consumables.")}
+      {:ok, site_id} ->
+        if MapSet.member?(socket.assigns.lab_site_ids, site_id) do
+          walk_in_receive(socket, scope, attrs)
+        else
+          {:noreply, put_flash(socket, :error, "Selected site cannot receive lab consumables.")}
+        end
 
       _ ->
         walk_in_receive(socket, scope, attrs)
@@ -239,13 +245,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     "#{name} — #{batch.batch_no} (#{batch.remaining_quantity} left, exp. #{batch.expiry_date})"
   end
 
-  defp lookup_name(id, map, field \\ :name) do
-    case Map.get(map, id) do
-      nil -> "—"
-      record -> Map.get(record, field) || "—"
-    end
-  end
-
   defp product_display(batch, products_by_id) do
     case Map.get(products_by_id, batch.product_id) do
       nil -> "(unknown product)"
@@ -329,13 +328,13 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
             <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               Destination site
             </dt>
-            <dd>{lookup_name(@selected_batch.site_id, @sites_by_id)}</dd>
+            <dd>{@selected_batch.site.name}</dd>
           </div>
           <div :if={@selected_batch.supplier_id}>
             <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               Supplier
             </dt>
-            <dd>{lookup_name(@selected_batch.supplier_id, @suppliers_by_id)}</dd>
+            <dd>{@selected_batch.supplier.name}</dd>
           </div>
           <div :if={@selected_batch.manufacture_date}>
             <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">

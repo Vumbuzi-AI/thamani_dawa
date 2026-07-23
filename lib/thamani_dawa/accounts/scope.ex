@@ -32,4 +32,23 @@ defmodule ThamaniDawa.Accounts.Scope do
 
   @doc "Whether the signed-in user is a lab technician (§7)."
   def lab_technician?(scope), do: role?(scope, :lab_technician)
+
+  @doc """
+  Whether the signed-in user holds the combined pharmacy + lab role (§7).
+  Combined staff work across both operational portals but never receive
+  organization-admin access.
+  """
+  def pharma_lab?(scope), do: role?(scope, :pharma_lab)
+
+  @doc """
+  Whether the signed-in user can enter the pharmacy portal: an admin, a
+  pharmacist, or combined pharmacy/lab staff.
+  """
+  def pharmacy_access?(scope), do: admin?(scope) or pharmacist?(scope) or pharma_lab?(scope)
+
+  @doc """
+  Whether the signed-in user can enter the lab portal: an admin, a lab
+  technician, or combined pharmacy/lab staff.
+  """
+  def lab_access?(scope), do: admin?(scope) or lab_technician?(scope) or pharma_lab?(scope)
 end

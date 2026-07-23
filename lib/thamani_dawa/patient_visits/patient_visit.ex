@@ -5,11 +5,15 @@ defmodule ThamaniDawa.PatientVisits.PatientVisit do
   @visit_types [:pharmacy, :lab]
 
   schema "patient_visits" do
-    field :organization_id, :id
-    field :patient_id, :id
-    field :site_id, :id
-    field :user_id, :id
     field :visit_type, Ecto.Enum, values: @visit_types
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+    belongs_to :patient, ThamaniDawa.Patients.Patient
+    belongs_to :site, ThamaniDawa.Sites.Site
+    belongs_to :user, ThamaniDawa.Accounts.User
+
+    has_many :prescriptions, ThamaniDawa.Prescriptions.Prescription
+    has_many :lab_orders, ThamaniDawa.LabOrders.LabOrder
 
     timestamps(type: :utc_datetime)
   end

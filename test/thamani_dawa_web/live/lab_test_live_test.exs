@@ -109,13 +109,14 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
     end
 
     test "creates a test and streams it into the table", %{conn: conn, admin: admin} do
+      category = lab_test_category_fixture(%{organization_id: admin.organization_id})
       {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
 
       view
       |> form("#lab-test-form", %{
         "lab_test" => %{
           "name" => "Haemoglobin",
-          "category" => "Haematology",
+          "category_id" => to_string(category.id),
           "price" => "350.00",
           "is_active" => "true"
         },
@@ -127,13 +128,35 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
       assert render(view) =~ "Haemoglobin"
     end
 
+    test "creates a test with an inline new category", %{conn: conn, admin: admin} do
+      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
+
+      view |> element("button[phx-click=toggle_new_category]") |> render_click()
+
+      view
+      |> form("#lab-test-form", %{
+        "lab_test" => %{
+          "name" => "Haemoglobin",
+          "price" => "350.00",
+          "is_active" => "true"
+        },
+        "category" => %{"name" => "New Category #{System.unique_integer()}"},
+        "field_defs_json" => ~s({"hb": {"type": "number", "unit": "g/dL"}})
+      })
+      |> render_submit()
+
+      assert_patch(view, ~p"/lab/tests")
+      assert render(view) =~ "Haemoglobin"
+    end
+
     test "shows validation errors when name is blank", %{conn: conn, admin: admin} do
+      category = lab_test_category_fixture(%{organization_id: admin.organization_id})
       {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
 
       html =
         view
         |> form("#lab-test-form", %{
-          "lab_test" => %{"name" => "", "category" => "Haematology"},
+          "lab_test" => %{"name" => "", "category_id" => to_string(category.id)},
           "field_defs_json" => ~s({"x": {"type": "string"}})
         })
         |> render_submit()

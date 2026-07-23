@@ -3,13 +3,16 @@ defmodule ThamaniDawa.Patients.Patient do
   import Ecto.Changeset
 
   schema "patients" do
-    field :organization_id, :id
     field :full_name, :string
     field :date_of_birth, :date
     field :gender, :string
     field :phone, :string
     field :national_id, :string
     field :gsrn, :integer
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+
+    has_many :patient_visits, ThamaniDawa.PatientVisits.PatientVisit
 
     timestamps(type: :utc_datetime)
   end
@@ -18,7 +21,7 @@ defmodule ThamaniDawa.Patients.Patient do
   def changeset(patient, attrs) do
     patient
     |> cast(attrs, [:full_name, :date_of_birth, :gender, :phone, :national_id, :gsrn])
-    |> validate_required([:full_name, :gsrn, :date_of_birth, :gender, :phone, :national_id])
+    |> validate_required([:full_name, :gsrn, :date_of_birth, :gender, :phone])
     |> validate_format(:national_id, ~r/^\d*$/, message: "must contain only numbers")
     |> validate_length(:national_id, is: 8, message: "must be exactly 8 characters")
     |> validate_format(:phone, ~r/^(?:\+254|0)[17]\d{8}$/,

@@ -3,13 +3,14 @@ defmodule ThamaniDawa.LabOrders.LabConsumableUsage do
   import Ecto.Changeset
 
   schema "lab_consumable_usage" do
-    field :organization_id, :id
-    field :lab_order_id, :id
-    field :batch_id, :id
     field :quantity, :integer
-    field :used_by_id, :id
     field :purpose, :string
     field :used_at, :utc_datetime
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+    belongs_to :lab_order, ThamaniDawa.LabOrders.LabOrder
+    belongs_to :batch, ThamaniDawa.Batches.Batch
+    belongs_to :used_by, ThamaniDawa.Accounts.User, foreign_key: :used_by_id
 
     timestamps(type: :utc_datetime)
   end

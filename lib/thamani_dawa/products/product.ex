@@ -3,7 +3,6 @@ defmodule ThamaniDawa.Products.Product do
   import Ecto.Changeset
 
   schema "products" do
-    field :organization_id, :id
     field :generic_name, :string
     field :brand_name, :string
     field :category, :string
@@ -13,6 +12,11 @@ defmodule ThamaniDawa.Products.Product do
     field :is_dangerous_drug, :boolean, default: false
     field :reorder_level, :integer
     field :price, :integer
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+
+    has_many :batches, ThamaniDawa.Batches.Batch
+    has_many :prescription_items, ThamaniDawa.Prescriptions.PrescriptionItem
 
     timestamps(type: :utc_datetime)
   end

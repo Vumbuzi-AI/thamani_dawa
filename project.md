@@ -175,7 +175,9 @@ Every table below carries `organization_id` per [§2.2](#22-enforcement).
   `supplier_id` (nullable — null when this batch arrived via an inter-site transfer rather than
   from a supplier), `source_batch_id` (nullable, self-referencing → `batches` — set when this
   batch was split off from another site's batch via a transfer, preserving GTIN/batch/expiry
-  lineage across the move), `received_by_id` (→ `users`), `received_at`, `is_active`.
+  lineage across the move), `received_at`, `approver_id` (→ `users`, nullable — the staff member
+  who confirmed receipt; receiving and approving are the same single step, so there is no separate
+  `received_by_id`), `is_active`.
 
 ### 4.2 People
 
@@ -211,15 +213,18 @@ Every table below carries `organization_id` per [§2.2](#22-enforcement).
 - **`lab_test_categories`** / **`lab_test_templates`** — `organization_id`, plus (template)
   `name`, `short_name`, `is_active`, `display_order`, `field_definitions`; (category) `name`,
   `description`, `display_order`.
-- **`lab_orders`** — `organization_id`, `site_id`, `patient_id`, `prescriber_name`,
-  `ordered_by_id` (→ `users`), `urgency`, `payment_type`, `has_paid`, `total_amount`,
-  `sample_collection_date`, `sample_collection_description`, `status`, `lab_report`,
-  `test_findings`.
-- **`lab_order_tests`** — `organization_id`, `lab_order_id`, `lab_test_id`, `template_id`
-  (nullable), `results` (map), `status`, `sample_collected_on`, `test_performed_on`,
-  `performed_by_id`, `verified_by_id`, `verified_at`.
-- **`lab_consumable_usage`** — `organization_id`, `lab_order_id` (nullable), `batch_id`,
-  `quantity`, `used_by_id`, `purpose`, `used_at`.
+- **`lab_orders`** — `organization_id`, `site_id`, `patient_visit_id` (required — sole path to the
+  patient, no separate `patient_id`), `prescriber_name`, `ordered_by_id` (→ `users`, nullable),
+  `urgency`, `payment_type`, `has_paid`, `total_amount`, `status`, `lab_report`, `test_findings`,
+  `lab_request`, referral fields.
+- **`lab_order_results`** — one row per individual test ordered. `organization_id`,
+  `lab_order_id`, `lab_test_id` (FK → `lab_tests`), `template_id` (nullable, bare integer — no
+  `lab_test_templates` table exists yet), `results` (map), `status`, `sample_collected_on`,
+  `test_performed_on`, `performed_by_id`/`collected_by_id`/`verified_by_id` (nullable),
+  `collection_notes` (free text), `sample_type` (`Ecto.Enum` — blood/urine/stool/swab, required).
+- **`lab_consumable_usage`** — `organization_id`, `lab_order_id` (nullable by design — a reagent
+  draw doesn't always tie back to a specific order), `batch_id`, `quantity`, `used_by_id`,
+  `purpose`, `used_at`.
 - **`quality_assurance_charts`** — `organization_id`, `site_id`, `chart_type`, `month`, `year`,
   `daily_entries`.
 

@@ -9,13 +9,13 @@ defmodule ThamaniDawa.Repo.Migrations.CreateBatches do
       add :gtin, :string, null: false
       add :batch_no, :string, null: false
       add :serial, :string
+      add :manufacturer, :string
       add :manufacture_date, :date
       add :expiry_date, :date, null: false
       add :quantity, :integer, null: false
       add :remaining_quantity, :integer, null: false
       add :cost_per_unit, :decimal
       add :supplier_id, references(:suppliers, on_delete: :nilify_all)
-      add :received_by_id, references(:users, on_delete: :nilify_all)
       add :received_at, :utc_datetime
       add :is_approved, :boolean, null: false, default: false
       add :approver_id, references(:users, on_delete: :restrict), null: false

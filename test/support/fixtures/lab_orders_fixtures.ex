@@ -16,18 +16,18 @@ defmodule ThamaniDawa.LabOrdersFixtures do
       lab_request: "CBC panel",
       referring_facility: "General Hospital",
       referring_doctor: "Dr. Jane Doe",
-      referred_date: ~T[09:00:00]
+      referred_date: ~D[2026-01-15]
     })
   end
 
   def valid_lab_order_result_attributes(attrs \\ %{}) do
-    Enum.into(attrs, %{sample_collection_description: 1})
+    Enum.into(attrs, %{sample_type: :blood})
   end
 
   @doc """
   Creates a lab order. Unless given, `organization_id` gets a fresh
-  organization, and `site_id`/`patient_id`/`patient_visit_id` get a fresh
-  site/patient/patient visit under that organization.
+  organization, and `site_id`/`patient_visit_id` get a fresh site/patient
+  visit under that organization.
   """
   def lab_order_fixture(attrs \\ %{}) do
     {organization_id, attrs} =

@@ -12,7 +12,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   alias ThamaniDawaWeb.SiteScoping
 
   @urgencies ~w(routine urgent stat)
-  @sample_types [{"Blood", 1}, {"Urine", 2}, {"Stool", 3}, {"Swab", 4}]
+  @sample_types [{"Blood", :blood}, {"Urine", :urine}, {"Stool", :stool}, {"Swab", :swab}]
   @default_filters %{status: "", urgency: ""}
 
   def mount(_params, _session, socket) do
@@ -356,7 +356,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                 <.input field={@patient_form[:gender]} label="Gender" required />
                 <.input field={@patient_form[:phone]} label="Phone" required />
               </div>
-              <.input field={@patient_form[:national_id]} label="National ID" required />
+              <.input field={@patient_form[:national_id]} label="National ID" />
             </div>
           </div>
 
@@ -396,7 +396,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           >
             <.input field={@header_form[:referring_facility]} label="Referring facility" required />
             <.input field={@header_form[:referring_doctor]} label="Referring doctor" required />
-            <.input field={@header_form[:referred_date]} type="time" label="Referred time" />
+            <.input field={@header_form[:referred_date]} type="date" label="Referred date" />
           </div>
 
           <%!-- Tests --%>
@@ -420,7 +420,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                 />
                 <.input
                   type="select"
-                  name={"tests[#{id}][sample_collection_description]"}
+                  name={"tests[#{id}][sample_type]"}
                   label="Sample type"
                   value={nil}
                   options={@sample_types}

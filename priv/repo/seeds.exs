@@ -7,6 +7,7 @@ alias ThamaniDawa.LabOrders
 alias ThamaniDawa.LabOrders.{LabConsumableUsage, LabOrder, LabOrderResult}
 alias ThamaniDawa.LabTests
 alias ThamaniDawa.LabTests.LabTest
+alias ThamaniDawa.LabTests.LabTestCategory
 alias ThamaniDawa.Organizations
 alias ThamaniDawa.Organizations.Organization
 alias ThamaniDawa.Patients
@@ -156,6 +157,9 @@ pharmacist = staff_user.("pharmacist@example.com", "Grace Pharmacist", :pharmaci
 lab_technician = staff_user.("lab@example.com", "Laban Technician", :lab_technician, lab_site)
 _lab_technician2 = staff_user.("lab2@example.com", "Amara Technician", :lab_technician, lab_site)
 
+_pharma_lab =
+  staff_user.("pharmalab@example.com", "Zawadi Combined", :pharma_lab, pharmacy_site)
+
 {:ok, admin} =
   if is_nil(admin.hashed_pin), do: Accounts.set_user_pin(admin, %{pin: pin}), else: {:ok, admin}
 
@@ -285,7 +289,6 @@ batch = fn product, site, batch_no, quantity, unit_price ->
       cost_per_unit: Decimal.new("20.00"),
       unit_price: Decimal.new(unit_price),
       supplier_id: supplier.id,
-      received_by_id: pharmacist.id,
       received_at: now,
       approver_id: pharmacist.id
     },
@@ -409,6 +412,14 @@ _dispensed_item =
     prescription_item
   end
 
+hematology_category =
+  insert_or_get.(
+    LabTestCategory,
+    %{organization_id: organization_id, name: "Hematology"},
+    %{},
+    fn attrs -> LabTests.create_lab_test_category(organization_id, attrs) end
+  )
+
 cbc_test =
   insert_or_get.(
     LabTest,
@@ -425,7 +436,7 @@ cbc_test =
         "mch" => %{"type" => "number", "unit" => "pg"},
         "mchc" => %{"type" => "number", "unit" => "g/dL"}
       },
-      category: "Haematology"
+      category_id: hematology_category.id
     },
     fn attrs -> LabTests.create_lab_test(organization_id, attrs) end
   )
@@ -446,12 +457,11 @@ lab_order =
     LabOrder,
     %{
       organization_id: organization_id,
-      patient_id: patient.id,
+      patient_visit_id: patient_visit.id,
       prescriber_name: "Dr. Demo"
     },
     %{
       site_id: lab_site.id,
-      patient_visit_id: patient_visit.id,
       ordered_by_id: lab_technician.id,
       urgency: "routine",
       payment_type: "Cash",
@@ -461,7 +471,7 @@ lab_order =
       is_referral: true,
       referring_facility: "Demo Care Diagnostic Lab",
       referring_doctor: "Dr. Demo",
-      referred_date: ~T[09:00:00]
+      referred_date: ~D[2026-01-15]
     },
     fn attrs -> LabOrders.create_lab_order(organization_id, attrs) end
   )
@@ -475,7 +485,7 @@ lab_order_result =
       lab_test_id: cbc_test.id
     },
     %{
-      sample_collection_description: 1
+      sample_type: :blood
     },
     fn attrs -> LabOrders.create_lab_order_result(organization_id, lab_order.id, attrs) end
   )
@@ -516,4 +526,5 @@ Seeded logins:
   pharmacist@example.com / #{password}  role=pharmacist     pin=#{pin}
   lab@example.com / #{password}         role=lab_technician pin=#{pin}
   lab2@example.com / #{password}        role=lab_technician pin=#{pin}
+  pharmalab@example.com / #{password}   role=pharma_lab     pin=#{pin}
 """)

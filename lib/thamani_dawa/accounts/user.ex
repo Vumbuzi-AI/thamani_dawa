@@ -2,12 +2,9 @@ defmodule ThamaniDawa.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @roles [:admin, :pharmacist, :lab_technician]
+  @roles [:admin, :pharmacist, :lab_technician, :pharma_lab]
 
   schema "users" do
-    field :organization_id, :id
-    field :site_id, :id
-    field :invited_by_id, :id
     field :name, :string
     field :email, :string
     field :hashed_password, :string, redact: true
@@ -16,6 +13,29 @@ defmodule ThamaniDawa.Accounts.User do
     field :pin, :string, virtual: true, redact: true
     field :role, Ecto.Enum, values: @roles
     field :is_active, :boolean, default: true
+    field :last_logged_in_at, :utc_datetime
+    field :last_logged_out_at, :utc_datetime
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+    belongs_to :site, ThamaniDawa.Sites.Site
+    belongs_to :invited_by, __MODULE__
+
+    has_many :invited_users, __MODULE__, foreign_key: :invited_by_id
+    has_many :user_tokens, ThamaniDawa.Accounts.UserToken
+    has_many :login_sessions, ThamaniDawa.Accounts.UserLoginSession
+    has_many :patient_visits, ThamaniDawa.PatientVisits.PatientVisit
+    has_many :prescriptions, ThamaniDawa.Prescriptions.Prescription
+    has_many :approved_batches, ThamaniDawa.Batches.Batch, foreign_key: :approver_id
+    has_many :ordered_lab_orders, ThamaniDawa.LabOrders.LabOrder, foreign_key: :ordered_by_id
+
+    has_many :performed_lab_order_results, ThamaniDawa.LabOrders.LabOrderResult,
+      foreign_key: :performed_by_id
+
+    has_many :collected_lab_order_results, ThamaniDawa.LabOrders.LabOrderResult,
+      foreign_key: :collected_by_id
+
+    has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage,
+      foreign_key: :used_by_id
 
     timestamps(type: :utc_datetime)
   end

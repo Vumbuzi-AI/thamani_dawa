@@ -2,8 +2,6 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.LabOrders
-  alias ThamaniDawa.Patients
-  alias ThamaniDawa.PatientVisits
   alias ThamaniDawaWeb.SiteScoping
 
   def mount(_params, _session, socket) do
@@ -11,28 +9,20 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
     organization_id = scope.organization_id
 
     lab_orders =
-      organization_id |> LabOrders.list_lab_orders() |> SiteScoping.for_current_site(scope)
-
-    patients_by_id = organization_id |> Patients.list_patients() |> Map.new(&{&1.id, &1})
-
-    patient_by_visit_id =
       organization_id
-      |> PatientVisits.list_patient_visits()
-      |> Map.new(&{&1.id, patients_by_id[&1.patient_id]})
+      |> LabOrders.list_lab_orders_with_patient()
+      |> SiteScoping.for_current_site(scope)
 
     {:ok,
      socket
-     |> assign(:patient_by_visit_id, patient_by_visit_id)
      |> assign(:pending, Enum.filter(lab_orders, &(&1.status == :pending)))
      |> assign(:incomplete, Enum.filter(lab_orders, &(&1.status in [:pending, :in_progress])))}
   end
 
-  defp patient_name(patient_by_visit_id, visit_id) do
-    case patient_by_visit_id[visit_id] do
-      nil -> "(unknown patient)"
-      patient -> patient.full_name
-    end
-  end
+  defp patient_name(%{patient_visit: %{patient: patient}}) when not is_nil(patient),
+    do: patient.full_name
+
+  defp patient_name(_lab_order), do: "(unknown patient)"
 
   def render(assigns) do
     ~H"""
@@ -48,9 +38,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         rows={@pending}
         row_click={fn o -> JS.navigate(~p"/lab/orders/#{o.id}") end}
       >
-        <:col :let={lab_order} label="Patient">
-          {patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}
-        </:col>
+        <:col :let={lab_order} label="Patient">{patient_name(lab_order)}</:col>
         <:col :let={lab_order} label="Urgency">{lab_order.urgency}</:col>
         <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
         <:empty_state>
@@ -66,9 +54,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         rows={@incomplete}
         row_click={fn o -> JS.navigate(~p"/lab/orders/#{o.id}") end}
       >
-        <:col :let={lab_order} label="Patient">
-          {patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}
-        </:col>
+        <:col :let={lab_order} label="Patient">{patient_name(lab_order)}</:col>
         <:col :let={lab_order} label="Status">
           <.status_badge status={lab_order.status} />
         </:col>

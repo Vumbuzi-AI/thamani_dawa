@@ -4,6 +4,7 @@ defmodule ThamaniDawa.LabOrdersTest do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.LabOrders
   alias ThamaniDawa.LabOrders.{LabOrder, LabOrderResult}
+  alias ThamaniDawa.PatientVisits
 
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.BatchesFixtures
@@ -17,7 +18,7 @@ defmodule ThamaniDawa.LabOrdersTest do
     lab_request: "CBC panel",
     referring_facility: "General Hospital",
     referring_doctor: "Dr. Jane Doe",
-    referred_date: ~T[09:00:00]
+    referred_date: ~D[2026-01-15]
   }
 
   describe "create_lab_order/2" do
@@ -30,8 +31,6 @@ defmodule ThamaniDawa.LabOrdersTest do
                site_id: ["can't be blank"],
                patient_visit_id: ["can't be blank"]
              } = errors_on(changeset)
-
-      refute Map.has_key?(errors_on(changeset), :patient_id)
     end
 
     test "defaults status to pending and scopes to the organization" do
@@ -134,7 +133,7 @@ defmodule ThamaniDawa.LabOrdersTest do
   end
 
   describe "create_lab_order_with_results/4 (with auto-created visit)" do
-    test "sets both patient_visit_id and patient_id on the resulting order" do
+    test "sets patient_visit_id on the resulting order, linking to the patient via the visit" do
       organization = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})
       patient = patient_fixture(%{organization_id: organization.id})
@@ -152,12 +151,14 @@ defmodule ThamaniDawa.LabOrdersTest do
                LabOrders.create_lab_order_with_results(
                  organization.id,
                  %{"site_id" => site.id},
-                 [%{lab_test_id: lab_test.id, sample_collection_description: 1}],
+                 [%{lab_test_id: lab_test.id, sample_type: :blood}],
                  visit_attrs
                )
 
-      assert header.patient_id == patient.id
       assert header.patient_visit_id != nil
+
+      visit = PatientVisits.get_patient_visit!(organization.id, header.patient_visit_id)
+      assert visit.patient_id == patient.id
     end
   end
 
@@ -180,14 +181,13 @@ defmodule ThamaniDawa.LabOrdersTest do
                  organization.id,
                  Map.merge(@valid_header_extra, %{
                    site_id: site.id,
-                   patient_id: patient.id,
                    patient_visit_id: lab_order.patient_visit_id
                  }),
-                 [%{lab_test_id: lab_test.id, sample_collection_description: 1}]
+                 [%{lab_test_id: lab_test.id, sample_type: :blood}]
                )
 
       assert result.status == :pending
-      assert header.referred_date == ~T[09:00:00]
+      assert header.referred_date == ~D[2026-01-15]
     end
 
     test "rolls back the header when a result is invalid" do
@@ -209,7 +209,6 @@ defmodule ThamaniDawa.LabOrdersTest do
                  organization.id,
                  Map.merge(@valid_header_extra, %{
                    site_id: site.id,
-                   patient_id: patient.id,
                    patient_visit_id: lab_order.patient_visit_id
                  }),
                  [%{}]
@@ -417,98 +416,6 @@ defmodule ThamaniDawa.LabOrdersTest do
                })
 
       assert updated.status == :completed
-
-      assert %LabOrder{status: :cancelled} =
-               LabOrders.get_lab_order!(ctx.organization.id, lab_order.id)
-    end
-  end
-
-  describe "verify_result/3" do
-    setup do
-      organization = organization_fixture()
-      performer = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
-      verifier = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
-      lab_order_result = lab_order_result_fixture(%{organization_id: organization.id})
-
-      {:ok, completed} =
-        LabOrders.record_result(organization.id, lab_order_result.id, performer.id, %{
-          "note" => "ok"
-        })
-
-      %{organization: organization, performer: performer, verifier: verifier, result: completed}
-    end
-
-    test "a different user can verify a completed result", ctx do
-      assert {:ok, verified} =
-               LabOrders.verify_result(ctx.organization.id, ctx.result.id, ctx.verifier.id)
-
-      assert verified.status == :verified
-    end
-
-    test "returns :cannot_self_verify when the verifier performed the test", ctx do
-      assert {:error, :cannot_self_verify} =
-               LabOrders.verify_result(ctx.organization.id, ctx.result.id, ctx.performer.id)
-
-      assert LabOrders.get_lab_order_result!(ctx.organization.id, ctx.result.id).status ==
-               :completed
-    end
-
-    test "advances the parent order to :verified when all results are verified", ctx do
-      lab_order_id = ctx.result.lab_order_id
-
-      assert {:ok, _} =
-               LabOrders.verify_result(ctx.organization.id, ctx.result.id, ctx.verifier.id)
-
-      assert LabOrders.get_lab_order!(ctx.organization.id, lab_order_id).status == :verified
-    end
-
-    test "parent order stays :completed when only some results are verified", ctx do
-      organization = ctx.organization
-      lab_order = lab_order_fixture(%{organization_id: organization.id})
-
-      result_1 =
-        lab_order_result_fixture(%{
-          organization_id: organization.id,
-          lab_order_id: lab_order.id
-        })
-
-      result_2 =
-        lab_order_result_fixture(%{
-          organization_id: organization.id,
-          lab_order_id: lab_order.id
-        })
-
-      {:ok, completed_1} =
-        LabOrders.record_result(organization.id, result_1.id, ctx.performer.id, %{"note" => "ok"})
-
-      {:ok, _completed_2} =
-        LabOrders.record_result(organization.id, result_2.id, ctx.performer.id, %{"note" => "ok"})
-
-      assert {:ok, _} =
-               LabOrders.verify_result(organization.id, completed_1.id, ctx.verifier.id)
-
-      assert LabOrders.get_lab_order!(organization.id, lab_order.id).status == :completed
-    end
-
-    test "never resurrects a cancelled order", ctx do
-      lab_order =
-        lab_order_fixture(%{organization_id: ctx.organization.id, status: :cancelled})
-
-      result =
-        lab_order_result_fixture(%{
-          organization_id: ctx.organization.id,
-          lab_order_id: lab_order.id
-        })
-
-      {:ok, completed} =
-        LabOrders.record_result(ctx.organization.id, result.id, ctx.performer.id, %{
-          "note" => "ok"
-        })
-
-      assert {:ok, verified} =
-               LabOrders.verify_result(ctx.organization.id, completed.id, ctx.verifier.id)
-
-      assert verified.status == :verified
 
       assert %LabOrder{status: :cancelled} =
                LabOrders.get_lab_order!(ctx.organization.id, lab_order.id)

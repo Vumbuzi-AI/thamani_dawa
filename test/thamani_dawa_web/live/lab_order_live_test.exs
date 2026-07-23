@@ -167,6 +167,32 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       assert LabOrders.get_lab_order!(ctx.admin.organization_id, lab_order.id).status ==
                :in_progress
     end
+
+    test "recording a result advances it to :completed and the order to :completed", ctx do
+      organization_id = ctx.admin.organization_id
+      lab_order = lab_order_fixture(%{organization_id: organization_id})
+
+      result =
+        lab_order_result_fixture(%{
+          organization_id: organization_id,
+          lab_order_id: lab_order.id,
+          lab_test_id: ctx.lab_test.id
+        })
+
+      {:ok, _} =
+        LabOrders.record_result(organization_id, result.id, ctx.lab_tech.id, %{"hb" => "13"})
+
+      assert LabOrders.get_lab_order_result!(organization_id, result.id).status == :completed
+      assert LabOrders.get_lab_order!(organization_id, lab_order.id).status == :completed
+    end
+  end
+
+  describe "removed verification queue" do
+    test "the standalone /lab/verification-queue route no longer exists", ctx do
+      conn = get(log_in_user(ctx.conn, ctx.lab_tech), "/lab/verification-queue")
+
+      assert conn.status == 404
+    end
   end
 
   describe "new lab order" do
@@ -203,7 +229,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         "tests" => %{
           "0" => %{
             "lab_test_id" => to_string(ctx.lab_test.id),
-            "sample_collection_description" => "1"
+            "sample_type" => "blood"
           }
         }
       })
@@ -240,7 +266,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         "tests" => %{
           "0" => %{
             "lab_test_id" => to_string(ctx.lab_test.id),
-            "sample_collection_description" => "1"
+            "sample_type" => "blood"
           }
         }
       })
@@ -313,7 +339,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           "tests" => %{
             "0" => %{
               "lab_test_id" => to_string(ctx.lab_test.id),
-              "sample_collection_description" => "1"
+              "sample_type" => "blood"
             }
           }
         })
@@ -346,7 +372,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         "tests" => %{
           "0" => %{
             "lab_test_id" => to_string(ctx.lab_test.id),
-            "sample_collection_description" => "1"
+            "sample_type" => "blood"
           }
         }
       })
@@ -386,11 +412,11 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           "tests" => %{
             "0" => %{
               "lab_test_id" => to_string(ctx.lab_test.id),
-              "sample_collection_description" => ""
+              "sample_type" => ""
             },
             "1" => %{
               "lab_test_id" => to_string(second_test.id),
-              "sample_collection_description" => ""
+              "sample_type" => ""
             }
           }
         })

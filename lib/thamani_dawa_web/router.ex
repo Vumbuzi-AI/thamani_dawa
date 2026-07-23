@@ -73,10 +73,7 @@ defmodule ThamaniDawaWeb.Router do
       live "/lab/orders", LabOrderLive.Index, :index
       live "/lab/orders/new", LabOrderLive.Index, :new
       live "/lab/orders/:id", LabOrderLive.Show, :show
-
-      live "/lab/orders/:lab_order_id/results/:id/edit", ResultEntryLive, :edit
-
-      live "/lab/verification-queue", VerificationQueueLive, :index
+      live "/lab/orders/:id/results/:result_id/edit", LabOrderLive.Show, :edit_result
 
       live "/lab/receive-stock", LabReceiveStockLive, :new
 

@@ -207,7 +207,7 @@ defmodule ThamaniDawa.BatchesTest do
   end
 
   describe "receive_batch/2" do
-    test "stamps received_by_id, received_at, approver_id and sets is_approved true" do
+    test "stamps approver_id and received_at" do
       organization = organization_fixture()
       user = user_fixture(%{organization_id: organization.id})
       batch = batch_fixture(%{organization_id: organization.id, pending: true})
@@ -217,7 +217,6 @@ defmodule ThamaniDawa.BatchesTest do
 
       assert {:ok, received} = Batches.receive_batch(batch, user.id)
       assert received.approver_id == user.id
-      assert received.received_by_id == user.id
       assert %DateTime{} = received.received_at
     end
   end

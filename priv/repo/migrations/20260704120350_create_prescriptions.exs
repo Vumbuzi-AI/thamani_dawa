@@ -15,7 +15,7 @@ defmodule ThamaniDawa.Repo.Migrations.CreatePrescriptions do
       add :is_external, :boolean, null: false, default: false
       add :source_facility, :text
       add :referring_doctor, :text
-      add :referral_date, :time
+      add :referral_date, :date
 
       timestamps(type: :utc_datetime)
     end

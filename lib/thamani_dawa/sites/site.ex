@@ -5,7 +5,6 @@ defmodule ThamaniDawa.Sites.Site do
   @site_types [:pharmacy, :lab, :pharmacy_lab, :warehouse]
 
   schema "sites" do
-    field :organization_id, :id
     field :name, :string
     field :site_type, Ecto.Enum, values: @site_types
     field :gln, :string
@@ -13,6 +12,13 @@ defmodule ThamaniDawa.Sites.Site do
     field :lat, :float
     field :long, :float
     field :is_active, :boolean, default: true
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+
+    has_many :users, ThamaniDawa.Accounts.User
+    has_many :batches, ThamaniDawa.Batches.Batch
+    has_many :patient_visits, ThamaniDawa.PatientVisits.PatientVisit
+    has_many :lab_orders, ThamaniDawa.LabOrders.LabOrder
 
     timestamps(type: :utc_datetime)
   end

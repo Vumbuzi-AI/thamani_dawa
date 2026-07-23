@@ -1,7 +1,6 @@
 defmodule ThamaniDawaWeb.ProductLive.Show do
   use ThamaniDawaWeb, :live_view
 
-  alias ThamaniDawa.Accounts
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Products
@@ -19,16 +18,10 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
       |> Sites.list_sites()
       |> Map.new(&{&1.id, &1})
 
-    users_by_id =
-      organization_id
-      |> Accounts.list_users()
-      |> Map.new(&{&1.id, &1})
-
     {:ok,
      socket
      |> assign(:product, product)
      |> assign(:sites_by_id, sites_by_id)
-     |> assign(:users_by_id, users_by_id)
      |> assign(:suppliers, Suppliers.list_suppliers(organization_id))
      |> stream(:batches, batches)}
   end
@@ -63,6 +56,10 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
     case Batches.create_batch(scope.organization_id, attrs) do
       {:ok, batch} ->
+        # A freshly-inserted batch has :site/:approver as %Ecto.Association.NotLoaded{} —
+        # fill them in from what's already in memory rather than an extra query.
+        batch = %{batch | site: socket.assigns.sites_by_id[batch.site_id], approver: nil}
+
         {:noreply,
          socket
          |> put_flash(:info, "Batch dispatched — awaiting receipt at site.")
@@ -74,20 +71,9 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
     end
   end
 
-  defp site_name(sites_by_id, site_id) do
-    case Map.get(sites_by_id, site_id) do
-      nil -> "—"
-      site -> site.name
-    end
-  end
-
-  defp user_display(users_by_id, user_id) do
-    case Map.get(users_by_id, user_id) do
-      nil -> "—"
-      %{name: name} when is_binary(name) and name != "" -> name
-      %{email: email} -> email
-    end
-  end
+  defp user_display(nil), do: "—"
+  defp user_display(%{name: name}) when is_binary(name) and name != "", do: name
+  defp user_display(%{email: email}), do: email
 
   defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
 
@@ -189,13 +175,11 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
       <.header class="mt-6">Batches</.header>
       <.table id="batches" rows={@streams.batches}>
-        <:col :let={{_id, batch}} label="Site">{site_name(@sites_by_id, batch.site_id)}</:col>
+        <:col :let={{_id, batch}} label="Site">{batch.site.name}</:col>
         <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
         <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
         <:col :let={{_id, batch}} label="Stock">{batch.remaining_quantity} / {batch.quantity}</:col>
-        <:col :let={{_id, batch}} label="Received by">
-          {user_display(@users_by_id, batch.approver_id)}
-        </:col>
+        <:col :let={{_id, batch}} label="Received by">{user_display(batch.approver)}</:col>
         <:col :let={{_id, batch}} label="Status">
           <.status_badge status={if batch.approver_id, do: :active, else: :pending_receipt} />
         </:col>

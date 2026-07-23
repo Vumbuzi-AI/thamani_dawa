@@ -9,6 +9,7 @@ defmodule ThamaniDawa.Repo.Migrations.CreateSuppliers do
       add :phone, :string
       add :email, :string
       add :gln, :string
+      add :location, :string
       add :is_active, :boolean, null: false, default: true
 
       timestamps(type: :utc_datetime)

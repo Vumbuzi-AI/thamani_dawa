@@ -5,11 +5,18 @@ defmodule ThamaniDawa.LabTests do
 
   import Ecto.Query, warn: false
   alias ThamaniDawa.LabTests.LabTest
+  alias ThamaniDawa.LabTests.LabTestCategory
   alias ThamaniDawa.Repo
 
-  @doc "Lists an organization's lab tests."
+  @doc "Lists an organization's lab tests, preloaded with `category` (scoped to the organization)."
   def list_lab_tests(organization_id) do
-    Repo.all(from t in LabTest, where: t.organization_id == ^organization_id)
+    category_query = from c in LabTestCategory, where: c.organization_id == ^organization_id
+
+    Repo.all(
+      from t in LabTest,
+        where: t.organization_id == ^organization_id,
+        preload: [category: ^category_query]
+    )
   end
 
   @doc "Gets a single lab test scoped to an organization. Raises if not found."
@@ -45,8 +52,32 @@ defmodule ThamaniDawa.LabTests do
   def list_active_lab_tests(organization_id) do
     Repo.all(
       from t in LabTest,
+        join: c in LabTestCategory,
+        on: c.id == t.category_id,
         where: t.organization_id == ^organization_id and t.is_active == true,
-        order_by: [asc: t.category, asc: t.name]
+        order_by: [asc: c.name, asc: t.name]
     )
+  end
+
+  @doc "Lists an organization's lab test categories, ordered by display_order then name."
+  def list_lab_test_categories(organization_id) do
+    Repo.all(
+      from c in LabTestCategory,
+        where: c.organization_id == ^organization_id,
+        order_by: [asc: c.display_order, asc: c.name]
+    )
+  end
+
+  @doc "Gets a single lab test category scoped to an organization. Raises if not found."
+  def get_lab_test_category!(organization_id, id) do
+    Repo.get_by!(LabTestCategory, id: id, organization_id: organization_id)
+  end
+
+  @doc "Creates a lab test category under the given organization."
+  def create_lab_test_category(organization_id, attrs) when is_integer(organization_id) do
+    %LabTestCategory{}
+    |> LabTestCategory.changeset(attrs)
+    |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> Repo.insert()
   end
 end

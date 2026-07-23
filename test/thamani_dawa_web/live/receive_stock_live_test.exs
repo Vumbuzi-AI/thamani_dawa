@@ -91,7 +91,6 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
 
       received = Batches.get_batch!(organization.id, batch.id)
       assert received.approver_id == pharmacist.id
-      assert received.received_by_id == pharmacist.id
       assert %DateTime{} = received.received_at
     end
 

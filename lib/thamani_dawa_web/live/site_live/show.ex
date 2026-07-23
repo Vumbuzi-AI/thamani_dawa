@@ -3,7 +3,6 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   alias ThamaniDawa.Batches
   alias ThamaniDawa.LabOrders
-  alias ThamaniDawa.Patients
   alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
@@ -70,15 +69,11 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
   defp load_lab(socket, organization_id, site) do
     if Site.lab?(site) do
       lab_orders =
-        organization_id |> LabOrders.list_lab_orders() |> SiteScoping.for_site(site.id)
-
-      patient_by_visit_id =
         organization_id
-        |> ThamaniDawa.PatientVisits.list_patient_visits()
-        |> Map.new(&{&1.id, Patients.get_patient!(organization_id, &1.patient_id)})
+        |> LabOrders.list_lab_orders_with_patient()
+        |> SiteScoping.for_site(site.id)
 
       socket
-      |> assign(:patient_by_visit_id, patient_by_visit_id)
       |> assign(:pending_orders, Enum.filter(lab_orders, &(&1.status == :pending)))
       |> assign(
         :incomplete_orders,
@@ -117,12 +112,10 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
   defp product_display_name(product),
     do: product.generic_name || product.brand_name || "(unnamed)"
 
-  defp patient_name(patient_by_visit_id, visit_id) do
-    case patient_by_visit_id[visit_id] do
-      nil -> "(unknown patient)"
-      patient -> patient.full_name
-    end
-  end
+  defp patient_name(%{patient_visit: %{patient: patient}}) when not is_nil(patient),
+    do: patient.full_name
+
+  defp patient_name(_lab_order), do: "(unknown patient)"
 
   def render(assigns) do
     ~H"""
@@ -221,7 +214,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           row_click={fn o -> JS.navigate(~p"/lab/orders/#{o.id}") end}
         >
           <:col :let={lab_order} label="Patient">
-            {patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}
+            {patient_name(lab_order)}
           </:col>
           <:col :let={lab_order} label="Urgency">{lab_order.urgency}</:col>
           <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
@@ -239,7 +232,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           row_click={fn o -> JS.navigate(~p"/lab/orders/#{o.id}") end}
         >
           <:col :let={lab_order} label="Patient">
-            {patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}
+            {patient_name(lab_order)}
           </:col>
           <:col :let={lab_order} label="Status">
             <.status_badge status={lab_order.status} />

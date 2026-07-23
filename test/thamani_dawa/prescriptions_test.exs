@@ -39,7 +39,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
                  doctors_note: "Take after meals",
                  source_facility: "General Hospital",
                  referring_doctor: "Dr. Jane Doe",
-                 referral_date: ~T[09:00:00],
+                 referral_date: ~D[2026-01-15],
                  payment_type: "Cash"
                })
 
@@ -360,7 +360,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
                    doctors_note: "Take after meals",
                    source_facility: "General Hospital",
                    referring_doctor: "Dr. Jane Doe",
-                   referral_date: ~T[09:00:00],
+                   referral_date: ~D[2026-01-15],
                    payment_type: "Cash"
                  },
                  [%{product_id: product.id, quantity_prescribed: 20}]
@@ -391,7 +391,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
                    doctors_note: "Take after meals",
                    source_facility: "General Hospital",
                    referring_doctor: "Dr. Jane Doe",
-                   referral_date: ~T[09:00:00],
+                   referral_date: ~D[2026-01-15],
                    payment_type: "Cash"
                  },
                  [%{}]

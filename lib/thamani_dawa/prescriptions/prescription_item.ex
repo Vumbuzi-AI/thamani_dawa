@@ -3,9 +3,6 @@ defmodule ThamaniDawa.Prescriptions.PrescriptionItem do
   import Ecto.Changeset
 
   schema "prescription_items" do
-    field :organization_id, :id
-    field :prescription_id, :id
-    field :product_id, :id
     field :quantity_prescribed, :integer
     field :dosage_instructions, :string
     field :frequency, :string
@@ -13,6 +10,10 @@ defmodule ThamaniDawa.Prescriptions.PrescriptionItem do
     field :route_of_administration, :string
     field :quantity_dispensed, :integer, default: 0
     field :is_verified, :boolean, default: false
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+    belongs_to :prescription, ThamaniDawa.Prescriptions.Prescription
+    belongs_to :product, ThamaniDawa.Products.Product
 
     timestamps(type: :utc_datetime)
   end

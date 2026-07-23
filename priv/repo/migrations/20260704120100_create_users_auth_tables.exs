@@ -12,6 +12,8 @@ defmodule ThamaniDawa.Repo.Migrations.CreateUsersAuthTables do
       add :hashed_pin, :string
       add :role, :string, null: false
       add :is_active, :boolean, null: false, default: true
+      add :last_logged_in_at, :utc_datetime
+      add :last_logged_out_at, :utc_datetime
 
       timestamps(type: :utc_datetime)
     end

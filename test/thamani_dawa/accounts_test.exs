@@ -126,7 +126,7 @@ defmodule ThamaniDawa.AccountsTest do
       assert %{role: ["can't be blank"]} = errors_on(changeset)
     end
 
-    test "rejects a role outside admin, pharmacist, and lab_technician" do
+    test "rejects a role outside the known roles" do
       organization = organization_fixture()
 
       assert {:error, changeset} =
@@ -139,7 +139,7 @@ defmodule ThamaniDawa.AccountsTest do
       assert %{role: ["is invalid"]} = errors_on(changeset)
     end
 
-    for role <- [:admin, :pharmacist, :lab_technician] do
+    for role <- [:admin, :pharmacist, :lab_technician, :pharma_lab] do
       test "accepts the #{role} role" do
         organization = organization_fixture()
 

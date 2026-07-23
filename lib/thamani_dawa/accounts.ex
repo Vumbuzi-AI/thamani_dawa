@@ -6,7 +6,7 @@ defmodule ThamaniDawa.Accounts do
   """
 
   import Ecto.Query, warn: false
-  alias ThamaniDawa.Accounts.{User, UserNotifier, UserToken}
+  alias ThamaniDawa.Accounts.{User, UserLoginSession, UserNotifier, UserToken}
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
@@ -32,9 +32,15 @@ defmodule ThamaniDawa.Accounts do
     Repo.get_by!(User, id: id, organization_id: organization_id)
   end
 
-  @doc "Lists an organization's staff, for the Team screen."
+  @doc "Lists an organization's staff, for the Team screen. Preloads `site` (scoped to the organization)."
   def list_users(organization_id) do
-    Repo.all(from u in User, where: u.organization_id == ^organization_id)
+    site_query = from s in Site, where: s.organization_id == ^organization_id
+
+    Repo.all(
+      from u in User,
+        where: u.organization_id == ^organization_id,
+        preload: [site: ^site_query]
+    )
   end
 
   @doc """
@@ -175,5 +181,54 @@ defmodule ThamaniDawa.Accounts do
   def delete_user_session_token(token) do
     Repo.delete_all(UserToken.by_token_and_context_query(token, "session"))
     :ok
+  end
+
+  @doc "Stamps `last_logged_in_at` on the given user to now."
+  def update_user_last_logged_in(%User{} = user) do
+    user
+    |> Ecto.Changeset.change(%{
+      last_logged_in_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
+    |> Repo.update()
+  end
+
+  @doc "Stamps `last_logged_out_at` on the given user to now."
+  def update_user_last_logged_out(%User{} = user) do
+    user
+    |> Ecto.Changeset.change(%{
+      last_logged_out_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
+    |> Repo.update()
+  end
+
+  @doc "Creates a `user_login_sessions` row recording a fresh login for `user_id`."
+  def create_login_session(user_id) do
+    %UserLoginSession{}
+    |> UserLoginSession.changeset(%{
+      user_id: user_id,
+      logged_in_at: DateTime.utc_now() |> DateTime.truncate(:second)
+    })
+    |> Repo.insert()
+  end
+
+  @doc """
+  Records logout on `user_id`'s most recent still-open login session (the
+  one with no `logged_out_at` yet). No-op if there isn't one.
+  """
+  def record_logout_session(user_id) do
+    session =
+      UserLoginSession
+      |> where([s], s.user_id == ^user_id and is_nil(s.logged_out_at))
+      |> order_by([s], desc: s.logged_in_at)
+      |> limit(1)
+      |> Repo.one()
+
+    if session do
+      session
+      |> UserLoginSession.changeset(%{
+        logged_out_at: DateTime.utc_now() |> DateTime.truncate(:second)
+      })
+      |> Repo.update()
+    end
   end
 end

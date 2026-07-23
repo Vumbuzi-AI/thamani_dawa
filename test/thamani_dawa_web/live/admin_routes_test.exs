@@ -43,6 +43,13 @@ defmodule ThamaniDawaWeb.AdminRoutesTest do
         assert {:error, {:redirect, %{to: "/"}}} = live(conn, @path)
       end
 
+      test "combined pharmacy/lab staff are redirected away", %{conn: conn} do
+        pharma_lab = staff_fixture(%{role: :pharma_lab})
+        conn = conn |> init_test_session(%{}) |> UserAuth.log_in_user(pharma_lab)
+
+        assert {:error, {:redirect, %{to: "/"}}} = live(conn, @path)
+      end
+
       test "a deactivated admin is redirected away", %{conn: conn} do
         admin = user_fixture()
         {:ok, deactivated} = admin |> change(is_active: false) |> Repo.update()

@@ -2,15 +2,10 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @statuses [:pending, :in_progress, :completed, :verified, :cancelled]
+  @statuses [:pending, :in_progress, :completed, :cancelled]
 
   schema "lab_orders" do
-    field :organization_id, :id
-    field :site_id, :id
-    field :patient_id, :id
-    field :patient_visit_id, :id
     field :prescriber_name, :string
-    field :ordered_by_id, :id
     field :urgency, :string
     field :payment_type, :string
     field :has_paid, :boolean, default: false
@@ -22,7 +17,15 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
     field :is_referral, :boolean, default: false
     field :referring_facility, :string
     field :referring_doctor, :string
-    field :referred_date, :time
+    field :referred_date, :date
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+    belongs_to :site, ThamaniDawa.Sites.Site
+    belongs_to :patient_visit, ThamaniDawa.PatientVisits.PatientVisit
+    belongs_to :ordered_by, ThamaniDawa.Accounts.User, foreign_key: :ordered_by_id
+
+    has_many :lab_order_results, ThamaniDawa.LabOrders.LabOrderResult
+    has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage
 
     timestamps(type: :utc_datetime)
   end
@@ -32,7 +35,6 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
     lab_order
     |> cast(attrs, [
       :site_id,
-      :patient_id,
       :patient_visit_id,
       :prescriber_name,
       :ordered_by_id,
@@ -50,14 +52,24 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
       :referred_date
     ])
     |> validate_required([:site_id, :patient_visit_id])
-    |> validate_inclusion(:payment_type, ThamaniDawa.PaymentMethods.all(),
-      message: "must be one of the approved payment methods"
-    )
+    |> validate_payment_type()
     |> validate_referral_details()
     |> foreign_key_constraint(:site_id)
-    |> foreign_key_constraint(:patient_id)
     |> foreign_key_constraint(:patient_visit_id)
     |> foreign_key_constraint(:ordered_by_id)
+  end
+
+  # Payment type is optional on a lab order; only validate it against the
+  # approved list when a value is actually supplied. (Ecto's validate_inclusion
+  # already skips nil, but the explicit guard keeps the optionality obvious.)
+  defp validate_payment_type(changeset) do
+    if get_field(changeset, :payment_type) in [nil, ""] do
+      changeset
+    else
+      validate_inclusion(changeset, :payment_type, ThamaniDawa.PaymentMethods.all(),
+        message: "must be one of the approved payment methods"
+      )
+    end
   end
 
   # A referred order must name the facility and clinician it came from; a

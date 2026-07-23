@@ -17,12 +17,13 @@ defmodule ThamaniDawa.LabTestsTest do
 
     test "defaults is_active to true and scopes to the organization" do
       organization = organization_fixture()
+      category = lab_test_category_fixture(%{organization_id: organization.id})
 
       assert {:ok, %LabTest{} = lab_test} =
                LabTests.create_lab_test(organization.id, %{
                  name: "Full Blood Count",
                  price: Decimal.new("500.00"),
-                 category: "Haematology",
+                 category_id: category.id,
                  field_definitions: %{"haemoglobin" => %{"type" => "number"}}
                })
 
@@ -30,28 +31,25 @@ defmodule ThamaniDawa.LabTestsTest do
       assert lab_test.is_active == true
     end
 
-    test "accepts every approved category" do
+    test "requires category_id" do
       organization = organization_fixture()
 
-      for category <- LabTest.categories() do
-        assert {:ok, %LabTest{category: ^category}} =
-                 LabTests.create_lab_test(
-                   organization.id,
-                   valid_lab_test_attributes(%{category: category})
-                 )
-      end
+      assert {:error, changeset} =
+               LabTests.create_lab_test(organization.id, valid_lab_test_attributes())
+
+      assert %{category_id: ["can't be blank"]} = errors_on(changeset)
     end
 
-    test "rejects an unsupported category" do
+    test "rejects a category_id that doesn't exist" do
       organization = organization_fixture()
 
       assert {:error, changeset} =
                LabTests.create_lab_test(
                  organization.id,
-                 valid_lab_test_attributes(%{category: "Made Up Category"})
+                 valid_lab_test_attributes(%{category_id: -1})
                )
 
-      assert %{category: ["must be one of the approved categories"]} = errors_on(changeset)
+      assert %{category_id: ["does not exist"]} = errors_on(changeset)
     end
   end
 
@@ -147,25 +145,33 @@ defmodule ThamaniDawa.LabTestsTest do
 
     test "orders results by category then name" do
       organization = organization_fixture()
+      serology = lab_test_category_fixture(%{organization_id: organization.id, name: "Serology"})
 
-      lab_test_fixture(%{organization_id: organization.id, category: "Serology", name: "Widal"})
+      biochemistry =
+        lab_test_category_fixture(%{organization_id: organization.id, name: "Biochemistry"})
 
       lab_test_fixture(%{
         organization_id: organization.id,
-        category: "Biochemistry",
+        category_id: serology.id,
+        name: "Widal"
+      })
+
+      lab_test_fixture(%{
+        organization_id: organization.id,
+        category_id: biochemistry.id,
         name: "Urea"
       })
 
       lab_test_fixture(%{
         organization_id: organization.id,
-        category: "Biochemistry",
+        category_id: biochemistry.id,
         name: "Creatinine"
       })
 
       assert [
-               %LabTest{category: "Biochemistry", name: "Creatinine"},
-               %LabTest{category: "Biochemistry", name: "Urea"},
-               %LabTest{category: "Serology", name: "Widal"}
+               %LabTest{name: "Creatinine"},
+               %LabTest{name: "Urea"},
+               %LabTest{name: "Widal"}
              ] = LabTests.list_active_lab_tests(organization.id)
     end
   end

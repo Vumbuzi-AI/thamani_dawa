@@ -3,21 +3,24 @@ defmodule ThamaniDawa.Batches.Batch do
   import Ecto.Changeset
 
   schema "batches" do
-    field :organization_id, :id
-    field :product_id, :id
-    field :site_id, :id
     field :gtin, :string
     field :batch_no, :string
     field :serial, :string
+    field :manufacturer, :string
     field :manufacture_date, :date
     field :expiry_date, :date
     field :quantity, :integer
     field :remaining_quantity, :integer
     field :cost_per_unit, :decimal
-    field :supplier_id, :id
-    field :received_by_id, :id
     field :received_at, :utc_datetime
-    field :approver_id, :id
+
+    belongs_to :organization, ThamaniDawa.Organizations.Organization
+    belongs_to :product, ThamaniDawa.Products.Product
+    belongs_to :site, ThamaniDawa.Sites.Site
+    belongs_to :supplier, ThamaniDawa.Suppliers.Supplier
+    belongs_to :approver, ThamaniDawa.Accounts.User, foreign_key: :approver_id
+
+    has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage
 
     timestamps(type: :utc_datetime)
   end
@@ -35,6 +38,7 @@ defmodule ThamaniDawa.Batches.Batch do
       :gtin,
       :batch_no,
       :serial,
+      :manufacturer,
       :manufacture_date,
       :expiry_date,
       :quantity,
@@ -81,11 +85,10 @@ defmodule ThamaniDawa.Batches.Batch do
   """
   def receive_changeset(batch, attrs) do
     batch
-    |> cast(attrs, [:received_by_id, :received_at, :approver_id, :quantity])
-    |> validate_required([:received_by_id, :received_at, :approver_id])
+    |> cast(attrs, [:received_at, :approver_id, :quantity])
+    |> validate_required([:received_at, :approver_id])
     |> validate_number(:quantity, greater_than_or_equal_to: 0)
     |> put_remaining_quantity_from_received_quantity()
-    |> foreign_key_constraint(:received_by_id)
     |> foreign_key_constraint(:approver_id)
   end
 

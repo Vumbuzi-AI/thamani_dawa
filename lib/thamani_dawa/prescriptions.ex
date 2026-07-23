@@ -9,6 +9,7 @@ defmodule ThamaniDawa.Prescriptions do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.PatientVisits.PatientVisit
   alias ThamaniDawa.Prescriptions.{Prescription, PrescriptionItem}
+  alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
 
   ## Prescriptions
@@ -179,11 +180,14 @@ defmodule ThamaniDawa.Prescriptions do
     Repo.get_by!(PrescriptionItem, id: id, organization_id: organization_id)
   end
 
-  @doc "Lists a prescription's items."
+  @doc "Lists a prescription's items, preloaded with `product` (scoped to the organization)."
   def list_prescription_items(organization_id, prescription_id) do
+    product_query = from p in Product, where: p.organization_id == ^organization_id
+
     Repo.all(
       from i in PrescriptionItem,
-        where: i.organization_id == ^organization_id and i.prescription_id == ^prescription_id
+        where: i.organization_id == ^organization_id and i.prescription_id == ^prescription_id,
+        preload: [product: ^product_query]
     )
   end
 

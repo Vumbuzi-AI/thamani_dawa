@@ -15,6 +15,20 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :is_subscription_active, :boolean, default: false
     field :kyc_details, :map, default: %{}
 
+    has_many :sites, ThamaniDawa.Sites.Site
+    has_many :users, ThamaniDawa.Accounts.User
+    has_many :products, ThamaniDawa.Products.Product
+    has_many :suppliers, ThamaniDawa.Suppliers.Supplier
+    has_many :patients, ThamaniDawa.Patients.Patient
+    has_many :patient_visits, ThamaniDawa.PatientVisits.PatientVisit
+    has_many :batches, ThamaniDawa.Batches.Batch
+    has_many :prescriptions, ThamaniDawa.Prescriptions.Prescription
+    has_many :lab_test_categories, ThamaniDawa.LabTests.LabTestCategory
+    has_many :lab_tests, ThamaniDawa.LabTests.LabTest
+    has_many :lab_orders, ThamaniDawa.LabOrders.LabOrder
+    has_many :lab_order_results, ThamaniDawa.LabOrders.LabOrderResult
+    has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage
+
     timestamps(type: :utc_datetime)
   end
 
