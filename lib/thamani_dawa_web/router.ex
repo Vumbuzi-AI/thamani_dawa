@@ -58,6 +58,7 @@ defmodule ThamaniDawaWeb.Router do
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
       live "/pharmacy", PharmacyDashboardLive, :index
       live "/pharmacy/scan", PharmacyScanLive, :index
+      live "/pharmacy/stock", PharmacyStockLive, :index
 
       live "/pharmacy/receive-stock", ReceiveStockLive, :new
 

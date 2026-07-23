@@ -133,6 +133,7 @@ defmodule ThamaniDawaWeb.Layouts do
       base_path="/pharmacy"
       nav_items={[
         {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
+        {"Stock", "hero-cube", ~p"/pharmacy/stock"},
         {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
         {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
         {"Scan", "hero-qr-code", ~p"/pharmacy/scan"}
