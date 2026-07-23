@@ -141,6 +141,116 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Amoxil"
     end
 
+    test "filters by category", %{conn: conn, admin: admin} do
+      product_fixture(%{
+        organization_id: admin.organization_id,
+        generic_name: "Panadol",
+        category: "Painkiller"
+      })
+
+      product_fixture(%{
+        organization_id: admin.organization_id,
+        generic_name: "Amoxil",
+        category: "Antibiotic"
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv
+      |> form("#products-filters-form", filters: %{category: "Painkiller"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "Panadol"
+      refute html =~ "Amoxil"
+      assert html =~ "Category: Painkiller"
+    end
+
+    test "filters by the over-the-counter flag", %{conn: conn, admin: admin} do
+      product_fixture(%{
+        organization_id: admin.organization_id,
+        generic_name: "Panadol",
+        is_otc: true
+      })
+
+      product_fixture(%{
+        organization_id: admin.organization_id,
+        generic_name: "Amoxil",
+        is_otc: false
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv
+      |> form("#products-filters-form", filters: %{is_otc: "true", is_dangerous_drug: "false"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "Panadol"
+      refute html =~ "Amoxil"
+    end
+
+    test "clear_filters resets category and flag filters", %{conn: conn, admin: admin} do
+      product_fixture(%{
+        organization_id: admin.organization_id,
+        generic_name: "Panadol",
+        category: "Painkiller"
+      })
+
+      product_fixture(%{
+        organization_id: admin.organization_id,
+        generic_name: "Amoxil",
+        category: "Antibiotic"
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv
+      |> form("#products-filters-form", filters: %{category: "Painkiller"})
+      |> render_submit()
+
+      refute render(lv) =~ "Amoxil"
+
+      lv |> element("button", "Clear filters") |> render_click()
+
+      html = render(lv)
+      assert html =~ "Panadol"
+      assert html =~ "Amoxil"
+    end
+
+    test "search and category filters combine", %{conn: conn, admin: admin} do
+      product_fixture(%{
+        organization_id: admin.organization_id,
+        generic_name: "Panadol Extra",
+        category: "Painkiller"
+      })
+
+      product_fixture(%{
+        organization_id: admin.organization_id,
+        generic_name: "Panadol Kids",
+        category: "Painkiller"
+      })
+
+      product_fixture(%{
+        organization_id: admin.organization_id,
+        generic_name: "Amoxil",
+        category: "Antibiotic"
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv
+      |> form("#products-filters-form", filters: %{category: "Painkiller"})
+      |> render_submit()
+
+      lv |> form("form[phx-change='search']", search: "extra") |> render_change()
+
+      html = render(lv)
+      assert html =~ "Panadol Extra"
+      refute html =~ "Panadol Kids"
+      refute html =~ "Amoxil"
+    end
+
     test "live-validates the new product form", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 

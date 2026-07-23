@@ -32,7 +32,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       assert {:error, {:live_redirect, %{to: to}}} =
                index_live
-               |> form("form",
+               |> form("#prescription-form",
                  prescription: %{
                    patient_id: patient.id,
                    payment_type: "Cash",
@@ -66,7 +66,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html =
         index_live
-        |> form("form", prescription: %{is_external: "true"})
+        |> form("#prescription-form", prescription: %{is_external: "true"})
         |> render_change()
 
       assert html =~ "Referring doctor"
@@ -76,7 +76,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html =
         index_live
-        |> form("form",
+        |> form("#prescription-form",
           prescription: %{
             patient_id: patient.id,
             is_external: "true",
@@ -103,14 +103,14 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html =
         index_live
-        |> form("form", prescription: %{is_external: "true"})
+        |> form("#prescription-form", prescription: %{is_external: "true"})
         |> render_change()
 
       assert html =~ "Referring doctor"
 
       html =
         index_live
-        |> form("form", prescription: %{is_external: "false"})
+        |> form("#prescription-form", prescription: %{is_external: "false"})
         |> render_change()
 
       refute html =~ "Referring doctor"
@@ -133,7 +133,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       assert {:error, {:live_redirect, %{to: to}}} =
                index_live
-               |> form("form",
+               |> form("#prescription-form",
                  patient: %{
                    full_name: "Jane Doe",
                    date_of_birth: "1990-01-01",
@@ -167,7 +167,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert index_live |> element("a", "New Patient") |> render_click()
 
       index_live
-      |> form("form", patient: %{full_name: "Jane Doe", phone: "0712345678"})
+      |> form("#prescription-form", patient: %{full_name: "Jane Doe", phone: "0712345678"})
       |> render_change()
 
       assert index_live |> element("button", "+ Add Item") |> render_click() =~ "Item 1"
@@ -200,7 +200,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       index_live
-      |> form("form",
+      |> form("#prescription-form",
         prescription: %{
           patient_id: patient.id,
           payment_type: "Cash",
@@ -220,7 +220,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       assert {:error, {:live_redirect, %{to: to}}} =
                index_live
-               |> form("form",
+               |> form("#prescription-form",
                  prescription: %{
                    patient_id: patient.id,
                    payment_type: "Cash",
@@ -269,7 +269,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html =
         index_live
-        |> form("form",
+        |> form("#prescription-form",
           prescription: %{
             patient_id: patient.id,
             payment_type: "Cash",
@@ -313,7 +313,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html =
         index_live
-        |> form("form",
+        |> form("#prescription-form",
           prescription: %{
             patient_id: "",
             payment_type: "Cash",
@@ -338,7 +338,9 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html =
         index_live
-        |> form("form", prescription: %{patient_id: patient.id, payment_type: "Cash"})
+        |> form("#prescription-form",
+          prescription: %{patient_id: patient.id, payment_type: "Cash"}
+        )
         |> render_submit()
 
       assert html =~ "must have at least one item"
@@ -362,7 +364,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html =
         index_live
-        |> form("form",
+        |> form("#prescription-form",
           patient: %{full_name: "", gsrn: ""},
           prescription: %{
             payment_type: "Cash",
@@ -391,18 +393,18 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert has_element?(index_live, "select[name='prescription[site_id]']")
 
       index_live
-      |> form("form", prescription: %{site_id: "", notes: "no site chosen yet"})
+      |> form("#prescription-form", prescription: %{site_id: "", notes: "no site chosen yet"})
       |> render_change()
 
       index_live
-      |> form("form", prescription: %{site_id: site.id})
+      |> form("#prescription-form", prescription: %{site_id: site.id})
       |> render_change()
 
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       assert {:error, {:live_redirect, %{to: to}}} =
                index_live
-               |> form("form",
+               |> form("#prescription-form",
                  prescription: %{
                    site_id: site.id,
                    patient_id: patient.id,
@@ -429,7 +431,9 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html =
         index_live
-        |> form("form", prescription: %{patient_id: patient.id, payment_type: "Cash"})
+        |> form("#prescription-form",
+          prescription: %{patient_id: patient.id, payment_type: "Cash"}
+        )
         |> render_submit()
 
       assert html =~ "Site is required."
@@ -451,13 +455,13 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert index_live |> element("a", "+ New prescription") |> render_click()
 
       index_live
-      |> form("form", prescription: %{site_id: site.id})
+      |> form("#prescription-form", prescription: %{site_id: site.id})
       |> render_change()
 
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       index_live
-      |> form("form",
+      |> form("#prescription-form",
         prescription: %{
           site_id: site.id,
           items: %{"0" => %{product_id: product.id, quantity_prescribed: "1"}}
@@ -467,7 +471,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html =
         index_live
-        |> form("form",
+        |> form("#prescription-form",
           prescription: %{
             site_id: "",
             patient_id: patient.id,
@@ -499,7 +503,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       index_live
-      |> form("form",
+      |> form("#prescription-form",
         prescription: %{
           patient_id: patient.id,
           payment_type: "Cash",
@@ -547,7 +551,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       index_live
-      |> form("form",
+      |> form("#prescription-form",
         prescription: %{
           patient_id: patient.id,
           payment_type: "Cash",
@@ -660,7 +664,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       })
 
       {:ok, show_live, html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
-      refute html =~ "text-green-600"
+      refute html =~ "bg-emerald-100"
 
       show_live
       |> form("form", %{"item_id" => item.id, "quantity" => "10"})
@@ -668,7 +672,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html = render(show_live)
       assert html =~ "Completed"
-      assert html =~ "text-green-600"
+      assert html =~ "bg-emerald-100"
 
       updated_prescription = ThamaniDawa.Prescriptions.get_prescription!(org.id, prescription.id)
       assert updated_prescription.status == :completed

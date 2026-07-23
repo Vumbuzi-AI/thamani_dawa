@@ -4,8 +4,14 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
 
+  @default_filters %{site_type: "", status: ""}
+
   def mount(_params, _session, socket) do
-    {:ok, assign_sites(socket)}
+    {:ok,
+     socket
+     |> assign(:search, "")
+     |> assign(:filters, @default_filters)
+     |> assign_sites()}
   end
 
   def handle_params(params, _url, socket) do
@@ -37,6 +43,32 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   def handle_event("save", %{"site" => attrs}, socket) do
     save_site(socket, socket.assigns.live_action, attrs)
+  end
+
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, socket |> assign(:search, search) |> assign_sites()}
+  end
+
+  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
+    filters = %{
+      site_type: Map.get(filter_params, "site_type", ""),
+      status: Map.get(filter_params, "status", "")
+    }
+
+    {:noreply, socket |> assign(:filters, filters) |> assign_sites()}
+  end
+
+  def handle_event("clear_filters", _params, socket) do
+    {:noreply, socket |> assign(:filters, @default_filters) |> assign_sites()}
+  end
+
+  def handle_event("clear_chip", %{"field" => field}, socket) do
+    key = String.to_existing_atom(field)
+
+    {:noreply,
+     socket
+     |> assign(:filters, %{socket.assigns.filters | key => ""})
+     |> assign_sites()}
   end
 
   defp save_site(socket, :new, attrs) do
@@ -71,7 +103,52 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   defp assign_sites(socket) do
     organization_id = socket.assigns.current_scope.organization_id
-    assign(socket, :sites, Sites.list_sites(organization_id))
+
+    sites =
+      organization_id
+      |> Sites.list_sites()
+      |> filter_by_search(socket.assigns.search)
+      |> filter_by_type(socket.assigns.filters.site_type)
+      |> filter_by_status(socket.assigns.filters.status)
+
+    assign(socket, :sites, sites)
+  end
+
+  defp filter_by_search(sites, ""), do: sites
+
+  defp filter_by_search(sites, search) do
+    search = String.downcase(String.trim(search))
+
+    Enum.filter(sites, fn site ->
+      [site.name, site.address]
+      |> Enum.filter(& &1)
+      |> Enum.any?(&String.contains?(String.downcase(&1), search))
+    end)
+  end
+
+  defp filter_by_type(sites, ""), do: sites
+
+  defp filter_by_type(sites, site_type) do
+    site_type = String.to_existing_atom(site_type)
+    Enum.filter(sites, &(&1.site_type == site_type))
+  end
+
+  defp filter_by_status(sites, ""), do: sites
+  defp filter_by_status(sites, "active"), do: Enum.filter(sites, & &1.is_active)
+  defp filter_by_status(sites, "inactive"), do: Enum.filter(sites, &(!&1.is_active))
+
+  defp active_filter_count(filters) do
+    Enum.count([filters.site_type != "", filters.status != ""], & &1)
+  end
+
+  defp filter_chips(filters) do
+    [
+      filters.site_type != "" &&
+        %{label: "Type: #{Phoenix.Naming.humanize(filters.site_type)}", field: "site_type"},
+      filters.status != "" &&
+        %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"}
+    ]
+    |> Enum.filter(& &1)
   end
 
   defp capability_options do
@@ -86,11 +163,50 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/sites"}>
-      <.header>
+      <.header icon="hero-building-office-2">
         Sites
+        <:subtitle>Search, filter, and manage your sites.</:subtitle>
         <:actions>
           <.button variant="primary" patch={~p"/org/sites/new"}>+ Add site</.button>
         </:actions>
+        <:toolbar>
+          <form phx-change="search" class="flex-1" id="search-form">
+            <.search_input name="search" value={@search} placeholder="Search by name or address" />
+          </form>
+
+          <.filter_drawer
+            id="sites-filters"
+            title="Filter sites"
+            apply_event="apply_filters"
+            active_count={active_filter_count(@filters)}
+          >
+            <:group label="Type">
+              <.input
+                type="select"
+                name="filters[site_type]"
+                value={@filters.site_type}
+                options={
+                  Enum.map(capability_options(), fn {label, _desc, value} -> {label, value} end)
+                }
+                prompt="All types"
+              />
+            </:group>
+            <:group label="Status">
+              <.input
+                type="select"
+                name="filters[status]"
+                value={@filters.status}
+                options={[{"Active", "active"}, {"Inactive", "inactive"}]}
+                prompt="All statuses"
+              />
+            </:group>
+            <:chip
+              :for={chip <- filter_chips(@filters)}
+              label={chip.label}
+              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
+            />
+          </.filter_drawer>
+        </:toolbar>
       </.header>
 
       <.modal
@@ -135,6 +251,20 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
         <:action :let={site}>
           <.link patch={~p"/org/sites/#{site.id}/edit"} class="link">Edit</.link>
         </:action>
+        <:empty_state>
+          <.blank_state
+            icon="hero-building-office-2"
+            title={
+              if @search != "" or active_filter_count(@filters) > 0,
+                do: "No sites match your search or filters",
+                else: "No sites yet"
+            }
+          >
+            {if @search != "" or active_filter_count(@filters) > 0,
+              do: "Try a different search term, or clear the applied filters.",
+              else: "Sites you add to your organization will appear here."}
+          </.blank_state>
+        </:empty_state>
       </.table>
     </Layouts.org_shell>
     """

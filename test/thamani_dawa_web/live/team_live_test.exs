@@ -46,6 +46,124 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
     end
   end
 
+  describe "index filters" do
+    test "searches by name or email", %{conn: conn} do
+      admin = user_fixture()
+
+      staff_fixture(%{
+        organization_id: admin.organization_id,
+        invited_by_id: admin.id,
+        name: "Alice Wanjiru"
+      })
+
+      staff_fixture(%{
+        organization_id: admin.organization_id,
+        invited_by_id: admin.id,
+        name: "Bob Otieno"
+      })
+
+      {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
+
+      lv |> form("form[phx-change='search']", search: "alice") |> render_change()
+
+      html = render(lv)
+      assert html =~ "Alice Wanjiru"
+      refute html =~ "Bob Otieno"
+    end
+
+    test "filters by role", %{conn: conn} do
+      admin = user_fixture()
+
+      staff_fixture(%{
+        organization_id: admin.organization_id,
+        invited_by_id: admin.id,
+        name: "Pharmacist Pat",
+        role: :pharmacist
+      })
+
+      staff_fixture(%{
+        organization_id: admin.organization_id,
+        invited_by_id: admin.id,
+        name: "Tech Tara",
+        role: :lab_technician
+      })
+
+      {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
+
+      lv
+      |> form("#team-filters-form", filters: %{role: "lab_technician"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "Tech Tara"
+      refute html =~ "Pharmacist Pat"
+      assert html =~ "Role: Lab technician"
+    end
+
+    test "filters by home site", %{conn: conn} do
+      admin = user_fixture()
+      site_a = site_fixture(%{organization_id: admin.organization_id, name: "Site A"})
+      site_b = site_fixture(%{organization_id: admin.organization_id, name: "Site B"})
+
+      staff_fixture(%{
+        organization_id: admin.organization_id,
+        invited_by_id: admin.id,
+        name: "At Site A",
+        site_id: site_a.id
+      })
+
+      staff_fixture(%{
+        organization_id: admin.organization_id,
+        invited_by_id: admin.id,
+        name: "At Site B",
+        site_id: site_b.id
+      })
+
+      {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
+
+      lv
+      |> form("#team-filters-form", filters: %{site_id: to_string(site_a.id)})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "At Site A"
+      refute html =~ "At Site B"
+      assert html =~ "Site: Site A"
+    end
+
+    test "filters by status", %{conn: conn} do
+      admin = user_fixture()
+
+      active =
+        staff_fixture(%{
+          organization_id: admin.organization_id,
+          invited_by_id: admin.id,
+          name: "Active Amina"
+        })
+
+      {:ok, invited, _token} =
+        ThamaniDawa.Accounts.invite_user(admin.organization_id, admin.id, %{
+          name: "Invited Ivy",
+          email: "ivy@example.com",
+          role: :pharmacist
+        })
+
+      assert active.hashed_password
+      refute invited.hashed_password
+
+      {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
+
+      lv
+      |> form("#team-filters-form", filters: %{status: "invited"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "Invited Ivy"
+      refute html =~ "Active Amina"
+      assert html =~ "Status: Invited"
+    end
+  end
+
   describe "invite a staff member" do
     test "a successful invite shows a flash and adds the new hire to the staff list", %{
       conn: conn

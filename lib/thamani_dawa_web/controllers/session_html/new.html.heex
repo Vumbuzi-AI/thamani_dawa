@@ -71,8 +71,7 @@
 
     <div style="width: 100%; max-width: 380px;">
       <%!-- Flash messages --%>
-      <.flash kind={:error} flash={@flash} />
-      <.flash kind={:info} flash={@flash} />
+      <Layouts.flash_group flash={@flash} />
 
       <%!-- Heading --%>
       <h1 style="font-size: 32px; font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-forest); margin-bottom: 8px;">

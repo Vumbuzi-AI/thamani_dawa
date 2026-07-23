@@ -27,7 +27,10 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path="/lab">
-      <.header>Lab dashboard</.header>
+      <.header icon="hero-squares-2x2">
+        Lab dashboard
+        <:subtitle>Pending orders and incomplete reports at your site.</:subtitle>
+      </.header>
 
       <.header class="mt-4">Pending orders</.header>
       <.table
@@ -38,6 +41,11 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         <:col :let={lab_order} label="Patient">{patient_name(lab_order)}</:col>
         <:col :let={lab_order} label="Urgency">{lab_order.urgency}</:col>
         <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
+        <:empty_state>
+          <.blank_state icon="hero-check-circle" title="No pending orders">
+            New lab orders at your site will appear here.
+          </.blank_state>
+        </:empty_state>
       </.table>
 
       <.header class="mt-6">Incomplete reports</.header>
@@ -47,8 +55,15 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         row_click={fn o -> JS.navigate(~p"/lab/orders/#{o.id}") end}
       >
         <:col :let={lab_order} label="Patient">{patient_name(lab_order)}</:col>
-        <:col :let={lab_order} label="Status">{Phoenix.Naming.humanize(lab_order.status)}</:col>
+        <:col :let={lab_order} label="Status">
+          <.status_badge status={lab_order.status} />
+        </:col>
         <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
+        <:empty_state>
+          <.blank_state icon="hero-check-circle" title="No incomplete reports">
+            Orders still awaiting collection or results will appear here.
+          </.blank_state>
+        </:empty_state>
       </.table>
     </Layouts.lab_shell>
     """

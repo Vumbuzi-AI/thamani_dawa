@@ -169,27 +169,21 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
 
       <%!-- Approved batch found at this site --%>
       <div :if={@scan_state == :found} id="scan-result-found">
-        <div
-          class="rounded-2xl border p-6 space-y-5"
-          style="background: #f0fce8; border-color: #a8e26a;"
-        >
+        <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 space-y-5">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <p class="text-xs font-semibold uppercase tracking-widest mb-1" style="color: #4a7a1e;">
+              <p class="text-xs font-semibold uppercase tracking-widest mb-1 text-emerald-700">
                 Approved stock found
               </p>
-              <h2 id="result-product-name" class="text-xl font-bold" style="color: #373896;">
+              <h2 id="result-product-name" class="text-xl font-bold text-thamani-forest">
                 {product_display_name(@product)}
               </h2>
-              <p class="text-sm mt-0.5" style="color: #4a7a1e;">
+              <p class="text-sm mt-0.5 text-emerald-700">
                 {if @product.category, do: @product.category}
                 {if @product.uom, do: "· #{@product.uom}"}
               </p>
             </div>
-            <span
-              class="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold"
-              style="background: #D1FAE5; color: #065F46;"
-            >
+            <span class="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
               <.icon name="hero-check-circle" class="size-3.5" />Approved
             </span>
           </div>
@@ -232,23 +226,16 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
 
       <%!-- Batch exists in org but not at this pharmacist's site --%>
       <div :if={@scan_state == :not_at_site} id="scan-result-not-at-site">
-        <div
-          class="rounded-2xl border p-6"
-          style="background: #fffbeb; border-color: #fcd34d;"
-        >
+        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6">
           <div class="flex items-start gap-4">
-            <div class="shrink-0 rounded-full p-2" style="background: #fef3c7;">
+            <div class="shrink-0 rounded-full bg-amber-100 p-2">
               <.icon name="hero-building-office-2" class="size-5 text-amber-800" />
             </div>
             <div>
-              <p
-                id="scan-not-at-site-heading"
-                class="font-semibold text-base"
-                style="color: #78350f;"
-              >
+              <p id="scan-not-at-site-heading" class="font-semibold text-base text-amber-800">
                 Not at your site
               </p>
-              <p class="text-sm mt-1" style="color: #92400e;">
+              <p class="text-sm mt-1 text-amber-700">
                 This product GTIN
                 (<span class="font-mono font-semibold">{@gtin}</span>)
                 is approved stock in your organisation but is held at a different site.
@@ -261,23 +248,16 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
 
       <%!-- Code decoded but no approved stock found anywhere in org --%>
       <div :if={@scan_state == :unavailable} id="scan-result-unavailable">
-        <div
-          class="rounded-2xl border p-6"
-          style="background: #fff8f0; border-color: #f5c08a;"
-        >
+        <div class="rounded-2xl border border-rose-200 bg-rose-50 p-6">
           <div class="flex items-start gap-4">
-            <div class="shrink-0 rounded-full p-2" style="background: #fde8c8;">
-              <.icon name="hero-no-symbol" class="size-5 text-amber-700" />
+            <div class="shrink-0 rounded-full bg-rose-100 p-2">
+              <.icon name="hero-no-symbol" class="size-5 text-rose-700" />
             </div>
             <div>
-              <p
-                id="scan-unavailable-heading"
-                class="font-semibold text-base"
-                style="color: #92400e;"
-              >
+              <p id="scan-unavailable-heading" class="font-semibold text-base text-rose-800">
                 No approved stock found
               </p>
-              <p class="text-sm mt-1" style="color: #b45309;">
+              <p class="text-sm mt-1 text-rose-700">
                 Product GTIN <span class="font-mono font-semibold">{@gtin}</span>
                 was not found in approved stock.
               </p>

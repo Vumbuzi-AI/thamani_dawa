@@ -159,12 +159,12 @@ defmodule ThamaniDawaWeb.Layouts do
       flash={@flash}
       current_scope={@current_scope}
       current_path={@current_path}
-      title="Thamani Dawa (Admin)"
+      title="Thamani Dawa"
       section_label="Organization"
       base_path="/org"
       nav_items={[
-        {"Team", "hero-user-group", ~p"/org/team"},
         {"Sites", "hero-building-office-2", ~p"/org/sites"},
+        {"Team", "hero-user-group", ~p"/org/team"},
         {"Products", "hero-cube", ~p"/org/products"}
       ]}
     >
@@ -194,11 +194,25 @@ defmodule ThamaniDawaWeb.Layouts do
       <%!-- Sidebar --%>
       <aside
         id="sidebar-aside"
-        class="shrink-0 flex flex-col overflow-y-auto overflow-x-hidden transition-[width] duration-200 ease-in-out border-r"
+        class="relative shrink-0 flex flex-col transition-[width] duration-200 ease-in-out border-r"
         style="background: var(--thamani-snow); border-color: var(--thamani-border-nav); width: 288px; padding: 24px 20px;"
       >
+        <%!-- Toggle — fixed position in both states (never moves, never stacks
+             under the logo), so nothing below it shifts when collapsing. --%>
+        <button
+          id="sidebar-toggle"
+          type="button"
+          aria-label="Toggle sidebar"
+          class="absolute z-10 shrink-0 flex items-center justify-center rounded-xl transition-colors cursor-pointer"
+          style="top: 28px; right: -14px; width: 36px; height: 36px; background: var(--thamani-snow); border: 1px solid var(--thamani-border-nav); color: var(--thamani-forest);"
+        >
+          <span id="sidebar-toggle-icon" class="inline-flex transition-transform duration-200">
+            <.icon name="hero-chevron-left" class="size-4" />
+          </span>
+        </button>
+
         <%!-- Brand row --%>
-        <div class="flex items-center gap-3 mb-6">
+        <div id="sidebar-brand-row" class="flex items-center gap-3 mb-6">
           <div
             class="flex items-center justify-center shrink-0 font-bold text-[13px]"
             style="width: 44px; height: 44px; border-radius: 12px; background: var(--thamani-lime); border: 1px solid var(--thamani-accent); color: var(--thamani-forest);"
@@ -211,26 +225,15 @@ defmodule ThamaniDawaWeb.Layouts do
           >
             <a
               href={~p"/"}
-              class="font-bold text-[17px] leading-tight"
+              class="font-bold text-[17px] leading-tight truncate block"
               style="color: var(--thamani-forest);"
             >
               {@title}
             </a>
-            <span class="text-[13px] font-medium" style="color: var(--thamani-pewter);">
+            <span class="text-[13px] font-medium truncate block" style="color: var(--thamani-pewter);">
               {@section_label}
             </span>
           </div>
-          <button
-            id="sidebar-toggle"
-            type="button"
-            aria-label="Toggle sidebar"
-            class="ml-auto shrink-0 flex items-center justify-center rounded-xl transition-colors cursor-pointer"
-            style="width: 36px; height: 36px; background: var(--thamani-snow); border: 1px solid var(--thamani-border-nav); color: var(--thamani-forest);"
-          >
-            <span id="sidebar-toggle-icon" class="inline-flex transition-transform duration-200">
-              <.icon name="hero-chevron-left" class="size-4" />
-            </span>
-          </button>
         </div>
 
         <%!-- Primary navigation --%>
@@ -242,7 +245,8 @@ defmodule ThamaniDawaWeb.Layouts do
                 else: String.starts_with?(@current_path, path) %>
             <.link
               navigate={path}
-              class="flex items-center gap-3 rounded-xl text-[15px] font-semibold transition-all whitespace-nowrap overflow-hidden"
+              data-tooltip={label}
+              class="flex items-center gap-3 rounded-xl text-[15px] font-semibold transition-all whitespace-nowrap"
               style={
                 if active,
                   do:
@@ -251,7 +255,7 @@ defmodule ThamaniDawaWeb.Layouts do
               }
             >
               <.icon name={icon} class="size-5 shrink-0" />
-              <span id={"nav-label-#{path}"} class="transition-opacity duration-150">
+              <span id={"nav-label-#{path}"} class="nav-label transition-opacity duration-150">
                 {label}
               </span>
             </.link>
@@ -302,7 +306,8 @@ defmodule ThamaniDawaWeb.Layouts do
         >
           <div
             id="sidebar-account-card"
-            class="flex items-center gap-3 overflow-hidden transition-opacity duration-150"
+            data-tooltip={@current_scope.user.name}
+            class="flex items-center gap-3 transition-opacity duration-150"
             style="background: #FBFBFF; border: 1px solid #E8EBF3; border-radius: 16px; padding: 14px 16px;"
           >
             <div
@@ -324,35 +329,16 @@ defmodule ThamaniDawaWeb.Layouts do
             </div>
           </div>
 
-          <div
-            :if={ThamaniDawa.Accounts.Scope.admin?(@current_scope)}
-            id="sidebar-admin-shortcuts"
-            class="flex items-center gap-1 overflow-hidden transition-opacity duration-150"
-          >
-            <.link
-              navigate={~p"/org/team"}
-              class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-              style="color: var(--thamani-pewter);"
-            >
-              Team
-            </.link>
-            <.link
-              navigate={~p"/org/sites"}
-              class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-              style="color: var(--thamani-pewter);"
-            >
-              Sites
-            </.link>
-          </div>
-
           <.link
+            id="sidebar-logout"
+            data-tooltip="Log out"
             href={~p"/logout"}
             method="delete"
             class="px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-3 group hover:bg-red-50"
             style="color: var(--thamani-error);"
           >
             <.icon name="hero-arrow-right-start-on-rectangle" class="size-4 shrink-0" />
-            <span id="nav-label-logout" class="transition-opacity duration-150">
+            <span id="nav-label-logout" class="nav-label transition-opacity duration-150">
               Log out
             </span>
           </.link>
@@ -374,39 +360,10 @@ defmodule ThamaniDawaWeb.Layouts do
         mounted() {
           const sidebar = document.getElementById("sidebar-aside");
           const toggleBtn = document.getElementById("sidebar-toggle");
-          const toggleIcon = document.getElementById("sidebar-toggle-icon");
-          const brandText = document.getElementById("sidebar-brand-text");
-          const profile = document.getElementById("sidebar-profile");
-          const accountCard = document.getElementById("sidebar-account-card");
-          const adminShortcuts = document.getElementById("sidebar-admin-shortcuts");
           let collapsed = localStorage.getItem("sidebar-collapsed") === "true";
 
           const apply = () => {
-            if (collapsed) {
-              sidebar.style.width = "72px";
-              sidebar.querySelectorAll("span[id^='nav-label-']").forEach(el => {
-                el.style.opacity = "0";
-                el.style.width = "0";
-                el.style.overflow = "hidden";
-              });
-              if (brandText) brandText.style.display = "none";
-              if (profile) { profile.style.opacity = "0"; profile.style.width = "0"; }
-              if (accountCard) accountCard.style.display = "none";
-              if (adminShortcuts) adminShortcuts.style.display = "none";
-              if (toggleIcon) toggleIcon.style.transform = "rotate(180deg)";
-            } else {
-              sidebar.style.width = "288px";
-              sidebar.querySelectorAll("span[id^='nav-label-']").forEach(el => {
-                el.style.opacity = "1";
-                el.style.width = "";
-                el.style.overflow = "";
-              });
-              if (brandText) brandText.style.display = "";
-              if (profile) { profile.style.opacity = "1"; profile.style.width = ""; }
-              if (accountCard) accountCard.style.display = "";
-              if (adminShortcuts) adminShortcuts.style.display = "";
-              if (toggleIcon) toggleIcon.style.transform = "";
-            }
+            sidebar.classList.toggle("sidebar-collapsed", collapsed);
             localStorage.setItem("sidebar-collapsed", collapsed);
           };
 

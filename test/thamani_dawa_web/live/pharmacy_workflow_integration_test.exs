@@ -65,7 +65,7 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
 
     assert {:error, {:live_redirect, %{to: prescription_path}}} =
              index_live
-             |> form("form",
+             |> form("#prescription-form",
                prescription: %{
                  patient_id: patient.id,
                  payment_type: "Cash",

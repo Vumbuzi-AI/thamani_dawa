@@ -27,6 +27,97 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
     %{admin: admin, lab_tech: lab_tech, site: site, lab_test: lab_test}
   end
 
+  describe "index filters" do
+    test "searches by patient name", ctx do
+      alice =
+        patient_fixture(%{organization_id: ctx.admin.organization_id, full_name: "Alice Wanjiru"})
+
+      bob =
+        patient_fixture(%{organization_id: ctx.admin.organization_id, full_name: "Bob Otieno"})
+
+      lab_order_fixture(%{organization_id: ctx.admin.organization_id, patient_id: alice.id})
+      lab_order_fixture(%{organization_id: ctx.admin.organization_id, patient_id: bob.id})
+
+      {:ok, lv, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders")
+
+      lv |> form("form[phx-change='search']", search: "alice") |> render_change()
+
+      html = render(lv)
+      assert html =~ "Alice Wanjiru"
+      refute html =~ "Bob Otieno"
+    end
+
+    test "filters by status", ctx do
+      pending_patient =
+        patient_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          full_name: "Pending Patient"
+        })
+
+      completed_patient =
+        patient_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          full_name: "Completed Patient"
+        })
+
+      lab_order_fixture(%{
+        organization_id: ctx.admin.organization_id,
+        patient_id: pending_patient.id
+      })
+
+      lab_order_fixture(%{
+        organization_id: ctx.admin.organization_id,
+        patient_id: completed_patient.id,
+        status: :completed
+      })
+
+      {:ok, lv, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders")
+
+      lv
+      |> form("#lab-orders-filters-form", filters: %{status: "completed"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "Completed Patient"
+      refute html =~ "Pending Patient"
+      assert html =~ "Status: Completed"
+    end
+
+    test "filters by urgency", ctx do
+      routine_patient =
+        patient_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          full_name: "Routine Patient"
+        })
+
+      stat_patient =
+        patient_fixture(%{organization_id: ctx.admin.organization_id, full_name: "Stat Patient"})
+
+      lab_order_fixture(%{
+        organization_id: ctx.admin.organization_id,
+        patient_id: routine_patient.id,
+        urgency: "routine"
+      })
+
+      lab_order_fixture(%{
+        organization_id: ctx.admin.organization_id,
+        patient_id: stat_patient.id,
+        urgency: "stat"
+      })
+
+      {:ok, lv, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders")
+
+      lv
+      |> form("#lab-orders-filters-form", filters: %{urgency: "stat"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "Stat Patient"
+      refute html =~ "Routine Patient"
+      assert html =~ "Urgency: Stat"
+    end
+  end
+
   describe "show lab order" do
     test "renders the order details and test results", ctx do
       lab_order = lab_order_fixture(%{organization_id: ctx.admin.organization_id})

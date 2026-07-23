@@ -41,6 +41,65 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
       {:ok, _view, html} = live(log_in_user(conn, lab_tech), ~p"/lab/tests")
       assert html =~ "Test catalog"
     end
+
+    test "searches by name", %{conn: conn, admin: admin} do
+      lab_test_fixture(%{organization_id: admin.organization_id, name: "Haemoglobin Panel"})
+      lab_test_fixture(%{organization_id: admin.organization_id, name: "Widal Test"})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
+
+      lv |> form("form[phx-change='search']", search: "haemoglobin") |> render_change()
+
+      html = render(lv)
+      assert html =~ "Haemoglobin Panel"
+      refute html =~ "Widal Test"
+    end
+
+    test "filters by category", %{conn: conn, admin: admin} do
+      lab_test_fixture(%{
+        organization_id: admin.organization_id,
+        name: "Haemoglobin Panel",
+        category: "Haematology"
+      })
+
+      lab_test_fixture(%{
+        organization_id: admin.organization_id,
+        name: "Widal Test",
+        category: "Serology"
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
+
+      lv
+      |> form("#lab-tests-filters-form", filters: %{category: "Serology"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "Widal Test"
+      refute html =~ "Haemoglobin Panel"
+      assert html =~ "Category: Serology"
+    end
+
+    test "filters by status", %{conn: conn, admin: admin} do
+      active =
+        lab_test_fixture(%{organization_id: admin.organization_id, name: "Active Test Alpha"})
+
+      inactive =
+        lab_test_fixture(%{organization_id: admin.organization_id, name: "Inactive Test Beta"})
+
+      {:ok, _} =
+        ThamaniDawa.LabTests.update_lab_test(admin.organization_id, inactive, %{is_active: false})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
+
+      lv
+      |> form("#lab-tests-filters-form", filters: %{status: "inactive"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ inactive.name
+      refute html =~ active.name
+    end
   end
 
   describe "create test" do

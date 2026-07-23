@@ -108,6 +108,92 @@
 /* This file is for your main application CSS */
 
 /* ============================================================
+   App Shell — Sidebar collapse
+   Single class toggled by the .Sidebar hook (layouts.ex); every
+   collapsed-state rule lives here instead of per-element inline
+   styles, so new sidebar items automatically behave correctly.
+   ============================================================ */
+
+#sidebar-aside.sidebar-collapsed {
+  width: 80px !important;
+  padding: 24px 16px !important;
+}
+
+#sidebar-aside.sidebar-collapsed #sidebar-brand-text {
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+}
+
+#sidebar-aside.sidebar-collapsed #sidebar-toggle-icon {
+  transform: rotate(180deg);
+}
+
+#sidebar-aside.sidebar-collapsed nav a,
+#sidebar-aside.sidebar-collapsed #sidebar-logout {
+  width: 48px;
+  margin-left: auto;
+  margin-right: auto;
+  justify-content: center;
+  gap: 0;
+}
+
+#sidebar-brand-text,
+.nav-label,
+#sidebar-profile {
+  max-width: 200px;
+  transition: opacity 150ms ease, max-width 200ms ease-in-out;
+}
+
+#sidebar-aside.sidebar-collapsed .nav-label {
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+}
+
+#sidebar-account-card {
+  transition: background-color 200ms ease, padding 200ms ease, border-radius 200ms ease;
+}
+
+#sidebar-aside.sidebar-collapsed #sidebar-account-card {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  justify-content: center;
+  gap: 0;
+}
+
+#sidebar-aside.sidebar-collapsed #sidebar-profile {
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+}
+
+#sidebar-aside.sidebar-collapsed [data-tooltip] {
+  position: relative;
+}
+
+#sidebar-aside.sidebar-collapsed [data-tooltip]:hover::after,
+#sidebar-aside.sidebar-collapsed [data-tooltip]:focus-visible::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--thamani-forest);
+  color: var(--thamani-snow);
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 60;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.15);
+}
+
+/* ============================================================
    Thamani Design System — Tokens
    ============================================================ */
 
@@ -306,6 +392,16 @@
 .thamani-btn-ghost-edit:active,
 .thamani-btn-ghost-delete:active { transform: scale(0.97); }
 
+.thamani-btn-primary:focus-visible,
+.thamani-btn-ghost:focus-visible,
+.thamani-btn-ghost-edit:focus-visible,
+.thamani-btn-ghost-delete:focus-visible,
+.thamani-btn-ghost-inv:focus-visible,
+.thamani-btn-lime:focus-visible {
+  outline: 2px solid var(--thamani-accent);
+  outline-offset: 2px;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .thamani-btn-ghost-edit:hover {
     background-color: var(--thamani-forest);
@@ -365,7 +461,7 @@
   padding: 9px 12px;
   border-radius: 8px;
   background: var(--thamani-snow);
-  color: var(--thamani-forest);
+  color: var(--color-base-content);
   font-size: 14px;
   font-weight: 400;
   line-height: 1.5;
@@ -379,15 +475,17 @@
 
 .thamani-input:focus,
 .thamani-select:focus {
-  border-color: var(--thamani-forest);
-  box-shadow: 0 0 0 3px rgba(55, 56, 150, 0.1);
+  border-color: var(--thamani-accent);
+  box-shadow: 0 0 0 3px rgba(102, 103, 171, 0.15);
 }
 
+/* Labels/values are neutral, not brand purple — thamani-forest is reserved
+   for headings, links, and CTAs, same principle as the table/1 fix. */
 .thamani-label {
   display: block;
   font-size: 12px;
   font-weight: 500;
-  color: var(--thamani-forest);
+  color: var(--thamani-pewter);
   margin-bottom: 4px;
   letter-spacing: 0.01em;
 }

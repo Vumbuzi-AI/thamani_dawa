@@ -21,6 +21,62 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       refute html =~ "Other Branch"
     end
 
+    test "searches by name or address", %{conn: conn, admin: admin} do
+      site_fixture(%{organization_id: admin.organization_id, name: "Nairobi Branch"})
+      site_fixture(%{organization_id: admin.organization_id, name: "Mombasa Branch"})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      lv |> form("form[phx-change='search']", search: "nairobi") |> render_change()
+
+      html = render(lv)
+      assert html =~ "Nairobi Branch"
+      refute html =~ "Mombasa Branch"
+    end
+
+    test "filters by type", %{conn: conn, admin: admin} do
+      site_fixture(%{
+        organization_id: admin.organization_id,
+        name: "Pharmacy One",
+        site_type: :pharmacy
+      })
+
+      site_fixture(%{organization_id: admin.organization_id, name: "Lab One", site_type: :lab})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      lv
+      |> form("#sites-filters-form", filters: %{site_type: "lab"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "Lab One"
+      refute html =~ "Pharmacy One"
+      assert html =~ "Type: Lab"
+    end
+
+    test "filters by active status", %{conn: conn, admin: admin} do
+      active = site_fixture(%{organization_id: admin.organization_id, name: "Active Site"})
+
+      inactive =
+        site_fixture(%{
+          organization_id: admin.organization_id,
+          name: "Inactive Site",
+          is_active: false
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      lv
+      |> form("#sites-filters-form", filters: %{status: "inactive"})
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ inactive.name
+      refute html =~ active.name
+      assert html =~ "Status: Inactive"
+    end
+
     test "a stray validate event on the plain index view is a no-op", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 

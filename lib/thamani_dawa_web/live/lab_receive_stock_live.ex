@@ -271,17 +271,21 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
           <:action :let={{_id, batch}}>
             <.button phx-click="view_batch" phx-value-id={batch.id}>View</.button>
           </:action>
+          <:empty_state>
+            <.blank_state icon="hero-check-circle" title="Nothing pending delivery">
+              Batches dispatched to this site will appear here for review.
+            </.blank_state>
+          </:empty_state>
         </.table>
       </div>
 
       <div
         :if={@selected_batch}
         id="batch-review-panel"
-        class="rounded-2xl p-6 mb-8"
-        style="background: #E6EDF8;"
+        class="rounded-2xl bg-thamani-stone p-6 mb-8"
       >
         <div class="flex items-start justify-between mb-5">
-          <h2 class="text-base font-semibold" style="color: #373896;">
+          <h2 class="text-base font-semibold text-thamani-forest">
             Review batch before receiving
           </h2>
           <.button phx-click="cancel_view">Cancel</.button>
@@ -289,51 +293,51 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
 
         <dl class="grid grid-cols-2 gap-x-10 gap-y-3 mb-6 text-sm">
           <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5" style="color: #6b7280;">
+            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               Product
             </dt>
-            <dd class="font-medium" style="color: #373896;">
+            <dd class="font-medium text-thamani-forest">
               {product_display(@selected_batch, @products_by_id)}
             </dd>
           </div>
           <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5" style="color: #6b7280;">
+            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               Batch / lot
             </dt>
             <dd><code>{@selected_batch.batch_no}</code></dd>
           </div>
           <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5" style="color: #6b7280;">
+            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               GTIN
             </dt>
             <dd><code>{@selected_batch.gtin}</code></dd>
           </div>
           <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5" style="color: #6b7280;">
+            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               Expiry date
             </dt>
             <dd>{@selected_batch.expiry_date}</dd>
           </div>
           <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5" style="color: #6b7280;">
+            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               Quantity
             </dt>
             <dd>{@selected_batch.quantity}</dd>
           </div>
           <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5" style="color: #6b7280;">
+            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               Destination site
             </dt>
             <dd>{@selected_batch.site.name}</dd>
           </div>
           <div :if={@selected_batch.supplier_id}>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5" style="color: #6b7280;">
+            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               Supplier
             </dt>
             <dd>{@selected_batch.supplier.name}</dd>
           </div>
           <div :if={@selected_batch.manufacture_date}>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5" style="color: #6b7280;">
+            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
               Manufacture date
             </dt>
             <dd>{@selected_batch.manufacture_date}</dd>
@@ -357,8 +361,8 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         />
       </div>
 
-      <div class="rounded-2xl p-6 mt-6" style="background: #E6EDF8;">
-        <h2 class="text-base font-medium mb-4" style="color: #373896;">Log consumable usage</h2>
+      <div class="rounded-2xl bg-thamani-stone p-6 mt-6">
+        <h2 class="text-base font-medium mb-4 text-thamani-forest">Log consumable usage</h2>
         <.form
           for={%{}}
           id="consumable-usage-form"

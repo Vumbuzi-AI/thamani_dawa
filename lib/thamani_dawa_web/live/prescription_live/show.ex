@@ -127,13 +127,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
           <div class="space-y-3 text-sm">
             <div class="flex justify-between items-center">
               <span class="text-base-content/70">Status</span>
-              <span class={[
-                "font-medium",
-                @prescription.status == :pending && "text-orange-600",
-                @prescription.status == :completed && "text-green-600"
-              ]}>
-                {Phoenix.Naming.humanize(@prescription.status)}
-              </span>
+              <.status_badge status={@prescription.status} />
             </div>
             <div class="flex justify-between items-center">
               <span class="text-base-content/70">Payment type</span>
