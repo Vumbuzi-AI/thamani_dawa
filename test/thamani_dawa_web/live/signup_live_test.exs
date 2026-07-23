@@ -15,7 +15,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       attrs = %{
         organization: %{name: "Acme Pharmacy", license_number: "LIC-1"},
-        user: %{name: "Jane Admin", email: "jane@example.com", password: "hello world!"}
+        user: %{name: "Jane Admin", email: "jane@example.com", password: "secret"}
       }
 
       assert {:error, {:live_redirect, %{to: to}}} =
