@@ -187,6 +187,11 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
             </.button>
           </form>
         </:action>
+        <:empty_state>
+          <.blank_state icon="hero-check-circle" title="Nothing awaiting receipt">
+            Batches dispatched to your site will appear here for confirmation.
+          </.blank_state>
+        </:empty_state>
       </.table>
     </Layouts.pharmacy_shell>
     """

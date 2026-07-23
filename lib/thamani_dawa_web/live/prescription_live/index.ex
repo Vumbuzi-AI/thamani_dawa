@@ -8,8 +8,14 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
 
+  @default_filters %{status: "", payment_type: "", paid: ""}
+
   def mount(_params, _session, socket) do
-    {:ok, assign_prescriptions(socket)}
+    {:ok,
+     socket
+     |> assign(:search, "")
+     |> assign(:filters, @default_filters)
+     |> assign_prescriptions()}
   end
 
   def handle_params(_params, _url, socket) do
@@ -47,6 +53,33 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
 
   def handle_event("toggle_patient_mode", _params, socket) do
     {:noreply, assign(socket, :use_new_patient, not socket.assigns.use_new_patient)}
+  end
+
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, socket |> assign(:search, search) |> assign_prescriptions()}
+  end
+
+  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
+    filters = %{
+      status: Map.get(filter_params, "status", ""),
+      payment_type: Map.get(filter_params, "payment_type", ""),
+      paid: Map.get(filter_params, "paid", "")
+    }
+
+    {:noreply, socket |> assign(:filters, filters) |> assign_prescriptions()}
+  end
+
+  def handle_event("clear_filters", _params, socket) do
+    {:noreply, socket |> assign(:filters, @default_filters) |> assign_prescriptions()}
+  end
+
+  def handle_event("clear_chip", %{"field" => field}, socket) do
+    key = String.to_existing_atom(field)
+
+    {:noreply,
+     socket
+     |> assign(:filters, %{socket.assigns.filters | key => ""})
+     |> assign_prescriptions()}
   end
 
   def handle_event("validate", params, socket) do
@@ -232,8 +265,56 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
       organization_id
       |> Prescriptions.list_prescriptions()
       |> SiteScoping.for_current_site(socket.assigns.current_scope)
+      |> filter_by_search(socket.assigns.search)
+      |> filter_by_status(socket.assigns.filters.status)
+      |> filter_by_payment_type(socket.assigns.filters.payment_type)
+      |> filter_by_paid(socket.assigns.filters.paid)
 
     assign(socket, :prescriptions, prescriptions)
+  end
+
+  defp filter_by_search(prescriptions, ""), do: prescriptions
+
+  defp filter_by_search(prescriptions, search) do
+    search = String.downcase(String.trim(search))
+
+    Enum.filter(prescriptions, fn prescription ->
+      [prescription.patient_name, prescription.patient_phone]
+      |> Enum.filter(& &1)
+      |> Enum.any?(&String.contains?(String.downcase(&1), search))
+    end)
+  end
+
+  defp filter_by_status(prescriptions, ""), do: prescriptions
+
+  defp filter_by_status(prescriptions, status) do
+    status = String.to_existing_atom(status)
+    Enum.filter(prescriptions, &(&1.status == status))
+  end
+
+  defp filter_by_payment_type(prescriptions, ""), do: prescriptions
+
+  defp filter_by_payment_type(prescriptions, payment_type),
+    do: Enum.filter(prescriptions, &(&1.payment_type == payment_type))
+
+  defp filter_by_paid(prescriptions, ""), do: prescriptions
+  defp filter_by_paid(prescriptions, "true"), do: Enum.filter(prescriptions, & &1.has_paid)
+  defp filter_by_paid(prescriptions, "false"), do: Enum.filter(prescriptions, &(!&1.has_paid))
+
+  defp active_filter_count(filters) do
+    Enum.count([filters.status != "", filters.payment_type != "", filters.paid != ""], & &1)
+  end
+
+  defp filter_chips(filters) do
+    [
+      filters.status != "" &&
+        %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"},
+      filters.payment_type != "" &&
+        %{label: "Payment: #{filters.payment_type}", field: "payment_type"},
+      filters.paid == "true" && %{label: "Paid", field: "paid"},
+      filters.paid == "false" && %{label: "Unpaid", field: "paid"}
+    ]
+    |> Enum.filter(& &1)
   end
 
   def render(assigns) do
@@ -243,11 +324,59 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
       current_scope={@current_scope}
       current_path="/pharmacy/prescriptions"
     >
-      <.header>
+      <.header icon="hero-document-text">
         Prescriptions
+        <:subtitle>Search, filter, and manage prescriptions at your site.</:subtitle>
         <:actions>
           <.button variant="primary" patch={~p"/pharmacy/prescriptions/new"}>+ New prescription</.button>
         </:actions>
+        <:toolbar>
+          <form phx-change="search" class="flex-1" id="search-form">
+            <.search_input
+              name="search"
+              value={@search}
+              placeholder="Search by patient name or phone"
+            />
+          </form>
+
+          <.filter_drawer
+            id="prescriptions-filters"
+            title="Filter prescriptions"
+            apply_event="apply_filters"
+            active_count={active_filter_count(@filters)}
+          >
+            <:group label="Status">
+              <.input
+                type="select"
+                name="filters[status]"
+                value={@filters.status}
+                options={Enum.map(Prescription.statuses(), &{Phoenix.Naming.humanize(&1), &1})}
+                prompt="All statuses"
+              />
+            </:group>
+            <:group label="Payment">
+              <.input
+                type="select"
+                name="filters[payment_type]"
+                value={@filters.payment_type}
+                options={ThamaniDawa.PaymentMethods.all()}
+                prompt="All payment methods"
+              />
+              <.input
+                type="select"
+                name="filters[paid]"
+                value={@filters.paid}
+                options={[{"Paid", "true"}, {"Unpaid", "false"}]}
+                prompt="Paid or unpaid"
+              />
+            </:group>
+            <:chip
+              :for={chip <- filter_chips(@filters)}
+              label={chip.label}
+              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
+            />
+          </.filter_drawer>
+        </:toolbar>
       </.header>
 
       <.modal
@@ -538,13 +667,29 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           <div class="font-semibold">{prescription.patient_name}</div>
           <div class="text-xs text-base-content/70">{prescription.patient_phone}</div>
         </:col>
-        <:col :let={prescription} label="Status">{Phoenix.Naming.humanize(prescription.status)}</:col>
+        <:col :let={prescription} label="Status">
+          <.status_badge status={prescription.status} />
+        </:col>
         <:col :let={prescription} label="Items">{prescription.items_count}</:col>
         <:col :let={prescription} label="Total">{prescription.total_amount}</:col>
         <:col :let={prescription} label="Prescriber">{prescription.referring_doctor}</:col>
         <:col :let={prescription} label="Created">
           {Calendar.strftime(prescription.inserted_at, "%b %d, %H:%M")}
         </:col>
+        <:empty_state>
+          <.blank_state
+            icon="hero-clipboard-document-list"
+            title={
+              if @search != "" or active_filter_count(@filters) > 0,
+                do: "No prescriptions match your search or filters",
+                else: "No prescriptions yet"
+            }
+          >
+            {if @search != "" or active_filter_count(@filters) > 0,
+              do: "Try a different search term, or clear the applied filters.",
+              else: "Prescriptions created at your site will appear here."}
+          </.blank_state>
+        </:empty_state>
       </.table>
     </Layouts.pharmacy_shell>
     """

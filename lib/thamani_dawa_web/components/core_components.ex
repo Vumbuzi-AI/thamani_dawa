@@ -233,7 +233,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
           name={@name}
           value="true"
           checked={@checked}
-          class={@class || "checkbox checkbox-sm accent-thamani-forest"}
+          class={
+            @class ||
+              "checkbox checkbox-sm accent-thamani-forest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+          }
           {@rest}
         />
         <span class="thamani-label" style="margin-bottom: 0;">{@label}</span>
@@ -396,7 +399,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           @errors != [] && "border-red-600"
         ]}
       >
-        <span data-dp-display data-placeholder={@placeholder} style="color: var(--thamani-forest);">
+        <span data-dp-display data-placeholder={@placeholder}>
           {display_date(@iso_value) || @placeholder}
         </span>
         <span style="color: var(--thamani-pewter);">
@@ -476,7 +479,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           if (!this.display) return
           if (this.selected) {
             this.display.textContent = this.fmt(this.selected)
-            this.display.style.color = "var(--thamani-forest)"
+            this.display.style.color = "var(--color-base-content)"
           } else {
             this.display.textContent = this.display.dataset.placeholder || "Choose a date"
             this.display.style.color = "var(--thamani-pewter)"
@@ -709,26 +712,72 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   @doc """
-  Renders a header with title.
+  Renders a page header: title, optional subtitle and actions — every
+  screen's title block should look like this. Pass `icon` for the leading
+  tinted icon badge (e.g. a section's own hero icon); omit it for a plain
+  title, same as before.
+
+  Pass a `:toolbar` slot (a search box + `filter_drawer/1`, typically) to
+  render it inside the *same* card, below an internal divider, instead of
+  as a separate floating element — this is what every list page with
+  search/filter should do, so the title and toolbar read as one unit.
+
+  ## Examples
+
+      <.header>Prescriptions</.header>
+
+      <.header icon="hero-cube">
+        Product catalog
+        <:subtitle>Search, filter, and manage your product catalog.</:subtitle>
+        <:actions>
+          <.button variant="primary">+ Add product</.button>
+        </:actions>
+        <:toolbar>
+          <form phx-change="search" class="flex-1">
+            <.search_input name="search" value={@search} placeholder="Search..." />
+          </form>
+          <.filter_drawer id="products-filters" apply_event="apply_filters">
+            ...
+          </.filter_drawer>
+        </:toolbar>
+      </.header>
   """
+  attr :icon, :string, default: nil, doc: "optional hero-* icon name for the leading badge"
   slot :inner_block, required: true
   slot :subtitle
   slot :actions
+  slot :toolbar, doc: "optional search/filter row, rendered below a divider in the same card"
   attr :class, :any, default: nil
 
   def header(assigns) do
     ~H"""
-    <header class={[@actions != [] && "flex items-center justify-between gap-6", "pb-4", @class]}>
-      <div>
-        <h1 class="text-lg font-semibold leading-8">
-          {render_slot(@inner_block)}
-        </h1>
-        <p :if={@subtitle != []} class="text-sm text-base-content/70">
-          {render_slot(@subtitle)}
-        </p>
+    <div class={["rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm mb-4", @class]}>
+      <header class={[
+        "flex items-center justify-between gap-6 p-5",
+        @toolbar != [] && "border-b border-thamani-stone"
+      ]}>
+        <div class="flex items-center gap-3">
+          <div
+            :if={@icon}
+            class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-thamani-lime text-thamani-forest"
+          >
+            <.icon name={@icon} class="size-5" />
+          </div>
+          <div>
+            <h1 class="text-lg font-semibold leading-8 text-thamani-forest">
+              {render_slot(@inner_block)}
+            </h1>
+            <p :if={@subtitle != []} class="text-sm text-thamani-pewter">
+              {render_slot(@subtitle)}
+            </p>
+          </div>
+        </div>
+        <div class="flex-none">{render_slot(@actions)}</div>
+      </header>
+      <div :if={@toolbar != []} class="flex flex-wrap items-center gap-3 p-5">
+        {render_slot(@toolbar)}
       </div>
-      <div class="flex-none">{render_slot(@actions)}</div>
-    </header>
+    </div>
     """
   end
 
@@ -756,6 +805,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   slot :action, doc: "the slot for showing user actions in the last table column"
+  slot :empty_state, doc: "rendered in place of the table body when `rows` is empty"
 
   def table(assigns) do
     assigns =
@@ -764,34 +814,150 @@ defmodule ThamaniDawaWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
-      <thead>
-        <tr>
-          <th :for={col <- @col}>{col[:label]}</th>
-          <th :if={@action != []}>
-            <span class="sr-only">{gettext("Actions")}</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody id={@id} phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}>
-        <tr :for={row <- @rows} id={@row_id && @row_id.(row)}>
-          <td
-            :for={col <- @col}
-            phx-click={@row_click && @row_click.(row)}
-            class={@row_click && "hover:cursor-pointer"}
-          >
-            {render_slot(col, @row_item.(row))}
-          </td>
-          <td :if={@action != []} class="w-0 font-semibold">
-            <div class="flex gap-4">
-              <%= for action <- @action do %>
-                {render_slot(action, @row_item.(row))}
-              <% end %>
-            </div>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow">
+      <table class="w-full text-left">
+        <thead class="bg-thamani-canvas">
+          <tr>
+            <th :for={col <- @col} class="px-6 py-3 text-sm font-semibold text-slate-700">
+              {col[:label]}
+            </th>
+            <th :if={@action != []} class="px-6 py-3">
+              <span class="sr-only">{gettext("Actions")}</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody
+          id={@id}
+          phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}
+          class="divide-y divide-thamani-stone"
+        >
+          <tr :if={@empty_state != []} id={"#{@id}-empty"} class="hidden only:table-row">
+            <td colspan={length(@col) + ((@action != [] && 1) || 0)} class="px-6 py-8">
+              {render_slot(@empty_state)}
+            </td>
+          </tr>
+          <tr :for={row <- @rows} id={@row_id && @row_id.(row)} class="hover:bg-thamani-canvas">
+            <td
+              :for={col <- @col}
+              phx-click={@row_click && @row_click.(row)}
+              class={["px-6 py-3 text-sm text-slate-900", @row_click && "hover:cursor-pointer"]}
+            >
+              {render_slot(col, @row_item.(row))}
+            </td>
+            <td :if={@action != []} class="w-0 px-6 py-3 font-semibold">
+              <div class="flex gap-4">
+                <%= for action <- @action do %>
+                  {render_slot(action, @row_item.(row))}
+                <% end %>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders a status pill for a domain status atom (from `Prescription`, `LabOrder`,
+  `LabOrderResult`, etc). Resolves the atom to one of five semantic categories via
+  `status_semantic/1` and styles by meaning, not by the literal status word — so
+  every schema's statuses read consistently. Always pairs color with the humanized
+  status text, never color alone.
+
+  ## Examples
+
+      <.status_badge status={@prescription.status} />
+      <.status_badge status={:verified} />
+  """
+  attr :status, :atom, required: true
+  attr :class, :any, default: nil
+
+  def status_badge(assigns) do
+    assigns = assign(assigns, :semantic, status_semantic(assigns.status))
+
+    ~H"""
+    <span class={[
+      "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold",
+      badge_classes(@semantic),
+      @class
+    ]}>
+      {Phoenix.Naming.humanize(@status)}
+    </span>
+    """
+  end
+
+  @doc """
+  Maps a domain status atom to one of five semantic categories — success, warning,
+  info, danger, neutral — regardless of which schema it comes from. This is the
+  single source of truth `status_badge/1` renders from.
+  """
+  def status_semantic(status)
+      when status in [:pending, :pending_review, :under_review, :pending_receipt, :invited],
+      do: :warning
+
+  def status_semantic(status)
+      when status in [
+             :completed,
+             :verified,
+             :approved,
+             :received,
+             :accepted,
+             :finalised,
+             :grn_confirmed,
+             :active
+           ],
+      do: :success
+
+  def status_semantic(status)
+      when status in [
+             :in_progress,
+             :collected,
+             :partially_dispensed,
+             :sent,
+             :submitted,
+             :acknowledged
+           ],
+      do: :info
+
+  def status_semantic(status) when status in [:cancelled, :rejected, :flagged], do: :danger
+  def status_semantic(_status), do: :neutral
+
+  defp badge_classes(:success), do: "bg-emerald-100 text-emerald-700"
+  defp badge_classes(:warning), do: "bg-amber-100 text-amber-800"
+  defp badge_classes(:info), do: "bg-sky-100 text-sky-700"
+  defp badge_classes(:danger), do: "bg-rose-100 text-rose-700"
+  defp badge_classes(:neutral), do: "bg-slate-100 text-slate-700"
+
+  @doc """
+  Renders an empty-state placeholder for a list/table with no rows, in Thamani's
+  flat, shadowless style.
+
+  ## Examples
+
+      <.blank_state title="No prescriptions yet">
+        Prescriptions will appear here once a patient visit creates one.
+      </.blank_state>
+  """
+  attr :icon, :string, default: "hero-inbox"
+  attr :title, :string, required: true
+  attr :class, :any, default: nil
+  slot :inner_block
+  slot :actions
+
+  def blank_state(assigns) do
+    ~H"""
+    <div class={[
+      "rounded-lg border border-dashed border-thamani-stone bg-thamani-canvas py-8 text-center",
+      @class
+    ]}>
+      <.icon name={@icon} class="mx-auto size-12 text-thamani-subtle" />
+      <p class="mt-2 text-sm font-medium text-thamani-forest">{@title}</p>
+      <p :if={@inner_block != []} class="mt-1 text-sm text-thamani-pewter">
+        {render_slot(@inner_block)}
+      </p>
+      <div :if={@actions != []} class="mt-4">{render_slot(@actions)}</div>
+    </div>
     """
   end
 
@@ -908,21 +1074,24 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   # Each clause maps a variant name to its Tailwind token classes.
   # Colors resolve from the @theme block in app.css — change there, updates everywhere.
+  @btn_focus "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+  @btn_loading "phx-submit-loading:opacity-75 phx-click-loading:opacity-75"
+
   defp thamani_btn_classes("primary"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] hover:opacity-90 w-full"
+      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] hover:opacity-90 w-full #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("ghost"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-transparent text-thamani-forest text-[15px] font-normal no-underline border-[1.5px] border-thamani-forest cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97]"
+      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-transparent text-thamani-forest text-[15px] font-normal no-underline border-[1.5px] border-thamani-forest cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("ghost_inv"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-transparent text-thamani-snow text-[15px] font-normal no-underline border-[1.5px] border-thamani-snow cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97]"
+      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-transparent text-thamani-snow text-[15px] font-normal no-underline border-[1.5px] border-thamani-snow cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("lime"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-thamani-lime text-thamani-forest text-[15px] font-medium no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97]"
+      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-thamani-lime text-thamani-forest text-[15px] font-medium no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] #{@btn_focus} #{@btn_loading}"
 
   @doc """
   Renders a Thamani-styled auth-page form field with label and inline error.
@@ -975,7 +1144,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       ]}>
         <label
           for={@input_id}
-          class="block text-[13px] font-medium text-thamani-forest tracking-[0.01em]"
+          class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
         >
           {@label}
         </label>
@@ -985,10 +1154,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
         name={@name}
         placeholder={@placeholder}
         class={[
-          "w-full box-border px-4 py-3 text-[15px] text-thamani-forest bg-thamani-snow",
+          "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
           "border-[1.5px] rounded-lg outline-none",
           "transition-[border-color,box-shadow] duration-150 ease-in-out",
-          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(55, 56, 150,0.08)]",
+          "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
           (@errors != [] && "border-thamani-error") || "border-thamani-stone"
         ]}
         {@rest}
@@ -1018,7 +1187,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       ]}>
         <label
           for={@input_id}
-          class="block text-[13px] font-medium text-thamani-forest tracking-[0.01em]"
+          class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
         >
           {@label}
         </label>
@@ -1031,10 +1200,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
         placeholder={@placeholder}
         autocomplete={@autocomplete}
         class={[
-          "w-full box-border px-4 py-3 text-[15px] text-thamani-forest bg-thamani-snow",
+          "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
           "border-[1.5px] rounded-lg outline-none",
           "transition-[border-color,box-shadow] duration-150 ease-in-out",
-          "focus:border-thamani-forest focus:shadow-[0_0_0_3px_rgba(55, 56, 150,0.08)]",
+          "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
           (@errors != [] && "border-thamani-error") || "border-thamani-stone"
         ]}
         {@rest}
@@ -1086,13 +1255,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
               phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
               phx-key="escape"
               phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
-              class="hidden relative rounded-2xl bg-base-100 shadow-lg ring-1 ring-black/5 p-6 transition"
+              class="hidden relative rounded-2xl bg-thamani-snow shadow-lg ring-1 ring-thamani-stone p-6 transition"
             >
               <div class="absolute top-4 right-4">
                 <button
                   phx-click={JS.exec("data-cancel", to: "##{@id}")}
                   type="button"
-                  class="-m-2 p-2 opacity-40 hover:opacity-70"
+                  class="-m-2 p-2 opacity-40 hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2 rounded-full"
                   aria-label="close"
                 >
                   <.icon name="hero-x-mark-solid" class="h-5 w-5" />
@@ -1105,6 +1274,239 @@ defmodule ThamaniDawaWeb.CoreComponents do
           </div>
         </div>
       </div>
+    </div>
+    """
+  end
+
+  @doc """
+  Renders the canonical toolbar search box: a plain text input styled the
+  same way everywhere it appears. Pair with `phx-change`/`phx-submit` on
+  the wrapping `<form>`.
+
+  ## Examples
+
+      <form phx-change="search">
+        <.search_input name="search" value={@search} placeholder="Search by name, GTIN, or category" />
+      </form>
+  """
+  attr :name, :string, required: true
+  attr :value, :string, default: ""
+  attr :placeholder, :string, required: true
+  attr :debounce, :string, default: "300"
+  attr :rest, :global
+
+  def search_input(assigns) do
+    ~H"""
+    <input
+      type="text"
+      name={@name}
+      value={@value}
+      placeholder={@placeholder}
+      phx-debounce={@debounce}
+      class="h-[40px] w-full rounded-md border border-slate-300 px-3 text-sm focus:border-thamani-accent focus:outline-none focus:ring-0"
+      {@rest}
+    />
+    """
+  end
+
+  @doc """
+  Renders a "Filters" trigger button that opens an anchored dropdown panel
+  below it.
+
+  Groups filter fields under labeled sections and applies them as a single
+  batch via an explicit "Apply filters" button, rather than firing an event
+  per field change. Opening and closing is pure client-side JS — no
+  LiveView round trip — mirroring how `modal/1` opens and closes. The
+  panel is sized to its content (not the full viewport height) and
+  anchored to the trigger button, like a dropdown menu.
+
+  The caller keeps its existing `phx-submit`/`phx-click` event names
+  (typically the same handlers an inline filter form already used); this
+  component only supplies the surrounding chrome.
+
+  ## Examples
+
+      <.filter_drawer
+        id="products-filters"
+        title="Filter products"
+        apply_event="apply_filters"
+        active_count={count_active_filters(@filters)}
+      >
+        <:group label="Category">
+          <.input type="select" name="filters[category]" ... />
+        </:group>
+        <:chip :for={chip <- filter_chips(@filters)} label={chip.label} clear={chip.clear} />
+      </.filter_drawer>
+  """
+  attr :id, :string, required: true
+  attr :title, :string, default: "Filters"
+  attr :trigger_label, :string, default: "Filters"
+  attr :active_count, :integer, default: 0
+
+  attr :variant, :string,
+    default: "outline",
+    values: ~w(outline solid),
+    doc:
+      ~s|"outline" (default) keeps the light/gray trigger; "solid" renders it filled with| <>
+        " the primary purple even when no filters are active, for pages that want the button" <>
+        " to read as a primary action"
+
+  attr :apply_event, :string,
+    required: true,
+    doc: "phx-submit (or, when instant: true, phx-change) target for the filter fields"
+
+  attr :clear_event, :string, default: "clear_filters"
+
+  attr :instant, :boolean,
+    default: false,
+    doc:
+      "if true, fields apply on every change instead of requiring an explicit Apply click; " <>
+        "the drawer stays open and hides the Apply button, since there's nothing to apply"
+
+  slot :group, required: true do
+    attr :label, :string, required: true
+  end
+
+  slot :chip,
+    doc:
+      "one per currently-active filter value, rendered as a removable pill below the " <>
+        "search/filter bar, plus a trailing \"Clear all\" link. The parent element the " <>
+        "caller places <.filter_drawer> in should allow wrapping (e.g. `flex flex-wrap`), " <>
+        "since the chip row renders as a `w-full` sibling of the trigger button." do
+    attr :label, :string, required: true
+
+    attr :clear, :any,
+      required: true,
+      doc: "phx-click value (event name string, or a JS command) fired to remove just this chip"
+  end
+
+  def filter_drawer(assigns) do
+    ~H"""
+    <div class="relative inline-block">
+      <button
+        type="button"
+        phx-click={show_filter_drawer(@id)}
+        class={[
+          "flex h-[40px] items-center gap-2 rounded-md border px-4 text-sm font-medium whitespace-nowrap transition",
+          @active_count > 0 &&
+            "border-thamani-lime bg-thamani-lime text-thamani-forest hover:bg-thamani-lime/70",
+          @active_count == 0 && @variant == "outline" &&
+            "border-slate-300 text-slate-700 hover:bg-slate-50",
+          @active_count == 0 && @variant == "solid" &&
+            "border-thamani-forest bg-thamani-forest text-white hover:bg-thamani-forest/90"
+        ]}
+      >
+        <.icon name="hero-adjustments-horizontal" class="h-4 w-4" />
+        {@trigger_label}
+        <span
+          :if={@active_count > 0}
+          class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-thamani-forest text-xs font-semibold text-white"
+        >
+          {@active_count}
+        </span>
+      </button>
+
+      <div id={@id} class="relative z-50 hidden" phx-remove={hide_filter_drawer(@id)}>
+        <div
+          id={"#{@id}-panel"}
+          class="absolute top-full right-0 z-50 mt-2 hidden max-h-[min(36rem,calc(100vh-9rem))] w-screen max-w-2xl origin-top-right scale-95 transform flex-col overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow opacity-0 shadow-xl transition"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={"#{@id}-title"}
+          tabindex="0"
+          phx-click-away={hide_filter_drawer(@id)}
+          phx-window-keydown={hide_filter_drawer(@id)}
+          phx-key="escape"
+        >
+          <div class="flex items-center justify-between gap-4 border-b border-thamani-stone px-5 py-4 sm:px-6">
+            <h2 id={"#{@id}-title"} class="min-w-0 flex-1 text-lg font-semibold text-thamani-forest">
+              {@title}
+            </h2>
+            <div class="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                phx-click={JS.push(@clear_event) |> hide_filter_drawer(@id)}
+                class="rounded-md px-2.5 py-1.5 text-sm font-medium text-thamani-accent hover:bg-thamani-lime/70 hover:text-thamani-forest"
+              >
+                Reset all
+              </button>
+              <button
+                type="button"
+                phx-click={hide_filter_drawer(@id)}
+                class="rounded-md p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                aria-label={gettext("close")}
+              >
+                <.icon name="hero-x-mark-solid" class="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          <form
+            id={"#{@id}-form"}
+            phx-change={@instant && @apply_event}
+            phx-submit={
+              if @instant,
+                do: JS.push(@apply_event),
+                else: JS.push(@apply_event) |> hide_filter_drawer(@id)
+            }
+            class="flex min-h-0 flex-1 flex-col"
+          >
+            <button type="reset" id={"#{@id}-reset-btn"} class="hidden" aria-hidden="true" />
+
+            <div class="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+              <div :for={group <- @group}>
+                <h3 class="mb-3 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                  {group.label}
+                </h3>
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {render_slot(group)}
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 border-t border-thamani-stone bg-thamani-canvas px-5 py-4 sm:px-6">
+              <button
+                type="button"
+                phx-click={JS.push(@clear_event) |> hide_filter_drawer(@id)}
+                class="rounded-md bg-thamani-snow px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
+              >
+                Clear filters
+              </button>
+              <button
+                :if={!@instant}
+                type="submit"
+                class="rounded-md bg-thamani-forest px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-thamani-forest/90"
+              >
+                Apply filters
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div :if={@chip != []} class="mt-3 flex w-full flex-wrap items-center gap-2">
+      <span
+        :for={chip <- @chip}
+        class="inline-flex items-center gap-1.5 rounded-full bg-thamani-lime px-3 py-1 text-sm font-medium text-thamani-forest"
+      >
+        {chip.label}
+        <button
+          type="button"
+          phx-click={chip.clear}
+          class="text-thamani-forest/70 hover:text-thamani-forest"
+          aria-label={"Remove #{chip.label} filter"}
+        >
+          <.icon name="hero-x-mark-solid" class="h-3.5 w-3.5" />
+        </button>
+      </span>
+      <button
+        type="button"
+        phx-click={@clear_event}
+        class="text-sm font-medium text-thamani-forest hover:underline"
+      >
+        Clear all
+      </button>
     </div>
     """
   end
@@ -1132,6 +1534,34 @@ defmodule ThamaniDawaWeb.CoreComponents do
     |> hide("##{id}-container")
     |> JS.hide(to: "##{id}")
     |> JS.remove_class("overflow-hidden", to: "body")
+    |> JS.pop_focus()
+  end
+
+  def show_filter_drawer(js \\ %JS{}, id) when is_binary(id) do
+    js
+    |> JS.dispatch("click", to: "##{id}-reset-btn")
+    |> JS.show(to: "##{id}")
+    |> JS.show(
+      to: "##{id}-panel",
+      display: "flex",
+      time: 150,
+      transition:
+        {"transition transform ease-out duration-150", "opacity-0 scale-95",
+         "opacity-100 scale-100"}
+    )
+    |> JS.focus_first(to: "##{id}-panel")
+  end
+
+  def hide_filter_drawer(js \\ %JS{}, id) do
+    js
+    |> JS.hide(
+      to: "##{id}-panel",
+      time: 100,
+      transition:
+        {"transition transform ease-in duration-100", "opacity-100 scale-100",
+         "opacity-0 scale-95"}
+    )
+    |> JS.hide(to: "##{id}", transition: {"block", "block", "hidden"}, time: 150)
     |> JS.pop_focus()
   end
 

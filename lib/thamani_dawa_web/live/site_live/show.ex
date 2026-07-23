@@ -167,6 +167,11 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
             {product && product.reorder_level}
           </:col>
           <:col :let={{_product, total}} label="Remaining">{total}</:col>
+          <:empty_state>
+            <.blank_state icon="hero-check-circle" title="No products are low on stock">
+              Products will show up here once they drop to their reorder level.
+            </.blank_state>
+          </:empty_state>
         </.table>
 
         <.header class="mt-6">
@@ -178,6 +183,11 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           <:col :let={batch} label="Batch no.">{batch.batch_no}</:col>
           <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
           <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
+          <:empty_state>
+            <.blank_state icon="hero-calendar-days" title="No batches expiring soon">
+              Batches will appear here within {@near_expiry_days} days of their expiry date.
+            </.blank_state>
+          </:empty_state>
         </.table>
 
         <.header class="mt-6">Pending prescriptions</.header>
@@ -189,12 +199,17 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           }
         >
           <:col :let={prescription} label="Status">
-            {Phoenix.Naming.humanize(prescription.status)}
+            <.status_badge status={prescription.status} />
           </:col>
           <:col :let={prescription} label="Total">{prescription.total_amount}</:col>
           <:col :let={prescription} label="Paid">
             {if prescription.has_paid, do: "Yes", else: "No"}
           </:col>
+          <:empty_state>
+            <.blank_state icon="hero-clipboard-document-check" title="No pending prescriptions">
+              Prescriptions awaiting dispensing at this site will appear here.
+            </.blank_state>
+          </:empty_state>
         </.table>
       </div>
 
@@ -210,6 +225,11 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           </:col>
           <:col :let={lab_order} label="Urgency">{lab_order.urgency}</:col>
           <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
+          <:empty_state>
+            <.blank_state icon="hero-check-circle" title="No pending orders">
+              New lab orders at this site will appear here.
+            </.blank_state>
+          </:empty_state>
         </.table>
 
         <.header class="mt-6">Incomplete reports</.header>
@@ -221,13 +241,22 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           <:col :let={lab_order} label="Patient">
             {patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}
           </:col>
-          <:col :let={lab_order} label="Status">{Phoenix.Naming.humanize(lab_order.status)}</:col>
+          <:col :let={lab_order} label="Status">
+            <.status_badge status={lab_order.status} />
+          </:col>
           <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
+          <:empty_state>
+            <.blank_state icon="hero-check-circle" title="No incomplete reports">
+              Orders still awaiting collection or results will appear here.
+            </.blank_state>
+          </:empty_state>
         </.table>
       </div>
 
-      <div :if={is_nil(@tab)} class="text-center text-base-content/50 py-8">
-        This site has no pharmacy or lab operations to show.
+      <div :if={is_nil(@tab)}>
+        <.blank_state icon="hero-building-office-2" title="No operations configured" class="mt-6">
+          This site has no pharmacy or lab operations to show.
+        </.blank_state>
       </div>
     </Layouts.org_shell>
     """

@@ -5,6 +5,7 @@ defmodule ThamaniDawaWeb.VerificationQueueLiveTest do
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.LabOrdersFixtures
   import ThamaniDawa.LabTestsFixtures
+  import ThamaniDawa.PatientsFixtures
   import ThamaniDawa.SitesFixtures
 
   alias ThamaniDawa.LabOrders
@@ -30,6 +31,20 @@ defmodule ThamaniDawaWeb.VerificationQueueLiveTest do
     lab_test = lab_test_fixture(%{organization_id: admin.organization_id})
 
     %{admin: admin, performer: performer, verifier: verifier, site: site, lab_test: lab_test}
+  end
+
+  # `lab_order_fixture/1` only threads a given `patient_id` through to the
+  # patient_visit it creates — it never sets `LabOrder.patient_id` itself
+  # (the real create flow does, via the header form's `patient_id` field).
+  # Patch it directly so `patient_name/3` (which reads `lab_order.patient_id`)
+  # can resolve it in tests, same as it would from a real save.
+  defp lab_order_with_patient(organization_id, patient_id) do
+    order = lab_order_fixture(%{organization_id: organization_id, patient_id: patient_id})
+
+    {:ok, updated} =
+      order |> Ecto.Changeset.change(patient_id: patient_id) |> ThamaniDawa.Repo.update()
+
+    updated
   end
 
   defp make_completed_result(ctx) do
@@ -96,6 +111,95 @@ defmodule ThamaniDawaWeb.VerificationQueueLiveTest do
 
       assert LabOrders.get_lab_order_result!(ctx.admin.organization_id, result.id).status ==
                :completed
+    end
+
+    test "searches by patient name", ctx do
+      alice =
+        patient_fixture(%{organization_id: ctx.admin.organization_id, full_name: "Alice Wanjiru"})
+
+      bob =
+        patient_fixture(%{organization_id: ctx.admin.organization_id, full_name: "Bob Otieno"})
+
+      alice_order = lab_order_with_patient(ctx.admin.organization_id, alice.id)
+      bob_order = lab_order_with_patient(ctx.admin.organization_id, bob.id)
+
+      alice_result =
+        lab_order_result_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          lab_order_id: alice_order.id,
+          lab_test_id: ctx.lab_test.id
+        })
+
+      bob_result =
+        lab_order_result_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          lab_order_id: bob_order.id,
+          lab_test_id: ctx.lab_test.id
+        })
+
+      LabOrders.record_result(ctx.admin.organization_id, alice_result.id, ctx.performer.id, %{
+        "haemoglobin" => "13.5"
+      })
+
+      LabOrders.record_result(ctx.admin.organization_id, bob_result.id, ctx.performer.id, %{
+        "haemoglobin" => "13.5"
+      })
+
+      {:ok, lv, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/verification-queue")
+
+      lv |> form("form[phx-change='search']", search: "alice") |> render_change()
+
+      html = render(lv)
+      assert html =~ "Alice Wanjiru"
+      refute html =~ "Bob Otieno"
+    end
+
+    test "filters by test", ctx do
+      other_test = lab_test_fixture(%{organization_id: ctx.admin.organization_id, name: "Widal"})
+
+      patient_a =
+        patient_fixture(%{organization_id: ctx.admin.organization_id, full_name: "Patient A"})
+
+      patient_b =
+        patient_fixture(%{organization_id: ctx.admin.organization_id, full_name: "Patient B"})
+
+      order_a = lab_order_with_patient(ctx.admin.organization_id, patient_a.id)
+      order_b = lab_order_with_patient(ctx.admin.organization_id, patient_b.id)
+
+      result_a =
+        lab_order_result_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          lab_order_id: order_a.id,
+          lab_test_id: ctx.lab_test.id
+        })
+
+      result_b =
+        lab_order_result_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          lab_order_id: order_b.id,
+          lab_test_id: other_test.id
+        })
+
+      LabOrders.record_result(ctx.admin.organization_id, result_a.id, ctx.performer.id, %{
+        "haemoglobin" => "13.5"
+      })
+
+      LabOrders.record_result(ctx.admin.organization_id, result_b.id, ctx.performer.id, %{
+        "haemoglobin" => "13.5"
+      })
+
+      {:ok, lv, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/verification-queue")
+
+      lv
+      |> form("#verification-queue-filters-form",
+        filters: %{lab_test_id: to_string(other_test.id)}
+      )
+      |> render_submit()
+
+      html = render(lv)
+      assert html =~ "Patient B"
+      refute html =~ "Patient A"
+      assert html =~ "Test: Widal"
     end
 
     test "does not show results from another organization", ctx do

@@ -112,7 +112,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
       </.header>
 
       <.list>
-        <:item title="Status">{Phoenix.Naming.humanize(@lab_order.status)}</:item>
+        <:item title="Status"><.status_badge status={@lab_order.status} /></:item>
         <:item title="Urgency">{@lab_order.urgency}</:item>
         <:item title="Prescriber">{@lab_order.prescriber_name}</:item>
         <:item title="Referring facility">{@lab_order.referring_facility}</:item>
@@ -122,7 +122,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
       <.header class="mt-4">Results</.header>
       <.table id="lab-order-results" rows={@results}>
         <:col :let={result} label="Test">{test_name(@lab_tests, result.lab_test_id)}</:col>
-        <:col :let={result} label="Status">{Phoenix.Naming.humanize(result.status)}</:col>
+        <:col :let={result} label="Status">
+          <.status_badge status={result.status} />
+        </:col>
         <:col :let={result} label="Sample collected">{result.sample_collected_on}</:col>
         <:col :let={result} label="Collection notes">{result.collection_notes}</:col>
         <:col :let={result} label="Collected by">
@@ -160,10 +162,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             Enter results
           </.link>
         </:action>
+        <:empty_state>
+          <.blank_state icon="hero-beaker" title="No tests added yet">
+            Use "Add a test" below to add results to this order.
+          </.blank_state>
+        </:empty_state>
       </.table>
 
-      <div :if={@collecting_result_id} class="rounded-2xl p-6 mt-4" style="background: #E6EDF8;">
-        <h2 class="text-base font-medium mb-4" style="color: #373896;">Record sample collection</h2>
+      <div :if={@collecting_result_id} class="rounded-2xl bg-thamani-stone p-6 mt-4">
+        <h2 class="text-base font-medium mb-4 text-thamani-forest">Record sample collection</h2>
         <.form
           for={%{}}
           id="collect-sample-form"
@@ -183,8 +190,8 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         </.form>
       </div>
 
-      <div class="rounded-2xl p-6 mt-4" style="background: #E6EDF8;">
-        <h2 class="text-base font-medium mb-4" style="color: #373896;">Add a test</h2>
+      <div class="rounded-2xl bg-thamani-stone p-6 mt-4">
+        <h2 class="text-base font-medium mb-4 text-thamani-forest">Add a test</h2>
         <.form
           for={%{}}
           id="add-test-form"

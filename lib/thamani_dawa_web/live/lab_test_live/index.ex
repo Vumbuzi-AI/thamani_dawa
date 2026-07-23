@@ -4,16 +4,18 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   alias ThamaniDawa.LabTests
   alias ThamaniDawa.LabTests.LabTest
 
-  def mount(_params, _session, socket) do
-    org_id = socket.assigns.current_scope.organization_id
+  @default_filters %{category: "", status: ""}
 
+  def mount(_params, _session, socket) do
     {:ok,
      socket
      |> assign(:lab_test, nil)
      |> assign(:form, nil)
      |> assign(:field_defs_json, "{}")
      |> assign(:field_defs_error, nil)
-     |> stream(:lab_tests, LabTests.list_lab_tests(org_id))}
+     |> assign(:search, "")
+     |> assign(:filters, @default_filters)
+     |> reload_lab_tests()}
   end
 
   def handle_params(params, _url, socket) do
@@ -74,12 +76,39 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     lab_test = LabTests.get_lab_test!(org_id, id)
 
     case LabTests.update_lab_test(org_id, lab_test, %{is_active: !lab_test.is_active}) do
-      {:ok, updated} ->
-        {:noreply, stream_insert(socket, :lab_tests, updated)}
+      {:ok, _updated} ->
+        {:noreply, reload_lab_tests(socket)}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not update test.")}
     end
+  end
+
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, socket |> assign(:search, search) |> reload_lab_tests()}
+  end
+
+  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
+    filters = %{
+      category: Map.get(filter_params, "category", ""),
+      status: Map.get(filter_params, "status", "")
+    }
+
+    {:noreply, socket |> assign(:filters, filters) |> reload_lab_tests()}
+  end
+
+  def handle_event("clear_filters", _params, socket) do
+    {:noreply, socket |> assign(:filters, @default_filters) |> reload_lab_tests()}
+  end
+
+  def handle_event("clear_chip", %{"field" => "category"}, socket) do
+    {:noreply,
+     socket |> assign(:filters, %{socket.assigns.filters | category: ""}) |> reload_lab_tests()}
+  end
+
+  def handle_event("clear_chip", %{"field" => "status"}, socket) do
+    {:noreply,
+     socket |> assign(:filters, %{socket.assigns.filters | status: ""}) |> reload_lab_tests()}
   end
 
   defp save_lab_test(socket, :new, attrs) do
@@ -121,14 +150,101 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     end
   end
 
+  defp reload_lab_tests(socket) do
+    org_id = socket.assigns.current_scope.organization_id
+    lab_tests = LabTests.list_lab_tests(org_id)
+
+    filtered =
+      lab_tests
+      |> filter_by_search(socket.assigns.search)
+      |> filter_by_category(socket.assigns.filters.category)
+      |> filter_by_status(socket.assigns.filters.status)
+
+    stream(socket, :lab_tests, filtered, reset: true)
+  end
+
+  defp filter_by_search(lab_tests, ""), do: lab_tests
+
+  defp filter_by_search(lab_tests, search) do
+    search = String.downcase(String.trim(search))
+
+    Enum.filter(lab_tests, fn test ->
+      [test.name, test.category]
+      |> Enum.filter(& &1)
+      |> Enum.any?(&String.contains?(String.downcase(&1), search))
+    end)
+  end
+
+  defp filter_by_category(lab_tests, ""), do: lab_tests
+
+  defp filter_by_category(lab_tests, category),
+    do: Enum.filter(lab_tests, &(&1.category == category))
+
+  defp filter_by_status(lab_tests, ""), do: lab_tests
+  defp filter_by_status(lab_tests, "active"), do: Enum.filter(lab_tests, & &1.is_active)
+  defp filter_by_status(lab_tests, "inactive"), do: Enum.filter(lab_tests, &(!&1.is_active))
+
+  defp active_filter_count(filters) do
+    Enum.count([filters.category != "", filters.status != ""], & &1)
+  end
+
+  defp filter_chips(filters) do
+    [
+      filters.category != "" && %{label: "Category: #{filters.category}", field: "category"},
+      filters.status != "" &&
+        %{
+          label: "Status: #{Phoenix.Naming.humanize(filters.status)}",
+          field: "status"
+        }
+    ]
+    |> Enum.filter(& &1)
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/tests"}>
-      <.header>
+      <.header icon="hero-beaker">
         Test catalog
+        <:subtitle>Search, filter, and manage your lab test catalog.</:subtitle>
         <:actions>
           <.button variant="primary" patch={~p"/lab/tests/new"}>+ New test</.button>
         </:actions>
+        <:toolbar>
+          <form phx-change="search" class="flex-1" id="search-form">
+            <.search_input name="search" value={@search} placeholder="Search by name or category" />
+          </form>
+
+          <.filter_drawer
+            id="lab-tests-filters"
+            title="Filter tests"
+            apply_event="apply_filters"
+            active_count={active_filter_count(@filters)}
+          >
+            <:group label="Category">
+              <.input
+                type="select"
+                name="filters[category]"
+                value={@filters.category}
+                options={LabTest.categories()}
+                prompt="All categories"
+              />
+            </:group>
+            <:group label="Status">
+              <.input
+                type="select"
+                name="filters[status]"
+                value={@filters.status}
+                options={[{"Active", "active"}, {"Inactive", "inactive"}]}
+                prompt="All statuses"
+              />
+            </:group>
+            <:chip
+              :for={chip <- filter_chips(@filters)}
+              label={chip.label}
+              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
+            />
+          </.filter_drawer>
+        </:toolbar>
       </.header>
 
       <.modal
@@ -193,16 +309,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
         <:col :let={{_id, test}} label="Category">{test.category}</:col>
         <:col :let={{_id, test}} label="Price">{test.price && "KES #{test.price}"}</:col>
         <:col :let={{_id, test}} label="Status">
-          <span
-            class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-            style={
-              if test.is_active,
-                do: "background: #D1FAE5; color: #065F46;",
-                else: "background: #e5e7eb; color: #6b7280;"
-            }
-          >
-            {if test.is_active, do: "Active", else: "Inactive"}
-          </span>
+          <.status_badge status={if test.is_active, do: :active, else: :inactive} />
         </:col>
         <:action :let={{_id, test}}>
           <.link patch={~p"/lab/tests/#{test.id}/edit"} class="link">Edit</.link>
@@ -216,6 +323,20 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
             {if test.is_active, do: "Deactivate", else: "Reactivate"}
           </.button>
         </:action>
+        <:empty_state>
+          <.blank_state
+            icon="hero-beaker"
+            title={
+              if @search != "" or active_filter_count(@filters) > 0,
+                do: "No tests match your search or filters",
+                else: "No tests yet"
+            }
+          >
+            {if @search != "" or active_filter_count(@filters) > 0,
+              do: "Try a different search term, or clear the applied filters.",
+              else: "Tests you add to the catalog will appear here."}
+          </.blank_state>
+        </:empty_state>
       </.table>
     </Layouts.lab_shell>
     """

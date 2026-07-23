@@ -197,8 +197,13 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
           {user_display(@users_by_id, batch.approver_id)}
         </:col>
         <:col :let={{_id, batch}} label="Status">
-          {if batch.approver_id, do: "Active", else: "Pending receipt"}
+          <.status_badge status={if batch.approver_id, do: :active, else: :pending_receipt} />
         </:col>
+        <:empty_state>
+          <.blank_state icon="hero-archive-box" title="No batches yet">
+            Batches dispatched to a site will appear here.
+          </.blank_state>
+        </:empty_state>
       </.table>
     </Layouts.org_shell>
     """

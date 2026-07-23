@@ -84,20 +84,22 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
   def render(assigns) do
     ~H"""
     <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path="/pharmacy">
-      <.header>Pharmacy dashboard</.header>
+      <.header icon="hero-squares-2x2">
+        Pharmacy dashboard
+        <:subtitle>Stock alerts and pending prescriptions at your site.</:subtitle>
+      </.header>
 
       <div
         :if={@pending_batches_count > 0}
-        class="alert mt-4 flex items-center justify-between"
-        style="background: #fffbeb; border-color: #fcd34d;"
+        class="mt-4 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
       >
-        <span>
+        <span class="text-sm text-amber-800">
           <strong>{@pending_batches_count}</strong>
           {if @pending_batches_count == 1, do: "batch is", else: "batches are"} awaiting receipt at your site.
         </span>
-        <.link navigate={~p"/pharmacy/receive-stock"} class="btn btn-sm btn-primary">
+        <.thamani_btn navigate={~p"/pharmacy/receive-stock"} class="!w-auto">
           Receive stock
-        </.link>
+        </.thamani_btn>
       </div>
 
       <.header class="mt-6">
@@ -114,6 +116,11 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         <:col :let={{_product, total}} label="Remaining">
           <span class="text-error font-semibold">{total}</span>
         </:col>
+        <:empty_state>
+          <.blank_state icon="hero-check-circle" title="Nothing out of stock">
+            Every product at your site has remaining stock.
+          </.blank_state>
+        </:empty_state>
       </.table>
 
       <.header class="mt-6">
@@ -128,6 +135,11 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         <:col :let={{product, _total}} label="Product">{product_name(product)}</:col>
         <:col :let={{product, _total}} label="Reorder level">{product && product.reorder_level}</:col>
         <:col :let={{_product, total}} label="Remaining">{total}</:col>
+        <:empty_state>
+          <.blank_state icon="hero-check-circle" title="No products are low on stock">
+            Products will show up here once they drop to their reorder level.
+          </.blank_state>
+        </:empty_state>
       </.table>
 
       <.header class="mt-6">
@@ -143,6 +155,11 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         <:col :let={batch} label="Batch no.">{batch.batch_no}</:col>
         <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
         <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
+        <:empty_state>
+          <.blank_state icon="hero-calendar-days" title="No batches expiring soon">
+            Batches will appear here within {@near_expiry_days} days of their expiry date.
+          </.blank_state>
+        </:empty_state>
       </.table>
 
       <.header class="mt-6">
@@ -153,11 +170,18 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         rows={@pending_prescriptions}
         row_click={fn prescription -> JS.navigate(~p"/pharmacy/prescriptions/#{prescription.id}") end}
       >
-        <:col :let={prescription} label="Status">{Phoenix.Naming.humanize(prescription.status)}</:col>
+        <:col :let={prescription} label="Status">
+          <.status_badge status={prescription.status} />
+        </:col>
         <:col :let={prescription} label="Total">{prescription.total_amount}</:col>
         <:col :let={prescription} label="Paid">
           {if prescription.has_paid, do: "Yes", else: "No"}
         </:col>
+        <:empty_state>
+          <.blank_state icon="hero-clipboard-document-check" title="No pending prescriptions">
+            Prescriptions awaiting dispensing at your site will appear here.
+          </.blank_state>
+        </:empty_state>
       </.table>
     </Layouts.pharmacy_shell>
     """

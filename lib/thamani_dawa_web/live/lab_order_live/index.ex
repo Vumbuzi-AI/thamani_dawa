@@ -6,15 +6,22 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   alias ThamaniDawa.LabTests
   alias ThamaniDawa.Patients
   alias ThamaniDawa.Patients.Patient
+  alias ThamaniDawa.PatientVisits
   alias ThamaniDawa.PatientVisits.PatientVisit
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
 
   @urgencies ~w(routine urgent stat)
   @sample_types [{"Blood", 1}, {"Urine", 2}, {"Stool", 3}, {"Swab", 4}]
+  @default_filters %{status: "", urgency: ""}
 
   def mount(_params, _session, socket) do
-    {:ok, assign_lab_orders(socket)}
+    {:ok,
+     socket
+     |> assign(:search, "")
+     |> assign(:filters, @default_filters)
+     |> assign(:urgencies, @urgencies)
+     |> assign_lab_orders()}
   end
 
   def handle_params(_params, _url, socket) do
@@ -49,6 +56,32 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
 
   def handle_event("toggle_new_patient", _params, socket) do
     {:noreply, assign(socket, :use_new_patient, not socket.assigns.use_new_patient)}
+  end
+
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, socket |> assign(:search, search) |> assign_lab_orders()}
+  end
+
+  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
+    filters = %{
+      status: Map.get(filter_params, "status", ""),
+      urgency: Map.get(filter_params, "urgency", "")
+    }
+
+    {:noreply, socket |> assign(:filters, filters) |> assign_lab_orders()}
+  end
+
+  def handle_event("clear_filters", _params, socket) do
+    {:noreply, socket |> assign(:filters, @default_filters) |> assign_lab_orders()}
+  end
+
+  def handle_event("clear_chip", %{"field" => field}, socket) do
+    key = String.to_existing_atom(field)
+
+    {:noreply,
+     socket
+     |> assign(:filters, %{socket.assigns.filters | key => ""})
+     |> assign_lab_orders()}
   end
 
   def handle_event("add_test", _params, socket) do
@@ -164,22 +197,117 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   defp assign_lab_orders(socket) do
     organization_id = socket.assigns.current_scope.organization_id
 
+    patients_by_id = organization_id |> Patients.list_patients() |> Map.new(&{&1.id, &1})
+
+    patient_by_visit_id =
+      organization_id
+      |> PatientVisits.list_patient_visits()
+      |> Map.new(&{&1.id, patients_by_id[&1.patient_id]})
+
     lab_orders =
       organization_id
       |> LabOrders.list_lab_orders()
       |> SiteScoping.for_current_site(socket.assigns.current_scope)
+      |> filter_by_search(socket.assigns.search, patient_by_visit_id)
+      |> filter_by_status(socket.assigns.filters.status)
+      |> filter_by_urgency(socket.assigns.filters.urgency)
 
-    assign(socket, :lab_orders, lab_orders)
+    socket
+    |> assign(:patient_by_visit_id, patient_by_visit_id)
+    |> assign(:lab_orders, lab_orders)
+  end
+
+  defp filter_by_search(lab_orders, "", _patient_by_visit_id), do: lab_orders
+
+  defp filter_by_search(lab_orders, search, patient_by_visit_id) do
+    search = String.downcase(String.trim(search))
+
+    Enum.filter(lab_orders, fn lab_order ->
+      case patient_by_visit_id[lab_order.patient_visit_id] do
+        nil -> false
+        patient -> String.contains?(String.downcase(patient.full_name), search)
+      end
+    end)
+  end
+
+  defp filter_by_status(lab_orders, ""), do: lab_orders
+
+  defp filter_by_status(lab_orders, status) do
+    status = String.to_existing_atom(status)
+    Enum.filter(lab_orders, &(&1.status == status))
+  end
+
+  defp filter_by_urgency(lab_orders, ""), do: lab_orders
+
+  defp filter_by_urgency(lab_orders, urgency),
+    do: Enum.filter(lab_orders, &(&1.urgency == urgency))
+
+  defp active_filter_count(filters) do
+    Enum.count([filters.status != "", filters.urgency != ""], & &1)
+  end
+
+  defp filter_chips(filters) do
+    [
+      filters.status != "" &&
+        %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"},
+      filters.urgency != "" &&
+        %{label: "Urgency: #{Phoenix.Naming.humanize(filters.urgency)}", field: "urgency"}
+    ]
+    |> Enum.filter(& &1)
+  end
+
+  defp patient_name(patient_by_visit_id, visit_id) do
+    case patient_by_visit_id[visit_id] do
+      nil -> "(unknown patient)"
+      patient -> patient.full_name
+    end
   end
 
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/orders"}>
-      <.header>
+      <.header icon="hero-clipboard-document-list">
         Lab orders
+        <:subtitle>Search, filter, and manage lab orders at your site.</:subtitle>
         <:actions>
           <.button variant="primary" patch={~p"/lab/orders/new"}>+ New order</.button>
         </:actions>
+        <:toolbar>
+          <form phx-change="search" class="flex-1" id="search-form">
+            <.search_input name="search" value={@search} placeholder="Search by patient name" />
+          </form>
+
+          <.filter_drawer
+            id="lab-orders-filters"
+            title="Filter lab orders"
+            apply_event="apply_filters"
+            active_count={active_filter_count(@filters)}
+          >
+            <:group label="Status">
+              <.input
+                type="select"
+                name="filters[status]"
+                value={@filters.status}
+                options={Enum.map(LabOrder.statuses(), &{Phoenix.Naming.humanize(&1), &1})}
+                prompt="All statuses"
+              />
+            </:group>
+            <:group label="Urgency">
+              <.input
+                type="select"
+                name="filters[urgency]"
+                value={@filters.urgency}
+                options={Enum.map(@urgencies, &{Phoenix.Naming.humanize(&1), &1})}
+                prompt="All urgencies"
+              />
+            </:group>
+            <:chip
+              :for={chip <- filter_chips(@filters)}
+              label={chip.label}
+              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
+            />
+          </.filter_drawer>
+        </:toolbar>
       </.header>
 
       <.modal
@@ -280,8 +408,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
             <div class="space-y-2">
               <div
                 :for={id <- @test_ids}
-                class="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-xl p-3 [&>div]:mb-0"
-                style="background: #FFFFFF;"
+                class="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-xl bg-thamani-snow p-3 [&>div]:mb-0"
               >
                 <.input
                   type="select"
@@ -339,10 +466,29 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         rows={@lab_orders}
         row_click={fn o -> JS.navigate(~p"/lab/orders/#{o.id}") end}
       >
-        <:col :let={lab_order} label="Status">{Phoenix.Naming.humanize(lab_order.status)}</:col>
+        <:col :let={lab_order} label="Patient">
+          {patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}
+        </:col>
+        <:col :let={lab_order} label="Status">
+          <.status_badge status={lab_order.status} />
+        </:col>
         <:col :let={lab_order} label="Urgency">{lab_order.urgency}</:col>
         <:col :let={lab_order} label="Paid">{if lab_order.has_paid, do: "Yes", else: "No"}</:col>
         <:col :let={lab_order} label="Created">{lab_order.inserted_at}</:col>
+        <:empty_state>
+          <.blank_state
+            icon="hero-beaker"
+            title={
+              if @search != "" or active_filter_count(@filters) > 0,
+                do: "No lab orders match your search or filters",
+                else: "No lab orders yet"
+            }
+          >
+            {if @search != "" or active_filter_count(@filters) > 0,
+              do: "Try a different search term, or clear the applied filters.",
+              else: "Lab orders created at your site will appear here."}
+          </.blank_state>
+        </:empty_state>
       </.table>
     </Layouts.lab_shell>
     """

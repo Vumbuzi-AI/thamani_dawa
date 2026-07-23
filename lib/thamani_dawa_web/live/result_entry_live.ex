@@ -59,7 +59,7 @@ defmodule ThamaniDawaWeb.ResultEntryLive do
         </:actions>
       </.header>
 
-      <div class="rounded-2xl p-6" style="background: #E6EDF8;">
+      <div class="rounded-2xl bg-thamani-stone p-6">
         <.form for={%{}} id="result-entry-form" phx-submit="save">
           <div class="flex flex-col gap-4">
             <%= for {key, definition} <- @lab_test.field_definitions do %>
