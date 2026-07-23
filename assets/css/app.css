@@ -108,6 +108,31 @@
 /* This file is for your main application CSS */
 
 /* ============================================================
+   Internal app typography
+
+   The operational UI uses a restrained 400/500/600 weight range.
+   This keeps dense tables and forms calm while preserving a clear
+   hierarchy for headings, identity, and important values.
+   ============================================================ */
+
+.internal-app {
+  font-weight: 400;
+  font-synthesis: none;
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+.internal-app .font-medium {
+  font-weight: 500;
+}
+
+.internal-app :where(.font-semibold, .font-bold, .font-extrabold, .font-black) {
+  font-weight: 600;
+}
+
+/* ============================================================
    App Shell — Sidebar collapse
    Single class toggled by the .Sidebar hook (layouts.ex); every
    collapsed-state rule lives here instead of per-element inline
@@ -186,7 +211,7 @@
   padding: 6px 12px;
   border-radius: 10px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
   z-index: 60;
   pointer-events: none;

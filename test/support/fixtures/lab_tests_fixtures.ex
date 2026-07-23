@@ -42,9 +42,16 @@ defmodule ThamaniDawa.LabTestsFixtures do
         OrganizationsFixtures.organization_fixture().id
       end)
 
+    {category_name, attrs} = Map.pop(attrs, :category)
+
     {category_id, attrs} =
       Map.pop_lazy(attrs, :category_id, fn ->
-        lab_test_category_fixture(%{organization_id: organization_id}).id
+        category_attrs =
+          if category_name,
+            do: %{organization_id: organization_id, name: category_name},
+            else: %{organization_id: organization_id}
+
+        lab_test_category_fixture(category_attrs).id
       end)
 
     attrs = Map.put(attrs, :category_id, category_id)

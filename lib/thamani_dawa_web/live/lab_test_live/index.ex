@@ -8,6 +8,8 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   @default_filters %{category: "", status: ""}
 
   def mount(_params, _session, socket) do
+    org_id = socket.assigns.current_scope.organization_id
+
     {:ok,
      socket
      |> assign(:lab_test, nil)
@@ -16,6 +18,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
      |> assign(:field_defs_error, nil)
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
+     |> refresh_categories(org_id)
      |> reload_lab_tests()}
   end
 
@@ -137,6 +140,17 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
      socket |> assign(:filters, %{socket.assigns.filters | status: ""}) |> reload_lab_tests()}
   end
 
+  defp resolve_category(%{assigns: %{use_new_category: true}}, organization_id, attrs, %{
+         "category" => category_attrs
+       }) do
+    case LabTests.create_lab_test_category(organization_id, category_attrs) do
+      {:ok, category} -> {:ok, Map.put(attrs, "category_id", category.id)}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  defp resolve_category(_socket, _organization_id, attrs, _params), do: {:ok, attrs}
+
   defp save_lab_test(socket, :new, attrs) do
     org_id = socket.assigns.current_scope.organization_id
 
@@ -182,6 +196,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
 
     socket
     |> assign(:categories, Enum.map(categories, &{&1.name, &1.id}))
+    |> assign(:category_filter_options, Enum.map(categories, & &1.name))
     |> assign(:categories_by_id, Map.new(categories, &{&1.id, &1}))
   end
 
@@ -211,7 +226,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     search = String.downcase(String.trim(search))
 
     Enum.filter(lab_tests, fn test ->
-      [test.name, test.category]
+      [test.name, category_name(test)]
       |> Enum.filter(& &1)
       |> Enum.any?(&String.contains?(String.downcase(&1), search))
     end)
@@ -220,7 +235,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   defp filter_by_category(lab_tests, ""), do: lab_tests
 
   defp filter_by_category(lab_tests, category),
-    do: Enum.filter(lab_tests, &(&1.category == category))
+    do: Enum.filter(lab_tests, &(category_name(&1) == category))
 
   defp filter_by_status(lab_tests, ""), do: lab_tests
   defp filter_by_status(lab_tests, "active"), do: Enum.filter(lab_tests, & &1.is_active)
@@ -241,6 +256,9 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     ]
     |> Enum.filter(& &1)
   end
+
+  defp category_name(%{category: nil}), do: "(unknown category)"
+  defp category_name(%{category: %LabTestCategory{name: name}}), do: name
 
   def render(assigns) do
     ~H"""
@@ -267,7 +285,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
                 type="select"
                 name="filters[category]"
                 value={@filters.category}
-                options={LabTest.categories()}
+                options={@category_filter_options}
                 prompt="All categories"
               />
             </:group>

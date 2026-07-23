@@ -643,8 +643,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       updated_batch = ThamaniDawa.Batches.get_batch!(org.id, batch.id)
       assert updated_batch.remaining_quantity == 46
 
-      # The UI should now reflect Dispensed: 4
-      assert render(show_live) =~ "Dispensed:\u003C/strong> 4"
+      assert has_element?(show_live, "#dispensed-quantity-#{item.id}", "4")
     end
 
     test "colors the status badge green once the prescription is completed", %{

@@ -32,7 +32,7 @@ defmodule ThamaniDawaWeb.Layouts do
 
   def app_shell(assigns) do
     ~H"""
-    <div class="min-h-screen">
+    <div class="internal-app min-h-screen">
       <header class="navbar bg-base-200 px-4 sm:px-6 lg:px-8">
         <div class="flex-1 flex items-center gap-4">
           <a href={~p"/"} class="font-semibold">Thamani Dawa</a>
@@ -187,7 +187,7 @@ defmodule ThamaniDawaWeb.Layouts do
     ~H"""
     <div
       id="sidebar-shell"
-      class="h-screen flex overflow-hidden"
+      class="internal-app h-screen flex overflow-hidden"
       style="background: var(--thamani-canvas); font-family: var(--font-thamani-sans, sans-serif);"
       phx-hook=".Sidebar"
     >
@@ -214,7 +214,7 @@ defmodule ThamaniDawaWeb.Layouts do
         <%!-- Brand row --%>
         <div id="sidebar-brand-row" class="flex items-center gap-3 mb-6">
           <div
-            class="flex items-center justify-center shrink-0 font-bold text-[13px]"
+            class="flex items-center justify-center shrink-0 font-semibold text-[13px]"
             style="width: 44px; height: 44px; border-radius: 12px; background: var(--thamani-lime); border: 1px solid var(--thamani-accent); color: var(--thamani-forest);"
           >
             TD
@@ -225,12 +225,12 @@ defmodule ThamaniDawaWeb.Layouts do
           >
             <a
               href={~p"/"}
-              class="font-bold text-[17px] leading-tight truncate block"
+              class="font-semibold text-[17px] leading-tight truncate block"
               style="color: var(--thamani-forest);"
             >
               {@title}
             </a>
-            <span class="text-[13px] font-medium truncate block" style="color: var(--thamani-pewter);">
+            <span class="text-[13px] truncate block" style="color: var(--thamani-pewter);">
               {@section_label}
             </span>
           </div>
@@ -246,7 +246,7 @@ defmodule ThamaniDawaWeb.Layouts do
             <.link
               navigate={path}
               data-tooltip={label}
-              class="flex items-center gap-3 rounded-xl text-[15px] font-semibold transition-all whitespace-nowrap"
+              class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-all whitespace-nowrap"
               style={
                 if active,
                   do:
@@ -272,7 +272,7 @@ defmodule ThamaniDawaWeb.Layouts do
         >
           <span
             id="nav-label-portal-switch-heading"
-            class="px-3 text-[11px] font-semibold uppercase tracking-wide transition-opacity duration-150"
+            class="px-3 text-[11px] font-medium uppercase tracking-wide transition-opacity duration-150"
             style="color: var(--thamani-subtle);"
           >
             Switch portal
@@ -281,7 +281,7 @@ defmodule ThamaniDawaWeb.Layouts do
             :if={@base_path != "/pharmacy"}
             id="portal-link-pharmacy"
             navigate={~p"/pharmacy"}
-            class="flex items-center gap-3 rounded-xl text-[15px] font-semibold transition-all whitespace-nowrap overflow-hidden"
+            class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-all whitespace-nowrap overflow-hidden"
             style="color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
           >
             <.icon name="hero-building-storefront" class="size-5 shrink-0" />
@@ -291,7 +291,7 @@ defmodule ThamaniDawaWeb.Layouts do
             :if={@base_path != "/lab"}
             id="portal-link-lab"
             navigate={~p"/lab"}
-            class="flex items-center gap-3 rounded-xl text-[15px] font-semibold transition-all whitespace-nowrap overflow-hidden"
+            class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-all whitespace-nowrap overflow-hidden"
             style="color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
           >
             <.icon name="hero-beaker" class="size-5 shrink-0" />
@@ -311,7 +311,7 @@ defmodule ThamaniDawaWeb.Layouts do
             style="background: #FBFBFF; border: 1px solid #E8EBF3; border-radius: 16px; padding: 14px 16px;"
           >
             <div
-              class="rounded-full flex items-center justify-center shrink-0 font-bold text-[15px]"
+              class="rounded-full flex items-center justify-center shrink-0 font-semibold text-[15px]"
               style="width: 44px; height: 44px; background: var(--thamani-forest); color: var(--thamani-snow);"
             >
               {String.at(@current_scope.user.name || "U", 0)}
@@ -320,7 +320,7 @@ defmodule ThamaniDawaWeb.Layouts do
               id="sidebar-profile"
               class="flex flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
             >
-              <span class="text-[15px] font-bold truncate" style="color: #1F2433;">
+              <span class="text-[15px] font-semibold truncate" style="color: #1F2433;">
                 {@current_scope.user.name}
               </span>
               <span class="text-[13px]" style="color: var(--thamani-pewter);">

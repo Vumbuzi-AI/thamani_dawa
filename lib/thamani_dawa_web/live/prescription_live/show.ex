@@ -100,6 +100,31 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   defp product_name(%{product: product}),
     do: product.generic_name || product.brand_name || "(unnamed)"
 
+  defp item_state(item, stock) do
+    cond do
+      item.is_verified -> :verified
+      item.quantity_dispensed >= item.quantity_prescribed -> :awaiting_verification
+      item.quantity_dispensed > 0 -> :partially_dispensed
+      stock <= 0 -> :out_of_stock
+      true -> :ready
+    end
+  end
+
+  defp item_state_label(:verified), do: "Verified"
+  defp item_state_label(:awaiting_verification), do: "Awaiting verification"
+  defp item_state_label(:partially_dispensed), do: "Partially dispensed"
+  defp item_state_label(:out_of_stock), do: "Out of stock"
+  defp item_state_label(:ready), do: "Ready to dispense"
+
+  defp item_state_classes(:verified), do: "bg-emerald-50 text-emerald-700 ring-emerald-200"
+  defp item_state_classes(:awaiting_verification), do: "bg-amber-50 text-amber-700 ring-amber-200"
+  defp item_state_classes(:partially_dispensed), do: "bg-sky-50 text-sky-700 ring-sky-200"
+  defp item_state_classes(:out_of_stock), do: "bg-rose-50 text-rose-700 ring-rose-200"
+  defp item_state_classes(:ready), do: "bg-indigo-50 text-thamani-forest ring-indigo-200"
+
+  defp outstanding_quantity(item),
+    do: max(item.quantity_prescribed - item.quantity_dispensed, 0)
+
   def render(assigns) do
     ~H"""
     <Layouts.pharmacy_shell
@@ -107,130 +132,311 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
       current_scope={@current_scope}
       current_path="/pharmacy/prescriptions"
     >
-      <.header>
-        Prescription for {@patient.full_name}
-        <:subtitle>
-          {if age = Patient.age(@patient), do: "#{age} yrs", else: "Age N/A"} | {if @patient.gender,
-            do: @patient.gender,
-            else: "Gender N/A"} | {@patient.phone || "No phone"}
-        </:subtitle>
-        <:actions>
-          <.button navigate={~p"/pharmacy/prescriptions"}>Back</.button>
-        </:actions>
-      </.header>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10 mt-6">
-        <div class="border rounded-box border-base-300 p-4 sm:p-6 bg-transparent">
-          <h3 class="font-semibold text-base-content/50 uppercase tracking-widest text-xs mb-4">
-            Status & Payment
-          </h3>
-          <div class="space-y-3 text-sm">
-            <div class="flex justify-between items-center">
-              <span class="text-base-content/70">Status</span>
-              <.status_badge status={@prescription.status} />
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-base-content/70">Payment type</span>
-              <span class="font-medium text-base-content">{@prescription.payment_type || "-"}</span>
-            </div>
-            <div class="flex justify-between items-center">
-              <span class="text-base-content/70">Paid</span>
-              <span class={[
-                "font-medium",
-                @prescription.has_paid && "text-success",
-                !@prescription.has_paid && "text-error"
-              ]}>
-                {if @prescription.has_paid, do: "Yes", else: "No"}
-              </span>
-            </div>
-            <div class="flex justify-between items-center pt-3 border-t border-base-200">
-              <span class="text-base-content/70">Total Amount</span>
-              <span class="font-bold text-base-content">{@prescription.total_amount || "-"}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="border rounded-box border-base-300 p-4 sm:p-6 bg-transparent flex flex-col">
-          <h3 class="font-semibold text-base-content/50 uppercase tracking-widest text-xs mb-4">
-            Prescriber & Notes
-          </h3>
-          <div class="space-y-4 text-sm flex-1">
-            <div class="flex flex-col">
-              <span class="text-base-content/70 mb-1">Prescriber</span>
-              <span class="font-medium text-base-content">{@prescription.referring_doctor || "Unknown"}</span>
-            </div>
-            <div class="flex flex-col pt-3 border-t border-base-200">
-              <span class="text-base-content/70 mb-1">Notes</span>
-              <span class={["font-medium", !@prescription.notes && "italic text-base-content/40"]}>
-                {@prescription.notes || "No notes provided"}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div :for={item <- @items} class="border rounded-box border-base-300 p-4 mt-4 bg-transparent">
-        <h3 class="font-semibold text-lg">{product_name(item)}</h3>
-        <p class="text-sm text-base-content/70 mt-1">
-          <strong>Prescribed:</strong> {item.quantity_prescribed} &nbsp;&middot;&nbsp;
-          <strong>Dispensed:</strong> {item.quantity_dispensed} &nbsp;&middot;&nbsp;
-          <span class={
-            if (@stock_by_product_id[item.product_id] || 0) < item.quantity_prescribed,
-              do: "text-error font-semibold",
-              else: "text-success font-semibold"
-          }>
-            In Stock: {@stock_by_product_id[item.product_id] || 0}
-          </span>
-        </p>
-        <p class="text-sm mt-1 text-base-content/90">
-          {item.dosage_instructions} {item.frequency}
-          {if item.route_of_administration, do: "- #{item.route_of_administration}"}
-          {if item.duration_in_days, do: "(for #{item.duration_in_days} days)"}
-        </p>
-
-        <form
-          :if={item.quantity_dispensed < item.quantity_prescribed}
-          phx-submit="dispense"
-          class="flex gap-3 items-end mt-4 pt-4 border-t border-base-200"
+      <div id="prescription-show" class="space-y-5">
+        <section
+          id="prescription-overview"
+          class="overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm"
         >
-          <input type="hidden" name="item_id" value={item.id} />
-          <input
-            type="number"
-            name="quantity"
-            placeholder="Quantity"
-            class="input input-sm input-bordered bg-transparent"
-            required
-            min="1"
-            max={item.quantity_prescribed - item.quantity_dispensed}
-          />
-          <.button type="submit" variant="primary" phx-disable-with="Dispensing...">Dispense</.button>
-        </form>
-
-        <div
-          :if={item.quantity_dispensed > 0}
-          class="mt-4 pt-4 border-t border-base-200 flex items-center gap-3"
-        >
-          <%= if item.is_verified do %>
-            <span class="text-success font-semibold flex items-center gap-1">
-              <.icon name="hero-check-circle" class="w-5 h-5" /> Verified
-            </span>
-          <% else %>
-            <form phx-submit="verify_item" class="flex gap-3 items-end w-full">
-              <input type="hidden" name="item_id" value={item.id} />
-              <div class="flex-1 max-w-xs">
-                <input
-                  type="text"
-                  name="gtin"
-                  placeholder="Scan GTIN to verify..."
-                  class="input input-sm input-bordered bg-transparent w-full"
-                  required
-                  autofocus
-                />
+          <div class="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
+            <div class="flex min-w-0 items-start gap-4">
+              <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-thamani-lime text-thamani-forest sm:size-12">
+                <.icon name="hero-user" class="size-5" />
               </div>
-              <.button type="submit" variant="ghost">Verify</.button>
-            </form>
-          <% end %>
-        </div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium uppercase tracking-[0.12em] text-thamani-subtle">
+                  Prescription for
+                </p>
+                <div class="mt-1 flex flex-wrap items-center gap-2.5">
+                  <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+                    {@patient.full_name}
+                  </h1>
+                  <.status_badge status={@prescription.status} />
+                </div>
+                <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-thamani-pewter">
+                  <span class="inline-flex items-center gap-1.5">
+                    <.icon name="hero-calendar-days" class="size-4 text-thamani-subtle" />
+                    {if age = Patient.age(@patient), do: "#{age} years", else: "Age not recorded"}
+                  </span>
+                  <span class="inline-flex items-center gap-1.5">
+                    <.icon name="hero-identification" class="size-4 text-thamani-subtle" />
+                    {@patient.gender || "Gender not recorded"}
+                  </span>
+                  <span class="inline-flex items-center gap-1.5">
+                    <.icon name="hero-phone" class="size-4 text-thamani-subtle" />
+                    {@patient.phone || "No phone number"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <.button
+              navigate={~p"/pharmacy/prescriptions"}
+              class="self-start gap-2 whitespace-nowrap"
+            >
+              <.icon name="hero-arrow-left" class="size-4" /> Back to prescriptions
+            </.button>
+          </div>
+
+          <dl class="grid grid-cols-2 border-t border-thamani-stone bg-thamani-canvas/70 lg:grid-cols-4">
+            <div class="border-b border-r border-thamani-stone px-5 py-4 lg:border-b-0">
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                Payment
+              </dt>
+              <dd class="mt-1.5 flex flex-wrap items-center gap-2 text-sm font-medium text-slate-900">
+                {@prescription.payment_type || "Not recorded"}
+                <span class={[
+                  "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
+                  @prescription.has_paid && "bg-emerald-50 text-emerald-700 ring-emerald-200",
+                  !@prescription.has_paid && "bg-rose-50 text-rose-700 ring-rose-200"
+                ]}>
+                  {if @prescription.has_paid, do: "Paid", else: "Unpaid"}
+                </span>
+              </dd>
+            </div>
+            <div class="border-b border-thamani-stone px-5 py-4 lg:border-b-0 lg:border-r">
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                Total amount
+              </dt>
+              <dd class="mt-1.5 text-sm font-semibold text-slate-900">
+                KES {@prescription.total_amount || "—"}
+              </dd>
+            </div>
+            <div class="border-r border-thamani-stone px-5 py-4">
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                Prescriber
+              </dt>
+              <dd class="mt-1.5 text-sm font-medium text-slate-900">
+                {@prescription.referring_doctor || "Not recorded"}
+              </dd>
+            </div>
+            <div class="px-5 py-4">
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                Medication items
+              </dt>
+              <dd class="mt-1.5 text-sm font-medium text-slate-900">
+                {length(@items)} {if length(@items) == 1, do: "item", else: "items"}
+              </dd>
+            </div>
+          </dl>
+        </section>
+
+        <aside
+          id="prescription-notes"
+          class="flex items-start gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3.5"
+        >
+          <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-thamani-forest ring-1 ring-indigo-100">
+            <.icon name="hero-clipboard-document-check" class="size-4" />
+          </div>
+          <div class="min-w-0">
+            <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+              Clinical notes
+            </p>
+            <p class={[
+              "mt-1 text-sm leading-6 text-slate-700",
+              !@prescription.notes && "italic text-thamani-subtle"
+            ]}>
+              {@prescription.notes || "No clinical notes were added to this prescription."}
+            </p>
+          </div>
+        </aside>
+
+        <section id="medication-fulfillment" class="pt-2">
+          <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900">Medication fulfillment</h2>
+              <p class="mt-1 text-sm text-thamani-pewter">
+                Dispense the prescribed quantity, then scan the product barcode to verify it.
+              </p>
+            </div>
+            <span class="self-start rounded-full bg-thamani-lime px-3 py-1 text-xs font-medium text-thamani-forest">
+              {Enum.count(@items, & &1.is_verified)} of {length(@items)} verified
+            </span>
+          </div>
+
+          <div id="prescription-items" class="space-y-4">
+            <.blank_state :if={@items == []} title="No medication items">
+              This prescription does not have any medication items.
+            </.blank_state>
+
+            <%= for {item, index} <- Enum.with_index(@items, 1) do %>
+              <% stock = Map.get(@stock_by_product_id, item.product_id, 0) %>
+              <% state = item_state(item, stock) %>
+              <article
+                id={"prescription-item-#{item.id}"}
+                class="overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div class="p-5 sm:p-6">
+                  <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="flex min-w-0 items-start gap-3.5">
+                      <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-thamani-canvas text-sm font-semibold text-thamani-forest ring-1 ring-thamani-stone">
+                        {index}
+                      </div>
+                      <div class="min-w-0">
+                        <h3 class="text-lg font-semibold text-slate-900">{product_name(item)}</h3>
+                        <p
+                          :if={
+                            item.product && item.product.brand_name &&
+                              item.product.brand_name != product_name(item)
+                          }
+                          class="mt-0.5 text-sm text-thamani-pewter"
+                        >
+                          {item.product.brand_name}
+                        </p>
+                      </div>
+                    </div>
+                    <span class={[
+                      "inline-flex self-start items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ring-1 ring-inset",
+                      item_state_classes(state)
+                    ]}>
+                      <span class="size-1.5 rounded-full bg-current"></span>
+                      {item_state_label(state)}
+                    </span>
+                  </div>
+
+                  <dl class="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-thamani-stone bg-thamani-canvas/60">
+                    <div class="border-r border-thamani-stone px-3 py-3.5 sm:px-4">
+                      <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
+                        Prescribed
+                      </dt>
+                      <dd class="mt-1 text-lg font-semibold text-slate-900">
+                        {item.quantity_prescribed}
+                      </dd>
+                    </div>
+                    <div class="border-r border-thamani-stone px-3 py-3.5 sm:px-4">
+                      <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
+                        Dispensed
+                      </dt>
+                      <dd
+                        id={"dispensed-quantity-#{item.id}"}
+                        class="mt-1 text-lg font-semibold text-slate-900"
+                      >
+                        {item.quantity_dispensed}
+                      </dd>
+                    </div>
+                    <div class="px-3 py-3.5 sm:px-4">
+                      <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
+                        Available
+                      </dt>
+                      <dd class={[
+                        "mt-1 text-lg font-semibold",
+                        stock < outstanding_quantity(item) && "text-rose-600",
+                        stock >= outstanding_quantity(item) && "text-emerald-600"
+                      ]}>
+                        {stock}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div class="mt-4 flex items-start gap-3 rounded-xl bg-indigo-50/60 px-4 py-3.5">
+                    <.icon
+                      name="hero-information-circle"
+                      class="mt-0.5 size-5 shrink-0 text-thamani-forest"
+                    />
+                    <div>
+                      <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                        Directions
+                      </p>
+                      <p class="mt-1 text-sm leading-6 text-slate-700">
+                        {item.dosage_instructions} {item.frequency}
+                        {if item.route_of_administration,
+                          do: " · #{item.route_of_administration}"}
+                        {if item.duration_in_days, do: " · #{item.duration_in_days} days"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  :if={item.quantity_dispensed < item.quantity_prescribed}
+                  class="border-t border-thamani-stone bg-thamani-canvas/50 px-5 py-4 sm:px-6"
+                >
+                  <form
+                    id={"dispense-form-#{item.id}"}
+                    phx-submit="dispense"
+                    class="flex flex-col gap-3 sm:flex-row sm:items-end"
+                  >
+                    <.input type="hidden" name="item_id" value={item.id} />
+                    <div class="w-full sm:max-w-48">
+                      <.input
+                        id={"dispense-quantity-#{item.id}"}
+                        type="number"
+                        name="quantity"
+                        value={outstanding_quantity(item)}
+                        label="Quantity to dispense"
+                        required
+                        min="1"
+                        max={outstanding_quantity(item)}
+                        class="h-11 w-full rounded-lg border border-thamani-stone bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-thamani-accent focus:ring-3 focus:ring-indigo-100"
+                      />
+                    </div>
+                    <.button
+                      type="submit"
+                      variant="primary"
+                      disabled={stock <= 0}
+                      class="h-11 gap-2 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
+                      phx-disable-with="Dispensing..."
+                    >
+                      <.icon name="hero-check" class="size-4" /> Dispense medication
+                    </.button>
+                    <p :if={stock <= 0} class="self-center text-sm font-medium text-rose-600">
+                      No stock is available at this site.
+                    </p>
+                  </form>
+                </div>
+
+                <div
+                  :if={item.quantity_dispensed > 0}
+                  class={[
+                    "border-t px-5 py-4 sm:px-6",
+                    item.is_verified && "border-emerald-100 bg-emerald-50/60",
+                    !item.is_verified && "border-thamani-stone bg-thamani-canvas/50"
+                  ]}
+                >
+                  <%= if item.is_verified do %>
+                    <div class="flex items-center gap-3 text-emerald-700">
+                      <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-emerald-200">
+                        <.icon name="hero-check" class="size-5" />
+                      </div>
+                      <div>
+                        <p class="text-sm font-semibold">Product verified</p>
+                        <p class="text-xs text-emerald-700/75">
+                          The scanned barcode matched this medication.
+                        </p>
+                      </div>
+                    </div>
+                  <% else %>
+                    <form
+                      id={"verify-form-#{item.id}"}
+                      phx-submit="verify_item"
+                      class="flex flex-col gap-3 sm:flex-row sm:items-end"
+                    >
+                      <.input type="hidden" name="item_id" value={item.id} />
+                      <div class="w-full sm:max-w-md">
+                        <.input
+                          id={"verify-gtin-#{item.id}"}
+                          type="text"
+                          name="gtin"
+                          label="Scan product barcode"
+                          placeholder="Scan or enter GTIN"
+                          required
+                          class="h-11 w-full rounded-lg border border-thamani-stone bg-white px-3 font-mono text-sm text-slate-900 outline-none transition placeholder:font-sans focus:border-thamani-accent focus:ring-3 focus:ring-indigo-100"
+                        />
+                      </div>
+                      <.button
+                        type="submit"
+                        variant="primary"
+                        class="h-11 gap-2 whitespace-nowrap"
+                        phx-disable-with="Verifying..."
+                      >
+                        <.icon name="hero-qr-code" class="size-4" /> Verify product
+                      </.button>
+                    </form>
+                  <% end %>
+                </div>
+              </article>
+            <% end %>
+          </div>
+        </section>
       </div>
     </Layouts.pharmacy_shell>
     """
