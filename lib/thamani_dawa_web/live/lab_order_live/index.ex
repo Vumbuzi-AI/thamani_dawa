@@ -66,7 +66,17 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   end
 
   def handle_event("validate", params, socket) do
-    {:noreply, assign(socket, :total_amount, compute_total(params, socket.assigns.lab_tests))}
+    header_attrs = params["lab_order"] || %{}
+
+    changeset =
+      %LabOrder{}
+      |> LabOrder.changeset(header_attrs)
+      |> Map.put(:action, :validate)
+
+    {:noreply,
+     socket
+     |> assign(:header_form, to_form(changeset, as: :lab_order))
+     |> assign(:total_amount, compute_total(params, socket.assigns.lab_tests))}
   end
 
   def handle_event("save", params, socket) do
@@ -188,38 +198,38 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           phx-change="validate"
           class="space-y-4"
         >
-          <div class="flex items-end gap-3">
-            <div class="flex-1">
-              <.input
-                :if={not @use_new_patient}
-                field={@header_form[:patient_id]}
-                type="select"
-                label="Patient"
-                options={Enum.map(@patients, &{&1.full_name, &1.id})}
-                prompt="Choose a patient"
-              />
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <p class="text-sm font-medium" style="color: #373896;">Patient</p>
+              <.button type="button" phx-click="toggle_new_patient">
+                {if @use_new_patient, do: "Choose existing patient", else: "+ New patient"}
+              </.button>
             </div>
-            <.button type="button" phx-click="toggle_new_patient">
-              {if @use_new_patient, do: "Choose existing patient", else: "+ New patient"}
-            </.button>
-          </div>
 
-          <div :if={@use_new_patient} class="rounded-xl p-4 space-y-3" style="background: #FFFFFF;">
-            <p class="text-sm font-medium" style="color: #373896;">New patient</p>
-            <.input field={@patient_form[:full_name]} label="Full name" required />
-            <.input field={@patient_form[:gsrn]} type="number" label="GSRN" required />
             <.input
-              field={@patient_form[:date_of_birth]}
-              type="date"
-              label="Date of birth"
-              required
-              max={Date.utc_today()}
+              :if={not @use_new_patient}
+              field={@header_form[:patient_id]}
+              type="select"
+              options={Enum.map(@patients, &{&1.full_name, &1.id})}
+              prompt="Choose a patient"
             />
-            <div class="grid grid-cols-2 gap-3">
-              <.input field={@patient_form[:gender]} label="Gender" required />
-              <.input field={@patient_form[:phone]} label="Phone" required />
+
+            <div :if={@use_new_patient} class="rounded-xl p-4 space-y-3" style="background: #FFFFFF;">
+              <.input field={@patient_form[:full_name]} label="Full name" required />
+              <.input field={@patient_form[:gsrn]} type="number" label="GSRN" required />
+              <.date_picker
+                field={@patient_form[:date_of_birth]}
+                label="Date of birth"
+                placeholder="Choose date of birth"
+                max="today"
+                required
+              />
+              <div class="grid grid-cols-2 gap-3">
+                <.input field={@patient_form[:gender]} label="Gender" required />
+                <.input field={@patient_form[:phone]} label="Phone" required />
+              </div>
+              <.input field={@patient_form[:national_id]} label="National ID" />
             </div>
-            <.input field={@patient_form[:national_id]} label="National ID" />
           </div>
 
           <.input :if={@site_locked} field={@header_form[:site_id]} type="hidden" />
@@ -244,28 +254,33 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
             />
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
-            <.input field={@header_form[:payment_type]} label="Payment type" />
-            <div class="flex items-end pb-1">
-              <.input field={@header_form[:has_paid]} type="checkbox" label="Paid" />
-            </div>
-          </div>
-
           <.input field={@header_form[:lab_request]} type="textarea" label="Lab request" />
 
-          <div class="grid grid-cols-3 gap-3">
-            <.input field={@header_form[:referring_facility]} label="Referring facility" />
-            <.input field={@header_form[:referring_doctor]} label="Referring doctor" />
+          <.input
+            field={@header_form[:is_referral]}
+            type="checkbox"
+            label="This order was referred from another facility"
+          />
+
+          <div
+            :if={Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_referral].value)}
+            class="grid grid-cols-3 gap-3"
+          >
+            <.input field={@header_form[:referring_facility]} label="Referring facility" required />
+            <.input field={@header_form[:referring_doctor]} label="Referring doctor" required />
             <.input field={@header_form[:referred_date]} type="date" label="Referred date" />
           </div>
 
           <%!-- Tests --%>
           <div>
-            <p class="text-sm font-medium mb-2" style="color: #373896;">Tests</p>
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-sm font-medium" style="color: #373896;">Tests</p>
+              <.button type="button" phx-click="add_test">+ Add test</.button>
+            </div>
             <div class="space-y-2">
               <div
                 :for={id <- @test_ids}
-                class="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-xl p-3"
+                class="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-xl p-3 [&>div]:mb-0"
                 style="background: #FFFFFF;"
               >
                 <.input
@@ -284,16 +299,31 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                   options={@sample_types}
                   prompt="Choose sample type"
                 />
-                <.button type="button" phx-click="remove_test" phx-value-id={id} class="mb-1">
+                <.button
+                  type="button"
+                  variant="ghost-delete"
+                  phx-click="remove_test"
+                  phx-value-id={id}
+                >
                   Remove
                 </.button>
               </div>
             </div>
-            <div class="flex items-center gap-4 mt-2">
-              <.button type="button" phx-click="add_test">+ Add test</.button>
-              <p class="text-sm" style="color: #373896;">
-                Total: <span class="font-medium">KES {@total_amount}</span>
-              </p>
+            <p class="text-sm text-right mt-3" style="color: #373896;">
+              Total: <span class="font-medium">KES {@total_amount}</span>
+            </p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <.input
+              field={@header_form[:payment_type]}
+              type="select"
+              label="Payment method"
+              options={ThamaniDawa.PaymentMethods.all()}
+              prompt="Choose a payment method"
+            />
+            <div class="flex items-end pb-1">
+              <.input field={@header_form[:has_paid]} type="checkbox" label="Paid" />
             </div>
           </div>
 

@@ -371,7 +371,7 @@ prescription =
     %{
       user_id: pharmacist.id,
       referring_doctor: "Dr. Demo",
-      payment_type: "cash",
+      payment_type: "Cash",
       has_paid: true,
       total_amount: Decimal.new("250.00"),
       notes: "Seed prescription for the pharmacy workflow"
@@ -461,10 +461,11 @@ lab_order =
       site_id: lab_site.id,
       ordered_by_id: lab_technician.id,
       urgency: "routine",
-      payment_type: "cash",
+      payment_type: "Cash",
       has_paid: true,
       total_amount: Decimal.new("800.00"),
       lab_request: "Complete blood count",
+      is_referral: true,
       referring_facility: "Demo Care Diagnostic Lab",
       referring_doctor: "Dr. Demo",
       referred_date: ~D[2026-01-15]

@@ -96,20 +96,23 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <.button navigate={~p"/"}>Home</.button>
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled type)
-  attr :class, :any
+  attr :class, :any, default: nil
   attr :variant, :string, values: ~w(primary ghost ghost-edit ghost-delete), default: "ghost"
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    assigns =
-      assign_new(assigns, :class, fn ->
-        case assigns[:variant] do
-          "primary" -> "thamani-btn-primary"
-          "ghost-edit" -> "thamani-btn-ghost-edit"
-          "ghost-delete" -> "thamani-btn-ghost-delete"
-          _ -> "thamani-btn-ghost"
-        end
-      end)
+    base =
+      case assigns[:variant] do
+        "primary" -> "thamani-btn-primary"
+        "ghost-edit" -> "thamani-btn-ghost-edit"
+        "ghost-delete" -> "thamani-btn-ghost-delete"
+        _ -> "thamani-btn-ghost"
+      end
+
+    # Merge any caller-supplied class onto the variant base rather than
+    # replacing it, so utility classes (margins, alignment) don't strip the
+    # button's styling.
+    assigns = assign(assigns, :class, [base, assigns[:class]])
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
       ~H"""
@@ -332,6 +335,323 @@ defmodule ThamaniDawaWeb.CoreComponents do
     </p>
     """
   end
+
+  @doc """
+  A Thamani-styled date picker: a pill-shaped trigger that opens a flat,
+  shadowless calendar popover (Snow White surface, Forest Depths ink, Lime
+  Pulse accents). Writes the selected date as an ISO-8601 string into a hidden
+  input, so it works inside a `<.form>` exactly like `<.input type="date">`.
+
+  ## Examples
+
+  ```heex
+  <.date_picker field={@patient_form[:date_of_birth]} label="Date of birth" max="today" />
+  ```
+  """
+  attr :id, :any, default: nil
+  attr :name, :any
+  attr :label, :string, default: nil
+  attr :value, :any, default: nil
+  attr :placeholder, :string, default: "Choose a date"
+  attr :required, :boolean, default: false
+
+  attr :max, :string,
+    default: nil,
+    doc: ~S(pass "today" to disable future dates — useful for dates of birth)
+
+  attr :errors, :list, default: []
+  attr :field, Phoenix.HTML.FormField, doc: "a form field struct, e.g. @form[:date_of_birth]"
+
+  def date_picker(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
+    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+
+    assigns
+    |> assign(field: nil, id: assigns.id || field.id)
+    |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+    |> assign_new(:name, fn -> field.name end)
+    |> assign_new(:value, fn -> field.value end)
+    |> date_picker()
+  end
+
+  def date_picker(assigns) do
+    assigns = assign(assigns, :iso_value, date_iso(assigns[:value]))
+
+    ~H"""
+    <div id={"#{@id}-dp"} class="mb-3 relative" phx-hook=".DatePicker" data-max={@max}>
+      <label :if={@label} for={@id} class="thamani-label">
+        {@label}<span
+          :if={@required}
+          aria-hidden="true"
+          style="color: #b91c1c; margin-left: 2px;"
+        >*</span>
+      </label>
+
+      <input type="hidden" name={@name} id={@id} value={@iso_value} data-dp-input />
+
+      <button
+        type="button"
+        data-dp-trigger
+        class={[
+          "thamani-input w-full flex items-center justify-between gap-2 text-left cursor-pointer",
+          @errors != [] && "border-red-600"
+        ]}
+      >
+        <span data-dp-display data-placeholder={@placeholder} style="color: var(--thamani-forest);">
+          {display_date(@iso_value) || @placeholder}
+        </span>
+        <span style="color: var(--thamani-pewter);">
+          <.icon name="hero-calendar-days" class="size-4 shrink-0" />
+        </span>
+      </button>
+
+      <div
+        data-dp-pop
+        id={"#{@id}-dp-pop"}
+        phx-update="ignore"
+        hidden
+        class="absolute z-50 mt-2 w-72 p-4"
+        style="background: var(--thamani-snow); border: 1px solid var(--thamani-stone); border-radius: 16px;"
+      >
+      </div>
+
+      <.error :for={msg <- @errors}>{msg}</.error>
+    </div>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".DatePicker">
+      const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+      const DOW = ["S","M","T","W","T","F","S"]
+
+      export default {
+        mounted() { this.setup() },
+        updated() { this.syncFromInput() },
+        destroyed() {
+          document.removeEventListener("click", this.onDocClick)
+          document.removeEventListener("keydown", this.onKey)
+        },
+        minYear() { return this.today.getFullYear() - 120 },
+        maxYear() { return this.max ? this.max.getFullYear() : this.today.getFullYear() + 10 },
+        setup() {
+          this.input = this.el.querySelector("[data-dp-input]")
+          this.trigger = this.el.querySelector("[data-dp-trigger]")
+          this.display = this.el.querySelector("[data-dp-display]")
+          this.pop = this.el.querySelector("[data-dp-pop]")
+          this.today = new Date(); this.today.setHours(0,0,0,0)
+          this.max = this.el.dataset.max === "today" ? this.today : null
+          this.parseValue()
+          this.onTrigger = (e) => { e.preventDefault(); e.stopPropagation(); this.toggle() }
+          this.onDocClick = (e) => { if (!this.el.contains(e.target)) this.close() }
+          this.onKey = (e) => { if (e.key === "Escape") this.close() }
+          this.onPopClick = (e) => this.handlePopClick(e)
+          this.trigger.addEventListener("click", this.onTrigger)
+          this.pop.addEventListener("click", this.onPopClick)
+          document.addEventListener("click", this.onDocClick)
+          document.addEventListener("keydown", this.onKey)
+        },
+        syncFromInput() {
+          this.input = this.el.querySelector("[data-dp-input]")
+          this.display = this.el.querySelector("[data-dp-display]")
+          this.parseValue()
+          this.renderDisplay()
+        },
+        parseValue() {
+          const v = this.input.value
+          if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+            const [y,m,d] = v.split("-").map(Number)
+            this.selected = new Date(y, m-1, d)
+          } else {
+            this.selected = null
+          }
+          this.renderDisplay()
+        },
+        iso(date) {
+          const y = date.getFullYear()
+          const m = String(date.getMonth()+1).padStart(2,"0")
+          const d = String(date.getDate()).padStart(2,"0")
+          return `${y}-${m}-${d}`
+        },
+        fmt(date) {
+          return date.toLocaleDateString(undefined, {day:"numeric", month:"short", year:"numeric"})
+        },
+        renderDisplay() {
+          if (!this.display) return
+          if (this.selected) {
+            this.display.textContent = this.fmt(this.selected)
+            this.display.style.color = "var(--thamani-forest)"
+          } else {
+            this.display.textContent = this.display.dataset.placeholder || "Choose a date"
+            this.display.style.color = "var(--thamani-pewter)"
+          }
+        },
+        toggle() { this.pop.hasAttribute("hidden") ? this.open() : this.close() },
+        open() {
+          const base = this.selected || this.today
+          this.viewYear = base.getFullYear()
+          this.viewMonth = base.getMonth()
+          this.mode = "days"
+          const css = `
+            [data-dp-body] button { transition: background 120ms ease; }
+            [data-dp-body] button[data-dp-day]:not(:disabled):hover,
+            [data-dp-body] button[data-dp-month]:not(:disabled):hover,
+            [data-dp-body] button[data-dp-year]:hover,
+            [data-dp-body] button[data-dp-nav]:hover,
+            [data-dp-body] button[data-dp-open]:hover { background: var(--thamani-stone); }`
+          this.pop.innerHTML = `<style>${css}</style><div data-dp-body></div>`
+          this.body = this.pop.querySelector("[data-dp-body]")
+          this.renderCalendar()
+          this.pop.removeAttribute("hidden")
+        },
+        close() { this.pop.setAttribute("hidden", "") },
+        handlePopClick(e) {
+          // Rebuilding the popover detaches the clicked node, so stop the event
+          // reaching the document "click-outside" handler (which would then see
+          // a detached target and wrongly close the picker).
+          e.stopPropagation()
+          const nav = e.target.closest("[data-dp-nav]")
+          if (nav) {
+            e.preventDefault()
+            this.viewMonth += parseInt(nav.dataset.dpNav, 10)
+            if (this.viewMonth < 0) { this.viewMonth = 11; this.viewYear-- }
+            if (this.viewMonth > 11) { this.viewMonth = 0; this.viewYear++ }
+            this.renderCalendar()
+            return
+          }
+          const open = e.target.closest("[data-dp-open]")
+          if (open) {
+            e.preventDefault()
+            this.mode = open.dataset.dpOpen
+            this.renderCalendar()
+            return
+          }
+          const yr = e.target.closest("[data-dp-year]")
+          if (yr && !yr.disabled) {
+            e.preventDefault()
+            this.viewYear = parseInt(yr.dataset.dpYear, 10)
+            if (this.viewMonth > this.maxMonthFor(this.viewYear)) this.viewMonth = this.maxMonthFor(this.viewYear)
+            this.mode = "days"
+            this.renderCalendar()
+            return
+          }
+          const mo = e.target.closest("[data-dp-month]")
+          if (mo && !mo.disabled) {
+            e.preventDefault()
+            this.viewMonth = parseInt(mo.dataset.dpMonth, 10)
+            this.mode = "days"
+            this.renderCalendar()
+            return
+          }
+          const day = e.target.closest("[data-dp-day]")
+          if (day && !day.disabled) {
+            e.preventDefault()
+            this.selected = new Date(this.viewYear, this.viewMonth, parseInt(day.dataset.dpDay, 10))
+            this.input.value = this.iso(this.selected)
+            this.input.dispatchEvent(new Event("input", {bubbles: true}))
+            this.renderDisplay()
+            this.close()
+          }
+        },
+        maxMonthFor(year) {
+          return (this.max && year === this.max.getFullYear()) ? this.max.getMonth() : 11
+        },
+        renderCalendar() {
+          if (this.mode === "years") return this.renderYears()
+          if (this.mode === "months") return this.renderMonths()
+          this.renderDays()
+        },
+        listHeader(label) {
+          const back = "width:28px;height:28px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:16px;"
+          return `<div style="display:flex;align-items:center;gap:4px;margin-bottom:12px;">
+              <button type="button" data-dp-open="days" aria-label="Back to days" style="${back}">&#8249;</button>
+              <span style="flex:1;text-align:center;font-size:14px;font-weight:500;color:var(--thamani-forest);">${label}</span>
+              <span style="width:28px;"></span>
+            </div>`
+        },
+        renderDays() {
+          const first = new Date(this.viewYear, this.viewMonth, 1)
+          const startDow = first.getDay()
+          const daysInMonth = new Date(this.viewYear, this.viewMonth + 1, 0).getDate()
+          const pillBtn = "width:28px;height:28px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:16px;"
+          const ctrl = "border:1px solid var(--thamani-stone);border-radius:8px;color:var(--thamani-forest);font-size:13px;font-weight:500;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;"
+
+          let head = `
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
+              <button type="button" data-dp-nav="-1" aria-label="Previous month" style="${pillBtn}">&#8249;</button>
+              <button type="button" data-dp-open="months" style="${ctrl}flex:1;">
+                <span>${MONTHS[this.viewMonth]}</span><span style="color:var(--thamani-pewter);">&#9662;</span>
+              </button>
+              <button type="button" data-dp-open="years" style="${ctrl}">
+                <span>${this.viewYear}</span><span style="color:var(--thamani-pewter);">&#9662;</span>
+              </button>
+              <button type="button" data-dp-nav="1" aria-label="Next month" style="${pillBtn}">&#8250;</button>
+            </div>`
+
+          let dow = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">`
+          DOW.forEach(d => { dow += `<span style="text-align:center;font-size:11px;color:var(--thamani-pewter);">${d}</span>` })
+          dow += `</div>`
+
+          let grid = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;">`
+          for (let i = 0; i < startDow; i++) grid += `<span></span>`
+          for (let d = 1; d <= daysInMonth; d++) {
+            const cur = new Date(this.viewYear, this.viewMonth, d)
+            const isSel = this.selected && cur.getTime() === this.selected.getTime()
+            const isToday = cur.getTime() === this.today.getTime()
+            const disabled = this.max && cur.getTime() > this.max.getTime()
+            let style = "width:32px;height:32px;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:13px;margin:0 auto;border:none;color:var(--thamani-forest);cursor:pointer;"
+            if (disabled) style += "color:#b3b3b3;cursor:not-allowed;"
+            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);"
+            else if (isToday) style += "border:1.5px solid var(--thamani-lime);"
+            grid += `<button type="button" data-dp-day="${d}" ${disabled ? "disabled" : ""} style="${style}">${d}</button>`
+          }
+          grid += `</div>`
+
+          this.body.innerHTML = head + dow + grid
+        },
+        renderMonths() {
+          let head = this.listHeader("Select month")
+          let grid = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">`
+          const maxMonth = this.maxMonthFor(this.viewYear)
+          MONTHS.forEach((name, i) => {
+            const isSel = i === this.viewMonth
+            const disabled = i > maxMonth
+            let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:var(--thamani-forest);cursor:pointer;text-align:center;"
+            if (disabled) style += "color:#b3b3b3;cursor:not-allowed;"
+            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:500;"
+            grid += `<button type="button" data-dp-month="${i}" ${disabled ? "disabled" : ""} style="${style}">${name.slice(0,3)}</button>`
+          })
+          grid += `</div>`
+          this.body.innerHTML = head + grid
+        },
+        renderYears() {
+          let head = this.listHeader("Select year")
+          let grid = `<div data-dp-years style="position:relative;max-height:196px;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:2px;">`
+          for (let y = this.maxYear(); y >= this.minYear(); y--) {
+            const isSel = y === this.viewYear
+            let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:var(--thamani-forest);cursor:pointer;text-align:center;"
+            if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:500;"
+            grid += `<button type="button" data-dp-year="${y}" style="${style}">${y}</button>`
+          }
+          grid += `</div>`
+          this.body.innerHTML = head + grid
+          const container = this.pop.querySelector("[data-dp-years]")
+          const sel = this.pop.querySelector(`[data-dp-year="${this.viewYear}"]`)
+          if (container && sel) container.scrollTop = sel.offsetTop - container.clientHeight / 2 + sel.clientHeight / 2
+        }
+      }
+    </script>
+    """
+  end
+
+  defp date_iso(%Date{} = date), do: Date.to_iso8601(date)
+  defp date_iso(value) when is_binary(value), do: value
+  defp date_iso(_), do: ""
+
+  defp display_date(value) when is_binary(value) and value != "" do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> Calendar.strftime(date, "%-d %b %Y")
+      _ -> nil
+    end
+  end
+
+  defp display_date(_), do: nil
 
   @doc """
   Renders a radio-card group for choosing a site capability.

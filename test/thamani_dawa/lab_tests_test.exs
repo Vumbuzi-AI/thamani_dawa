@@ -30,6 +30,27 @@ defmodule ThamaniDawa.LabTestsTest do
       assert lab_test.organization_id == organization.id
       assert lab_test.is_active == true
     end
+
+    test "requires category_id" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               LabTests.create_lab_test(organization.id, valid_lab_test_attributes())
+
+      assert %{category_id: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "rejects a category_id that doesn't exist" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               LabTests.create_lab_test(
+                 organization.id,
+                 valid_lab_test_attributes(%{category_id: -1})
+               )
+
+      assert %{category_id: ["does not exist"]} = errors_on(changeset)
+    end
   end
 
   describe "list_lab_tests/1" do
@@ -120,6 +141,38 @@ defmodule ThamaniDawa.LabTestsTest do
       lab_test_fixture(%{organization_id: organization_b.id})
 
       assert [] = LabTests.list_active_lab_tests(organization_a.id)
+    end
+
+    test "orders results by category then name" do
+      organization = organization_fixture()
+      serology = lab_test_category_fixture(%{organization_id: organization.id, name: "Serology"})
+
+      biochemistry =
+        lab_test_category_fixture(%{organization_id: organization.id, name: "Biochemistry"})
+
+      lab_test_fixture(%{
+        organization_id: organization.id,
+        category_id: serology.id,
+        name: "Widal"
+      })
+
+      lab_test_fixture(%{
+        organization_id: organization.id,
+        category_id: biochemistry.id,
+        name: "Urea"
+      })
+
+      lab_test_fixture(%{
+        organization_id: organization.id,
+        category_id: biochemistry.id,
+        name: "Creatinine"
+      })
+
+      assert [
+               %LabTest{name: "Creatinine"},
+               %LabTest{name: "Urea"},
+               %LabTest{name: "Widal"}
+             ] = LabTests.list_active_lab_tests(organization.id)
     end
   end
 end
