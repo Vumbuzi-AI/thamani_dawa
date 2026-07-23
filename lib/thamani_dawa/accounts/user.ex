@@ -2,7 +2,7 @@ defmodule ThamaniDawa.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @roles [:admin, :pharmacist, :lab_technician]
+  @roles [:admin, :pharmacist, :lab_technician, :pharma_lab]
 
   schema "users" do
     field :organization_id, :id

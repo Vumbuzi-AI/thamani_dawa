@@ -67,6 +67,18 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       assert redirected_to(conn) == ~p"/lab"
     end
 
+    test "redirects combined pharmacy/lab staff to /pharmacy", %{conn: conn} do
+      pharma_lab = staff_fixture(%{role: :pharma_lab})
+
+      conn =
+        post(conn, ~p"/login", %{
+          "email" => pharma_lab.email,
+          "password" => valid_user_password()
+        })
+
+      assert redirected_to(conn) == ~p"/pharmacy"
+    end
+
     test "shows an error and does not log in with an invalid password", %{conn: conn} do
       admin = user_fixture()
 

@@ -93,6 +93,17 @@ defmodule ThamaniDawaWeb.UserAuthTest do
       assert socket.redirected
     end
 
+    test "halts and redirects for combined pharmacy/lab staff" do
+      staff = staff_fixture(%{role: :pharma_lab})
+      token = Accounts.generate_user_session_token(staff)
+      session = %{"user_token" => token}
+
+      assert {:halt, socket} =
+               UserAuth.on_mount(:require_admin, %{}, session, live_socket())
+
+      assert socket.redirected
+    end
+
     test "halts and redirects when there is no user" do
       assert {:halt, socket} =
                UserAuth.on_mount(:require_admin, %{}, %{}, live_socket())
@@ -114,6 +125,16 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for a pharmacist" do
       staff = staff_fixture(%{role: :pharmacist})
+      session = %{"user_token" => Accounts.generate_user_session_token(staff)}
+
+      assert {:cont, socket} =
+               UserAuth.on_mount(:require_pharmacy_access, %{}, session, live_socket())
+
+      assert socket.assigns.current_scope.user.id == staff.id
+    end
+
+    test "continues for combined pharmacy/lab staff" do
+      staff = staff_fixture(%{role: :pharma_lab})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
       assert {:cont, socket} =
@@ -153,6 +174,16 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for a lab technician" do
       staff = staff_fixture(%{role: :lab_technician})
+      session = %{"user_token" => Accounts.generate_user_session_token(staff)}
+
+      assert {:cont, socket} =
+               UserAuth.on_mount(:require_lab_access, %{}, session, live_socket())
+
+      assert socket.assigns.current_scope.user.id == staff.id
+    end
+
+    test "continues for combined pharmacy/lab staff" do
+      staff = staff_fixture(%{role: :pharma_lab})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
       assert {:cont, socket} =

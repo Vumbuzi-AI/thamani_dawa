@@ -49,10 +49,10 @@ defmodule ThamaniDawaWeb.Layouts do
             <li :if={Scope.admin?(@current_scope)}>
               <.link navigate={~p"/org/products"} class="btn btn-ghost btn-sm">Products</.link>
             </li>
-            <li :if={Scope.admin?(@current_scope) or Scope.pharmacist?(@current_scope)}>
+            <li :if={Scope.pharmacy_access?(@current_scope)}>
               <.link navigate={~p"/pharmacy"} class="btn btn-ghost btn-sm">Pharmacy</.link>
             </li>
-            <li :if={Scope.admin?(@current_scope) or Scope.lab_technician?(@current_scope)}>
+            <li :if={Scope.lab_access?(@current_scope)}>
               <.link navigate={~p"/lab"} class="btn btn-ghost btn-sm">Lab</.link>
             </li>
             <li><.theme_toggle /></li>
@@ -104,7 +104,6 @@ defmodule ThamaniDawaWeb.Layouts do
         {"Dashboard", "hero-squares-2x2", ~p"/lab"},
         {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
         {"Tests", "hero-beaker", ~p"/lab/tests"},
-        {"Verification queue", "hero-check-badge", ~p"/lab/verification-queue"},
         {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
         {"Scan", "hero-qr-code", ~p"/lab/scan"}
       ]}
@@ -258,6 +257,43 @@ defmodule ThamaniDawaWeb.Layouts do
             </.link>
           <% end %>
         </nav>
+
+        <%!-- Cross-portal switch: only combined pharmacy/lab staff can hop
+             portals; single-role staff never see the other operational side. --%>
+        <div
+          :if={Scope.pharma_lab?(@current_scope)}
+          id="sidebar-portal-switch"
+          class="flex flex-col gap-1 mt-4 pt-4"
+          style="border-top: 1px solid var(--thamani-border-nav);"
+        >
+          <span
+            id="nav-label-portal-switch-heading"
+            class="px-3 text-[11px] font-semibold uppercase tracking-wide transition-opacity duration-150"
+            style="color: var(--thamani-subtle);"
+          >
+            Switch portal
+          </span>
+          <.link
+            :if={@base_path != "/pharmacy"}
+            id="portal-link-pharmacy"
+            navigate={~p"/pharmacy"}
+            class="flex items-center gap-3 rounded-xl text-[15px] font-semibold transition-all whitespace-nowrap overflow-hidden"
+            style="color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
+          >
+            <.icon name="hero-building-storefront" class="size-5 shrink-0" />
+            <span id="nav-label-/pharmacy" class="transition-opacity duration-150">Pharmacy</span>
+          </.link>
+          <.link
+            :if={@base_path != "/lab"}
+            id="portal-link-lab"
+            navigate={~p"/lab"}
+            class="flex items-center gap-3 rounded-xl text-[15px] font-semibold transition-all whitespace-nowrap overflow-hidden"
+            style="color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
+          >
+            <.icon name="hero-beaker" class="size-5 shrink-0" />
+            <span id="nav-label-/lab" class="transition-opacity duration-150">Lab</span>
+          </.link>
+        </div>
 
         <%!-- Account card + utilities --%>
         <div

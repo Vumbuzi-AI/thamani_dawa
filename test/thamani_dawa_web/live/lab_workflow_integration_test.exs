@@ -9,18 +9,11 @@ defmodule ThamaniDawaWeb.LabWorkflowIntegrationTest do
 
   alias ThamaniDawa.LabOrders
 
-  test "lab technician completes the full order → collect → results → verify flow", ctx do
+  test "lab technician completes the full order → collect → results flow", ctx do
     admin = user_fixture()
     organization_id = admin.organization_id
 
     performer =
-      staff_fixture(%{
-        organization_id: organization_id,
-        invited_by_id: admin.id,
-        role: :lab_technician
-      })
-
-    verifier =
       staff_fixture(%{
         organization_id: organization_id,
         invited_by_id: admin.id,
@@ -74,17 +67,5 @@ defmodule ThamaniDawaWeb.LabWorkflowIntegrationTest do
     assert result.status == :completed
     assert result.performed_by_id == performer.id
     assert LabOrders.get_lab_order!(organization_id, lab_order.id).status == :completed
-
-    # Step 4: A different lab technician verifies the result
-    verifier_conn = log_in_user(ctx.conn, verifier)
-    {:ok, queue_view, _html} = live(verifier_conn, ~p"/lab/verification-queue")
-
-    queue_view
-    |> element(~s(button[phx-click="verify"][phx-value-id="#{result.id}"]))
-    |> render_click()
-
-    result = LabOrders.get_lab_order_result!(organization_id, result.id)
-    assert result.status == :verified
-    assert LabOrders.get_lab_order!(organization_id, lab_order.id).status == :verified
   end
 end

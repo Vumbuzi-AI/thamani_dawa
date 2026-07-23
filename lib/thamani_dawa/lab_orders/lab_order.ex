@@ -2,7 +2,7 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @statuses [:pending, :in_progress, :completed, :verified, :cancelled]
+  @statuses [:pending, :in_progress, :completed, :cancelled]
 
   schema "lab_orders" do
     field :organization_id, :id

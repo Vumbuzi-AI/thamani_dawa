@@ -108,7 +108,7 @@ defmodule ThamaniDawaWeb.UserAuth do
       {:cont, socket} ->
         scope = socket.assigns.current_scope
 
-        if Scope.admin?(scope) or Scope.pharmacist?(scope) do
+        if Scope.pharmacy_access?(scope) do
           {:cont, socket}
         else
           socket =
@@ -129,7 +129,7 @@ defmodule ThamaniDawaWeb.UserAuth do
       {:cont, socket} ->
         scope = socket.assigns.current_scope
 
-        if Scope.admin?(scope) or Scope.lab_technician?(scope) do
+        if Scope.lab_access?(scope) do
           {:cont, socket}
         else
           socket =

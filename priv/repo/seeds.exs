@@ -156,6 +156,9 @@ pharmacist = staff_user.("pharmacist@example.com", "Grace Pharmacist", :pharmaci
 lab_technician = staff_user.("lab@example.com", "Laban Technician", :lab_technician, lab_site)
 _lab_technician2 = staff_user.("lab2@example.com", "Amara Technician", :lab_technician, lab_site)
 
+_pharma_lab =
+  staff_user.("pharmalab@example.com", "Zawadi Combined", :pharma_lab, pharmacy_site)
+
 {:ok, admin} =
   if is_nil(admin.hashed_pin), do: Accounts.set_user_pin(admin, %{pin: pin}), else: {:ok, admin}
 
@@ -516,4 +519,5 @@ Seeded logins:
   pharmacist@example.com / #{password}  role=pharmacist     pin=#{pin}
   lab@example.com / #{password}         role=lab_technician pin=#{pin}
   lab2@example.com / #{password}        role=lab_technician pin=#{pin}
+  pharmalab@example.com / #{password}   role=pharma_lab     pin=#{pin}
 """)
