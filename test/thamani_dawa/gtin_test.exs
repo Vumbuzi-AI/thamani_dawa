@@ -71,6 +71,14 @@ defmodule ThamaniDawa.GtinTest do
     test "rejects a non-numeric code instead of raising" do
       assert Gtin.normalize("not-a-valid-gtin") == {:error, :invalid_gtin}
     end
+
+    test "rejects nil instead of raising" do
+      assert Gtin.normalize(nil) == {:error, :invalid_gtin}
+    end
+
+    test "rejects a non-binary value instead of raising" do
+      assert Gtin.normalize(614_141_000_012) == {:error, :invalid_gtin}
+    end
   end
 
   describe "generate/1" do
