@@ -26,6 +26,7 @@ defmodule ThamaniDawa.Prescriptions.Prescription do
     belongs_to :patient_visit, ThamaniDawa.PatientVisits.PatientVisit
 
     has_many :items, ThamaniDawa.Prescriptions.PrescriptionItem, on_replace: :delete
+    has_many :payments, ThamaniDawa.Payments.Payment
 
     timestamps(type: :utc_datetime)
   end
