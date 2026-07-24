@@ -14,6 +14,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
   import ThamaniDawa.OrganizationsFixtures
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
+  import ThamaniDawa.SuppliersFixtures
 
   describe "access control" do
     test "an admin can reach it", %{conn: conn} do
@@ -111,6 +112,35 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       assert has_element?(view, "#stock", "Active")
       assert has_element?(view, "#stock", pending.batch_no)
       assert has_element?(view, "#stock", "Pending receipt")
+    end
+
+    test "shows serial, manufacture date, and supplier when present", %{conn: conn} do
+      pharmacist = staff_fixture(%{role: :pharmacist})
+      supplier = supplier_fixture(%{organization_id: pharmacist.organization_id, name: "Bulk Rx"})
+
+      batch_fixture(%{
+        organization_id: pharmacist.organization_id,
+        batch_no: "TRACE-BATCH",
+        serial: "SN-77665",
+        manufacture_date: ~D[2026-04-01],
+        supplier_id: supplier.id
+      })
+
+      {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+
+      assert html =~ "SN-77665"
+      assert html =~ "2026-04-01"
+      assert html =~ "Bulk Rx"
+    end
+
+    test "shows a dash for serial, manufacture date, and supplier when absent", %{conn: conn} do
+      pharmacist = staff_fixture(%{role: :pharmacist})
+
+      batch_fixture(%{organization_id: pharmacist.organization_id, batch_no: "BARE-BATCH"})
+
+      {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+
+      assert has_element?(view, "#stock td", "—")
     end
   end
 

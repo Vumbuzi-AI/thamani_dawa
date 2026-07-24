@@ -7,8 +7,10 @@ defmodule ThamaniDawa.Prescriptions do
 
   import Ecto.Query, warn: false
   alias ThamaniDawa.Batches
+  alias ThamaniDawa.PatientVisits
   alias ThamaniDawa.PatientVisits.PatientVisit
   alias ThamaniDawa.Prescriptions.{Prescription, PrescriptionItem}
+  alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
 
@@ -191,14 +193,98 @@ defmodule ThamaniDawa.Prescriptions do
     )
   end
 
-  @doc "Creates a prescription item under the given prescription."
+  @doc """
+  Creates a prescription item under the given prescription. Rejects a
+  `product_id` that's missing, belongs to another organization, is
+  inactive, or has no stock available at the prescription's site — before
+  any header/items transaction commits. This is independent of the
+  post-dispense GTIN scan check in `verify_dispensed_item/3`, which stays
+  unchanged.
+  """
   def create_prescription_item(organization_id, prescription_id, attrs)
       when is_integer(organization_id) and is_integer(prescription_id) do
     %PrescriptionItem{}
     |> PrescriptionItem.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Ecto.Changeset.put_change(:prescription_id, prescription_id)
+    |> validate_belongs_to_org(:product_id, Product, organization_id)
+    |> validate_product_active(organization_id)
+    |> validate_product_available_at_site(organization_id, prescription_id)
     |> Repo.insert()
+  end
+
+  defp validate_belongs_to_org(changeset, field, schema, organization_id) do
+    Ecto.Changeset.validate_change(changeset, field, fn _field, id ->
+      case Repo.get_by(schema, id: id, organization_id: organization_id) do
+        nil -> [{field, "does not belong to this organization"}]
+        _record -> []
+      end
+    end)
+  end
+
+  defp validate_product_active(changeset, organization_id) do
+    if Keyword.has_key?(changeset.errors, :product_id) do
+      changeset
+    else
+      case Ecto.Changeset.get_field(changeset, :product_id) do
+        nil -> changeset
+        product_id -> validate_active(changeset, organization_id, product_id)
+      end
+    end
+  end
+
+  defp validate_active(changeset, organization_id, product_id) do
+    if Products.get_product!(organization_id, product_id).is_active do
+      changeset
+    else
+      Ecto.Changeset.add_error(changeset, :product_id, "is not active")
+    end
+  end
+
+  defp validate_product_available_at_site(changeset, organization_id, prescription_id) do
+    if Keyword.has_key?(changeset.errors, :product_id) do
+      changeset
+    else
+      case Ecto.Changeset.get_field(changeset, :product_id) do
+        nil ->
+          changeset
+
+        product_id ->
+          validate_available_at_prescription_site(
+            changeset,
+            organization_id,
+            prescription_id,
+            product_id
+          )
+      end
+    end
+  end
+
+  defp validate_available_at_prescription_site(
+         changeset,
+         organization_id,
+         prescription_id,
+         product_id
+       ) do
+    prescription = get_prescription!(organization_id, prescription_id)
+
+    case prescription.patient_visit_id do
+      nil ->
+        changeset
+
+      patient_visit_id ->
+        site_id = PatientVisits.get_patient_visit!(organization_id, patient_visit_id).site_id
+
+        if Batches.any_batch_for_site?(organization_id, site_id, product_id) do
+          changeset
+        else
+          Ecto.Changeset.add_error(
+            changeset,
+            :product_id,
+            "is not available at this prescription's site"
+          )
+        end
+    end
   end
 
   ## Dispensing (§9 "Walk-in prescription → dispense", steps 2-3)

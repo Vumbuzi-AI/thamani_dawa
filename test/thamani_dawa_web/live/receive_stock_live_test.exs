@@ -7,6 +7,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
   import ThamaniDawa.OrganizationsFixtures
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
+  import ThamaniDawa.SuppliersFixtures
 
   alias ThamaniDawa.Batches
 
@@ -55,6 +56,51 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
       {:ok, _lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
 
       refute html =~ "LOT-ELSEWHERE"
+    end
+
+    test "shows serial, manufacture date, and supplier when present", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      supplier = supplier_fixture(%{organization_id: organization.id, name: "Wholesale Meds Ltd"})
+
+      _batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          batch_no: "LOT-TRACE",
+          serial: "SN-55443",
+          manufacture_date: ~D[2026-03-01],
+          supplier_id: supplier.id,
+          pending: true
+        })
+
+      {:ok, _lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      assert html =~ "SN-55443"
+      assert html =~ "2026-03-01"
+      assert html =~ "Wholesale Meds Ltd"
+    end
+
+    test "shows a dash for serial, manufacture date, and supplier when absent", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        batch_no: "LOT-BARE",
+        pending: true
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      assert has_element?(lv, "#pending-batches td", "—")
     end
   end
 

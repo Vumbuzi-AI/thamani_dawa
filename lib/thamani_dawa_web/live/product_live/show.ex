@@ -56,9 +56,17 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
     case Batches.create_batch(scope.organization_id, attrs) do
       {:ok, batch} ->
-        # A freshly-inserted batch has :site/:approver as %Ecto.Association.NotLoaded{} —
-        # fill them in from what's already in memory rather than an extra query.
-        batch = %{batch | site: socket.assigns.sites_by_id[batch.site_id], approver: nil}
+        # A freshly-inserted batch has :site/:approver/:supplier as
+        # %Ecto.Association.NotLoaded{} — fill them in from what's already
+        # in memory rather than an extra query.
+        supplier = Enum.find(socket.assigns.suppliers, &(&1.id == batch.supplier_id))
+
+        batch = %{
+          batch
+          | site: socket.assigns.sites_by_id[batch.site_id],
+            approver: nil,
+            supplier: supplier
+        }
 
         {:noreply,
          socket
@@ -149,6 +157,8 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
             />
             <.input field={@form[:gtin]} label="GTIN" required />
             <.input field={@form[:batch_no]} label="Batch / lot number" required />
+            <.input field={@form[:serial]} label="Serial" />
+            <.input field={@form[:manufacture_date]} type="date" label="Manufacture date" />
             <.input
               field={@form[:expiry_date]}
               type="date"
@@ -177,7 +187,12 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
       <.table id="batches" rows={@streams.batches}>
         <:col :let={{_id, batch}} label="Site">{batch.site.name}</:col>
         <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
+        <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
+        <:col :let={{_id, batch}} label="Manufacture date">{batch.manufacture_date || "—"}</:col>
         <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
+        <:col :let={{_id, batch}} label="Supplier">
+          {(batch.supplier && batch.supplier.name) || "—"}
+        </:col>
         <:col :let={{_id, batch}} label="Stock">{batch.remaining_quantity} / {batch.quantity}</:col>
         <:col :let={{_id, batch}} label="Received by">{user_display(batch.approver)}</:col>
         <:col :let={{_id, batch}} label="Status">

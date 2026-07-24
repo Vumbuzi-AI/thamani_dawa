@@ -589,6 +589,13 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
           patient_visit_id: patient_visit.id
         })
 
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        pending: true
+      })
+
       item =
         prescription_item_fixture(%{
           organization_id: organization.id,

@@ -172,6 +172,13 @@ defmodule ThamaniDawa.AssociationsTest do
       prescription =
         prescription_fixture(%{organization_id: organization.id, patient_visit_id: visit.id})
 
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        pending: true
+      })
+
       _item =
         prescription_item_fixture(%{
           organization_id: organization.id,
