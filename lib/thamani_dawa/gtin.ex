@@ -26,15 +26,30 @@ defmodule ThamaniDawa.Gtin do
   end
 
   defp put_normalized_gtin(changeset, field, gtin) do
-    if digits_only?(gtin) do
-      case ExGtin.normalize(gtin) do
-        {:ok, normalized} -> put_change(changeset, field, normalized)
-        {:error, _reason} -> add_error(changeset, field, "is not a valid GTIN")
-      end
-    else
-      add_error(changeset, field, "is not a valid GTIN")
+    case normalize(gtin) do
+      {:ok, normalized} -> put_change(changeset, field, normalized)
+      {:error, _reason} -> add_error(changeset, field, "is not a valid GTIN")
     end
   end
+
+  @doc """
+  Validates and normalizes a raw GTIN string to canonical GTIN-14 form, outside of a changeset
+  (e.g. for an external lookup called with a raw search-box value rather than a schema field).
+  Returns `{:error, :invalid_gtin}` for non-numeric input, `nil`, or a failed GS1 check digit,
+  rather than letting `ExGtin.normalize/1` raise on non-numeric input or `=~/2` raise on `nil`.
+  """
+  def normalize(gtin) when is_binary(gtin) do
+    if digits_only?(gtin) do
+      case ExGtin.normalize(gtin) do
+        {:ok, normalized} -> {:ok, normalized}
+        {:error, _reason} -> {:error, :invalid_gtin}
+      end
+    else
+      {:error, :invalid_gtin}
+    end
+  end
+
+  def normalize(_gtin), do: {:error, :invalid_gtin}
 
   defp digits_only?(value), do: value =~ ~r/^\d+$/
 

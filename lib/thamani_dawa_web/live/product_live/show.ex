@@ -105,6 +105,10 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
           <div class="font-medium">{@product.category || "—"}</div>
         </div>
         <div>
+          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Manufacturer</div>
+          <div class="font-medium">{@product.manufacturer || "—"}</div>
+        </div>
+        <div>
           <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Unit</div>
           <div class="font-medium">{@product.uom || "—"}</div>
         </div>

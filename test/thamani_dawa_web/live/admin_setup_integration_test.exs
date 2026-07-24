@@ -85,6 +85,10 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     {:ok, product_view, _html} = live(admin_conn, ~p"/org/products/new")
 
     product_view
+    |> form("#gtin-scan-form", gtin_search: "")
+    |> render_submit()
+
+    product_view
     |> form("#product-form",
       product: %{
         generic_name: "Paracetamol",

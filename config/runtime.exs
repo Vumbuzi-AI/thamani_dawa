@@ -20,6 +20,8 @@ if System.get_env("PHX_SERVER") do
   config :thamani_dawa, ThamaniDawaWeb.Endpoint, server: true
 end
 
+config :thamani_dawa, ThamaniDawa.GtinLookup, api_key: System.get_env("GS1_GRP_API_KEY")
+
 config :thamani_dawa, ThamaniDawaWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]
 

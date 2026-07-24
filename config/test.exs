@@ -26,6 +26,10 @@ config :thamani_dawa, ThamaniDawa.Mailer, adapter: Swoosh.Adapters.Test
 # Disable swoosh api client as it is only required for production adapters
 config :swoosh, :api_client, false
 
+config :thamani_dawa, ThamaniDawa.GtinLookup,
+  api_key: "test-api-key",
+  plug: {Req.Test, ThamaniDawa.GtinLookup}
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

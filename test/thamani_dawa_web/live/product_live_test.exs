@@ -13,6 +13,10 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     {:ok, admin: admin, site: site}
   end
 
+  defp skip_gtin_scan(lv) do
+    lv |> form("#gtin-scan-form", gtin_search: "") |> render_submit()
+  end
+
   describe "index" do
     test "lists products for the organization", %{conn: conn, admin: admin} do
       _product =
@@ -59,6 +63,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
       lv |> element("a", "+ Add product") |> render_click()
+      skip_gtin_scan(lv)
 
       lv
       |> form("form[phx-submit='save']",
@@ -255,6 +260,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
       lv |> element("a", "+ Add product") |> render_click()
+      skip_gtin_scan(lv)
 
       html =
         lv
@@ -271,6 +277,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
       lv |> element("a", "+ Add product") |> render_click()
+      skip_gtin_scan(lv)
 
       html =
         lv
@@ -289,6 +296,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
       lv |> element("a", "+ Add product") |> render_click()
+      skip_gtin_scan(lv)
 
       html =
         lv
@@ -312,6 +320,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
       lv |> element("a", "+ Add product") |> render_click()
+      skip_gtin_scan(lv)
 
       html =
         lv
@@ -342,12 +351,212 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     end
   end
 
+  describe "GTIN lookup" do
+    test "adding a product starts at the scan step, not the form", %{conn: conn, admin: admin} do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      assert has_element?(lv, "#gtin-scan-step")
+      refute has_element?(lv, "#product-form")
+    end
+
+    test "editing an existing product skips the scan step and goes straight to the form", %{
+      conn: conn,
+      admin: admin
+    } do
+      product = product_fixture(%{organization_id: admin.organization_id})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}/edit")
+
+      refute has_element?(lv, "#gtin-scan-step")
+      assert has_element?(lv, "#product-form")
+    end
+
+    test "the scan box echoes back what's typed", %{conn: conn, admin: admin} do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      html =
+        lv
+        |> form("#gtin-scan-form", gtin_search: "123")
+        |> render_change()
+
+      assert html =~ ~s(value="123")
+    end
+
+    test "a crashed lookup task shows the provider-error state", %{conn: conn, admin: admin} do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+      Req.Test.allow(ThamaniDawa.GtinLookup, self(), lv.pid)
+
+      Req.Test.stub(ThamaniDawa.GtinLookup, fn _conn -> raise "boom" end)
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      lv
+      |> form("#gtin-scan-form", gtin_search: unique_gtin())
+      |> render_submit()
+
+      html = render_async(lv)
+
+      assert html =~ "Couldn&#39;t reach the lookup service"
+    end
+
+    test "a match prefills only the supported fields for review before save", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+      Req.Test.allow(ThamaniDawa.GtinLookup, self(), lv.pid)
+
+      Req.Test.stub(ThamaniDawa.GtinLookup, fn conn ->
+        Req.Test.json(conn, [
+          %{
+            "brandName" => [%{"value" => "Panadol"}],
+            "productDescription" => [%{"value" => "Paracetamol 500mg Tablets"}],
+            "gs1Licence" => %{"licenseeName" => "GlaxoSmithKline"},
+            "netContent" => [%{"value" => "100", "unitCode" => "H87"}]
+          }
+        ])
+      end)
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      lv
+      |> form("#gtin-scan-form", gtin_search: unique_gtin())
+      |> render_submit()
+
+      html = render_async(lv)
+
+      assert has_element?(lv, "#product-form")
+      refute has_element?(lv, "#gtin-scan-step")
+      assert html =~ "Match found"
+      assert html =~ "Panadol"
+      assert html =~ "Paracetamol 500mg Tablets"
+      assert html =~ "GlaxoSmithKline"
+
+      refute Enum.any?(
+               ThamaniDawa.Products.list_products(admin.organization_id),
+               &(&1.brand_name == "Panadol")
+             )
+    end
+
+    test "no match still advances to the form, prefilled with just the scanned GTIN", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+      Req.Test.allow(ThamaniDawa.GtinLookup, self(), lv.pid)
+
+      Req.Test.stub(ThamaniDawa.GtinLookup, fn conn -> Req.Test.json(conn, []) end)
+
+      gtin = unique_gtin()
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      lv
+      |> form("#gtin-scan-form", gtin_search: gtin)
+      |> render_submit()
+
+      html = render_async(lv)
+
+      assert html =~ "No match found for this GTIN"
+      assert has_element?(lv, "#product-form")
+      assert html =~ gtin
+      assert ThamaniDawa.Products.list_products(admin.organization_id) == []
+    end
+
+    test "a provider error still advances to the form, no product created", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+      Req.Test.allow(ThamaniDawa.GtinLookup, self(), lv.pid)
+
+      Req.Test.stub(ThamaniDawa.GtinLookup, fn conn -> Plug.Conn.send_resp(conn, 500, "") end)
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      lv
+      |> form("#gtin-scan-form", gtin_search: unique_gtin())
+      |> render_submit()
+
+      html = render_async(lv)
+
+      assert html =~ "Couldn&#39;t reach the lookup service"
+      assert has_element?(lv, "#product-form")
+      assert ThamaniDawa.Products.list_products(admin.organization_id) == []
+    end
+
+    test "a timed-out lookup still advances to the form, no product created", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+      Req.Test.allow(ThamaniDawa.GtinLookup, self(), lv.pid)
+
+      Req.Test.stub(ThamaniDawa.GtinLookup, fn conn ->
+        Req.Test.transport_error(conn, :timeout)
+      end)
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      lv
+      |> form("#gtin-scan-form", gtin_search: unique_gtin())
+      |> render_submit()
+
+      html = render_async(lv)
+
+      assert html =~ "Lookup timed out"
+      assert has_element?(lv, "#product-form")
+      assert ThamaniDawa.Products.list_products(admin.organization_id) == []
+    end
+
+    test "an invalid GTIN shows a validation message instantly and stays on the scan step", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      html =
+        lv
+        |> form("#gtin-scan-form", gtin_search: "not-a-gtin")
+        |> render_submit()
+
+      assert html =~ "is not a valid GTIN"
+      assert has_element?(lv, "#gtin-scan-step")
+      refute has_element?(lv, "#product-form")
+    end
+
+    test "continuing without a GTIN advances straight to the form for manual entry", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      lv |> element("a", "+ Add product") |> render_click()
+
+      html =
+        lv
+        |> form("#gtin-scan-form", gtin_search: "")
+        |> render_submit()
+
+      assert has_element?(lv, "#product-form")
+      refute has_element?(lv, "#gtin-scan-step")
+      refute html =~ "is not a valid GTIN"
+    end
+  end
+
   describe "show" do
     test "displays product details and active batches", %{conn: conn, admin: admin, site: site} do
       product =
         product_fixture(%{
           organization_id: admin.organization_id,
           generic_name: "Show Me Product",
+          manufacturer: "GlaxoSmithKline",
           price: 99
         })
 
@@ -364,6 +573,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       assert html =~ "Show Me Product"
       assert html =~ "99"
+      assert html =~ "GlaxoSmithKline"
       assert has_element?(lv, "#batches", "BATCH-001")
       assert has_element?(lv, "#batches", "Active")
     end

@@ -59,6 +59,28 @@ defmodule ThamaniDawa.GtinTest do
     end
   end
 
+  describe "normalize/1" do
+    test "normalizes a shorter GTIN to canonical GTIN-14" do
+      assert Gtin.normalize("614141000012") == {:ok, "00614141000012"}
+    end
+
+    test "rejects a code with an invalid check digit" do
+      assert Gtin.normalize("00614141000011") == {:error, :invalid_gtin}
+    end
+
+    test "rejects a non-numeric code instead of raising" do
+      assert Gtin.normalize("not-a-valid-gtin") == {:error, :invalid_gtin}
+    end
+
+    test "rejects nil instead of raising" do
+      assert Gtin.normalize(nil) == {:error, :invalid_gtin}
+    end
+
+    test "rejects a non-binary value instead of raising" do
+      assert Gtin.normalize(614_141_000_012) == {:error, :invalid_gtin}
+    end
+  end
+
   describe "generate/1" do
     test "appends a valid GS1 check digit to a 13-digit base code" do
       assert {:ok, gtin} = Gtin.generate("0000000000001")

@@ -46,6 +46,7 @@ defmodule ThamaniDawa.ProductsTest do
                  price: 500,
                  generic_name: "Amoxicillin",
                  brand_name: "Amoxil",
+                 manufacturer: "GlaxoSmithKline",
                  uom: "capsule",
                  gtin: "00614141000012"
                })
@@ -53,6 +54,7 @@ defmodule ThamaniDawa.ProductsTest do
       assert product.organization_id == organization.id
       assert product.price == 500
       assert product.generic_name == "Amoxicillin"
+      assert product.manufacturer == "GlaxoSmithKline"
     end
 
     test "enforces per-organization unique gtin, allowing the same gtin across organizations" do

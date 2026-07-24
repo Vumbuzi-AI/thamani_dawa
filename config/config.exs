@@ -48,6 +48,8 @@ config :thamani_dawa, ThamaniDawa.Accounts.UserToken,
   invite_validity_in_days: 7,
   reset_password_validity_in_days: 1
 
+config :thamani_dawa, ThamaniDawa.GtinLookup, base_url: "https://grp.gs1.org"
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",

@@ -6,6 +6,7 @@ defmodule ThamaniDawa.Products.Product do
     field :generic_name, :string
     field :brand_name, :string
     field :category, :string
+    field :manufacturer, :string
     field :uom, :string
     field :gtin, :string
     field :is_otc, :boolean, default: false
@@ -28,6 +29,7 @@ defmodule ThamaniDawa.Products.Product do
       :generic_name,
       :brand_name,
       :category,
+      :manufacturer,
       :uom,
       :gtin,
       :is_otc,
