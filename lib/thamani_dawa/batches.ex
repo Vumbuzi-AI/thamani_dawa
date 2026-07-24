@@ -110,17 +110,18 @@ defmodule ThamaniDawa.Batches do
     end
   end
 
-  @doc "Lists a product's batches, preloaded with `site` and `approver` (both scoped to the organization)."
+  @doc "Lists a product's batches, preloaded with `site`, `approver`, and `supplier` (all scoped to the organization)."
   def list_batches_for_product(organization_id, product_id) do
     site_query = from s in Site, where: s.organization_id == ^organization_id
     user_query = from u in User, where: u.organization_id == ^organization_id
+    supplier_query = from s in Supplier, where: s.organization_id == ^organization_id
 
     Repo.all(
       from b in Batch,
         where: b.organization_id == ^organization_id,
         where: b.product_id == ^product_id,
         order_by: [asc: b.expiry_date],
-        preload: [site: ^site_query, approver: ^user_query]
+        preload: [site: ^site_query, approver: ^user_query, supplier: ^supplier_query]
     )
   end
 
@@ -139,6 +140,21 @@ defmodule ThamaniDawa.Batches do
       %Decimal{} = d -> Decimal.to_integer(d)
       n when is_integer(n) -> n
     end
+  end
+
+  @doc """
+  Whether a site has ever had any batch record (any status, any stock
+  level) for a product — i.e. whether this site's practice includes this
+  product at all. Unlike `total_available_stock/3`, this is unaffected by
+  a normal, temporary stock-out.
+  """
+  def any_batch_for_site?(organization_id, site_id, product_id) do
+    Repo.exists?(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: b.product_id == ^product_id
+    )
   end
 
   @doc "Gets a single batch scoped to an organization. Raises if not found."

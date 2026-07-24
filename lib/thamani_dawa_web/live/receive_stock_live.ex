@@ -6,6 +6,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
+  alias ThamaniDawa.Suppliers
   alias ThamaniDawaWeb.SiteScoping
 
   def mount(_params, _session, socket) do
@@ -18,6 +19,9 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
     sites_by_id =
       organization_id |> Sites.list_sites() |> Map.new(&{&1.id, &1})
 
+    suppliers_by_id =
+      organization_id |> Suppliers.list_suppliers() |> Map.new(&{&1.id, &1})
+
     pending_batches =
       organization_id
       |> Batches.list_pending_batches()
@@ -29,6 +33,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
      socket
      |> assign(:products_by_id, products_by_id)
      |> assign(:sites_by_id, sites_by_id)
+     |> assign(:suppliers_by_id, suppliers_by_id)
      |> assign(:gs1_decode_error, nil)
      |> assign(:scan_form, to_form(%{"raw_gs1" => ""}))
      |> stream(:pending_batches, pending_batches)}
@@ -132,6 +137,13 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
     end
   end
 
+  defp supplier_name(suppliers_by_id, supplier_id) do
+    case Map.get(suppliers_by_id, supplier_id) do
+      nil -> "—"
+      supplier -> supplier.name
+    end
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.pharmacy_shell
@@ -199,9 +211,14 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
         </:col>
         <:col :let={{_id, batch}} label="Site">{site_name(@sites_by_id, batch.site_id)}</:col>
         <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
+        <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
+        <:col :let={{_id, batch}} label="Manufacture date">{batch.manufacture_date || "—"}</:col>
         <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
         <:col :let={{_id, batch}} label="Expected">
           <span class="tabular-nums">{batch.quantity}</span>
+        </:col>
+        <:col :let={{_id, batch}} label="Supplier">
+          {supplier_name(@suppliers_by_id, batch.supplier_id)}
         </:col>
         <:action :let={{_id, batch}}>
           <form id={"receive-batch-#{batch.id}"} phx-submit="receive" class="flex gap-2 items-center">

@@ -352,6 +352,13 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
       product = product_fixture(%{organization_id: organization.id})
 
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        pending: true
+      })
+
       assert {:ok, %{prescription: prescription, prescription_items: [item]}} =
                Prescriptions.create_prescription_with_items(
                  organization.id,
@@ -400,6 +407,173 @@ defmodule ThamaniDawa.PrescriptionsTest do
       assert %{product_id: ["can't be blank"]} = errors_on(changeset)
       assert Prescriptions.list_prescriptions(organization.id) == []
     end
+
+    test "rolls back the entire header and all items when one item among several is invalid" do
+      organization = organization_fixture()
+      other_org = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+      product_a = product_fixture(%{organization_id: organization.id})
+      product_b = product_fixture(%{organization_id: organization.id})
+      hostile_product = product_fixture(%{organization_id: other_org.id})
+
+      patient_visit =
+        patient_visit_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          patient_id: patient.id
+        })
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product_a.id,
+        pending: true
+      })
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product_b.id,
+        pending: true
+      })
+
+      prescription_count_before = Repo.aggregate(Prescription, :count)
+      item_count_before = Repo.aggregate(PrescriptionItem, :count)
+
+      assert {:error, changeset} =
+               Prescriptions.create_prescription_with_items(
+                 organization.id,
+                 %{
+                   patient_visit_id: patient_visit.id,
+                   doctors_note: "Take after meals",
+                   source_facility: "General Hospital",
+                   referring_doctor: "Dr. Jane Doe",
+                   referral_date: ~D[2026-01-15],
+                   payment_type: "Cash"
+                 },
+                 [
+                   %{product_id: product_a.id, quantity_prescribed: 10},
+                   %{product_id: product_b.id, quantity_prescribed: 5},
+                   %{product_id: hostile_product.id, quantity_prescribed: 1}
+                 ]
+               )
+
+      assert %{product_id: ["does not belong to this organization"]} = errors_on(changeset)
+      assert Repo.aggregate(Prescription, :count) == prescription_count_before
+      assert Repo.aggregate(PrescriptionItem, :count) == item_count_before
+    end
+  end
+
+  describe "create_prescription_item/3" do
+    setup do
+      organization = organization_fixture()
+      other_org = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      other_site = site_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+
+      patient_visit =
+        patient_visit_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          patient_id: patient.id
+        })
+
+      prescription =
+        prescription_fixture(%{
+          organization_id: organization.id,
+          patient_visit_id: patient_visit.id
+        })
+
+      %{
+        organization: organization,
+        other_org: other_org,
+        site: site,
+        other_site: other_site,
+        prescription: prescription
+      }
+    end
+
+    test "accepts a valid, in-org, active product with a batch on record at the prescription's site",
+         ctx do
+      product = product_fixture(%{organization_id: ctx.organization.id})
+
+      batch_fixture(%{
+        organization_id: ctx.organization.id,
+        site_id: ctx.site.id,
+        product_id: product.id,
+        pending: true
+      })
+
+      assert {:ok, %PrescriptionItem{}} =
+               Prescriptions.create_prescription_item(ctx.organization.id, ctx.prescription.id, %{
+                 product_id: product.id,
+                 quantity_prescribed: 5
+               })
+    end
+
+    test "rejects a product_id belonging to a different organization", ctx do
+      hostile_product = product_fixture(%{organization_id: ctx.other_org.id})
+
+      assert {:error, changeset} =
+               Prescriptions.create_prescription_item(ctx.organization.id, ctx.prescription.id, %{
+                 product_id: hostile_product.id,
+                 quantity_prescribed: 5
+               })
+
+      assert %{product_id: ["does not belong to this organization"]} = errors_on(changeset)
+      assert Repo.aggregate(PrescriptionItem, :count) == 0
+    end
+
+    test "rejects a nonexistent product_id", ctx do
+      assert {:error, changeset} =
+               Prescriptions.create_prescription_item(ctx.organization.id, ctx.prescription.id, %{
+                 product_id: 0,
+                 quantity_prescribed: 5
+               })
+
+      assert %{product_id: ["does not belong to this organization"]} = errors_on(changeset)
+    end
+
+    test "rejects an inactive product", ctx do
+      product = product_fixture(%{organization_id: ctx.organization.id, is_active: false})
+
+      batch_fixture(%{
+        organization_id: ctx.organization.id,
+        site_id: ctx.site.id,
+        product_id: product.id,
+        pending: true
+      })
+
+      assert {:error, changeset} =
+               Prescriptions.create_prescription_item(ctx.organization.id, ctx.prescription.id, %{
+                 product_id: product.id,
+                 quantity_prescribed: 5
+               })
+
+      assert %{product_id: ["is not active"]} = errors_on(changeset)
+    end
+
+    test "rejects a product that has only ever been stocked at a different site", ctx do
+      product = product_fixture(%{organization_id: ctx.organization.id})
+
+      batch_fixture(%{
+        organization_id: ctx.organization.id,
+        site_id: ctx.other_site.id,
+        product_id: product.id,
+        pending: true
+      })
+
+      assert {:error, changeset} =
+               Prescriptions.create_prescription_item(ctx.organization.id, ctx.prescription.id, %{
+                 product_id: product.id,
+                 quantity_prescribed: 5
+               })
+
+      assert %{product_id: ["is not available at this prescription's site"]} =
+               errors_on(changeset)
+    end
   end
 
   describe "dispense_item/5" do
@@ -416,6 +590,13 @@ defmodule ThamaniDawa.PrescriptionsTest do
           site_id: site.id,
           patient_id: patient.id
         })
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        pending: true
+      })
 
       prescription =
         prescription_fixture(%{

@@ -14,6 +14,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.Suppliers
 
   @default_filters %{site: "", status: ""}
 
@@ -25,6 +26,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
      socket
      |> assign(:products_by_id, org_id |> Products.list_products() |> Map.new(&{&1.id, &1}))
      |> assign(:sites_by_id, Map.new(sites, &{&1.id, &1}))
+     |> assign(:suppliers_by_id, org_id |> Suppliers.list_suppliers() |> Map.new(&{&1.id, &1}))
      |> assign(:site_options, Enum.map(sites, &{&1.name, &1.id}))
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
@@ -122,6 +124,9 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   defp site_name(nil), do: "(unknown site)"
   defp site_name(site), do: site.name
 
+  defp supplier_name(nil), do: "—"
+  defp supplier_name(supplier), do: supplier.name
+
   def render(assigns) do
     ~H"""
     <Layouts.pharmacy_shell
@@ -180,8 +185,13 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
         </:col>
         <:col :let={{_id, batch}} label="Site">{site_name(@sites_by_id[batch.site_id])}</:col>
         <:col :let={{_id, batch}} label="Batch no.">{batch.batch_no}</:col>
+        <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
+        <:col :let={{_id, batch}} label="Manufacture date">{batch.manufacture_date || "—"}</:col>
         <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
         <:col :let={{_id, batch}} label="Remaining">{batch.remaining_quantity}</:col>
+        <:col :let={{_id, batch}} label="Supplier">
+          {supplier_name(@suppliers_by_id[batch.supplier_id])}
+        </:col>
         <:col :let={{_id, batch}} label="Status">
           <.status_badge status={if batch.approver_id, do: :active, else: :pending_receipt} />
         </:col>

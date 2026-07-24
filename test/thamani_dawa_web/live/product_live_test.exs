@@ -6,6 +6,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
   import ThamaniDawa.BatchesFixtures
+  import ThamaniDawa.SuppliersFixtures
 
   setup do
     admin = user_fixture()
@@ -342,6 +343,30 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     end
   end
 
+  describe "active-state behavior" do
+    test "deactivates an active product", %{conn: conn, admin: admin} do
+      product = product_fixture(%{organization_id: admin.organization_id})
+      assert product.is_active
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+      render_click(lv, "toggle_active", %{"id" => to_string(product.id)})
+
+      assert %{is_active: false} =
+               ThamaniDawa.Products.get_product!(admin.organization_id, product.id)
+    end
+
+    test "reactivates an inactive product", %{conn: conn, admin: admin} do
+      product = product_fixture(%{organization_id: admin.organization_id})
+      {:ok, _} = ThamaniDawa.Products.update_product(product, %{is_active: false})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+      render_click(lv, "toggle_active", %{"id" => to_string(product.id)})
+
+      assert %{is_active: true} =
+               ThamaniDawa.Products.get_product!(admin.organization_id, product.id)
+    end
+  end
+
   describe "show" do
     test "displays product details and active batches", %{conn: conn, admin: admin, site: site} do
       product =
@@ -422,6 +447,66 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Batch dispatched"
       assert html =~ "LOT-ADMIN-1"
       assert html =~ "200"
+    end
+
+    test "dispatching a batch captures serial, manufacture date, and supplier, and displays them",
+         %{conn: conn, admin: admin, site: site} do
+      product =
+        product_fixture(%{
+          organization_id: admin.organization_id,
+          generic_name: "Traceable Drug",
+          gtin: unique_gtin()
+        })
+
+      supplier = supplier_fixture(%{organization_id: admin.organization_id, name: "Acme Supply"})
+
+      {:ok, lv, _html} =
+        live(log_in_user(conn, admin), ~p"/org/products/#{product.id}/batches/new")
+
+      lv
+      |> form("#batch-form",
+        batch: %{
+          site_id: site.id,
+          gtin: product.gtin,
+          batch_no: "LOT-TRACE-1",
+          serial: "SN-12345",
+          manufacture_date: "2026-01-01",
+          expiry_date: "2027-06-01",
+          quantity: 100,
+          supplier_id: supplier.id
+        }
+      )
+      |> render_submit()
+
+      assert_patch(lv, ~p"/org/products/#{product.id}")
+      html = render(lv)
+      assert html =~ "SN-12345"
+      assert html =~ "2026-01-01"
+      assert html =~ "Acme Supply"
+
+      assert %{serial: "SN-12345", manufacture_date: ~D[2026-01-01], supplier_id: supplier_id} =
+               hd(ThamaniDawa.Batches.list_batches(admin.organization_id))
+
+      assert supplier_id == supplier.id
+    end
+
+    test "batches table shows a dash when serial, manufacture date, or supplier are absent", %{
+      conn: conn,
+      admin: admin,
+      site: site
+    } do
+      product = product_fixture(%{organization_id: admin.organization_id})
+
+      batch_fixture(%{
+        organization_id: admin.organization_id,
+        site_id: site.id,
+        product_id: product.id,
+        batch_no: "LOT-BARE-1"
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
+
+      assert has_element?(lv, "#batches td", "—")
     end
 
     test "shows an error dispatching the same batch_no to the same site twice", %{

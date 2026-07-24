@@ -44,12 +44,14 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
       |> Map.new(&{&1.id, &1})
 
     suppliers = Suppliers.list_suppliers(organization_id)
+    suppliers_by_id = Map.new(suppliers, &{&1.id, &1})
     initial_attrs = if site_id, do: %{site_id: site_id}, else: %{}
 
     {:ok,
      socket
      |> assign(:products_by_id, products_by_id)
      |> assign(:suppliers, suppliers)
+     |> assign(:suppliers_by_id, suppliers_by_id)
      |> assign(:lab_site_ids, MapSet.new(lab_sites, & &1.id))
      |> assign(:lab_sites, lab_sites)
      |> assign(:site_id, site_id)
@@ -252,6 +254,13 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     end
   end
 
+  defp supplier_display(batch, suppliers_by_id) do
+    case Map.get(suppliers_by_id, batch.supplier_id) do
+      nil -> "—"
+      supplier -> supplier.name
+    end
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell
@@ -266,8 +275,13 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         <.table id="pending-batches" rows={@streams.pending_batches}>
           <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
           <:col :let={{_id, batch}} label="GTIN"><code>{batch.gtin}</code></:col>
+          <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
+          <:col :let={{_id, batch}} label="Manufacture date">{batch.manufacture_date || "—"}</:col>
           <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
           <:col :let={{_id, batch}} label="Qty">{batch.quantity}</:col>
+          <:col :let={{_id, batch}} label="Supplier">
+            {supplier_display(batch, @suppliers_by_id)}
+          </:col>
           <:action :let={{_id, batch}}>
             <.button phx-click="view_batch" phx-value-id={batch.id}>View</.button>
           </:action>
@@ -311,6 +325,12 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
               GTIN
             </dt>
             <dd><code>{@selected_batch.gtin}</code></dd>
+          </div>
+          <div :if={@selected_batch.serial}>
+            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+              Serial
+            </dt>
+            <dd>{@selected_batch.serial}</dd>
           </div>
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
