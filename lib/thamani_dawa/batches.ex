@@ -174,6 +174,7 @@ defmodule ThamaniDawa.Batches do
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> validate_belongs_to_org(:site_id, Site, organization_id)
     |> validate_belongs_to_org(:product_id, Product, organization_id)
+    |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
     |> Repo.insert()
   end
 

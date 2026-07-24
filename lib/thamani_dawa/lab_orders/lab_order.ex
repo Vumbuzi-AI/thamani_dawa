@@ -26,6 +26,7 @@ defmodule ThamaniDawa.LabOrders.LabOrder do
 
     has_many :lab_order_results, ThamaniDawa.LabOrders.LabOrderResult
     has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage
+    has_many :payments, ThamaniDawa.Payments.Payment
 
     timestamps(type: :utc_datetime)
   end

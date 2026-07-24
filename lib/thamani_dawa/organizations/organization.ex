@@ -28,6 +28,8 @@ defmodule ThamaniDawa.Organizations.Organization do
     has_many :lab_orders, ThamaniDawa.LabOrders.LabOrder
     has_many :lab_order_results, ThamaniDawa.LabOrders.LabOrderResult
     has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage
+    has_many :payments, ThamaniDawa.Payments.Payment
+    has_many :wallet_entries, ThamaniDawa.Payments.WalletEntry
 
     timestamps(type: :utc_datetime)
   end

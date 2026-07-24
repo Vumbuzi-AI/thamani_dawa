@@ -19,6 +19,8 @@ defmodule ThamaniDawa.Sites.Site do
     has_many :batches, ThamaniDawa.Batches.Batch
     has_many :patient_visits, ThamaniDawa.PatientVisits.PatientVisit
     has_many :lab_orders, ThamaniDawa.LabOrders.LabOrder
+    has_many :payments, ThamaniDawa.Payments.Payment
+    has_many :wallet_entries, ThamaniDawa.Payments.WalletEntry
 
     timestamps(type: :utc_datetime)
   end
