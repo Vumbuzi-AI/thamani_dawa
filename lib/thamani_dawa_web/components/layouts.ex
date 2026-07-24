@@ -105,6 +105,7 @@ defmodule ThamaniDawaWeb.Layouts do
         {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
         {"Tests", "hero-beaker", ~p"/lab/tests"},
         {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
+        {"Stock take", "hero-clipboard-document-check", ~p"/lab/stock-take"},
         {"Scan", "hero-qr-code", ~p"/lab/scan"}
       ]}
     >
@@ -135,6 +136,7 @@ defmodule ThamaniDawaWeb.Layouts do
         {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
         {"Stock", "hero-cube", ~p"/pharmacy/stock"},
         {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
+        {"Stock take", "hero-clipboard-document-check", ~p"/pharmacy/stock-take"},
         {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
         {"Scan", "hero-qr-code", ~p"/pharmacy/scan"}
       ]}

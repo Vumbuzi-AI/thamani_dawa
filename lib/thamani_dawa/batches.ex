@@ -262,4 +262,16 @@ defmodule ThamaniDawa.Batches do
     |> Ecto.Changeset.validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
     |> Repo.update()
   end
+
+  @doc """
+  Sets `remaining_quantity` directly to `quantity` — a physical stock take correcting the
+  recorded amount to match a fresh count, unlike `decrement_remaining_quantity/2`'s relative
+  adjustment for a single dispense/consumption event.
+  """
+  def set_remaining_quantity(%Batch{} = batch, quantity) when is_integer(quantity) do
+    batch
+    |> Ecto.Changeset.change(remaining_quantity: quantity)
+    |> Ecto.Changeset.validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
+    |> Repo.update()
+  end
 end
