@@ -24,14 +24,14 @@ defmodule ThamaniDawaWeb.BatchFormComponents do
       <div class="card-body">
         <h2 class="font-semibold mb-2">Paste a GS1 code</h2>
         <form id="receive-stock-gs1-form" phx-submit="decode_gs1" class="flex gap-2 items-end">
-          <div class="flex-1">
+          <div class="flex-1 [&>div]:mb-0">
             <.input
               name="raw_gs1"
               label="Raw GS1 element string"
               placeholder="(01)0...(10)LOT1(17)261231"
             />
           </div>
-          <.button class="mb-2">Decode &amp; prefill</.button>
+          <.button>Decode &amp; prefill</.button>
         </form>
         <p :if={@gs1_decode_error} id="gs1-decode-error" class="mt-2 text-error">
           {@gs1_decode_error}

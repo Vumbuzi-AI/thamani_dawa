@@ -51,11 +51,35 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
          ThamaniDawa.Batches.total_available_stock(organization_id, visit.site_id, product_id)}
       end)
 
+    allocation_previews =
+      Map.new(items, fn item ->
+        {item.id,
+         allocation_preview(organization_id, visit.site_id, item.product_id,
+           outstanding_quantity(item)
+         )}
+      end)
+
+    dispenses_by_item =
+      Map.new(items, fn item ->
+        {item.id, Prescriptions.list_batch_dispenses_for_item(organization_id, item.id)}
+      end)
+
     socket
     |> assign(:prescription, prescription)
     |> assign(:patient, patient)
     |> assign(:items, items)
     |> assign(:stock_by_product_id, stock_by_product_id)
+    |> assign(:site_id, visit.site_id)
+    |> assign(:allocation_previews, allocation_previews)
+    |> assign(:dispenses_by_item, dispenses_by_item)
+  end
+
+  defp allocation_preview(_organization_id, _site_id, _product_id, quantity)
+       when quantity <= 0,
+       do: []
+
+  defp allocation_preview(organization_id, site_id, product_id, quantity) do
+    ThamaniDawa.Batches.preview_fefo_allocation(organization_id, site_id, product_id, quantity)
   end
 
   def handle_event("validate_payment", %{"payment" => attrs}, socket) do
@@ -101,6 +125,21 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
       do_dispense(socket, organization_id, item_id, pharmacist_id, quantity)
     else
       _ -> {:noreply, put_flash(socket, :error, "Enter a valid quantity.")}
+    end
+  end
+
+  def handle_event("preview_dispense", %{"item_id" => item_id, "quantity" => quantity}, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+
+    with {item_id, ""} <- Integer.parse(item_id),
+         {quantity, ""} <- Integer.parse(quantity) do
+      item = Enum.find(socket.assigns.items, &(&1.id == item_id))
+      preview = allocation_preview(organization_id, socket.assigns.site_id, item.product_id, quantity)
+
+      {:noreply,
+       assign(socket, :allocation_previews, Map.put(socket.assigns.allocation_previews, item_id, preview))}
+    else
+      _ -> {:noreply, socket}
     end
   end
 
@@ -180,6 +219,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
   defp outstanding_quantity(item),
     do: max(item.quantity_prescribed - item.quantity_dispensed, 0)
+
+  defp user_display(nil), do: "—"
+  defp user_display(%{name: name}) when is_binary(name) and name != "", do: name
+  defp user_display(%{email: email}), do: email
 
   def render(assigns) do
     ~H"""
@@ -399,8 +442,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                     </span>
                   </div>
 
-                  <dl class="mt-5 grid grid-cols-3 overflow-hidden rounded-xl border border-thamani-stone bg-thamani-canvas/60">
-                    <div class="border-r border-thamani-stone px-3 py-3.5 sm:px-4">
+                  <dl class="mt-5 grid grid-cols-2 overflow-hidden rounded-xl border border-thamani-stone bg-thamani-canvas/60 sm:grid-cols-4">
+                    <div class="border-r border-b border-thamani-stone px-3 py-3.5 sm:border-b-0 sm:px-4">
                       <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
                         Prescribed
                       </dt>
@@ -408,7 +451,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                         {item.quantity_prescribed}
                       </dd>
                     </div>
-                    <div class="border-r border-thamani-stone px-3 py-3.5 sm:px-4">
+                    <div class="border-b border-thamani-stone px-3 py-3.5 sm:border-b-0 sm:border-r sm:px-4">
                       <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
                         Dispensed
                       </dt>
@@ -419,7 +462,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                         {item.quantity_dispensed}
                       </dd>
                     </div>
-                    <div class="px-3 py-3.5 sm:px-4">
+                    <div class="border-r border-thamani-stone px-3 py-3.5 sm:px-4">
                       <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
                         Available
                       </dt>
@@ -429,6 +472,21 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                         stock >= outstanding_quantity(item) && "text-emerald-600"
                       ]}>
                         {stock}
+                      </dd>
+                    </div>
+                    <div class="px-3 py-3.5 sm:px-4">
+                      <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
+                        Price
+                      </dt>
+                      <dd class="mt-1 text-lg font-semibold text-slate-900">
+                        <%= if item.product && item.product.price do %>
+                          KES {item.product.price * item.quantity_prescribed}
+                          <span class="text-xs font-normal text-thamani-subtle">
+                            ({item.product.price}/unit)
+                          </span>
+                        <% else %>
+                          —
+                        <% end %>
                       </dd>
                     </div>
                   </dl>
@@ -459,10 +517,11 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                   <form
                     id={"dispense-form-#{item.id}"}
                     phx-submit="dispense"
+                    phx-change="preview_dispense"
                     class="flex flex-col gap-3 sm:flex-row sm:items-end"
                   >
                     <.input type="hidden" name="item_id" value={item.id} />
-                    <div class="w-full sm:max-w-48">
+                    <div class="w-full sm:max-w-48 [&>div]:mb-0">
                       <.input
                         id={"dispense-quantity-#{item.id}"}
                         type="number"
@@ -488,6 +547,53 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                       No stock is available at this site.
                     </p>
                   </form>
+
+                  <div
+                    :if={(allocation = Map.get(@allocation_previews, item.id, [])) != []}
+                    class="mt-3 rounded-lg border border-thamani-stone bg-white px-3 py-2.5"
+                  >
+                    <p class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
+                      Will take from (FEFO)
+                    </p>
+                    <ul class="mt-1.5 space-y-1">
+                      <li
+                        :for={%{batch: batch, quantity: qty} <- allocation}
+                        class="flex items-center justify-between text-sm text-slate-700"
+                      >
+                        <span>
+                          Batch {batch.batch_no || "##{batch.id}"}
+                          <span class="text-thamani-subtle">
+                            · exp {Calendar.strftime(batch.expiry_date, "%b %d, %Y")}
+                          </span>
+                        </span>
+                        <span class="font-medium">{qty} units</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div
+                  :if={(dispenses = Map.get(@dispenses_by_item, item.id, [])) != []}
+                  class="border-t border-thamani-stone bg-white px-5 py-4 sm:px-6"
+                >
+                  <p class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
+                    Dispensed from
+                  </p>
+                  <ul class="mt-1.5 space-y-1">
+                    <li
+                      :for={dispense <- dispenses}
+                      class="flex flex-wrap items-center justify-between gap-1 text-sm text-slate-700"
+                    >
+                      <span>
+                        Batch {dispense.batch.batch_no || "##{dispense.batch.id}"}
+                        <span class="text-thamani-subtle">
+                          · exp {Calendar.strftime(dispense.batch.expiry_date, "%b %d, %Y")}
+                          · by {user_display(dispense.dispensed_by)}
+                        </span>
+                      </span>
+                      <span class="font-medium">{dispense.quantity} units</span>
+                    </li>
+                  </ul>
                 </div>
 
                 <div
@@ -517,7 +623,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                       class="flex flex-col gap-3 sm:flex-row sm:items-end"
                     >
                       <.input type="hidden" name="item_id" value={item.id} />
-                      <div class="w-full sm:max-w-md">
+                      <div class="w-full sm:max-w-md [&>div]:mb-0">
                         <.input
                           id={"verify-gtin-#{item.id}"}
                           type="text"

@@ -991,6 +991,53 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   @doc """
+  Renders a pill-style tab group, e.g. the "Patients / Patient visits" toggle.
+
+  ## Examples
+
+      <.tab_group>
+        <:tab id="patients-tab" active={@tab == "patients"} phx_click="switch_tab" phx_value_tab="patients">
+          Patients
+        </:tab>
+        <:tab id="visits-tab" active={@tab == "visits"} phx_click="switch_tab" phx_value_tab="visits">
+          Patient visits
+        </:tab>
+      </.tab_group>
+  """
+  attr :class, :any, default: nil
+
+  slot :tab, required: true do
+    attr :id, :string
+    attr :active, :boolean
+    attr :phx_click, :string, required: true
+    attr :phx_value_tab, :string
+    attr :phx_value_view, :string
+  end
+
+  def tab_group(assigns) do
+    ~H"""
+    <div class={["inline-flex rounded-lg border border-thamani-stone bg-thamani-snow p-1", @class]}>
+      <a
+        :for={tab <- @tab}
+        id={tab[:id]}
+        role="button"
+        tabindex="0"
+        class={[
+          "cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          if(tab[:active],
+            do: "bg-thamani-lime text-thamani-forest",
+            else: "text-thamani-pewter hover:text-thamani-forest"
+          )
+        ]}
+        phx-click={tab[:phx_click]}
+        phx-value-tab={tab[:phx_value_tab]}
+        phx-value-view={tab[:phx_value_view]}
+      >{render_slot(tab)}</a>
+    </div>
+    """
+  end
+
+  @doc """
   Renders a data list.
 
   ## Examples
@@ -1483,13 +1530,15 @@ defmodule ThamaniDawaWeb.CoreComponents do
           >
             <button type="reset" id={"#{@id}-reset-btn"} class="hidden" aria-hidden="true" />
 
-            <div class="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
-              <div :for={group <- @group}>
-                <h3 class="mb-3 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                  {group.label}
-                </h3>
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {render_slot(group)}
+            <div class="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+              <div class={["grid grid-cols-1 gap-6", length(@group) > 1 && "sm:grid-cols-2"]}>
+                <div :for={group <- @group}>
+                  <h3 class="mb-3 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                    {group.label}
+                  </h3>
+                  <div>
+                    {render_slot(group)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1642,5 +1691,130 @@ defmodule ThamaniDawaWeb.CoreComponents do
   """
   def translate_errors(errors, field) when is_list(errors) do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
+  end
+
+  @doc """
+  Renders pagination controls for Scrivener pagination.
+
+  ## Examples
+
+      <.pagination page={@page} path={~p"/org/products"} />
+  """
+  attr :page, :map, required: true, doc: "Scrivener page object"
+  attr :path, :string, required: true, doc: "Base path for pagination links"
+  attr :query_param, :string, default: "page", doc: "Query parameter name for page number"
+
+  def pagination(assigns) do
+    page = assigns.page
+    total_pages = page.total_pages || 1
+    current_page = page.page_number || 1
+    total_entries = page.total_entries || 0
+    page_size = page.page_size || 10
+
+    from_item = (current_page - 1) * page_size + 1
+    to_item = min(current_page * page_size, total_entries)
+
+    has_prev = current_page > 1
+    has_next = current_page < total_pages
+
+    page_numbers = get_page_numbers(current_page, total_pages)
+
+    assigns =
+      assigns
+      |> assign(:current_page, current_page)
+      |> assign(:total_pages, total_pages)
+      |> assign(:total_entries, total_entries)
+      |> assign(:from_item, from_item)
+      |> assign(:to_item, to_item)
+      |> assign(:has_prev, has_prev)
+      |> assign(:has_next, has_next)
+      |> assign(:page_numbers, page_numbers)
+
+    ~H"""
+    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200 pt-6">
+      <p class="text-sm text-slate-500 order-2 sm:order-1">
+        Showing <span class="font-medium text-slate-900">{@from_item}</span>–<span class="font-medium text-slate-900">{@to_item}</span>
+        of <span class="font-medium text-slate-900">{@total_entries}</span> results
+      </p>
+
+      <nav
+        :if={@total_pages > 1}
+        class="order-1 sm:order-2 flex items-center gap-1"
+        aria-label="Pagination"
+      >
+        <.link
+          navigate={build_pagination_url(@path, @current_page - 1, @query_param)}
+          class={[
+            "inline-flex items-center justify-center size-9 rounded-lg text-slate-500 transition-colors duration-150",
+            if(@has_prev,
+              do: "hover:bg-slate-100 hover:text-slate-900",
+              else: "pointer-events-none opacity-40"
+            )
+          ]}
+          aria-disabled={!@has_prev}
+          title="Previous page"
+        >
+          <.icon name="hero-chevron-left" class="size-4" />
+        </.link>
+
+        <div class="flex items-center gap-1">
+          <.link
+            :for={page_num <- @page_numbers}
+            navigate={
+              if page_num != :ellipsis, do: build_pagination_url(@path, page_num, @query_param)
+            }
+            class={[
+              "inline-flex items-center justify-center size-9 rounded-lg text-sm font-medium transition-colors duration-150",
+              if(page_num == :ellipsis,
+                do: "text-slate-400 cursor-default",
+                else: if(page_num == @current_page,
+                  do: "bg-thamani-forest text-white",
+                  else: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                )
+              )
+            ]}
+          >
+            {if page_num == :ellipsis, do: "…", else: page_num}
+          </.link>
+        </div>
+
+        <.link
+          navigate={build_pagination_url(@path, @current_page + 1, @query_param)}
+          class={[
+            "inline-flex items-center justify-center size-9 rounded-lg text-slate-500 transition-colors duration-150",
+            if(@has_next,
+              do: "hover:bg-slate-100 hover:text-slate-900",
+              else: "pointer-events-none opacity-40"
+            )
+          ]}
+          aria-disabled={!@has_next}
+          title="Next page"
+        >
+          <.icon name="hero-chevron-right" class="size-4" />
+        </.link>
+      </nav>
+    </div>
+    """
+  end
+
+  defp get_page_numbers(current_page, total_pages) do
+    cond do
+      total_pages <= 7 ->
+        Enum.to_list(1..total_pages)
+
+      current_page <= 4 ->
+        Enum.to_list(1..5) ++ [:ellipsis, total_pages]
+
+      current_page >= total_pages - 3 ->
+        [1, :ellipsis] ++ Enum.to_list((total_pages - 4)..total_pages)
+
+      true ->
+        [1, :ellipsis] ++ Enum.to_list((current_page - 1)..(current_page + 1)) ++ [:ellipsis, total_pages]
+    end
+  end
+
+  defp build_pagination_url(path, page, query_param) do
+    separator = if String.contains?(path, "?"), do: "&", else: "?"
+    "#{path}#{separator}#{query_param}=#{page}"
   end
 end

@@ -7,6 +7,12 @@ defmodule ThamaniDawa.PatientVisits.PatientVisit do
   schema "patient_visits" do
     field :visit_type, Ecto.Enum, values: @visit_types
 
+    # Virtual — populated by list_patient_visits_paginated/2's join for display
+    field :patient_name, :string, virtual: true
+    field :patient_phone, :string, virtual: true
+    field :site_name, :string, virtual: true
+    field :user_name, :string, virtual: true
+
     belongs_to :organization, ThamaniDawa.Organizations.Organization
     belongs_to :patient, ThamaniDawa.Patients.Patient
     belongs_to :site, ThamaniDawa.Sites.Site

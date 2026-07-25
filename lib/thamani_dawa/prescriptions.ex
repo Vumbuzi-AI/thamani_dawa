@@ -9,7 +9,7 @@ defmodule ThamaniDawa.Prescriptions do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.PatientVisits
   alias ThamaniDawa.PatientVisits.PatientVisit
-  alias ThamaniDawa.Prescriptions.{Prescription, PrescriptionItem}
+  alias ThamaniDawa.Prescriptions.{BatchDispense, Prescription, PrescriptionItem}
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
@@ -47,6 +47,37 @@ defmodule ThamaniDawa.Prescriptions do
     )
   end
 
+  @doc """
+  Lists an organization's prescriptions with pagination. Each returned struct has a virtual
+  `:site_id` field populated from the associated `patient_visits` row so that
+  `SiteScoping.for_current_site/2` can filter by site without a second query.
+  """
+  def list_prescriptions_paginated(organization_id, page \\ 1) do
+    items_count_query =
+      from i in PrescriptionItem,
+        group_by: i.prescription_id,
+        select: %{prescription_id: i.prescription_id, count: count(i.id)}
+
+    from(p in Prescription,
+      left_join: v in PatientVisit,
+      on: v.id == p.patient_visit_id,
+      left_join: pat in ThamaniDawa.Patients.Patient,
+      on: pat.id == v.patient_id,
+      left_join: ic in subquery(items_count_query),
+      on: ic.prescription_id == p.id,
+      where: p.organization_id == ^organization_id,
+      select: %{
+        p
+        | site_id: v.site_id,
+          patient_name: pat.full_name,
+          patient_phone: pat.phone,
+          items_count: coalesce(ic.count, 0)
+      },
+      order_by: [desc: p.inserted_at]
+    )
+    |> Repo.paginate(page: page)
+  end
+
   @doc "Gets a single prescription scoped to an organization. Raises if not found."
   def get_prescription!(organization_id, id) do
     Repo.get_by!(Prescription, id: id, organization_id: organization_id)
@@ -57,7 +88,35 @@ defmodule ThamaniDawa.Prescriptions do
     %Prescription{}
     |> Prescription.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> put_computed_total_amount(organization_id)
     |> Repo.insert()
+  end
+
+  defp put_computed_total_amount(changeset, organization_id) do
+    items = Ecto.Changeset.get_field(changeset, :items) || []
+    Ecto.Changeset.put_change(changeset, :total_amount, total_amount_for_items(items, organization_id))
+  end
+
+  defp total_amount_for_items(items, organization_id) do
+    product_ids = items |> Enum.map(& &1.product_id) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    prices =
+      Repo.all(
+        from p in Product,
+          where: p.organization_id == ^organization_id and p.id in ^product_ids,
+          select: {p.id, p.price}
+      )
+      |> Map.new()
+
+    Enum.reduce(items, Decimal.new(0), fn item, acc ->
+      case {Map.get(prices, item.product_id), item.quantity_prescribed} do
+        {price, qty} when is_integer(price) and is_integer(qty) ->
+          Decimal.add(acc, Decimal.mult(Decimal.new(price), Decimal.new(qty)))
+
+        _ ->
+          acc
+      end
+    end)
   end
 
   @doc """
@@ -153,7 +212,11 @@ defmodule ThamaniDawa.Prescriptions do
     Repo.transaction(fn ->
       with {:ok, prescription} <- create_prescription(organization_id, attrs),
            {:ok, items} <-
-             create_prescription_items(organization_id, prescription.id, items_attrs) do
+             create_prescription_items(organization_id, prescription.id, items_attrs),
+           {:ok, prescription} <-
+             prescription
+             |> Ecto.Changeset.change(total_amount: total_amount_for_items(items, organization_id))
+             |> Repo.update() do
         %{prescription: prescription, prescription_items: items}
       else
         {:error, changeset} -> Repo.rollback(changeset)
@@ -298,7 +361,7 @@ defmodule ThamaniDawa.Prescriptions do
   if `quantity` exceeds the prescribed amount, `{:error, :invalid_prescription_site}` if the
   prescription has no resolvable site, or `{:error, changeset}` for validation failures.
   """
-  def dispense_item(organization_id, prescription_item_id, _pharmacist_id, quantity)
+  def dispense_item(organization_id, prescription_item_id, pharmacist_id, quantity)
       when is_integer(organization_id) and is_integer(quantity) and quantity > 0 do
     Repo.transaction(fn ->
       item = get_prescription_item!(organization_id, prescription_item_id)
@@ -308,7 +371,8 @@ defmodule ThamaniDawa.Prescriptions do
       with :ok <- validate_not_over_dispensed(item, quantity),
            :ok <- validate_site_id_present(site_id),
            batches = Batches.fefo_batches(organization_id, site_id, item.product_id),
-           :ok <- consume_quantity_across_batches(batches, quantity),
+           {:ok, allocations} <- consume_quantity_across_batches(batches, quantity),
+           :ok <- record_batch_dispenses(organization_id, item, pharmacist_id, allocations),
            {:ok, updated_item} <- bump_quantity_dispensed(item, quantity),
            {:ok, _prescription} <- recompute_status(prescription) do
         updated_item
@@ -316,6 +380,25 @@ defmodule ThamaniDawa.Prescriptions do
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
+  end
+
+  @doc """
+  Lists the batches actually dispensed against a prescription item, preloaded
+  with `batch` — the persisted, authoritative record of what was given (unlike
+  the live FEFO preview, which can go stale between preview and dispense).
+  """
+  def list_batch_dispenses_for_item(organization_id, prescription_item_id) do
+    batch_query = from b in ThamaniDawa.Batches.Batch, where: b.organization_id == ^organization_id
+    user_query = from u in ThamaniDawa.Accounts.User, where: u.organization_id == ^organization_id
+
+    Repo.all(
+      from d in BatchDispense,
+        where:
+          d.organization_id == ^organization_id and
+            d.prescription_item_id == ^prescription_item_id,
+        order_by: [asc: d.dispensed_at],
+        preload: [batch: ^batch_query, dispensed_by: ^user_query]
+    )
   end
 
   @doc """
@@ -346,13 +429,35 @@ defmodule ThamaniDawa.Prescriptions do
   defp consume_quantity_across_batches([], _quantity_needed), do: {:error, :out_of_stock}
 
   defp consume_quantity_across_batches([batch | rest], quantity_needed) do
-    if batch.remaining_quantity >= quantity_needed do
-      {:ok, _} = Batches.decrement_remaining_quantity(batch, quantity_needed)
-      :ok
+    take = min(batch.remaining_quantity, quantity_needed)
+    {:ok, _} = Batches.decrement_remaining_quantity(batch, take)
+
+    if take == quantity_needed do
+      {:ok, [%{batch: batch, quantity: take}]}
     else
-      {:ok, _} = Batches.decrement_remaining_quantity(batch, batch.remaining_quantity)
-      consume_quantity_across_batches(rest, quantity_needed - batch.remaining_quantity)
+      with {:ok, more} <- consume_quantity_across_batches(rest, quantity_needed - take) do
+        {:ok, [%{batch: batch, quantity: take} | more]}
+      end
     end
+  end
+
+  defp record_batch_dispenses(organization_id, item, pharmacist_id, allocations) do
+    Enum.reduce_while(allocations, :ok, fn %{batch: batch, quantity: qty}, :ok ->
+      %BatchDispense{}
+      |> BatchDispense.changeset(%{
+        organization_id: organization_id,
+        prescription_item_id: item.id,
+        batch_id: batch.id,
+        quantity: qty,
+        dispensed_by_id: pharmacist_id,
+        dispensed_at: DateTime.utc_now()
+      })
+      |> Repo.insert()
+      |> case do
+        {:ok, _} -> {:cont, :ok}
+        {:error, changeset} -> {:halt, {:error, changeset}}
+      end
+    end)
   end
 
   # `prescriptions` no longer carries its own `site_id` — it's derived from

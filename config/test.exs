@@ -30,6 +30,8 @@ config :thamani_dawa, ThamaniDawa.GtinLookup,
   api_key: "test-api-key",
   plug: {Req.Test, ThamaniDawa.GtinLookup}
 
+config :thamani_dawa, ThamaniDawa.Gln, company_prefix: "0614141"
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

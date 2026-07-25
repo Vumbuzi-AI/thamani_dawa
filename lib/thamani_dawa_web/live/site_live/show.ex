@@ -171,7 +171,11 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           Near-expiry batches
           <:subtitle>Expiring within {@near_expiry_days} days</:subtitle>
         </.header>
-        <.table id="site-near-expiry" rows={@near_expiry}>
+        <.table
+          id="site-near-expiry"
+          rows={@near_expiry}
+          row_click={fn batch -> JS.navigate(~p"/org/batches/#{batch.id}") end}
+        >
           <:col :let={batch} label="Product">{product_name(@products_by_id, batch.product_id)}</:col>
           <:col :let={batch} label="Batch no.">{batch.batch_no}</:col>
           <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>

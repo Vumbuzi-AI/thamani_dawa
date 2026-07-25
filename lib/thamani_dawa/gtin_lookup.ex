@@ -12,8 +12,7 @@ defmodule ThamaniDawa.GtinLookup do
   require Logger
 
   alias ThamaniDawa.Gtin
-
-  @path "/grp/v3.2/gtins/verified"
+  alias ThamaniDawa.VerifyGtin
 
   @type prefill :: %{
           optional(:brand_name) => String.t(),
@@ -38,36 +37,24 @@ defmodule ThamaniDawa.GtinLookup do
   end
 
   defp request(normalized_gtin) do
-    config = Application.get_env(:thamani_dawa, __MODULE__, [])
-    api_key = Keyword.get(config, :api_key)
+    case VerifyGtin.verify(normalized_gtin) do
+      {:ok, :not_verified} ->
+        Logger.debug("GTIN #{normalized_gtin} not verified by GS1")
+        {:error, :not_found}
 
-    req_opts =
-      [receive_timeout: 10_000, retry: false, headers: [{"APIKEY", api_key}]]
-      |> Keyword.merge(Keyword.delete(config, :api_key))
-
-    req = Req.new(req_opts)
-
-    case Req.post(req, url: @path, json: [normalized_gtin]) do
-      {:ok, %Req.Response{status: 200, body: [%{"validationErrors" => errors} | _]}}
-      when errors != [] ->
+      {:ok, [%{"validationErrors" => errors} | _]} when errors != [] ->
         Logger.debug("GTIN #{normalized_gtin} not verified by GS1: #{inspect(errors)}")
         {:error, :not_found}
 
-      {:ok, %Req.Response{status: 200, body: [first | _]}} when is_map(first) ->
+      {:ok, [first | _]} when is_map(first) ->
         Logger.debug("GTIN lookup match for #{normalized_gtin}: #{inspect(first)}")
         {:ok, extract(first, normalized_gtin)}
 
-      {:ok, %Req.Response{status: 200, body: []}} ->
+      {:ok, []} ->
         {:error, :not_found}
 
-      {:ok, %Req.Response{}} ->
+      {:error, _reason} ->
         {:error, :provider_error}
-
-      {:error, %{reason: :timeout}} ->
-        {:error, :timeout}
-
-      {:error, _exception} ->
-        {:error, :timeout}
     end
   end
 

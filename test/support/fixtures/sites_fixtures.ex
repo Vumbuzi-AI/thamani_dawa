@@ -10,7 +10,6 @@ defmodule ThamaniDawa.SitesFixtures do
     Enum.into(attrs, %{
       name: "Main Site #{System.unique_integer()}",
       site_type: :pharmacy,
-      gln: "#{:rand.uniform(9_999_999_999_999) + 1_000_000_000_000}",
       address: "#{System.unique_integer([:positive])} Test Street"
     })
   end

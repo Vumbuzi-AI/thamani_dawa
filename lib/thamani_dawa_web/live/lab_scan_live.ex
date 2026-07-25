@@ -66,7 +66,7 @@ defmodule ThamaniDawaWeb.LabScanLive do
           phx-submit="decode"
           class="flex flex-col gap-3 sm:flex-row sm:items-end"
         >
-          <div class="flex-1">
+          <div class="flex-1 [&>div]:mb-0">
             <.input
               field={@scan_form[:raw_gs1]}
               label="GS1 barcode"
@@ -74,7 +74,7 @@ defmodule ThamaniDawaWeb.LabScanLive do
               autocomplete="off"
             />
           </div>
-          <.button variant="primary" class="sm:mb-2" phx-disable-with="Decoding…">
+          <.button variant="primary" phx-disable-with="Decoding…">
             Decode barcode
           </.button>
         </.form>

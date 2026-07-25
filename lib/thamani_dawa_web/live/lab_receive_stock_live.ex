@@ -107,7 +107,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     scope = socket.assigns.current_scope
     batch = Batches.get_batch!(scope.organization_id, String.to_integer(id))
 
-    if not Scope.admin?(scope) and scope.user.site_id != batch.site_id do
+    if not Scope.admin?(scope) and scope.current_site_id != batch.site_id do
       {:noreply, put_flash(socket, :error, "Not authorized to receive this batch.")}
     else
       do_receive_batch(socket, scope, batch)
@@ -123,7 +123,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     scope = socket.assigns.current_scope
     batch = socket.assigns.receive_batch
 
-    if not Scope.admin?(scope) and scope.user.site_id != batch.site_id do
+    if not Scope.admin?(scope) and scope.current_site_id != batch.site_id do
       {:noreply, put_flash(socket, :error, "Not authorized to receive this batch.")}
     else
       do_receive_batch(socket, scope, batch)
@@ -379,9 +379,14 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
             {supplier_display(batch, @suppliers_by_id)}
           </:col>
           <:action :let={{_id, batch}}>
-            <.link patch={~p"/lab/receive-stock/#{batch.id}/receive"} class="link">
+            <.button
+              variant="ghost"
+              patch={~p"/lab/receive-stock/#{batch.id}/receive"}
+              class="gap-2"
+            >
+              <.icon name="hero-arrow-down-tray" class="size-4" />
               Receive
-            </.link>
+            </.button>
           </:action>
           <:empty_state>
             <.blank_state icon="hero-check-circle" title="Nothing pending delivery">
@@ -485,7 +490,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
           for={%{}}
           id="consumable-usage-form"
           phx-submit="record_usage"
-          class="flex flex-wrap gap-3 items-end"
+          class="flex flex-wrap gap-3 items-end [&>div]:mb-0"
         >
           <.input
             type="select"

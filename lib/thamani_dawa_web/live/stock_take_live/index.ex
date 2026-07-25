@@ -143,9 +143,17 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
             else: "—"}
         </:col>
         <:action :let={{_id, take}}>
-          <.link navigate={~p"/pharmacy/stock-takes/#{take.id}"} class="link">
+          <.button
+            variant="ghost"
+            navigate={~p"/pharmacy/stock-takes/#{take.id}"}
+            class="gap-2"
+          >
+            <.icon
+              name={if take.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
+              class="size-4"
+            />
             {if take.status == :draft, do: "Continue counting", else: "View"}
-          </.link>
+          </.button>
         </:action>
         <:empty_state>
           <.blank_state icon="hero-clipboard-document-list" title="No stock takes yet">

@@ -35,8 +35,9 @@ defmodule ThamaniDawa.AccountsFixtures do
 
   @doc """
   Creates a staff user via the invite/accept-invite flow, defaulting to the
-  `pharmacist` role. Pass `role:`, `organization_id:`, `invited_by_id:`, or
-  `site_id:` to override.
+  `pharmacist` role. Pass `role:`, `organization_id:`, `invited_by_id:`,
+  `site_id:` (a single site, for convenience), or `site_ids:` (a list, for
+  multi-site staff) to override.
   """
   def staff_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
@@ -45,9 +46,12 @@ defmodule ThamaniDawa.AccountsFixtures do
       end)
 
     {invited_by_id, attrs} = Map.pop(attrs, :invited_by_id, nil)
+    {site_id, attrs} = Map.pop(attrs, :site_id, nil)
 
     invite_attrs =
-      Enum.into(attrs, %{name: valid_user_name(), email: valid_user_email(), role: :pharmacist})
+      attrs
+      |> Enum.into(%{name: valid_user_name(), email: valid_user_email(), role: :pharmacist})
+      |> Map.put_new_lazy(:site_ids, fn -> if site_id, do: [site_id], else: [] end)
 
     {:ok, invited, _encoded_token} =
       Accounts.invite_user(organization_id, invited_by_id, invite_attrs)

@@ -19,39 +19,37 @@ defmodule ThamaniDawa.SitesTest do
   end
 
   describe "create_site/2" do
-    test "requires a name, site_type, gln, and address" do
+    test "requires a name, site_type, and address" do
       organization = organization_fixture()
       assert {:error, changeset} = Sites.create_site(organization.id, %{})
 
       assert %{
                name: ["can't be blank"],
                site_type: ["can't be blank"],
-               gln: ["can't be blank"],
                address: ["can't be blank"]
              } = errors_on(changeset)
     end
 
-    test "enforces globally unique gln across organizations" do
-      organization_a = organization_fixture()
-      organization_b = organization_fixture()
+    test "auto-generates a unique gln" do
+      organization = organization_fixture()
 
-      assert {:ok, _site} =
-               Sites.create_site(organization_a.id, %{
+      assert {:ok, site_a} =
+               Sites.create_site(organization.id, %{
                  name: "HQ",
                  site_type: :warehouse,
-                 gln: "0614141000005",
                  address: "Industrial Area"
                })
 
-      assert {:error, changeset} =
-               Sites.create_site(organization_b.id, %{
+      assert {:ok, site_b} =
+               Sites.create_site(organization.id, %{
                  name: "Branch",
                  site_type: :pharmacy,
-                 gln: "0614141000005",
                  address: "Kimathi Street"
                })
 
-      assert %{gln: ["has already been taken"]} = errors_on(changeset)
+      assert site_a.gln
+      assert site_b.gln
+      assert site_a.gln != site_b.gln
     end
   end
 
@@ -63,11 +61,10 @@ defmodule ThamaniDawa.SitesTest do
         Sites.create_site(organization.id, %{
           name: "HQ",
           site_type: :warehouse,
-          gln: "0614141000005",
           address: "Industrial Area"
         })
 
-      assert {:ok, found} = Sites.get_site_by_gln(organization.id, "0614141000005")
+      assert {:ok, found} = Sites.get_site_by_gln(organization.id, site.gln)
       assert found.id == site.id
     end
 
@@ -75,15 +72,14 @@ defmodule ThamaniDawa.SitesTest do
       organization_a = organization_fixture()
       organization_b = organization_fixture()
 
-      {:ok, _site} =
+      {:ok, site} =
         Sites.create_site(organization_a.id, %{
           name: "HQ",
           site_type: :warehouse,
-          gln: "0614141000005",
           address: "Industrial Area"
         })
 
-      assert {:error, :not_found} = Sites.get_site_by_gln(organization_b.id, "0614141000005")
+      assert {:error, :not_found} = Sites.get_site_by_gln(organization_b.id, site.gln)
     end
 
     test "returns :not_found for an unknown GLN" do
@@ -130,7 +126,6 @@ defmodule ThamaniDawa.SitesTest do
                Sites.create_site(organization.id, %{
                  name: "Joint Branch",
                  site_type: :pharmacy_lab,
-                 gln: "0614141000006",
                  address: "Valid Address"
                })
 
@@ -138,7 +133,6 @@ defmodule ThamaniDawa.SitesTest do
                Sites.create_site(organization.id, %{
                  name: "Pharmacy Branch",
                  site_type: :pharmacy,
-                 gln: "0614141000007",
                  address: "Valid Address"
                })
 
@@ -146,7 +140,6 @@ defmodule ThamaniDawa.SitesTest do
                Sites.create_site(organization.id, %{
                  name: "Lab Branch",
                  site_type: :lab,
-                 gln: "0614141000008",
                  address: "Valid Address"
                })
 
@@ -155,7 +148,6 @@ defmodule ThamaniDawa.SitesTest do
                Sites.create_site(organization.id, %{
                  name: "Unknown Branch",
                  site_type: :unknown_type,
-                 gln: "0614141000009",
                  address: "Valid Address"
                })
 

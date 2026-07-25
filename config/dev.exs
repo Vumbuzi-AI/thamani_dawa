@@ -92,3 +92,7 @@ config :phoenix_live_view,
 config :swoosh, :api_client, false
 
 config :thamani_dawa, ThamaniDawa.GtinLookup, api_key: System.get_env("GS1_GRP_API_KEY")
+
+config :thamani_dawa, :google_maps, api_key: System.get_env("GOOGLE_MAPS_API_KEY")
+
+config :thamani_dawa, ThamaniDawa.Gln, company_prefix: System.get_env("GS1_COMPANY_PREFIX")

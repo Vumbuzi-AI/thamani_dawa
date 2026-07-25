@@ -102,6 +102,7 @@ defmodule ThamaniDawaWeb.Layouts do
       base_path="/lab"
       nav_items={[
         {"Dashboard", "hero-squares-2x2", ~p"/lab"},
+        {"Patients", "hero-user-group", ~p"/lab/patients"},
         {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
         {"Tests", "hero-beaker", ~p"/lab/tests"},
         {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
@@ -133,10 +134,11 @@ defmodule ThamaniDawaWeb.Layouts do
       base_path="/pharmacy"
       nav_items={[
         {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
+        {"Patients", "hero-user-group", ~p"/pharmacy/patients"},
+        {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
         {"Stock", "hero-cube", ~p"/pharmacy/stock"},
         {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
         {"Stock take", "hero-clipboard-document-check", ~p"/pharmacy/stock-takes"},
-        {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
         {"Scan", "hero-qr-code", ~p"/pharmacy/scan"}
       ]}
     >
@@ -223,12 +225,16 @@ defmodule ThamaniDawaWeb.Layouts do
 
         <%!-- Brand row --%>
         <div id="sidebar-brand-row" class="flex items-center gap-3 mb-6">
-          <div
-            class="flex items-center justify-center shrink-0 font-semibold text-[13px]"
-            style="width: 44px; height: 44px; border-radius: 12px; background: var(--thamani-lime); border: 1px solid var(--thamani-accent); color: var(--thamani-forest);"
+          <a
+            href={~p"/"}
+            class="flex items-center justify-center shrink-0 rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
           >
-            TD
-          </div>
+            <img
+              src="/images/logo.png"
+              alt="Thamani Dawa"
+              class="w-11 h-11 object-cover"
+            />
+          </a>
           <div
             id="sidebar-brand-text"
             class="flex flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
@@ -252,7 +258,8 @@ defmodule ThamaniDawaWeb.Layouts do
             <% active =
               if path == @base_path,
                 do: @current_path == @base_path,
-                else: String.starts_with?(@current_path, path) %>
+                else:
+                  @current_path == path or String.starts_with?(@current_path, path <> "/") %>
             <.link
               navigate={path}
               data-tooltip={label}
@@ -315,6 +322,39 @@ defmodule ThamaniDawaWeb.Layouts do
           class="mt-auto pt-4 flex flex-col gap-3"
           style="border-top: 1px solid var(--thamani-border-nav);"
         >
+          <form
+            :if={length(@current_scope.user.sites) > 1}
+            id="site-switch-form"
+            action={~p"/switch-site"}
+            method="post"
+            class="flex flex-col gap-1"
+          >
+            <input type="hidden" name="_method" value="patch" />
+            <input type="hidden" name="return_to" value={@current_path} />
+            <label
+              for="site-switch-select"
+              class="px-3 text-[11px] font-medium uppercase tracking-wide"
+              style="color: var(--thamani-subtle);"
+            >
+              Current site
+            </label>
+            <select
+              id="site-switch-select"
+              name="site_id"
+              class="rounded-lg text-sm"
+              style="background: #FBFBFF; border: 1px solid #E8EBF3; padding: 8px 10px;"
+              onchange="this.form.requestSubmit()"
+            >
+              <option
+                :for={site <- @current_scope.user.sites}
+                value={site.id}
+                selected={site.id == @current_scope.current_site_id}
+              >
+                {site.name}
+              </option>
+            </select>
+          </form>
+
           <div
             id="sidebar-account-card"
             data-tooltip={@current_scope.user.name}
@@ -425,9 +465,9 @@ defmodule ThamaniDawaWeb.Layouts do
     """
   end
 
-  defp current_site_name(%Scope{user: %{site_id: nil}}), do: "All sites"
+  defp current_site_name(%Scope{current_site_id: nil}), do: "All sites"
 
-  defp current_site_name(%Scope{user: %{site_id: site_id}, organization_id: organization_id}) do
+  defp current_site_name(%Scope{current_site_id: site_id, organization_id: organization_id}) do
     ThamaniDawa.Sites.get_site!(organization_id, site_id).name
   rescue
     Ecto.NoResultsError -> "Unknown site"

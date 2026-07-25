@@ -6,7 +6,7 @@ defmodule ThamaniDawa.Accounts do
   """
 
   import Ecto.Query, warn: false
-  alias ThamaniDawa.Accounts.{User, UserLoginSession, UserNotifier, UserToken}
+  alias ThamaniDawa.Accounts.{Scope, User, UserLoginSession, UserNotifier, UserToken}
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
@@ -27,20 +27,32 @@ defmodule ThamaniDawa.Accounts do
     if User.valid_password?(user, password) and User.active?(user), do: user
   end
 
-  @doc "Gets a single user scoped to an organization. Raises if not found."
+  @doc "Gets a single user scoped to an organization. Raises if not found. Preloads `sites` (scoped to the organization)."
   def get_user!(organization_id, id) do
     Repo.get_by!(User, id: id, organization_id: organization_id)
+    |> Repo.preload(sites: scoped_site_query(organization_id))
   end
 
-  @doc "Lists an organization's staff, for the Team screen. Preloads `site` (scoped to the organization)."
+  @doc "Lists an organization's staff, for the Team screen. Preloads `sites` (scoped to the organization)."
   def list_users(organization_id) do
-    site_query = from s in Site, where: s.organization_id == ^organization_id
-
     Repo.all(
       from u in User,
         where: u.organization_id == ^organization_id,
-        preload: [site: ^site_query]
+        preload: [sites: ^scoped_site_query(organization_id)]
     )
+  end
+
+  @doc "Lists an organization's staff with pagination. Preloads `sites` (scoped to the organization)."
+  def list_users_paginated(organization_id, page \\ 1) do
+    from(u in User,
+      where: u.organization_id == ^organization_id,
+      preload: [sites: ^scoped_site_query(organization_id)]
+    )
+    |> Repo.paginate(page: page)
+  end
+
+  defp scoped_site_query(organization_id) do
+    from s in Site, where: s.organization_id == ^organization_id
   end
 
   @doc """
@@ -66,16 +78,23 @@ defmodule ThamaniDawa.Accounts do
   alongside it — the caller is responsible for emailing it via
   `deliver_user_invite/5`. `organization_id` and `invited_by_id` are always
   explicit arguments, never taken from `attrs`, so an admin can only invite
-  staff into their own organization; a given `site_id` is validated to
-  belong to that same organization.
+  staff into their own organization; `attrs["site_ids"]` (or `attrs[:site_ids]`)
+  is resolved to `Site`s and validated to belong to that same organization.
+  `current_site_id` defaults to the first assigned site (or `nil` for an
+  org-wide admin with no sites).
   """
   def invite_user(organization_id, invited_by_id, attrs) when is_integer(organization_id) do
+    site_ids = extract_site_ids(attrs)
+    sites = list_sites_by_ids(organization_id, site_ids)
+
     changeset =
-      %User{}
+      %User{sites: []}
       |> User.invite_changeset(attrs)
       |> Ecto.Changeset.put_change(:organization_id, organization_id)
       |> Ecto.Changeset.put_change(:invited_by_id, invited_by_id)
-      |> validate_site_in_organization(organization_id)
+      |> Ecto.Changeset.put_assoc(:sites, sites)
+      |> validate_sites_resolved(site_ids, sites)
+      |> Ecto.Changeset.put_change(:current_site_id, default_current_site_id(sites))
 
     case Repo.insert(changeset) do
       {:ok, user} ->
@@ -90,33 +109,77 @@ defmodule ThamaniDawa.Accounts do
 
   @doc """
   Updates a team member's role and site assignment. `organization_id` is
-  validated to ensure the user belongs to the same organization, and if a
-  `site_id` is provided, it's validated to belong to that organization.
+  validated to ensure the user belongs to the same organization, and
+  `attrs["site_ids"]` (or `attrs[:site_ids]`) is resolved to `Site`s and
+  validated to belong to that organization. If the user's current site is no
+  longer among their assigned sites, it's reset to the first remaining site
+  (or `nil`).
   """
   def update_user(organization_id, user_id, attrs) when is_integer(organization_id) do
-    user = get_user!(organization_id, user_id)
+    user = organization_id |> get_user!(user_id)
+    site_ids = extract_site_ids(attrs)
+    sites = list_sites_by_ids(organization_id, site_ids)
 
     changeset =
       user
       |> User.edit_changeset(attrs)
-      |> validate_site_in_organization(organization_id)
+      |> Ecto.Changeset.put_assoc(:sites, sites)
+      |> validate_sites_resolved(site_ids, sites)
+      |> maybe_reset_current_site(user, sites)
 
     Repo.update(changeset)
   end
 
-  defp validate_site_in_organization(changeset, organization_id) do
-    case Ecto.Changeset.get_change(changeset, :site_id) do
-      nil ->
-        changeset
+  defp extract_site_ids(attrs) do
+    (Map.get(attrs, :site_ids) || Map.get(attrs, "site_ids") || [])
+    |> List.wrap()
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.map(&to_site_id/1)
+    |> Enum.uniq()
+  end
 
-      site_id ->
-        query = from s in Site, where: s.id == ^site_id and s.organization_id == ^organization_id
+  defp to_site_id(id) when is_integer(id), do: id
+  defp to_site_id(id) when is_binary(id), do: String.to_integer(id)
 
-        if Repo.exists?(query) do
-          changeset
-        else
-          Ecto.Changeset.add_error(changeset, :site_id, "must belong to the same organization")
-        end
+  defp list_sites_by_ids(_organization_id, []), do: []
+
+  defp list_sites_by_ids(organization_id, site_ids) do
+    Repo.all(from s in Site, where: s.id in ^site_ids and s.organization_id == ^organization_id)
+  end
+
+  defp validate_sites_resolved(changeset, site_ids, sites) do
+    if length(sites) == length(site_ids) do
+      changeset
+    else
+      Ecto.Changeset.add_error(changeset, :sites, "must belong to the same organization")
+    end
+  end
+
+  defp default_current_site_id([]), do: nil
+  defp default_current_site_id([site | _]), do: site.id
+
+  defp maybe_reset_current_site(changeset, %User{current_site_id: current_site_id}, sites) do
+    if is_nil(current_site_id) or current_site_id in Enum.map(sites, & &1.id) do
+      changeset
+    else
+      Ecto.Changeset.put_change(changeset, :current_site_id, default_current_site_id(sites))
+    end
+  end
+
+  @doc """
+  Switches the signed-in user to one of their assigned sites (or `nil`, for
+  an org-wide admin). Rejects a site the user isn't assigned to.
+  """
+  def switch_current_site(%Scope{user: %User{} = user}, site_id) do
+    user = Repo.preload(user, :sites)
+    allowed_ids = Enum.map(user.sites, & &1.id)
+
+    if is_nil(site_id) or site_id in allowed_ids do
+      user
+      |> User.switch_site_changeset(%{current_site_id: site_id})
+      |> Repo.update()
+    else
+      {:error, :not_assigned}
     end
   end
 
@@ -187,11 +250,14 @@ defmodule ThamaniDawa.Accounts do
     token
   end
 
-  @doc "Gets the user for a given session token."
+  @doc "Gets the user for a given session token. Preloads `sites` (needed for the site switcher on every authenticated page)."
   def get_user_by_session_token(token) do
     {:ok, query} = UserToken.verify_session_token_query(token)
-    Repo.one(query)
+    query |> Repo.one() |> maybe_preload_sites()
   end
+
+  defp maybe_preload_sites(nil), do: nil
+  defp maybe_preload_sites(%User{} = user), do: Repo.preload(user, :sites)
 
   @doc "Deletes the given session token."
   def delete_user_session_token(token) do

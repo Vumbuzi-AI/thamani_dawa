@@ -35,7 +35,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
       assert html =~ ~s(id="user_name")
       assert html =~ ~s(id="user_email")
       assert html =~ ~s(id="user_role")
-      assert html =~ ~s(id="user_site_id")
+      assert html =~ ~s(id="user-site-checkboxes")
     end
 
     test "a pharmacist (non-admin) is redirected away, never sees the form", %{conn: conn} do
@@ -179,7 +179,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
             name: "New Hire",
             email: "new.hire@example.com",
             role: "pharmacist",
-            site_id: site.id
+            site_ids: [site.id]
           }
         )
         |> render_submit()

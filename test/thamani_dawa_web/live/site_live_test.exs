@@ -91,7 +91,6 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/new")
 
       assert has_element?(lv, "#site-name")
-      assert has_element?(lv, "#site-gln")
       assert has_element?(lv, "#site-address")
       assert has_element?(lv, "#site-capability")
       assert has_element?(lv, "#site-capability-pharmacy")
@@ -108,7 +107,6 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
         site: %{
           name: "Pharmacy Branch",
           site_type: :pharmacy,
-          gln: "0612345678901",
           address: "1 Test St"
         }
       )
@@ -125,7 +123,6 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
         site: %{
           name: "Lab Branch",
           site_type: :lab,
-          gln: "0612345678902",
           address: "2 Test St"
         }
       )
@@ -142,7 +139,6 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
         site: %{
           name: "Combined Branch",
           site_type: :pharmacy_lab,
-          gln: "0612345678903",
           address: "3 Test St"
         }
       )
@@ -159,7 +155,6 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
         site: %{
           name: "Warehouse Branch",
           site_type: :warehouse,
-          gln: "0612345678904",
           address: "4 Test St"
         }
       )
@@ -169,6 +164,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       site = ThamaniDawa.Repo.get_by!(ThamaniDawa.Sites.Site, name: "Warehouse Branch")
       assert site.site_type == :warehouse
+      assert site.gln
     end
 
     test "shows validation error when name is blank", %{conn: conn, admin: admin} do
@@ -180,34 +176,10 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       assert render(lv) =~ "can&#39;t be blank"
     end
-
-    test "shows an error and does not create a site with a duplicate GLN", %{
-      conn: conn,
-      admin: admin
-    } do
-      site_fixture(%{organization_id: admin.organization_id, gln: "0699999999999"})
-
-      {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
-
-      html =
-        lv
-        |> form("#site-form",
-          site: %{
-            name: "Second Branch",
-            site_type: :pharmacy,
-            gln: "0699999999999",
-            address: "5 Test St"
-          }
-        )
-        |> render_submit()
-
-      assert html =~ "has already been taken"
-      refute ThamaniDawa.Repo.get_by(ThamaniDawa.Sites.Site, name: "Second Branch")
-    end
   end
 
   describe "edit" do
-    test "persists name, address, GLN, and capability changes", %{conn: conn, admin: admin} do
+    test "persists name, address, and capability changes", %{conn: conn, admin: admin} do
       site =
         site_fixture(%{
           organization_id: admin.organization_id,
@@ -222,7 +194,6 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
         site: %{
           name: "New Name",
           address: "Updated St",
-          gln: "6291041500213",
           site_type: :lab
         }
       )
@@ -231,7 +202,6 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       html = render(lv)
       assert html =~ "New Name"
       assert html =~ "Updated St"
-      assert html =~ "6291041500213"
     end
 
     test "shows an error and does not persist an invalid edit", %{conn: conn, admin: admin} do

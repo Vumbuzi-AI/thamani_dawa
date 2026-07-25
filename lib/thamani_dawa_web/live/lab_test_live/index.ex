@@ -15,53 +15,54 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
      socket
      |> assign(:lab_test, nil)
      |> assign(:form, nil)
-     |> assign(:field_defs_json, "{}")
+     |> assign(:field_defs_rows, [])
+     |> assign(:next_field_idx, 0)
      |> assign(:field_defs_error, nil)
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
+     |> assign(:page, 1)
+     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> refresh_categories(org_id)
      |> reload_lab_tests()}
   end
 
   def handle_params(params, _url, socket) do
+    page = String.to_integer(Map.get(params, "page", "1"))
+    socket = socket |> assign(:page, page) |> reload_lab_tests()
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
   defp apply_action(socket, :new, _params) do
+    rows = field_definitions_to_rows(%{})
+
     socket
     |> assign(:lab_test, nil)
-    |> assign(:field_defs_json, "{}")
+    |> assign(:field_defs_rows, rows)
+    |> assign(:next_field_idx, length(rows))
     |> assign(:field_defs_error, nil)
-    |> assign(:use_new_category, false)
     |> reset_preset()
-    |> assign(
-      :category_form,
-      to_form(LabTestCategory.changeset(%LabTestCategory{}, %{}), as: :category)
-    )
     |> assign(:form, to_form(LabTests.change_lab_test(%LabTest{}, %{}), as: :lab_test))
   end
 
   defp apply_action(socket, :edit, %{"id" => id}) do
     org_id = socket.assigns.current_scope.organization_id
     lab_test = LabTests.get_lab_test!(org_id, id)
+    rows = field_definitions_to_rows(lab_test.field_definitions || %{})
 
     socket
     |> assign(:lab_test, lab_test)
-    |> assign(:field_defs_json, Jason.encode!(lab_test.field_definitions || %{}, pretty: true))
+    |> assign(:field_defs_rows, rows)
+    |> assign(:next_field_idx, length(rows))
     |> assign(:field_defs_error, nil)
-    |> assign(:use_new_category, false)
     |> reset_preset()
-    |> assign(
-      :category_form,
-      to_form(LabTestCategory.changeset(%LabTestCategory{}, %{}), as: :category)
-    )
     |> assign(:form, to_form(LabTests.change_lab_test(lab_test, %{}), as: :lab_test))
   end
 
   defp apply_action(socket, :index, _params) do
     socket
     |> assign(:lab_test, nil)
-    |> assign(:field_defs_json, "{}")
+    |> assign(:field_defs_rows, [])
+    |> assign(:next_field_idx, 0)
     |> assign(:field_defs_error, nil)
     |> assign(:form, nil)
     |> reset_preset()
@@ -70,15 +71,12 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   defp reset_preset(socket) do
     socket
     |> assign(:selected_preset, "")
-    |> assign(:applied_preset_json, nil)
+    |> assign(:applied_preset_defs, nil)
   end
 
-  def handle_event("toggle_new_category", _params, socket) do
-    {:noreply, assign(socket, :use_new_category, not socket.assigns.use_new_category)}
-  end
-
-  def handle_event("validate", %{"lab_test" => attrs, "field_defs_json" => json}, socket) do
-    {merged_attrs, json_error} = decode_field_defs(attrs, json)
+  def handle_event("validate", %{"lab_test" => attrs} = params, socket) do
+    rows = field_defs_rows_from_params(Map.get(params, "field_defs", %{}))
+    {merged_attrs, field_defs_error} = merge_field_defs(attrs, rows)
 
     changeset =
       (socket.assigns.lab_test || %LabTest{})
@@ -88,26 +86,36 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     {:noreply,
      socket
      |> assign(:form, to_form(changeset, as: :lab_test))
-     |> assign(:field_defs_json, json)
-     |> assign(:field_defs_error, json_error)}
+     |> assign(:field_defs_rows, rows)
+     |> assign(:field_defs_error, field_defs_error)}
   end
 
-  def handle_event("save", %{"lab_test" => attrs, "field_defs_json" => json} = params, socket) do
-    case decode_field_defs(attrs, json) do
+  def handle_event("save", %{"lab_test" => attrs} = params, socket) do
+    rows = field_defs_rows_from_params(Map.get(params, "field_defs", %{}))
+
+    case merge_field_defs(attrs, rows) do
       {merged_attrs, nil} ->
-        org_id = socket.assigns.current_scope.organization_id
-
-        case resolve_category(socket, org_id, merged_attrs, params) do
-          {:ok, attrs} ->
-            save_lab_test(socket, socket.assigns.live_action, attrs)
-
-          {:error, changeset} ->
-            {:noreply, assign(socket, :category_form, to_form(changeset, as: :category))}
-        end
+        save_lab_test(socket, socket.assigns.live_action, merged_attrs)
 
       {_attrs, error} ->
-        {:noreply, assign(socket, :field_defs_error, error)}
+        {:noreply, socket |> assign(:field_defs_rows, rows) |> assign(:field_defs_error, error)}
     end
+  end
+
+  def handle_event("add_field_row", _params, socket) do
+    idx = socket.assigns.next_field_idx
+    new_row = %{"idx" => idx, "key" => "", "type" => "number", "unit" => "", "options" => ""}
+
+    {:noreply,
+     socket
+     |> assign(:field_defs_rows, socket.assigns.field_defs_rows ++ [new_row])
+     |> assign(:next_field_idx, idx + 1)}
+  end
+
+  def handle_event("remove_field_row", %{"idx" => idx}, socket) do
+    idx = String.to_integer(idx)
+    rows = Enum.reject(socket.assigns.field_defs_rows, &(&1["idx"] == idx))
+    {:noreply, assign(socket, :field_defs_rows, rows)}
   end
 
   def handle_event("select_preset", %{"preset" => ""}, socket) do
@@ -164,17 +172,6 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
      socket |> assign(:filters, %{socket.assigns.filters | status: ""}) |> reload_lab_tests()}
   end
 
-  defp resolve_category(%{assigns: %{use_new_category: true}}, organization_id, attrs, %{
-         "category" => category_attrs
-       }) do
-    case LabTests.create_lab_test_category(organization_id, category_attrs) do
-      {:ok, category} -> {:ok, Map.put(attrs, "category_id", category.id)}
-      {:error, changeset} -> {:error, changeset}
-    end
-  end
-
-  defp resolve_category(_socket, _organization_id, attrs, _params), do: {:ok, attrs}
-
   defp apply_preset(socket, preset) do
     org_id = socket.assigns.current_scope.organization_id
 
@@ -190,13 +187,16 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
           |> LabTests.change_lab_test(%{"name" => preset.name, "category_id" => category.id})
 
         socket = assign(socket, :form, to_form(changeset, as: :lab_test))
-        new_json = Jason.encode!(preset.field_definitions, pretty: true)
+        {current_defs, _error} = build_field_definitions(socket.assigns.field_defs_rows)
 
-        if socket.assigns.field_defs_json in ["{}", socket.assigns.applied_preset_json] do
+        if current_defs in [%{}, socket.assigns.applied_preset_defs] do
+          rows = field_definitions_to_rows(preset.field_definitions)
+
           {:noreply,
            socket
-           |> assign(:field_defs_json, new_json)
-           |> assign(:applied_preset_json, new_json)
+           |> assign(:field_defs_rows, rows)
+           |> assign(:next_field_idx, length(rows))
+           |> assign(:applied_preset_defs, preset.field_definitions)
            |> assign(:field_defs_error, nil)}
         else
           {:noreply,
@@ -270,16 +270,85 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     |> assign(:categories_by_id, Map.new(categories, &{&1.id, &1}))
   end
 
-  defp decode_field_defs(attrs, json) do
-    case Jason.decode(json) do
-      {:ok, decoded} -> {Map.put(attrs, "field_definitions", decoded), nil}
-      {:error, _} -> {attrs, "must be valid JSON (e.g. {\"result\": {\"type\": \"number\"}})"}
+  defp merge_field_defs(attrs, rows) do
+    case build_field_definitions(rows) do
+      {field_definitions, nil} -> {Map.put(attrs, "field_definitions", field_definitions), nil}
+      {_field_definitions, error} -> {attrs, error}
     end
+  end
+
+  defp field_defs_rows_from_params(field_defs_params) do
+    field_defs_params
+    |> Enum.map(fn {idx, row} ->
+      %{
+        "idx" => String.to_integer(idx),
+        "key" => Map.get(row, "key", ""),
+        "type" => Map.get(row, "type", "number"),
+        "unit" => Map.get(row, "unit", ""),
+        "options" => Map.get(row, "options", "")
+      }
+    end)
+    |> Enum.sort_by(& &1["idx"])
+  end
+
+  defp build_field_definitions(rows) do
+    Enum.reduce_while(rows, {%{}, nil}, fn row, {defs, nil} ->
+      key = String.trim(row["key"] || "")
+      type = row["type"] || "number"
+      unit = String.trim(row["unit"] || "")
+      options_raw = row["options"] || ""
+
+      cond do
+        key == "" and unit == "" and String.trim(options_raw) == "" ->
+          {:cont, {defs, nil}}
+
+        key == "" ->
+          {:halt, {defs, "Give every field a name."}}
+
+        type == "select" ->
+          options =
+            options_raw
+            |> String.split(",")
+            |> Enum.map(&String.trim/1)
+            |> Enum.reject(&(&1 == ""))
+
+          if options == [] do
+            {:halt,
+             {defs, "Give \"#{key}\" at least one choice (separate choices with commas)."}}
+          else
+            {:cont, {Map.put(defs, key, %{"type" => "select", "options" => options}), nil}}
+          end
+
+        true ->
+          {:cont, {Map.put(defs, key, %{"type" => type, "unit" => unit}), nil}}
+      end
+    end)
+  end
+
+  defp field_definitions_to_rows(field_definitions) when map_size(field_definitions) == 0 do
+    [%{"idx" => 0, "key" => "", "type" => "number", "unit" => "", "options" => ""}]
+  end
+
+  defp field_definitions_to_rows(field_definitions) do
+    field_definitions
+    |> Enum.with_index()
+    |> Enum.map(fn {{key, def_}, idx} ->
+      %{
+        "idx" => idx,
+        "key" => key,
+        "type" => Map.get(def_, "type", "text"),
+        "unit" => Map.get(def_, "unit", ""),
+        "options" => def_ |> Map.get("options", []) |> Enum.join(", ")
+      }
+    end)
   end
 
   defp reload_lab_tests(socket) do
     org_id = socket.assigns.current_scope.organization_id
-    lab_tests = LabTests.list_lab_tests(org_id)
+    page = socket.assigns.page
+
+    page_result = LabTests.list_lab_tests_paginated(org_id, page)
+    lab_tests = page_result.entries
 
     filtered =
       lab_tests
@@ -287,7 +356,9 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
       |> filter_by_category(socket.assigns.filters.category)
       |> filter_by_status(socket.assigns.filters.status)
 
-    stream(socket, :lab_tests, filtered, reset: true)
+    socket
+    |> stream(:lab_tests, filtered, reset: true)
+    |> assign(:page_info, page_result)
   end
 
   defp filter_by_search(lab_tests, ""), do: lab_tests
@@ -402,28 +473,14 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
           <div class="grid grid-cols-2 gap-3 mb-3">
             <.input field={@form[:name]} label="Test name" required />
 
-            <div class="flex items-end gap-2">
-              <div class="flex-1">
-                <.input
-                  :if={not @use_new_category}
-                  field={@form[:category_id]}
-                  type="select"
-                  label="Category"
-                  options={@categories}
-                  prompt="Choose a category"
-                  required
-                />
-                <.input
-                  :if={@use_new_category}
-                  field={@category_form[:name]}
-                  label="New category name"
-                  required
-                />
-              </div>
-              <.button type="button" phx-click="toggle_new_category" class="mb-1">
-                {if @use_new_category, do: "Choose existing", else: "+ New category"}
-              </.button>
-            </div>
+            <.input
+              field={@form[:category_id]}
+              type="select"
+              label="Category"
+              options={@categories}
+              prompt="Choose a category"
+              required
+            />
           </div>
 
           <div class="grid grid-cols-2 gap-3 mb-3">
@@ -434,22 +491,82 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
           </div>
 
           <div class="mb-3">
-            <label class="block text-sm font-medium mb-1">Field definitions (JSON)</label>
-            <textarea
-              name="field_defs_json"
-              rows="6"
-              class="w-full rounded-lg border border-base-300 bg-base-100 px-3 py-2 font-mono text-xs"
-              phx-debounce="blur"
-            >{@field_defs_json}</textarea>
-            <p :if={@field_defs_error} class="mt-1 text-sm" style="color: #C21F17;">
+            <label class="block text-sm font-medium mb-1">Test results</label>
+            <p class="text-sm mb-2" style="color: var(--thamani-pewter);">
+              Add one row for each result this test reports.
+            </p>
+
+            <div class="grid grid-cols-12 gap-2 px-1 mb-1 text-xs font-medium" style="color: var(--thamani-pewter);">
+              <div class="col-span-5">Field name</div>
+              <div class="col-span-3">Type</div>
+              <div class="col-span-3">Unit or choices</div>
+            </div>
+
+            <div class="divide-y divide-base-300 border-t border-b border-base-300">
+              <div
+                :for={row <- @field_defs_rows}
+                class="grid grid-cols-12 gap-2 items-center py-2"
+              >
+                <div class="col-span-5">
+                  <.input
+                    type="text"
+                    name={"field_defs[#{row["idx"]}][key]"}
+                    value={row["key"]}
+                    placeholder="e.g. Haemoglobin"
+                    class="thamani-input"
+                  />
+                </div>
+                <div class="col-span-3">
+                  <.input
+                    type="select"
+                    name={"field_defs[#{row["idx"]}][type]"}
+                    value={row["type"]}
+                    options={[{"Number", "number"}, {"Text", "text"}, {"Multiple choice", "select"}]}
+                  />
+                </div>
+                <div class="col-span-3">
+                  <.input
+                    :if={row["type"] != "select"}
+                    type="text"
+                    name={"field_defs[#{row["idx"]}][unit]"}
+                    value={row["unit"]}
+                    placeholder="e.g. g/dL"
+                  />
+                  <.input
+                    :if={row["type"] == "select"}
+                    type="text"
+                    name={"field_defs[#{row["idx"]}][options]"}
+                    value={row["options"]}
+                    placeholder="e.g. Positive, Negative"
+                  />
+                </div>
+                <div class="col-span-1 flex justify-end">
+                  <button
+                    type="button"
+                    phx-click="remove_field_row"
+                    phx-value-idx={row["idx"]}
+                    aria-label="Remove field"
+                    style="color: var(--thamani-pewter);"
+                  >
+                    <.icon name="hero-x-mark" class="size-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <.button type="button" phx-click="add_field_row" variant="ghost" class="mt-2">
+              + Add field
+            </.button>
+
+            <p :if={@field_defs_error} class="mt-2 text-sm" style="color: #C21F17;">
               {@field_defs_error}
             </p>
             <p
               :if={!@field_defs_error && @form[:field_definitions].errors != []}
-              class="mt-1 text-sm"
+              class="mt-2 text-sm"
               style="color: #C21F17;"
             >
-              can't be blank
+              Add at least one field.
             </p>
           </div>
 
@@ -468,14 +585,27 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
           <.status_badge status={if test.is_active, do: :active, else: :inactive} />
         </:col>
         <:action :let={{_id, test}}>
-          <.link patch={~p"/lab/tests/#{test.id}/edit"} class="link">Edit</.link>
+          <.button
+            variant="ghost-edit"
+            patch={~p"/lab/tests/#{test.id}/edit"}
+            class="gap-2"
+          >
+            <.icon name="hero-pencil-square" class="size-4" />
+            Edit
+          </.button>
         </:action>
         <:action :let={{_id, test}}>
           <.button
             type="button"
             phx-click="toggle_active"
             phx-value-id={test.id}
+            class="gap-2"
+            variant={if test.is_active, do: "ghost-delete", else: "ghost"}
           >
+            <.icon
+              name={if test.is_active, do: "hero-power", else: "hero-arrow-path"}
+              class="size-4"
+            />
             {if test.is_active, do: "Deactivate", else: "Reactivate"}
           </.button>
         </:action>
@@ -494,6 +624,8 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <.pagination page={@page_info} path={~p"/lab/tests"} />
     </Layouts.lab_shell>
     """
   end

@@ -11,10 +11,14 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
      socket
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
+     |> assign(:page, 1)
+     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> reload_suppliers()}
   end
 
   def handle_params(params, _url, socket) do
+    page = String.to_integer(Map.get(params, "page", "1"))
+    socket = socket |> assign(:page, page) |> reload_suppliers()
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -116,14 +120,19 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
 
   defp reload_suppliers(socket) do
     organization_id = socket.assigns.current_scope.organization_id
-    suppliers = Suppliers.list_suppliers(organization_id)
+    page = socket.assigns.page
+
+    page_result = Suppliers.list_suppliers_paginated(organization_id, page)
+    suppliers = page_result.entries
 
     filtered =
       suppliers
       |> filter_by_search(socket.assigns.search)
       |> filter_by_status(socket.assigns.filters.status)
 
-    stream(socket, :suppliers, filtered, reset: true)
+    socket
+    |> stream(:suppliers, filtered, reset: true)
+    |> assign(:page_info, page_result)
   end
 
   defp filter_by_search(suppliers, ""), do: suppliers
@@ -212,10 +221,7 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
             <.input field={@form[:phone]} label="Phone" required />
           </div>
           <.input field={@form[:email]} type="email" label="Email" required />
-          <div class="grid grid-cols-2 gap-x-4">
-            <.input field={@form[:gln]} label="GLN" />
-            <.input field={@form[:location]} label="Location" />
-          </div>
+          <.input field={@form[:location]} label="Location" />
           <.input field={@form[:is_active]} type="checkbox" label="Active" />
           <div class="flex gap-2 mt-2">
             <.button variant="primary">Save</.button>
@@ -234,10 +240,27 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
           <.status_badge status={if supplier.is_active, do: :active, else: :inactive} />
         </:col>
         <:action :let={{_id, supplier}}>
-          <.link patch={~p"/org/suppliers/#{supplier.id}/edit"} class="link">Edit</.link>
+          <.button
+            variant="ghost-edit"
+            patch={~p"/org/suppliers/#{supplier.id}/edit"}
+            class="gap-2"
+          >
+            <.icon name="hero-pencil-square" class="size-4" />
+            Edit
+          </.button>
         </:action>
         <:action :let={{_id, supplier}}>
-          <.button type="button" phx-click="toggle_active" phx-value-id={supplier.id}>
+          <.button
+            type="button"
+            phx-click="toggle_active"
+            phx-value-id={supplier.id}
+            class="gap-2"
+            variant={if supplier.is_active, do: "ghost-delete", else: "ghost"}
+          >
+            <.icon
+              name={if supplier.is_active, do: "hero-power", else: "hero-arrow-path"}
+              class="size-4"
+            />
             {if supplier.is_active, do: "Deactivate", else: "Reactivate"}
           </.button>
         </:action>
@@ -256,6 +279,8 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <.pagination page={@page_info} path={~p"/org/suppliers"} />
     </Layouts.org_shell>
     """
   end

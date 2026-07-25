@@ -359,16 +359,17 @@ defmodule ThamaniDawa.AssociationsTest do
       user = staff_fixture(%{organization_id: org_a.id})
       site_b = site_fixture(%{organization_id: org_b.id})
 
-      # site_id normally has cross-org validation at invite time — bypass it here too,
-      # to prove the read path is defended independently of the write path.
-      user
-      |> Ecto.Changeset.change(site_id: site_b.id)
-      |> Repo.update!()
+      # user_sites normally has cross-org validation at invite/edit time — bypass it here
+      # too, to prove the read path is defended independently of the write path.
+      Repo.insert!(%ThamaniDawa.Accounts.UserSite{
+        organization_id: org_a.id,
+        user_id: user.id,
+        site_id: site_b.id
+      })
 
       [loaded] = Accounts.list_users(org_a.id)
 
-      assert loaded.site_id == site_b.id
-      assert loaded.site == nil
+      assert loaded.sites == []
     end
   end
 end

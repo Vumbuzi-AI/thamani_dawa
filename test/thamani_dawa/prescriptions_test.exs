@@ -675,6 +675,11 @@ defmodule ThamaniDawa.PrescriptionsTest do
         Prescriptions.get_prescription!(ctx.organization.id, ctx.prescription.id)
 
       assert updated_prescription.status == :completed
+
+      assert [dispense] = Prescriptions.list_batch_dispenses_for_item(ctx.organization.id, ctx.item.id)
+      assert dispense.batch.id == soon_batch.id
+      assert dispense.quantity == 10
+      assert dispense.dispensed_by_id == ctx.pharmacist.id
     end
 
     test "dispenses across multiple batches when partial fills are needed", ctx do
@@ -715,6 +720,12 @@ defmodule ThamaniDawa.PrescriptionsTest do
       # Batch 2 should be partially consumed
       updated_batch2 = Batches.get_batch!(ctx.organization.id, batch2.id)
       assert updated_batch2.remaining_quantity == 4
+
+      dispenses = Prescriptions.list_batch_dispenses_for_item(ctx.organization.id, ctx.item.id)
+      assert length(dispenses) == 2
+
+      assert Enum.find(dispenses, &(&1.batch.id == batch1.id)).quantity == 4
+      assert Enum.find(dispenses, &(&1.batch.id == batch2.id)).quantity == 6
     end
 
     test "rolls back and returns :out_of_stock if the combined batches cannot fulfill the requested quantity",
@@ -757,6 +768,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
       updated_item = Prescriptions.get_prescription_item!(ctx.organization.id, ctx.item.id)
       assert updated_item.quantity_dispensed == 0
+
+      assert Prescriptions.list_batch_dispenses_for_item(ctx.organization.id, ctx.item.id) == []
     end
 
     test "never pulls stock from another site or organization, rolling back if local stock is insufficient",

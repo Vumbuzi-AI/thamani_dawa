@@ -7,12 +7,19 @@ defmodule ThamaniDawa.Sites do
   """
 
   import Ecto.Query, warn: false
+  alias ThamaniDawa.Gln
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
   @doc "Lists an organization's sites."
   def list_sites(organization_id) do
     Repo.all(from s in Site, where: s.organization_id == ^organization_id)
+  end
+
+  @doc "Lists an organization's sites with pagination."
+  def list_sites_paginated(organization_id, page \\ 1) do
+    from(s in Site, where: s.organization_id == ^organization_id)
+    |> Repo.paginate(page: page)
   end
 
   @doc "Gets a single site scoped to an organization. Raises if not found."
@@ -41,6 +48,7 @@ defmodule ThamaniDawa.Sites do
     %Site{}
     |> Site.default_changeset(%{name: name, site_type: :pharmacy})
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> Ecto.Changeset.put_change(:gln, Gln.generate!())
     |> Repo.insert()
   end
 
@@ -49,6 +57,7 @@ defmodule ThamaniDawa.Sites do
     %Site{}
     |> Site.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> Ecto.Changeset.put_change(:gln, Gln.generate!())
     |> Repo.insert()
   end
 

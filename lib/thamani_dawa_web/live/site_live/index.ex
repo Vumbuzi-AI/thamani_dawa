@@ -11,10 +11,14 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
      socket
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
+     |> assign(:page, 1)
+     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> assign_sites()}
   end
 
   def handle_params(params, _url, socket) do
+    page = String.to_integer(Map.get(params, "page", "1"))
+    socket = socket |> assign(:page, page) |> assign_sites()
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -103,15 +107,20 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   defp assign_sites(socket) do
     organization_id = socket.assigns.current_scope.organization_id
+    page = socket.assigns.page
 
-    sites =
-      organization_id
-      |> Sites.list_sites()
+    page_result = Sites.list_sites_paginated(organization_id, page)
+    sites = page_result.entries
+
+    filtered =
+      sites
       |> filter_by_search(socket.assigns.search)
       |> filter_by_type(socket.assigns.filters.site_type)
       |> filter_by_status(socket.assigns.filters.status)
 
-    assign(socket, :sites, sites)
+    socket
+    |> assign(:sites, filtered)
+    |> assign(:page_info, page_result)
   end
 
   defp filter_by_search(sites, ""), do: sites
@@ -223,13 +232,24 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             Fields marked <span class="text-error">*</span> are required.
           </p>
           <.input id="site-name" field={@form[:name]} label="Name" required />
-          <.input id="site-gln" field={@form[:gln]} label="GLN" required />
           <.input id="site-address" field={@form[:address]} label="Address" required />
           <.capability_select field={@form[:site_type]} options={capability_options()} required />
           <.input id="site-active" field={@form[:is_active]} type="checkbox" label="Active" />
           <div class="grid grid-cols-2 gap-2">
             <.input id="site-lat" field={@form[:lat]} label="Latitude" type="number" step="any" />
             <.input id="site-long" field={@form[:long]} label="Longitude" type="number" step="any" />
+          </div>
+          <div
+            id="site-map"
+            phx-hook="GoogleMaps"
+            phx-update="ignore"
+            data-lat-input="site-lat"
+            data-lng-input="site-long"
+            data-address-input="site-address"
+            data-lat={@form[:lat].value}
+            data-lng={@form[:long].value}
+            class="w-full h-64 rounded-lg mt-2"
+          >
           </div>
           <div class="flex gap-2 mt-2">
             <.button variant="primary">Save</.button>
@@ -249,7 +269,14 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
         <:col :let={site} label="Address">{site.address}</:col>
         <:col :let={site} label="Active">{if site.is_active, do: "Yes", else: "No"}</:col>
         <:action :let={site}>
-          <.link patch={~p"/org/sites/#{site.id}/edit"} class="link">Edit</.link>
+          <.button
+            variant="ghost-edit"
+            patch={~p"/org/sites/#{site.id}/edit"}
+            class="gap-2"
+          >
+            <.icon name="hero-pencil-square" class="size-4" />
+            Edit
+          </.button>
         </:action>
         <:empty_state>
           <.blank_state
@@ -266,6 +293,8 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <.pagination page={@page_info} path={~p"/org/sites"} />
     </Layouts.org_shell>
     """
   end

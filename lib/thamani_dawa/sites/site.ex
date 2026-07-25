@@ -15,7 +15,7 @@ defmodule ThamaniDawa.Sites.Site do
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
 
-    has_many :users, ThamaniDawa.Accounts.User
+    many_to_many :users, ThamaniDawa.Accounts.User, join_through: ThamaniDawa.Accounts.UserSite
     has_many :batches, ThamaniDawa.Batches.Batch
     has_many :patient_visits, ThamaniDawa.PatientVisits.PatientVisit
     has_many :lab_orders, ThamaniDawa.LabOrders.LabOrder
@@ -29,12 +29,12 @@ defmodule ThamaniDawa.Sites.Site do
   @doc false
   def changeset(site, attrs) do
     site
-    |> cast(attrs, [:name, :site_type, :gln, :address, :lat, :long, :is_active])
-    |> validate_required([:name, :site_type, :gln, :address])
+    |> cast(attrs, [:name, :site_type, :address, :lat, :long, :is_active])
+    |> validate_required([:name, :site_type, :address])
     |> unique_constraint(:gln)
   end
 
-  @doc "Minimal changeset for system-created sites (signup default site) — no gln/address yet."
+  @doc "Minimal changeset for system-created sites (signup default site) — no address yet."
   def default_changeset(site, attrs) do
     site
     |> cast(attrs, [:name, :site_type, :lat, :long, :is_active])

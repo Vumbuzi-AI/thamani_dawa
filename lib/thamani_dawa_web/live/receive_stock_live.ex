@@ -272,7 +272,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
           phx-submit="receive_via_gs1"
           class="flex flex-col gap-3 sm:flex-row sm:items-end"
         >
-          <div class="flex-1">
+          <div class="flex-1 [&>div]:mb-0">
             <.input
               field={@scan_form[:raw_gs1]}
               label="GS1 barcode"
@@ -280,7 +280,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
               autocomplete="off"
             />
           </div>
-          <.button variant="primary" class="sm:mb-2" phx-disable-with="Receiving…">
+          <.button variant="primary" phx-disable-with="Receiving…">
             Scan and receive
           </.button>
         </.form>
@@ -314,9 +314,14 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
           {supplier_name(@suppliers_by_id, batch.supplier_id)}
         </:col>
         <:action :let={{_id, batch}}>
-          <.link patch={~p"/pharmacy/receive-stock/#{batch.id}/receive"} class="link">
+          <.button
+            variant="ghost"
+            patch={~p"/pharmacy/receive-stock/#{batch.id}/receive"}
+            class="gap-2"
+          >
+            <.icon name="hero-arrow-down-tray" class="size-4" />
             Receive
-          </.link>
+          </.button>
         </:action>
         <:empty_state>
           <.blank_state icon="hero-check-circle" title="Nothing awaiting receipt">

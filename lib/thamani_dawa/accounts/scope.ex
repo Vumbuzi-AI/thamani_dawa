@@ -8,11 +8,15 @@ defmodule ThamaniDawa.Accounts.Scope do
 
   alias ThamaniDawa.Accounts.User
 
-  defstruct user: nil, organization_id: nil
+  defstruct user: nil, organization_id: nil, current_site_id: nil
 
   @doc "Builds a scope for the given user, nil if there is no user."
   def for_user(%User{} = user) do
-    %__MODULE__{user: user, organization_id: user.organization_id}
+    %__MODULE__{
+      user: user,
+      organization_id: user.organization_id,
+      current_site_id: user.current_site_id
+    }
   end
 
   def for_user(nil), do: nil

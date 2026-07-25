@@ -29,6 +29,8 @@ defmodule ThamaniDawaWeb.Router do
     get "/login", SessionController, :new
     post "/login", SessionController, :create
     delete "/logout", SessionController, :delete
+
+    patch "/switch-site", SiteSwitchController, :update
   end
 
   scope "/", ThamaniDawaWeb do
@@ -55,6 +57,8 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/products/:id/batches/new", ProductLive.Show, :new_batch
       live "/org/products/:id/edit", ProductLive.Index, :edit
 
+      live "/org/batches/:id", BatchLive.Show, :show
+
       live "/org/suppliers", SupplierLive.Index, :index
       live "/org/suppliers/new", SupplierLive.Index, :new
       live "/org/suppliers/:id/edit", SupplierLive.Index, :edit
@@ -64,6 +68,8 @@ defmodule ThamaniDawaWeb.Router do
       live "/pharmacy", PharmacyDashboardLive, :index
       live "/pharmacy/scan", PharmacyScanLive, :index
       live "/pharmacy/stock", PharmacyStockLive, :index
+      live "/pharmacy/stock/products/:id", PharmacyStockProductLive, :show
+      live "/pharmacy/stock/batches/:id", PharmacyStockBatchLive, :show
 
       live "/pharmacy/receive-stock", ReceiveStockLive, :index
       live "/pharmacy/receive-stock/:id/receive", ReceiveStockLive, :receive
@@ -76,15 +82,24 @@ defmodule ThamaniDawaWeb.Router do
       live "/pharmacy/prescriptions/new", PrescriptionLive.Index, :new
       live "/pharmacy/prescriptions/:id", PrescriptionLive.Show, :show
       live "/pharmacy/prescriptions/:id/payments/new", PrescriptionLive.Show, :new_payment
+
+      live "/pharmacy/patients", PatientLive.Index, :index
+      live "/pharmacy/patients/new", PatientLive.Index, :new
+      live "/pharmacy/patients/:id", PatientLive.Show, :show
     end
 
     live_session :lab, on_mount: [{ThamaniDawaWeb.UserAuth, :require_lab_access}] do
       live "/lab", LabDashboardLive, :index
       live "/lab/scan", LabScanLive, :index
 
+      live "/lab/patients", LabPatientLive.Index, :index
+      live "/lab/patients/new", LabPatientLive.Index, :new
+      live "/lab/patients/:id", LabPatientLive.Show, :show
+
       live "/lab/orders", LabOrderLive.Index, :index
       live "/lab/orders/new", LabOrderLive.Index, :new
       live "/lab/orders/:id", LabOrderLive.Show, :show
+      live "/lab/orders/:id/tests/new", LabOrderLive.Show, :add_test
       live "/lab/orders/:id/results/:result_id/edit", LabOrderLive.Show, :edit_result
       live "/lab/orders/:id/payments/new", LabOrderLive.Show, :new_payment
 

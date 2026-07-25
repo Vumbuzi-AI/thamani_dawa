@@ -17,8 +17,10 @@ defmodule ThamaniDawa.Accounts.User do
     field :last_logged_out_at, :utc_datetime
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
-    belongs_to :site, ThamaniDawa.Sites.Site
+    belongs_to :current_site, ThamaniDawa.Sites.Site
     belongs_to :invited_by, __MODULE__
+
+    many_to_many :sites, ThamaniDawa.Sites.Site, join_through: ThamaniDawa.Accounts.UserSite
 
     has_many :invited_users, __MODULE__, foreign_key: :invited_by_id
     has_many :user_tokens, ThamaniDawa.Accounts.UserToken
@@ -59,13 +61,15 @@ defmodule ThamaniDawa.Accounts.User do
   Changeset for an admin inviting a staff member (§2.3.2). `organization_id`
   and `invited_by_id` are set explicitly by `ThamaniDawa.Accounts.invite_user/3`
   — never taken from `attrs` — so an admin can only invite staff into their
-  own organization. `role` and `site_id` are the admin's own choice on the
-  Team screen, so they're cast from `attrs` here. The invited user has no
+  own organization. `role` is the admin's own choice on the Team screen, so
+  it's cast from `attrs` here. Site assignment is a many-to-many
+  (`:sites`/`UserSite`) handled separately by `invite_user/3` via
+  `put_assoc/3`, since it can't be cast directly. The invited user has no
   password until they accept the invite; see `accept_invite_changeset/2`.
   """
   def invite_changeset(user, attrs) do
     user
-    |> cast(attrs, [:name, :email, :role, :site_id])
+    |> cast(attrs, [:name, :email, :role])
     |> validate_required([:name, :role])
     |> validate_email()
   end
@@ -77,11 +81,16 @@ defmodule ThamaniDawa.Accounts.User do
     |> validate_password(opts)
   end
 
-  @doc "Changeset for an admin editing a team member's role and site assignment."
+  @doc "Changeset for an admin editing a team member's role and site assignment. Site assignment (`:sites`) is handled separately by `update_user/3` via `put_assoc/3`."
   def edit_changeset(user, attrs) do
     user
-    |> cast(attrs, [:role, :site_id])
+    |> cast(attrs, [:role])
     |> validate_required([:role])
+  end
+
+  @doc "Changeset for a user switching which of their assigned sites they're currently operating at."
+  def switch_site_changeset(user, attrs) do
+    cast(user, attrs, [:current_site_id])
   end
 
   @doc "Changeset for a user setting or changing their 4-digit counter-side PIN (§7)."

@@ -15,6 +15,8 @@ defmodule ThamaniDawa.Prescriptions.PrescriptionItem do
     belongs_to :prescription, ThamaniDawa.Prescriptions.Prescription
     belongs_to :product, ThamaniDawa.Products.Product
 
+    has_many :batch_dispenses, ThamaniDawa.Prescriptions.BatchDispense
+
     timestamps(type: :utc_datetime)
   end
 

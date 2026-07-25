@@ -188,7 +188,11 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
       </.modal>
 
       <.header class="mt-6">Batches</.header>
-      <.table id="batches" rows={@streams.batches}>
+      <.table
+        id="batches"
+        rows={@streams.batches}
+        row_click={fn {_id, batch} -> JS.navigate(~p"/org/batches/#{batch.id}") end}
+      >
         <:col :let={{_id, batch}} label="Site">{batch.site.name}</:col>
         <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
         <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>

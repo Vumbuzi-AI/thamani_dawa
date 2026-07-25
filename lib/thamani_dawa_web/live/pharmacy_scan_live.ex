@@ -155,7 +155,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
           phx-submit="decode"
           class="flex flex-col gap-3 sm:flex-row sm:items-end"
         >
-          <div class="flex-1">
+          <div class="flex-1 [&>div]:mb-0">
             <.input
               field={@scan_form[:gtin]}
               label="GTIN or barcode"
@@ -163,7 +163,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
               autocomplete="off"
             />
           </div>
-          <.button id="scan-submit" variant="primary" class="sm:mb-0.5">
+          <.button id="scan-submit" variant="primary">
             <.icon name="hero-magnifying-glass" class="mr-1 size-4" /> Look up stock
           </.button>
         </.form>

@@ -13,6 +13,15 @@ defmodule ThamaniDawa.Patients do
     Repo.all(from p in Patient, where: p.organization_id == ^organization_id)
   end
 
+  @doc "Lists an organization's patients with pagination, ordered by name."
+  def list_patients_paginated(organization_id, page \\ 1) do
+    from(p in Patient,
+      where: p.organization_id == ^organization_id,
+      order_by: [asc: p.full_name]
+    )
+    |> Repo.paginate(page: page)
+  end
+
   @doc "Gets a single patient scoped to an organization. Raises if not found."
   def get_patient!(organization_id, id) do
     Repo.get_by!(Patient, id: id, organization_id: organization_id)

@@ -7,21 +7,56 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
   @default_filters %{category: "", is_otc: false, is_dangerous_drug: false}
 
+  @units [
+    {"KILOGRAM", "KGM"},
+    {"GRAM", "GRM"},
+    {"MILIGRAM", "MGM"},
+    {"LITRE", "LTR"},
+    {"MILLILITRE", "MLT"},
+    {"CENTILITRE", "CTL"},
+    {"METRE", "MTR"},
+    {"CENTIMETER", "CMT"},
+    {"MILLIMETRE", "MLT"},
+    {"INCH", "INH"},
+    {"TABLET", "U2"},
+    {"PIECE", "H87"},
+    {"AMPERE", "AMP"},
+    {"PACK", "PK"},
+    {"PACKET", "PA"},
+    {"DOZEN", "DZN"},
+    {"PAIR", "PR"},
+    {"PAGE", "ZP"},
+    {"KILOWATT", "KWT"},
+    {"WATT", "WTT"},
+    {"VOLT", "VLT"},
+    {"KILOVOLT", "KVT"},
+    {"TON", "LTN"},
+    {"CAPSULE", "AV"},
+    {"OUNCE", "ONZ"},
+    {"ROLL", "RO"}
+  ]
+
   def mount(_params, _session, socket) do
     {:ok,
      socket
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
+     |> assign(:units, @units)
+     |> assign(:page, 1)
+     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> reload_products()}
   end
 
   def handle_params(params, _url, socket) do
+    page = String.to_integer(Map.get(params, "page", "1"))
+    socket = socket |> assign(:page, page) |> reload_products()
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
   defp apply_action(socket, :new, _params) do
     socket
     |> assign(form: to_form(Product.changeset(%Product{}, %{}), as: :product), product: nil)
+    |> assign(:back_path, ~p"/org/products")
     |> reset_gtin_lookup()
     |> assign(:gtin_step, :scan)
   end
@@ -32,6 +67,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
     socket
     |> assign(form: to_form(Product.changeset(product, %{}), as: :product), product: product)
+    |> assign(:back_path, ~p"/org/products/#{id}")
     |> reset_gtin_lookup()
     |> assign(:gtin_step, :form)
   end
@@ -39,6 +75,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   defp apply_action(socket, :index, _params) do
     socket
     |> assign(form: nil, product: nil)
+    |> assign(:back_path, ~p"/org/products")
     |> reset_gtin_lookup()
     |> assign(:gtin_step, :scan)
   end
@@ -96,6 +133,10 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     {:noreply, assign(socket, :gtin_search, gtin_search)}
   end
 
+  def handle_event("skip_gtin", _params, socket) do
+    {:noreply, assign(socket, :gtin_step, :form)}
+  end
+
   def handle_event("scan_gtin", %{"gtin_search" => raw_gtin}, socket) do
     case String.trim(raw_gtin) do
       "" ->
@@ -109,7 +150,13 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
              |> assign(:gtin_step, :form)
              |> assign(:gtin_lookup, :searching)
              |> put_scanned_gtin(normalized)
-             |> start_async(:gtin_lookup, fn -> GtinLookup.lookup(trimmed) end)}
+             |> start_async(:gtin_lookup, fn ->
+               with {:ok, result} <- GtinLookup.lookup(trimmed) do
+                 {:ok, result}
+               else
+                 {:error, _reason} = err -> err
+               end
+             end)}
 
           {:error, :invalid_gtin} ->
             {:noreply, assign(socket, :gtin_lookup, {:error, :invalid_gtin})}
@@ -164,11 +211,13 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   defp save_product(socket, :edit, attrs) do
     case Products.update_product(socket.assigns.product, attrs) do
       {:ok, product} ->
+        back_path = socket.assigns[:back_path] || ~p"/org/products"
+
         {:noreply,
          socket
          |> put_flash(:info, "Product updated.")
          |> stream_insert(:products, product)
-         |> push_patch(to: ~p"/org/products")}
+         |> push_patch(to: back_path)}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :product))}
@@ -177,7 +226,10 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
   defp reload_products(socket) do
     organization_id = socket.assigns.current_scope.organization_id
-    products = Products.list_products(organization_id)
+    page = socket.assigns.page
+
+    page_result = Products.list_products_paginated(organization_id, page)
+    products = page_result.entries
 
     filtered =
       products
@@ -186,8 +238,15 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
       |> filter_by_flag(:is_otc, socket.assigns.filters.is_otc)
       |> filter_by_flag(:is_dangerous_drug, socket.assigns.filters.is_dangerous_drug)
 
+    all_products = Products.list_products(organization_id)
+
+    categories =
+      all_products
+      |> distinct_categories()
+
     socket
-    |> assign(:categories, distinct_categories(products))
+    |> assign(:categories, categories)
+    |> assign(:page_info, page_result)
     |> stream(:products, filtered, reset: true)
   end
 
@@ -337,93 +396,231 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         :if={@live_action in [:new, :edit]}
         id="product-modal"
         show
-        on_cancel={JS.patch(~p"/org/products")}
+        on_cancel={JS.patch(@back_path || ~p"/org/products")}
       >
-        <h2 class="font-semibold mb-2">
-          {if @live_action == :new, do: "Add a product", else: "Edit product"}
-        </h2>
-
-        <div :if={@gtin_step == :scan} id="gtin-scan-step">
-          <p class="text-sm mb-2" style="color: var(--thamani-pewter);">
-            Scan or enter the product's GTIN to prefill what it can find, or continue without
-            one to enter everything manually.
-          </p>
-          <form
-            id="gtin-scan-form"
-            phx-submit="scan_gtin"
-            phx-change="gtin_search_change"
-            class="flex gap-2"
-          >
-            <input
-              type="text"
-              name="gtin_search"
-              value={@gtin_search}
-              placeholder="Scan or type a GTIN"
-              class="thamani-input flex-1"
-              autofocus
-            />
-            <.button type="submit" variant="primary" phx-disable-with="Looking up...">
-              Continue
-            </.button>
-          </form>
-          <p
-            :if={@gtin_lookup == {:error, :invalid_gtin}}
-            class="mt-2 text-sm"
-            style="color: #C21F17;"
-          >
-            is not a valid GTIN
-          </p>
-          <div class="flex justify-end mt-4">
-            <.button type="button" patch={~p"/org/products"}>Cancel</.button>
+        <div class="space-y-6">
+          <div>
+            <h2 class="text-xl font-semibold">
+              {if @live_action == :new, do: "Add a product", else: "Edit product"}
+            </h2>
           </div>
-        </div>
 
-        <div :if={@gtin_step == :form}>
-          <div
-            :if={@live_action == :new and @gtin_lookup != :idle}
-            class="mb-4 rounded-box border border-thamani-stone p-3"
-          >
-            <p :if={@gtin_lookup == :searching} class="text-sm flex items-center gap-1">
-              <.icon name="hero-arrow-path" class="size-3 motion-safe:animate-spin" /> Looking up...
-            </p>
-            <% message = gtin_lookup_message(@gtin_lookup) %>
-            <p
-              :if={message}
-              class="text-sm"
+          <div :if={@gtin_step == :scan} id="gtin-scan-step" class="space-y-4">
+            <div class="bg-slate-50 rounded-lg p-4">
+              <p class="text-sm text-slate-600 mb-4">
+                <span class="font-medium">Scan or enter the product's GTIN</span>
+                to automatically fill in product details, or skip to enter everything manually.
+              </p>
+            </div>
+
+            <form
+              id="gtin-scan-form"
+              phx-submit="scan_gtin"
+              phx-change="gtin_search_change"
+              class="space-y-3"
+            >
+              <div class="relative">
+                <input
+                  type="text"
+                  name="gtin_search"
+                  value={@gtin_search}
+                  placeholder="Scan or type a GTIN (e.g., 5901234123457)"
+                  class="thamani-input w-full pl-4 pr-12"
+                  autofocus
+                  inputmode="numeric"
+                />
+                <div
+                  :if={@gtin_search != "" and @gtin_lookup != :searching}
+                  class="absolute right-3 top-1/2 -translate-y-1/2"
+                >
+                  <div
+                    :if={@gtin_lookup == {:error, :invalid_gtin}}
+                    class="text-red-500"
+                  >
+                    <.icon name="hero-x-circle" class="size-5" />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                :if={@gtin_lookup == {:error, :invalid_gtin}}
+                class="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg"
+              >
+                <.icon
+                  name="hero-exclamation-circle"
+                  class="size-5 text-red-600 mt-0.5 flex-shrink-0"
+                />
+                <p class="text-sm text-red-700">
+                  Please enter a valid GTIN. GTINs are numeric codes with 8, 12, 13, or 14 digits.
+                </p>
+              </div>
+
+              <div class="flex gap-3">
+                <.button
+                  type="submit"
+                  variant="primary"
+                  class="flex-1"
+                  disabled={@gtin_search == ""}
+                  phx-disable-with="Looking up..."
+                >
+                  Look Up
+                </.button>
+                <.button
+                  type="button"
+                  phx-click="skip_gtin"
+                  variant="ghost"
+                >
+                  Skip
+                </.button>
+              </div>
+            </form>
+          </div>
+
+          <div :if={@gtin_step == :form} class="space-y-4">
+            <div
+              :if={@live_action == :new and @gtin_lookup != :idle}
+              class="rounded-lg border p-3"
               style={
-                if elem(message, 0) == :info,
-                  do: "color: var(--thamani-forest);",
-                  else: "color: var(--thamani-pewter);"
+                case @gtin_lookup do
+                  :searching -> "background-color: #F0F9FF; border-color: #E0F2FE;"
+                  {:found, _} -> "background-color: #F0FDF4; border-color: #BBF7D0;"
+                  {:error, _} -> "background-color: #FEF2F2; border-color: #FECACA;"
+                  _ -> ""
+                end
               }
             >
-              {elem(message, 1)}
-            </p>
+              <div :if={@gtin_lookup == :searching} class="flex items-center gap-2">
+                <.icon name="hero-arrow-path" class="size-4 text-blue-600 motion-safe:animate-spin" />
+                <p class="text-sm text-blue-700 font-medium">Looking up GTIN details...</p>
+              </div>
+              <% message = gtin_lookup_message(@gtin_lookup) %>
+              <div
+                :if={message}
+                class="flex items-start gap-2"
+              >
+                <div>
+                  <.icon
+                    name={
+                      case elem(message, 0) do
+                        :info -> "hero-check-circle"
+                        :warning -> "hero-exclamation-triangle"
+                      end
+                    }
+                    class={
+                      if elem(message, 0) == :info,
+                        do: "size-5 text-green-600 mt-0.5",
+                        else: "size-5 text-amber-600 mt-0.5"
+                    }
+                  />
+                </div>
+                <p
+                  class="text-sm"
+                  style={
+                    if elem(message, 0) == :info,
+                      do: "color: #16a34a; font-weight: 500;",
+                      else: "color: #92400e;"
+                  }
+                >
+                  {elem(message, 1)}
+                </p>
+              </div>
+            </div>
+
+            <.form
+              for={@form}
+              id="product-form"
+              phx-submit="save"
+              phx-change="validate"
+              class="space-y-4"
+            >
+              <div class="grid grid-cols-2 gap-4">
+                <.input field={@form[:price]} type="number" label="Price" min="0" required />
+                <.input
+                  field={@form[:uom]}
+                  type="select"
+                  label="Unit of measure"
+                  options={@units}
+                  prompt="Select a unit"
+                  required
+                />
+              </div>
+
+              <div class="space-y-2">
+                <label class="block">
+                  <span class="text-sm font-medium text-slate-700">
+                    Product Name <span class="text-red-500">*</span>
+                  </span>
+                  <span class="text-xs text-slate-500 ml-1">(at least generic or brand name)</span>
+                </label>
+                <div class="grid grid-cols-2 gap-4">
+                  <.input
+                    field={@form[:generic_name]}
+                    label="Generic name"
+                    placeholder="e.g., Ibuprofen"
+                  />
+                  <.input field={@form[:brand_name]} label="Brand name" placeholder="e.g., Advil" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <.input
+                  field={@form[:category]}
+                  type="select"
+                  label="Category"
+                  options={@categories}
+                  prompt="Select a category"
+                />
+                <.input
+                  field={@form[:manufacturer]}
+                  label="Manufacturer"
+                  placeholder="e.g., ABC Pharma"
+                />
+              </div>
+
+              <.input field={@form[:gtin]} label="GTIN" required placeholder="e.g., 5901234123457" />
+
+              <div class="space-y-3 bg-slate-50 p-3 rounded-lg">
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="product[is_otc]"
+                    value="true"
+                    checked={@form[:is_otc].value}
+                    class="w-4 h-4 rounded border-slate-300"
+                  />
+                  <span class="text-sm font-medium text-slate-700">Over-the-counter</span>
+                </label>
+                <label class="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="product[is_dangerous_drug]"
+                    value="true"
+                    checked={@form[:is_dangerous_drug].value}
+                    class="w-4 h-4 rounded border-slate-300"
+                  />
+                  <span class="text-sm font-medium text-slate-700">Dangerous drug</span>
+                </label>
+              </div>
+
+              <.input field={@form[:reorder_level]} type="number" label="Reorder level" min="0" />
+
+              <label class="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  name="product[is_active]"
+                  value="true"
+                  checked={@form[:is_active].value}
+                  class="w-4 h-4 rounded border-slate-300"
+                />
+                <span class="text-sm font-medium text-slate-700">Active</span>
+              </label>
+
+              <div class="flex gap-3 pt-4 border-t">
+                <.button variant="primary" class="flex-1">Save Product</.button>
+                <.button type="button" patch={@back_path || ~p"/org/products"} variant="ghost">Cancel</.button>
+              </div>
+            </.form>
           </div>
-
-          <.form for={@form} id="product-form" phx-submit="save" phx-change="validate">
-            <.input field={@form[:price]} type="number" label="Price" min="0" required />
-
-            <p class="text-xs mb-1" style="color: var(--thamani-pewter);">
-              Name <span style="color: #C21F17;">*</span>
-              — at least one of generic or brand name is required
-            </p>
-            <div class="grid grid-cols-2 gap-x-4">
-              <.input field={@form[:generic_name]} label="Generic name" />
-              <.input field={@form[:brand_name]} label="Brand name" />
-            </div>
-            <.input field={@form[:category]} label="Category" />
-            <.input field={@form[:manufacturer]} label="Manufacturer" />
-            <.input field={@form[:uom]} label="Unit of measure" required />
-            <.input field={@form[:gtin]} label="GTIN" required />
-            <.input field={@form[:is_otc]} type="checkbox" label="Over-the-counter" />
-            <.input field={@form[:is_dangerous_drug]} type="checkbox" label="Dangerous drug" />
-            <.input field={@form[:reorder_level]} type="number" label="Reorder level" />
-            <.input field={@form[:is_active]} type="checkbox" label="Active" />
-            <div class="flex gap-2 mt-2">
-              <.button variant="primary">Save</.button>
-              <.button patch={~p"/org/products"}>Cancel</.button>
-            </div>
-          </.form>
         </div>
       </.modal>
 
@@ -439,10 +636,27 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           <.status_badge status={if product.is_active, do: :active, else: :inactive} />
         </:col>
         <:action :let={{_id, product}}>
-          <.link patch={~p"/org/products/#{product.id}/edit"} class="link">Edit</.link>
+          <.button
+            variant="ghost-edit"
+            patch={~p"/org/products/#{product.id}/edit"}
+            class="gap-2"
+          >
+            <.icon name="hero-pencil-square" class="size-4" />
+            Edit
+          </.button>
         </:action>
         <:action :let={{_id, product}}>
-          <.button type="button" phx-click="toggle_active" phx-value-id={product.id}>
+          <.button
+            type="button"
+            phx-click="toggle_active"
+            phx-value-id={product.id}
+            class="gap-2"
+            variant={if product.is_active, do: "ghost-delete", else: "ghost"}
+          >
+            <.icon
+              name={if product.is_active, do: "hero-power", else: "hero-arrow-path"}
+              class="size-4"
+            />
             {if product.is_active, do: "Deactivate", else: "Reactivate"}
           </.button>
         </:action>
@@ -461,6 +675,8 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <.pagination page={@page_info} path={~p"/org/products"} />
     </Layouts.org_shell>
     """
   end

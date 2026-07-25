@@ -23,6 +23,15 @@ defmodule ThamaniDawa.StockTakes do
     )
   end
 
+  @doc "Lists all stock takes for an organization with pagination."
+  def list_stock_takes_paginated(organization_id, page \\ 1) do
+    from(st in StockTake,
+      where: st.organization_id == ^organization_id,
+      order_by: [desc: st.inserted_at]
+    )
+    |> Repo.paginate(page: page)
+  end
+
   @doc "Lists stock takes for a specific site within an organization."
   def list_stock_takes_for_site(organization_id, site_id) do
     Repo.all(

@@ -28,7 +28,7 @@
       </p>
 
       <div
-        class="flex flex-col sm:flex-row items-start gap-4"
+        class="flex flex-col sm:flex-row items-start gap-4 mb-10"
         style="animation: hero-in 550ms cubic-bezier(0.23,1,0.32,1) both; animation-delay: 180ms;"
       >
         <%= if @current_scope do %>
@@ -56,6 +56,25 @@
           See how it works →
         </a>
       </div>
+
+      <%!-- Quick highlight stats --%>
+      <div
+        class="flex flex-wrap items-center gap-x-10 gap-y-4"
+        style="animation: hero-in 550ms cubic-bezier(0.23,1,0.32,1) both; animation-delay: 220ms; border-top: 1px solid #E6EDF8; padding-top: 24px;"
+      >
+        <div class="flex flex-col">
+          <span style="font-size: 22px; font-weight: 350; color: #373896; letter-spacing: -0.4px; font-variant-numeric: tabular-nums;">500+</span>
+          <span style="font-size: 13px; color: #666666;">Products catalogued</span>
+        </div>
+        <div class="flex flex-col">
+          <span style="font-size: 22px; font-weight: 350; color: #373896; letter-spacing: -0.4px; font-variant-numeric: tabular-nums;">50+</span>
+          <span style="font-size: 13px; color: #666666;">Active sites</span>
+        </div>
+        <div class="flex flex-col">
+          <span style="font-size: 22px; font-weight: 350; color: #373896; letter-spacing: -0.4px;">100%</span>
+          <span style="font-size: 13px; color: #666666;">GS1 compliant</span>
+        </div>
+      </div>
     </div>
 
     <%!-- Right: image card --%>
@@ -68,9 +87,9 @@
         style="background: #373896; border-radius: 32px; min-height: 480px; position: relative;"
       >
         <img
-          src="/images/thamanidawa-heroo.png"
+          src="/images/thamanidawa-hero.png"
           alt="ThamaniDawa pharmacy management platform"
-          class="absolute inset-0 w-full h-full object-contain"
+          class="absolute inset-0 w-full h-full object-cover"
         />
       </div>
     </div>

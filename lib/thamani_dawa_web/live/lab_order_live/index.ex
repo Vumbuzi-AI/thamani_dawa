@@ -415,7 +415,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                   name={"tests[#{id}][lab_test_id]"}
                   label="Test"
                   value={nil}
-                  options={Enum.map(@lab_tests, &{&1.name, &1.id})}
+                  options={Enum.map(@lab_tests, &{"#{&1.name} — KES #{&1.price}", &1.id})}
                   prompt="Choose a test"
                 />
                 <.input

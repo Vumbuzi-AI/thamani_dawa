@@ -7,6 +7,25 @@ import Config
 # any compile-time configuration in here, as it won't be applied.
 # The block below contains prod specific runtime configuration.
 
+# Load local secrets from a .env file (dev/test only — never committed).
+# Production should set real environment variables on the host/platform.
+if config_env() in [:dev, :test] do
+  env_path = Path.join(File.cwd!(), ".env")
+
+  if File.exists?(env_path) do
+    env_path
+    |> File.read!()
+    |> String.split("\n", trim: true)
+    |> Enum.reject(&String.starts_with?(&1, "#"))
+    |> Enum.each(fn line ->
+      case String.split(line, "=", parts: 2) do
+        [key, value] -> System.put_env(String.trim(key), String.trim(value))
+        _ -> :ok
+      end
+    end)
+  end
+end
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server
@@ -21,6 +40,10 @@ if System.get_env("PHX_SERVER") do
 end
 
 config :thamani_dawa, ThamaniDawa.GtinLookup, api_key: System.get_env("GS1_GRP_API_KEY")
+
+config :thamani_dawa, :google_maps, api_key: System.get_env("GOOGLE_MAPS_API_KEY")
+
+config :thamani_dawa, ThamaniDawa.Gln, company_prefix: System.get_env("GS1_COMPANY_PREFIX")
 
 config :thamani_dawa, ThamaniDawaWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]

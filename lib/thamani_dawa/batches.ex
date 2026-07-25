@@ -18,6 +18,40 @@ defmodule ThamaniDawa.Batches do
     Repo.all(from b in Batch, where: b.organization_id == ^organization_id)
   end
 
+  @doc """
+  Lists all batches for an organization, one page at a time. When `site_ids`
+  is given, restricts to batches at those sites — for staff assigned to a
+  subset of the organization's sites; `nil` (the default) means org-wide.
+  """
+  def list_batches_paginated(organization_id, page \\ 1, site_ids \\ nil) do
+    from(b in Batch, where: b.organization_id == ^organization_id)
+    |> filter_by_site_ids(site_ids)
+    |> Repo.paginate(page: page)
+  end
+
+  @doc """
+  Batch count and total remaining stock for each of the given product ids —
+  the per-product roll-up shown when stock is browsed product-first rather
+  than batch-first. When `site_ids` is given, restricts the roll-up to
+  batches at those sites; `nil` (the default) means org-wide.
+  """
+  def stock_summary_by_product(organization_id, product_ids, site_ids \\ nil) do
+    from(b in Batch,
+      where: b.organization_id == ^organization_id,
+      where: b.product_id in ^product_ids,
+      group_by: b.product_id,
+      select:
+        {b.product_id,
+         %{batch_count: count(b.id), total_remaining: coalesce(sum(b.remaining_quantity), 0)}}
+    )
+    |> filter_by_site_ids(site_ids)
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  defp filter_by_site_ids(query, nil), do: query
+  defp filter_by_site_ids(query, site_ids), do: where(query, [b], b.site_id in ^site_ids)
+
   @doc "Lists batches dispatched to a site but not yet received by staff."
   def list_pending_batches(organization_id) do
     Repo.all(
@@ -163,18 +197,32 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc """
-  Gets a single batch scoped to an organization, preloaded with `product`,
-  `site`, and `supplier` (each scoped to the same organization) — for
-  review-panel-style displays. Raises if not found.
+  Gets a single batch scoped to an organization, preloaded with everything a
+  traceability page needs — identity (`product`, `site`, `supplier`,
+  `approver`) plus every event that has touched its stock (prescription
+  dispenses, lab consumable usage, stock-take adjustments), each scoped to
+  the same organization. Raises if not found.
   """
   def get_batch_with_details!(organization_id, id) do
     product_query = from p in Product, where: p.organization_id == ^organization_id
     site_query = from s in Site, where: s.organization_id == ^organization_id
     supplier_query = from s in Supplier, where: s.organization_id == ^organization_id
+    user_query = from u in User, where: u.organization_id == ^organization_id
 
     Batch
     |> Repo.get_by!(id: id, organization_id: organization_id)
-    |> Repo.preload(product: product_query, site: site_query, supplier: supplier_query)
+    |> Repo.preload(
+      product: product_query,
+      site: site_query,
+      supplier: supplier_query,
+      approver: user_query,
+      prescription_batch_dispenses: [
+        dispensed_by: user_query,
+        prescription_item: [prescription: [patient_visit: :patient]]
+      ],
+      lab_consumable_usages: [used_by: user_query, lab_order: [patient_visit: :patient]],
+      stock_take_items: [stock_take: [:finalized_by], counted_by: user_query]
+    )
   end
 
   @doc """
@@ -264,6 +312,43 @@ defmodule ThamaniDawa.Batches do
         lock: "FOR UPDATE"
 
     Repo.all(query)
+  end
+
+  @doc """
+  Previews which batches `quantity` units would be drawn from, in FEFO
+  order, without locking or mutating anything — for display purposes
+  (e.g. showing a pharmacist which batch(es) dispensing will draw from).
+
+  Unlike `fefo_batches/3`, this does not require a transaction and its
+  result isn't authoritative: concurrent dispenses can change batch
+  availability between this preview and the actual `dispense_item/4` call.
+
+  Returns a list of `%{batch: batch, quantity: n}`, stopping once
+  `quantity` is fully allocated. The last entry may take less than a
+  batch's full `remaining_quantity` if that's all that's needed.
+  """
+  def preview_fefo_allocation(organization_id, site_id, product_id, quantity)
+      when is_integer(quantity) and quantity > 0 do
+    query =
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: b.product_id == ^product_id,
+        where: b.remaining_quantity > 0,
+        where: not is_nil(b.approver_id),
+        order_by: [asc: b.expiry_date, asc: b.id]
+
+    query
+    |> Repo.all()
+    |> allocate_preview(quantity)
+  end
+
+  defp allocate_preview([], _quantity_remaining), do: []
+  defp allocate_preview(_batches, quantity_remaining) when quantity_remaining <= 0, do: []
+
+  defp allocate_preview([batch | rest], quantity_remaining) do
+    take = min(batch.remaining_quantity, quantity_remaining)
+    [%{batch: batch, quantity: take} | allocate_preview(rest, quantity_remaining - take)]
   end
 
   @doc """

@@ -116,7 +116,7 @@
    ============================================================ */
 
 .internal-app {
-  font-weight: 400;
+  font-weight: 500;
   font-synthesis: none;
   font-kerning: normal;
   font-optical-sizing: auto;
@@ -125,11 +125,11 @@
 }
 
 .internal-app .font-medium {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .internal-app :where(.font-semibold, .font-bold, .font-extrabold, .font-black) {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* ============================================================

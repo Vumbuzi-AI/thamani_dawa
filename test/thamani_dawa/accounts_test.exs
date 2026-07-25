@@ -79,10 +79,12 @@ defmodule ThamaniDawa.AccountsTest do
                  name: "New Hire",
                  email: valid_user_email(),
                  role: :pharmacist,
-                 site_id: site.id
+                 site_ids: [site.id]
                })
 
-      assert user.site_id == site.id
+      user = Repo.preload(user, :sites)
+      assert Enum.map(user.sites, & &1.id) == [site.id]
+      assert user.current_site_id == site.id
     end
 
     test "rejects a home site that belongs to a different organization" do
@@ -94,10 +96,10 @@ defmodule ThamaniDawa.AccountsTest do
                  name: "New Hire",
                  email: valid_user_email(),
                  role: :pharmacist,
-                 site_id: other_org_site.id
+                 site_ids: [other_org_site.id]
                })
 
-      assert %{site_id: ["must belong to the same organization"]} = errors_on(changeset)
+      assert %{sites: ["must belong to the same organization"]} = errors_on(changeset)
     end
 
     test "rejects a site_id that does not exist at all" do
@@ -108,10 +110,10 @@ defmodule ThamaniDawa.AccountsTest do
                  name: "New Hire",
                  email: valid_user_email(),
                  role: :pharmacist,
-                 site_id: 999_999
+                 site_ids: [999_999]
                })
 
-      assert %{site_id: ["must belong to the same organization"]} = errors_on(changeset)
+      assert %{sites: ["must belong to the same organization"]} = errors_on(changeset)
     end
 
     test "requires a role" do

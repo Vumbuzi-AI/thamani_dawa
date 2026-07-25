@@ -144,8 +144,14 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     organization_id = socket.assigns.current_scope.organization_id
 
     case LabOrders.create_lab_order_result(organization_id, socket.assigns.lab_order.id, attrs) do
-      {:ok, _result} -> {:noreply, load_lab_order(socket, socket.assigns.lab_order.id)}
-      {:error, _changeset} -> {:noreply, put_flash(socket, :error, "Couldn't add that test.")}
+      {:ok, _result} ->
+        {:noreply,
+         socket
+         |> load_lab_order(socket.assigns.lab_order.id)
+         |> push_patch(to: ~p"/lab/orders/#{socket.assigns.lab_order.id}")}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Couldn't add that test.")}
     end
   end
 
@@ -187,13 +193,28 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
   defp current_value(result, key), do: get_in(result.results, [key, "value"])
 
+  defp input_type(%{"type" => "select"}), do: "select"
   defp input_type(%{"type" => "number"}), do: "number"
   defp input_type(_), do: "text"
 
-  defp field_label(key, %{"unit" => unit}) when is_binary(unit) and unit != "",
-    do: "#{key} (#{unit})"
+  defp field_options(%{"type" => "select", "options" => options}) when is_list(options),
+    do: options
 
-  defp field_label(key, _definition), do: key
+  defp field_options(_), do: nil
+
+  defp field_label(key, %{"unit" => unit}) when is_binary(unit) and unit != "",
+    do: "#{Phoenix.Naming.humanize(key)} (#{unit})"
+
+  defp field_label(key, _definition), do: Phoenix.Naming.humanize(key)
+
+  defp total_price(results) do
+    Enum.reduce(results, Decimal.new(0), fn result, acc ->
+      case result.lab_test do
+        %{price: %Decimal{} = price} -> Decimal.add(acc, price)
+        _ -> acc
+      end
+    end)
+  end
 
   defp format_date(nil), do: "—"
   defp format_date(%Date{} = date), do: Calendar.strftime(date, "%d %b %Y")
@@ -302,6 +323,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
           Lab order #{@lab_order.id} · {Phoenix.Naming.humanize(@lab_order.urgency || "routine")}
         </:subtitle>
         <:actions>
+          <.button patch={~p"/lab/orders/#{@lab_order.id}/tests/new"} class="gap-2">
+            <.icon name="hero-plus" class="size-4" /> Add test
+          </.button>
           <.button
             :if={not @lab_order.has_paid}
             variant="primary"
@@ -324,6 +348,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               style="color: #9AA3B5;"
             > · {Phoenix.Naming.humanize(@lab_order.payment_type)}</span>
           </.field>
+          <.field label="Total">KES {total_price(@results)}</.field>
           <.field :if={@lab_order.is_referral} label="Referring facility">
             {@lab_order.referring_facility || "—"}
           </.field>
@@ -345,7 +370,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         class="rounded-2xl p-8 text-center text-sm"
         style="background: #F8FAFC; border: 1px dashed #C7CFE0; color: #687083;"
       >
-        No tests on this order yet. Add one below to begin.
+        No tests on this order yet. Use "Add test" above to begin.
       </div>
 
       <div class="space-y-4">
@@ -357,6 +382,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
           <div class="flex items-start justify-between gap-4">
             <h3 class="text-base font-semibold" style="color: #1F2430;">
               {test_name(result)}
+              <span class="ml-2 font-normal text-sm" style="color: #9AA3B5;">
+                KES {result.lab_test && result.lab_test.price}
+              </span>
             </h3>
             <.status_pill kind={:result} status={result.status} />
           </div>
@@ -451,36 +479,35 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         </article>
       </div>
 
-      <section class="rounded-2xl p-6 mt-8" style="background: #E6EDF8;">
-        <h2 class="text-base font-medium mb-4" style="color: #373896;">Add a test</h2>
-        <.form
-          for={%{}}
-          id="add-test-form"
-          phx-submit="add_result"
-          class="flex flex-col sm:flex-row sm:items-end gap-3 [&_div]:mb-0"
-        >
-          <div class="w-full sm:w-64">
-            <.input
-              type="select"
-              name="lab_test_id"
-              label="Test"
-              value={nil}
-              options={Enum.map(@lab_tests, &{&1.name, &1.id})}
-              prompt="Choose a test"
-            />
+      <.modal
+        :if={@live_action == :add_test}
+        id="add-test-modal"
+        show
+        on_cancel={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
+      >
+        <h2 class="mb-4 font-semibold text-slate-900">Add a test</h2>
+        <.form for={%{}} id="add-test-form" phx-submit="add_result">
+          <.input
+            type="select"
+            name="lab_test_id"
+            label="Test"
+            value={nil}
+            options={Enum.map(@lab_tests, &{"#{&1.name} — KES #{&1.price}", &1.id})}
+            prompt="Choose a test"
+          />
+          <.input
+            type="select"
+            name="sample_type"
+            label="Sample type"
+            value={:blood}
+            options={@sample_types}
+          />
+          <div class="mt-4 flex gap-2">
+            <.button variant="primary">Add test</.button>
+            <.button type="button" patch={~p"/lab/orders/#{@lab_order.id}"}>Cancel</.button>
           </div>
-          <div class="w-full sm:w-44">
-            <.input
-              type="select"
-              name="sample_type"
-              label="Sample type"
-              value={:blood}
-              options={@sample_types}
-            />
-          </div>
-          <.button variant="primary" class="w-full sm:w-auto">Add test</.button>
         </.form>
-      </section>
+      </.modal>
 
       <.modal
         :if={@live_action == :edit_result && @editing_result}
@@ -488,7 +515,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         show
         on_cancel={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
       >
-        <.header>Enter results — {@editing_lab_test.name}</.header>
+        <h2 class="mb-4 font-semibold text-slate-900">Enter results — {@editing_lab_test.name}</h2>
 
         <.form for={%{}} id="result-entry-form" phx-submit="save_result">
           <div class="flex flex-col gap-4">
@@ -498,6 +525,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               name={"values[#{key}]"}
               label={field_label(key, definition)}
               value={current_value(@editing_result, key)}
+              options={field_options(definition)}
             />
           </div>
           <.button variant="primary" class="mt-4">Save results</.button>

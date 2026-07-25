@@ -179,7 +179,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
             id="add-batch-form"
             class="flex flex-col gap-3 sm:flex-row sm:items-end"
           >
-            <div class="flex-1">
+            <div class="flex-1 [&>div]:mb-0">
               <.input
                 type="select"
                 name="batch_id"
@@ -191,7 +191,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
                 prompt="Choose a received batch"
               />
             </div>
-            <.button variant="primary" class="sm:mb-2" phx-disable-with="Adding…">
+            <.button variant="primary" phx-disable-with="Adding…">
               Add batch
             </.button>
           </form>
@@ -274,7 +274,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
                     class="flex items-end gap-3"
                   >
                     <input type="hidden" name="item_id" value={item.id} />
-                    <div>
+                    <div class="[&>div]:mb-0">
                       <.input
                         id={"counted-#{item.id}"}
                         type="number"

@@ -14,6 +14,12 @@ defmodule ThamaniDawa.Products do
     Repo.all(from p in Product, where: p.organization_id == ^organization_id)
   end
 
+  @doc "Lists an organization's products with pagination."
+  def list_products_paginated(organization_id, page \\ 1) do
+    from(p in Product, where: p.organization_id == ^organization_id)
+    |> Repo.paginate(page: page)
+  end
+
   @doc "Lists products that have active, approved batches at a site."
   def list_active_products_for_site(organization_id, site_id) do
     Repo.all(
@@ -26,6 +32,33 @@ defmodule ThamaniDawa.Products do
         where: not is_nil(b.approver_id),
         where: b.remaining_quantity > 0,
         distinct: p.id
+    )
+  end
+
+  @doc """
+  Lists products with active, approved batches at a site, each annotated
+  with its `stock` — the total `remaining_quantity` across those batches —
+  so the prescriber can see what's actually available at their site.
+  """
+  def list_active_products_with_stock_for_site(organization_id, site_id) do
+    Repo.all(
+      from p in Product,
+        join: b in ThamaniDawa.Batches.Batch,
+        on: b.product_id == p.id,
+        where: p.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: not is_nil(b.received_at),
+        where: not is_nil(b.approver_id),
+        where: b.remaining_quantity > 0,
+        group_by: p.id,
+        order_by: p.generic_name,
+        select: %{
+          id: p.id,
+          generic_name: p.generic_name,
+          brand_name: p.brand_name,
+          price: p.price,
+          stock: sum(b.remaining_quantity)
+        }
     )
   end
 

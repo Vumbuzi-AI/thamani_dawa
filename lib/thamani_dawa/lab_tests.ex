@@ -19,6 +19,17 @@ defmodule ThamaniDawa.LabTests do
     )
   end
 
+  @doc "Lists an organization's lab tests with pagination, preloaded with `category` (scoped to the organization)."
+  def list_lab_tests_paginated(organization_id, page \\ 1) do
+    category_query = from c in LabTestCategory, where: c.organization_id == ^organization_id
+
+    from(t in LabTest,
+      where: t.organization_id == ^organization_id,
+      preload: [category: ^category_query]
+    )
+    |> Repo.paginate(page: page)
+  end
+
   @doc "Gets a single lab test scoped to an organization. Raises if not found."
   def get_lab_test!(organization_id, id) do
     Repo.get_by!(LabTest, id: id, organization_id: organization_id)

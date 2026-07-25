@@ -15,10 +15,19 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
      socket
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
+     |> assign(:page, 1)
+     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> assign_prescriptions()}
   end
 
-  def handle_params(_params, _url, socket) do
+  def handle_params(params, _url, socket) do
+    page = String.to_integer(Map.get(params, "page", "1"))
+
+    socket =
+      socket
+      |> assign(:page, page)
+      |> assign_prescriptions()
+
     {:noreply, apply_action(socket, socket.assigns.live_action)}
   end
 
@@ -30,7 +39,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
 
     products =
       if site_id do
-        ThamaniDawa.Products.list_active_products_for_site(organization_id, site_id)
+        ThamaniDawa.Products.list_active_products_with_stock_for_site(organization_id, site_id)
       else
         []
       end
@@ -195,7 +204,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     assign(
       socket,
       :products,
-      ThamaniDawa.Products.list_active_products_for_site(
+      ThamaniDawa.Products.list_active_products_with_stock_for_site(
         organization_id,
         String.to_integer(site_id)
       )
@@ -260,17 +269,22 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
 
   defp assign_prescriptions(socket) do
     organization_id = socket.assigns.current_scope.organization_id
+    page = socket.assigns.page
 
-    prescriptions =
-      organization_id
-      |> Prescriptions.list_prescriptions()
+    page_result = Prescriptions.list_prescriptions_paginated(organization_id, page)
+    prescriptions = page_result.entries
+
+    filtered =
+      prescriptions
       |> SiteScoping.for_current_site(socket.assigns.current_scope)
       |> filter_by_search(socket.assigns.search)
       |> filter_by_status(socket.assigns.filters.status)
       |> filter_by_payment_type(socket.assigns.filters.payment_type)
       |> filter_by_paid(socket.assigns.filters.paid)
 
-    assign(socket, :prescriptions, prescriptions)
+    socket
+    |> assign(:prescriptions, filtered)
+    |> assign(:page_info, page_result)
   end
 
   defp filter_by_search(prescriptions, ""), do: prescriptions
@@ -399,34 +413,14 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           <section class="overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow">
             <div class="flex flex-col gap-3 border-b border-thamani-stone bg-thamani-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 class="text-base font-semibold text-thamani-forest">1. Patient</h3>
-              <div class="inline-flex rounded-lg border border-thamani-stone bg-thamani-snow p-1">
-                <a
-                  id="existing-patient-mode"
-                  role="button"
-                  tabindex="0"
-                  class={[
-                    "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    if(not @use_new_patient,
-                      do: "bg-thamani-lime text-thamani-forest",
-                      else: "text-thamani-pewter hover:text-thamani-forest"
-                    )
-                  ]}
-                  phx-click="toggle_patient_mode"
-                >Existing Patient</a>
-                <a
-                  id="new-patient-mode"
-                  role="button"
-                  tabindex="0"
-                  class={[
-                    "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                    if(@use_new_patient,
-                      do: "bg-thamani-lime text-thamani-forest",
-                      else: "text-thamani-pewter hover:text-thamani-forest"
-                    )
-                  ]}
-                  phx-click="toggle_patient_mode"
-                >New Patient</a>
-              </div>
+              <.tab_group>
+                <:tab id="existing-patient-mode" active={not @use_new_patient} phx_click="toggle_patient_mode">
+                  Existing Patient
+                </:tab>
+                <:tab id="new-patient-mode" active={@use_new_patient} phx_click="toggle_patient_mode">
+                  New Patient
+                </:tab>
+              </.tab_group>
             </div>
             <div class="p-4 sm:p-5">
               <div :if={not @use_new_patient}>
@@ -475,16 +469,21 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
               <.inputs_for :let={item_form} field={@header_form[:items]}>
                 <% is_editing = MapSet.member?(@editing_items, item_form.index) %>
                 <div class={[
-                  "rounded-lg border p-4",
+                  "rounded-xl border p-4 transition-colors",
                   if(is_editing,
-                    do: "border-thamani-accent/40 bg-thamani-canvas",
+                    do: "border-thamani-accent/50 bg-thamani-canvas shadow-sm",
                     else: "border-thamani-stone bg-thamani-snow"
                   )
                 ]}>
                   <div class={"flex justify-between items-center #{if is_editing, do: "mb-4"}"}>
-                    <h4 class="font-medium text-sm text-base-content/70">
-                      Item {item_form.index + 1}
-                    </h4>
+                    <div class="flex items-center gap-2">
+                      <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-thamani-lime text-xs font-semibold text-thamani-forest">
+                        {item_form.index + 1}
+                      </span>
+                      <h4 class="font-medium text-sm text-thamani-forest">
+                        Item {item_form.index + 1}
+                      </h4>
+                    </div>
                     <div class="flex items-center gap-2">
                       <%= if is_editing do %>
                         <% can_collapse =
@@ -527,8 +526,13 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                   </div>
 
                   <%= if is_editing do %>
-                    <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
-                      <div class="md:col-span-2">
+                    <% selected_product_id = Ecto.Changeset.get_field(item_form.source, :product_id) %>
+                    <% selected_product = Enum.find(@products, &(&1.id == selected_product_id)) %>
+                    <% qty_value = Ecto.Changeset.get_field(item_form.source, :quantity_prescribed) %>
+                    <% over_stock? =
+                      selected_product && qty_value && qty_value > selected_product.stock %>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-6">
+                      <div class="md:col-span-3">
                         <.input
                           field={item_form[:product_id]}
                           type="select"
@@ -536,13 +540,23 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                           options={
                             Enum.map(
                               @products,
-                              &{"#{&1.generic_name}#{if &1.brand_name, do: " (" <> &1.brand_name <> ")"}",
+                              &{"#{&1.generic_name}#{if &1.brand_name, do: " (" <> &1.brand_name <> ")"} — KES #{&1.price} — #{&1.stock} in stock",
                                &1.id}
                             )
                           }
                           prompt="Select product..."
                           required
                         />
+                        <p :if={selected_product} class="mt-1.5 flex items-center gap-3 text-xs font-medium text-thamani-pewter">
+                          <span class="flex items-center gap-1">
+                            <.icon name="hero-cube" class="size-3.5" />
+                            {selected_product.stock} unit{if selected_product.stock != 1, do: "s"} in stock
+                          </span>
+                          <span class="flex items-center gap-1">
+                            <.icon name="hero-banknotes" class="size-3.5" />
+                            KES {selected_product.price} per unit
+                          </span>
+                        </p>
                       </div>
                       <div class="md:col-span-1">
                         <.input
@@ -552,6 +566,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                           required
                           min="1"
                         />
+                        <p :if={over_stock?} class="mt-1.5 flex items-center gap-1 text-xs font-medium text-thamani-error">
+                          <.icon name="hero-exclamation-triangle" class="size-3.5" />
+                          Exceeds stock ({selected_product.stock})
+                        </p>
                       </div>
                       <div class="md:col-span-1">
                         <.input
@@ -569,21 +587,23 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                           min="1"
                         />
                       </div>
-                      <div class="md:col-span-1">
-                        <.input
-                          field={item_form[:route_of_administration]}
-                          type="text"
-                          label="Route"
-                          placeholder="e.g. Oral"
-                        />
-                      </div>
-                      <div class="md:col-span-6">
-                        <.input
-                          field={item_form[:dosage_instructions]}
-                          type="text"
-                          label="Instructions"
-                          placeholder="e.g. Take after meals"
-                        />
+                      <div class="md:col-span-6 md:grid md:grid-cols-6 md:gap-4">
+                        <div class="md:col-span-1">
+                          <.input
+                            field={item_form[:route_of_administration]}
+                            type="text"
+                            label="Route"
+                            placeholder="e.g. Oral"
+                          />
+                        </div>
+                        <div class="md:col-span-5">
+                          <.input
+                            field={item_form[:dosage_instructions]}
+                            type="text"
+                            label="Instructions"
+                            placeholder="e.g. Take after meals"
+                          />
+                        </div>
                       </div>
                     </div>
                   <% else %>
@@ -616,6 +636,16 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                           Qty: {qty || "-"} {if freq && freq != "", do: " | #{freq}"} {if days,
                             do: " | #{days} days"}
                         </div>
+                      </div>
+                      <div :if={product} class="flex items-center gap-3 text-xs font-medium text-thamani-pewter">
+                        <span class="flex items-center gap-1">
+                          <.icon name="hero-cube" class="size-3.5" />
+                          {product.stock} in stock
+                        </span>
+                        <span class="flex items-center gap-1">
+                          <.icon name="hero-banknotes" class="size-3.5" />
+                          KES {product.price}
+                        </span>
                       </div>
                     </div>
                   <% end %>
@@ -728,6 +758,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <.pagination page={@page_info} path={~p"/pharmacy/prescriptions"} />
     </Layouts.pharmacy_shell>
     """
   end

@@ -362,15 +362,18 @@ defmodule ThamaniDawaWeb.PageComponents do
         class="max-w-5xl mx-auto flex items-center justify-between px-4 sm:px-6 h-[64px] pointer-events-auto shadow-sm"
         style="background: var(--thamani-snow); border: 1.5px solid var(--thamani-stone); border-radius: 1000px;"
       >
-        <%!-- Left side: Avatar + Brand --%>
-        <div class="flex items-center gap-4">
+        <%!-- Left side: Logo + Brand --%>
+        <div class="flex items-center gap-3">
           <a
-            href={dashboard_path(@current_scope)}
-            class="flex items-center justify-center w-[34px] h-[34px] rounded-full transition-transform hover:scale-105 active:scale-95"
-            style="background: var(--thamani-stone); color: var(--thamani-forest);"
-            aria-label="Go to Dashboard"
+            href="/"
+            class="flex items-center justify-center rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
+            aria-label="Thamani Dawa Home"
           >
-            <.icon name="hero-user-solid" class="w-[20px] h-[20px]" />
+            <img
+              src="/images/logo.png"
+              alt="Thamani Dawa Logo"
+              class="w-[40px] h-[40px] object-cover"
+            />
           </a>
           <a
             href="/"
@@ -396,11 +399,19 @@ defmodule ThamaniDawaWeb.PageComponents do
         </nav>
 
         <%!-- Right: Actions --%>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 sm:gap-4">
           <%= if @current_scope do %>
+            <div
+              class="flex items-center justify-center w-[36px] h-[36px] rounded-full font-semibold text-sm transition-transform hover:scale-105"
+              style="background: var(--thamani-forest); color: var(--thamani-snow);"
+              title={@current_scope.user.name}
+            >
+              {String.at(@current_scope.user.name || "U", 0)}
+            </div>
             <.thamani_btn
               variant="primary"
               href={dashboard_path(@current_scope)}
+              class="whitespace-nowrap"
               style="padding: 8px 20px; font-size: 14px;"
             >
               Dashboard
@@ -408,20 +419,26 @@ defmodule ThamaniDawaWeb.PageComponents do
             <.link
               href="/logout"
               method="delete"
-              class="whitespace-nowrap"
-              style="font-size: 14px; font-weight: 500; color: var(--thamani-pewter); text-decoration: none; margin-left: 8px;"
+              class="whitespace-nowrap hidden sm:inline"
+              style="font-size: 14px; font-weight: 500; color: var(--thamani-pewter); text-decoration: none;"
             >
               Log out
             </.link>
           <% else %>
             <.thamani_btn
-              variant="ghost_inv"
+              variant="ghost"
               href="/login"
-              style="padding: 8px 20px; font-size: 14px; border-color: var(--thamani-stone);"
+              class="whitespace-nowrap"
+              style="padding: 8px 18px; font-size: 14px;"
             >
               Log in
             </.thamani_btn>
-            <.thamani_btn variant="primary" href="/signup" style="padding: 8px 20px; font-size: 14px;">
+            <.thamani_btn
+              variant="primary"
+              href="/signup"
+              class="whitespace-nowrap"
+              style="padding: 8px 20px; font-size: 14px;"
+            >
               Sign up
             </.thamani_btn>
           <% end %>

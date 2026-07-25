@@ -15,8 +15,7 @@ defmodule ThamaniDawaWeb.SupplierLiveTest do
       supplier =
         supplier_fixture(%{
           organization_id: admin.organization_id,
-          name: "Acme Distributors",
-          gln: "6160002000048"
+          name: "Acme Distributors"
         })
 
       {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/suppliers")
@@ -68,7 +67,6 @@ defmodule ThamaniDawaWeb.SupplierLiveTest do
           contact: "Jane Doe",
           phone: "+254700000000",
           email: "jane@newsupplier.test",
-          gln: "6160002000048",
           location: "Nairobi"
         }
       )

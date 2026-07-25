@@ -14,26 +14,35 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
      |> assign(:editing_user, nil)
+     |> assign(:page, 1)
+     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> assign_lists()}
   end
 
   def handle_params(params, _url, socket) do
-    {form, user} =
+    page = String.to_integer(Map.get(params, "page", "1"))
+    socket = socket |> assign(:page, page) |> assign_lists()
+
+    {form, user, checked_site_ids} =
       case socket.assigns.live_action do
         :new ->
-          {to_form(User.invite_changeset(%User{}, %{}), as: :user), nil}
+          {to_form(User.invite_changeset(%User{}, %{}), as: :user), nil, []}
 
         :edit ->
           user_id = String.to_integer(params["id"])
           organization_id = socket.assigns.current_scope.organization_id
           user = Accounts.get_user!(organization_id, user_id)
-          {to_form(User.edit_changeset(user, %{}), as: :user), user}
+          {to_form(User.edit_changeset(user, %{}), as: :user), user, Enum.map(user.sites, & &1.id)}
 
         _ ->
-          {nil, nil}
+          {nil, nil, []}
       end
 
-    {:noreply, socket |> assign(:form, form) |> assign(:editing_user, user)}
+    {:noreply,
+     socket
+     |> assign(:form, form)
+     |> assign(:editing_user, user)
+     |> assign(:checked_site_ids, checked_site_ids)}
   end
 
   def handle_event("save", %{"user" => attrs}, socket) do
@@ -108,21 +117,25 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
   defp assign_lists(socket) do
     organization_id = socket.assigns.current_scope.organization_id
+    page = socket.assigns.page
     sites = Sites.list_sites(organization_id)
     sites_by_id = Map.new(sites, &{&1.id, &1})
 
-    users =
-      organization_id
-      |> Accounts.list_users()
+    page_result = Accounts.list_users_paginated(organization_id, page)
+    users = page_result.entries
+
+    filtered =
+      users
       |> filter_by_search(socket.assigns.search)
       |> filter_by_role(socket.assigns.filters.role)
       |> filter_by_site(socket.assigns.filters.site_id)
       |> filter_by_status(socket.assigns.filters.status)
 
     socket
-    |> assign(:users, users)
+    |> assign(:users, filtered)
     |> assign(:sites, sites)
     |> assign(:sites_by_id, sites_by_id)
+    |> assign(:page_info, page_result)
     |> assign_new(:organization, fn -> Organizations.get_organization!(organization_id) end)
   end
 
@@ -146,7 +159,10 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   end
 
   defp filter_by_site(users, ""), do: users
-  defp filter_by_site(users, site_id), do: Enum.filter(users, &(to_string(&1.site_id) == site_id))
+
+  defp filter_by_site(users, site_id) do
+    Enum.filter(users, fn user -> Enum.any?(user.sites, &(to_string(&1.id) == site_id)) end)
+  end
 
   defp filter_by_status(users, ""), do: users
   defp filter_by_status(users, "invited"), do: Enum.filter(users, &(status(&1) == :invited))
@@ -176,6 +192,34 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       nil -> "—"
       site -> site.name
     end
+  end
+
+  defp sites_summary([]), do: "—"
+  defp sites_summary(sites), do: Enum.map_join(sites, ", ", & &1.name)
+
+  attr :sites, :list, required: true
+  attr :checked_site_ids, :list, required: true
+
+  defp site_checkboxes(assigns) do
+    ~H"""
+    <div id="user-site-checkboxes">
+      <label class="block text-sm font-medium mb-1">Sites</label>
+      <input type="hidden" name="user[site_ids][]" value="" />
+      <div class="flex flex-col gap-1">
+        <label :for={site <- @sites} class="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            id={"user_site_ids_#{site.id}"}
+            name="user[site_ids][]"
+            value={site.id}
+            checked={site.id in @checked_site_ids}
+          />
+          {site.name}
+        </label>
+      </div>
+      <p class="text-xs text-gray-500 mt-1">Leave all unchecked for org-wide (admin) access.</p>
+    </div>
+    """
   end
 
   defp status(%User{hashed_password: nil}), do: :invited
@@ -250,13 +294,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             prompt="Choose a role"
             required
           />
-          <.input
-            field={@form[:site_id]}
-            type="select"
-            label="Home site"
-            options={Enum.map(@sites, &{&1.name, &1.id})}
-            prompt="No home site (org-wide)"
-          />
+          <.site_checkboxes sites={@sites} checked_site_ids={@checked_site_ids} />
           <div class="flex gap-2 mt-2">
             <.button variant="primary">Send invite</.button>
             <.button patch={~p"/org/team"}>Cancel</.button>
@@ -284,13 +322,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
               prompt="Choose a role"
               required
             />
-            <.input
-              field={@form[:site_id]}
-              type="select"
-              label="Home site"
-              options={Enum.map(@sites, &{&1.name, &1.id})}
-              prompt="No home site (org-wide)"
-            />
+            <.site_checkboxes sites={@sites} checked_site_ids={@checked_site_ids} />
           </div>
           <div class="flex gap-2 mt-4">
             <.button variant="primary">Save changes</.button>
@@ -303,14 +335,19 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         <:col :let={user} label="Name">{user.name}</:col>
         <:col :let={user} label="Email">{user.email}</:col>
         <:col :let={user} label="Role">{Phoenix.Naming.humanize(user.role)}</:col>
-        <:col :let={user} label="Home site">{site_name(@sites_by_id, user.site_id)}</:col>
+        <:col :let={user} label="Sites">{sites_summary(user.sites)}</:col>
         <:col :let={user} label="Status">
           <.status_badge status={status(user)} />
         </:col>
         <:action :let={user}>
-          <.link patch={~p"/org/team/#{user.id}/edit"} class="text-xs font-semibold text-blue-600 hover:underline">
+          <.button
+            variant="ghost-edit"
+            patch={~p"/org/team/#{user.id}/edit"}
+            class="gap-2"
+          >
+            <.icon name="hero-pencil-square" class="size-4" />
             Edit
-          </.link>
+          </.button>
         </:action>
         <:empty_state>
           <.blank_state
@@ -327,6 +364,8 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <.pagination page={@page_info} path={~p"/org/team"} />
     </Layouts.org_shell>
     """
   end
