@@ -51,7 +51,6 @@ legacy_emails = [
   {"admin@example.com", "admin@gmail.com"},
   {"pharmacist@example.com", "pharmacist@gmail.com"},
   {"lab@example.com", "lab@gmail.com"},
-  {"lab2@example.com", "lab2@gmail.com"},
   {"pharmalab@example.com", "pharmalab@gmail.com"}
 ]
 
@@ -153,20 +152,6 @@ combined_site =
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
 
-warehouse_site =
-  insert_or_get.(
-    Site,
-    %{organization_id: organization_id, name: "Demo Care Central Store"},
-    %{
-      site_type: :warehouse,
-      gln: "6160001000032",
-      address: "Enterprise Road, Industrial Area, Nairobi",
-      lat: -1.3106,
-      long: 36.8554
-    },
-    fn attrs -> Sites.create_site(organization_id, attrs) end
-  )
-
 ensure_account = fn email, name, role, site ->
   site_id = if site, do: site.id, else: nil
 
@@ -200,21 +185,9 @@ end
 
 account_specs = [
   {"admin@gmail.com", "Amina Kamau", :admin, nil},
-  {"admin2@gmail.com", "Brian Otieno", :admin, nil},
-  {"admin3@gmail.com", "Carol Wanjiru", :admin, nil},
-  {"admin4@gmail.com", "David Mwangi", :admin, nil},
   {"pharmacist@gmail.com", "Grace Njeri", :pharmacist, pharmacy_site},
-  {"pharmacist2@gmail.com", "Kevin Kiptoo", :pharmacist, pharmacy_site},
-  {"pharmacist3@gmail.com", "Linda Achieng", :pharmacist, combined_site},
-  {"pharmacist4@gmail.com", "Moses Mutua", :pharmacist, combined_site},
   {"lab@gmail.com", "Laban Omondi", :lab_technician, lab_site},
-  {"lab2@gmail.com", "Amara Hassan", :lab_technician, lab_site},
-  {"lab3@gmail.com", "Faith Chebet", :lab_technician, combined_site},
-  {"lab4@gmail.com", "George Maina", :lab_technician, combined_site},
-  {"pharmalab@gmail.com", "Zawadi Muthoni", :pharma_lab, combined_site},
-  {"pharmalab2@gmail.com", "Ian Kariuki", :pharma_lab, combined_site},
-  {"pharmalab3@gmail.com", "Joy Atieno", :pharma_lab, combined_site},
-  {"pharmalab4@gmail.com", "Noah Wafula", :pharma_lab, combined_site}
+  {"pharmalab@gmail.com", "Zawadi Muthoni", :pharma_lab, combined_site}
 ]
 
 accounts =
@@ -224,9 +197,8 @@ accounts =
 
 primary_admin = Map.fetch!(accounts, "admin@gmail.com")
 primary_pharmacist = Map.fetch!(accounts, "pharmacist@gmail.com")
-branch_pharmacist = Map.fetch!(accounts, "pharmacist3@gmail.com")
 primary_lab_technician = Map.fetch!(accounts, "lab@gmail.com")
-branch_lab_technician = Map.fetch!(accounts, "lab3@gmail.com")
+primary_pharma_lab = Map.fetch!(accounts, "pharmalab@gmail.com")
 
 supplier_specs = [
   {"MediSource Kenya Ltd", "Amina Otieno", "+254700100200", "medisource@gmail.com",
@@ -340,7 +312,7 @@ end
 pharmacy_batches =
   for {site, site_code, approver} <- [
         {pharmacy_site, "CBD", primary_pharmacist},
-        {combined_site, "WST", branch_pharmacist}
+        {combined_site, "WST", primary_pharma_lab}
       ],
       {product, index} <- Enum.with_index(drug_products) do
     supplier = Enum.at(suppliers, rem(index, length(suppliers)))
@@ -363,7 +335,7 @@ pharmacy_batches =
 lab_batches =
   for {site, site_code, approver} <- [
         {lab_site, "LAB", primary_lab_technician},
-        {combined_site, "WLB", branch_lab_technician}
+        {combined_site, "WLB", primary_pharma_lab}
       ],
       {product, index} <- Enum.with_index(lab_products) do
     supplier = Enum.at(suppliers, rem(index + 1, length(suppliers)))
@@ -379,22 +351,6 @@ lab_batches =
       approver
     )
   end
-
-drug_products
-|> Enum.take(6)
-|> Enum.with_index()
-|> Enum.each(fn {product, index} ->
-  create_batch.(
-    product,
-    warehouse_site,
-    "WH-#{index + 1}-A",
-    500 + index * 50,
-    500 + index * 50,
-    540,
-    Enum.at(suppliers, rem(index, length(suppliers))),
-    primary_admin
-  )
-end)
 
 # Pending receipts ensure both pharmacy-capable sites have actionable stock work.
 Enum.each(
@@ -497,7 +453,7 @@ patients
   {site, pharmacist} =
     if index < 6,
       do: {pharmacy_site, primary_pharmacist},
-      else: {combined_site, branch_pharmacist}
+      else: {combined_site, primary_pharma_lab}
 
   visit = ensure_visit.(patient, site, pharmacist, :pharmacy)
   target_status = Enum.at(prescription_statuses, index)
@@ -665,7 +621,7 @@ patients
   {site, technician} =
     if index < 6,
       do: {lab_site, primary_lab_technician},
-      else: {combined_site, branch_lab_technician}
+      else: {combined_site, primary_pharma_lab}
 
   visit = ensure_visit.(patient, site, technician, :lab)
   target_state = Enum.at(lab_order_states, index)
@@ -796,12 +752,12 @@ role_counts =
   |> Repo.all()
   |> Map.new()
 
-expected_role_counts = %{admin: 4, pharmacist: 4, lab_technician: 4, pharma_lab: 4}
+expected_role_counts = %{admin: 1, pharmacist: 1, lab_technician: 1, pharma_lab: 1}
 
 if role_counts != expected_role_counts do
   raise """
   Demo account count is not balanced.
-  Expected exactly four accounts per role: #{inspect(expected_role_counts)}
+  Expected exactly one account per role: #{inspect(expected_role_counts)}
   Found: #{inspect(role_counts)}
   """
 end
@@ -811,22 +767,22 @@ IO.puts("""
 Seed complete.
 
 Organization: #{organization.name}
-Sites: #{pharmacy_site.name}, #{lab_site.name}, #{combined_site.name}, #{warehouse_site.name}
+Sites: #{pharmacy_site.name}, #{lab_site.name}, #{combined_site.name}
 Data: #{length(products)} products, #{length(pharmacy_batches) + length(lab_batches)} active site batches,
       #{length(suppliers)} suppliers, #{length(patients)} patients,
       12 prescriptions, #{length(lab_tests)} lab tests, and 12 lab orders.
 
 All accounts use password #{password} and PIN #{pin}.
 
-Admin accounts:
-  admin@gmail.com, admin2@gmail.com, admin3@gmail.com, admin4@gmail.com
+Admin account:
+  admin@gmail.com
 
-Pharmacist accounts:
-  pharmacist@gmail.com, pharmacist2@gmail.com, pharmacist3@gmail.com, pharmacist4@gmail.com
+Pharmacist account:
+  pharmacist@gmail.com
 
-Lab technician accounts:
-  lab@gmail.com, lab2@gmail.com, lab3@gmail.com, lab4@gmail.com
+Lab technician account:
+  lab@gmail.com
 
-Pharmacy + lab accounts:
-  pharmalab@gmail.com, pharmalab2@gmail.com, pharmalab3@gmail.com, pharmalab4@gmail.com
+Pharmacy + lab account:
+  pharmalab@gmail.com
 """)
