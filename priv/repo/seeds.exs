@@ -13,6 +13,8 @@ alias ThamaniDawa.Patients
 alias ThamaniDawa.Patients.Patient
 alias ThamaniDawa.PatientVisits
 alias ThamaniDawa.PatientVisits.PatientVisit
+alias ThamaniDawa.Payments
+alias ThamaniDawa.Payments.Payment
 alias ThamaniDawa.Prescriptions
 alias ThamaniDawa.Prescriptions.{Prescription, PrescriptionItem}
 alias ThamaniDawa.Products
@@ -20,6 +22,8 @@ alias ThamaniDawa.Products.Product
 alias ThamaniDawa.Repo
 alias ThamaniDawa.Sites
 alias ThamaniDawa.Sites.Site
+alias ThamaniDawa.StockTakes
+alias ThamaniDawa.StockTakes.StockTake
 alias ThamaniDawa.Suppliers
 alias ThamaniDawa.Suppliers.Supplier
 
@@ -475,6 +479,81 @@ ensure_visit = fn patient, site, user, type ->
   )
 end
 
+# A prescription or lab order gets at most one seeded payment attempt, keyed
+# on its order reference — reruns find that payment and leave it untouched
+# rather than crediting the wallet a second time.
+ensure_payment = fn lookup, attrs, outcome ->
+  case Repo.get_by(Payment, Map.to_list(lookup)) do
+    nil ->
+      {:ok, payment} = Payments.create_payment(organization_id, attrs)
+
+      case outcome do
+        :complete ->
+          {:ok, payment} = Payments.complete_payment(payment)
+          payment
+
+        {:fail, reason} ->
+          {:ok, payment} = Payments.fail_payment(payment, reason)
+          payment
+      end
+
+    payment ->
+      payment
+  end
+end
+
+# A stock take is looked up by its (site, marker) pair since a session has no
+# other natural key — reruns find the same draft/finalized session and skip
+# re-counting or re-finalizing it.
+ensure_stock_take = fn site, approver, batches, marker, opts ->
+  finalize? = Keyword.get(opts, :finalize, true)
+  count_upto = Keyword.get(opts, :count_upto, length(batches))
+
+  case Repo.get_by(StockTake, organization_id: organization_id, site_id: site.id, notes: marker) do
+    nil ->
+      {:ok, stock_take} =
+        StockTakes.create_stock_take(organization_id, %{
+          site_id: site.id,
+          started_by_id: approver.id,
+          notes: marker
+        })
+
+      items =
+        Enum.map(batches, fn batch ->
+          {:ok, item} = StockTakes.add_item(stock_take, batch)
+          item
+        end)
+
+      items
+      |> Enum.with_index()
+      |> Enum.each(fn {item, index} ->
+        if index < count_upto do
+          counted =
+            if index == 0,
+              do: max(item.expected_quantity - 4, 0),
+              else: item.expected_quantity
+
+          note =
+            if index == 0,
+              do: "Shortfall noted - flagged for pharmacist review",
+              else: "Matches expected count"
+
+          {:ok, _item} = StockTakes.record_count(item, counted, approver.id, %{"notes" => note})
+        end
+      end)
+
+      if finalize? do
+        {:ok, finalized} = StockTakes.finalize_stock_take(stock_take, approver.id)
+        finalized
+      else
+        stock_take
+      end
+
+    existing ->
+      existing
+  end
+end
+
 prescription_statuses = [
   :pending,
   :partially_dispensed,
@@ -567,6 +646,35 @@ patients
           )
       end
     end)
+  end
+
+  case target_status do
+    status when status in [:completed, :partially_dispensed] ->
+      ensure_payment.(
+        %{organization_id: organization_id, prescription_id: prescription.id},
+        %{
+          prescription_id: prescription.id,
+          amount: prescription.total_amount,
+          payment_type: prescription.payment_type,
+          provider_reference: "RX-#{prescription.id}-PAY"
+        },
+        :complete
+      )
+
+    :cancelled ->
+      ensure_payment.(
+        %{organization_id: organization_id, prescription_id: prescription.id},
+        %{
+          prescription_id: prescription.id,
+          amount: prescription.total_amount,
+          payment_type: prescription.payment_type,
+          provider_reference: "RX-#{prescription.id}-PAY"
+        },
+        {:fail, "Payment declined by provider"}
+      )
+
+    :pending ->
+      :ok
   end
 end)
 
@@ -767,6 +875,35 @@ patients
       end)
   end
 
+  case target_state do
+    status when status in [:in_progress, :completed] ->
+      ensure_payment.(
+        %{organization_id: organization_id, lab_order_id: lab_order.id},
+        %{
+          lab_order_id: lab_order.id,
+          amount: lab_order.total_amount,
+          payment_type: lab_order.payment_type,
+          provider_reference: "LO-#{lab_order.id}-PAY"
+        },
+        :complete
+      )
+
+    :cancelled ->
+      ensure_payment.(
+        %{organization_id: organization_id, lab_order_id: lab_order.id},
+        %{
+          lab_order_id: lab_order.id,
+          amount: lab_order.total_amount,
+          payment_type: lab_order.payment_type,
+          provider_reference: "LO-#{lab_order.id}-PAY"
+        },
+        {:fail, "Payment declined by provider"}
+      )
+
+    :pending ->
+      :ok
+  end
+
   reagent_batch =
     lab_batches
     |> Enum.filter(&(&1.site_id == site.id))
@@ -788,6 +925,25 @@ patients
   end
 end)
 
+pharmacy_stock_take =
+  ensure_stock_take.(
+    pharmacy_site,
+    primary_pharmacist,
+    pharmacy_batches |> Enum.filter(&(&1.site_id == pharmacy_site.id)) |> Enum.take(3),
+    "Monthly stock take - seed baseline",
+    finalize: true
+  )
+
+lab_stock_take =
+  ensure_stock_take.(
+    lab_site,
+    primary_lab_technician,
+    lab_batches |> Enum.filter(&(&1.site_id == lab_site.id)) |> Enum.take(3),
+    "Weekly reagent count - in progress",
+    finalize: false,
+    count_upto: 2
+  )
+
 role_counts =
   User
   |> where([u], u.organization_id == ^organization_id)
@@ -806,6 +962,13 @@ if role_counts != expected_role_counts do
   """
 end
 
+payment_count = length(Payments.list_payments(organization_id))
+
+wallet_balance =
+  [pharmacy_site, lab_site, combined_site]
+  |> Enum.map(&Payments.site_earnings(organization_id, &1.id))
+  |> Enum.reduce(&Decimal.add/2)
+
 IO.puts("""
 
 Seed complete.
@@ -815,6 +978,8 @@ Sites: #{pharmacy_site.name}, #{lab_site.name}, #{combined_site.name}, #{warehou
 Data: #{length(products)} products, #{length(pharmacy_batches) + length(lab_batches)} active site batches,
       #{length(suppliers)} suppliers, #{length(patients)} patients,
       12 prescriptions, #{length(lab_tests)} lab tests, and 12 lab orders.
+      #{payment_count} payments (#{wallet_balance} credited across site wallets),
+      #{pharmacy_stock_take.status} pharmacy stock take, #{lab_stock_take.status} lab stock take.
 
 All accounts use password #{password} and PIN #{pin}.
 
