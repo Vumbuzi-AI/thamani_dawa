@@ -77,6 +77,13 @@ defmodule ThamaniDawa.Accounts.User do
     |> validate_password(opts)
   end
 
+  @doc "Changeset for an admin editing a team member's role and site assignment."
+  def edit_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:role, :site_id])
+    |> validate_required([:role])
+  end
+
   @doc "Changeset for a user setting or changing their 4-digit counter-side PIN (§7)."
   def pin_changeset(user, attrs) do
     user

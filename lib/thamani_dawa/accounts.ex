@@ -88,6 +88,22 @@ defmodule ThamaniDawa.Accounts do
     end
   end
 
+  @doc """
+  Updates a team member's role and site assignment. `organization_id` is
+  validated to ensure the user belongs to the same organization, and if a
+  `site_id` is provided, it's validated to belong to that organization.
+  """
+  def update_user(organization_id, user_id, attrs) when is_integer(organization_id) do
+    user = get_user!(organization_id, user_id)
+
+    changeset =
+      user
+      |> User.edit_changeset(attrs)
+      |> validate_site_in_organization(organization_id)
+
+    Repo.update(changeset)
+  end
+
   defp validate_site_in_organization(changeset, organization_id) do
     case Ecto.Changeset.get_change(changeset, :site_id) do
       nil ->

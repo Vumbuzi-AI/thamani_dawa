@@ -13,16 +13,27 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      socket
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
+     |> assign(:editing_user, nil)
      |> assign_lists()}
   end
 
-  def handle_params(_params, _url, socket) do
-    form =
-      if socket.assigns.live_action == :new do
-        to_form(User.invite_changeset(%User{}, %{}), as: :user)
+  def handle_params(params, _url, socket) do
+    {form, user} =
+      case socket.assigns.live_action do
+        :new ->
+          {to_form(User.invite_changeset(%User{}, %{}), as: :user), nil}
+
+        :edit ->
+          user_id = String.to_integer(params["id"])
+          organization_id = socket.assigns.current_scope.organization_id
+          user = Accounts.get_user!(organization_id, user_id)
+          {to_form(User.edit_changeset(user, %{}), as: :user), user}
+
+        _ ->
+          {nil, nil}
       end
 
-    {:noreply, assign(socket, :form, form)}
+    {:noreply, socket |> assign(:form, form) |> assign(:editing_user, user)}
   end
 
   def handle_event("save", %{"user" => attrs}, socket) do
@@ -43,6 +54,23 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         {:noreply,
          socket
          |> put_flash(:info, "Invite sent to #{user.email}.")
+         |> assign_lists()
+         |> push_patch(to: ~p"/org/team")}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :form, to_form(changeset, as: :user))}
+    end
+  end
+
+  def handle_event("save_edit", %{"user" => attrs}, socket) do
+    %{organization_id: organization_id} = socket.assigns.current_scope
+    user_id = socket.assigns.editing_user.id
+
+    case Accounts.update_user(organization_id, user_id, attrs) do
+      {:ok, user} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "#{user.name} updated successfully.")
          |> assign_lists()
          |> push_patch(to: ~p"/org/team")}
 
@@ -236,6 +264,41 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         </form>
       </.modal>
 
+      <.modal :if={@live_action == :edit} id="edit-modal" show on_cancel={JS.patch(~p"/org/team")}>
+        <h2 class="font-semibold mb-2">Edit team member</h2>
+        <form id="edit-form" phx-submit="save_edit">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium mb-1">Name</label>
+              <p class="text-gray-600">{@editing_user.name}</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium mb-1">Email</label>
+              <p class="text-gray-600">{@editing_user.email}</p>
+            </div>
+            <.input
+              field={@form[:role]}
+              type="select"
+              label="Role"
+              options={Enum.map(User.roles(), &{Phoenix.Naming.humanize(&1), &1})}
+              prompt="Choose a role"
+              required
+            />
+            <.input
+              field={@form[:site_id]}
+              type="select"
+              label="Home site"
+              options={Enum.map(@sites, &{&1.name, &1.id})}
+              prompt="No home site (org-wide)"
+            />
+          </div>
+          <div class="flex gap-2 mt-4">
+            <.button variant="primary">Save changes</.button>
+            <.button patch={~p"/org/team"}>Cancel</.button>
+          </div>
+        </form>
+      </.modal>
+
       <.table id="users" rows={@users}>
         <:col :let={user} label="Name">{user.name}</:col>
         <:col :let={user} label="Email">{user.email}</:col>
@@ -244,6 +307,11 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         <:col :let={user} label="Status">
           <.status_badge status={status(user)} />
         </:col>
+        <:action :let={user}>
+          <.link patch={~p"/org/team/#{user.id}/edit"} class="text-xs font-semibold text-blue-600 hover:underline">
+            Edit
+          </.link>
+        </:action>
         <:empty_state>
           <.blank_state
             icon="hero-users"

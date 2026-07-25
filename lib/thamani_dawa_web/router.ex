@@ -42,6 +42,7 @@ defmodule ThamaniDawaWeb.Router do
     live_session :organization, on_mount: [{ThamaniDawaWeb.UserAuth, :require_admin}] do
       live "/org/team", TeamLive.Index, :index
       live "/org/team/new", TeamLive.Index, :new
+      live "/org/team/:id/edit", TeamLive.Index, :edit
 
       live "/org/sites", SiteLive.Index, :index
       live "/org/sites/new", SiteLive.Index, :new
