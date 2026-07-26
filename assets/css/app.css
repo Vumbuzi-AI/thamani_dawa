@@ -64,26 +64,26 @@
   default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: #FFFFFF;
-  --color-base-200: #F8FAFC;
-  --color-base-300: #E6EDF8;
-  --color-base-content: #1F2433;
+  --color-base-100: #ffffff;
+  --color-base-200: #f8fafc;
+  --color-base-300: #e6edf8;
+  --color-base-content: #1f2433;
   --color-primary: #373896;
-  --color-primary-content: #FFFFFF;
+  --color-primary-content: #ffffff;
   --color-secondary: #687083;
-  --color-secondary-content: #FFFFFF;
-  --color-accent: #6667AB;
-  --color-accent-content: #FFFFFF;
+  --color-secondary-content: #ffffff;
+  --color-accent: #6667ab;
+  --color-accent-content: #ffffff;
   --color-neutral: #374151;
-  --color-neutral-content: #FFFFFF;
-  --color-info: #2C66E4;
-  --color-info-content: #FFFFFF;
-  --color-success: #12B586;
-  --color-success-content: #FFFFFF;
-  --color-warning: #D79B2B;
-  --color-warning-content: #1F2433;
-  --color-error: #C21F17;
-  --color-error-content: #FFFFFF;
+  --color-neutral-content: #ffffff;
+  --color-info: #2c66e4;
+  --color-info-content: #ffffff;
+  --color-success: #12b586;
+  --color-success-content: #ffffff;
+  --color-warning: #d79b2b;
+  --color-warning-content: #1f2433;
+  --color-error: #c21f17;
+  --color-error-content: #ffffff;
   --radius-selector: 0.25rem;
   --radius-field: 0.25rem;
   --radius-box: 0.5rem;
@@ -103,7 +103,10 @@
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 /* Make LiveView wrapper divs transparent for layout */
-[data-phx-session], [data-phx-teleported-src] { display: contents }
+[data-phx-session],
+[data-phx-teleported-src] {
+  display: contents;
+}
 
 /* This file is for your main application CSS */
 
@@ -115,6 +118,9 @@
    hierarchy for headings, identity, and important values.
    ============================================================ */
 
+html {
+  scroll-behavior: smooth !important;
+}
 .internal-app {
   font-weight: 500;
   font-synthesis: none;
@@ -175,8 +181,8 @@
   }
 
   #sidebar-aside.sidebar-collapsed #sidebar-account-card {
-    background: #FBFBFF !important;
-    border: 1px solid #E8EBF3 !important;
+    background: #fbfbff !important;
+    border: 1px solid #e8ebf3 !important;
     border-radius: 16px !important;
     padding: 14px 16px !important;
     justify-content: flex-start;
@@ -218,7 +224,9 @@
 .nav-label,
 #sidebar-profile {
   max-width: 200px;
-  transition: opacity 150ms ease, max-width 200ms ease-in-out;
+  transition:
+    opacity 150ms ease,
+    max-width 200ms ease-in-out;
 }
 
 #sidebar-aside.sidebar-collapsed .nav-label {
@@ -228,7 +236,10 @@
 }
 
 #sidebar-account-card {
-  transition: background-color 200ms ease, padding 200ms ease, border-radius 200ms ease;
+  transition:
+    background-color 200ms ease,
+    padding 200ms ease,
+    border-radius 200ms ease;
 }
 
 #sidebar-aside.sidebar-collapsed #sidebar-account-card {
@@ -275,30 +286,39 @@
 
 :root {
   /* Thamani palette — single source of truth (indigo/slate/white) */
-  --thamani-forest:  #373896;
-  --thamani-lime:    #E7E7FF;
-  --thamani-snow:    #FFFFFF;
-  --thamani-stone:   #E6EDF8;
-  --thamani-pewter:  #687083;
-  --thamani-frosted: #C7CFE0;
-  --thamani-subtle:  #9AA3B5;
-  --thamani-error:   #C21F17;
-  --thamani-canvas:     #F8FAFC;
-  --thamani-accent:     #6667AB;
-  --thamani-border-nav: #EDF0F8;
+  --thamani-forest: #373896;
+  --thamani-lime: #e7e7ff;
+  --thamani-snow: #ffffff;
+  --thamani-stone: #e6edf8;
+  --thamani-pewter: #687083;
+  --thamani-frosted: #c7cfe0;
+  --thamani-subtle: #9aa3b5;
+  --thamani-error: #c21f17;
+  --thamani-canvas: #f8fafc;
+  --thamani-accent: #6667ab;
+  --thamani-border-nav: #edf0f8;
 
-  --shadow-card:  0 12px 28px rgba(15, 23, 42, 0.045);
+  /* Dashboard chart series — fixed categorical order, validated for CVD
+     separation and contrast against --thamani-canvas (see dataviz skill). */
+  --thamani-chart-1: #6667ab;
+  --thamani-chart-1-fill: rgba(102, 103, 171, 0.14);
+  --thamani-chart-2: #1f9e8f;
+  --thamani-chart-3: #c2760a;
+  --thamani-chart-4: #2c5aa0;
+  --thamani-chart-5: #c21f17;
+
+  --shadow-card: 0 12px 28px rgba(15, 23, 42, 0.045);
   --shadow-panel: 0 18px 38px rgba(15, 23, 42, 0.055);
-  --shadow-hero:  0 20px 42px rgba(15, 23, 42, 0.06);
+  --shadow-hero: 0 20px 42px rgba(15, 23, 42, 0.06);
 
   /* Landing page tokens — always light (Thamani palette) */
-  --brand:          #373896;
-  --ld-bg:          #FFFFFF;
-  --ld-surface:     #E6EDF8;
-  --ld-text:        #373896;
-  --ld-text-muted:  #687083;
-  --ld-text-subtle: #9AA3B5;
-  --ld-border:      rgba(55, 56, 150, 0.1);
+  --brand: #373896;
+  --ld-bg: #ffffff;
+  --ld-surface: #e6edf8;
+  --ld-text: #373896;
+  --ld-text-muted: #687083;
+  --ld-text-subtle: #9aa3b5;
+  --ld-border: rgba(55, 56, 150, 0.1);
   --ld-marquee-dur: 28s;
 }
 
@@ -309,42 +329,61 @@
    ============================================================ */
 
 @theme {
-  --color-thamani-forest:  #373896;
-  --color-thamani-lime:    #E7E7FF;
-  --color-thamani-snow:    #FFFFFF;
-  --color-thamani-stone:   #E6EDF8;
-  --color-thamani-pewter:  #687083;
-  --color-thamani-frosted: #C7CFE0;
-  --color-thamani-subtle:  #9AA3B5;
-  --color-thamani-error:   #C21F17;
-  --color-thamani-canvas:     #F8FAFC;
-  --color-thamani-accent:     #6667AB;
-  --color-thamani-border-nav: #EDF0F8;
+  --color-thamani-forest: #373896;
+  --color-thamani-lime: #e7e7ff;
+  --color-thamani-snow: #ffffff;
+  --color-thamani-stone: #e6edf8;
+  --color-thamani-pewter: #687083;
+  --color-thamani-frosted: #c7cfe0;
+  --color-thamani-subtle: #9aa3b5;
+  --color-thamani-error: #c21f17;
+  --color-thamani-canvas: #f8fafc;
+  --color-thamani-accent: #6667ab;
+  --color-thamani-border-nav: #edf0f8;
 }
-
 
 /* ============================================================
    Landing Page — Keyframes
    ============================================================ */
 
 @keyframes hero-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes marquee-left {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @keyframes marquee-right {
-  from { transform: translateX(-50%); }
-  to   { transform: translateX(0); }
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes thamani-fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ============================================================
@@ -355,7 +394,7 @@
   opacity: 0;
   transform: translateY(32px) scale(0.97);
   transition:
-    opacity   520ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 520ms cubic-bezier(0.23, 1, 0.32, 1),
     transform 520ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -364,9 +403,15 @@
   transform: translateY(0) scale(1);
 }
 
-.reveal-item:nth-child(1) { transition-delay:   0ms; }
-.reveal-item:nth-child(2) { transition-delay: 120ms; }
-.reveal-item:nth-child(3) { transition-delay: 240ms; }
+.reveal-item:nth-child(1) {
+  transition-delay: 0ms;
+}
+.reveal-item:nth-child(2) {
+  transition-delay: 120ms;
+}
+.reveal-item:nth-child(3) {
+  transition-delay: 240ms;
+}
 
 /* ============================================================
    Landing Page — Section Backgrounds
@@ -377,13 +422,13 @@
   color: var(--thamani-snow);
 
   /* Flip all var(--ld-*) children for the dark context */
-  --brand:          var(--thamani-lime);
-  --ld-bg:          var(--thamani-forest);
-  --ld-text:        var(--thamani-snow);
-  --ld-text-muted:  rgba(252, 252, 247, 0.65);
+  --brand: var(--thamani-lime);
+  --ld-bg: var(--thamani-forest);
+  --ld-text: var(--thamani-snow);
+  --ld-text-muted: rgba(252, 252, 247, 0.65);
   --ld-text-subtle: rgba(252, 252, 247, 0.4);
-  --ld-surface:     rgba(252, 252, 247, 0.06);
-  --ld-border:      rgba(252, 252, 247, 0.12);
+  --ld-surface: rgba(252, 252, 247, 0.06);
+  --ld-border: rgba(252, 252, 247, 0.12);
 }
 
 /* Active scan pill text on lime bg in dark section */
@@ -400,10 +445,6 @@
 /* Progress fill to lime in dark section */
 .ld-dark-section .ld-progress-fill {
   background: var(--thamani-lime);
-}
-
-.ld-stone-section {
-  background: var(--thamani-stone);
 }
 
 /* ============================================================
@@ -444,7 +485,9 @@
   transition: transform 160ms ease-out;
 }
 
-.thamani-btn-primary:active { transform: scale(0.97); }
+.thamani-btn-primary:active {
+  transform: scale(0.97);
+}
 
 .thamani-btn-ghost,
 .thamani-btn-ghost-edit,
@@ -461,12 +504,18 @@
   text-decoration: none;
   border: 1.5px solid var(--thamani-forest);
   cursor: pointer;
-  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms cubic-bezier(0.23, 1, 0.32, 1), border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  transition:
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .thamani-btn-ghost:active,
 .thamani-btn-ghost-edit:active,
-.thamani-btn-ghost-delete:active { transform: scale(0.97); }
+.thamani-btn-ghost-delete:active {
+  transform: scale(0.97);
+}
 
 .thamani-btn-primary:focus-visible,
 .thamani-btn-ghost:focus-visible,
@@ -506,7 +555,9 @@
   transition: transform 160ms ease-out;
 }
 
-.thamani-btn-ghost-inv:active { transform: scale(0.97); }
+.thamani-btn-ghost-inv:active {
+  transform: scale(0.97);
+}
 
 .thamani-btn-lime {
   display: inline-flex;
@@ -524,7 +575,9 @@
   transition: transform 160ms ease-out;
 }
 
-.thamani-btn-lime:active { transform: scale(0.97); }
+.thamani-btn-lime:active {
+  transform: scale(0.97);
+}
 
 /* ============================================================
    App UI — Thamani Inputs
@@ -543,11 +596,15 @@
   line-height: 1.5;
   border: 1.5px solid rgba(55, 56, 150, 0.18);
   outline: none;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
   appearance: none;
 }
 
-.thamani-input::placeholder { color: var(--thamani-pewter); }
+.thamani-input::placeholder {
+  color: var(--thamani-pewter);
+}
 
 .thamani-input:focus,
 .thamani-select:focus {
@@ -565,7 +622,6 @@
   margin-bottom: 4px;
   letter-spacing: 0.01em;
 }
-
 
 /* ============================================================
    Landing Page — Thamani Badge
@@ -596,12 +652,23 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .ld-nav-link:hover { color: var(--thamani-forest); }
+  .ld-nav-link:hover {
+    color: var(--thamani-forest);
+  }
 }
 
 /* ============================================================
    Landing Page — Value Prop Items
    ============================================================ */
+
+.ld-eyebrow {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ld-text-subtle);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+}
 
 .ld-value-prop {
   padding: 20px 0;
@@ -618,10 +685,10 @@
 
 .ld-btn {
   transition:
-    transform        120ms ease-out,
+    transform 120ms ease-out,
     background-color 150ms ease,
-    color            150ms ease,
-    border-color     150ms ease;
+    color 150ms ease,
+    border-color 150ms ease;
 }
 
 .ld-btn:active {
@@ -657,17 +724,11 @@
   padding: 4px 0;
 }
 
-.ld-marquee-left  .ld-marquee-track { animation: marquee-left  var(--ld-marquee-dur) linear infinite; }
-.ld-marquee-right .ld-marquee-track { animation: marquee-right var(--ld-marquee-dur) linear infinite; }
-
-/* ============================================================
-   Landing Page — Stats divider (desktop only)
-   ============================================================ */
-
-@media (min-width: 640px) {
-  .ld-stat-sep {
-    border-left: 1px solid var(--ld-border);
-  }
+.ld-marquee-left .ld-marquee-track {
+  animation: marquee-left var(--ld-marquee-dur) linear infinite;
+}
+.ld-marquee-right .ld-marquee-track {
+  animation: marquee-right var(--ld-marquee-dur) linear infinite;
 }
 
 /* ============================================================
@@ -689,10 +750,10 @@
   opacity: 0.55;
   transform: scale(0.95);
   transition:
-    opacity      400ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform    400ms cubic-bezier(0.16, 1, 0.3, 1),
-    background   400ms ease,
-    color        400ms ease,
+    opacity 400ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 400ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 400ms ease,
+    color 400ms ease,
     border-color 400ms ease;
   will-change: transform, opacity;
 }
@@ -714,7 +775,7 @@
   font-weight: 400;
   line-height: 1.5;
   transition:
-    opacity   380ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 380ms cubic-bezier(0.16, 1, 0.3, 1),
     transform 380ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -726,7 +787,7 @@
 
 .ld-answer-bubble {
   background: #373896;
-  color: #FFFFFF;
+  color: #ffffff;
   align-self: flex-start;
   max-width: 85%;
 }
@@ -750,8 +811,13 @@
 }
 
 @keyframes ld-pulse-opacity {
-  0%, 100% { opacity: 0.6; }
-  50%       { opacity: 1;   }
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .ld-sync-label {
@@ -796,4 +862,129 @@
     opacity: 1 !important;
     transform: none !important;
   }
+}
+
+/* ============================================================
+   Dashboard components — stat tiles, chart cards, range filter
+   ============================================================ */
+
+.dashboard-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .dashboard-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-stat-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.dashboard-stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--thamani-snow);
+  border: 1px solid var(--thamani-border-nav);
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.dashboard-stat-tile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--thamani-lime);
+  color: var(--thamani-forest);
+}
+
+.dashboard-stat-tile-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--thamani-subtle);
+}
+
+.dashboard-stat-tile-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--thamani-forest);
+  line-height: 1.1;
+}
+
+.dashboard-stat-tile-sublabel {
+  font-size: 13px;
+  color: var(--thamani-pewter);
+}
+
+.dashboard-chart-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 1024px) {
+  .dashboard-chart-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.dashboard-chart-card {
+  background: var(--thamani-snow);
+  border: 1px solid var(--thamani-border-nav);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow-card);
+}
+
+.dashboard-chart-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--thamani-forest);
+}
+
+.dashboard-chart-subtitle {
+  font-size: 13px;
+  color: var(--thamani-pewter);
+  margin-top: 2px;
+}
+
+.dashboard-chart-canvas-wrap {
+  margin-top: 16px;
+  height: 260px;
+  position: relative;
+}
+
+.dashboard-range-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dashboard-range-pill {
+  padding: 8px 16px;
+  border-radius: 1000px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--thamani-border-nav);
+  background: var(--thamani-snow);
+  color: var(--thamani-pewter);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.dashboard-range-pill[aria-pressed="true"] {
+  background: var(--thamani-forest);
+  color: var(--thamani-snow);
+  border-color: var(--thamani-forest);
 }

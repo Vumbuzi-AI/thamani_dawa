@@ -167,6 +167,7 @@ defmodule ThamaniDawaWeb.Layouts do
       section_label="Organization"
       base_path="/org"
       nav_items={[
+        {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
         {"Sites", "hero-building-office-2", ~p"/org/sites"},
         {"Team", "hero-user-group", ~p"/org/team"},
         {"Products", "hero-cube", ~p"/org/products"},

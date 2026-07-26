@@ -90,6 +90,8 @@ defmodule ThamaniDawaWeb do
       import ThamaniDawaWeb.CoreComponents
       # Marketing & legal page layout components
       import ThamaniDawaWeb.PageComponents
+      # Stat tiles, chart cards, and range filters for role dashboards
+      import ThamaniDawaWeb.DashboardComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

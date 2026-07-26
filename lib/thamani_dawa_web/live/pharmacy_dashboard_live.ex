@@ -2,6 +2,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Batches
+  alias ThamaniDawa.Dashboards
   alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Products
   alias ThamaniDawaWeb.SiteScoping
@@ -11,6 +12,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     organization_id = scope.organization_id
+    site_id = scope.current_site_id
 
     products_by_id = organization_id |> Products.list_products() |> Map.new(&{&1.id, &1})
 
@@ -41,7 +43,10 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
      |> assign(:near_expiry, near_expiry(active_batches))
      |> assign(:near_expiry_days, @near_expiry_days)
      |> assign(:pending_batches_count, length(pending_batches))
-     |> assign(:pending_prescriptions, prescriptions)}
+     |> assign(:pending_prescriptions, prescriptions)
+     |> assign(:stats, Dashboards.pharmacy_stats(organization_id, site_id))
+     |> assign(:dispensed_by_day, Dashboards.dispensed_by_day(organization_id, site_id))
+     |> assign(:top_products, Dashboards.top_dispensed_products(organization_id, site_id))}
   end
 
   defp stock_alerts(batches, products_by_id) do
@@ -81,6 +86,58 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
   defp product_name(nil), do: "(unknown product)"
   defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
 
+  defp money(amount) do
+    grouped =
+      amount
+      |> round()
+      |> Integer.to_string()
+      |> String.reverse()
+      |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
+      |> String.reverse()
+
+    "KSh " <> grouped
+  end
+
+  defp dispensed_by_day_chart_data(dispensed_by_day) do
+    %{
+      labels: Enum.map(dispensed_by_day, fn {date, _qty} -> Calendar.strftime(date, "%d %b") end),
+      datasets: [
+        %{
+          label: "Units dispensed",
+          data: Enum.map(dispensed_by_day, fn {_date, qty} -> qty end),
+          borderColor: "#6667ab",
+          backgroundColor: "rgba(102, 103, 171, 0.14)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 3
+        }
+      ]
+    }
+  end
+
+  defp top_products_chart_data(top_products) do
+    %{
+      labels: Enum.map(top_products, fn {name, _qty} -> name end),
+      datasets: [
+        %{
+          label: "Units dispensed",
+          data: Enum.map(top_products, fn {_name, qty} -> qty end),
+          backgroundColor: "#1f9e8f",
+          borderRadius: 4
+        }
+      ]
+    }
+  end
+
+  defp chart_options do
+    %{
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: %{legend: %{display: false}},
+      scales: %{y: %{beginAtZero: true}}
+    }
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path="/pharmacy">
@@ -100,6 +157,64 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         <.thamani_btn navigate={~p"/pharmacy/receive-stock"} class="!w-auto">
           Receive stock
         </.thamani_btn>
+      </div>
+
+      <div class="dashboard-stat-grid mt-4">
+        <.stat_tile
+          icon="hero-x-circle"
+          label="Out of stock"
+          value={length(@out_of_stock)}
+          sublabel="Products with no remaining stock"
+        />
+        <.stat_tile
+          icon="hero-exclamation-triangle"
+          label="Low stock"
+          value={length(@low_stock)}
+          sublabel="At or below reorder level"
+        />
+        <.stat_tile
+          icon="hero-calendar-days"
+          label="Near-expiry"
+          value={length(@near_expiry)}
+          sublabel={"Expiring within #{@near_expiry_days} days"}
+        />
+        <.stat_tile
+          icon="hero-document-text"
+          label="Pending prescriptions"
+          value={length(@pending_prescriptions)}
+          sublabel="Awaiting dispensing"
+        />
+        <.stat_tile
+          icon="hero-arrow-down-tray"
+          label="Pending batches"
+          value={@pending_batches_count}
+          sublabel="Awaiting receipt at your site"
+        />
+        <.stat_tile
+          icon="hero-banknotes"
+          label="Revenue this month"
+          value={money(@stats.revenue_this_month)}
+          sublabel="Wallet credits collected"
+        />
+      </div>
+
+      <div class="dashboard-chart-grid mt-6">
+        <.chart_card
+          id="dispensed-by-day-chart"
+          title="Prescriptions dispensed"
+          subtitle="Units dispensed per day, last 30 days"
+          type="line"
+          data={dispensed_by_day_chart_data(@dispensed_by_day)}
+          options={chart_options()}
+        />
+        <.chart_card
+          id="top-products-chart"
+          title="Top dispensed products"
+          subtitle="By units dispensed this month"
+          type="bar"
+          data={top_products_chart_data(@top_products)}
+          options={chart_options()}
+        />
       </div>
 
       <.header class="mt-6">

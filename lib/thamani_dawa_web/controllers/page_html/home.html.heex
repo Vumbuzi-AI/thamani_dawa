@@ -100,7 +100,7 @@
      TRUST STRIP
      ============================================================ --%>
 <section style="background: #FFFFFF; padding: 32px 24px 40px; border-bottom: 1px solid #E6EDF8;">
-  <p style="text-align: center; font-size: 12px; font-weight: 500; color: #b3b3b3; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 28px;">
+  <p class="ld-eyebrow mb-7">
     Trusted by pharmacies and labs across Kenya
   </p>
   <div class="flex flex-wrap items-center justify-center gap-8 md:gap-12">
@@ -113,11 +113,74 @@
 </section>
 
 <%!-- ============================================================
+     SYSTEM MODULES — what the platform actually does
+     ============================================================ --%>
+<section style="background: #FFFFFF; padding: 96px 24px 72px;">
+  <div class="max-w-6xl mx-auto">
+    <p class="ld-eyebrow mb-4">
+      One system, every workflow
+    </p>
+    <h2
+      class="text-center mx-auto mb-16"
+      style="font-size: clamp(26px, 3.5vw, 40px); font-weight: 350; letter-spacing: -0.5px; line-height: 1.2; color: #373896; max-width: 640px; text-wrap: balance;"
+    >
+      Everything a modern pharmacy network needs, in one place.
+    </h2>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-12">
+      <%= for {icon, title, body} <- [
+        {"hero-qr-code", "GS1 dispensing", "Scan-to-dispense at the counter, with every batch and unit traceable to the GS1 standard."},
+        {"hero-beaker", "Lab orders & results", "Order lab tests, track samples, and deliver results without leaving the platform."},
+        {"hero-shield-check", "Controlled drugs", "PIN-gated dispensing and automatic audit trails keep your Schedule register board-ready."},
+        {"hero-building-storefront", "Multi-site network", "Run every branch from a single dashboard — stock, staff, and sales, site by site or network-wide."},
+        {"hero-cube", "Stock & batch tracking", "Live stock levels, expiry alerts, and stock takes across every site, updated in real time."},
+        {"hero-document-text", "Prescriptions", "Digitise prescriptions end to end, from doctor to dispensing, with a full patient history."},
+      ] do %>
+        <div class="flex flex-col gap-4 reveal-item">
+          <div
+            class="flex items-center justify-center"
+            style="width: 44px; height: 44px; border-radius: 12px; background: var(--thamani-lime); color: #373896;"
+          >
+            <.icon name={icon} class="size-5" />
+          </div>
+          <div>
+            <h3 style="font-size: 17px; font-weight: 500; letter-spacing: -0.01em; color: #373896; line-height: 1.3; margin-bottom: 6px;">
+              {title}
+            </h3>
+            <p style="font-size: 14px; line-height: 1.65; color: #666666;">
+              {body}
+            </p>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</section>
+
+<%!-- ============================================================
+     PRODUCT SHOWCASE
+     ============================================================ --%>
+<section style="background: var(--thamani-stone); padding: 72px 24px;">
+  <div class="max-w-6xl mx-auto">
+    <div
+      class="overflow-hidden reveal-item"
+      style="border-radius: 28px; position: relative; aspect-ratio: 16/8;"
+    >
+      <img
+        src="/images/thamanidawa-heroo.png"
+        alt="ThamaniDawa dashboard showing stock, sites, and dispensing in one view"
+        class="absolute inset-0 w-full h-full object-cover"
+      />
+    </div>
+  </div>
+</section>
+
+<%!-- ============================================================
      DARK FEATURE BAND
      ============================================================ --%>
 <section id="features" class="ld-dark-section" style="padding: 96px 24px;">
   <div class="max-w-6xl mx-auto">
-    <p style="font-size: 12px; font-weight: 500; color: rgba(252,252,247,0.45); letter-spacing: 0.08em; text-transform: uppercase; text-align: center; margin-bottom: 16px;">
+    <p class="ld-eyebrow mb-4">
       Built for the pharmacy network owner
     </p>
     <h2
@@ -292,34 +355,11 @@
 </section>
 
 <%!-- ============================================================
-     STATS STRIP
-     ============================================================ --%>
-<section
-  class="ld-stone-section"
-  style="border-top: 1px solid rgba(55, 56, 150,0.08); border-bottom: 1px solid rgba(55, 56, 150,0.08);"
->
-  <div class="max-w-4xl mx-auto flex flex-col sm:flex-row">
-    <div class="flex-1 flex flex-col items-center py-12 px-8">
-      <span style="font-size: clamp(36px, 4vw, 52px); font-weight: 350; color: #373896; letter-spacing: -0.72px; line-height: 1; font-variant-numeric: tabular-nums;">500+</span>
-      <span class="mt-2" style="font-size: 15px; color: #666666;">Products catalogued</span>
-    </div>
-    <div class="ld-stat-sep flex-1 flex flex-col items-center py-12 px-8">
-      <span style="font-size: clamp(36px, 4vw, 52px); font-weight: 350; color: #373896; letter-spacing: -0.72px; line-height: 1; font-variant-numeric: tabular-nums;">50+</span>
-      <span class="mt-2" style="font-size: 15px; color: #666666;">Active sites</span>
-    </div>
-    <div class="ld-stat-sep flex-1 flex flex-col items-center py-12 px-8">
-      <span style="font-size: clamp(36px, 4vw, 52px); font-weight: 350; color: #373896; letter-spacing: -0.72px; line-height: 1;">100%</span>
-      <span class="mt-2" style="font-size: 15px; color: #666666;">GS1 compliant</span>
-    </div>
-  </div>
-</section>
-
-<%!-- ============================================================
      TESTIMONIAL
      ============================================================ --%>
 <section style="background: #FFFFFF; padding: 96px 24px;">
   <div class="max-w-6xl mx-auto">
-    <p style="font-size: 12px; font-weight: 500; color: #b3b3b3; letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 48px;">
+    <p class="ld-eyebrow mb-12" style="text-align: left;">
       Here's what our customers say
     </p>
 

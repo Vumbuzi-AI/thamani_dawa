@@ -25,12 +25,13 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/thamani_dawa"
 import topbar from "../vendor/topbar"
 import {GoogleMaps} from "./hooks/google_maps"
+import {Chart} from "./hooks/chart_hook"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GoogleMaps},
+  hooks: {...colocatedHooks, GoogleMaps, Chart},
 })
 
 // Show progress bar on live navigation and form submits

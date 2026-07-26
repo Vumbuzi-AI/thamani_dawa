@@ -452,7 +452,7 @@ defmodule ThamaniDawaWeb.PageComponents do
 
   def dashboard_path(scope) do
     cond do
-      ThamaniDawa.Accounts.Scope.admin?(scope) -> "/org/team"
+      ThamaniDawa.Accounts.Scope.admin?(scope) -> "/org/dashboard"
       ThamaniDawa.Accounts.Scope.pharmacist?(scope) -> "/pharmacy"
       ThamaniDawa.Accounts.Scope.lab_technician?(scope) -> "/lab"
       true -> "/login"
