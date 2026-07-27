@@ -148,6 +148,14 @@ html {
   padding: 24px 16px !important;
 }
 
+/* The toggle's 36px circle is a deliberate compact size — extend the hit
+   area to the 40px floor via a pseudo-element instead of growing it visually. */
+#sidebar-toggle::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+}
+
 #sidebar-shell.sidebar-mobile-open #sidebar-aside {
   transform: translateX(0);
 }
@@ -306,8 +314,6 @@ html {
   --thamani-chart-5: #c21f17;
 
   --shadow-card: 0 12px 28px rgba(15, 23, 42, 0.045);
-  --shadow-panel: 0 18px 38px rgba(15, 23, 42, 0.055);
-  --shadow-hero: 0 20px 42px rgba(15, 23, 42, 0.06);
 
   /* Landing page tokens — always light (Thamani palette) */
   --brand: #373896;
@@ -471,6 +477,7 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 40px;
   padding: 10px 24px;
   border-radius: 1000px;
   background: var(--thamani-forest);
@@ -484,7 +491,7 @@ html {
 }
 
 .thamani-btn-primary:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .thamani-btn-ghost,
@@ -493,6 +500,7 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 40px;
   padding: 10px 24px;
   border-radius: 1000px;
   background: transparent;
@@ -512,7 +520,7 @@ html {
 .thamani-btn-ghost:active,
 .thamani-btn-ghost-edit:active,
 .thamani-btn-ghost-delete:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .thamani-btn-primary:focus-visible,
@@ -541,6 +549,7 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 40px;
   padding: 10px 24px;
   border-radius: 1000px;
   background: transparent;
@@ -554,13 +563,14 @@ html {
 }
 
 .thamani-btn-ghost-inv:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .thamani-btn-lime {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 40px;
   padding: 10px 24px;
   border-radius: 1000px;
   background: var(--thamani-lime);
@@ -574,7 +584,7 @@ html {
 }
 
 .thamani-btn-lime:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 /* ============================================================
@@ -977,14 +987,21 @@ html {
 }
 
 .dashboard-range-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   padding: 8px 16px;
   border-radius: 1000px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   border: 1px solid var(--thamani-border-nav);
   background: var(--thamani-snow);
   color: var(--thamani-pewter);
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, color 150ms ease, scale 150ms ease;
+}
+
+.dashboard-range-pill:active {
+  scale: 0.96;
 }
 
 .dashboard-range-pill[aria-pressed="true"] {

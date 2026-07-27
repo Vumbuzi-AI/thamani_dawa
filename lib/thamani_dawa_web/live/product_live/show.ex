@@ -187,7 +187,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         </.form>
       </.modal>
 
-      <.header class="mt-6">Batches</.header>
+      <.header variant="plain" class="mt-6">Batches</.header>
       <.table
         id="batches"
         rows={@streams.batches}

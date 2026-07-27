@@ -63,8 +63,7 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
         %{
           at: item.counted_at,
           label: "Counted #{item.counted_quantity} (variance #{item.variance})",
-          detail:
-            "Stock-take ##{item.stock_take_id} · by #{user_display(item.counted_by)}"
+          detail: "Stock-take ##{item.stock_take_id} · by #{user_display(item.counted_by)}"
         }
       end)
 
@@ -119,7 +118,7 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
         </div>
       </div>
 
-      <.header class="mt-6">
+      <.header variant="plain" class="mt-6">
         History
         <:subtitle>Everything that has touched this batch's stock, newest first</:subtitle>
       </.header>

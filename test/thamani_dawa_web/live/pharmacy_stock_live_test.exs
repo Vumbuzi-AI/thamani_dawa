@@ -32,10 +32,10 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       assert {:ok, _view, _html} = live(log_in_user(conn, pharma_lab), ~p"/pharmacy/stock")
     end
 
-    test "a lab technician is redirected away", %{conn: conn} do
+    test "a lab technician is redirected to the lab portal instead", %{conn: conn} do
       lab_technician = staff_fixture(%{role: :lab_technician})
 
-      assert {:error, {:redirect, %{to: "/"}}} =
+      assert {:error, {:redirect, %{to: "/lab"}}} =
                live(log_in_user(conn, lab_technician), ~p"/pharmacy/stock")
     end
 

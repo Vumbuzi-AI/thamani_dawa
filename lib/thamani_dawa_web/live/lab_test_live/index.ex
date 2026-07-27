@@ -313,8 +313,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
             |> Enum.reject(&(&1 == ""))
 
           if options == [] do
-            {:halt,
-             {defs, "Give \"#{key}\" at least one choice (separate choices with commas)."}}
+            {:halt, {defs, "Give \"#{key}\" at least one choice (separate choices with commas)."}}
           else
             {:cont, {Map.put(defs, key, %{"type" => "select", "options" => options}), nil}}
           end
@@ -496,7 +495,10 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
               Add one row for each result this test reports.
             </p>
 
-            <div class="grid grid-cols-12 gap-2 px-1 mb-1 text-xs font-medium" style="color: var(--thamani-pewter);">
+            <div
+              class="grid grid-cols-12 gap-2 px-1 mb-1 text-xs font-medium"
+              style="color: var(--thamani-pewter);"
+            >
               <div class="col-span-5">Field name</div>
               <div class="col-span-3">Type</div>
               <div class="col-span-3">Unit or choices</div>
@@ -546,6 +548,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
                     phx-click="remove_field_row"
                     phx-value-idx={row["idx"]}
                     aria-label="Remove field"
+                    class="relative transition-[opacity,transform] hover:opacity-70 active:scale-[0.96] after:absolute after:inset-[-10px] after:content-['']"
                     style="color: var(--thamani-pewter);"
                   >
                     <.icon name="hero-x-mark" class="size-5" />
@@ -590,8 +593,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
             patch={~p"/lab/tests/#{test.id}/edit"}
             class="gap-2"
           >
-            <.icon name="hero-pencil-square" class="size-4" />
-            Edit
+            <.icon name="hero-pencil-square" class="size-4" /> Edit
           </.button>
         </:action>
         <:action :let={{_id, test}}>

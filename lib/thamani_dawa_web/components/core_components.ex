@@ -78,8 +78,15 @@ defmodule ThamaniDawaWeb.CoreComponents do
           <p>{msg}</p>
         </div>
         <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+        <button
+          type="button"
+          class="group relative self-start cursor-pointer transition-transform active:scale-[0.96] after:absolute after:inset-[-12px] after:content-['']"
+          aria-label={gettext("close")}
+        >
+          <.icon
+            name="hero-x-mark"
+            class="size-5 opacity-40 transition-opacity group-hover:opacity-70"
+          />
         </button>
       </div>
     </div>
@@ -743,6 +750,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
       </.header>
   """
   attr :icon, :string, default: nil, doc: "optional hero-* icon name for the leading badge"
+
+  attr :variant, :string,
+    values: ~w(card plain),
+    default: "card",
+    doc:
+      "\"card\" (default) renders the bordered/shadowed card shell; \"plain\" is a bare section divider with no card shell, for in-page section headings that aren't real page headers"
+
   slot :inner_block, required: true
   slot :subtitle
   slot :actions
@@ -751,9 +765,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def header(assigns) do
     ~H"""
-    <div class={["mb-5 rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm", @class]}>
+    <div class={[
+      @variant == "card" && "mb-5 rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm",
+      @class
+    ]}>
       <header class={[
-        "flex flex-col items-stretch gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-5",
+        "flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6",
+        @variant == "card" && "p-4 sm:p-5",
         @toolbar != [] && "border-b border-thamani-stone"
       ]}>
         <div class="flex min-w-0 items-center gap-3">
@@ -781,7 +799,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
       </header>
       <div
         :if={@toolbar != []}
-        class="flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:p-5"
+        class={[
+          "flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center",
+          @variant == "card" && "p-4 sm:p-5"
+        ]}
       >
         {render_slot(@toolbar)}
       </div>
@@ -1156,19 +1177,19 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   defp thamani_btn_classes("primary"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] hover:opacity-90 w-full #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] hover:opacity-90 w-full #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("ghost"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-transparent text-thamani-forest text-[15px] font-normal no-underline border-[1.5px] border-thamani-forest cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-transparent text-thamani-forest text-[15px] font-normal no-underline border-[1.5px] border-thamani-forest cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("ghost_inv"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-transparent text-thamani-snow text-[15px] font-normal no-underline border-[1.5px] border-thamani-snow cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-transparent text-thamani-snow text-[15px] font-normal no-underline border-[1.5px] border-thamani-snow cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("lime"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-thamani-lime text-thamani-forest text-[15px] font-medium no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-lime text-thamani-forest text-[15px] font-medium no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] #{@btn_focus} #{@btn_loading}"
 
   @doc """
   Renders a Thamani-styled auth-page form field with label and inline error.
@@ -1734,7 +1755,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
     <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200 pt-6">
       <p class="text-sm text-slate-500 order-2 sm:order-1">
         Showing <span class="font-medium text-slate-900">{@from_item}</span>–<span class="font-medium text-slate-900">{@to_item}</span>
-        of <span class="font-medium text-slate-900">{@total_entries}</span> results
+        of <span class="font-medium text-slate-900">{@total_entries}</span>
+        results
       </p>
 
       <nav
@@ -1745,7 +1767,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page - 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-9 rounded-lg text-slate-500 transition-colors duration-150",
+            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_prev,
               do: "hover:bg-slate-100 hover:text-slate-900",
               else: "pointer-events-none opacity-40"
@@ -1764,13 +1786,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
               if page_num != :ellipsis, do: build_pagination_url(@path, page_num, @query_param)
             }
             class={[
-              "inline-flex items-center justify-center size-9 rounded-lg text-sm font-medium transition-colors duration-150",
+              "inline-flex items-center justify-center size-10 rounded-lg text-sm font-medium transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
               if(page_num == :ellipsis,
                 do: "text-slate-400 cursor-default",
-                else: if(page_num == @current_page,
-                  do: "bg-thamani-forest text-white",
-                  else: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                )
+                else:
+                  if(page_num == @current_page,
+                    do: "bg-thamani-forest text-white",
+                    else: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  )
               )
             ]}
           >
@@ -1781,7 +1804,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page + 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-9 rounded-lg text-slate-500 transition-colors duration-150",
+            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_next,
               do: "hover:bg-slate-100 hover:text-slate-900",
               else: "pointer-events-none opacity-40"
@@ -1809,7 +1832,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
         [1, :ellipsis] ++ Enum.to_list((total_pages - 4)..total_pages)
 
       true ->
-        [1, :ellipsis] ++ Enum.to_list((current_page - 1)..(current_page + 1)) ++ [:ellipsis, total_pages]
+        [1, :ellipsis] ++
+          Enum.to_list((current_page - 1)..(current_page + 1)) ++ [:ellipsis, total_pages]
     end
   end
 

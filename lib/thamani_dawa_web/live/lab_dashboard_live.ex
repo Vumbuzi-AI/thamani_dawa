@@ -19,7 +19,8 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
 
     completed_this_month =
       Enum.count(lab_orders, fn order ->
-        order.status == :completed and Date.compare(DateTime.to_date(order.inserted_at), from) != :lt and
+        order.status == :completed and
+          Date.compare(DateTime.to_date(order.inserted_at), from) != :lt and
           Date.compare(DateTime.to_date(order.inserted_at), to) != :gt
       end)
 
@@ -152,7 +153,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         />
       </div>
 
-      <.header class="mt-4">Pending orders</.header>
+      <.header variant="plain" class="mt-4">Pending orders</.header>
       <.table
         id="pending-orders"
         rows={@pending}
@@ -168,7 +169,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         </:empty_state>
       </.table>
 
-      <.header class="mt-6">Incomplete reports</.header>
+      <.header variant="plain" class="mt-6">Incomplete reports</.header>
       <.table
         id="incomplete-orders"
         rows={@incomplete}

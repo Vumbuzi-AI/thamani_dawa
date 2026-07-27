@@ -274,8 +274,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             patch={~p"/org/sites/#{site.id}/edit"}
             class="gap-2"
           >
-            <.icon name="hero-pencil-square" class="size-4" />
-            Edit
+            <.icon name="hero-pencil-square" class="size-4" /> Edit
           </.button>
         </:action>
         <:empty_state>

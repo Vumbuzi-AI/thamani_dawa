@@ -62,7 +62,8 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
 
   def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
     filters = %{
-      site: sanitize_site_filter(Map.get(filter_params, "site", ""), socket.assigns.allowed_site_ids),
+      site:
+        sanitize_site_filter(Map.get(filter_params, "site", ""), socket.assigns.allowed_site_ids),
       status: Map.get(filter_params, "status", "")
     }
 
@@ -235,10 +236,20 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
         <:subtitle>{stock_subtitle(@allowed_site_ids)}</:subtitle>
         <:toolbar>
           <.tab_group>
-            <:tab id="products-tab" active={@view == "products"} phx_click="set_view" phx_value_view="products">
+            <:tab
+              id="products-tab"
+              active={@view == "products"}
+              phx_click="set_view"
+              phx_value_view="products"
+            >
               Products
             </:tab>
-            <:tab id="batches-tab" active={@view == "batches"} phx_click="set_view" phx_value_view="batches">
+            <:tab
+              id="batches-tab"
+              active={@view == "batches"}
+              phx_click="set_view"
+              phx_value_view="batches"
+            >
               All batches
             </:tab>
           </.tab_group>
@@ -358,7 +369,8 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
         <p class="text-sm text-slate-500">
           Showing page <span class="font-medium text-slate-900">{@page_info.page_number}</span>
           of <span class="font-medium text-slate-900">{max(@page_info.total_pages, 1)}</span>
-          (<span class="font-medium text-slate-900">{@page_info.total_entries}</span> total)
+          (<span class="font-medium text-slate-900">{@page_info.total_entries}</span>
+          total)
         </p>
         <div class="flex items-center gap-1">
           <.button

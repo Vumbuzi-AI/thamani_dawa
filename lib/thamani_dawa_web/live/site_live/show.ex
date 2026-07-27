@@ -181,7 +181,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       </.header>
 
       <div class="flex flex-wrap items-start justify-between gap-4 mt-6">
-        <.header>
+        <.header variant="plain">
           Site activity
           <:subtitle>Stats for the selected time window at this site.</:subtitle>
         </.header>
@@ -227,7 +227,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         />
       </div>
 
-      <.header class="mt-6">Staff assigned</.header>
+      <.header variant="plain" class="mt-6">Staff assigned</.header>
       <.table id="site-staff" rows={@staff}>
         <:col :let={user} label="Name">{user.name}</:col>
         <:col :let={user} label="Role">{Phoenix.Naming.humanize(user.role)}</:col>
@@ -257,7 +257,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       </div>
 
       <div :if={@tab == :pharmacy}>
-        <.header class="mt-6">
+        <.header variant="plain" class="mt-6">
           Low stock
           <:subtitle>Products at or below their reorder level</:subtitle>
         </.header>
@@ -274,7 +274,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           </:empty_state>
         </.table>
 
-        <.header class="mt-6">
+        <.header variant="plain" class="mt-6">
           Near-expiry batches
           <:subtitle>Expiring within {@near_expiry_days} days</:subtitle>
         </.header>
@@ -294,7 +294,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           </:empty_state>
         </.table>
 
-        <.header class="mt-6">Pending prescriptions</.header>
+        <.header variant="plain" class="mt-6">Pending prescriptions</.header>
         <.table
           id="site-pending-prescriptions"
           rows={@pending_prescriptions}
@@ -318,7 +318,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       </div>
 
       <div :if={@tab == :lab}>
-        <.header class="mt-6">Pending orders</.header>
+        <.header variant="plain" class="mt-6">Pending orders</.header>
         <.table
           id="site-pending-orders"
           rows={@pending_orders}
@@ -336,7 +336,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           </:empty_state>
         </.table>
 
-        <.header class="mt-6">Incomplete reports</.header>
+        <.header variant="plain" class="mt-6">Incomplete reports</.header>
         <.table
           id="site-incomplete-orders"
           rows={@incomplete_orders}

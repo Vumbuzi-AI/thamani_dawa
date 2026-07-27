@@ -20,7 +20,10 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     socket
     |> assign(:range, range)
     |> assign(:stats, Dashboards.admin_stats(organization_id, site_id, dates))
-    |> assign(:daily_revenue, Dashboards.daily_revenue(organization_id, site_id, elem(dates, 0), elem(dates, 1)))
+    |> assign(
+      :daily_revenue,
+      Dashboards.daily_revenue(organization_id, site_id, elem(dates, 0), elem(dates, 1))
+    )
     |> assign(:monthly_revenue, Dashboards.monthly_revenue(organization_id, site_id))
   end
 
@@ -55,7 +58,8 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
 
   defp monthly_revenue_chart_data(monthly_revenue) do
     %{
-      labels: Enum.map(monthly_revenue, fn {date, _amount} -> Calendar.strftime(date, "%b %Y") end),
+      labels:
+        Enum.map(monthly_revenue, fn {date, _amount} -> Calendar.strftime(date, "%b %Y") end),
       datasets: [
         %{
           label: "Revenue",

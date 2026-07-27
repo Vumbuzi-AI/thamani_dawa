@@ -580,40 +580,13 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
               <.input field={@form[:gtin]} label="GTIN" required placeholder="e.g., 5901234123457" />
 
               <div class="space-y-3 bg-slate-50 p-3 rounded-lg">
-                <label class="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="product[is_otc]"
-                    value="true"
-                    checked={@form[:is_otc].value}
-                    class="w-4 h-4 rounded border-slate-300"
-                  />
-                  <span class="text-sm font-medium text-slate-700">Over-the-counter</span>
-                </label>
-                <label class="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="product[is_dangerous_drug]"
-                    value="true"
-                    checked={@form[:is_dangerous_drug].value}
-                    class="w-4 h-4 rounded border-slate-300"
-                  />
-                  <span class="text-sm font-medium text-slate-700">Dangerous drug</span>
-                </label>
+                <.input field={@form[:is_otc]} type="checkbox" label="Over-the-counter" />
+                <.input field={@form[:is_dangerous_drug]} type="checkbox" label="Dangerous drug" />
               </div>
 
               <.input field={@form[:reorder_level]} type="number" label="Reorder level" min="0" />
 
-              <label class="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="product[is_active]"
-                  value="true"
-                  checked={@form[:is_active].value}
-                  class="w-4 h-4 rounded border-slate-300"
-                />
-                <span class="text-sm font-medium text-slate-700">Active</span>
-              </label>
+              <.input field={@form[:is_active]} type="checkbox" label="Active" />
 
               <div class="flex gap-3 pt-4 border-t">
                 <.button variant="primary" class="flex-1">Save Product</.button>
@@ -641,8 +614,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
             patch={~p"/org/products/#{product.id}/edit"}
             class="gap-2"
           >
-            <.icon name="hero-pencil-square" class="size-4" />
-            Edit
+            <.icon name="hero-pencil-square" class="size-4" /> Edit
           </.button>
         </:action>
         <:action :let={{_id, product}}>

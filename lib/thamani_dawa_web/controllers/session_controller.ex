@@ -36,5 +36,18 @@ defmodule ThamaniDawaWeb.SessionController do
   defp redirect_path_for(%User{role: :admin}), do: ~p"/org/sites"
   defp redirect_path_for(%User{role: :pharmacist}), do: ~p"/pharmacy"
   defp redirect_path_for(%User{role: :lab_technician}), do: ~p"/lab"
-  defp redirect_path_for(%User{role: :pharma_lab}), do: ~p"/pharmacy"
+
+  defp redirect_path_for(%User{role: :pharma_lab, current_site_id: nil}), do: ~p"/pharmacy"
+
+  defp redirect_path_for(%User{role: :pharma_lab} = user) do
+    site = ThamaniDawa.Sites.get_site!(user.organization_id, user.current_site_id)
+
+    if ThamaniDawa.Sites.Site.lab?(site) and not ThamaniDawa.Sites.Site.pharmacy?(site) do
+      ~p"/lab"
+    else
+      ~p"/pharmacy"
+    end
+  rescue
+    Ecto.NoResultsError -> ~p"/pharmacy"
+  end
 end

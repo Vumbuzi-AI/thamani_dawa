@@ -106,7 +106,11 @@ defmodule ThamaniDawaWeb.LabPatientLive.Index do
 
     visit_attrs = %{site_id: site_id, user_id: user_id, visit_type: :lab}
 
-    PatientVisits.create_patient_visit_with_new_patient(organization_id, patient_attrs, visit_attrs)
+    PatientVisits.create_patient_visit_with_new_patient(
+      organization_id,
+      patient_attrs,
+      visit_attrs
+    )
   end
 
   defp save_patient_visit(false = _new_patient, params, site_id, socket) do
@@ -153,7 +157,9 @@ defmodule ThamaniDawaWeb.LabPatientLive.Index do
     organization_id = socket.assigns.current_scope.organization_id
     page = socket.assigns.page
 
-    page_result = PatientVisits.list_patient_visits_paginated(organization_id, page, visit_type: :lab)
+    page_result =
+      PatientVisits.list_patient_visits_paginated(organization_id, page, visit_type: :lab)
+
     visits = page_result.entries
 
     filtered =
@@ -216,10 +222,20 @@ defmodule ThamaniDawaWeb.LabPatientLive.Index do
         </:actions>
         <:toolbar>
           <.tab_group>
-            <:tab id="patients-tab" active={@tab == "patients"} phx_click="switch_tab" phx_value_tab="patients">
+            <:tab
+              id="patients-tab"
+              active={@tab == "patients"}
+              phx_click="switch_tab"
+              phx_value_tab="patients"
+            >
               Patients
             </:tab>
-            <:tab id="visits-tab" active={@tab == "visits"} phx_click="switch_tab" phx_value_tab="visits">
+            <:tab
+              id="visits-tab"
+              active={@tab == "visits"}
+              phx_click="switch_tab"
+              phx_value_tab="visits"
+            >
               Patient visits
             </:tab>
           </.tab_group>
@@ -254,7 +270,11 @@ defmodule ThamaniDawaWeb.LabPatientLive.Index do
           class="space-y-4"
         >
           <.tab_group>
-            <:tab id="existing-patient-mode" active={not @use_new_patient} phx_click="toggle_patient_mode">
+            <:tab
+              id="existing-patient-mode"
+              active={not @use_new_patient}
+              phx_click="toggle_patient_mode"
+            >
               Existing Patient
             </:tab>
             <:tab id="new-patient-mode" active={@use_new_patient} phx_click="toggle_patient_mode">

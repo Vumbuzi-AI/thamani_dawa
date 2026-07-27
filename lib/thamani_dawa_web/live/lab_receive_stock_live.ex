@@ -384,8 +384,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
               patch={~p"/lab/receive-stock/#{batch.id}/receive"}
               class="gap-2"
             >
-              <.icon name="hero-arrow-down-tray" class="size-4" />
-              Receive
+              <.icon name="hero-arrow-down-tray" class="size-4" /> Receive
             </.button>
           </:action>
           <:empty_state>
@@ -471,8 +470,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
           Approve receipt
         </.button>
       </div>
-
-      
 
       <div class="rounded-2xl bg-thamani-stone p-6 mt-6">
         <h2 class="text-base font-medium mb-4 text-thamani-forest">Log consumable usage</h2>

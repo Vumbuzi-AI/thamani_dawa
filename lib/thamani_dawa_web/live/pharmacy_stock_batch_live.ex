@@ -90,7 +90,7 @@ defmodule ThamaniDawaWeb.PharmacyStockBatchLive do
         </div>
       </div>
 
-      <.header class="mt-6">
+      <.header variant="plain" class="mt-6">
         Usage history
         <:subtitle>Everyone who has drawn stock from this batch, newest first</:subtitle>
       </.header>

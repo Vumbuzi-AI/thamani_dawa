@@ -414,7 +414,11 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
             <div class="flex flex-col gap-3 border-b border-thamani-stone bg-thamani-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 class="text-base font-semibold text-thamani-forest">1. Patient</h3>
               <.tab_group>
-                <:tab id="existing-patient-mode" active={not @use_new_patient} phx_click="toggle_patient_mode">
+                <:tab
+                  id="existing-patient-mode"
+                  active={not @use_new_patient}
+                  phx_click="toggle_patient_mode"
+                >
                   Existing Patient
                 </:tab>
                 <:tab id="new-patient-mode" active={@use_new_patient} phx_click="toggle_patient_mode">
@@ -547,7 +551,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                           prompt="Select product..."
                           required
                         />
-                        <p :if={selected_product} class="mt-1.5 flex items-center gap-3 text-xs font-medium text-thamani-pewter">
+                        <p
+                          :if={selected_product}
+                          class="mt-1.5 flex items-center gap-3 text-xs font-medium text-thamani-pewter"
+                        >
                           <span class="flex items-center gap-1">
                             <.icon name="hero-cube" class="size-3.5" />
                             {selected_product.stock} unit{if selected_product.stock != 1, do: "s"} in stock
@@ -566,7 +573,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                           required
                           min="1"
                         />
-                        <p :if={over_stock?} class="mt-1.5 flex items-center gap-1 text-xs font-medium text-thamani-error">
+                        <p
+                          :if={over_stock?}
+                          class="mt-1.5 flex items-center gap-1 text-xs font-medium text-thamani-error"
+                        >
                           <.icon name="hero-exclamation-triangle" class="size-3.5" />
                           Exceeds stock ({selected_product.stock})
                         </p>
@@ -637,14 +647,16 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                             do: " | #{days} days"}
                         </div>
                       </div>
-                      <div :if={product} class="flex items-center gap-3 text-xs font-medium text-thamani-pewter">
+                      <div
+                        :if={product}
+                        class="flex items-center gap-3 text-xs font-medium text-thamani-pewter"
+                      >
                         <span class="flex items-center gap-1">
                           <.icon name="hero-cube" class="size-3.5" />
                           {product.stock} in stock
                         </span>
                         <span class="flex items-center gap-1">
-                          <.icon name="hero-banknotes" class="size-3.5" />
-                          KES {product.price}
+                          <.icon name="hero-banknotes" class="size-3.5" /> KES {product.price}
                         </span>
                       </div>
                     </div>

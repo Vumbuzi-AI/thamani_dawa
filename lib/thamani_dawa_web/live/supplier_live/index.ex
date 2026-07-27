@@ -245,8 +245,7 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
             patch={~p"/org/suppliers/#{supplier.id}/edit"}
             class="gap-2"
           >
-            <.icon name="hero-pencil-square" class="size-4" />
-            Edit
+            <.icon name="hero-pencil-square" class="size-4" /> Edit
           </.button>
         </:action>
         <:action :let={{_id, supplier}}>

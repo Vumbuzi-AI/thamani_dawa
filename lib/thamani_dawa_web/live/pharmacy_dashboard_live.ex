@@ -146,19 +146,6 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         <:subtitle>Stock alerts and pending prescriptions at your site.</:subtitle>
       </.header>
 
-      <div
-        :if={@pending_batches_count > 0}
-        class="mt-4 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
-      >
-        <span class="text-sm text-amber-800">
-          <strong>{@pending_batches_count}</strong>
-          {if @pending_batches_count == 1, do: "batch is", else: "batches are"} awaiting receipt at your site.
-        </span>
-        <.thamani_btn navigate={~p"/pharmacy/receive-stock"} class="!w-auto">
-          Receive stock
-        </.thamani_btn>
-      </div>
-
       <div class="dashboard-stat-grid mt-4">
         <.stat_tile
           icon="hero-x-circle"
@@ -217,7 +204,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         />
       </div>
 
-      <.header class="mt-6">
+      <.header variant="plain" class="mt-6">
         Out of stock
         <:subtitle>Products with no remaining stock at your site</:subtitle>
       </.header>
@@ -238,7 +225,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         </:empty_state>
       </.table>
 
-      <.header class="mt-6">
+      <.header variant="plain" class="mt-6">
         Low stock
         <:subtitle>Products at or below their reorder level</:subtitle>
       </.header>
@@ -257,7 +244,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         </:empty_state>
       </.table>
 
-      <.header class="mt-6">
+      <.header variant="plain" class="mt-6">
         Near-expiry batches
         <:subtitle>Expiring within {@near_expiry_days} days</:subtitle>
       </.header>
@@ -277,7 +264,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         </:empty_state>
       </.table>
 
-      <.header class="mt-6">
+      <.header variant="plain" class="mt-6">
         Pending prescriptions
       </.header>
       <.table
