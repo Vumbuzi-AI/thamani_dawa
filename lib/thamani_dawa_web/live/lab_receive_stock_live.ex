@@ -472,17 +472,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         </.button>
       </div>
 
-      <div class="mb-8">
-        <h2 class="text-base font-semibold mb-3">Receive unscheduled delivery</h2>
-        <.batch_form
-          form={@form}
-          products={Map.values(@products_by_id)}
-          suppliers={@suppliers}
-          sites={@lab_sites}
-          site_locked={@site_locked}
-          gs1_decode_error={@gs1_decode_error}
-        />
-      </div>
+      
 
       <div class="rounded-2xl bg-thamani-stone p-6 mt-6">
         <h2 class="text-base font-medium mb-4 text-thamani-forest">Log consumable usage</h2>

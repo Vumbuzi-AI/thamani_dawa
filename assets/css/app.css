@@ -122,7 +122,6 @@ html {
   scroll-behavior: smooth !important;
 }
 .internal-app {
-  font-weight: 500;
   font-synthesis: none;
   font-kerning: normal;
   font-optical-sizing: auto;
@@ -130,12 +129,11 @@ html {
   -webkit-font-smoothing: antialiased;
 }
 
-.internal-app .font-medium {
-  font-weight: 600;
-}
-
-.internal-app :where(.font-semibold, .font-bold, .font-extrabold, .font-black) {
-  font-weight: 700;
+/* Medium (500) is the heaviest weight this app ever renders — never
+   font-semibold/font-bold. Clamped here so any stray usage is neutralized
+   instead of quietly rendering bolder than the design allows. */
+.internal-app :where(.font-medium, .font-semibold, .font-bold, .font-extrabold, .font-black) {
+  font-weight: 500;
 }
 
 /* ============================================================
@@ -290,9 +288,9 @@ html {
   --thamani-lime: #e7e7ff;
   --thamani-snow: #ffffff;
   --thamani-stone: #e6edf8;
-  --thamani-pewter: #687083;
+  --thamani-pewter: #4b5164;
   --thamani-frosted: #c7cfe0;
-  --thamani-subtle: #9aa3b5;
+  --thamani-subtle: #687083;
   --thamani-error: #c21f17;
   --thamani-canvas: #f8fafc;
   --thamani-accent: #6667ab;
@@ -897,27 +895,33 @@ html {
   box-shadow: var(--shadow-card);
 }
 
+.dashboard-stat-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .dashboard-stat-tile-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--thamani-lime);
-  color: var(--thamani-forest);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--thamani-stone);
+  color: var(--thamani-pewter);
+  flex-shrink: 0;
 }
 
 .dashboard-stat-tile-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--thamani-subtle);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--thamani-pewter);
 }
 
 .dashboard-stat-tile-value {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--thamani-forest);
   line-height: 1.1;

@@ -87,6 +87,24 @@ defmodule ThamaniDawa.AccountsTest do
       assert user.current_site_id == site.id
     end
 
+    test "accepts multiple home sites that belong to the same organization" do
+      organization = organization_fixture()
+      site_a = site_fixture(%{organization_id: organization.id})
+      site_b = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, user, _encoded_token} =
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "New Hire",
+                 email: valid_user_email(),
+                 role: :pharmacist,
+                 site_ids: [site_a.id, site_b.id]
+               })
+
+      user = Repo.preload(user, :sites)
+      assert Enum.map(user.sites, & &1.id) |> Enum.sort() == Enum.sort([site_a.id, site_b.id])
+      assert user.current_site_id in [site_a.id, site_b.id]
+    end
+
     test "rejects a home site that belongs to a different organization" do
       organization = organization_fixture()
       other_org_site = site_fixture()

@@ -40,12 +40,26 @@ defmodule ThamaniDawa.Dashboards do
     last_day_of_last_month = today |> Date.beginning_of_month() |> Date.add(-1)
 
     case key do
+      "today" -> {today, today}
+      "this_week" -> {Date.beginning_of_week(today), today}
       "this_month" -> {Date.beginning_of_month(today), today}
       "last_month" -> {Date.beginning_of_month(last_day_of_last_month), last_day_of_last_month}
       "last_30_days" -> {Date.add(today, -29), today}
       "this_year" -> {%{today | month: 1, day: 1}, today}
       "all_time" -> {~D[2000-01-01], today}
       _ -> range_dates("this_month")
+    end
+  end
+
+  @doc """
+  Resolves an admin-supplied `{from, to}` window for a custom date-range
+  filter (see `ThamaniDawaWeb.SiteLive.Show`). Swaps the pair if `from` is
+  after `to`, so the caller doesn't have to validate ordering.
+  """
+  def custom_range_dates(%Date{} = from, %Date{} = to) do
+    case Date.compare(from, to) do
+      :gt -> {to, from}
+      _ -> {from, to}
     end
   end
 
@@ -62,6 +76,21 @@ defmodule ThamaniDawa.Dashboards do
       lab_tests_done: count_completed_lab_orders(organization_id, site_id, from, to),
       pending_prescriptions: count_pending_prescriptions(organization_id, site_id),
       pending_lab_orders: count_pending_lab_orders(organization_id, site_id)
+    }
+  end
+
+  @doc """
+  Site-scoped activity numbers for the `SiteLive.Show` stat cards: patient
+  visits, prescriptions, and completed lab orders in the given window at a
+  single site. Unlike `admin_stats/3` this skips the org-wide-only fields
+  (`total_patients`, `revenue_collected`, `active_staff`, pending counts)
+  that page doesn't show, so it only runs the three queries it needs.
+  """
+  def site_activity_stats(organization_id, site_id, {from, to}) do
+    %{
+      patient_visits: count_visits(organization_id, site_id, from, to),
+      prescriptions: count_prescriptions(organization_id, site_id, from, to),
+      lab_tests_done: count_completed_lab_orders(organization_id, site_id, from, to)
     }
   end
 
@@ -147,7 +176,9 @@ defmodule ThamaniDawa.Dashboards do
     |> order_by([d], desc: sum(d.quantity))
     |> limit(^limit)
     |> Repo.all()
-    |> Enum.map(fn {generic_name, brand_name, qty} -> {generic_name || brand_name || "Unnamed", qty} end)
+    |> Enum.map(fn {generic_name, brand_name, qty} ->
+      {generic_name || brand_name || "Unnamed", qty}
+    end)
   end
 
   @doc "Stat-tile numbers for the lab dashboard (this-month window)."

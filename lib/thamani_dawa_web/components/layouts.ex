@@ -259,8 +259,7 @@ defmodule ThamaniDawaWeb.Layouts do
             <% active =
               if path == @base_path,
                 do: @current_path == @base_path,
-                else:
-                  @current_path == path or String.starts_with?(@current_path, path <> "/") %>
+                else: @current_path == path or String.starts_with?(@current_path, path <> "/") %>
             <.link
               navigate={path}
               data-tooltip={label}
@@ -331,6 +330,7 @@ defmodule ThamaniDawaWeb.Layouts do
             class="flex flex-col gap-1"
           >
             <input type="hidden" name="_method" value="patch" />
+            <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
             <input type="hidden" name="return_to" value={@current_path} />
             <label
               for="site-switch-select"

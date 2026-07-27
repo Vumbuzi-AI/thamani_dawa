@@ -6,7 +6,7 @@ defmodule ThamaniDawa.Accounts do
   """
 
   import Ecto.Query, warn: false
-  alias ThamaniDawa.Accounts.{Scope, User, UserLoginSession, UserNotifier, UserToken}
+  alias ThamaniDawa.Accounts.{Scope, User, UserLoginSession, UserNotifier, UserSite, UserToken}
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
@@ -53,6 +53,22 @@ defmodule ThamaniDawa.Accounts do
 
   defp scoped_site_query(organization_id) do
     from s in Site, where: s.organization_id == ^organization_id
+  end
+
+  @doc """
+  Lists the staff assigned to a single site, for the site detail page's
+  "Staff assigned" card. Returns plain `%{id:, name:, role:}` maps (not
+  `User` structs), ordered by name.
+  """
+  def list_users_for_site(organization_id, site_id) do
+    from(u in User,
+      join: us in UserSite,
+      on: us.user_id == u.id,
+      where: us.organization_id == ^organization_id and us.site_id == ^site_id,
+      order_by: [asc: u.name],
+      select: %{id: u.id, name: u.name, role: u.role}
+    )
+    |> Repo.all()
   end
 
   @doc """
