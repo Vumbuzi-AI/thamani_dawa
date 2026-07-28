@@ -31,6 +31,7 @@ defmodule ThamaniDawa.LabOrders.LabConsumableUsage do
     |> validate_required([:batch_id, :quantity])
     |> validate_number(:quantity, greater_than: 0)
     |> foreign_key_constraint(:lab_order_id)
+    |> foreign_key_constraint(:lab_order_result_id)
     |> foreign_key_constraint(:batch_id)
     |> foreign_key_constraint(:used_by_id)
   end
