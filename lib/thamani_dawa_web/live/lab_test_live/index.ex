@@ -315,35 +315,45 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
 
   defp build_field_definitions(rows) do
     Enum.reduce_while(rows, {%{}, nil}, fn row, {defs, nil} ->
-      key = String.trim(row["key"] || "")
-      type = row["type"] || "number"
-      unit = String.trim(row["unit"] || "")
-      options_raw = row["options"] || ""
-
-      cond do
-        key == "" and unit == "" and String.trim(options_raw) == "" ->
-          {:cont, {defs, nil}}
-
-        key == "" ->
-          {:halt, {defs, "Give every field a name."}}
-
-        type == "select" ->
-          options =
-            options_raw
-            |> String.split(",")
-            |> Enum.map(&String.trim/1)
-            |> Enum.reject(&(&1 == ""))
-
-          if options == [] do
-            {:halt, {defs, "Give \"#{key}\" at least one choice (separate choices with commas)."}}
-          else
-            {:cont, {Map.put(defs, key, %{"type" => "select", "options" => options}), nil}}
-          end
-
-        true ->
-          {:cont, {Map.put(defs, key, %{"type" => type, "unit" => unit}), nil}}
+      case classify_row(row) do
+        :skip -> {:cont, {defs, nil}}
+        {:error, msg} -> {:halt, {defs, msg}}
+        {:ok, key, field_def} -> {:cont, {Map.put(defs, key, field_def), nil}}
       end
     end)
+  end
+
+  defp classify_row(row) do
+    {key, type, unit, options_raw} = parse_row(row)
+
+    cond do
+      key == "" and unit == "" and String.trim(options_raw) == "" -> :skip
+      key == "" -> {:error, "Give every field a name."}
+      type == "select" -> classify_select_row(key, options_raw)
+      true -> {:ok, key, %{"type" => type, "unit" => unit}}
+    end
+  end
+
+  defp parse_row(row) do
+    key = String.trim(row["key"] || "")
+    type = row["type"] || "number"
+    unit = String.trim(row["unit"] || "")
+    options_raw = row["options"] || ""
+    {key, type, unit, options_raw}
+  end
+
+  defp classify_select_row(key, options_raw) do
+    options =
+      options_raw
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    if options == [] do
+      {:error, "Give \"#{key}\" at least one choice (separate choices with commas)."}
+    else
+      {:ok, key, %{"type" => "select", "options" => options}}
+    end
   end
 
   defp field_definitions_to_rows(field_definitions) when map_size(field_definitions) == 0 do

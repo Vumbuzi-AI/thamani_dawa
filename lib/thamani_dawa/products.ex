@@ -11,14 +11,17 @@ defmodule ThamaniDawa.Products do
 
   @doc "Lists an organization's products."
   def list_products(organization_id) do
-    Repo.all(from p in Product, where: p.organization_id == ^organization_id)
+    Repo.all(
+      from p in Product, where: p.organization_id == ^organization_id, order_by: [asc: p.id]
+    )
   end
 
   @doc "Lists an organization's products with pagination."
   def list_products_paginated(organization_id, page \\ 1, opts \\ []) do
     search = Keyword.get(opts, :search)
 
-    query = from(p in Product, where: p.organization_id == ^organization_id)
+    query =
+      from(p in Product, where: p.organization_id == ^organization_id, order_by: [asc: p.id])
 
     query =
       if search && String.trim(search) != "" do

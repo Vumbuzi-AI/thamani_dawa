@@ -1,9 +1,13 @@
 defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
   @moduledoc """
-  Covers the acceptance criteria for the organization-wide, read-only stock
-  view: pharmacists see every site's batches (not just their home site),
-  cross-organization stock never leaks in, site/status filters narrow the
-  list, and the screen exposes no mutation controls of its own.
+  Covers the acceptance criteria for the site-scoped, read-only stock view:
+  staff see every site they're *assigned to* (not just their current one), never
+  a site they aren't assigned to and never another organization's stock, the
+  site/status filters narrow the list, and the screen exposes no mutation
+  controls of its own.
+
+  Admins are org-wide (`site_id: nil`) and get every site in the filter; non-admin
+  staff are confined to `user.sites` in both the data and the filter's options.
   """
 
   use ThamaniDawaWeb.ConnCase, async: true
@@ -15,6 +19,26 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
   import ThamaniDawa.SuppliersFixtures
+
+  # Builds an organization with one site per name in `site_names` and a pharmacist
+  # assigned to all of them. Batches are only visible to non-admin staff at sites
+  # they're assigned to, so tests must pin their batches to one of the returned sites.
+  defp pharmacist_assigned_to(site_names) do
+    admin = user_fixture()
+    org_id = admin.organization_id
+
+    sites = Enum.map(site_names, &site_fixture(%{organization_id: org_id, name: &1}))
+
+    pharmacist =
+      staff_fixture(%{
+        organization_id: org_id,
+        invited_by_id: admin.id,
+        role: :pharmacist,
+        site_ids: Enum.map(sites, & &1.id)
+      })
+
+    {org_id, pharmacist, sites}
+  end
 
   describe "access control" do
     test "an admin can reach it", %{conn: conn} do
@@ -44,33 +68,15 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
     end
   end
 
-  describe "organization-wide reads" do
-    test "a pharmacist sees batches at every site, not just their home site", %{conn: conn} do
-      admin = user_fixture()
-      site_a = site_fixture(%{organization_id: admin.organization_id, name: "Site A"})
-      site_b = site_fixture(%{organization_id: admin.organization_id, name: "Site B"})
-
-      pharmacist =
-        staff_fixture(%{
-          organization_id: admin.organization_id,
-          invited_by_id: admin.id,
-          role: :pharmacist,
-          site_id: site_a.id
-        })
+  describe "assigned-site reads" do
+    test "a pharmacist sees batches at every site they're assigned to", %{conn: conn} do
+      {org_id, pharmacist, [site_a, site_b]} = pharmacist_assigned_to(["Site A", "Site B"])
 
       batch_a =
-        batch_fixture(%{
-          organization_id: admin.organization_id,
-          site_id: site_a.id,
-          batch_no: "BATCH-SITE-A"
-        })
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BATCH-SITE-A"})
 
       batch_b =
-        batch_fixture(%{
-          organization_id: admin.organization_id,
-          site_id: site_b.id,
-          batch_no: "BATCH-SITE-B"
-        })
+        batch_fixture(%{organization_id: org_id, site_id: site_b.id, batch_no: "BATCH-SITE-B"})
 
       {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
@@ -80,8 +86,40 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       assert html =~ "Site B"
     end
 
+    test "a pharmacist can neither see nor filter into a site they aren't assigned to", %{
+      conn: conn
+    } do
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
+      off_limits = site_fixture(%{organization_id: org_id, name: "Site Off Limits"})
+
+      mine =
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BATCH-MINE"})
+
+      theirs =
+        batch_fixture(%{
+          organization_id: org_id,
+          site_id: off_limits.id,
+          batch_no: "BATCH-THEIRS"
+        })
+
+      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+
+      assert html =~ mine.batch_no
+      refute html =~ theirs.batch_no
+      # The filter can't be used to reach it either: it isn't even an option.
+      refute html =~ "value=\"#{off_limits.id}\""
+
+      # ...and hand-crafting the filter value is rejected server-side.
+      html = render_submit(lv, "apply_filters", %{"filters" => %{"site" => "#{off_limits.id}"}})
+
+      assert html =~ mine.batch_no
+      refute html =~ theirs.batch_no
+    end
+
     test "batches from another organization never appear", %{conn: conn} do
-      pharmacist = staff_fixture(%{role: :pharmacist})
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
+
+      mine = batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BATCH-MINE"})
 
       other_org = organization_fixture()
 
@@ -90,18 +128,20 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
 
       {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
+      assert html =~ mine.batch_no
       refute html =~ other_org_batch.batch_no
     end
 
     test "shows both active and pending-receipt batches with their status", %{conn: conn} do
-      pharmacist = staff_fixture(%{role: :pharmacist})
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
 
       active =
-        batch_fixture(%{organization_id: pharmacist.organization_id, batch_no: "ACTIVE-BATCH"})
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "ACTIVE-BATCH"})
 
       pending =
         batch_fixture(%{
-          organization_id: pharmacist.organization_id,
+          organization_id: org_id,
+          site_id: site_a.id,
           batch_no: "PENDING-BATCH",
           pending: true
         })
@@ -115,11 +155,12 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
     end
 
     test "shows serial, manufacture date, and supplier when present", %{conn: conn} do
-      pharmacist = staff_fixture(%{role: :pharmacist})
-      supplier = supplier_fixture(%{organization_id: pharmacist.organization_id, name: "Bulk Rx"})
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
+      supplier = supplier_fixture(%{organization_id: org_id, name: "Bulk Rx"})
 
       batch_fixture(%{
-        organization_id: pharmacist.organization_id,
+        organization_id: org_id,
+        site_id: site_a.id,
         batch_no: "TRACE-BATCH",
         serial: "SN-77665",
         manufacture_date: ~D[2026-04-01],
@@ -134,9 +175,9 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
     end
 
     test "shows a dash for serial, manufacture date, and supplier when absent", %{conn: conn} do
-      pharmacist = staff_fixture(%{role: :pharmacist})
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
 
-      batch_fixture(%{organization_id: pharmacist.organization_id, batch_no: "BARE-BATCH"})
+      batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BARE-BATCH"})
 
       {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
@@ -146,24 +187,13 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
 
   describe "site filter" do
     test "narrows the list to just the selected site", %{conn: conn} do
-      admin = user_fixture()
-      site_a = site_fixture(%{organization_id: admin.organization_id, name: "Site A"})
-      site_b = site_fixture(%{organization_id: admin.organization_id, name: "Site B"})
-      pharmacist = staff_fixture(%{organization_id: admin.organization_id, role: :pharmacist})
+      {org_id, pharmacist, [site_a, site_b]} = pharmacist_assigned_to(["Site A", "Site B"])
 
       batch_a =
-        batch_fixture(%{
-          organization_id: admin.organization_id,
-          site_id: site_a.id,
-          batch_no: "BATCH-SITE-A"
-        })
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BATCH-SITE-A"})
 
       batch_b =
-        batch_fixture(%{
-          organization_id: admin.organization_id,
-          site_id: site_b.id,
-          batch_no: "BATCH-SITE-B"
-        })
+        batch_fixture(%{organization_id: org_id, site_id: site_b.id, batch_no: "BATCH-SITE-B"})
 
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
@@ -177,25 +207,14 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       assert html =~ "Site: Site A"
     end
 
-    test "clear_filters shows every site again", %{conn: conn} do
-      admin = user_fixture()
-      site_a = site_fixture(%{organization_id: admin.organization_id, name: "Site A"})
-      site_b = site_fixture(%{organization_id: admin.organization_id, name: "Site B"})
-      pharmacist = staff_fixture(%{organization_id: admin.organization_id, role: :pharmacist})
+    test "clear_filters shows every assigned site again", %{conn: conn} do
+      {org_id, pharmacist, [site_a, site_b]} = pharmacist_assigned_to(["Site A", "Site B"])
 
       batch_a =
-        batch_fixture(%{
-          organization_id: admin.organization_id,
-          site_id: site_a.id,
-          batch_no: "BATCH-SITE-A"
-        })
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BATCH-SITE-A"})
 
       batch_b =
-        batch_fixture(%{
-          organization_id: admin.organization_id,
-          site_id: site_b.id,
-          batch_no: "BATCH-SITE-B"
-        })
+        batch_fixture(%{organization_id: org_id, site_id: site_b.id, batch_no: "BATCH-SITE-B"})
 
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
@@ -213,24 +232,13 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
     end
 
     test "clearing the site filter chip removes just that filter", %{conn: conn} do
-      admin = user_fixture()
-      site_a = site_fixture(%{organization_id: admin.organization_id, name: "Site A"})
-      site_b = site_fixture(%{organization_id: admin.organization_id, name: "Site B"})
-      pharmacist = staff_fixture(%{organization_id: admin.organization_id, role: :pharmacist})
+      {org_id, pharmacist, [site_a, site_b]} = pharmacist_assigned_to(["Site A", "Site B"])
 
       batch_a =
-        batch_fixture(%{
-          organization_id: admin.organization_id,
-          site_id: site_a.id,
-          batch_no: "BATCH-SITE-A"
-        })
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BATCH-SITE-A"})
 
       batch_b =
-        batch_fixture(%{
-          organization_id: admin.organization_id,
-          site_id: site_b.id,
-          batch_no: "BATCH-SITE-B"
-        })
+        batch_fixture(%{organization_id: org_id, site_id: site_b.id, batch_no: "BATCH-SITE-B"})
 
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
@@ -247,11 +255,11 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       assert html =~ batch_b.batch_no
     end
 
-    test "a stale site filter (no longer a real site) falls back to showing its raw id", %{
-      conn: conn
-    } do
-      pharmacist = staff_fixture(%{role: :pharmacist})
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+    test "for an admin, a stale site filter falls back to showing its raw id", %{conn: conn} do
+      # Admins are org-wide, so their filter value isn't narrowed to an assigned
+      # set — a since-deleted site id survives and is shown as-is on the chip.
+      admin = user_fixture()
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
 
       html = render_submit(lv, "apply_filters", %{"filters" => %{"site" => "999999"}})
 
@@ -261,14 +269,15 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
 
   describe "status filter" do
     test "filters by active", %{conn: conn} do
-      pharmacist = staff_fixture(%{role: :pharmacist})
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
 
       active =
-        batch_fixture(%{organization_id: pharmacist.organization_id, batch_no: "ACTIVE-BATCH"})
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "ACTIVE-BATCH"})
 
       pending =
         batch_fixture(%{
-          organization_id: pharmacist.organization_id,
+          organization_id: org_id,
+          site_id: site_a.id,
           batch_no: "PENDING-BATCH",
           pending: true
         })
@@ -285,14 +294,15 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
     end
 
     test "clearing the status filter chip removes just that filter", %{conn: conn} do
-      pharmacist = staff_fixture(%{role: :pharmacist})
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
 
       active =
-        batch_fixture(%{organization_id: pharmacist.organization_id, batch_no: "ACTIVE-BATCH"})
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "ACTIVE-BATCH"})
 
       pending =
         batch_fixture(%{
-          organization_id: pharmacist.organization_id,
+          organization_id: org_id,
+          site_id: site_a.id,
           batch_no: "PENDING-BATCH",
           pending: true
         })
@@ -313,14 +323,15 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
     end
 
     test "filters by pending receipt", %{conn: conn} do
-      pharmacist = staff_fixture(%{role: :pharmacist})
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
 
       active =
-        batch_fixture(%{organization_id: pharmacist.organization_id, batch_no: "ACTIVE-BATCH"})
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "ACTIVE-BATCH"})
 
       pending =
         batch_fixture(%{
-          organization_id: pharmacist.organization_id,
+          organization_id: org_id,
+          site_id: site_a.id,
           batch_no: "PENDING-BATCH",
           pending: true
         })
@@ -339,25 +350,16 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
 
   describe "search" do
     test "searches by product name", %{conn: conn} do
-      pharmacist = staff_fixture(%{role: :pharmacist})
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
 
-      panadol =
-        product_fixture(%{
-          organization_id: pharmacist.organization_id,
-          generic_name: "Panadol"
-        })
-
-      amoxil =
-        product_fixture(%{
-          organization_id: pharmacist.organization_id,
-          generic_name: "Amoxil"
-        })
+      panadol = product_fixture(%{organization_id: org_id, generic_name: "Panadol"})
+      amoxil = product_fixture(%{organization_id: org_id, generic_name: "Amoxil"})
 
       panadol_batch =
-        batch_fixture(%{organization_id: pharmacist.organization_id, product_id: panadol.id})
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, product_id: panadol.id})
 
       amoxil_batch =
-        batch_fixture(%{organization_id: pharmacist.organization_id, product_id: amoxil.id})
+        batch_fixture(%{organization_id: org_id, site_id: site_a.id, product_id: amoxil.id})
 
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
@@ -371,8 +373,9 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
 
   describe "read-only" do
     test "exposes no receive or dispense controls", %{conn: conn} do
-      pharmacist = staff_fixture(%{role: :pharmacist})
-      batch_fixture(%{organization_id: pharmacist.organization_id, pending: true})
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
+
+      batch_fixture(%{organization_id: org_id, site_id: site_a.id, pending: true})
 
       {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 

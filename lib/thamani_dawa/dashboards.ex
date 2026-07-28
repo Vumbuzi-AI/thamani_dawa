@@ -96,8 +96,10 @@ defmodule ThamaniDawa.Dashboards do
 
   @doc "Daily wallet revenue between `from` and `to` (inclusive), zero-filled for gap days."
   def daily_revenue(organization_id, site_id, from, to) do
+    query = wallet_entries_query(organization_id, site_id)
+
     rows =
-      wallet_entries_query(organization_id, site_id)
+      query
       |> where([w], w.inserted_at >= ^to_start(from) and w.inserted_at < ^to_end(to))
       |> group_by([w], fragment("date_trunc('day', ?)", w.inserted_at))
       |> select([w], {fragment("date_trunc('day', ?)", w.inserted_at), sum(w.amount)})
@@ -110,10 +112,11 @@ defmodule ThamaniDawa.Dashboards do
   @doc "Total wallet revenue per month for the trailing `months` months (default 12)."
   def monthly_revenue(organization_id, site_id, months \\ 12) do
     today = Date.utc_today()
-    start_month = Date.beginning_of_month(today) |> shift_months(-(months - 1))
+    start_month = shift_months(Date.beginning_of_month(today), -(months - 1))
+    query = wallet_entries_query(organization_id, site_id)
 
     rows =
-      wallet_entries_query(organization_id, site_id)
+      query
       |> where([w], w.inserted_at >= ^to_start(start_month))
       |> group_by([w], fragment("date_trunc('month', ?)", w.inserted_at))
       |> select([w], {fragment("date_trunc('month', ?)", w.inserted_at), sum(w.amount)})
@@ -286,7 +289,9 @@ defmodule ThamaniDawa.Dashboards do
   end
 
   defp sum_wallet_entries(organization_id, site_id, from, to) do
-    wallet_entries_query(organization_id, site_id)
+    query = wallet_entries_query(organization_id, site_id)
+
+    query
     |> where([w], w.inserted_at >= ^to_start(from) and w.inserted_at < ^to_end(to))
     |> select([w], sum(w.amount))
     |> Repo.one()

@@ -376,105 +376,149 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
       <div class="space-y-4">
         <article
           :for={result <- @results}
-          class="rounded-2xl p-5 sm:p-6"
-          style="background: #FFFFFF; border: 1px solid #EDF0F8;"
+          class="rounded-2xl overflow-hidden"
+          style="background: #FFFFFF; border: 1px solid #EDF0F8; box-shadow: 0 1px 3px oklch(0 0 0 / 0.04);"
         >
-          <div class="flex items-start justify-between gap-4">
-            <h3 class="text-base font-semibold" style="color: #1F2430;">
-              {test_name(result)}
-              <span class="ml-2 font-normal text-sm" style="color: #9AA3B5;">
-                KES {result.lab_test && result.lab_test.price}
-              </span>
-            </h3>
+          <%!-- Card header --%>
+          <div class="flex items-start justify-between gap-4 px-5 pt-5 pb-4 sm:px-6">
+            <div>
+              <h3 class="text-base font-semibold" style="color: #1F2430;">
+                {test_name(result)}
+              </h3>
+              <span class="text-sm" style="color: #9AA3B5;">KES {result.lab_test && result.lab_test.price}</span>
+            </div>
             <.status_pill kind={:result} status={result.status} />
           </div>
 
-          <div
-            :if={result.results != %{}}
-            class="mt-4 rounded-xl p-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3"
-            style="background: #F8FAFC;"
-          >
-            <div :for={{key, %{"value" => value}} <- result.results}>
-              <div
-                class="text-[11px] font-semibold uppercase tracking-wider"
-                style="color: #9AA3B5;"
-              >
-                {key}
-              </div>
-              <div class="mt-0.5 text-sm font-medium" style="color: #1F2430;">
-                {value}
-                <span class="font-normal" style="color: #9AA3B5;">
-                  {result_unit(result, key)}
+          <%!-- Step 1: Sample Collection --%>
+          <div style="border-top: 1px solid #EDF0F8;">
+            <div class="px-5 pt-4 pb-1 sm:px-6">
+              <div class="flex items-center gap-2 mb-3">
+                <span
+                  class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
+                  style={if result.sample_collected_on, do: "background: #373896; color: #fff;", else: "background: #E6EDF8; color: #373896;"}
+                >
+                  1
                 </span>
+                <span class="text-xs font-semibold uppercase tracking-wider" style="color: #687083;">Sample collection</span>
+                <%= if result.sample_collected_on do %>
+                  <span class="text-xs" style="color: #22C55E;">✓ Done</span>
+                <% end %>
               </div>
+
+              <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 mb-4">
+                <.field label="Sample type">
+                  {if result.sample_type, do: Phoenix.Naming.humanize(result.sample_type), else: "—"}
+                </.field>
+                <.field label="Collected on">
+                  {format_date(result.sample_collected_on)}<span
+                    :if={result.collected_by_id}
+                    style="color: #9AA3B5;"
+                  > · {user_name(result.collected_by)}</span>
+                </.field>
+                <.field :if={result.collection_notes not in [nil, ""]} label="Collection notes">
+                  {result.collection_notes}
+                </.field>
+              </dl>
+            </div>
+
+            <%!-- Inline sample collection form --%>
+            <div
+              :if={@collecting_result_id == result.id}
+              class="mx-5 mb-4 rounded-xl p-4 sm:mx-6"
+              style="background: #E6EDF8;"
+            >
+              <p class="text-xs font-semibold mb-3" style="color: #373896;">Record collection details</p>
+              <.form
+                for={%{}}
+                id="collect-sample-form"
+                phx-submit="confirm_collected"
+                class="flex flex-wrap gap-3 items-end [&>div]:mb-0"
+              >
+                <input type="hidden" name="result_id" value={result.id} />
+                <.input
+                  type="date"
+                  name="collection_date"
+                  label="Collected on"
+                  value={to_string(Date.utc_today())}
+                />
+                <.input type="text" name="collection_notes" label="Notes (optional)" value="" />
+                <div class="flex gap-2 items-end">
+                  <.button type="submit" variant="primary" class="h-11">Save collection</.button>
+                  <.button type="button" phx-click="cancel_collect" class="h-11">Cancel</.button>
+                </div>
+              </.form>
+            </div>
+
+            <%!-- Mark collected CTA --%>
+            <div
+              :if={can_collect?(result, @collecting_result_id)}
+              class="px-5 pb-4 sm:px-6"
+            >
+              <.button
+                type="button"
+                phx-click="start_collect"
+                phx-value-id={result.id}
+                class="h-11 px-5 active:scale-[0.96] transition-transform"
+              >
+                <.icon name="hero-beaker" class="size-4 mr-1.5" /> Mark collected
+              </.button>
             </div>
           </div>
 
-          <dl class="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
-            <.field label="Sample type">
-              {if result.sample_type, do: Phoenix.Naming.humanize(result.sample_type), else: "—"}
-            </.field>
-            <.field label="Sample collected">
-              {format_date(result.sample_collected_on)}<span
-                :if={result.collected_by_id}
-                style="color: #9AA3B5;"
-              > · {user_name(result.collected_by)}</span>
-            </.field>
-            <.field label="Performed by">
-              {user_name(result.performed_by)}
-            </.field>
-            <.field :if={result.collection_notes not in [nil, ""]} label="Collection notes">
-              {result.collection_notes}
-            </.field>
-          </dl>
+          <%!-- Step 2: Results Entry --%>
+          <div style="border-top: 1px solid #EDF0F8;">
+            <div class="px-5 pt-4 pb-5 sm:px-6">
+              <div class="flex items-center gap-2 mb-3">
+                <span
+                  class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
+                  style={if result.status == :completed, do: "background: #373896; color: #fff;", else: "background: #F1F2F5; color: #687083;"}
+                >
+                  2
+                </span>
+                <span class="text-xs font-semibold uppercase tracking-wider" style="color: #687083;">Results</span>
+                <%= if result.status == :completed do %>
+                  <span class="text-xs" style="color: #22C55E;">✓ Done</span>
+                <% end %>
+              </div>
 
-          <div
-            :if={@collecting_result_id == result.id}
-            class="mt-5 rounded-xl p-5"
-            style="background: #E6EDF8;"
-          >
-            <h4 class="text-sm font-medium mb-3" style="color: #373896;">
-              Record sample collection
-            </h4>
-            <.form
-              for={%{}}
-              id="collect-sample-form"
-              phx-submit="confirm_collected"
-              class="flex flex-wrap gap-3 items-end [&>div]:mb-0"
-            >
-              <input type="hidden" name="result_id" value={result.id} />
-              <.input
-                type="date"
-                name="collection_date"
-                label="Collected on"
-                value={to_string(Date.utc_today())}
-              />
-              <.input type="text" name="collection_notes" label="Notes (optional)" value="" />
-              <.button type="submit" variant="primary">Save</.button>
-              <.button type="button" phx-click="cancel_collect">Cancel</.button>
-            </.form>
-          </div>
+              <%!-- Results values grid --%>
+              <div
+                :if={result.results != %{}}
+                class="rounded-xl p-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 mb-4"
+                style="background: #F8FAFC;"
+              >
+                <div :for={{key, %{"value" => value}} <- result.results}>
+                  <div
+                    class="text-[11px] font-semibold uppercase tracking-wider"
+                    style="color: #9AA3B5;"
+                  >
+                    {key}
+                  </div>
+                  <div class="mt-0.5 text-sm font-medium" style="color: #1F2430;">
+                    {value}
+                    <span class="font-normal" style="color: #9AA3B5;">
+                      {result_unit(result, key)}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-          <div
-            :if={has_actions?(result, @collecting_result_id)}
-            class="mt-5 pt-4 flex flex-wrap gap-3"
-            style="border-top: 1px solid #EDF0F8;"
-          >
-            <.button
-              :if={can_collect?(result, @collecting_result_id)}
-              type="button"
-              phx-click="start_collect"
-              phx-value-id={result.id}
-            >
-              Mark collected
-            </.button>
-            <.button
-              :if={can_enter?(result)}
-              patch={~p"/lab/orders/#{@lab_order.id}/results/#{result.id}/edit"}
-              variant="primary"
-            >
-              Enter results
-            </.button>
+              <.field label="Performed by">
+                {user_name(result.performed_by)}
+              </.field>
+
+              <%!-- Enter results CTA --%>
+              <div :if={can_enter?(result)} class="mt-4">
+                <.button
+                  patch={~p"/lab/orders/#{@lab_order.id}/results/#{result.id}/edit"}
+                  variant="primary"
+                  class="h-11 px-5 active:scale-[0.96] transition-transform"
+                >
+                  <.icon name="hero-pencil-square" class="size-4 mr-1.5" /> Enter results
+                </.button>
+              </div>
+            </div>
           </div>
         </article>
       </div>

@@ -101,7 +101,7 @@ defmodule ThamaniDawa.AccountsTest do
                })
 
       user = Repo.preload(user, :sites)
-      assert Enum.map(user.sites, & &1.id) |> Enum.sort() == Enum.sort([site_a.id, site_b.id])
+      assert user.sites |> Enum.map(& &1.id) |> Enum.sort() == Enum.sort([site_a.id, site_b.id])
       assert user.current_site_id in [site_a.id, site_b.id]
     end
 

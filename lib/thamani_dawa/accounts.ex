@@ -29,8 +29,8 @@ defmodule ThamaniDawa.Accounts do
 
   @doc "Gets a single user scoped to an organization. Raises if not found. Preloads `sites` (scoped to the organization)."
   def get_user!(organization_id, id) do
-    Repo.get_by!(User, id: id, organization_id: organization_id)
-    |> Repo.preload(sites: scoped_site_query(organization_id))
+    user = Repo.get_by!(User, id: id, organization_id: organization_id)
+    Repo.preload(user, sites: scoped_site_query(organization_id))
   end
 
   @doc "Lists an organization's staff, for the Team screen. Preloads `sites` (scoped to the organization)."

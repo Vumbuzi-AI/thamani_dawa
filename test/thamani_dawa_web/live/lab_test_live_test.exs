@@ -18,12 +18,12 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
   describe "access control" do
     test "admins can access the catalog", %{conn: conn, admin: admin} do
       {:ok, _view, html} = live(log_in_user(conn, admin), ~p"/lab/tests")
-      assert html =~ "Catalog"
+      assert html =~ "Test catalog"
     end
 
     test "lab technicians can access the catalog", %{conn: conn, lab_tech: lab_tech} do
       {:ok, _view, html} = live(log_in_user(conn, lab_tech), ~p"/lab/tests")
-      assert html =~ "Catalog"
+      assert html =~ "Test catalog"
     end
 
     test "pharma_lab staff can access the catalog", %{conn: conn, admin: admin} do
@@ -41,7 +41,7 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
         })
 
       {:ok, _view, html} = live(log_in_user(conn, pharma_lab), ~p"/lab/tests")
-      assert html =~ "Catalog"
+      assert html =~ "Test catalog"
     end
 
     test "pharmacists without lab access are redirected", %{
@@ -148,7 +148,7 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
 
       lv
-      |> form("#catalog-filters-form", filters: %{category: "Cat A"})
+      |> form("#lab-tests-filters-form", filters: %{category: "Cat A"})
       |> render_submit()
 
       assert render(lv) =~ test1.name
@@ -168,7 +168,7 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
 
       lv
-      |> form("#catalog-filters-form", filters: %{category: "Cat X"})
+      |> form("#lab-tests-filters-form", filters: %{category: "Cat X"})
       |> render_submit()
 
       assert render(lv) =~ test.name

@@ -52,6 +52,10 @@ defmodule ThamaniDawa.GtinLookup do
 
       {:ok, []} ->
         {:error, :not_found}
+
+      {:error, reason} ->
+        Logger.debug("GTIN lookup for #{normalized_gtin} failed: #{inspect(reason)}")
+        {:error, reason}
     end
   end
 

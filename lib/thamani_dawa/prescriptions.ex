@@ -106,12 +106,13 @@ defmodule ThamaniDawa.Prescriptions do
     product_ids = items |> Enum.map(& &1.product_id) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
     prices =
-      Repo.all(
-        from p in Product,
-          where: p.organization_id == ^organization_id and p.id in ^product_ids,
-          select: {p.id, p.price}
+      Map.new(
+        Repo.all(
+          from p in Product,
+            where: p.organization_id == ^organization_id and p.id in ^product_ids,
+            select: {p.id, p.price}
+        )
       )
-      |> Map.new()
 
     Enum.reduce(items, Decimal.new(0), fn item, acc ->
       case {Map.get(prices, item.product_id), item.quantity_prescribed} do

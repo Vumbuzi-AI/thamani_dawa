@@ -72,7 +72,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
           generic_name: "New Panadol",
           brand_name: "Panadol",
           category: "Painkiller",
-          uom: "Pack",
+          uom: "PK",
           gtin: unique_gtin(),
           price: "50"
         }
@@ -283,7 +283,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       html =
         lv
         |> form("form[phx-submit='save']",
-          product: %{generic_name: "Panadol", uom: "tablet", price: "50", gtin: "abc"}
+          product: %{generic_name: "Panadol", uom: "U2", price: "50", gtin: "abc"}
         )
         |> render_change()
 
@@ -527,7 +527,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
         |> form("#gtin-scan-form", gtin_search: "not-a-gtin")
         |> render_submit()
 
-      assert html =~ "is not a valid GTIN"
+      assert html =~ "Please enter a valid GTIN"
       assert has_element?(lv, "#gtin-scan-step")
       refute has_element?(lv, "#product-form")
     end

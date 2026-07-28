@@ -484,6 +484,11 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                 >
                   Skip
                 </.button>
+                <%!-- Matches the form step's affordance, and keeps the modal
+                      dismissible without relying on the JS-driven close button. --%>
+                <.button type="button" patch={~p"/org/products"} variant="ghost">
+                  Cancel
+                </.button>
               </div>
             </form>
           </div>
@@ -575,13 +580,18 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
               </div>
 
               <div class="grid grid-cols-2 gap-4">
+                <%!-- Free text with existing categories as suggestions: a plain select
+                      could only ever offer categories already in use, so no new one
+                      could be introduced (not even on the very first product). --%>
                 <.input
                   field={@form[:category]}
-                  type="select"
                   label="Category"
-                  options={@categories}
-                  prompt="Select a category"
+                  list="product-category-options"
+                  placeholder="e.g., Analgesic"
                 />
+                <datalist id="product-category-options">
+                  <option :for={category <- @categories} value={category}></option>
+                </datalist>
                 <.input
                   field={@form[:manufacturer]}
                   label="Manufacturer"
