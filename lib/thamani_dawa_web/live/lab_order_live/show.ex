@@ -237,9 +237,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
   defp can_enter?(result), do: result.status in [:pending, :collected]
 
-  defp has_actions?(result, collecting_id),
-    do: can_collect?(result, collecting_id) or can_enter?(result)
-
   attr :kind, :atom, required: true
   attr :status, :atom, required: true
 
@@ -385,7 +382,8 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               <h3 class="text-base font-semibold" style="color: #1F2430;">
                 {test_name(result)}
               </h3>
-              <span class="text-sm" style="color: #9AA3B5;">KES {result.lab_test && result.lab_test.price}</span>
+              <span class="text-sm" style="color: #9AA3B5;">KES {result.lab_test &&
+                result.lab_test.price}</span>
             </div>
             <.status_pill kind={:result} status={result.status} />
           </div>
@@ -396,7 +394,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               <div class="flex items-center gap-2 mb-3">
                 <span
                   class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
-                  style={if result.sample_collected_on, do: "background: #373896; color: #fff;", else: "background: #E6EDF8; color: #373896;"}
+                  style={
+                    if result.sample_collected_on,
+                      do: "background: #373896; color: #fff;",
+                      else: "background: #E6EDF8; color: #373896;"
+                  }
                 >
                   1
                 </span>
@@ -428,7 +430,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               class="mx-5 mb-4 rounded-xl p-4 sm:mx-6"
               style="background: #E6EDF8;"
             >
-              <p class="text-xs font-semibold mb-3" style="color: #373896;">Record collection details</p>
+              <p class="text-xs font-semibold mb-3" style="color: #373896;">
+                Record collection details
+              </p>
               <.form
                 for={%{}}
                 id="collect-sample-form"
@@ -472,7 +476,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               <div class="flex items-center gap-2 mb-3">
                 <span
                   class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold"
-                  style={if result.status == :completed, do: "background: #373896; color: #fff;", else: "background: #F1F2F5; color: #687083;"}
+                  style={
+                    if result.status == :completed,
+                      do: "background: #373896; color: #fff;",
+                      else: "background: #F1F2F5; color: #687083;"
+                  }
                 >
                   2
                 </span>
