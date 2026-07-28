@@ -113,14 +113,19 @@
 /* ============================================================
    Internal app typography
 
-   The operational UI uses a restrained 400/500/600 weight range.
-   This keeps dense tables and forms calm while preserving a clear
-   hierarchy for headings, identity, and important values.
+   The operational UI uses a sturdy 450/550/600+ weight range.
+   This keeps dense tables and forms easy to scan while preserving a
+   clear hierarchy for headings, identity, and important values.
    ============================================================ */
 
 html {
   scroll-behavior: smooth !important;
 }
+
+body {
+  font-weight: 450;
+}
+
 .internal-app {
   font-synthesis: none;
   font-kerning: normal;
@@ -129,11 +134,20 @@ html {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Medium (500) is the heaviest weight this app ever renders — never
-   font-semibold/font-bold. Clamped here so any stray usage is neutralized
-   instead of quietly rendering bolder than the design allows. */
-.internal-app :where(.font-medium, .font-semibold, .font-bold, .font-extrabold, .font-black) {
-  font-weight: 500;
+.internal-app .font-normal {
+  font-weight: 450;
+}
+
+.internal-app .font-medium {
+  font-weight: 550;
+}
+
+.internal-app .font-semibold {
+  font-weight: 600;
+}
+
+.internal-app :where(.font-bold, .font-extrabold, .font-black) {
+  font-weight: 650;
 }
 
 /* ============================================================

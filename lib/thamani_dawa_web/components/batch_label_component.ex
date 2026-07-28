@@ -79,12 +79,6 @@ defmodule ThamaniDawaWeb.BatchLabelComponent do
           </div>
         </div>
       </div>
-
-      <div class="mt-4 pt-3 border-t border-base-200">
-        <div class="text-[11px] font-mono text-center text-base-content/70 break-all select-all bg-base-200/50 py-1.5 px-2 rounded">
-          {@human_text}
-        </div>
-      </div>
     </div>
     """
   end
