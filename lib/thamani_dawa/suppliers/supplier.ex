@@ -9,6 +9,8 @@ defmodule ThamaniDawa.Suppliers.Supplier do
     field :email, :string
     field :gln, :string
     field :location, :string
+    field :lat, :float
+    field :long, :float
     field :is_active, :boolean, default: true
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
@@ -21,7 +23,7 @@ defmodule ThamaniDawa.Suppliers.Supplier do
   @doc false
   def changeset(supplier, attrs) do
     supplier
-    |> cast(attrs, [:name, :contact, :phone, :email, :location, :is_active])
+    |> cast(attrs, [:name, :contact, :phone, :email, :location, :lat, :long, :is_active])
     |> validate_required([:name, :phone, :email])
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+\.[a-zA-Z]{2,}$/,
       message: "Please enter a valid email (e.g. you@example.com)"

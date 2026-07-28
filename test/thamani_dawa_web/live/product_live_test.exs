@@ -54,7 +54,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Add a product"
       assert html =~ "+ Add product"
 
-      html = lv |> element("#product-modal a", "Cancel") |> render_click()
+      html = lv |> element("#product-modal button[aria-label='Cancel']") |> render_click()
 
       refute has_element?(lv, "#product-modal")
       assert html =~ "+ Add product"

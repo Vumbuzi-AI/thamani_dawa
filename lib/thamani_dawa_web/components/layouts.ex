@@ -91,6 +91,8 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
   attr :current_path, :string, default: ""
+  attr :back, :any, default: nil
+  attr :back_label, :string, default: nil
 
   slot :inner_block, required: true
 
@@ -105,6 +107,8 @@ defmodule ThamaniDawaWeb.Layouts do
       flash={@flash}
       current_scope={@current_scope}
       current_path={@current_path}
+      back={@back}
+      back_label={@back_label}
       title="Thamani Dawa"
       section_label="Lab"
       base_path="/lab"
@@ -130,6 +134,8 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
   attr :current_path, :string, default: ""
+  attr :back, :any, default: nil
+  attr :back_label, :string, default: nil
 
   slot :inner_block, required: true
 
@@ -144,6 +150,8 @@ defmodule ThamaniDawaWeb.Layouts do
       flash={@flash}
       current_scope={@current_scope}
       current_path={@current_path}
+      back={@back}
+      back_label={@back_label}
       title="Thamani Dawa"
       section_label="Pharmacy"
       base_path="/pharmacy"
@@ -204,6 +212,8 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
   attr :current_path, :string, default: ""
+  attr :back, :any, default: nil
+  attr :back_label, :string, default: nil
 
   slot :inner_block, required: true
 
@@ -213,6 +223,8 @@ defmodule ThamaniDawaWeb.Layouts do
       flash={@flash}
       current_scope={@current_scope}
       current_path={@current_path}
+      back={@back}
+      back_label={@back_label}
       title="Thamani Dawa"
       section_label="Organization"
       base_path="/org"
@@ -237,10 +249,14 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :base_path, :string, required: true
   attr :nav_items, :list, required: true
   attr :nav_badges, :map, default: %{}
+  attr :back, :any, default: nil
+  attr :back_label, :string, default: nil
 
   slot :inner_block, required: true
 
   defp sidebar_shell(assigns) do
+    assigns = assign(assigns, :back_label, back_label(assigns))
+
     ~H"""
     <div
       id="sidebar-shell"
@@ -261,20 +277,6 @@ defmodule ThamaniDawaWeb.Layouts do
         style="background: var(--thamani-snow); border-color: var(--thamani-border-nav); width: 288px; padding: 24px 20px;"
         aria-label={"#{@section_label} navigation"}
       >
-        <%!-- Toggle — fixed position in both states (never moves, never stacks
-             under the logo), so nothing below it shifts when collapsing. --%>
-        <button
-          id="sidebar-toggle"
-          type="button"
-          aria-label="Toggle sidebar"
-          class="absolute z-10 shrink-0 flex items-center justify-center rounded-xl transition-[background-color,scale] cursor-pointer active:scale-[0.96]"
-          style="top: 28px; right: -14px; width: 36px; height: 36px; background: var(--thamani-snow); border: 1px solid var(--thamani-border-nav); color: var(--thamani-forest);"
-        >
-          <span id="sidebar-toggle-icon" class="inline-flex transition-transform duration-200">
-            <.icon name="hero-chevron-left" class="size-4" />
-          </span>
-        </button>
-
         <%!-- Brand row --%>
         <div id="sidebar-brand-row" class="flex items-center gap-3 mb-6">
           <a
@@ -382,6 +384,22 @@ defmodule ThamaniDawaWeb.Layouts do
           class="mt-auto pt-4 flex flex-col gap-3"
           style="border-top: 1px solid var(--thamani-border-nav);"
         >
+          <%!-- Collapse sidebar toggle --%>
+          <button
+            id="sidebar-toggle"
+            type="button"
+            aria-label="Collapse sidebar"
+            data-tooltip="Collapse sidebar"
+            class="flex items-center gap-3 w-full rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 hover:bg-slate-100/80"
+            style="background: #FBFBFF; border: 1px solid #E8EBF3; color: var(--thamani-pewter); padding: 10px 14px; min-height: 42px;"
+          >
+            <span id="sidebar-toggle-icon" class="inline-flex transition-transform duration-200">
+              <.icon name="hero-chevron-left" class="size-4 shrink-0" />
+            </span>
+            <span class="nav-label text-[13px] font-medium transition-opacity duration-150 text-slate-600 truncate">
+              Collapse sidebar
+            </span>
+          </button>
           <form
             :if={length(@current_scope.user.sites) > 1}
             id="site-switch-form"
@@ -480,6 +498,20 @@ defmodule ThamaniDawaWeb.Layouts do
           <div class="size-11" aria-hidden="true" />
         </header>
         <div class="mx-auto space-y-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-8" style="max-width: 1600px;">
+          <%!-- Page-level back affordance. Lives outside the page's header card
+               on purpose: separation comes from whitespace, not another box. --%>
+          <.link
+            :if={is_binary(@back)}
+            navigate={@back}
+            class="group inline-flex items-center gap-2 text-[13px] font-medium transition-colors hover:text-thamani-forest"
+            style="color: var(--thamani-pewter);"
+          >
+            <.icon
+              name="hero-arrow-left"
+              class="size-3.5 shrink-0 transition-transform duration-150 group-hover:-translate-x-0.5"
+            />
+            {@back_label}
+          </.link>
           {render_slot(@inner_block)}
         </div>
       </main>
@@ -490,36 +522,66 @@ defmodule ThamaniDawaWeb.Layouts do
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Sidebar">
       export default {
         mounted() {
-          const sidebar = document.getElementById("sidebar-aside");
-          const toggleBtn = document.getElementById("sidebar-toggle");
-          const mobileToggle = document.getElementById("mobile-sidebar-toggle");
-          const backdrop = document.getElementById("sidebar-backdrop");
-          let collapsed = localStorage.getItem("sidebar-collapsed") === "true";
+          const getSidebar = () => document.getElementById("sidebar-aside");
+          const getMobileToggle = () => document.getElementById("mobile-sidebar-toggle");
 
           const apply = () => {
-            sidebar.classList.toggle("sidebar-collapsed", collapsed);
-            localStorage.setItem("sidebar-collapsed", collapsed);
-          };
-
-          const closeMobile = () => {
-            this.el.classList.remove("sidebar-mobile-open");
-            mobileToggle?.setAttribute("aria-expanded", "false");
+            const sidebar = getSidebar();
+            if (sidebar) {
+              const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
+              sidebar.classList.toggle("sidebar-collapsed", collapsed);
+            }
           };
 
           apply();
 
-          toggleBtn && toggleBtn.addEventListener("click", () => {
-            collapsed = !collapsed;
-            apply();
-          });
+          this.handleGlobalClick = (e) => {
+            const toggleBtn = e.target.closest("#sidebar-toggle");
+            if (toggleBtn) {
+              e.preventDefault();
+              e.stopPropagation();
+              const current = localStorage.getItem("sidebar-collapsed") === "true";
+              const next = !current;
+              localStorage.setItem("sidebar-collapsed", String(next));
+              apply();
+              return;
+            }
 
-          mobileToggle?.addEventListener("click", () => {
-            const open = !this.el.classList.contains("sidebar-mobile-open");
-            this.el.classList.toggle("sidebar-mobile-open", open);
-            mobileToggle.setAttribute("aria-expanded", String(open));
-          });
-          backdrop?.addEventListener("click", closeMobile);
-          sidebar.querySelectorAll("a").forEach(link => link.addEventListener("click", closeMobile));
+            const backdrop = e.target.closest("#sidebar-backdrop");
+            if (backdrop) {
+              this.el.classList.remove("sidebar-mobile-open");
+              getMobileToggle()?.setAttribute("aria-expanded", "false");
+              return;
+            }
+
+            const mobileToggle = e.target.closest("#mobile-sidebar-toggle");
+            if (mobileToggle) {
+              const open = !this.el.classList.contains("sidebar-mobile-open");
+              this.el.classList.toggle("sidebar-mobile-open", open);
+              mobileToggle.setAttribute("aria-expanded", String(open));
+              return;
+            }
+
+            const sidebarLink = e.target.closest("#sidebar-aside a");
+            if (sidebarLink) {
+              this.el.classList.remove("sidebar-mobile-open");
+              getMobileToggle()?.setAttribute("aria-expanded", "false");
+            }
+          };
+
+          document.addEventListener("click", this.handleGlobalClick);
+        },
+        updated() {
+          const sidebar = document.getElementById("sidebar-aside");
+          if (sidebar) {
+            const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
+            sidebar.classList.toggle("sidebar-collapsed", collapsed);
+          }
+        },
+        destroyed() {
+          if (this.handleGlobalClick) {
+            document.removeEventListener("click", this.handleGlobalClick);
+          }
         }
       }
     </script>
@@ -652,6 +714,20 @@ defmodule ThamaniDawaWeb.Layouts do
     </div>
     """
   end
+
+  # Label for the page-level back link. An explicit `back_label` always wins;
+  # otherwise the destination is matched against the nav items so `/org/sites`
+  # reads "Back to Sites" without every page restating it.
+  defp back_label(%{back_label: label}) when is_binary(label), do: label
+
+  defp back_label(%{back: back, nav_items: nav_items}) when is_binary(back) do
+    case Enum.find(nav_items, fn {_label, _icon, path} -> path == back end) do
+      {label, _icon, _path} -> "Back to #{label}"
+      nil -> "Back"
+    end
+  end
+
+  defp back_label(_assigns), do: nil
 
   @doc """
   Provides dark vs light theme toggle based on themes defined in app.css.

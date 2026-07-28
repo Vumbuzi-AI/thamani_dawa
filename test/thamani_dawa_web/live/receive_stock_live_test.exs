@@ -226,7 +226,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
 
       assert has_element?(lv, "#receive-batch-modal")
 
-      lv |> element("#receive-batch-modal a", "Cancel") |> render_click()
+      lv |> element("#receive-batch-modal button[aria-label='Cancel']") |> render_click()
 
       assert_patch(lv, ~p"/pharmacy/receive-stock")
       refute has_element?(lv, "#receive-batch-modal")

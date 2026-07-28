@@ -211,7 +211,7 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
         show
         on_cancel={JS.patch(~p"/org/suppliers")}
       >
-        <h2 class="font-semibold mb-2">
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
           {if @live_action == :new, do: "Add a supplier", else: "Edit supplier"}
         </h2>
         <.form for={@form} id="supplier-form" phx-submit="save" phx-change="validate">
@@ -221,11 +221,32 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
             <.input field={@form[:phone]} label="Phone" required />
           </div>
           <.input field={@form[:email]} type="email" label="Email" required />
-          <.input field={@form[:location]} label="Location" />
+          <.input id="supplier-location" field={@form[:location]} label="Location" />
+          <div class="grid grid-cols-2 gap-x-4">
+            <.input id="supplier-lat" field={@form[:lat]} label="Latitude" type="number" step="any" />
+            <.input
+              id="supplier-long"
+              field={@form[:long]}
+              label="Longitude"
+              type="number"
+              step="any"
+            />
+          </div>
+          <div
+            id="supplier-map"
+            phx-hook="GoogleMaps"
+            phx-update="ignore"
+            data-lat-input="supplier-lat"
+            data-lng-input="supplier-long"
+            data-address-input="supplier-location"
+            data-lat={@form[:lat].value}
+            data-lng={@form[:long].value}
+            class="w-full h-56 rounded-lg mt-2"
+          >
+          </div>
           <.input field={@form[:is_active]} type="checkbox" label="Active" />
-          <div class="flex gap-2 mt-2">
-            <.button variant="primary">Save</.button>
-            <.button patch={~p"/org/suppliers"}>Cancel</.button>
+          <div class="mt-2">
+            <.button variant="primary" class="w-full">Save</.button>
           </div>
         </.form>
       </.modal>

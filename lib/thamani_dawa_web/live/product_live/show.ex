@@ -120,7 +120,12 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
   def render(assigns) do
     ~H"""
-    <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/products"}>
+    <Layouts.org_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={~p"/org/products"}
+      back={~p"/org/products"}
+    >
       <.header>
         {product_name(@product)}
         <:actions>
@@ -129,7 +134,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
             variant="primary"
             patch={~p"/org/products/#{@product.id}/batches/new"}
           >
-            + Dispatch batch to site
+            Send batch
           </.button>
           <.button
             variant="ghost-edit"
@@ -143,7 +148,6 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
           >
             {if @product.is_active, do: "Deactivate", else: "Reactivate"}
           </.button>
-          <.button navigate={~p"/org/products"}>Back</.button>
         </:actions>
       </.header>
 
@@ -196,7 +200,9 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         show
         on_cancel={JS.patch(~p"/org/products/#{@product.id}")}
       >
-        <h2 class="font-semibold mb-2">Dispatch batch to site</h2>
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+          Dispatch batch to site
+        </h2>
         <.form for={@form} id="batch-form" phx-submit="save" phx-change="validate">
           <div class="grid grid-cols-2 gap-x-4">
             <.input

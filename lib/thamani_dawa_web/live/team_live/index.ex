@@ -285,7 +285,9 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       </.header>
 
       <.modal :if={@live_action == :new} id="invite-modal" show on_cancel={JS.patch(~p"/org/team")}>
-        <h2 class="font-semibold mb-2">Invite a staff member</h2>
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+          Invite a staff member
+        </h2>
         <form id="invite-form" phx-submit="save">
           <.input field={@form[:name]} label="Name" required />
           <.input field={@form[:email]} type="email" label="Email" required />
@@ -298,15 +300,14 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             required
           />
           <.site_checkboxes sites={@sites} checked_site_ids={@checked_site_ids} />
-          <div class="flex gap-2 mt-2">
-            <.button variant="primary">Send invite</.button>
-            <.button patch={~p"/org/team"}>Cancel</.button>
+          <div class="mt-2">
+            <.button variant="primary" class="w-full">Send invite</.button>
           </div>
         </form>
       </.modal>
 
       <.modal :if={@live_action == :edit} id="edit-modal" show on_cancel={JS.patch(~p"/org/team")}>
-        <h2 class="font-semibold mb-2">Edit team member</h2>
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">Edit team member</h2>
         <form id="edit-form" phx-submit="save_edit">
           <div class="space-y-4">
             <div>
@@ -327,9 +328,8 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             />
             <.site_checkboxes sites={@sites} checked_site_ids={@checked_site_ids} />
           </div>
-          <div class="flex gap-2 mt-4">
-            <.button variant="primary">Save changes</.button>
-            <.button patch={~p"/org/team"}>Cancel</.button>
+          <div class="mt-4">
+            <.button variant="primary" class="w-full">Save changes</.button>
           </div>
         </form>
       </.modal>

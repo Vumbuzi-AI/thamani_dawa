@@ -370,6 +370,85 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
     end
   end
 
+  describe "option boxes and step blocks" do
+    test "renders step blocks and supports dynamic option box management with hard minimum of 1",
+         %{
+           conn: conn,
+           admin: admin
+         } do
+      {:ok, view, html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
+
+      assert html =~ "1. Test details"
+      assert html =~ "2. Result fields &amp; options"
+
+      # Select multiple choice type for field 0
+      view
+      |> form("#lab-test-form", %{
+        "field_defs" => %{
+          "0" => %{
+            "key" => "result_type",
+            "type" => "select"
+          }
+        }
+      })
+      |> render_change()
+
+      # Add a second option box
+      view
+      |> element("button[phx-click=add_field_option][phx-value-field_idx='0']")
+      |> render_click()
+
+      html = render(view)
+      assert html =~ "Option 2"
+
+      # Remove option box 1 (index 1) so 1 option remains
+      view
+      |> element(
+        "button[phx-click=remove_field_option][phx-value-field_idx='0'][phx-value-opt_idx='1']"
+      )
+      |> render_click()
+
+      # Remove button disappears when only 1 option remains (hard minimum of 1)
+      refute has_element?(view, "button[phx-click=remove_field_option]")
+    end
+
+    test "handles form params with _unused keys during validate without crashing", %{
+      conn: conn,
+      admin: admin
+    } do
+      lab_test =
+        lab_test_fixture(%{
+          organization_id: admin.organization_id,
+          name: "TB aki",
+          field_definitions: %{"Status" => %{"type" => "select", "options" => ["Nayo", "Hana"]}}
+        })
+
+      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/#{lab_test.id}/edit")
+
+      html =
+        render_change(view, "validate", %{
+          "_target" => ["field_defs", "0", "options", "1"],
+          "field_defs" => %{
+            "0" => %{
+              "_unused_key" => "",
+              "_unused_type" => "",
+              "key" => "Status",
+              "type" => "select",
+              "options" => %{"0" => "Nayo", "1" => "Nayo p", "_unused_0" => ""}
+            }
+          },
+          "lab_test" => %{
+            "_unused_name" => "",
+            "name" => "TB aki",
+            "category_id" => to_string(lab_test.category_id),
+            "price" => "1000"
+          }
+        })
+
+      assert html =~ "Nayo p"
+    end
+  end
+
   describe "deactivate and reactivate" do
     test "toggle_active flips is_active from true to false", %{conn: conn, admin: admin} do
       lab_test =

@@ -89,7 +89,6 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
           >
             <.icon name="hero-printer" class="w-4 h-4" /> Print Data Matrix
           </.button>
-          <.button navigate={~p"/org/products/#{@batch.product_id}"}>Back to product</.button>
         </:actions>
       </.header>
 

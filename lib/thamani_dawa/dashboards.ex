@@ -22,10 +22,13 @@ defmodule ThamaniDawa.Dashboards do
   alias ThamaniDawa.Prescriptions.Prescription
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
+  alias ThamaniDawa.Sites.Site
 
   @doc "Named date ranges for the admin dashboard's range filter, in display order."
   def ranges do
     [
+      {"today", "Today"},
+      {"this_week", "This Week"},
       {"this_month", "This Month"},
       {"last_month", "Last Month"},
       {"last_30_days", "Last 30 Days"},
@@ -64,19 +67,289 @@ defmodule ThamaniDawa.Dashboards do
   end
 
   @doc """
-  Core admin/org stat-tile numbers for the given window and optional site.
+  Core admin/org stat-tile numbers for the given window, optional site, and optional search query.
   """
-  def admin_stats(organization_id, site_id, {from, to}) do
+  def admin_stats(organization_id, site_id, {from, to}, search_query \\ nil) do
+    term = String.trim(search_query || "")
+
+    if term == "" do
+      default_admin_stats(organization_id, site_id, {from, to})
+    else
+      search_filtered_admin_stats(organization_id, site_id, {from, to}, "%#{term}%")
+    end
+  end
+
+  defp default_admin_stats(organization_id, site_id, {from, to}) do
     %{
-      total_patients: count(Patient, organization_id),
+      total_patients: count_patients(organization_id, site_id),
       patient_visits: count_visits(organization_id, site_id, from, to),
       revenue_collected: sum_wallet_entries(organization_id, site_id, from, to),
-      active_staff: count_active_users(organization_id),
+      active_staff: count_active_users(organization_id, site_id),
       prescriptions: count_prescriptions(organization_id, site_id, from, to),
       lab_tests_done: count_completed_lab_orders(organization_id, site_id, from, to),
       pending_prescriptions: count_pending_prescriptions(organization_id, site_id),
       pending_lab_orders: count_pending_lab_orders(organization_id, site_id)
     }
+  end
+
+  defp search_filtered_admin_stats(organization_id, site_id, {from, to}, pattern) do
+    %{
+      total_patients: count_search_patients(organization_id, site_id, pattern),
+      patient_visits: count_search_visits(organization_id, site_id, from, to, pattern),
+      revenue_collected: sum_search_revenue(organization_id, site_id, from, to, pattern),
+      active_staff: count_search_staff(organization_id, site_id, pattern),
+      prescriptions: count_search_prescriptions(organization_id, site_id, from, to, pattern),
+      lab_tests_done: count_search_lab_tests(organization_id, site_id, from, to, pattern),
+      pending_prescriptions:
+        count_search_pending_prescriptions(organization_id, site_id, pattern),
+      pending_lab_orders: count_search_pending_lab_orders(organization_id, site_id, pattern)
+    }
+  end
+
+  defp count_search_patients(organization_id, nil, pattern) do
+    Repo.aggregate(
+      from(p in Patient,
+        where: p.organization_id == ^organization_id,
+        where:
+          ilike(p.full_name, ^pattern) or ilike(p.phone, ^pattern) or
+            ilike(p.national_id, ^pattern)
+      ),
+      :count
+    )
+  end
+
+  defp count_search_patients(organization_id, site_id, pattern) do
+    from(p in Patient,
+      join: v in PatientVisit,
+      on: v.patient_id == p.id,
+      where: p.organization_id == ^organization_id and v.site_id == ^site_id,
+      where:
+        ilike(p.full_name, ^pattern) or ilike(p.phone, ^pattern) or
+          ilike(p.national_id, ^pattern),
+      select: count(p.id, :distinct)
+    )
+    |> Repo.one() || 0
+  end
+
+  defp count_search_visits(organization_id, site_id, from, to, pattern) do
+    from(v in PatientVisit,
+      join: p in Patient,
+      on: p.id == v.patient_id,
+      join: s in Site,
+      on: s.id == v.site_id,
+      where: v.organization_id == ^organization_id,
+      where: v.inserted_at >= ^to_start(from) and v.inserted_at < ^to_end(to),
+      where: ilike(p.full_name, ^pattern) or ilike(p.phone, ^pattern) or ilike(s.name, ^pattern)
+    )
+    |> filter_by_site(site_id, dynamic([v, _p, _s], v.site_id == ^site_id))
+    |> Repo.aggregate(:count)
+  end
+
+  defp count_search_staff(organization_id, nil, pattern) do
+    Repo.aggregate(
+      from(u in User,
+        where: u.organization_id == ^organization_id and u.is_active == true,
+        where: ilike(u.name, ^pattern) or ilike(u.email, ^pattern)
+      ),
+      :count
+    )
+  end
+
+  defp count_search_staff(organization_id, site_id, pattern) do
+    from(u in User,
+      join: us in ThamaniDawa.Accounts.UserSite,
+      on: us.user_id == u.id,
+      where:
+        u.organization_id == ^organization_id and u.is_active == true and us.site_id == ^site_id,
+      where: ilike(u.name, ^pattern) or ilike(u.email, ^pattern)
+    )
+    |> Repo.aggregate(:count)
+  end
+
+  defp count_search_prescriptions(organization_id, site_id, from, to, pattern) do
+    from(p in Prescription,
+      join: v in PatientVisit,
+      on: v.id == p.patient_visit_id,
+      join: pat in Patient,
+      on: pat.id == v.patient_id,
+      where: p.organization_id == ^organization_id,
+      where: p.inserted_at >= ^to_start(from) and p.inserted_at < ^to_end(to),
+      where: ilike(pat.full_name, ^pattern) or ilike(pat.phone, ^pattern)
+    )
+    |> filter_by_site(site_id, dynamic([_p, v, _pat], v.site_id == ^site_id))
+    |> Repo.aggregate(:count)
+  end
+
+  defp count_search_lab_tests(organization_id, site_id, from, to, pattern) do
+    from(o in LabOrder,
+      join: v in PatientVisit,
+      on: v.id == o.patient_visit_id,
+      join: pat in Patient,
+      on: pat.id == v.patient_id,
+      where: o.organization_id == ^organization_id,
+      where: o.status == :completed,
+      where: o.inserted_at >= ^to_start(from) and o.inserted_at < ^to_end(to),
+      where: ilike(pat.full_name, ^pattern) or ilike(pat.phone, ^pattern)
+    )
+    |> filter_by_site(site_id, dynamic([o, _v, _pat], o.site_id == ^site_id))
+    |> Repo.aggregate(:count)
+  end
+
+  defp count_search_pending_prescriptions(organization_id, site_id, pattern) do
+    from(p in Prescription,
+      join: v in PatientVisit,
+      on: v.id == p.patient_visit_id,
+      join: pat in Patient,
+      on: pat.id == v.patient_id,
+      where: p.organization_id == ^organization_id,
+      where: p.status in [:pending, :partially_dispensed],
+      where: ilike(pat.full_name, ^pattern) or ilike(pat.phone, ^pattern)
+    )
+    |> filter_by_site(site_id, dynamic([_p, v, _pat], v.site_id == ^site_id))
+    |> Repo.aggregate(:count)
+  end
+
+  defp count_search_pending_lab_orders(organization_id, site_id, pattern) do
+    from(o in LabOrder,
+      join: v in PatientVisit,
+      on: v.id == o.patient_visit_id,
+      join: pat in Patient,
+      on: pat.id == v.patient_id,
+      where: o.organization_id == ^organization_id,
+      where: o.status in [:pending, :in_progress],
+      where: ilike(pat.full_name, ^pattern) or ilike(pat.phone, ^pattern)
+    )
+    |> filter_by_site(site_id, dynamic([o, _v, _pat], o.site_id == ^site_id))
+    |> Repo.aggregate(:count)
+  end
+
+  defp sum_search_revenue(organization_id, site_id, from, to, pattern) do
+    from(w in WalletEntry,
+      join: pay in ThamaniDawa.Payments.Payment,
+      on: pay.id == w.payment_id,
+      left_join: rx in Prescription,
+      on: rx.id == pay.prescription_id,
+      left_join: lab in LabOrder,
+      on: lab.id == pay.lab_order_id,
+      left_join: v1 in PatientVisit,
+      on: v1.id == rx.patient_visit_id,
+      left_join: v2 in PatientVisit,
+      on: v2.id == lab.patient_visit_id,
+      left_join: p1 in Patient,
+      on: p1.id == v1.patient_id,
+      left_join: p2 in Patient,
+      on: p2.id == v2.patient_id,
+      where: w.organization_id == ^organization_id,
+      where: w.inserted_at >= ^to_start(from) and w.inserted_at < ^to_end(to),
+      where:
+        ilike(p1.full_name, ^pattern) or ilike(p2.full_name, ^pattern) or
+          ilike(p1.phone, ^pattern) or ilike(p2.phone, ^pattern)
+    )
+    |> filter_by_site(
+      site_id,
+      dynamic([w, _pay, _rx, _lab, _v1, _v2, _p1, _p2], w.site_id == ^site_id)
+    )
+    |> select([w, _pay, _rx, _lab, _v1, _v2, _p1, _p2], sum(w.amount))
+    |> Repo.one()
+    |> decimal_to_float()
+  end
+
+  @doc """
+  Performs search across patients, sites, staff, and visits for the admin dashboard.
+  """
+  def search_admin_dashboard(organization_id, search_query, {from, to}, site_id \\ nil) do
+    term = String.trim(search_query || "")
+
+    if term == "" do
+      %{patients: [], sites: [], staff: [], visits: []}
+    else
+      pattern = "%#{term}%"
+
+      %{
+        patients: search_patients_list(organization_id, pattern, site_id),
+        sites: search_sites_list(organization_id, pattern),
+        staff: search_staff_list(organization_id, pattern, site_id),
+        visits: search_visits_list(organization_id, site_id, {from, to}, pattern)
+      }
+    end
+  end
+
+  defp search_patients_list(organization_id, pattern, site_id) do
+    base =
+      from(p in Patient,
+        where: p.organization_id == ^organization_id,
+        where:
+          ilike(p.full_name, ^pattern) or ilike(p.phone, ^pattern) or
+            ilike(p.national_id, ^pattern),
+        order_by: [desc: p.inserted_at],
+        limit: 5
+      )
+
+    query =
+      if site_id do
+        from(p in base,
+          join: v in PatientVisit,
+          on: v.patient_id == p.id and v.site_id == ^site_id,
+          distinct: true
+        )
+      else
+        base
+      end
+
+    Repo.all(query)
+  end
+
+  defp search_sites_list(organization_id, pattern) do
+    from(s in Site,
+      where: s.organization_id == ^organization_id,
+      where: ilike(s.name, ^pattern) or ilike(s.gln, ^pattern) or ilike(s.address, ^pattern),
+      limit: 5
+    )
+    |> Repo.all()
+  end
+
+  defp search_staff_list(organization_id, pattern, site_id) do
+    base =
+      from(u in User,
+        where: u.organization_id == ^organization_id,
+        where: ilike(u.name, ^pattern) or ilike(u.email, ^pattern),
+        limit: 5
+      )
+
+    query =
+      if site_id do
+        from(u in base,
+          join: us in ThamaniDawa.Accounts.UserSite,
+          on: us.user_id == u.id and us.site_id == ^site_id
+        )
+      else
+        base
+      end
+
+    Repo.all(query)
+  end
+
+  defp search_visits_list(organization_id, site_id, {from, to}, pattern) do
+    from(v in PatientVisit,
+      join: p in Patient,
+      on: p.id == v.patient_id,
+      join: s in Site,
+      on: s.id == v.site_id,
+      where: v.organization_id == ^organization_id,
+      where: v.inserted_at >= ^to_start(from) and v.inserted_at < ^to_end(to),
+      where: ilike(p.full_name, ^pattern) or ilike(p.phone, ^pattern) or ilike(s.name, ^pattern),
+      select: %{
+        id: v.id,
+        visit_type: v.visit_type,
+        inserted_at: v.inserted_at,
+        patient_name: p.full_name,
+        site_name: s.name
+      },
+      order_by: [desc: v.inserted_at],
+      limit: 5
+    )
+    |> filter_by_site(site_id, dynamic([v, _p, _s], v.site_id == ^site_id))
+    |> Repo.all()
   end
 
   @doc """
@@ -125,7 +398,7 @@ defmodule ThamaniDawa.Dashboards do
         {%{to_date(date) | day: 1}, decimal_to_float(amount)}
       end)
 
-    for i <- (months - 1)..0 do
+    for i <- (months - 1)..0//-1 do
       month = shift_months(Date.beginning_of_month(today), -i)
       {month, Map.get(rows, month, 0.0)}
     end
@@ -231,11 +504,35 @@ defmodule ThamaniDawa.Dashboards do
     Repo.aggregate(from(s in schema, where: s.organization_id == ^organization_id), :count)
   end
 
-  defp count_active_users(organization_id) do
+  defp count_patients(organization_id, nil) do
+    count(Patient, organization_id)
+  end
+
+  defp count_patients(organization_id, site_id) do
+    from(p in Patient,
+      join: v in PatientVisit,
+      on: v.patient_id == p.id,
+      where: p.organization_id == ^organization_id and v.site_id == ^site_id,
+      select: count(p.id, :distinct)
+    )
+    |> Repo.one() || 0
+  end
+
+  defp count_active_users(organization_id, nil) do
     Repo.aggregate(
       from(u in User, where: u.organization_id == ^organization_id and u.is_active == true),
       :count
     )
+  end
+
+  defp count_active_users(organization_id, site_id) do
+    from(u in User,
+      join: us in ThamaniDawa.Accounts.UserSite,
+      on: us.user_id == u.id,
+      where:
+        u.organization_id == ^organization_id and u.is_active == true and us.site_id == ^site_id
+    )
+    |> Repo.aggregate(:count)
   end
 
   defp count_visits(organization_id, site_id, from, to) do

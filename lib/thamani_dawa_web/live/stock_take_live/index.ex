@@ -109,7 +109,9 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
         show
         on_cancel={JS.patch(~p"/pharmacy/stock-takes")}
       >
-        <h2 class="mb-4 font-semibold text-slate-900">Start a new stock take</h2>
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+          Start a new stock take
+        </h2>
         <.form for={@form} id="stock-take-form" phx-submit="save" phx-change="validate">
           <input type="hidden" name="stock_take[started_by_id]" value={@current_scope.user.id} />
           <.input
@@ -121,9 +123,8 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
             required
           />
           <.input field={@form[:notes]} type="textarea" label="Notes" rows="3" />
-          <div class="mt-4 flex gap-2">
-            <.button variant="primary">Start counting</.button>
-            <.button patch={~p"/pharmacy/stock-takes"}>Cancel</.button>
+          <div class="mt-4">
+            <.button variant="primary" class="w-full">Start counting</.button>
           </div>
         </.form>
       </.modal>

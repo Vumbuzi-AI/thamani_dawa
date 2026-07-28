@@ -311,10 +311,32 @@ defmodule ThamaniDawa.LabOrders do
       used_by_id: used_by_id,
       quantity: quantity,
       lab_order_id: Keyword.get(opts, :lab_order_id),
+      lab_order_result_id: Keyword.get(opts, :lab_order_result_id),
       purpose: Keyword.get(opts, :purpose),
       used_at: DateTime.utc_now(:second)
     })
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Repo.insert()
+  end
+
+  @doc """
+  Lists all consumable usage records for a lab order, preloaded with the
+  batch (including its product) and the user who recorded the usage.
+  Grouped usage can be accessed by `lab_order_result_id`.
+  """
+  def list_consumable_usages_for_order(organization_id, lab_order_id) do
+    batch_query =
+      from b in ThamaniDawa.Batches.Batch,
+        where: b.organization_id == ^organization_id,
+        preload: :product
+
+    user_query = from u in User, where: u.organization_id == ^organization_id
+
+    Repo.all(
+      from u in LabConsumableUsage,
+        where: u.organization_id == ^organization_id,
+        where: u.lab_order_id == ^lab_order_id,
+        preload: [batch: ^batch_query, used_by: ^user_query]
+    )
   end
 end

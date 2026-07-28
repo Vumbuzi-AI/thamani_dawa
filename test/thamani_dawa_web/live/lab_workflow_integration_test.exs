@@ -36,13 +36,11 @@ defmodule ThamaniDawaWeb.LabWorkflowIntegrationTest do
     assert lab_order.status == :pending
     assert result.status == :pending
 
-    # Step 2: Performer collects the sample via the order show page
+    # Step 2: Performer collects the sample via the collection modal
     performer_conn = log_in_user(ctx.conn, performer)
-    {:ok, view, _html} = live(performer_conn, ~p"/lab/orders/#{lab_order.id}")
 
-    view
-    |> element(~s(button[phx-click="start_collect"][phx-value-id="#{result.id}"]))
-    |> render_click()
+    {:ok, view, _html} =
+      live(performer_conn, ~p"/lab/orders/#{lab_order.id}/results/#{result.id}/collect")
 
     view
     |> form("#collect-sample-form", %{

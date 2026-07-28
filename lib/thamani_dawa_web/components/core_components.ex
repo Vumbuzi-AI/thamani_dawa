@@ -142,6 +142,34 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   @doc """
+  Renders a standardized form step/section block card.
+
+  ## Examples
+
+      <.form_block title="1. Test Details">
+        ...
+      </.form_block>
+  """
+  attr :title, :string, required: true
+  attr :class, :string, default: nil
+  slot :actions
+  slot :inner_block, required: true
+
+  def form_block(assigns) do
+    ~H"""
+    <section class={["rounded-xl border border-thamani-stone bg-thamani-snow", @class]}>
+      <div class="flex items-center justify-between gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
+        <h3 class="text-base font-semibold text-thamani-forest">{@title}</h3>
+        <div>{render_slot(@actions)}</div>
+      </div>
+      <div class="space-y-4 p-4 sm:p-5">
+        {render_slot(@inner_block)}
+      </div>
+    </section>
+    """
+  end
+
+  @doc """
   Renders an input with label and error messages.
 
   A `Phoenix.HTML.FormField` may be passed as argument,
@@ -272,7 +300,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <select
           id={@id}
           name={@name}
-          class={[@class || "thamani-select", @errors != [] && (@error_class || "border-red-600")]}
+          class={[
+            "thamani-select",
+            @class,
+            @errors != [] && (@error_class || "border-red-600")
+          ]}
           multiple={@multiple}
           {@rest}
         >
@@ -300,7 +332,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
           id={@id}
           name={@name}
           class={[
-            @class || "thamani-input",
+            "thamani-input",
+            @class,
             @errors != [] && (@error_class || "border-red-600")
           ]}
           style="min-height: 80px; resize: vertical;"
@@ -330,7 +363,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
           id={@id}
           value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
           class={[
-            @class || "thamani-input",
+            "thamani-input",
+            @class,
             @errors != [] && (@error_class || "border-red-600")
           ]}
           {@rest}
@@ -765,6 +799,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
   slot :subtitle
   slot :actions
   slot :toolbar, doc: "optional search/filter row, rendered below a divider in the same card"
+
+  attr :back, :any,
+    default: nil,
+    doc: "optional route or true to render back button directly to the left of the title"
+
   attr :class, :any, default: nil
 
   def header(assigns) do
@@ -779,6 +818,23 @@ defmodule ThamaniDawaWeb.CoreComponents do
         @toolbar != [] && "border-b border-thamani-stone"
       ]}>
         <div class="flex min-w-0 items-center gap-3">
+          <.link
+            :if={is_binary(@back)}
+            navigate={@back}
+            aria-label="Go back"
+            class="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-2xs shrink-0 cursor-pointer"
+          >
+            <.icon name="hero-arrow-left" class="size-4" />
+          </.link>
+          <button
+            :if={@back == true}
+            type="button"
+            aria-label="Go back"
+            onclick="window.history.back()"
+            class="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-2xs shrink-0 cursor-pointer"
+          >
+            <.icon name="hero-arrow-left" class="size-4" />
+          </button>
           <div
             :if={@icon}
             class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-thamani-lime text-thamani-forest"
@@ -1361,10 +1417,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
             >
               <div class="absolute top-4 right-4">
                 <button
-                  phx-click={JS.exec("data-cancel", to: "##{@id}")}
+                  phx-click={JS.exec(@on_cancel, "phx-remove")}
                   type="button"
-                  class="-m-2 p-2 opacity-40 hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2 rounded-full"
-                  aria-label="close"
+                  data-tooltip="Cancel"
+                  class="flex size-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-[background-color,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+                  aria-label="Cancel"
                 >
                   <.icon name="hero-x-mark-solid" class="h-5 w-5" />
                 </button>

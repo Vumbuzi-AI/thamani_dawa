@@ -22,15 +22,11 @@ defmodule ThamaniDawaWeb.PatientLive.Show do
       flash={@flash}
       current_scope={@current_scope}
       current_path="/pharmacy/patients"
+      back={~p"/pharmacy/patients"}
     >
       <.header icon="hero-user">
         {@patient.full_name}
         <:subtitle>Patient details and visit history.</:subtitle>
-        <:actions>
-          <.button patch={~p"/pharmacy/patients"} variant="ghost">
-            <.icon name="hero-arrow-left" class="size-4" /> Back to patients
-          </.button>
-        </:actions>
       </.header>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

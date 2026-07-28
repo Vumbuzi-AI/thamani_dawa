@@ -195,7 +195,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
         show
         on_cancel={JS.patch(~p"/pharmacy/receive-stock")}
       >
-        <h2 class="mb-1 font-semibold text-slate-900">Receive batch</h2>
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">Receive batch</h2>
         <p class="mb-4 text-sm text-thamani-pewter">
           Confirm the quantity actually received for this batch.
         </p>
@@ -244,10 +244,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
             min="0"
             required
           />
-          <div class="flex gap-2">
-            <.button variant="primary" phx-disable-with="Receiving…">Confirm receipt</.button>
-            <.button patch={~p"/pharmacy/receive-stock"}>Cancel</.button>
-          </div>
+          <.button variant="primary" phx-disable-with="Receiving…" class="w-full">Confirm receipt</.button>
         </.form>
       </.modal>
 
