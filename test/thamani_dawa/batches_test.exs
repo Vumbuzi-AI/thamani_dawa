@@ -619,4 +619,56 @@ defmodule ThamaniDawa.BatchesTest do
       assert %{remaining_quantity: ["must be greater than or equal to 0"]} = errors_on(changeset)
     end
   end
+
+  describe "list_batches_paginated/4 site filter" do
+    setup do
+      admin = user_fixture()
+      org_id = admin.organization_id
+
+      # Two sites, one batch each, so a working filter has to actually discriminate.
+      site = site_fixture(%{organization_id: org_id})
+      other_site = site_fixture(%{organization_id: org_id})
+      batch = batch_fixture(%{organization_id: org_id, site_id: site.id})
+      other_batch = batch_fixture(%{organization_id: org_id, site_id: other_site.id})
+
+      {:ok,
+       org_id: org_id,
+       site: site,
+       batch: batch,
+       other_batch: other_batch,
+       other_site_ids: [other_site.id]}
+    end
+
+    test "accepts the site id as a string", %{org_id: org_id, site: site, batch: batch} do
+      page = Batches.list_batches_paginated(org_id, 1, nil, site: to_string(site.id))
+      assert Enum.map(page.entries, & &1.id) == [batch.id]
+    end
+
+    test "accepts the site id as an integer", %{org_id: org_id, site: site, batch: batch} do
+      # Used to fall through to the catch-all clause and silently return every
+      # site's batches — a fail-open filter.
+      page = Batches.list_batches_paginated(org_id, 1, nil, site: site.id)
+      assert Enum.map(page.entries, & &1.id) == [batch.id]
+    end
+
+    test "ignores a malformed site filter instead of raising", %{
+      org_id: org_id,
+      batch: batch,
+      other_batch: other_batch
+    } do
+      page = Batches.list_batches_paginated(org_id, 1, nil, site: "abc")
+
+      assert Enum.sort(Enum.map(page.entries, & &1.id)) == Enum.sort([batch.id, other_batch.id])
+    end
+
+    test "a malformed site filter still respects the permitted-site scoping", %{
+      org_id: org_id,
+      other_site_ids: other_site_ids,
+      other_batch: other_batch
+    } do
+      page = Batches.list_batches_paginated(org_id, 1, other_site_ids, site: "abc")
+
+      assert Enum.map(page.entries, & &1.id) == [other_batch.id]
+    end
+  end
 end

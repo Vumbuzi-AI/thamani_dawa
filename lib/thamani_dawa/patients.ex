@@ -14,12 +14,30 @@ defmodule ThamaniDawa.Patients do
   end
 
   @doc "Lists an organization's patients with pagination, ordered by name."
-  def list_patients_paginated(organization_id, page \\ 1) do
-    from(p in Patient,
-      where: p.organization_id == ^organization_id,
-      order_by: [asc: p.full_name]
-    )
-    |> Repo.paginate(page: page)
+  def list_patients_paginated(organization_id, page \\ 1, opts \\ []) do
+    search = Keyword.get(opts, :search)
+
+    query =
+      from(p in Patient,
+        where: p.organization_id == ^organization_id,
+        order_by: [asc: p.full_name]
+      )
+
+    query =
+      if search && String.trim(search) != "" do
+        pattern = "%#{String.trim(search)}%"
+
+        from(p in query,
+          where:
+            ilike(p.full_name, ^pattern) or
+              ilike(p.phone, ^pattern) or
+              ilike(p.national_id, ^pattern)
+        )
+      else
+        query
+      end
+
+    Repo.paginate(query, page: page)
   end
 
   @doc "Gets a single patient scoped to an organization. Raises if not found."

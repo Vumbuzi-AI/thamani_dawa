@@ -61,13 +61,20 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     |> assign(:gtin_step, :scan)
   end
 
-  defp apply_action(socket, :edit, %{"id" => id}) do
+  defp apply_action(socket, :edit, %{"id" => id} = params) do
     organization_id = socket.assigns.current_scope.organization_id
     product = Products.get_product!(organization_id, id)
 
+    back_path =
+      if Map.get(params, "return_to") == "show" do
+        ~p"/org/products/#{id}"
+      else
+        ~p"/org/products"
+      end
+
     socket
     |> assign(form: to_form(Product.changeset(product, %{}), as: :product), product: product)
-    |> assign(:back_path, ~p"/org/products/#{id}")
+    |> assign(:back_path, back_path)
     |> reset_gtin_lookup()
     |> assign(:gtin_step, :form)
   end
@@ -151,11 +158,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
              |> assign(:gtin_lookup, :searching)
              |> put_scanned_gtin(normalized)
              |> start_async(:gtin_lookup, fn ->
-               with {:ok, result} <- GtinLookup.lookup(trimmed) do
-                 {:ok, result}
-               else
-                 {:error, _reason} = err -> err
-               end
+               GtinLookup.lookup(trimmed)
              end)}
 
           {:error, :invalid_gtin} ->
@@ -213,11 +216,16 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
       {:ok, product} ->
         back_path = socket.assigns[:back_path] || ~p"/org/products"
 
-        {:noreply,
-         socket
-         |> put_flash(:info, "Product updated.")
-         |> stream_insert(:products, product)
-         |> push_patch(to: back_path)}
+        socket =
+          socket
+          |> put_flash(:info, "Product updated.")
+          |> stream_insert(:products, product)
+
+        if back_path == ~p"/org/products" do
+          {:noreply, push_patch(socket, to: back_path)}
+        else
+          {:noreply, push_navigate(socket, to: back_path)}
+        end
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :product))}
@@ -334,6 +342,11 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   defp gtin_lookup_message({:error, :provider_error}),
     do: {:warning, "Couldn't reach the lookup service — enter the product details manually."}
 
+  # Nothing the person filling the form can do about our credentials, so the copy
+  # matches the generic outage case; the cause is in the logs.
+  defp gtin_lookup_message({:error, :unauthorized}),
+    do: {:warning, "Couldn't reach the lookup service — enter the product details manually."}
+
   defp gtin_lookup_message(_), do: nil
 
   def render(assigns) do
@@ -396,7 +409,11 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         :if={@live_action in [:new, :edit]}
         id="product-modal"
         show
-        on_cancel={JS.patch(@back_path || ~p"/org/products")}
+        on_cancel={
+          if @back_path == ~p"/org/products",
+            do: JS.patch(~p"/org/products"),
+            else: JS.navigate(@back_path)
+        }
       >
         <div class="space-y-6">
           <div>
@@ -471,6 +488,11 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                   variant="ghost"
                 >
                   Skip
+                </.button>
+                <%!-- Matches the form step's affordance, and keeps the modal
+                      dismissible without relying on the JS-driven close button. --%>
+                <.button type="button" patch={~p"/org/products"} variant="ghost">
+                  Cancel
                 </.button>
               </div>
             </form>
@@ -563,13 +585,18 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
               </div>
 
               <div class="grid grid-cols-2 gap-4">
+                <%!-- Free text with existing categories as suggestions: a plain select
+                      could only ever offer categories already in use, so no new one
+                      could be introduced (not even on the very first product). --%>
                 <.input
                   field={@form[:category]}
-                  type="select"
                   label="Category"
-                  options={@categories}
-                  prompt="Select a category"
+                  list="product-category-options"
+                  placeholder="e.g., Analgesic"
                 />
+                <datalist id="product-category-options">
+                  <option :for={category <- @categories} value={category}></option>
+                </datalist>
                 <.input
                   field={@form[:manufacturer]}
                   label="Manufacturer"
@@ -580,44 +607,24 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
               <.input field={@form[:gtin]} label="GTIN" required placeholder="e.g., 5901234123457" />
 
               <div class="space-y-3 bg-slate-50 p-3 rounded-lg">
-                <label class="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="product[is_otc]"
-                    value="true"
-                    checked={@form[:is_otc].value}
-                    class="w-4 h-4 rounded border-slate-300"
-                  />
-                  <span class="text-sm font-medium text-slate-700">Over-the-counter</span>
-                </label>
-                <label class="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="product[is_dangerous_drug]"
-                    value="true"
-                    checked={@form[:is_dangerous_drug].value}
-                    class="w-4 h-4 rounded border-slate-300"
-                  />
-                  <span class="text-sm font-medium text-slate-700">Dangerous drug</span>
-                </label>
+                <.input field={@form[:is_otc]} type="checkbox" label="Over-the-counter" />
+                <.input field={@form[:is_dangerous_drug]} type="checkbox" label="Dangerous drug" />
               </div>
 
               <.input field={@form[:reorder_level]} type="number" label="Reorder level" min="0" />
 
-              <label class="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  name="product[is_active]"
-                  value="true"
-                  checked={@form[:is_active].value}
-                  class="w-4 h-4 rounded border-slate-300"
-                />
-                <span class="text-sm font-medium text-slate-700">Active</span>
-              </label>
+              <.input field={@form[:is_active]} type="checkbox" label="Active" />
 
               <div class="flex gap-3 pt-4 border-t">
                 <.button variant="primary" class="flex-1">Save Product</.button>
-                <.button type="button" patch={@back_path || ~p"/org/products"} variant="ghost">Cancel</.button>
+                <.button
+                  type="button"
+                  patch={if @back_path == ~p"/org/products", do: @back_path}
+                  navigate={if @back_path != ~p"/org/products", do: @back_path}
+                  variant="ghost"
+                >
+                  Cancel
+                </.button>
               </div>
             </.form>
           </div>
@@ -637,27 +644,32 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         </:col>
         <:action :let={{_id, product}}>
           <.button
-            variant="ghost-edit"
-            patch={~p"/org/products/#{product.id}/edit"}
-            class="gap-2"
+            variant="ghost"
+            navigate={~p"/org/products/#{product.id}"}
+            class="px-3 py-1.5 text-xs"
+            id={"btn-view-#{product.id}"}
           >
-            <.icon name="hero-pencil-square" class="size-4" />
-            Edit
+            View
           </.button>
         </:action>
         <:action :let={{_id, product}}>
           <.button
-            type="button"
-            phx-click="toggle_active"
-            phx-value-id={product.id}
-            class="gap-2"
-            variant={if product.is_active, do: "ghost-delete", else: "ghost"}
+            variant="primary"
+            navigate={~p"/org/products/#{product.id}/batches/new"}
+            class="px-3 py-1.5 text-xs"
+            id={"btn-dispatch-#{product.id}"}
           >
-            <.icon
-              name={if product.is_active, do: "hero-power", else: "hero-arrow-path"}
-              class="size-4"
-            />
-            {if product.is_active, do: "Deactivate", else: "Reactivate"}
+            Dispatch batch
+          </.button>
+        </:action>
+        <:action :let={{_id, product}}>
+          <.button
+            variant="ghost-edit"
+            patch={~p"/org/products/#{product.id}/edit"}
+            class="px-3 py-1.5 text-xs"
+            id={"btn-edit-#{product.id}"}
+          >
+            Edit
           </.button>
         </:action>
         <:empty_state>

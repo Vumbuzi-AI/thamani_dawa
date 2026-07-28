@@ -8,14 +8,27 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
 
   import Ecto.Changeset
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.OrganizationsFixtures
+  import ThamaniDawa.SitesFixtures
 
   alias ThamaniDawa.Repo
 
   describe "GET /login" do
-    test "renders the login form", %{conn: conn} do
+    test "renders the login form for unauthenticated users", %{conn: conn} do
       conn = get(conn, ~p"/login")
 
       assert html_response(conn, 200) =~ "Welcome back"
+    end
+
+    test "redirects an authenticated user to their portal", %{conn: conn} do
+      pharmacist = staff_fixture(%{role: :pharmacist})
+
+      conn =
+        conn
+        |> log_in_user(pharmacist)
+        |> get(~p"/login")
+
+      assert redirected_to(conn) == ~p"/pharmacy"
     end
   end
 
@@ -69,6 +82,58 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
 
     test "redirects combined pharmacy/lab staff to /pharmacy", %{conn: conn} do
       pharma_lab = staff_fixture(%{role: :pharma_lab})
+
+      conn =
+        post(conn, ~p"/login", %{
+          "email" => pharma_lab.email,
+          "password" => valid_user_password()
+        })
+
+      assert redirected_to(conn) == ~p"/pharmacy"
+    end
+
+    test "redirects combined pharmacy/lab staff to /lab when their current site is lab-only", %{
+      conn: conn
+    } do
+      org = organization_fixture()
+      lab_site = site_fixture(%{organization_id: org.id, site_type: :lab})
+
+      pharma_lab =
+        staff_fixture(%{organization_id: org.id, role: :pharma_lab, site_id: lab_site.id})
+
+      conn =
+        post(conn, ~p"/login", %{
+          "email" => pharma_lab.email,
+          "password" => valid_user_password()
+        })
+
+      assert redirected_to(conn) == ~p"/lab"
+    end
+
+    test "redirects combined pharmacy/lab staff to /pharmacy when their current site is a combined pharmacy+lab site",
+         %{conn: conn} do
+      org = organization_fixture()
+      combined_site = site_fixture(%{organization_id: org.id, site_type: :pharmacy_lab})
+
+      pharma_lab =
+        staff_fixture(%{organization_id: org.id, role: :pharma_lab, site_id: combined_site.id})
+
+      conn =
+        post(conn, ~p"/login", %{
+          "email" => pharma_lab.email,
+          "password" => valid_user_password()
+        })
+
+      assert redirected_to(conn) == ~p"/pharmacy"
+    end
+
+    test "redirects combined pharmacy/lab staff to /pharmacy when their current site is pharmacy-only",
+         %{conn: conn} do
+      org = organization_fixture()
+      pharmacy_site = site_fixture(%{organization_id: org.id, site_type: :pharmacy})
+
+      pharma_lab =
+        staff_fixture(%{organization_id: org.id, role: :pharma_lab, site_id: pharmacy_site.id})
 
       conn =
         post(conn, ~p"/login", %{

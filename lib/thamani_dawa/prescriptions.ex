@@ -94,19 +94,25 @@ defmodule ThamaniDawa.Prescriptions do
 
   defp put_computed_total_amount(changeset, organization_id) do
     items = Ecto.Changeset.get_field(changeset, :items) || []
-    Ecto.Changeset.put_change(changeset, :total_amount, total_amount_for_items(items, organization_id))
+
+    Ecto.Changeset.put_change(
+      changeset,
+      :total_amount,
+      total_amount_for_items(items, organization_id)
+    )
   end
 
   defp total_amount_for_items(items, organization_id) do
     product_ids = items |> Enum.map(& &1.product_id) |> Enum.reject(&is_nil/1) |> Enum.uniq()
 
     prices =
-      Repo.all(
-        from p in Product,
-          where: p.organization_id == ^organization_id and p.id in ^product_ids,
-          select: {p.id, p.price}
+      Map.new(
+        Repo.all(
+          from p in Product,
+            where: p.organization_id == ^organization_id and p.id in ^product_ids,
+            select: {p.id, p.price}
+        )
       )
-      |> Map.new()
 
     Enum.reduce(items, Decimal.new(0), fn item, acc ->
       case {Map.get(prices, item.product_id), item.quantity_prescribed} do
@@ -215,7 +221,9 @@ defmodule ThamaniDawa.Prescriptions do
              create_prescription_items(organization_id, prescription.id, items_attrs),
            {:ok, prescription} <-
              prescription
-             |> Ecto.Changeset.change(total_amount: total_amount_for_items(items, organization_id))
+             |> Ecto.Changeset.change(
+               total_amount: total_amount_for_items(items, organization_id)
+             )
              |> Repo.update() do
         %{prescription: prescription, prescription_items: items}
       else
@@ -388,7 +396,9 @@ defmodule ThamaniDawa.Prescriptions do
   the live FEFO preview, which can go stale between preview and dispense).
   """
   def list_batch_dispenses_for_item(organization_id, prescription_item_id) do
-    batch_query = from b in ThamaniDawa.Batches.Batch, where: b.organization_id == ^organization_id
+    batch_query =
+      from b in ThamaniDawa.Batches.Batch, where: b.organization_id == ^organization_id
+
     user_query = from u in ThamaniDawa.Accounts.User, where: u.organization_id == ^organization_id
 
     Repo.all(

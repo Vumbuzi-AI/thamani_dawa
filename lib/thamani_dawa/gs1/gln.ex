@@ -37,14 +37,12 @@ defmodule ThamaniDawa.Gln do
   end
 
   defp random_digits(length) do
-    1..length
-    |> Enum.map(fn _ -> Integer.to_string(:rand.uniform(10) - 1) end)
-    |> Enum.join()
+    Enum.map_join(1..length, fn _ -> Integer.to_string(:rand.uniform(10) - 1) end)
   end
 
   defp company_prefix do
-    Application.get_env(:thamani_dawa, __MODULE__, [])
-    |> Keyword.fetch!(:company_prefix)
+    config = Application.get_env(:thamani_dawa, __MODULE__, [])
+    Keyword.fetch!(config, :company_prefix)
   end
 
   defp unique?(gln) do

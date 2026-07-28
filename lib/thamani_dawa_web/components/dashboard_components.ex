@@ -25,10 +25,12 @@ defmodule ThamaniDawaWeb.DashboardComponents do
   def stat_tile(assigns) do
     ~H"""
     <div class={["dashboard-stat-tile", @class]}>
-      <span class="dashboard-stat-tile-icon">
-        <.icon name={@icon} class="size-5" />
-      </span>
-      <span class="dashboard-stat-tile-label">{@label}</span>
+      <div class="dashboard-stat-tile-header">
+        <span class="dashboard-stat-tile-label">{@label}</span>
+        <span class="dashboard-stat-tile-icon">
+          <.icon name={@icon} class="size-4" />
+        </span>
+      </div>
       <span class="dashboard-stat-tile-value">{@value}</span>
       <span :if={@sublabel} class="dashboard-stat-tile-sublabel">{@sublabel}</span>
     </div>

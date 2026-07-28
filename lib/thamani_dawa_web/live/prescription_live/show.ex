@@ -54,7 +54,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     allocation_previews =
       Map.new(items, fn item ->
         {item.id,
-         allocation_preview(organization_id, visit.site_id, item.product_id,
+         allocation_preview(
+           organization_id,
+           visit.site_id,
+           item.product_id,
            outstanding_quantity(item)
          )}
       end)
@@ -134,10 +137,16 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     with {item_id, ""} <- Integer.parse(item_id),
          {quantity, ""} <- Integer.parse(quantity) do
       item = Enum.find(socket.assigns.items, &(&1.id == item_id))
-      preview = allocation_preview(organization_id, socket.assigns.site_id, item.product_id, quantity)
+
+      preview =
+        allocation_preview(organization_id, socket.assigns.site_id, item.product_id, quantity)
 
       {:noreply,
-       assign(socket, :allocation_previews, Map.put(socket.assigns.allocation_previews, item_id, preview))}
+       assign(
+         socket,
+         :allocation_previews,
+         Map.put(socket.assigns.allocation_previews, item_id, preview)
+       )}
     else
       _ -> {:noreply, socket}
     end
@@ -587,8 +596,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                       <span>
                         Batch {dispense.batch.batch_no || "##{dispense.batch.id}"}
                         <span class="text-thamani-subtle">
-                          · exp {Calendar.strftime(dispense.batch.expiry_date, "%b %d, %Y")}
-                          · by {user_display(dispense.dispensed_by)}
+                          · exp {Calendar.strftime(dispense.batch.expiry_date, "%b %d, %Y")} · by {user_display(
+                            dispense.dispensed_by
+                          )}
                         </span>
                       </span>
                       <span class="font-medium">{dispense.quantity} units</span>

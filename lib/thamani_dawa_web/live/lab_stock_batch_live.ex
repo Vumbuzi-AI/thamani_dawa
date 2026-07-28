@@ -1,8 +1,7 @@
-defmodule ThamaniDawaWeb.PharmacyStockBatchLive do
+defmodule ThamaniDawaWeb.LabStockBatchLive do
   @moduledoc """
-  Read-only view of who has drawn stock from a single batch, reached by
-  drilling into `PharmacyStockProductLive` or the flat batches view on
-  `PharmacyStockLive`.
+  Read-only view of who has drawn stock from a single batch in lab, reached by
+  drilling into `LabStockProductLive` or the flat batches view on `LabStockLive`.
   """
 
   use ThamaniDawaWeb, :live_view
@@ -58,11 +57,7 @@ defmodule ThamaniDawaWeb.PharmacyStockBatchLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.pharmacy_shell
-      flash={@flash}
-      current_scope={@current_scope}
-      current_path="/pharmacy/stock"
-    >
+    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path="/lab/stock">
       <.header icon="hero-cube">
         Batch {@batch.batch_no}
         <:subtitle>{product_name(@batch.product)} · {@batch.site.name}</:subtitle>
@@ -75,7 +70,7 @@ defmodule ThamaniDawaWeb.PharmacyStockBatchLive do
           >
             <.icon name="hero-printer" class="w-4 h-4" /> Print Data Matrix
           </.button>
-          <.button navigate={~p"/pharmacy/stock/products/#{@batch.product_id}"}>
+          <.button navigate={~p"/lab/stock/products/#{@batch.product_id}"}>
             Back to product
           </.button>
         </:actions>
@@ -114,7 +109,7 @@ defmodule ThamaniDawaWeb.PharmacyStockBatchLive do
           <.blank_state icon="hero-user-group" title="No one has drawn from this batch yet" />
         </:empty_state>
       </.table>
-    </Layouts.pharmacy_shell>
+    </Layouts.lab_shell>
     """
   end
 end

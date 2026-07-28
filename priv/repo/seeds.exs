@@ -153,7 +153,7 @@ combined_site =
   )
 
 ensure_account = fn email, name, role, site ->
-  site_id = if site, do: site.id, else: nil
+  site_ids = if site, do: [site.id], else: []
 
   user =
     case Accounts.get_user_by_email(email) do
@@ -163,15 +163,18 @@ ensure_account = fn email, name, role, site ->
             email: email,
             name: name,
             role: role,
-            site_id: site_id
+            site_ids: site_ids
           })
 
         {:ok, accepted} = Accounts.accept_invite(invited, %{password: password})
         accepted
 
       %User{} = existing ->
-        existing
-        |> Ecto.Changeset.change(name: name, role: role, site_id: site_id, is_active: true)
+        {:ok, updated} =
+          Accounts.update_user(organization_id, existing.id, %{role: role, site_ids: site_ids})
+
+        updated
+        |> Ecto.Changeset.cast(%{name: name, is_active: true}, [:name, :is_active])
         |> Repo.update!()
     end
 

@@ -4,6 +4,7 @@ defmodule ThamaniDawa.Repo.Migrations.CreatePrescriptionBatchDispenses do
   def change do
     create table(:prescription_batch_dispenses) do
       add :organization_id, references(:organizations, on_delete: :delete_all), null: false
+
       add :prescription_item_id, references(:prescription_items, on_delete: :restrict),
         null: false
 

@@ -10,7 +10,7 @@ defmodule ThamaniDawa.ProductsFixtures do
   def valid_product_attributes(attrs \\ %{}) do
     Enum.into(attrs, %{
       generic_name: "Paracetamol #{System.unique_integer()}",
-      uom: "tablet",
+      uom: "U2",
       gtin: BatchesFixtures.unique_gtin(),
       price: 100
     })

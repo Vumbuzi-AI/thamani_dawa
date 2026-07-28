@@ -63,7 +63,7 @@ defmodule ThamaniDawaWeb.PatientLive.Show do
         </:col>
         <:empty_state>
           <.blank_state icon="hero-user-group" title="No visits yet">
-            This patient hasn't been logged for a visit yet.
+            No visits recorded for this patient yet.
           </.blank_state>
         </:empty_state>
       </.table>

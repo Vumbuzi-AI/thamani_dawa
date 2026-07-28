@@ -188,6 +188,41 @@ defmodule ThamaniDawa.PatientsTest do
     end
   end
 
+  describe "list_patients_paginated/3" do
+    test "filters patients across all entries using search term" do
+      organization = organization_fixture()
+
+      _p1 =
+        patient_fixture(%{
+          organization_id: organization.id,
+          full_name: "Alice Smith",
+          phone: "0711111111"
+        })
+
+      _p2 =
+        patient_fixture(%{
+          organization_id: organization.id,
+          full_name: "Bob Jones",
+          phone: "0722222222"
+        })
+
+      _p3 =
+        patient_fixture(%{
+          organization_id: organization.id,
+          full_name: "Charlie Smith",
+          phone: "0733333333"
+        })
+
+      page_res = Patients.list_patients_paginated(organization.id, 1, search: "Smith")
+      names = Enum.map(page_res.entries, & &1.full_name)
+
+      assert length(page_res.entries) == 2
+      assert "Alice Smith" in names
+      assert "Charlie Smith" in names
+      refute "Bob Jones" in names
+    end
+  end
+
   describe "get_patient!/2" do
     test "raises when the patient belongs to a different organization" do
       other_organization = organization_fixture()

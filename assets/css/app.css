@@ -122,7 +122,6 @@ html {
   scroll-behavior: smooth !important;
 }
 .internal-app {
-  font-weight: 500;
   font-synthesis: none;
   font-kerning: normal;
   font-optical-sizing: auto;
@@ -130,12 +129,11 @@ html {
   -webkit-font-smoothing: antialiased;
 }
 
-.internal-app .font-medium {
-  font-weight: 600;
-}
-
-.internal-app :where(.font-semibold, .font-bold, .font-extrabold, .font-black) {
-  font-weight: 700;
+/* Medium (500) is the heaviest weight this app ever renders — never
+   font-semibold/font-bold. Clamped here so any stray usage is neutralized
+   instead of quietly rendering bolder than the design allows. */
+.internal-app :where(.font-medium, .font-semibold, .font-bold, .font-extrabold, .font-black) {
+  font-weight: 500;
 }
 
 /* ============================================================
@@ -148,6 +146,14 @@ html {
 #sidebar-aside.sidebar-collapsed {
   width: 80px !important;
   padding: 24px 16px !important;
+}
+
+/* The toggle's 36px circle is a deliberate compact size — extend the hit
+   area to the 40px floor via a pseudo-element instead of growing it visually. */
+#sidebar-toggle::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
 }
 
 #sidebar-shell.sidebar-mobile-open #sidebar-aside {
@@ -290,9 +296,9 @@ html {
   --thamani-lime: #e7e7ff;
   --thamani-snow: #ffffff;
   --thamani-stone: #e6edf8;
-  --thamani-pewter: #687083;
+  --thamani-pewter: #4b5164;
   --thamani-frosted: #c7cfe0;
-  --thamani-subtle: #9aa3b5;
+  --thamani-subtle: #687083;
   --thamani-error: #c21f17;
   --thamani-canvas: #f8fafc;
   --thamani-accent: #6667ab;
@@ -308,8 +314,6 @@ html {
   --thamani-chart-5: #c21f17;
 
   --shadow-card: 0 12px 28px rgba(15, 23, 42, 0.045);
-  --shadow-panel: 0 18px 38px rgba(15, 23, 42, 0.055);
-  --shadow-hero: 0 20px 42px rgba(15, 23, 42, 0.06);
 
   /* Landing page tokens — always light (Thamani palette) */
   --brand: #373896;
@@ -473,6 +477,7 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 40px;
   padding: 10px 24px;
   border-radius: 1000px;
   background: var(--thamani-forest);
@@ -486,15 +491,15 @@ html {
 }
 
 .thamani-btn-primary:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .thamani-btn-ghost,
-.thamani-btn-ghost-edit,
-.thamani-btn-ghost-delete {
+.thamani-btn-ghost-edit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 40px;
   padding: 10px 24px;
   border-radius: 1000px;
   background: transparent;
@@ -511,16 +516,40 @@ html {
     border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
+.thamani-btn-ghost-delete,
+.thamani-btn-destructive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 10px 24px;
+  border-radius: 1000px;
+  background: transparent;
+  color: var(--thamani-error);
+  font-size: 14px;
+  font-weight: 400;
+  text-decoration: none;
+  border: 1.5px solid var(--thamani-error);
+  cursor: pointer;
+  transition:
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 .thamani-btn-ghost:active,
 .thamani-btn-ghost-edit:active,
-.thamani-btn-ghost-delete:active {
-  transform: scale(0.97);
+.thamani-btn-ghost-delete:active,
+.thamani-btn-destructive:active {
+  transform: scale(0.96);
 }
 
 .thamani-btn-primary:focus-visible,
 .thamani-btn-ghost:focus-visible,
 .thamani-btn-ghost-edit:focus-visible,
 .thamani-btn-ghost-delete:focus-visible,
+.thamani-btn-destructive:focus-visible,
 .thamani-btn-ghost-inv:focus-visible,
 .thamani-btn-lime:focus-visible {
   outline: 2px solid var(--thamani-accent);
@@ -532,7 +561,8 @@ html {
     background-color: var(--thamani-forest);
     color: white;
   }
-  .thamani-btn-ghost-delete:hover {
+  .thamani-btn-ghost-delete:hover,
+  .thamani-btn-destructive:hover {
     background-color: var(--thamani-error);
     border-color: var(--thamani-error);
     color: white;
@@ -543,6 +573,7 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 40px;
   padding: 10px 24px;
   border-radius: 1000px;
   background: transparent;
@@ -556,13 +587,14 @@ html {
 }
 
 .thamani-btn-ghost-inv:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .thamani-btn-lime {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  min-height: 40px;
   padding: 10px 24px;
   border-radius: 1000px;
   background: var(--thamani-lime);
@@ -576,7 +608,7 @@ html {
 }
 
 .thamani-btn-lime:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 /* ============================================================
@@ -897,27 +929,33 @@ html {
   box-shadow: var(--shadow-card);
 }
 
+.dashboard-stat-tile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .dashboard-stat-tile-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  background: var(--thamani-lime);
-  color: var(--thamani-forest);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--thamani-stone);
+  color: var(--thamani-pewter);
+  flex-shrink: 0;
 }
 
 .dashboard-stat-tile-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--thamani-subtle);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--thamani-pewter);
 }
 
 .dashboard-stat-tile-value {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--thamani-forest);
   line-height: 1.1;
@@ -973,18 +1011,52 @@ html {
 }
 
 .dashboard-range-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   padding: 8px 16px;
   border-radius: 1000px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   border: 1px solid var(--thamani-border-nav);
   background: var(--thamani-snow);
   color: var(--thamani-pewter);
-  transition: background-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, color 150ms ease, scale 150ms ease;
+}
+
+.dashboard-range-pill:active {
+  scale: 0.96;
 }
 
 .dashboard-range-pill[aria-pressed="true"] {
   background: var(--thamani-forest);
   color: var(--thamani-snow);
   border-color: var(--thamani-forest);
+}
+
+/* Print styles for GS1 Data Matrix Batch Label */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .printable-batch-label,
+  .printable-batch-label * {
+    visibility: visible !important;
+  }
+  .printable-batch-label {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 4in !important;
+    margin: 0 !important;
+    padding: 16px !important;
+    border: 2px solid #000 !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
 }

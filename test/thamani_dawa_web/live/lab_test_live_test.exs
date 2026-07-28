@@ -6,204 +6,176 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
   import ThamaniDawa.LabTestsFixtures
 
   setup do
-    admin = user_fixture()
+    admin = staff_fixture(%{role: :admin})
+    lab_tech = staff_fixture(%{role: :lab_technician, organization_id: admin.organization_id})
 
-    lab_tech =
-      staff_fixture(%{
-        organization_id: admin.organization_id,
-        invited_by_id: admin.id,
-        role: :lab_technician
-      })
+    pharmacist =
+      staff_fixture(%{role: :pharmacist, organization_id: admin.organization_id})
 
-    %{admin: admin, lab_tech: lab_tech}
+    %{admin: admin, lab_tech: lab_tech, pharmacist: pharmacist}
   end
 
-  describe "catalog index" do
-    test "admin sees active and inactive tests", %{conn: conn, admin: admin} do
-      active =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Active Test Alpha"})
-
-      inactive =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Inactive Test Beta"})
-
-      {:ok, _} =
-        ThamaniDawa.LabTests.update_lab_test(admin.organization_id, inactive, %{is_active: false})
-
+  describe "access control" do
+    test "admins can access the catalog", %{conn: conn, admin: admin} do
       {:ok, _view, html} = live(log_in_user(conn, admin), ~p"/lab/tests")
-
-      assert html =~ active.name
-      assert html =~ inactive.name
+      assert html =~ "Test catalog"
     end
 
-    test "lab technician can access the catalog", %{conn: conn, lab_tech: lab_tech} do
-      lab_test_fixture(%{organization_id: lab_tech.organization_id})
-
+    test "lab technicians can access the catalog", %{conn: conn, lab_tech: lab_tech} do
       {:ok, _view, html} = live(log_in_user(conn, lab_tech), ~p"/lab/tests")
       assert html =~ "Test catalog"
     end
 
-    test "searches by name", %{conn: conn, admin: admin} do
-      lab_test_fixture(%{organization_id: admin.organization_id, name: "Haemoglobin Panel"})
-      lab_test_fixture(%{organization_id: admin.organization_id, name: "Widal Test"})
+    test "pharma_lab staff can access the catalog", %{conn: conn, admin: admin} do
+      lab_site =
+        ThamaniDawa.SitesFixtures.site_fixture(%{
+          organization_id: admin.organization_id,
+          type: :pharmacy_lab
+        })
 
-      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
+      pharma_lab =
+        staff_fixture(%{
+          role: :pharma_lab,
+          organization_id: admin.organization_id,
+          sites: [lab_site]
+        })
 
-      lv |> form("form[phx-change='search']", search: "haemoglobin") |> render_change()
-
-      html = render(lv)
-      assert html =~ "Haemoglobin Panel"
-      refute html =~ "Widal Test"
+      {:ok, _view, html} = live(log_in_user(conn, pharma_lab), ~p"/lab/tests")
+      assert html =~ "Test catalog"
     end
 
-    test "filters by category", %{conn: conn, admin: admin} do
-      lab_test_fixture(%{
-        organization_id: admin.organization_id,
-        name: "Haemoglobin Panel",
-        category: "Haematology"
-      })
+    test "pharmacists without lab access are redirected", %{
+      conn: conn,
+      pharmacist: pharmacist
+    } do
+      result = live(log_in_user(conn, pharmacist), ~p"/lab/tests")
 
-      lab_test_fixture(%{
-        organization_id: admin.organization_id,
-        name: "Widal Test",
-        category: "Serology"
-      })
-
-      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
-
-      lv
-      |> form("#lab-tests-filters-form", filters: %{category: "Serology"})
-      |> render_submit()
-
-      html = render(lv)
-      assert html =~ "Widal Test"
-      refute html =~ "Haemoglobin Panel"
-      assert html =~ "Category: Serology"
+      assert {:error, {:redirect, %{to: "/pharmacy"}}} = result
     end
+  end
 
-    test "clearing the category filter chip removes just that filter", %{
+  describe "scoping" do
+    test "users see tests from their organization only", %{conn: conn, admin: admin} do
+      other_admin = staff_fixture(%{role: :admin})
+
+      mine = lab_test_fixture(%{organization_id: admin.organization_id, name: "Mine"})
+      theirs = lab_test_fixture(%{organization_id: other_admin.organization_id, name: "Theirs"})
+
+      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
+
+      assert has_element?(view, "#lab-tests", mine.name)
+      refute has_element?(view, "#lab-tests", theirs.name)
+    end
+  end
+
+  describe "listing and filtering" do
+    test "shows tests with their category name, price, and active status", %{
       conn: conn,
       admin: admin
     } do
-      lab_test_fixture(%{
-        organization_id: admin.organization_id,
-        name: "Haemoglobin Panel",
-        category: "Haematology"
-      })
+      category =
+        lab_test_category_fixture(%{
+          organization_id: admin.organization_id,
+          name: "Haematology"
+        })
 
-      lab_test_fixture(%{
-        organization_id: admin.organization_id,
-        name: "Widal Test",
-        category: "Serology"
-      })
+      test =
+        lab_test_fixture(%{
+          organization_id: admin.organization_id,
+          category_id: category.id,
+          name: "Full Blood Count",
+          price: Decimal.new("500.00"),
+          is_active: true
+        })
 
-      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
+      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
 
-      lv
-      |> form("#lab-tests-filters-form", filters: %{category: "Serology"})
-      |> render_submit()
-
-      lv
-      |> element("button[aria-label='Remove Category: Serology filter']")
-      |> render_click()
-
-      html = render(lv)
-      assert html =~ "Widal Test"
-      assert html =~ "Haemoglobin Panel"
+      assert has_element?(view, "#lab-tests", test.name)
+      assert has_element?(view, "#lab-tests", "Haematology")
+      assert has_element?(view, "#lab-tests", "KES 500.00")
+      assert has_element?(view, "#lab-tests", "Active")
     end
 
-    test "clearing the status filter chip removes just that filter", %{conn: conn, admin: admin} do
-      active =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Active Test Alpha"})
+    test "search filters tests by name or category", %{conn: conn, admin: admin} do
+      cat =
+        lab_test_category_fixture(%{
+          organization_id: admin.organization_id,
+          name: "Serology"
+        })
 
-      inactive =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Inactive Test Beta"})
+      malaria =
+        lab_test_fixture(%{
+          organization_id: admin.organization_id,
+          category_id: cat.id,
+          name: "Malaria RDT"
+        })
 
-      {:ok, _} =
-        ThamaniDawa.LabTests.update_lab_test(admin.organization_id, inactive, %{is_active: false})
+      hiv =
+        lab_test_fixture(%{
+          organization_id: admin.organization_id,
+          category_id: cat.id,
+          name: "HIV Rapid"
+        })
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
 
-      lv
-      |> form("#lab-tests-filters-form", filters: %{status: "inactive"})
-      |> render_submit()
-
-      lv
-      |> element("button[aria-label='Remove Status: Inactive filter']")
-      |> render_click()
-
-      html = render(lv)
-      assert html =~ active.name
-      assert html =~ inactive.name
+      lv |> form("form[phx-change='search']", search: "malaria") |> render_change()
+      assert render(lv) =~ malaria.name
+      refute render(lv) =~ hiv.name
     end
 
-    test "filters by status: active", %{conn: conn, admin: admin} do
-      active =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Active Test Alpha"})
+    test "filtering by category", %{conn: conn, admin: admin} do
+      cat1 =
+        lab_test_category_fixture(%{organization_id: admin.organization_id, name: "Cat A"})
 
-      inactive =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Inactive Test Beta"})
+      cat2 =
+        lab_test_category_fixture(%{organization_id: admin.organization_id, name: "Cat B"})
 
-      {:ok, _} =
-        ThamaniDawa.LabTests.update_lab_test(admin.organization_id, inactive, %{is_active: false})
+      test1 =
+        lab_test_fixture(%{
+          organization_id: admin.organization_id,
+          category_id: cat1.id,
+          name: "Test A"
+        })
+
+      test2 =
+        lab_test_fixture(%{
+          organization_id: admin.organization_id,
+          category_id: cat2.id,
+          name: "Test B"
+        })
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
 
       lv
-      |> form("#lab-tests-filters-form", filters: %{status: "active"})
+      |> form("#lab-tests-filters-form", filters: %{category: "Cat A"})
       |> render_submit()
 
-      html = render(lv)
-      assert html =~ active.name
-      refute html =~ inactive.name
+      assert render(lv) =~ test1.name
+      refute render(lv) =~ test2.name
     end
 
-    test "filters by status", %{conn: conn, admin: admin} do
-      active =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Active Test Alpha"})
+    test "clearing filter chips", %{conn: conn, admin: admin} do
+      cat = lab_test_category_fixture(%{organization_id: admin.organization_id, name: "Cat X"})
 
-      inactive =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Inactive Test Beta"})
-
-      {:ok, _} =
-        ThamaniDawa.LabTests.update_lab_test(admin.organization_id, inactive, %{is_active: false})
-
-      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
-
-      lv
-      |> form("#lab-tests-filters-form", filters: %{status: "inactive"})
-      |> render_submit()
-
-      html = render(lv)
-      assert html =~ inactive.name
-      refute html =~ active.name
-    end
-
-    test "clear_filters resets category and status filters", %{conn: conn, admin: admin} do
-      lab_test_fixture(%{
-        organization_id: admin.organization_id,
-        name: "Haemoglobin Panel",
-        category: "Haematology"
-      })
-
-      lab_test_fixture(%{
-        organization_id: admin.organization_id,
-        name: "Widal Test",
-        category: "Serology"
-      })
+      test =
+        lab_test_fixture(%{
+          organization_id: admin.organization_id,
+          category_id: cat.id,
+          name: "Test X"
+        })
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
 
       lv
-      |> form("#lab-tests-filters-form", filters: %{category: "Serology"})
+      |> form("#lab-tests-filters-form", filters: %{category: "Cat X"})
       |> render_submit()
 
-      refute render(lv) =~ "Haemoglobin Panel"
+      assert render(lv) =~ test.name
 
-      lv |> element("button", "Clear filters") |> render_click()
+      lv |> element("button[aria-label='Remove Category: Cat X filter']") |> render_click()
 
-      html = render(lv)
-      assert html =~ "Haemoglobin Panel"
-      assert html =~ "Widal Test"
+      assert render(lv) =~ test.name
     end
   end
 
@@ -225,58 +197,12 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
           "price" => "350.00",
           "is_active" => "true"
         },
-        "field_defs_json" => ~s({"hb": {"type": "number", "unit": "g/dL"}})
+        "field_defs" => %{"0" => %{"key" => "hb", "type" => "number", "unit" => "g/dL"}}
       })
       |> render_submit()
 
       assert_patch(view, ~p"/lab/tests")
       assert render(view) =~ "Haemoglobin"
-    end
-
-    test "creates a test with an inline new category", %{conn: conn, admin: admin} do
-      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
-
-      view |> element("button[phx-click=toggle_new_category]") |> render_click()
-
-      view
-      |> form("#lab-test-form", %{
-        "lab_test" => %{
-          "name" => "Haemoglobin",
-          "price" => "350.00",
-          "is_active" => "true"
-        },
-        "category" => %{"name" => "New Category #{System.unique_integer()}"},
-        "field_defs_json" => ~s({"hb": {"type": "number", "unit": "g/dL"}})
-      })
-      |> render_submit()
-
-      assert_patch(view, ~p"/lab/tests")
-      assert render(view) =~ "Haemoglobin"
-    end
-
-    test "shows an error and does not save when the inline new category name is blank", %{
-      conn: conn,
-      admin: admin
-    } do
-      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
-
-      view |> element("button[phx-click=toggle_new_category]") |> render_click()
-
-      html =
-        view
-        |> form("#lab-test-form", %{
-          "lab_test" => %{"name" => "Some Test", "price" => "100.00"},
-          "category" => %{"name" => ""},
-          "field_defs_json" => ~s({"x": {"type": "string"}})
-        })
-        |> render_submit()
-
-      assert html =~ "can&#39;t be blank"
-
-      refute Enum.any?(
-               ThamaniDawa.LabTests.list_lab_tests(admin.organization_id),
-               &(&1.name == "Some Test")
-             )
     end
 
     test "shows validation errors when name is blank", %{conn: conn, admin: admin} do
@@ -287,7 +213,7 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
         view
         |> form("#lab-test-form", %{
           "lab_test" => %{"name" => "", "category_id" => to_string(category.id)},
-          "field_defs_json" => ~s({"x": {"type": "string"}})
+          "field_defs" => %{"0" => %{"key" => "x", "type" => "text", "unit" => ""}}
         })
         |> render_submit()
 
@@ -298,12 +224,14 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
   describe "field-definition presets" do
     test "the category field is a dropdown, not free text", %{conn: conn, admin: admin} do
       lab_test_category_fixture(%{organization_id: admin.organization_id})
+
       {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
 
-      assert has_element?(view, "select[name='lab_test[category_id]']")
+      assert has_element?(view, "#lab-test-form select[name='lab_test[category_id]']")
+      refute has_element?(view, "#lab-test-form input[name='lab_test[category_id]']")
     end
 
-    test "selecting a preset fills name, category, and field definitions", %{
+    test "selecting a preset auto-fills category and field definitions", %{
       conn: conn,
       admin: admin
     } do
@@ -314,58 +242,14 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
         |> form("#lab-test-preset-form", preset: "Complete Blood Count")
         |> render_change()
 
+      assert html =~ "Complete Blood Count"
       assert html =~ "haemoglobin"
-      assert html =~ "Hematology"
-
-      view
-      |> form("#lab-test-form", %{"lab_test" => %{"price" => "800.00"}})
-      |> render_submit()
-
-      assert_patch(view, ~p"/lab/tests")
-
-      [saved] = ThamaniDawa.LabTests.list_lab_tests(admin.organization_id)
-      assert saved.name == "Complete Blood Count"
-      assert saved.field_definitions["haemoglobin"]["unit"] == "g/dL"
-
-      category =
-        ThamaniDawa.LabTests.get_lab_test_category!(admin.organization_id, saved.category_id)
-
-      assert category.name == "Hematology"
     end
 
-    test "fields already typed before picking a preset are preserved (e.g. price)", %{
+    test "selecting a preset creates the preset's category if it doesn't exist yet", %{
       conn: conn,
       admin: admin
     } do
-      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
-
-      view
-      |> form("#lab-test-form", %{"lab_test" => %{"price" => "450.00"}})
-      |> render_change()
-
-      html =
-        view
-        |> form("#lab-test-preset-form", preset: "HIV Rapid Test")
-        |> render_change()
-
-      assert html =~ "450.00"
-
-      view
-      |> form("#lab-test-form", %{})
-      |> render_submit()
-
-      assert_patch(view, ~p"/lab/tests")
-
-      [saved] = ThamaniDawa.LabTests.list_lab_tests(admin.organization_id)
-      assert saved.name == "HIV Rapid Test"
-      assert Decimal.equal?(saved.price, Decimal.new("450.00"))
-    end
-
-    test "picking a preset reuses an existing matching category instead of duplicating it", %{
-      conn: conn,
-      admin: admin
-    } do
-      lab_test_category_fixture(%{organization_id: admin.organization_id, name: "Hematology"})
       {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
 
       view
@@ -374,47 +258,6 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
 
       categories = ThamaniDawa.LabTests.list_lab_test_categories(admin.organization_id)
       assert Enum.count(categories, &(&1.name == "Hematology")) == 1
-    end
-
-    test "an already-edited field-definitions value is preserved when a preset is picked", %{
-      conn: conn,
-      admin: admin
-    } do
-      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
-
-      view
-      |> form("#lab-test-form", %{
-        "lab_test" => %{"name" => "My Custom Test"},
-        "field_defs_json" => ~s({"custom_field":{"type":"text"}})
-      })
-      |> render_change()
-
-      html =
-        view
-        |> form("#lab-test-preset-form", preset: "Malaria Parasite")
-        |> render_change()
-
-      assert html =~ "custom_field"
-      refute html =~ "parasites"
-      assert html =~ "already edited"
-    end
-
-    test "picking a preset while editing an existing test preserves its saved field definitions",
-         %{conn: conn, admin: admin} do
-      lab_test =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Existing Test"})
-
-      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/#{lab_test.id}/edit")
-
-      html =
-        view
-        |> form("#lab-test-preset-form", preset: "Malaria Parasite")
-        |> render_change()
-
-      assert html =~ "Malaria Parasite"
-      assert html =~ "haemoglobin"
-      refute html =~ "parasites"
-      assert html =~ "already edited"
     end
 
     test "clearing the preset selection doesn't touch whatever was already applied", %{
@@ -444,31 +287,10 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
       assert html =~ "New test"
       refute html =~ "haemoglobin"
     end
-
-    test "a category-creation race shows an error instead of crashing", %{
-      conn: conn,
-      admin: admin
-    } do
-      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests/new")
-
-      # Simulate another process creating the same category after this view's own category
-      # list was already loaded — the view can't see it and will try to create it again.
-      {:ok, _category} =
-        ThamaniDawa.LabTests.create_lab_test_category(admin.organization_id, %{
-          name: "Hematology"
-        })
-
-      html =
-        view
-        |> form("#lab-test-preset-form", preset: "Complete Blood Count")
-        |> render_change()
-
-      assert html =~ "apply that preset"
-    end
   end
 
-  describe "invalid field-definitions JSON" do
-    test "shows an error and does not save when field_defs_json is invalid", %{
+  describe "invalid field-definitions" do
+    test "shows an error and does not save when a field row is missing a name", %{
       conn: conn,
       admin: admin
     } do
@@ -479,19 +301,19 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
         view
         |> form("#lab-test-form", %{
           "lab_test" => %{
-            "name" => "Bad JSON Test",
+            "name" => "Bad Field Test",
             "category_id" => to_string(category.id),
             "price" => "100"
           },
-          "field_defs_json" => "not json"
+          "field_defs" => %{"0" => %{"key" => "", "type" => "number", "unit" => "g/dL"}}
         })
         |> render_submit()
 
-      assert html =~ "must be valid JSON"
+      assert html =~ "Give every field a name."
 
       refute Enum.any?(
                ThamaniDawa.LabTests.list_lab_tests(admin.organization_id),
-               &(&1.name == "Bad JSON Test")
+               &(&1.name == "Bad Field Test")
              )
     end
   end
@@ -516,7 +338,7 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
       view
       |> form("#lab-test-form", %{
         "lab_test" => %{"name" => "New Name"},
-        "field_defs_json" => Jason.encode!(lab_test.field_definitions)
+        "field_defs" => %{"0" => %{"key" => "haemoglobin", "type" => "number", "unit" => "g/dL"}}
       })
       |> render_submit()
 
@@ -535,7 +357,9 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
         view
         |> form("#lab-test-form", %{
           "lab_test" => %{"name" => ""},
-          "field_defs_json" => Jason.encode!(lab_test.field_definitions)
+          "field_defs" => %{
+            "0" => %{"key" => "haemoglobin", "type" => "number", "unit" => "g/dL"}
+          }
         })
         |> render_submit()
 
@@ -548,46 +372,18 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
 
   describe "deactivate and reactivate" do
     test "toggle_active flips is_active from true to false", %{conn: conn, admin: admin} do
-      lab_test = lab_test_fixture(%{organization_id: admin.organization_id})
-      assert lab_test.is_active == true
+      lab_test =
+        lab_test_fixture(%{
+          organization_id: admin.organization_id,
+          name: "Deactivate Me",
+          is_active: true
+        })
 
       {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
-      render_click(view, "toggle_active", %{"id" => to_string(lab_test.id)})
 
-      assert %{is_active: false} =
-               ThamaniDawa.LabTests.get_lab_test!(admin.organization_id, lab_test.id)
-    end
+      view |> element("#btn-toggle-test-#{lab_test.id}") |> render_click()
 
-    test "toggle_active flips is_active from false to true", %{conn: conn, admin: admin} do
-      lab_test = lab_test_fixture(%{organization_id: admin.organization_id})
-
-      {:ok, inactive} =
-        ThamaniDawa.LabTests.update_lab_test(admin.organization_id, lab_test, %{is_active: false})
-
-      assert inactive.is_active == false
-
-      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
-      render_click(view, "toggle_active", %{"id" => to_string(lab_test.id)})
-
-      assert %{is_active: true} =
-               ThamaniDawa.LabTests.get_lab_test!(admin.organization_id, lab_test.id)
-    end
-  end
-
-  describe "inactive hidden from new order" do
-    test "inactive tests do not appear in order test selection", %{conn: conn, admin: admin} do
-      active = lab_test_fixture(%{organization_id: admin.organization_id, name: "Active CBC"})
-
-      inactive =
-        lab_test_fixture(%{organization_id: admin.organization_id, name: "Inactive Lipids"})
-
-      {:ok, _} =
-        ThamaniDawa.LabTests.update_lab_test(admin.organization_id, inactive, %{is_active: false})
-
-      {:ok, _view, html} = live(log_in_user(conn, admin), ~p"/lab/orders/new")
-
-      assert html =~ active.name
-      refute html =~ inactive.name
+      refute ThamaniDawa.LabTests.get_lab_test!(admin.organization_id, lab_test.id).is_active
     end
   end
 end

@@ -6,6 +6,9 @@ defmodule ThamaniDawaWeb.Layouts do
   use ThamaniDawaWeb, :html
 
   alias ThamaniDawa.Accounts.Scope
+  alias ThamaniDawa.Batches
+  alias ThamaniDawa.Sites.Site
+  alias ThamaniDawaWeb.SiteScoping
 
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
@@ -92,6 +95,11 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :inner_block, required: true
 
   def lab_shell(assigns) do
+    assigns =
+      assign(assigns, :nav_badges, %{
+        ~p"/lab/receive-stock" => pending_batches_count(assigns.current_scope, :lab)
+      })
+
     ~H"""
     <.sidebar_shell
       flash={@flash}
@@ -100,11 +108,13 @@ defmodule ThamaniDawaWeb.Layouts do
       title="Thamani Dawa"
       section_label="Lab"
       base_path="/lab"
+      nav_badges={@nav_badges}
       nav_items={[
         {"Dashboard", "hero-squares-2x2", ~p"/lab"},
         {"Patients", "hero-user-group", ~p"/lab/patients"},
         {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
         {"Tests", "hero-beaker", ~p"/lab/tests"},
+        {"Stock", "hero-cube", ~p"/lab/stock"},
         {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
         {"Scan", "hero-qr-code", ~p"/lab/scan"}
       ]}
@@ -124,6 +134,11 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :inner_block, required: true
 
   def pharmacy_shell(assigns) do
+    assigns =
+      assign(assigns, :nav_badges, %{
+        ~p"/pharmacy/receive-stock" => pending_batches_count(assigns.current_scope, :pharmacy)
+      })
+
     ~H"""
     <.sidebar_shell
       flash={@flash}
@@ -132,6 +147,7 @@ defmodule ThamaniDawaWeb.Layouts do
       title="Thamani Dawa"
       section_label="Pharmacy"
       base_path="/pharmacy"
+      nav_badges={@nav_badges}
       nav_items={[
         {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
         {"Patients", "hero-user-group", ~p"/pharmacy/patients"},
@@ -145,6 +161,40 @@ defmodule ThamaniDawaWeb.Layouts do
       {render_slot(@inner_block)}
     </.sidebar_shell>
     """
+  end
+
+  defp pending_batches_count(scope, portal_type) do
+    batches =
+      scope.organization_id
+      |> Batches.list_pending_batches()
+      |> SiteScoping.for_current_site(scope)
+
+    case portal_type do
+      :pharmacy ->
+        sites_by_id =
+          scope.organization_id
+          |> ThamaniDawa.Sites.list_sites()
+          |> Map.new(&{&1.id, &1})
+
+        Enum.count(batches, fn batch ->
+          site = sites_by_id[batch.site_id]
+          site && Site.pharmacy?(site)
+        end)
+
+      :lab ->
+        sites_by_id =
+          scope.organization_id
+          |> ThamaniDawa.Sites.list_sites()
+          |> Map.new(&{&1.id, &1})
+
+        Enum.count(batches, fn batch ->
+          site = sites_by_id[batch.site_id]
+          site && Site.lab?(site)
+        end)
+
+      :all ->
+        length(batches)
+    end
   end
 
   @doc """
@@ -186,6 +236,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :section_label, :string, required: true
   attr :base_path, :string, required: true
   attr :nav_items, :list, required: true
+  attr :nav_badges, :map, default: %{}
 
   slot :inner_block, required: true
 
@@ -216,7 +267,7 @@ defmodule ThamaniDawaWeb.Layouts do
           id="sidebar-toggle"
           type="button"
           aria-label="Toggle sidebar"
-          class="absolute z-10 shrink-0 flex items-center justify-center rounded-xl transition-colors cursor-pointer"
+          class="absolute z-10 shrink-0 flex items-center justify-center rounded-xl transition-[background-color,scale] cursor-pointer active:scale-[0.96]"
           style="top: 28px; right: -14px; width: 36px; height: 36px; background: var(--thamani-snow); border: 1px solid var(--thamani-border-nav); color: var(--thamani-forest);"
         >
           <span id="sidebar-toggle-icon" class="inline-flex transition-transform duration-200">
@@ -259,13 +310,12 @@ defmodule ThamaniDawaWeb.Layouts do
             <% active =
               if path == @base_path,
                 do: @current_path == @base_path,
-                else:
-                  @current_path == path or String.starts_with?(@current_path, path <> "/") %>
+                else: @current_path == path or String.starts_with?(@current_path, path <> "/") %>
             <.link
               navigate={path}
               data-tooltip={label}
               aria-current={active && "page"}
-              class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-all whitespace-nowrap"
+              class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-[background-color,color,scale] whitespace-nowrap active:scale-[0.96]"
               style={
                 if active,
                   do:
@@ -277,14 +327,23 @@ defmodule ThamaniDawaWeb.Layouts do
               <span id={"nav-label-#{path}"} class="nav-label transition-opacity duration-150">
                 {label}
               </span>
+              <span
+                :if={Map.get(@nav_badges, path, 0) > 0}
+                class="nav-label ml-auto inline-flex items-center justify-center rounded-full bg-warning text-warning-content text-[11px] font-medium leading-none transition-opacity duration-150"
+                style="min-width: 20px; height: 20px; padding: 0 6px;"
+              >
+                {Map.get(@nav_badges, path)}
+              </span>
             </.link>
           <% end %>
         </nav>
 
-        <%!-- Cross-portal switch: only combined pharmacy/lab staff can hop
-             portals; single-role staff never see the other operational side. --%>
+        <%!-- Cross-portal switch: only combined pharmacy/lab staff currently
+             stationed at a combined pharmacy+lab site can hop portals. A
+             pharma_lab user sent to a lab-only (or pharmacy-only) site only
+             ever sees that one side, matching what the site actually offers. --%>
         <div
-          :if={Scope.pharma_lab?(@current_scope)}
+          :if={Scope.pharma_lab?(@current_scope) and combined_site?(@current_scope)}
           id="sidebar-portal-switch"
           class="flex flex-col gap-1 mt-4 pt-4"
           style="border-top: 1px solid var(--thamani-border-nav);"
@@ -300,7 +359,7 @@ defmodule ThamaniDawaWeb.Layouts do
             :if={@base_path != "/pharmacy"}
             id="portal-link-pharmacy"
             navigate={~p"/pharmacy"}
-            class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-all whitespace-nowrap overflow-hidden"
+            class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-[background-color,color,scale] whitespace-nowrap overflow-hidden active:scale-[0.96]"
             style="color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
           >
             <.icon name="hero-building-storefront" class="size-5 shrink-0" />
@@ -310,7 +369,7 @@ defmodule ThamaniDawaWeb.Layouts do
             :if={@base_path != "/lab"}
             id="portal-link-lab"
             navigate={~p"/lab"}
-            class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-all whitespace-nowrap overflow-hidden"
+            class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-[background-color,color,scale] whitespace-nowrap overflow-hidden active:scale-[0.96]"
             style="color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
           >
             <.icon name="hero-beaker" class="size-5 shrink-0" />
@@ -331,6 +390,7 @@ defmodule ThamaniDawaWeb.Layouts do
             class="flex flex-col gap-1"
           >
             <input type="hidden" name="_method" value="patch" />
+            <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
             <input type="hidden" name="return_to" value={@current_path} />
             <label
               for="site-switch-select"
@@ -363,8 +423,8 @@ defmodule ThamaniDawaWeb.Layouts do
             style="background: #FBFBFF; border: 1px solid #E8EBF3; border-radius: 16px; padding: 14px 16px;"
           >
             <div
-              class="rounded-full flex items-center justify-center shrink-0 font-semibold text-[15px]"
-              style="width: 44px; height: 44px; background: var(--thamani-forest); color: var(--thamani-snow);"
+              class="rounded-full flex items-center justify-center shrink-0 aspect-square font-semibold text-[15px]"
+              style="width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 9999px; background: var(--thamani-forest); color: var(--thamani-snow);"
             >
               {String.at(@current_scope.user.name || "U", 0)}
             </div>
@@ -386,7 +446,7 @@ defmodule ThamaniDawaWeb.Layouts do
             data-tooltip="Log out"
             href={~p"/logout"}
             method="delete"
-            class="px-3 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-3 group hover:bg-red-50"
+            class="px-3 py-2 rounded-xl text-sm font-medium transition-[background-color,scale] flex items-center gap-3 group hover:bg-red-50 active:scale-[0.96]"
             style="color: var(--thamani-error);"
           >
             <.icon name="hero-arrow-right-start-on-rectangle" class="size-4 shrink-0" />
@@ -409,7 +469,7 @@ defmodule ThamaniDawaWeb.Layouts do
             aria-label="Open navigation"
             aria-controls="sidebar-aside"
             aria-expanded="false"
-            class="flex size-11 items-center justify-center rounded-lg text-thamani-forest transition-colors hover:bg-thamani-lime focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+            class="flex size-11 items-center justify-center rounded-lg text-thamani-forest transition-[background-color,scale] hover:bg-thamani-lime active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
           >
             <.icon name="hero-bars-3" class="size-5" />
           </button>
@@ -472,6 +532,15 @@ defmodule ThamaniDawaWeb.Layouts do
     ThamaniDawa.Sites.get_site!(organization_id, site_id).name
   rescue
     Ecto.NoResultsError -> "Unknown site"
+  end
+
+  defp combined_site?(%Scope{current_site_id: nil}), do: false
+
+  defp combined_site?(%Scope{current_site_id: site_id, organization_id: organization_id}) do
+    site = ThamaniDawa.Sites.get_site!(organization_id, site_id)
+    Site.pharmacy?(site) and Site.lab?(site)
+  rescue
+    Ecto.NoResultsError -> false
   end
 
   @doc """

@@ -20,7 +20,9 @@ defmodule ThamaniDawa.Accounts.User do
     belongs_to :current_site, ThamaniDawa.Sites.Site
     belongs_to :invited_by, __MODULE__
 
-    many_to_many :sites, ThamaniDawa.Sites.Site, join_through: ThamaniDawa.Accounts.UserSite
+    many_to_many :sites, ThamaniDawa.Sites.Site,
+      join_through: ThamaniDawa.Accounts.UserSite,
+      join_defaults: :put_join_organization_id
 
     has_many :invited_users, __MODULE__, foreign_key: :invited_by_id
     has_many :user_tokens, ThamaniDawa.Accounts.UserToken
@@ -91,6 +93,11 @@ defmodule ThamaniDawa.Accounts.User do
   @doc "Changeset for a user switching which of their assigned sites they're currently operating at."
   def switch_site_changeset(user, attrs) do
     cast(user, attrs, [:current_site_id])
+  end
+
+  @doc false
+  def put_join_organization_id(user_site, user) do
+    %{user_site | organization_id: user.organization_id}
   end
 
   @doc "Changeset for a user setting or changing their 4-digit counter-side PIN (§7)."

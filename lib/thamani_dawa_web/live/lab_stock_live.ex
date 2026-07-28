@@ -1,20 +1,16 @@
-defmodule ThamaniDawaWeb.PharmacyStockLive do
+defmodule ThamaniDawaWeb.LabStockLive do
   @moduledoc """
-  Read-only view of batch/product stock. Admins see every site in the
-  organization, with a site filter to narrow down. Non-admin staff
-  (pharmacist, lab technician, pharma_lab) are restricted to the sites
-  they're assigned to (`user.sites`) — both the underlying data and the
-  Site filter's options are limited to that set, so they can never browse
-  or filter into another site's stock. Nothing here mutates a batch —
-  receiving/dispensing stay on `ReceiveStockLive`/`PrescriptionLive`, both
-  still site-locked as before.
+  Read-only view of batch/product stock for lab sites. Admins see every lab site
+  in the organization, with a site filter to narrow down. Non-admin lab staff
+  (lab_technician, pharma_lab) are restricted to their assigned lab sites.
+  Nothing here mutates a batch — receiving stays on `LabReceiveStockLive`.
 
   Two views, toggled without a full page navigation: "Products" (paginated,
   one row per product with a batch/stock roll-up) and "Batches" (paginated,
-  the flat batch-level table this screen originally was). Clicking a product
-  navigates to `PharmacyStockProductLive`, which lists that product's
-  batches; clicking a batch there (or in the flat batches view) navigates to
-  `PharmacyStockBatchLive`, which shows who has drawn stock from it.
+  the flat batch-level table for lab sites). Clicking a product navigates to
+  `LabStockProductLive`, which lists that product's batches at lab sites;
+  clicking a batch there (or in the flat batches view) navigates to
+  `LabStockBatchLive`, which shows details and usage history.
   """
 
   use ThamaniDawaWeb, :live_view
@@ -23,6 +19,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.Suppliers
 
   @default_filters %{site: "", status: ""}
@@ -31,15 +28,16 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
     scope = socket.assigns.current_scope
     org_id = scope.organization_id
     sites = if Scope.admin?(scope), do: Sites.list_sites(org_id), else: scope.user.sites
-    site_ids = if Scope.admin?(scope), do: nil, else: Enum.map(sites, & &1.id)
+    lab_sites = Enum.filter(sites, &Site.lab?/1)
+    allowed_site_ids = Enum.map(lab_sites, & &1.id)
 
     {:ok,
      socket
      |> assign(:products_by_id, org_id |> Products.list_products() |> Map.new(&{&1.id, &1}))
-     |> assign(:sites_by_id, Map.new(sites, &{&1.id, &1}))
+     |> assign(:sites_by_id, Map.new(lab_sites, &{&1.id, &1}))
      |> assign(:suppliers_by_id, org_id |> Suppliers.list_suppliers() |> Map.new(&{&1.id, &1}))
-     |> assign(:site_options, Enum.map(sites, &{&1.name, &1.id}))
-     |> assign(:allowed_site_ids, site_ids)
+     |> assign(:site_options, Enum.map(lab_sites, &{&1.name, &1.id}))
+     |> assign(:allowed_site_ids, allowed_site_ids)
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
      |> assign(:view, "batches")
@@ -140,15 +138,15 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
 
     params =
       %{}
-      |> then(fn m -> if view != "products", do: Map.put(m, "view", view), else: m end)
+      |> then(fn m -> if view != "batches", do: Map.put(m, "view", view), else: m end)
       |> then(fn m -> if search != "", do: Map.put(m, "search", search), else: m end)
       |> then(fn m -> if site != "", do: Map.put(m, "site", site), else: m end)
       |> then(fn m -> if status != "", do: Map.put(m, "status", status), else: m end)
 
     if map_size(params) > 0 do
-      ~p"/pharmacy/stock?#{params}"
+      ~p"/lab/stock?#{params}"
     else
-      ~p"/pharmacy/stock"
+      ~p"/lab/stock"
     end
   end
 
@@ -207,7 +205,6 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
     |> stream(:batches, page_result.entries, reset: true)
   end
 
-  defp sanitize_site_filter(site_id_str, nil), do: site_id_str
   defp sanitize_site_filter("", _allowed_site_ids), do: ""
 
   defp sanitize_site_filter(site_id_str, allowed_site_ids) do
@@ -247,18 +244,14 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   defp supplier_name(nil), do: "—"
   defp supplier_name(supplier), do: supplier.name
 
-  defp stock_subtitle(nil), do: "Every batch across every site in your organization — read-only."
-  defp stock_subtitle(_site_ids), do: "Every batch across your assigned sites — read-only."
+  defp stock_subtitle([]), do: "Every batch across lab sites in your organization — read-only."
+  defp stock_subtitle(_site_ids), do: "Every batch across your assigned lab sites — read-only."
 
   def render(assigns) do
     ~H"""
-    <Layouts.pharmacy_shell
-      flash={@flash}
-      current_scope={@current_scope}
-      current_path="/pharmacy/stock"
-    >
+    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path="/lab/stock">
       <.header icon="hero-cube">
-        Organization stock
+        Lab stock
         <:subtitle>{stock_subtitle(@allowed_site_ids)}</:subtitle>
         <:toolbar>
           <.tab_group>
@@ -304,7 +297,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
                 name="filters[site]"
                 value={@filters.site}
                 options={@site_options}
-                prompt="All sites"
+                prompt="All lab sites"
               />
             </:group>
             <:group label="Status">
@@ -329,7 +322,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
         <.table
           id="products"
           rows={@streams.products}
-          row_click={fn {_id, row} -> JS.navigate(~p"/pharmacy/stock/products/#{row.product.id}") end}
+          row_click={fn {_id, row} -> JS.navigate(~p"/lab/stock/products/#{row.product.id}") end}
         >
           <:col :let={{_id, row}} label="Product">{product_name(row.product)}</:col>
           <:col :let={{_id, row}} label="Category">{row.product.category || "—"}</:col>
@@ -356,7 +349,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
         <.table
           id="stock"
           rows={@streams.batches}
-          row_click={fn {_id, batch} -> JS.navigate(~p"/pharmacy/stock/batches/#{batch.id}") end}
+          row_click={fn {_id, batch} -> JS.navigate(~p"/lab/stock/batches/#{batch.id}") end}
         >
           <:col :let={{_id, batch}} label="Product">
             {product_name(@products_by_id[batch.product_id])}
@@ -384,14 +377,14 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
             >
               {if @search != "",
                 do: "Try a different search term.",
-                else: "Batches dispatched to any site will appear here."}
+                else: "Batches dispatched to any lab site will appear here."}
             </.blank_state>
           </:empty_state>
         </.table>
       </div>
 
       <.pagination page={@page_info} path={pagination_path(@view, @search, @filters)} />
-    </Layouts.pharmacy_shell>
+    </Layouts.lab_shell>
     """
   end
 end

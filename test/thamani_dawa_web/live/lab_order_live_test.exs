@@ -245,7 +245,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
     test "creates patient scoped to org when using inline new patient", ctx do
       {:ok, view, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/new")
 
-      view |> element("button[phx-click=toggle_new_patient]") |> render_click()
+      view |> element("#new-patient-mode") |> render_click()
 
       gsrn = System.unique_integer([:positive])
 

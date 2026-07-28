@@ -10,7 +10,11 @@ defmodule ThamaniDawaWeb.SessionController do
   plug :put_layout, [html: {ThamaniDawaWeb.Layouts, :root}] when action in [:new, :create]
 
   def new(conn, _params) do
-    render(conn, :new, form: to_form(%{"email" => "", "password" => ""}, as: nil))
+    if conn.assigns[:current_scope] && conn.assigns.current_scope.user do
+      redirect(conn, to: redirect_path_for(conn.assigns.current_scope.user))
+    else
+      render(conn, :new, form: to_form(%{"email" => "", "password" => ""}, as: nil))
+    end
   end
 
   def create(conn, %{"email" => email, "password" => password}) do
@@ -36,5 +40,18 @@ defmodule ThamaniDawaWeb.SessionController do
   defp redirect_path_for(%User{role: :admin}), do: ~p"/org/sites"
   defp redirect_path_for(%User{role: :pharmacist}), do: ~p"/pharmacy"
   defp redirect_path_for(%User{role: :lab_technician}), do: ~p"/lab"
-  defp redirect_path_for(%User{role: :pharma_lab}), do: ~p"/pharmacy"
+
+  defp redirect_path_for(%User{role: :pharma_lab, current_site_id: nil}), do: ~p"/pharmacy"
+
+  defp redirect_path_for(%User{role: :pharma_lab} = user) do
+    site = ThamaniDawa.Sites.get_site!(user.organization_id, user.current_site_id)
+
+    if ThamaniDawa.Sites.Site.lab?(site) and not ThamaniDawa.Sites.Site.pharmacy?(site) do
+      ~p"/lab"
+    else
+      ~p"/pharmacy"
+    end
+  rescue
+    Ecto.NoResultsError -> ~p"/pharmacy"
+  end
 end

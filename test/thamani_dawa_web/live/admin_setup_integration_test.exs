@@ -43,7 +43,6 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
       site: %{
         name: "Main Branch",
         site_type: :pharmacy_lab,
-        gln: "0614141000005",
         address: "1 Test Street"
       }
     )
@@ -54,6 +53,8 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     site = Enum.find(Sites.list_sites(organization.id), &(&1.name == "Main Branch"))
     assert site
     assert site.site_type == :pharmacy_lab
+    # GLN is assigned by `Sites.create_site/2` (never entered by hand).
+    assert site.gln
 
     # Step 3: invite staff to that site
     staff_email = "pharmacist-#{System.unique_integer([:positive])}@example.com"
@@ -66,7 +67,7 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
         name: "Peter Pharmacist",
         email: staff_email,
         role: :pharmacist,
-        site_id: site.id
+        site_ids: [to_string(site.id)]
       }
     )
     |> render_submit()
@@ -76,7 +77,9 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     staff = Accounts.get_user_by_email(staff_email)
     assert staff
     assert staff.role == :pharmacist
-    assert staff.site_id == site.id
+    # Staff are assigned to one or more sites; `current_site_id` is the active one.
+    assert staff.current_site_id == site.id
+    assert Enum.map(Accounts.get_user!(organization.id, staff.id).sites, & &1.id) == [site.id]
     assert is_nil(staff.hashed_password)
 
     # Step 4: add a product to the (org-wide) catalog
@@ -94,7 +97,7 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
         generic_name: "Paracetamol",
         brand_name: "Panadol",
         category: "Analgesic",
-        uom: "tablet",
+        uom: "U2",
         gtin: gtin,
         price: 100,
         reorder_level: 20

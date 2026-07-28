@@ -402,8 +402,8 @@ defmodule ThamaniDawaWeb.PageComponents do
         <div class="flex items-center gap-2 sm:gap-4">
           <%= if @current_scope do %>
             <div
-              class="flex items-center justify-center w-[36px] h-[36px] rounded-full font-semibold text-sm transition-transform hover:scale-105"
-              style="background: var(--thamani-forest); color: var(--thamani-snow);"
+              class="flex items-center justify-center shrink-0 w-[36px] h-[36px] min-w-[36px] min-h-[36px] aspect-square rounded-full font-semibold text-sm transition-transform hover:scale-105"
+              style="background: var(--thamani-forest); color: var(--thamani-snow); border-radius: 9999px;"
               title={@current_scope.user.name}
             >
               {String.at(@current_scope.user.name || "U", 0)}
@@ -449,13 +449,48 @@ defmodule ThamaniDawaWeb.PageComponents do
   end
 
   def dashboard_path(nil), do: "/login"
+  def dashboard_path(%ThamaniDawa.Accounts.Scope{user: nil}), do: "/login"
 
-  def dashboard_path(scope) do
+  def dashboard_path(%ThamaniDawa.Accounts.Scope{} = scope) do
     cond do
-      ThamaniDawa.Accounts.Scope.admin?(scope) -> "/org/dashboard"
-      ThamaniDawa.Accounts.Scope.pharmacist?(scope) -> "/pharmacy"
-      ThamaniDawa.Accounts.Scope.lab_technician?(scope) -> "/lab"
-      true -> "/login"
+      ThamaniDawa.Accounts.Scope.admin?(scope) ->
+        "/org/dashboard"
+
+      ThamaniDawa.Accounts.Scope.pharmacist?(scope) ->
+        "/pharmacy"
+
+      ThamaniDawa.Accounts.Scope.lab_technician?(scope) ->
+        "/lab"
+
+      ThamaniDawa.Accounts.Scope.pharma_lab?(scope) ->
+        if site_lab_only?(scope) do
+          "/lab"
+        else
+          "/pharmacy"
+        end
+
+      ThamaniDawa.Accounts.Scope.pharmacy_access?(scope) ->
+        "/pharmacy"
+
+      ThamaniDawa.Accounts.Scope.lab_access?(scope) ->
+        "/lab"
+
+      true ->
+        "/login"
     end
+  end
+
+  def dashboard_path(_), do: "/login"
+
+  defp site_lab_only?(%ThamaniDawa.Accounts.Scope{current_site_id: nil}), do: false
+
+  defp site_lab_only?(%ThamaniDawa.Accounts.Scope{
+         current_site_id: site_id,
+         organization_id: org_id
+       }) do
+    site = ThamaniDawa.Sites.get_site!(org_id, site_id)
+    ThamaniDawa.Sites.Site.lab?(site) and not ThamaniDawa.Sites.Site.pharmacy?(site)
+  rescue
+    Ecto.NoResultsError -> false
   end
 end

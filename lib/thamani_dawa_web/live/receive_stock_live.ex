@@ -319,8 +319,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
             patch={~p"/pharmacy/receive-stock/#{batch.id}/receive"}
             class="gap-2"
           >
-            <.icon name="hero-arrow-down-tray" class="size-4" />
-            Receive
+            <.icon name="hero-arrow-down-tray" class="size-4" /> Receive
           </.button>
         </:action>
         <:empty_state>

@@ -676,7 +676,9 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
       assert updated_prescription.status == :completed
 
-      assert [dispense] = Prescriptions.list_batch_dispenses_for_item(ctx.organization.id, ctx.item.id)
+      assert [dispense] =
+               Prescriptions.list_batch_dispenses_for_item(ctx.organization.id, ctx.item.id)
+
       assert dispense.batch.id == soon_batch.id
       assert dispense.quantity == 10
       assert dispense.dispensed_by_id == ctx.pharmacist.id

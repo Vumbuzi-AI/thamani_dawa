@@ -28,7 +28,10 @@ config :swoosh, :api_client, false
 
 config :thamani_dawa, ThamaniDawa.GtinLookup,
   api_key: "test-api-key",
-  plug: {Req.Test, ThamaniDawa.GtinLookup}
+  plug: {Req.Test, ThamaniDawa.GtinLookup},
+  # Stubbed responses are final: retrying a stubbed 500/transport error would
+  # just burn the test's timeout budget on backoff.
+  retry: false
 
 config :thamani_dawa, ThamaniDawa.Gln, company_prefix: "0614141"
 

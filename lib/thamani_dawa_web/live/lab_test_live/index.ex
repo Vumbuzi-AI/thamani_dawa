@@ -27,8 +27,23 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   end
 
   def handle_params(params, _url, socket) do
-    page = String.to_integer(Map.get(params, "page", "1"))
-    socket = socket |> assign(:page, page) |> reload_lab_tests()
+    page = if p = Map.get(params, "page"), do: String.to_integer(p), else: socket.assigns.page
+    search = Map.get(params, "search", socket.assigns.search)
+    category = Map.get(params, "category", socket.assigns.filters.category)
+    status = Map.get(params, "status", socket.assigns.filters.status)
+
+    filters = %{
+      category: category,
+      status: status
+    }
+
+    socket =
+      socket
+      |> assign(:page, page)
+      |> assign(:search, search)
+      |> assign(:filters, filters)
+      |> reload_lab_tests()
+
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -146,7 +161,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   end
 
   def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, socket |> assign(:search, search) |> reload_lab_tests()}
+    {:noreply, socket |> assign(:search, search) |> assign(:page, 1) |> reload_lab_tests()}
   end
 
   def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
@@ -155,21 +170,28 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
       status: Map.get(filter_params, "status", "")
     }
 
-    {:noreply, socket |> assign(:filters, filters) |> reload_lab_tests()}
+    {:noreply, socket |> assign(:filters, filters) |> assign(:page, 1) |> reload_lab_tests()}
   end
 
   def handle_event("clear_filters", _params, socket) do
-    {:noreply, socket |> assign(:filters, @default_filters) |> reload_lab_tests()}
+    {:noreply,
+     socket |> assign(:filters, @default_filters) |> assign(:page, 1) |> reload_lab_tests()}
   end
 
   def handle_event("clear_chip", %{"field" => "category"}, socket) do
     {:noreply,
-     socket |> assign(:filters, %{socket.assigns.filters | category: ""}) |> reload_lab_tests()}
+     socket
+     |> assign(:filters, %{socket.assigns.filters | category: ""})
+     |> assign(:page, 1)
+     |> reload_lab_tests()}
   end
 
   def handle_event("clear_chip", %{"field" => "status"}, socket) do
     {:noreply,
-     socket |> assign(:filters, %{socket.assigns.filters | status: ""}) |> reload_lab_tests()}
+     socket
+     |> assign(:filters, %{socket.assigns.filters | status: ""})
+     |> assign(:page, 1)
+     |> reload_lab_tests()}
   end
 
   defp apply_preset(socket, preset) do
@@ -293,36 +315,45 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
 
   defp build_field_definitions(rows) do
     Enum.reduce_while(rows, {%{}, nil}, fn row, {defs, nil} ->
-      key = String.trim(row["key"] || "")
-      type = row["type"] || "number"
-      unit = String.trim(row["unit"] || "")
-      options_raw = row["options"] || ""
-
-      cond do
-        key == "" and unit == "" and String.trim(options_raw) == "" ->
-          {:cont, {defs, nil}}
-
-        key == "" ->
-          {:halt, {defs, "Give every field a name."}}
-
-        type == "select" ->
-          options =
-            options_raw
-            |> String.split(",")
-            |> Enum.map(&String.trim/1)
-            |> Enum.reject(&(&1 == ""))
-
-          if options == [] do
-            {:halt,
-             {defs, "Give \"#{key}\" at least one choice (separate choices with commas)."}}
-          else
-            {:cont, {Map.put(defs, key, %{"type" => "select", "options" => options}), nil}}
-          end
-
-        true ->
-          {:cont, {Map.put(defs, key, %{"type" => type, "unit" => unit}), nil}}
+      case classify_row(row) do
+        :skip -> {:cont, {defs, nil}}
+        {:error, msg} -> {:halt, {defs, msg}}
+        {:ok, key, field_def} -> {:cont, {Map.put(defs, key, field_def), nil}}
       end
     end)
+  end
+
+  defp classify_row(row) do
+    {key, type, unit, options_raw} = parse_row(row)
+
+    cond do
+      key == "" and unit == "" and String.trim(options_raw) == "" -> :skip
+      key == "" -> {:error, "Give every field a name."}
+      type == "select" -> classify_select_row(key, options_raw)
+      true -> {:ok, key, %{"type" => type, "unit" => unit}}
+    end
+  end
+
+  defp parse_row(row) do
+    key = String.trim(row["key"] || "")
+    type = row["type"] || "number"
+    unit = String.trim(row["unit"] || "")
+    options_raw = row["options"] || ""
+    {key, type, unit, options_raw}
+  end
+
+  defp classify_select_row(key, options_raw) do
+    options =
+      options_raw
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    if options == [] do
+      {:error, "Give \"#{key}\" at least one choice (separate choices with commas)."}
+    else
+      {:ok, key, %{"type" => "select", "options" => options}}
+    end
   end
 
   defp field_definitions_to_rows(field_definitions) when map_size(field_definitions) == 0 do
@@ -343,44 +374,41 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     end)
   end
 
+  defp pagination_path(search, filters) do
+    search = String.trim(search || "")
+    category = Map.get(filters, :category, "")
+    status = Map.get(filters, :status, "")
+
+    params =
+      %{}
+      |> then(fn m -> if search != "", do: Map.put(m, "search", search), else: m end)
+      |> then(fn m -> if category != "", do: Map.put(m, "category", category), else: m end)
+      |> then(fn m -> if status != "", do: Map.put(m, "status", status), else: m end)
+
+    if map_size(params) > 0 do
+      ~p"/lab/tests?#{params}"
+    else
+      ~p"/lab/tests"
+    end
+  end
+
   defp reload_lab_tests(socket) do
     org_id = socket.assigns.current_scope.organization_id
     page = socket.assigns.page
+    search = socket.assigns.search
+    filters = socket.assigns.filters
 
-    page_result = LabTests.list_lab_tests_paginated(org_id, page)
-    lab_tests = page_result.entries
-
-    filtered =
-      lab_tests
-      |> filter_by_search(socket.assigns.search)
-      |> filter_by_category(socket.assigns.filters.category)
-      |> filter_by_status(socket.assigns.filters.status)
+    page_result =
+      LabTests.list_lab_tests_paginated(org_id, page,
+        search: search,
+        category: filters.category,
+        status: filters.status
+      )
 
     socket
-    |> stream(:lab_tests, filtered, reset: true)
+    |> stream(:lab_tests, page_result.entries, reset: true)
     |> assign(:page_info, page_result)
   end
-
-  defp filter_by_search(lab_tests, ""), do: lab_tests
-
-  defp filter_by_search(lab_tests, search) do
-    search = String.downcase(String.trim(search))
-
-    Enum.filter(lab_tests, fn test ->
-      [test.name, category_name(test)]
-      |> Enum.filter(& &1)
-      |> Enum.any?(&String.contains?(String.downcase(&1), search))
-    end)
-  end
-
-  defp filter_by_category(lab_tests, ""), do: lab_tests
-
-  defp filter_by_category(lab_tests, category),
-    do: Enum.filter(lab_tests, &(category_name(&1) == category))
-
-  defp filter_by_status(lab_tests, ""), do: lab_tests
-  defp filter_by_status(lab_tests, "active"), do: Enum.filter(lab_tests, & &1.is_active)
-  defp filter_by_status(lab_tests, "inactive"), do: Enum.filter(lab_tests, &(!&1.is_active))
 
   defp active_filter_count(filters) do
     Enum.count([filters.category != "", filters.status != ""], & &1)
@@ -496,7 +524,10 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
               Add one row for each result this test reports.
             </p>
 
-            <div class="grid grid-cols-12 gap-2 px-1 mb-1 text-xs font-medium" style="color: var(--thamani-pewter);">
+            <div
+              class="grid grid-cols-12 gap-2 px-1 mb-1 text-xs font-medium"
+              style="color: var(--thamani-pewter);"
+            >
               <div class="col-span-5">Field name</div>
               <div class="col-span-3">Type</div>
               <div class="col-span-3">Unit or choices</div>
@@ -546,6 +577,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
                     phx-click="remove_field_row"
                     phx-value-idx={row["idx"]}
                     aria-label="Remove field"
+                    class="relative transition-[opacity,transform] hover:opacity-70 active:scale-[0.96] after:absolute after:inset-[-10px] after:content-['']"
                     style="color: var(--thamani-pewter);"
                   >
                     <.icon name="hero-x-mark" class="size-5" />
@@ -588,9 +620,9 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
           <.button
             variant="ghost-edit"
             patch={~p"/lab/tests/#{test.id}/edit"}
-            class="gap-2"
+            class="px-3 py-1.5 text-xs"
+            id={"btn-edit-test-#{test.id}"}
           >
-            <.icon name="hero-pencil-square" class="size-4" />
             Edit
           </.button>
         </:action>
@@ -599,13 +631,10 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
             type="button"
             phx-click="toggle_active"
             phx-value-id={test.id}
-            class="gap-2"
-            variant={if test.is_active, do: "ghost-delete", else: "ghost"}
+            class="px-3 py-1.5 text-xs"
+            variant={if test.is_active, do: "destructive", else: "ghost"}
+            id={"btn-toggle-test-#{test.id}"}
           >
-            <.icon
-              name={if test.is_active, do: "hero-power", else: "hero-arrow-path"}
-              class="size-4"
-            />
             {if test.is_active, do: "Deactivate", else: "Reactivate"}
           </.button>
         </:action>
@@ -625,7 +654,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
         </:empty_state>
       </.table>
 
-      <.pagination page={@page_info} path={~p"/lab/tests"} />
+      <.pagination page={@page_info} path={pagination_path(@search, @filters)} />
     </Layouts.lab_shell>
     """
   end

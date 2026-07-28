@@ -119,6 +119,21 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
       assert html =~ "border-b border-thamani-stone"
       assert html =~ "rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm"
     end
+
+    test "variant=\"plain\" renders no card shell, for bare section dividers" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <.header variant="plain">Out of stock</.header>
+        """)
+
+      assert html =~ "Out of stock"
+      refute html =~ "rounded-2xl"
+      refute html =~ "shadow-sm"
+      refute html =~ "bg-thamani-snow"
+      refute html =~ "border-thamani-stone"
+    end
   end
 
   describe "search_input/1" do

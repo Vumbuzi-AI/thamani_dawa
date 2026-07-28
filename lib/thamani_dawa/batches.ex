@@ -23,11 +23,62 @@ defmodule ThamaniDawa.Batches do
   is given, restricts to batches at those sites — for staff assigned to a
   subset of the organization's sites; `nil` (the default) means org-wide.
   """
-  def list_batches_paginated(organization_id, page \\ 1, site_ids \\ nil) do
-    from(b in Batch, where: b.organization_id == ^organization_id)
+  def list_batches_paginated(organization_id, page \\ 1, site_ids \\ nil, opts \\ []) do
+    query =
+      from(b in Batch,
+        join: p in ThamaniDawa.Products.Product,
+        on: b.product_id == p.id,
+        where: b.organization_id == ^organization_id,
+        preload: [product: p]
+      )
+
+    query
     |> filter_by_site_ids(site_ids)
+    |> filter_by_site_opt(Keyword.get(opts, :site))
+    |> filter_by_status_opt(Keyword.get(opts, :status))
+    |> filter_by_search_opt(Keyword.get(opts, :search))
     |> Repo.paginate(page: page)
   end
+
+  defp filter_by_site_opt(query, site_id) when is_integer(site_id) do
+    from([b, _p] in query, where: b.site_id == ^site_id)
+  end
+
+  defp filter_by_site_opt(query, site) when is_binary(site) and site != "" do
+    case Integer.parse(site) do
+      {site_id, ""} ->
+        filter_by_site_opt(query, site_id)
+
+      # A malformed filter value is dropped rather than raising. Safe because the
+      # permitted-site scoping is a separate argument, applied independently.
+      _ ->
+        query
+    end
+  end
+
+  defp filter_by_site_opt(query, _), do: query
+
+  defp filter_by_status_opt(query, "active"),
+    do: from([b, _p] in query, where: not is_nil(b.approver_id))
+
+  defp filter_by_status_opt(query, "pending"),
+    do: from([b, _p] in query, where: is_nil(b.approver_id))
+
+  defp filter_by_status_opt(query, _), do: query
+
+  defp filter_by_search_opt(query, search) when is_binary(search) and search != "" do
+    pattern = "%#{String.trim(search)}%"
+
+    from([b, p] in query,
+      where:
+        ilike(p.generic_name, ^pattern) or
+          ilike(p.brand_name, ^pattern) or
+          ilike(b.gtin, ^pattern) or
+          ilike(b.batch_no, ^pattern)
+    )
+  end
+
+  defp filter_by_search_opt(query, _), do: query
 
   @doc """
   Batch count and total remaining stock for each of the given product ids —
@@ -36,14 +87,17 @@ defmodule ThamaniDawa.Batches do
   batches at those sites; `nil` (the default) means org-wide.
   """
   def stock_summary_by_product(organization_id, product_ids, site_ids \\ nil) do
-    from(b in Batch,
-      where: b.organization_id == ^organization_id,
-      where: b.product_id in ^product_ids,
-      group_by: b.product_id,
-      select:
-        {b.product_id,
-         %{batch_count: count(b.id), total_remaining: coalesce(sum(b.remaining_quantity), 0)}}
-    )
+    query =
+      from(b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.product_id in ^product_ids,
+        group_by: b.product_id,
+        select:
+          {b.product_id,
+           %{batch_count: count(b.id), total_remaining: coalesce(sum(b.remaining_quantity), 0)}}
+      )
+
+    query
     |> filter_by_site_ids(site_ids)
     |> Repo.all()
     |> Map.new()
@@ -145,18 +199,22 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc "Lists a product's batches, preloaded with `site`, `approver`, and `supplier` (all scoped to the organization)."
-  def list_batches_for_product(organization_id, product_id) do
+  def list_batches_for_product(organization_id, product_id, site_ids \\ nil) do
     site_query = from s in Site, where: s.organization_id == ^organization_id
     user_query = from u in User, where: u.organization_id == ^organization_id
     supplier_query = from s in Supplier, where: s.organization_id == ^organization_id
 
-    Repo.all(
-      from b in Batch,
+    query =
+      from(b in Batch,
         where: b.organization_id == ^organization_id,
         where: b.product_id == ^product_id,
         order_by: [asc: b.expiry_date],
         preload: [site: ^site_query, approver: ^user_query, supplier: ^supplier_query]
-    )
+      )
+
+    query
+    |> filter_by_site_ids(site_ids)
+    |> Repo.all()
   end
 
   @doc "Gets the total sum of remaining quantity of approved stock for a product at a given site."

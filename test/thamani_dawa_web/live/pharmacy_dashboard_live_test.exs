@@ -36,14 +36,14 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
         pending: true
       })
 
-      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
 
       # Would trivially qualify for low-stock/near-expiry if pending batches
       # weren't excluded (reorder_level 100 > quantity 5, expiry in 10 days).
       refute has_element?(lv, "#low-stock", "Pending Only Drug")
       refute has_element?(lv, "#near-expiry", "Pending Only Drug")
       refute has_element?(lv, "#out-of-stock", "Pending Only Drug")
-      assert html =~ "awaiting receipt at your site"
+      assert has_element?(lv, "a[href='/pharmacy/receive-stock'] .bg-warning", "1")
     end
 
     test "distinguishes out-of-stock from low-stock", %{conn: conn} do
@@ -209,8 +209,9 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
     end
   end
 
-  describe "pending receipts banner" do
-    test "shows a count and link when batches are awaiting receipt at this site", %{conn: conn} do
+  describe "pending batches sidebar badge" do
+    test "shows a count badge on Receive stock when batches are awaiting receipt at this site",
+         %{conn: conn} do
       organization = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})
       pharmacist = pharmacist_at(organization, site)
@@ -223,20 +224,20 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
         pending: true
       })
 
-      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
 
-      assert html =~ "awaiting receipt at your site"
       assert has_element?(lv, "a[href='/pharmacy/receive-stock']", "Receive stock")
+      assert has_element?(lv, "a[href='/pharmacy/receive-stock'] .bg-warning", "1")
     end
 
-    test "shows nothing when there are no pending batches", %{conn: conn} do
+    test "shows no badge when there are no pending batches", %{conn: conn} do
       organization = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})
       pharmacist = pharmacist_at(organization, site)
 
-      {:ok, _lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
 
-      refute html =~ "awaiting receipt at your site"
+      refute has_element?(lv, "a[href='/pharmacy/receive-stock'] .bg-warning")
     end
   end
 end

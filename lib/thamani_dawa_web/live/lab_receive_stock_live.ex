@@ -12,8 +12,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
   alias ThamaniDawa.Suppliers
   alias ThamaniDawaWeb.SiteScoping
 
-  import ThamaniDawaWeb.BatchFormComponents
-
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     organization_id = scope.organization_id
@@ -158,23 +156,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     end
   end
 
-  def handle_event("save", %{"batch" => attrs}, socket) do
-    scope = socket.assigns.current_scope
-    site_id_str = Map.get(attrs, "site_id", "")
-
-    case parse_id(site_id_str) do
-      {:ok, site_id} ->
-        if MapSet.member?(socket.assigns.lab_site_ids, site_id) do
-          walk_in_receive(socket, scope, attrs)
-        else
-          {:noreply, put_flash(socket, :error, "Selected site cannot receive lab consumables.")}
-        end
-
-      _ ->
-        walk_in_receive(socket, scope, attrs)
-    end
-  end
-
   def handle_event(
         "record_usage",
         %{"batch_id" => batch_id, "quantity" => quantity} = attrs,
@@ -238,21 +219,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     end
   end
 
-  defp walk_in_receive(socket, scope, attrs) do
-    with {:create, {:ok, batch}} <-
-           {:create, Batches.create_batch(scope.organization_id, attrs)},
-         {:receive, {:ok, _}} <-
-           {:receive, Batches.receive_batch(batch, scope.user.id)} do
-      {:noreply, socket |> put_flash(:info, "Stock received.") |> push_navigate(to: ~p"/lab")}
-    else
-      {:create, {:error, changeset}} ->
-        {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
-
-      {:receive, {:error, _}} ->
-        {:noreply, put_flash(socket, :error, "Batch saved but could not be marked received.")}
-    end
-  end
-
   defp reload_pending_batches(socket, scope) do
     org_id = scope.organization_id
     site_id = socket.assigns.site_id
@@ -269,15 +235,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
       end
 
     stream(socket, :pending_batches, pending, reset: true)
-  end
-
-  defp parse_id(""), do: :empty
-
-  defp parse_id(str) do
-    case Integer.parse(str) do
-      {id, ""} -> {:ok, id}
-      _ -> :error
-    end
   end
 
   defp blank_to_nil(nil), do: nil
@@ -384,8 +341,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
               patch={~p"/lab/receive-stock/#{batch.id}/receive"}
               class="gap-2"
             >
-              <.icon name="hero-arrow-down-tray" class="size-4" />
-              Receive
+              <.icon name="hero-arrow-down-tray" class="size-4" /> Receive
             </.button>
           </:action>
           <:empty_state>
@@ -470,18 +426,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         <.button phx-click="receive_batch" phx-value-id={@selected_batch.id} variant="primary">
           Approve receipt
         </.button>
-      </div>
-
-      <div class="mb-8">
-        <h2 class="text-base font-semibold mb-3">Receive unscheduled delivery</h2>
-        <.batch_form
-          form={@form}
-          products={Map.values(@products_by_id)}
-          suppliers={@suppliers}
-          sites={@lab_sites}
-          site_locked={@site_locked}
-          gs1_decode_error={@gs1_decode_error}
-        />
       </div>
 
       <div class="rounded-2xl bg-thamani-stone p-6 mt-6">

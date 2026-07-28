@@ -96,7 +96,10 @@ defmodule ThamaniDawa.MixProject do
       precommit: [
         "compile --warnings-as-errors",
         "deps.unlock --unused",
-        "format",
+        # Must match CI, which runs `--check-formatted`. Plain `format` rewrites
+        # files in place and so can never fail, letting drift reach CI unnoticed.
+        # Run `mix format` yourself when this step fails.
+        "format --check-formatted",
         "credo --strict",
         "test"
       ]

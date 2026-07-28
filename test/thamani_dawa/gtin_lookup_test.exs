@@ -1,6 +1,8 @@
 defmodule ThamaniDawa.GtinLookupTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias ThamaniDawa.GtinLookup
 
   @valid_gtin "614141000012"
@@ -82,6 +84,37 @@ defmodule ThamaniDawa.GtinLookupTest do
 
     test "a non-2xx status is a provider error" do
       Req.Test.stub(GtinLookup, fn conn -> Plug.Conn.send_resp(conn, 500, "") end)
+
+      assert GtinLookup.lookup(@valid_gtin) == {:error, :provider_error}
+    end
+
+    test "a rejected API key is reported as :unauthorized, not a generic provider error" do
+      for status <- [401, 403] do
+        Req.Test.stub(GtinLookup, fn conn -> Plug.Conn.send_resp(conn, status, "") end)
+
+        # Captured only to keep the expected warning out of the suite's output.
+        capture_log(fn ->
+          assert GtinLookup.lookup(@valid_gtin) == {:error, :unauthorized},
+                 "expected HTTP #{status} to surface as :unauthorized"
+        end)
+      end
+    end
+
+    test "a rejected API key is logged loudly rather than looking like a GTIN miss" do
+      Req.Test.stub(GtinLookup, fn conn -> Plug.Conn.send_resp(conn, 401, "") end)
+
+      logs =
+        capture_log(fn ->
+          assert GtinLookup.lookup(@valid_gtin) == {:error, :unauthorized}
+        end)
+
+      assert logs =~ "unauthorized"
+    end
+
+    test "a 404 is a provider error, not a GTIN miss" do
+      # The registry signals an unknown GTIN with 200 + validationErrors, so a 404
+      # means the endpoint itself is wrong — not that the product doesn't exist.
+      Req.Test.stub(GtinLookup, fn conn -> Plug.Conn.send_resp(conn, 404, "") end)
 
       assert GtinLookup.lookup(@valid_gtin) == {:error, :provider_error}
     end

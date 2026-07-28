@@ -1,14 +1,24 @@
 defmodule ThamaniDawaWeb.SiteLive.ShowTest do
   use ThamaniDawaWeb.ConnCase, async: true
 
+  import Ecto.Query
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.BatchesFixtures
   import ThamaniDawa.LabOrdersFixtures
   import ThamaniDawa.OrganizationsFixtures
+  import ThamaniDawa.PatientVisitsFixtures
   import ThamaniDawa.PrescriptionsFixtures
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
+
+  alias ThamaniDawa.PatientVisits.PatientVisit
+  alias ThamaniDawa.Repo
+
+  defp stat_value(html, label) do
+    [_, value] = Regex.run(~r/#{Regex.escape(label)}.*?dashboard-stat-tile-value">(\d+)</s, html)
+    value
+  end
 
   describe "pharmacy-only site" do
     test "shows near-expiry stock and pending prescriptions scoped to this site, no tab toggle",
@@ -150,6 +160,118 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
 
       html = lv |> element("a", "Lab") |> render_click()
       assert html =~ "Pending orders"
+    end
+  end
+
+  describe "site stats" do
+    test "shows patient visit, prescription, and lab order counts scoped to this site", %{
+      conn: conn
+    } do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy_lab})
+      other_site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy_lab})
+
+      visit = patient_visit_fixture(%{organization_id: organization.id, site_id: site.id})
+      prescription_fixture(%{organization_id: organization.id, patient_visit_id: visit.id})
+
+      lab_order_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        patient_visit_id: visit.id,
+        status: :completed
+      })
+
+      other_visit =
+        patient_visit_fixture(%{organization_id: organization.id, site_id: other_site.id})
+
+      prescription_fixture(%{organization_id: organization.id, patient_visit_id: other_visit.id})
+
+      lab_order_fixture(%{
+        organization_id: organization.id,
+        site_id: other_site.id,
+        patient_visit_id: other_visit.id,
+        status: :completed
+      })
+
+      {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
+
+      assert stat_value(html, "Patient visits") == "1"
+      assert stat_value(html, "Prescriptions") == "1"
+      assert stat_value(html, "Lab orders completed") == "1"
+    end
+
+    test "shows only staff assigned to this site", %{conn: conn} do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+      other_site = site_fixture(%{organization_id: organization.id})
+
+      staff_fixture(%{organization_id: organization.id, site_id: site.id, name: "Site Nurse"})
+
+      staff_fixture(%{
+        organization_id: organization.id,
+        site_id: other_site.id,
+        name: "Other Site Nurse"
+      })
+
+      {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
+
+      assert html =~ "Site Nurse"
+      refute html =~ "Other Site Nurse"
+      assert stat_value(html, "Staff assigned") == "1"
+    end
+
+    test "clicking a range pill re-renders without error", %{conn: conn} do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
+
+      html = lv |> element("button", "This Week") |> render_click()
+      assert html =~ "Patient visits"
+    end
+
+    test "clicking Custom reveals a date-range form, and submitting it recomputes stats", %{
+      conn: conn
+    } do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      visit = patient_visit_fixture(%{organization_id: organization.id, site_id: site.id})
+
+      from(v in PatientVisit, where: v.id == ^visit.id)
+      |> Repo.update_all(set: [inserted_at: DateTime.add(DateTime.utc_now(), -8, :day)])
+
+      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
+      refute html =~ "site-custom-range-form"
+      assert stat_value(html, "Patient visits") == "0"
+
+      html = lv |> element("button", "Custom") |> render_click()
+      assert html =~ "site-custom-range-form"
+
+      from = Date.utc_today() |> Date.add(-10) |> Date.to_iso8601()
+      to = Date.utc_today() |> Date.to_iso8601()
+
+      html = render_submit(lv, "apply_custom_range", %{"from" => from, "to" => to})
+      assert stat_value(html, "Patient visits") == "1"
+    end
+
+    test "an invalid custom range shows a flash error and does not crash", %{conn: conn} do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
+
+      lv |> element("button", "Custom") |> render_click()
+
+      html =
+        render_submit(lv, "apply_custom_range", %{"from" => "not-a-date", "to" => "also-not"})
+
+      assert html =~ "Enter a valid from and to date"
     end
   end
 

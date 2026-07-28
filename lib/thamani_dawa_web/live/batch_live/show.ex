@@ -1,6 +1,8 @@
 defmodule ThamaniDawaWeb.BatchLive.Show do
   use ThamaniDawaWeb, :live_view
 
+  import ThamaniDawaWeb.BatchLabelComponent
+
   alias ThamaniDawa.Batches
 
   def mount(%{"id" => id}, _session, socket) do
@@ -63,8 +65,7 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
         %{
           at: item.counted_at,
           label: "Counted #{item.counted_quantity} (variance #{item.variance})",
-          detail:
-            "Stock-take ##{item.stock_take_id} · by #{user_display(item.counted_by)}"
+          detail: "Stock-take ##{item.stock_take_id} · by #{user_display(item.counted_by)}"
         }
       end)
 
@@ -80,9 +81,19 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
         Batch {@batch.batch_no}
         <:subtitle>{product_name(@batch.product)} · {@batch.site.name}</:subtitle>
         <:actions>
+          <.button
+            type="button"
+            variant="primary"
+            onclick="window.print()"
+            class="no-print flex items-center gap-1.5"
+          >
+            <.icon name="hero-printer" class="w-4 h-4" /> Print Data Matrix
+          </.button>
           <.button navigate={~p"/org/products/#{@batch.product_id}"}>Back to product</.button>
         </:actions>
       </.header>
+
+      <.batch_label_card batch={@batch} class="my-6" />
 
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-base-200 text-sm mb-6">
         <div>
@@ -119,7 +130,7 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
         </div>
       </div>
 
-      <.header class="mt-6">
+      <.header variant="plain" class="mt-6">
         History
         <:subtitle>Everything that has touched this batch's stock, newest first</:subtitle>
       </.header>

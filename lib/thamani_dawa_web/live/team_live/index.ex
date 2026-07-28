@@ -32,7 +32,9 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           user_id = String.to_integer(params["id"])
           organization_id = socket.assigns.current_scope.organization_id
           user = Accounts.get_user!(organization_id, user_id)
-          {to_form(User.edit_changeset(user, %{}), as: :user), user, Enum.map(user.sites, & &1.id)}
+
+          {to_form(User.edit_changeset(user, %{}), as: :user), user,
+           Enum.map(user.sites, & &1.id)}
 
         _ ->
           {nil, nil, []}
@@ -213,6 +215,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             name="user[site_ids][]"
             value={site.id}
             checked={site.id in @checked_site_ids}
+            class="checkbox checkbox-sm accent-thamani-forest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
           />
           {site.name}
         </label>
@@ -343,9 +346,9 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           <.button
             variant="ghost-edit"
             patch={~p"/org/team/#{user.id}/edit"}
-            class="gap-2"
+            class="px-3 py-1.5 text-xs"
+            id={"btn-edit-user-#{user.id}"}
           >
-            <.icon name="hero-pencil-square" class="size-4" />
             Edit
           </.button>
         </:action>

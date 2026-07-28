@@ -78,8 +78,15 @@ defmodule ThamaniDawaWeb.CoreComponents do
           <p>{msg}</p>
         </div>
         <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label={gettext("close")}>
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+        <button
+          type="button"
+          class="group relative self-start cursor-pointer transition-transform active:scale-[0.96] after:absolute after:inset-[-12px] after:content-['']"
+          aria-label={gettext("close")}
+        >
+          <.icon
+            name="hero-x-mark"
+            class="size-5 opacity-40 transition-opacity group-hover:opacity-70"
+          />
         </button>
       </div>
     </div>
@@ -97,7 +104,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled type)
   attr :class, :any, default: nil
-  attr :variant, :string, values: ~w(primary ghost ghost-edit ghost-delete), default: "ghost"
+
+  attr :variant, :string,
+    values: ~w(primary ghost ghost-edit ghost-delete destructive),
+    default: "ghost"
+
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
@@ -106,6 +117,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         "primary" -> "thamani-btn-primary"
         "ghost-edit" -> "thamani-btn-ghost-edit"
         "ghost-delete" -> "thamani-btn-ghost-delete"
+        "destructive" -> "thamani-btn-destructive"
         _ -> "thamani-btn-ghost"
       end
 
@@ -371,8 +383,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
     assigns
     |> assign(field: nil, id: assigns.id || field.id)
     |> assign(:errors, Enum.map(errors, &translate_error(&1)))
-    |> assign_new(:name, fn -> field.name end)
-    |> assign_new(:value, fn -> field.value end)
+    |> assign(:name, field.name)
+    |> assign(:value, field.value)
     |> date_picker()
   end
 
@@ -389,7 +401,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         >*</span>
       </label>
 
-      <input type="hidden" name={@name} id={@id} value={@iso_value} data-dp-input />
+      <input type="text" name={@name} id={@id} value={@iso_value} data-dp-input class="hidden" />
 
       <button
         type="button"
@@ -412,8 +424,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
         id={"#{@id}-dp-pop"}
         phx-update="ignore"
         hidden
-        class="absolute z-50 mt-2 w-72 p-4"
-        style="background: var(--thamani-snow); border: 1px solid var(--thamani-stone); border-radius: 16px;"
+        class="absolute left-0 top-full z-50 mt-1.5 w-80 p-4 shadow-xl"
+        style="background: var(--thamani-snow); border: 1px solid var(--thamani-stone); border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);"
       >
       </div>
 
@@ -442,9 +454,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
           this.max = this.el.dataset.max === "today" ? this.today : null
           this.parseValue()
           this.onTrigger = (e) => { e.preventDefault(); e.stopPropagation(); this.toggle() }
-          this.onDocClick = (e) => { if (!this.el.contains(e.target)) this.close() }
+          this.onDocClick = (e) => { if (!this.el.contains(e.target) && !this.pop.contains(e.target)) this.close() }
           this.onKey = (e) => { if (e.key === "Escape") this.close() }
           this.onPopClick = (e) => this.handlePopClick(e)
+
           this.trigger.addEventListener("click", this.onTrigger)
           this.pop.addEventListener("click", this.onPopClick)
           document.addEventListener("click", this.onDocClick)
@@ -457,7 +470,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           this.renderDisplay()
         },
         parseValue() {
-          const v = this.input.value
+          const v = this.input ? this.input.value : ""
           if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
             const [y,m,d] = v.split("-").map(Number)
             this.selected = new Date(y, m-1, d)
@@ -505,9 +518,6 @@ defmodule ThamaniDawaWeb.CoreComponents do
         },
         close() { this.pop.setAttribute("hidden", "") },
         handlePopClick(e) {
-          // Rebuilding the popover detaches the clicked node, so stop the event
-          // reaching the document "click-outside" handler (which would then see
-          // a detached target and wrongly close the picker).
           e.stopPropagation()
           const nav = e.target.closest("[data-dp-nav]")
           if (nav) {
@@ -548,6 +558,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             this.selected = new Date(this.viewYear, this.viewMonth, parseInt(day.dataset.dpDay, 10))
             this.input.value = this.iso(this.selected)
             this.input.dispatchEvent(new Event("input", {bubbles: true}))
+            this.input.dispatchEvent(new Event("change", {bubbles: true}))
             this.renderDisplay()
             this.close()
           }
@@ -561,19 +572,19 @@ defmodule ThamaniDawaWeb.CoreComponents do
           this.renderDays()
         },
         listHeader(label) {
-          const back = "width:28px;height:28px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:16px;"
+          const back = "width:32px;height:32px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:18px;"
           return `<div style="display:flex;align-items:center;gap:4px;margin-bottom:12px;">
               <button type="button" data-dp-open="days" aria-label="Back to days" style="${back}">&#8249;</button>
-              <span style="flex:1;text-align:center;font-size:14px;font-weight:500;color:var(--thamani-forest);">${label}</span>
-              <span style="width:28px;"></span>
+              <span style="flex:1;text-align:center;font-size:14px;font-weight:600;color:var(--thamani-forest);">${label}</span>
+              <span style="width:32px;"></span>
             </div>`
         },
         renderDays() {
           const first = new Date(this.viewYear, this.viewMonth, 1)
           const startDow = first.getDay()
           const daysInMonth = new Date(this.viewYear, this.viewMonth + 1, 0).getDate()
-          const pillBtn = "width:28px;height:28px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:16px;"
-          const ctrl = "border:1px solid var(--thamani-stone);border-radius:8px;color:var(--thamani-forest);font-size:13px;font-weight:500;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;"
+          const pillBtn = "width:32px;height:32px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:18px;"
+          const ctrl = "border:1px solid var(--thamani-stone);border-radius:8px;color:var(--thamani-forest);font-size:13px;font-weight:500;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px;"
 
           let head = `
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
@@ -587,20 +598,20 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <button type="button" data-dp-nav="1" aria-label="Next month" style="${pillBtn}">&#8250;</button>
             </div>`
 
-          let dow = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">`
-          DOW.forEach(d => { dow += `<span style="text-align:center;font-size:11px;color:var(--thamani-pewter);">${d}</span>` })
+          let dow = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">`
+          DOW.forEach(d => { dow += `<span style="text-align:center;font-size:12px;font-weight:500;color:var(--thamani-pewter);">${d}</span>` })
           dow += `</div>`
 
-          let grid = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;">`
+          let grid = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">`
           for (let i = 0; i < startDow; i++) grid += `<span></span>`
           for (let d = 1; d <= daysInMonth; d++) {
             const cur = new Date(this.viewYear, this.viewMonth, d)
             const isSel = this.selected && cur.getTime() === this.selected.getTime()
             const isToday = cur.getTime() === this.today.getTime()
             const disabled = this.max && cur.getTime() > this.max.getTime()
-            let style = "width:32px;height:32px;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:13px;margin:0 auto;border:none;color:var(--thamani-forest);cursor:pointer;"
+            let style = "width:34px;height:34px;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:13px;margin:0 auto;border:none;color:var(--thamani-forest);cursor:pointer;"
             if (disabled) style += "color:#b3b3b3;cursor:not-allowed;"
-            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);"
+            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:600;"
             else if (isToday) style += "border:1.5px solid var(--thamani-lime);"
             grid += `<button type="button" data-dp-day="${d}" ${disabled ? "disabled" : ""} style="${style}">${d}</button>`
           }
@@ -610,14 +621,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
         },
         renderMonths() {
           let head = this.listHeader("Select month")
-          let grid = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">`
+          let grid = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">`
           const maxMonth = this.maxMonthFor(this.viewYear)
           MONTHS.forEach((name, i) => {
             const isSel = i === this.viewMonth
             const disabled = i > maxMonth
             let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:var(--thamani-forest);cursor:pointer;text-align:center;"
             if (disabled) style += "color:#b3b3b3;cursor:not-allowed;"
-            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:500;"
+            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:600;"
             grid += `<button type="button" data-dp-month="${i}" ${disabled ? "disabled" : ""} style="${style}">${name.slice(0,3)}</button>`
           })
           grid += `</div>`
@@ -625,11 +636,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
         },
         renderYears() {
           let head = this.listHeader("Select year")
-          let grid = `<div data-dp-years style="position:relative;max-height:196px;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:2px;">`
+          let grid = `<div data-dp-years style="position:relative;max-height:220px;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:2px;">`
           for (let y = this.maxYear(); y >= this.minYear(); y--) {
             const isSel = y === this.viewYear
             let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:var(--thamani-forest);cursor:pointer;text-align:center;"
-            if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:500;"
+            if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:600;"
             grid += `<button type="button" data-dp-year="${y}" style="${style}">${y}</button>`
           }
           grid += `</div>`
@@ -743,6 +754,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
       </.header>
   """
   attr :icon, :string, default: nil, doc: "optional hero-* icon name for the leading badge"
+
+  attr :variant, :string,
+    values: ~w(card plain),
+    default: "card",
+    doc:
+      "\"card\" (default) renders the bordered/shadowed card shell; \"plain\" is a bare section divider with no card shell, for in-page section headings that aren't real page headers"
+
   slot :inner_block, required: true
   slot :subtitle
   slot :actions
@@ -751,9 +769,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def header(assigns) do
     ~H"""
-    <div class={["mb-5 rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm", @class]}>
+    <div class={[
+      @variant == "card" && "mb-5 rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm",
+      @class
+    ]}>
       <header class={[
-        "flex flex-col items-stretch gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-5",
+        "flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6",
+        @variant == "card" && "p-4 sm:p-5",
         @toolbar != [] && "border-b border-thamani-stone"
       ]}>
         <div class="flex min-w-0 items-center gap-3">
@@ -781,7 +803,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
       </header>
       <div
         :if={@toolbar != []}
-        class="flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:p-5"
+        class={[
+          "flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center",
+          @variant == "card" && "p-4 sm:p-5"
+        ]}
       >
         {render_slot(@toolbar)}
       </div>
@@ -1156,19 +1181,19 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   defp thamani_btn_classes("primary"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] hover:opacity-90 w-full #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] hover:opacity-90 w-full #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("ghost"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-transparent text-thamani-forest text-[15px] font-normal no-underline border-[1.5px] border-thamani-forest cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-transparent text-thamani-forest text-[15px] font-normal no-underline border-[1.5px] border-thamani-forest cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("ghost_inv"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-transparent text-thamani-snow text-[15px] font-normal no-underline border-[1.5px] border-thamani-snow cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-transparent text-thamani-snow text-[15px] font-normal no-underline border-[1.5px] border-thamani-snow cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("lime"),
     do:
-      "inline-flex items-center justify-center px-6 py-[11px] rounded-full bg-thamani-lime text-thamani-forest text-[15px] font-medium no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.97] #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-lime text-thamani-forest text-[15px] font-medium no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] #{@btn_focus} #{@btn_loading}"
 
   @doc """
   Renders a Thamani-styled auth-page form field with label and inline error.
@@ -1734,7 +1759,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
     <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200 pt-6">
       <p class="text-sm text-slate-500 order-2 sm:order-1">
         Showing <span class="font-medium text-slate-900">{@from_item}</span>–<span class="font-medium text-slate-900">{@to_item}</span>
-        of <span class="font-medium text-slate-900">{@total_entries}</span> results
+        of <span class="font-medium text-slate-900">{@total_entries}</span>
+        results
       </p>
 
       <nav
@@ -1745,7 +1771,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page - 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-9 rounded-lg text-slate-500 transition-colors duration-150",
+            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_prev,
               do: "hover:bg-slate-100 hover:text-slate-900",
               else: "pointer-events-none opacity-40"
@@ -1764,13 +1790,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
               if page_num != :ellipsis, do: build_pagination_url(@path, page_num, @query_param)
             }
             class={[
-              "inline-flex items-center justify-center size-9 rounded-lg text-sm font-medium transition-colors duration-150",
+              "inline-flex items-center justify-center size-10 rounded-lg text-sm font-medium transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
               if(page_num == :ellipsis,
                 do: "text-slate-400 cursor-default",
-                else: if(page_num == @current_page,
-                  do: "bg-thamani-forest text-white",
-                  else: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                )
+                else:
+                  if(page_num == @current_page,
+                    do: "bg-thamani-forest text-white",
+                    else: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  )
               )
             ]}
           >
@@ -1781,7 +1808,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page + 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-9 rounded-lg text-slate-500 transition-colors duration-150",
+            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_next,
               do: "hover:bg-slate-100 hover:text-slate-900",
               else: "pointer-events-none opacity-40"
@@ -1809,7 +1836,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
         [1, :ellipsis] ++ Enum.to_list((total_pages - 4)..total_pages)
 
       true ->
-        [1, :ellipsis] ++ Enum.to_list((current_page - 1)..(current_page + 1)) ++ [:ellipsis, total_pages]
+        [1, :ellipsis] ++
+          Enum.to_list((current_page - 1)..(current_page + 1)) ++ [:ellipsis, total_pages]
     end
   end
 

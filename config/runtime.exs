@@ -43,7 +43,9 @@ config :thamani_dawa, ThamaniDawa.GtinLookup, api_key: System.get_env("GS1_GRP_A
 
 config :thamani_dawa, :google_maps, api_key: System.get_env("GOOGLE_MAPS_API_KEY")
 
-config :thamani_dawa, ThamaniDawa.Gln, company_prefix: System.get_env("GS1_COMPANY_PREFIX")
+if company_prefix = System.get_env("GS1_COMPANY_PREFIX") do
+  config :thamani_dawa, ThamaniDawa.Gln, company_prefix: company_prefix
+end
 
 config :thamani_dawa, ThamaniDawaWeb.Endpoint,
   http: [port: String.to_integer(System.get_env("PORT", "4000"))]

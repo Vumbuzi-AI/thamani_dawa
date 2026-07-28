@@ -243,9 +243,9 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
           <.button
             variant="ghost-edit"
             patch={~p"/org/suppliers/#{supplier.id}/edit"}
-            class="gap-2"
+            class="px-3 py-1.5 text-xs"
+            id={"btn-edit-supplier-#{supplier.id}"}
           >
-            <.icon name="hero-pencil-square" class="size-4" />
             Edit
           </.button>
         </:action>
@@ -254,13 +254,10 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
             type="button"
             phx-click="toggle_active"
             phx-value-id={supplier.id}
-            class="gap-2"
-            variant={if supplier.is_active, do: "ghost-delete", else: "ghost"}
+            class="px-3 py-1.5 text-xs"
+            variant={if supplier.is_active, do: "destructive", else: "ghost"}
+            id={"btn-toggle-supplier-#{supplier.id}"}
           >
-            <.icon
-              name={if supplier.is_active, do: "hero-power", else: "hero-arrow-path"}
-              class="size-4"
-            />
             {if supplier.is_active, do: "Deactivate", else: "Reactivate"}
           </.button>
         </:action>
