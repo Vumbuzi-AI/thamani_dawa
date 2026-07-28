@@ -410,8 +410,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           class="space-y-5"
         >
           <%!-- Step 1: Patient information --%>
-          <section class="overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow">
-            <div class="flex flex-col gap-3 border-b border-thamani-stone bg-thamani-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <section class="rounded-xl border border-thamani-stone bg-thamani-snow">
+            <div class="flex flex-col gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 class="text-base font-semibold text-thamani-forest">1. Patient</h3>
               <.tab_group>
                 <:tab
@@ -440,12 +440,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
               <div :if={@use_new_patient} class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <.input field={@patient_form[:full_name]} label="Full Name" required />
                 <.input field={@patient_form[:gsrn]} type="text" label="GSRN (Identifier)" required />
-                <.input
+                <.date_picker
                   field={@patient_form[:date_of_birth]}
-                  type="date"
                   label="Date of birth"
+                  placeholder="Choose date of birth"
+                  max="today"
                   required
-                  max={Date.utc_today()}
                 />
                 <.input
                   field={@patient_form[:gender]}
@@ -462,8 +462,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           </section>
 
           <%!-- Step 2: Prescription items --%>
-          <section class="overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow">
-            <div class="flex items-center justify-between gap-3 border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
+          <section class="rounded-xl border border-thamani-stone bg-thamani-snow">
+            <div class="flex items-center justify-between gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
               <h3 class="text-base font-semibold text-thamani-forest">2. Medication</h3>
               <.button id="add-prescription-item" type="button" phx-click="add-item" variant="ghost">
                 + Add Item

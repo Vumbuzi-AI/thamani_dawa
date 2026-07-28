@@ -20,7 +20,7 @@ defmodule ThamaniDawa.VerifyGtin do
 
     case Req.post(url, req_options) do
       {:ok, %Req.Response{status: 200, body: body}} ->
-        if Enum.count(body) == 0 do
+        if Enum.empty?(body) do
           {:ok, :not_verified}
         else
           {:ok, body}

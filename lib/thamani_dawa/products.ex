@@ -15,9 +15,27 @@ defmodule ThamaniDawa.Products do
   end
 
   @doc "Lists an organization's products with pagination."
-  def list_products_paginated(organization_id, page \\ 1) do
-    from(p in Product, where: p.organization_id == ^organization_id)
-    |> Repo.paginate(page: page)
+  def list_products_paginated(organization_id, page \\ 1, opts \\ []) do
+    search = Keyword.get(opts, :search)
+
+    query = from(p in Product, where: p.organization_id == ^organization_id)
+
+    query =
+      if search && String.trim(search) != "" do
+        pattern = "%#{String.trim(search)}%"
+
+        from(p in query,
+          where:
+            ilike(p.generic_name, ^pattern) or
+              ilike(p.brand_name, ^pattern) or
+              ilike(p.gtin, ^pattern) or
+              ilike(p.category, ^pattern)
+        )
+      else
+        query
+      end
+
+    Repo.paginate(query, page: page)
   end
 
   @doc "Lists products that have active, approved batches at a site."

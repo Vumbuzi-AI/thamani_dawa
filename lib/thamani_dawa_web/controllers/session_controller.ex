@@ -10,7 +10,11 @@ defmodule ThamaniDawaWeb.SessionController do
   plug :put_layout, [html: {ThamaniDawaWeb.Layouts, :root}] when action in [:new, :create]
 
   def new(conn, _params) do
-    render(conn, :new, form: to_form(%{"email" => "", "password" => ""}, as: nil))
+    if conn.assigns[:current_scope] && conn.assigns.current_scope.user do
+      redirect(conn, to: redirect_path_for(conn.assigns.current_scope.user))
+    else
+      render(conn, :new, form: to_form(%{"email" => "", "password" => ""}, as: nil))
+    end
   end
 
   def create(conn, %{"email" => email, "password" => password}) do

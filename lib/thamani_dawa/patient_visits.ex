@@ -44,11 +44,35 @@ defmodule ThamaniDawa.PatientVisits do
         order_by: [desc: pv.inserted_at]
       )
 
-    case Keyword.get(opts, :visit_type) do
-      nil -> query
-      visit_type -> where(query, [pv], pv.visit_type == ^visit_type)
-    end
-    |> Repo.paginate(page: page)
+    query =
+      case Keyword.get(opts, :visit_type) do
+        nil -> query
+        visit_type -> where(query, [pv], pv.visit_type == ^visit_type)
+      end
+
+    query =
+      case Keyword.get(opts, :site_id) do
+        nil -> query
+        site_id -> where(query, [pv], pv.site_id == ^site_id)
+      end
+
+    query =
+      case Keyword.get(opts, :search) do
+        nil ->
+          query
+
+        "" ->
+          query
+
+        search ->
+          pattern = "%#{String.trim(search)}%"
+
+          from([pv, pat, s, u] in query,
+            where: ilike(pat.full_name, ^pattern) or ilike(pat.phone, ^pattern)
+          )
+      end
+
+    Repo.paginate(query, page: page)
   end
 
   @doc "Gets a single patient visit scoped to an organization. Raises if not found."

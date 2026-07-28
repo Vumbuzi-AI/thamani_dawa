@@ -86,7 +86,6 @@ defmodule ThamaniDawaWeb.Router do
       live "/pharmacy/prescriptions/:id/payments/new", PrescriptionLive.Show, :new_payment
 
       live "/pharmacy/patients", PatientLive.Index, :index
-      live "/pharmacy/patients/new", PatientLive.Index, :new
       live "/pharmacy/patients/:id", PatientLive.Show, :show
     end
 
@@ -95,7 +94,6 @@ defmodule ThamaniDawaWeb.Router do
       live "/lab/scan", LabScanLive, :index
 
       live "/lab/patients", LabPatientLive.Index, :index
-      live "/lab/patients/new", LabPatientLive.Index, :new
       live "/lab/patients/:id", LabPatientLive.Show, :show
 
       live "/lab/orders", LabOrderLive.Index, :index
@@ -107,6 +105,10 @@ defmodule ThamaniDawaWeb.Router do
 
       live "/lab/receive-stock", LabReceiveStockLive, :index
       live "/lab/receive-stock/:id/receive", LabReceiveStockLive, :receive
+
+      live "/lab/stock", LabStockLive, :index
+      live "/lab/stock/products/:id", LabStockProductLive, :show
+      live "/lab/stock/batches/:id", LabStockBatchLive, :show
 
       live "/lab/tests", LabTestLive.Index, :index
       live "/lab/tests/new", LabTestLive.Index, :new

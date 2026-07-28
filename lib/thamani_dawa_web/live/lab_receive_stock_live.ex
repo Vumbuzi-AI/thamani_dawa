@@ -12,8 +12,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
   alias ThamaniDawa.Suppliers
   alias ThamaniDawaWeb.SiteScoping
 
-  import ThamaniDawaWeb.BatchFormComponents
-
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     organization_id = scope.organization_id

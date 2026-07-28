@@ -61,13 +61,20 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     |> assign(:gtin_step, :scan)
   end
 
-  defp apply_action(socket, :edit, %{"id" => id}) do
+  defp apply_action(socket, :edit, %{"id" => id} = params) do
     organization_id = socket.assigns.current_scope.organization_id
     product = Products.get_product!(organization_id, id)
 
+    back_path =
+      if Map.get(params, "return_to") == "show" do
+        ~p"/org/products/#{id}"
+      else
+        ~p"/org/products"
+      end
+
     socket
     |> assign(form: to_form(Product.changeset(product, %{}), as: :product), product: product)
-    |> assign(:back_path, ~p"/org/products/#{id}")
+    |> assign(:back_path, back_path)
     |> reset_gtin_lookup()
     |> assign(:gtin_step, :form)
   end
@@ -151,11 +158,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
              |> assign(:gtin_lookup, :searching)
              |> put_scanned_gtin(normalized)
              |> start_async(:gtin_lookup, fn ->
-               with {:ok, result} <- GtinLookup.lookup(trimmed) do
-                 {:ok, result}
-               else
-                 {:error, _reason} = err -> err
-               end
+               GtinLookup.lookup(trimmed)
              end)}
 
           {:error, :invalid_gtin} ->
@@ -213,11 +216,16 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
       {:ok, product} ->
         back_path = socket.assigns[:back_path] || ~p"/org/products"
 
-        {:noreply,
-         socket
-         |> put_flash(:info, "Product updated.")
-         |> stream_insert(:products, product)
-         |> push_patch(to: back_path)}
+        socket =
+          socket
+          |> put_flash(:info, "Product updated.")
+          |> stream_insert(:products, product)
+
+        if back_path == ~p"/org/products" do
+          {:noreply, push_patch(socket, to: back_path)}
+        else
+          {:noreply, push_navigate(socket, to: back_path)}
+        end
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :product))}
@@ -396,7 +404,11 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         :if={@live_action in [:new, :edit]}
         id="product-modal"
         show
-        on_cancel={JS.patch(@back_path || ~p"/org/products")}
+        on_cancel={
+          if @back_path == ~p"/org/products",
+            do: JS.patch(~p"/org/products"),
+            else: JS.navigate(@back_path)
+        }
       >
         <div class="space-y-6">
           <div>
@@ -590,7 +602,14 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
               <div class="flex gap-3 pt-4 border-t">
                 <.button variant="primary" class="flex-1">Save Product</.button>
-                <.button type="button" patch={@back_path || ~p"/org/products"} variant="ghost">Cancel</.button>
+                <.button
+                  type="button"
+                  patch={if @back_path == ~p"/org/products", do: @back_path}
+                  navigate={if @back_path != ~p"/org/products", do: @back_path}
+                  variant="ghost"
+                >
+                  Cancel
+                </.button>
               </div>
             </.form>
           </div>
@@ -610,26 +629,32 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         </:col>
         <:action :let={{_id, product}}>
           <.button
-            variant="ghost-edit"
-            patch={~p"/org/products/#{product.id}/edit"}
-            class="gap-2"
+            variant="ghost"
+            navigate={~p"/org/products/#{product.id}"}
+            class="px-3 py-1.5 text-xs"
+            id={"btn-view-#{product.id}"}
           >
-            <.icon name="hero-pencil-square" class="size-4" /> Edit
+            View
           </.button>
         </:action>
         <:action :let={{_id, product}}>
           <.button
-            type="button"
-            phx-click="toggle_active"
-            phx-value-id={product.id}
-            class="gap-2"
-            variant={if product.is_active, do: "ghost-delete", else: "ghost"}
+            variant="primary"
+            navigate={~p"/org/products/#{product.id}/batches/new"}
+            class="px-3 py-1.5 text-xs"
+            id={"btn-dispatch-#{product.id}"}
           >
-            <.icon
-              name={if product.is_active, do: "hero-power", else: "hero-arrow-path"}
-              class="size-4"
-            />
-            {if product.is_active, do: "Deactivate", else: "Reactivate"}
+            Dispatch batch
+          </.button>
+        </:action>
+        <:action :let={{_id, product}}>
+          <.button
+            variant="ghost-edit"
+            patch={~p"/org/products/#{product.id}/edit"}
+            class="px-3 py-1.5 text-xs"
+            id={"btn-edit-#{product.id}"}
+          >
+            Edit
           </.button>
         </:action>
         <:empty_state>

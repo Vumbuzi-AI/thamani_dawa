@@ -20,15 +20,45 @@ defmodule ThamaniDawa.LabTests do
   end
 
   @doc "Lists an organization's lab tests with pagination, preloaded with `category` (scoped to the organization)."
-  def list_lab_tests_paginated(organization_id, page \\ 1) do
-    category_query = from c in LabTestCategory, where: c.organization_id == ^organization_id
+  def list_lab_tests_paginated(organization_id, page \\ 1, opts \\ []) do
+    query =
+      from(t in LabTest,
+        left_join: c in LabTestCategory,
+        on: t.category_id == c.id and c.organization_id == ^organization_id,
+        where: t.organization_id == ^organization_id,
+        preload: [category: c]
+      )
 
-    from(t in LabTest,
-      where: t.organization_id == ^organization_id,
-      preload: [category: ^category_query]
-    )
+    query
+    |> filter_by_search_opt(Keyword.get(opts, :search))
+    |> filter_by_category_opt(Keyword.get(opts, :category))
+    |> filter_by_status_opt(Keyword.get(opts, :status))
     |> Repo.paginate(page: page)
   end
+
+  defp filter_by_search_opt(query, search) when is_binary(search) and search != "" do
+    pattern = "%#{String.trim(search)}%"
+
+    from([t, c] in query,
+      where: ilike(t.name, ^pattern) or ilike(c.name, ^pattern)
+    )
+  end
+
+  defp filter_by_search_opt(query, _), do: query
+
+  defp filter_by_category_opt(query, category) when is_binary(category) and category != "" do
+    from([_t, c] in query, where: c.name == ^category)
+  end
+
+  defp filter_by_category_opt(query, _), do: query
+
+  defp filter_by_status_opt(query, "active"),
+    do: from([t, _c] in query, where: t.is_active == true)
+
+  defp filter_by_status_opt(query, "inactive"),
+    do: from([t, _c] in query, where: t.is_active == false)
+
+  defp filter_by_status_opt(query, _), do: query
 
   @doc "Gets a single lab test scoped to an organization. Raises if not found."
   def get_lab_test!(organization_id, id) do

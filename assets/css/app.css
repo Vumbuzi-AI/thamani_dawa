@@ -495,8 +495,7 @@ html {
 }
 
 .thamani-btn-ghost,
-.thamani-btn-ghost-edit,
-.thamani-btn-ghost-delete {
+.thamani-btn-ghost-edit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -517,9 +516,32 @@ html {
     border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
+.thamani-btn-ghost-delete,
+.thamani-btn-destructive {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 10px 24px;
+  border-radius: 1000px;
+  background: transparent;
+  color: var(--thamani-error);
+  font-size: 14px;
+  font-weight: 400;
+  text-decoration: none;
+  border: 1.5px solid var(--thamani-error);
+  cursor: pointer;
+  transition:
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 .thamani-btn-ghost:active,
 .thamani-btn-ghost-edit:active,
-.thamani-btn-ghost-delete:active {
+.thamani-btn-ghost-delete:active,
+.thamani-btn-destructive:active {
   transform: scale(0.96);
 }
 
@@ -527,6 +549,7 @@ html {
 .thamani-btn-ghost:focus-visible,
 .thamani-btn-ghost-edit:focus-visible,
 .thamani-btn-ghost-delete:focus-visible,
+.thamani-btn-destructive:focus-visible,
 .thamani-btn-ghost-inv:focus-visible,
 .thamani-btn-lime:focus-visible {
   outline: 2px solid var(--thamani-accent);
@@ -538,7 +561,8 @@ html {
     background-color: var(--thamani-forest);
     color: white;
   }
-  .thamani-btn-ghost-delete:hover {
+  .thamani-btn-ghost-delete:hover,
+  .thamani-btn-destructive:hover {
     background-color: var(--thamani-error);
     border-color: var(--thamani-error);
     color: white;
@@ -1008,4 +1032,31 @@ html {
   background: var(--thamani-forest);
   color: var(--thamani-snow);
   border-color: var(--thamani-forest);
+}
+
+/* Print styles for GS1 Data Matrix Batch Label */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .printable-batch-label,
+  .printable-batch-label * {
+    visibility: visible !important;
+  }
+  .printable-batch-label {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 4in !important;
+    margin: 0 !important;
+    padding: 16px !important;
+    border: 2px solid #000 !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
 }

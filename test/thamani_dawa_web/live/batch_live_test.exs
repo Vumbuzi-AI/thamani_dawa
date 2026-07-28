@@ -34,6 +34,8 @@ defmodule ThamaniDawaWeb.BatchLiveTest do
 
       assert html =~ "TRACE-BATCH-1"
       assert html =~ site.name
+      assert html =~ "Print Data Matrix"
+      assert html =~ "printable-batch-label"
     end
 
     test "shows the receiving event and a prescription dispense in the timeline", %{
@@ -57,14 +59,6 @@ defmodule ThamaniDawaWeb.BatchLiveTest do
           patient_visit_id: patient_visit.id
         })
 
-      item =
-        prescription_item_fixture(%{
-          organization_id: admin.organization_id,
-          prescription_id: prescription.id,
-          product_id: product.id,
-          quantity_prescribed: 5
-        })
-
       batch =
         batch_fixture(%{
           organization_id: admin.organization_id,
@@ -73,6 +67,14 @@ defmodule ThamaniDawaWeb.BatchLiveTest do
           batch_no: "TRACE-BATCH-2",
           quantity: 20,
           remaining_quantity: 20
+        })
+
+      item =
+        prescription_item_fixture(%{
+          organization_id: admin.organization_id,
+          prescription_id: prescription.id,
+          product_id: product.id,
+          quantity_prescribed: 5
         })
 
       assert {:ok, _updated_item} =

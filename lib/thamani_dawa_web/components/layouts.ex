@@ -108,6 +108,7 @@ defmodule ThamaniDawaWeb.Layouts do
         {"Patients", "hero-user-group", ~p"/lab/patients"},
         {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
         {"Tests", "hero-beaker", ~p"/lab/tests"},
+        {"Stock", "hero-cube", ~p"/lab/stock"},
         {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
         {"Scan", "hero-qr-code", ~p"/lab/scan"}
       ]}
@@ -389,8 +390,8 @@ defmodule ThamaniDawaWeb.Layouts do
             style="background: #FBFBFF; border: 1px solid #E8EBF3; border-radius: 16px; padding: 14px 16px;"
           >
             <div
-              class="rounded-full flex items-center justify-center shrink-0 font-semibold text-[15px]"
-              style="width: 44px; height: 44px; background: var(--thamani-forest); color: var(--thamani-snow);"
+              class="rounded-full flex items-center justify-center shrink-0 aspect-square font-semibold text-[15px]"
+              style="width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 9999px; background: var(--thamani-forest); color: var(--thamani-snow);"
             >
               {String.at(@current_scope.user.name || "U", 0)}
             </div>

@@ -799,5 +799,60 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       assert ThamaniDawa.Batches.list_batches_for_product(admin.organization_id, product.id) == []
     end
+
+    test "dispatched batch opens GS1 Data Matrix print modal", %{
+      conn: conn,
+      admin: admin,
+      site: site
+    } do
+      product = product_fixture(%{organization_id: admin.organization_id})
+
+      {:ok, lv, _html} =
+        live(log_in_user(conn, admin), ~p"/org/products/#{product.id}/batches/new")
+
+      gtin = unique_gtin()
+
+      html =
+        lv
+        |> form("#batch-form",
+          batch: %{
+            site_id: site.id,
+            gtin: gtin,
+            batch_no: "LOT-DM-001",
+            expiry_date: "2027-06-01",
+            quantity: 50
+          }
+        )
+        |> render_submit()
+
+      assert html =~ "Batch dispatched"
+      assert html =~ "Batch GS1 Data Matrix Label"
+      assert html =~ "LOT-DM-001"
+      assert html =~ "Print Label"
+    end
+
+    test "clicking Data Matrix print button on batch row opens modal", %{
+      conn: conn,
+      admin: admin,
+      site: site
+    } do
+      product = product_fixture(%{organization_id: admin.organization_id})
+
+      batch =
+        batch_fixture(%{
+          organization_id: admin.organization_id,
+          product_id: product.id,
+          site_id: site.id,
+          batch_no: "LOT-PRINT-ME"
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
+
+      html = lv |> element("#btn-datamatrix-#{batch.id}") |> render_click()
+
+      assert html =~ "Batch GS1 Data Matrix Label"
+      assert html =~ "LOT-PRINT-ME"
+      assert html =~ "Print Label"
+    end
   end
 end

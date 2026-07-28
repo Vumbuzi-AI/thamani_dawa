@@ -52,9 +52,6 @@ defmodule ThamaniDawa.GtinLookup do
 
       {:ok, []} ->
         {:error, :not_found}
-
-      {:error, _reason} ->
-        {:error, :provider_error}
     end
   end
 

@@ -31,6 +31,19 @@ defmodule ThamaniDawa.LabTestsTest do
       assert lab_test.is_active == true
     end
 
+    test "list_lab_tests_paginated filters by category name" do
+      org = organization_fixture()
+      cat1 = lab_test_category_fixture(%{organization_id: org.id, name: "Cat A"})
+      cat2 = lab_test_category_fixture(%{organization_id: org.id, name: "Cat B"})
+      t1 = lab_test_fixture(%{organization_id: org.id, category_id: cat1.id, name: "Test A"})
+      t2 = lab_test_fixture(%{organization_id: org.id, category_id: cat2.id, name: "Test B"})
+
+      res = LabTests.list_lab_tests_paginated(org.id, 1, category: "Cat A")
+      ids = Enum.map(res.entries, & &1.id)
+      assert t1.id in ids
+      refute t2.id in ids
+    end
+
     test "requires category_id" do
       organization = organization_fixture()
 

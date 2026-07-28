@@ -14,10 +14,21 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
   alias ThamaniDawa.Repo
 
   describe "GET /login" do
-    test "renders the login form", %{conn: conn} do
+    test "renders the login form for unauthenticated users", %{conn: conn} do
       conn = get(conn, ~p"/login")
 
       assert html_response(conn, 200) =~ "Welcome back"
+    end
+
+    test "redirects an authenticated user to their portal", %{conn: conn} do
+      pharmacist = staff_fixture(%{role: :pharmacist})
+
+      conn =
+        conn
+        |> log_in_user(pharmacist)
+        |> get(~p"/login")
+
+      assert redirected_to(conn) == ~p"/pharmacy"
     end
   end
 

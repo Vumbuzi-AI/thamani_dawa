@@ -1,6 +1,8 @@
 defmodule ThamaniDawaWeb.ProductLive.Show do
   use ThamaniDawaWeb, :live_view
 
+  import ThamaniDawaWeb.BatchLabelComponent
+
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Products
@@ -23,6 +25,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
      |> assign(:product, product)
      |> assign(:sites_by_id, sites_by_id)
      |> assign(:suppliers, Suppliers.list_suppliers(organization_id))
+     |> assign(:selected_batch, nil)
      |> stream(:batches, batches)}
   end
 
@@ -63,7 +66,8 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
         batch = %{
           batch
-          | site: socket.assigns.sites_by_id[batch.site_id],
+          | product: product,
+            site: socket.assigns.sites_by_id[batch.site_id],
             approver: nil,
             supplier: supplier
         }
@@ -72,10 +76,39 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
          socket
          |> put_flash(:info, "Batch dispatched — awaiting receipt at site.")
          |> stream_insert(:batches, batch)
+         |> assign(:selected_batch, batch)
          |> push_patch(to: ~p"/org/products/#{product.id}")}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
+    end
+  end
+
+  def handle_event("show_datamatrix", %{"id" => id}, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+    batch = Batches.get_batch_with_details!(organization_id, String.to_integer(id))
+    {:noreply, assign(socket, :selected_batch, batch)}
+  end
+
+  def handle_event("close_datamatrix", _params, socket) do
+    {:noreply, assign(socket, :selected_batch, nil)}
+  end
+
+  def handle_event("toggle_active", _params, socket) do
+    product = socket.assigns.product
+
+    case Products.update_product(product, %{is_active: !product.is_active}) do
+      {:ok, updated_product} ->
+        status_msg =
+          if updated_product.is_active, do: "Product reactivated.", else: "Product deactivated."
+
+        {:noreply,
+         socket
+         |> assign(:product, updated_product)
+         |> put_flash(:info, status_msg)}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not update product.")}
     end
   end
 
@@ -98,12 +131,27 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
           >
             + Dispatch batch to site
           </.button>
-          <.button variant="ghost-edit" navigate={~p"/org/products/#{@product.id}/edit"}>Edit</.button>
+          <.button
+            variant="ghost-edit"
+            navigate={~p"/org/products/#{@product.id}/edit?return_to=show"}
+          >Edit</.button>
+          <.button
+            type="button"
+            phx-click="toggle_active"
+            variant={if @product.is_active, do: "destructive", else: "ghost"}
+            id="btn-toggle-active-product"
+          >
+            {if @product.is_active, do: "Deactivate", else: "Reactivate"}
+          </.button>
           <.button navigate={~p"/org/products"}>Back</.button>
         </:actions>
       </.header>
 
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-base-200 text-sm mb-6">
+        <div>
+          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Status</div>
+          <.status_badge status={if @product.is_active, do: :active, else: :inactive} />
+        </div>
         <div>
           <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Brand</div>
           <div class="font-medium">{@product.brand_name || "—"}</div>
@@ -187,6 +235,12 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         </.form>
       </.modal>
 
+      <.batch_label_modal
+        :if={@selected_batch}
+        batch={@selected_batch}
+        on_close={JS.push("close_datamatrix")}
+      />
+
       <.header variant="plain" class="mt-6">Batches</.header>
       <.table
         id="batches"
@@ -205,6 +259,18 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         <:col :let={{_id, batch}} label="Received by">{user_display(batch.approver)}</:col>
         <:col :let={{_id, batch}} label="Status">
           <.status_badge status={if batch.approver_id, do: :active, else: :pending_receipt} />
+        </:col>
+        <:col :let={{_id, batch}} label="Data Matrix">
+          <.button
+            type="button"
+            variant="ghost-edit"
+            phx-click="show_datamatrix"
+            phx-value-id={batch.id}
+            phx-stop-propagation
+            id={"btn-datamatrix-#{batch.id}"}
+          >
+            <.icon name="hero-qr-code" class="w-4 h-4 mr-1" /> Print Label
+          </.button>
         </:col>
         <:empty_state>
           <.blank_state icon="hero-archive-box" title="No batches yet">

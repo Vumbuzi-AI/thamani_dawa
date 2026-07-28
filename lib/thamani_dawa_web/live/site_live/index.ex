@@ -272,9 +272,10 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           <.button
             variant="ghost-edit"
             patch={~p"/org/sites/#{site.id}/edit"}
-            class="gap-2"
+            class="px-3 py-1.5 text-xs"
+            id={"btn-edit-site-#{site.id}"}
           >
-            <.icon name="hero-pencil-square" class="size-4" /> Edit
+            Edit
           </.button>
         </:action>
         <:empty_state>
