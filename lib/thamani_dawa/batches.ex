@@ -137,6 +137,21 @@ defmodule ThamaniDawa.Batches do
     )
   end
 
+  @doc "Like `list_active_batches_for_site/2` but also preloads `product` on each batch."
+  def list_active_batches_for_site_with_product(organization_id, site_id) do
+    product_query = from p in Product, where: p.organization_id == ^organization_id
+
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: not is_nil(b.received_at),
+        where: not is_nil(b.approver_id),
+        where: b.remaining_quantity > 0,
+        preload: [product: ^product_query]
+    )
+  end
+
   @doc """
   Finds approved batches by GTIN. 
   It filters by the provided `site_id`, but will also check if the GTIN is approved at 

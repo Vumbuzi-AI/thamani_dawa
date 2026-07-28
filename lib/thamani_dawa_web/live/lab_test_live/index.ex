@@ -89,7 +89,8 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     |> assign(:applied_preset_defs, nil)
   end
 
-  def handle_event("validate", %{"lab_test" => attrs} = params, socket) do
+  def handle_event("validate", params, socket) do
+    attrs = params["lab_test"] || %{}
     rows = field_defs_rows_from_params(Map.get(params, "field_defs", %{}))
     {merged_attrs, field_defs_error} = merge_field_defs(attrs, rows)
 
@@ -105,7 +106,8 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
      |> assign(:field_defs_error, field_defs_error)}
   end
 
-  def handle_event("save", %{"lab_test" => attrs} = params, socket) do
+  def handle_event("save", params, socket) do
+    attrs = params["lab_test"] || %{}
     rows = field_defs_rows_from_params(Map.get(params, "field_defs", %{}))
 
     case merge_field_defs(attrs, rows) do
@@ -119,7 +121,14 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
 
   def handle_event("add_field_row", _params, socket) do
     idx = socket.assigns.next_field_idx
-    new_row = %{"idx" => idx, "key" => "", "type" => "number", "unit" => "", "options" => ""}
+
+    new_row = %{
+      "idx" => idx,
+      "key" => "",
+      "type" => "number",
+      "unit" => "",
+      "options" => ["Option 1"]
+    }
 
     {:noreply,
      socket
@@ -128,8 +137,26 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   end
 
   def handle_event("remove_field_row", %{"idx" => idx}, socket) do
-    idx = String.to_integer(idx)
-    rows = Enum.reject(socket.assigns.field_defs_rows, &(&1["idx"] == idx))
+    if length(socket.assigns.field_defs_rows) > 1 do
+      idx = String.to_integer(idx)
+      rows = Enum.reject(socket.assigns.field_defs_rows, &(&1["idx"] == idx))
+      {:noreply, assign(socket, :field_defs_rows, rows)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("add_field_option", %{"field_idx" => f_idx}, socket) do
+    f_idx = String.to_integer(f_idx)
+    rows = Enum.map(socket.assigns.field_defs_rows, &update_row_add_option(&1, f_idx))
+    {:noreply, assign(socket, :field_defs_rows, rows)}
+  end
+
+  def handle_event("remove_field_option", %{"field_idx" => f_idx, "opt_idx" => o_idx}, socket) do
+    f_idx = String.to_integer(f_idx)
+    o_idx = String.to_integer(o_idx)
+
+    rows = Enum.map(socket.assigns.field_defs_rows, &update_row_remove_option(&1, f_idx, o_idx))
     {:noreply, assign(socket, :field_defs_rows, rows)}
   end
 
@@ -193,6 +220,26 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
      |> assign(:page, 1)
      |> reload_lab_tests()}
   end
+
+  defp update_row_add_option(%{"idx" => idx} = row, target_idx) when idx == target_idx do
+    opts = if is_list(row["options"]), do: row["options"], else: []
+    Map.put(row, "options", opts ++ [""])
+  end
+
+  defp update_row_add_option(row, _target_idx), do: row
+
+  defp update_row_remove_option(%{"idx" => idx} = row, target_idx, o_idx)
+       when idx == target_idx do
+    opts = if is_list(row["options"]), do: row["options"], else: []
+
+    if length(opts) > 1 do
+      Map.put(row, "options", List.delete_at(opts, o_idx))
+    else
+      row
+    end
+  end
+
+  defp update_row_remove_option(row, _target_idx, _o_idx), do: row
 
   defp apply_preset(socket, preset) do
     org_id = socket.assigns.current_scope.organization_id
@@ -263,8 +310,9 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
 
   defp save_lab_test(socket, :edit, attrs) do
     org_id = socket.assigns.current_scope.organization_id
+    lab_test = socket.assigns.lab_test
 
-    case LabTests.update_lab_test(org_id, socket.assigns.lab_test, attrs) do
+    case LabTests.update_lab_test(org_id, lab_test, attrs) do
       {:ok, lab_test} ->
         socket = refresh_categories(socket, org_id)
 
@@ -299,19 +347,46 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     end
   end
 
-  defp field_defs_rows_from_params(field_defs_params) do
+  defp field_defs_rows_from_params(field_defs_params) when is_map(field_defs_params) do
     field_defs_params
+    |> Enum.reject(fn {k, _v} -> String.starts_with?(to_string(k), "_") end)
+    |> Enum.filter(fn {k, _v} -> match?({_, ""}, Integer.parse(to_string(k))) end)
     |> Enum.map(fn {idx, row} ->
+      raw_opts = if is_map(row), do: Map.get(row, "options", []), else: []
+      opts_list = parse_options_param(raw_opts)
+      type = if is_map(row), do: Map.get(row, "type", "number"), else: "number"
+
+      opts_list =
+        if type in ["select", "checkbox"] and opts_list == [] do
+          ["Option 1"]
+        else
+          opts_list
+        end
+
       %{
-        "idx" => String.to_integer(idx),
-        "key" => Map.get(row, "key", ""),
-        "type" => Map.get(row, "type", "number"),
-        "unit" => Map.get(row, "unit", ""),
-        "options" => Map.get(row, "options", "")
+        "idx" => String.to_integer(to_string(idx)),
+        "key" => if(is_map(row), do: Map.get(row, "key", ""), else: ""),
+        "type" => type,
+        "unit" => if(is_map(row), do: Map.get(row, "unit", ""), else: ""),
+        "options" => opts_list
       }
     end)
     |> Enum.sort_by(& &1["idx"])
   end
+
+  defp field_defs_rows_from_params(_), do: []
+
+  defp parse_options_param(opts) when is_map(opts) do
+    opts
+    |> Enum.reject(fn {k, _v} -> String.starts_with?(to_string(k), "_") end)
+    |> Enum.filter(fn {k, _v} -> match?({_, ""}, Integer.parse(to_string(k))) end)
+    |> Enum.sort_by(fn {k, _v} -> String.to_integer(to_string(k)) end)
+    |> Enum.map(fn {_k, v} -> to_string(v) end)
+  end
+
+  defp parse_options_param(opts) when is_list(opts), do: Enum.map(opts, &to_string/1)
+
+  defp parse_options_param(_), do: []
 
   defp build_field_definitions(rows) do
     Enum.reduce_while(rows, {%{}, nil}, fn row, {defs, nil} ->
@@ -324,12 +399,12 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   end
 
   defp classify_row(row) do
-    {key, type, unit, options_raw} = parse_row(row)
+    {key, type, unit, options} = parse_row(row)
 
     cond do
-      key == "" and unit == "" and String.trim(options_raw) == "" -> :skip
+      key == "" and unit == "" and clean_options(options) == [] -> :skip
       key == "" -> {:error, "Give every field a name."}
-      type == "select" -> classify_select_row(key, options_raw)
+      type == "select" -> classify_select_row(key, options)
       true -> {:ok, key, %{"type" => type, "unit" => unit}}
     end
   end
@@ -338,38 +413,58 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     key = String.trim(row["key"] || "")
     type = row["type"] || "number"
     unit = String.trim(row["unit"] || "")
-    options_raw = row["options"] || ""
-    {key, type, unit, options_raw}
+    options = row["options"] || []
+    {key, type, unit, options}
   end
 
-  defp classify_select_row(key, options_raw) do
-    options =
-      options_raw
-      |> String.split(",")
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
+  defp classify_select_row(key, options) do
+    cleaned = clean_options(options)
 
-    if options == [] do
-      {:error, "Give \"#{key}\" at least one choice (separate choices with commas)."}
+    if cleaned == [] do
+      {:error, "Give \"#{key}\" at least one choice option."}
     else
-      {:ok, key, %{"type" => "select", "options" => options}}
+      {:ok, key, %{"type" => "select", "options" => cleaned}}
     end
   end
 
+  defp clean_options(opts) when is_list(opts) do
+    opts |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
+  defp clean_options(opts) when is_binary(opts) do
+    opts |> String.split(",") |> Enum.map(&String.trim/1) |> Enum.reject(&(&1 == ""))
+  end
+
+  defp clean_options(_), do: []
+
   defp field_definitions_to_rows(field_definitions) when map_size(field_definitions) == 0 do
-    [%{"idx" => 0, "key" => "", "type" => "number", "unit" => "", "options" => ""}]
+    [%{"idx" => 0, "key" => "", "type" => "number", "unit" => "", "options" => ["Option 1"]}]
   end
 
   defp field_definitions_to_rows(field_definitions) do
     field_definitions
     |> Enum.with_index()
     |> Enum.map(fn {{key, def_}, idx} ->
+      raw_opts = Map.get(def_, "options", [])
+
+      opts_list =
+        cond do
+          is_list(raw_opts) and raw_opts != [] ->
+            raw_opts
+
+          is_binary(raw_opts) and raw_opts != "" ->
+            raw_opts |> String.split(",") |> Enum.map(&String.trim/1)
+
+          true ->
+            ["Option 1"]
+        end
+
       %{
         "idx" => idx,
         "key" => key,
         "type" => Map.get(def_, "type", "text"),
         "unit" => Map.get(def_, "unit", ""),
-        "options" => def_ |> Map.get("options", []) |> Enum.join(", ")
+        "options" => opts_list
       }
     end)
   end
@@ -480,132 +575,210 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
         :if={@live_action in [:new, :edit]}
         id="lab-test-modal"
         show
+        class="max-w-3xl"
         on_cancel={JS.patch(~p"/lab/tests")}
       >
-        <h2 class="text-base font-semibold mb-4" style="color: #373896;">
-          {if @live_action == :new, do: "New test", else: "Edit test"}
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+          {if @live_action == :new, do: "New test template", else: "Edit test template"}
         </h2>
 
-        <form id="lab-test-preset-form" phx-change="select_preset" class="mb-3">
+        <form id="lab-test-preset-form" phx-change="select_preset" class="mb-5">
           <.input
             type="select"
             name="preset"
             value={@selected_preset}
-            label="Preset (optional)"
+            label="Preset template (optional)"
             options={FieldDefinitionPresets.options()}
             prompt="No preset — enter everything manually"
           />
         </form>
 
-        <.form for={@form} id="lab-test-form" phx-submit="save" phx-change="validate">
-          <div class="grid grid-cols-2 gap-3 mb-3">
-            <.input field={@form[:name]} label="Test name" required />
+        <.form
+          for={@form}
+          id="lab-test-form"
+          phx-submit="save"
+          phx-change="validate"
+          class="space-y-5"
+        >
+          <%!-- Step 1: Test Details --%>
+          <.form_block title="1. Test details">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <.input field={@form[:name]} label="Test name" required />
 
-            <.input
-              field={@form[:category_id]}
-              type="select"
-              label="Category"
-              options={@categories}
-              prompt="Choose a category"
-              required
-            />
-          </div>
-
-          <div class="grid grid-cols-2 gap-3 mb-3">
-            <.input field={@form[:price]} type="number" label="Price" step="0.01" min="0" required />
-            <div class="flex items-end pb-1">
-              <.input field={@form[:is_active]} type="checkbox" label="Active" />
-            </div>
-          </div>
-
-          <div class="mb-3">
-            <label class="block text-sm font-medium mb-1">Test results</label>
-            <p class="text-sm mb-2" style="color: var(--thamani-pewter);">
-              Add one row for each result this test reports.
-            </p>
-
-            <div
-              class="grid grid-cols-12 gap-2 px-1 mb-1 text-xs font-medium"
-              style="color: var(--thamani-pewter);"
-            >
-              <div class="col-span-5">Field name</div>
-              <div class="col-span-3">Type</div>
-              <div class="col-span-3">Unit or choices</div>
+              <.input
+                field={@form[:category_id]}
+                type="select"
+                label="Category"
+                options={@categories}
+                prompt="Choose a category"
+                required
+              />
             </div>
 
-            <div class="divide-y divide-base-300 border-t border-b border-base-300">
-              <div
-                :for={row <- @field_defs_rows}
-                class="grid grid-cols-12 gap-2 items-center py-2"
-              >
-                <div class="col-span-5">
-                  <.input
-                    type="text"
-                    name={"field_defs[#{row["idx"]}][key]"}
-                    value={row["key"]}
-                    placeholder="e.g. Haemoglobin"
-                    class="thamani-input"
-                  />
-                </div>
-                <div class="col-span-3">
-                  <.input
-                    type="select"
-                    name={"field_defs[#{row["idx"]}][type]"}
-                    value={row["type"]}
-                    options={[{"Number", "number"}, {"Text", "text"}, {"Multiple choice", "select"}]}
-                  />
-                </div>
-                <div class="col-span-3">
-                  <.input
-                    :if={row["type"] != "select"}
-                    type="text"
-                    name={"field_defs[#{row["idx"]}][unit]"}
-                    value={row["unit"]}
-                    placeholder="e.g. g/dL"
-                  />
-                  <.input
-                    :if={row["type"] == "select"}
-                    type="text"
-                    name={"field_defs[#{row["idx"]}][options]"}
-                    value={row["options"]}
-                    placeholder="e.g. Positive, Negative"
-                  />
-                </div>
-                <div class="col-span-1 flex justify-end">
-                  <button
-                    type="button"
-                    phx-click="remove_field_row"
-                    phx-value-idx={row["idx"]}
-                    aria-label="Remove field"
-                    class="relative transition-[opacity,transform] hover:opacity-70 active:scale-[0.96] after:absolute after:inset-[-10px] after:content-['']"
-                    style="color: var(--thamani-pewter);"
-                  >
-                    <.icon name="hero-x-mark" class="size-5" />
-                  </button>
-                </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <.input
+                field={@form[:price]}
+                type="number"
+                label="Price (KES)"
+                step="0.01"
+                min="0"
+                required
+              />
+              <div class="flex items-center pt-6">
+                <.input field={@form[:is_active]} type="checkbox" label="Active catalog entry" />
               </div>
             </div>
+          </.form_block>
 
-            <.button type="button" phx-click="add_field_row" variant="ghost" class="mt-2">
-              + Add field
-            </.button>
+          <%!-- Step 2: Result Fields & Options --%>
+          <.form_block title="2. Result fields & options">
+            <:actions>
+              <.button
+                id="add-field-row-btn"
+                type="button"
+                phx-click="add_field_row"
+                variant="ghost"
+                class="text-xs py-1 px-2.5 h-auto min-h-0"
+              >
+                + Add Field
+              </.button>
+            </:actions>
 
-            <p :if={@field_defs_error} class="mt-2 text-sm" style="color: #C21F17;">
+            <p class="text-xs text-thamani-pewter mb-3">
+              Configure each result field. Multiple choice fields let you define specific options below.
+            </p>
+
+            <div class="space-y-4">
+              <%= for row <- @field_defs_rows do %>
+                <% opts = if is_list(row["options"]), do: row["options"], else: ["Option 1"] %>
+                <% opts = if opts == [], do: ["Option 1"], else: opts %>
+                <div class="rounded-xl border border-thamani-stone bg-thamani-canvas p-4 space-y-3">
+                  <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                    <div class={
+                      if row["type"] == "select", do: "md:col-span-6", else: "md:col-span-5"
+                    }>
+                      <.input
+                        type="text"
+                        name={"field_defs[#{row["idx"]}][key]"}
+                        value={row["key"]}
+                        label="Field name"
+                        placeholder="e.g. Haemoglobin, Result, Species"
+                        required
+                      />
+                    </div>
+                    <div class={
+                      if row["type"] == "select", do: "md:col-span-5", else: "md:col-span-4"
+                    }>
+                      <.input
+                        type="select"
+                        name={"field_defs[#{row["idx"]}][type]"}
+                        value={row["type"]}
+                        label="Result type"
+                        options={[
+                          {"Number", "number"},
+                          {"Text", "text"},
+                          {"Multiple choice", "select"}
+                        ]}
+                      />
+                    </div>
+                    <div :if={row["type"] != "select"} class="md:col-span-2">
+                      <.input
+                        type="text"
+                        name={"field_defs[#{row["idx"]}][unit]"}
+                        value={row["unit"]}
+                        label="Unit"
+                        placeholder="e.g. g/dL"
+                      />
+                    </div>
+                    <div class="md:col-span-1 flex justify-end pt-7">
+                      <button
+                        :if={length(@field_defs_rows) > 1}
+                        type="button"
+                        phx-click="remove_field_row"
+                        phx-value-idx={row["idx"]}
+                        class="flex size-7 items-center justify-center rounded-md text-thamani-error hover:bg-thamani-error/10 transition-colors"
+                        aria-label="Remove field"
+                      >
+                        <.icon name="hero-trash" class="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <%!-- Choice options for Multiple choice (select) & Checkbox types --%>
+                  <%= if row["type"] in ["select", "checkbox"] do %>
+                    <div class="border-t border-thamani-stone/60 pt-3 mt-2">
+                      <div class="flex items-center justify-between mb-2">
+                        <span class="thamani-label" style="margin-bottom: 0;">
+                          {if row["type"] == "checkbox",
+                            do: "Checkbox options",
+                            else: "Choice options"}
+                        </span>
+                        <.button
+                          type="button"
+                          phx-click="add_field_option"
+                          phx-value-field_idx={row["idx"]}
+                          variant="ghost"
+                          class="text-xs py-1 px-2.5 h-auto min-h-0 text-thamani-accent font-medium hover:bg-thamani-accent/10"
+                        >
+                          + Add option
+                        </.button>
+                      </div>
+
+                      <div class="space-y-2">
+                        <%= for {opt_val, opt_idx} <- Enum.with_index(opts) do %>
+                          <div class="flex items-center gap-2">
+                            <div class="flex items-center gap-1 min-w-6 justify-end text-thamani-pewter">
+                              <.icon
+                                name={
+                                  if row["type"] == "checkbox",
+                                    do: "hero-check-square",
+                                    else: "hero-check-circle"
+                                }
+                                class="w-3.5 h-3.5 opacity-60 text-thamani-accent"
+                              />
+                              <span class="text-xs font-mono">{opt_idx + 1}.</span>
+                            </div>
+                            <.input
+                              type="text"
+                              name={"field_defs[#{row["idx"]}][options][#{opt_idx}]"}
+                              value={opt_val}
+                              placeholder={"Option #{opt_idx + 1}"}
+                              class="flex-1 py-1.5 px-3 text-xs h-9"
+                            />
+                            <button
+                              :if={length(opts) > 1}
+                              type="button"
+                              phx-click="remove_field_option"
+                              phx-value-field_idx={row["idx"]}
+                              phx-value-opt_idx={opt_idx}
+                              class="flex size-7 items-center justify-center rounded-md text-thamani-error hover:bg-thamani-error/10 transition-colors"
+                              aria-label="Remove option"
+                            >
+                              <.icon name="hero-trash" class="w-4 h-4" />
+                            </button>
+                          </div>
+                        <% end %>
+                      </div>
+                    </div>
+                  <% end %>
+                </div>
+              <% end %>
+            </div>
+
+            <p :if={@field_defs_error} class="mt-2 text-sm text-thamani-error font-medium">
               {@field_defs_error}
             </p>
             <p
               :if={!@field_defs_error && @form[:field_definitions].errors != []}
-              class="mt-2 text-sm"
-              style="color: #C21F17;"
+              class="mt-2 text-sm text-thamani-error font-medium"
             >
-              Add at least one field.
+              Add at least one field definition.
             </p>
-          </div>
+          </.form_block>
 
-          <div class="flex gap-2">
-            <.button variant="primary">Save</.button>
-            <.button patch={~p"/lab/tests"}>Cancel</.button>
-          </div>
+          <.button type="submit" variant="primary" class="w-full">
+            Save Test
+          </.button>
         </.form>
       </.modal>
 

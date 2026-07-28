@@ -18,15 +18,15 @@ defmodule ThamaniDawaWeb.LabPatientLive.Show do
 
   def render(assigns) do
     ~H"""
-    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path="/lab/patients">
+    <Layouts.lab_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/lab/patients"
+      back={~p"/lab/patients"}
+    >
       <.header icon="hero-user">
         {@patient.full_name}
         <:subtitle>Patient details and visit history.</:subtitle>
-        <:actions>
-          <.button patch={~p"/lab/patients"} variant="ghost">
-            <.icon name="hero-arrow-left" class="size-4" /> Back to patients
-          </.button>
-        </:actions>
       </.header>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

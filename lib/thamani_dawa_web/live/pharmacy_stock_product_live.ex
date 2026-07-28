@@ -37,9 +37,6 @@ defmodule ThamaniDawaWeb.PharmacyStockProductLive do
       <.header icon="hero-cube">
         {product_name(@product)}
         <:subtitle>Every batch of this product, across every site — read-only.</:subtitle>
-        <:actions>
-          <.button navigate={~p"/pharmacy/stock"}>Back to stock</.button>
-        </:actions>
       </.header>
 
       <.table

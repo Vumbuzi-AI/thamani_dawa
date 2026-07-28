@@ -50,6 +50,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
     |> assign(:patient_form, to_form(Patient.changeset(%Patient{}, %{}), as: :patient))
     |> assign(:test_ids, [0])
     |> assign(:next_test_id, 1)
+    |> assign(:tests_params, %{})
   end
 
   defp apply_action(socket, :index), do: socket
@@ -85,22 +86,27 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   end
 
   def handle_event("add_test", _params, socket) do
+    next_id = socket.assigns.next_test_id
+
     {:noreply,
      socket
-     |> update(:test_ids, &(&1 ++ [socket.assigns.next_test_id]))
+     |> update(:test_ids, &(&1 ++ [next_id]))
      |> update(:next_test_id, &(&1 + 1))}
   end
 
   def handle_event("remove_test", %{"id" => id}, socket) do
     id = String.to_integer(id)
-    test_ids = List.delete(socket.assigns.test_ids, id)
-    test_ids = if test_ids == [], do: socket.assigns.test_ids, else: test_ids
-    {:noreply, assign(socket, :test_ids, test_ids)}
+
+    {:noreply,
+     socket
+     |> update(:test_ids, &List.delete(&1, id))
+     |> update(:tests_params, &Map.delete(&1, to_string(id)))}
   end
 
   def handle_event("validate", params, socket) do
     header_attrs = params["lab_order"] || %{}
     patient_attrs = params["patient"] || %{}
+    tests_params = params["tests"] || %{}
 
     changeset =
       %LabOrder{}
@@ -116,6 +122,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
      socket
      |> assign(:header_form, to_form(changeset, as: :lab_order))
      |> assign(:patient_form, to_form(patient_changeset, as: :patient))
+     |> assign(:tests_params, tests_params)
      |> assign(:total_amount, compute_total(params, socket.assigns.lab_tests))}
   end
 
@@ -324,7 +331,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         class="max-w-4xl"
         on_cancel={JS.patch(~p"/lab/orders")}
       >
-        <h2 class="font-semibold mb-2">New lab order</h2>
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">New lab order</h2>
 
         <.form
           for={@header_form}
@@ -386,140 +393,164 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           </section>
 
           <%!-- Step 2: Tests --%>
-          <section class="rounded-xl border border-thamani-stone bg-thamani-snow">
-            <div class="flex items-center justify-between gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
-              <h3 class="text-base font-semibold text-thamani-forest">2. Tests</h3>
-              <.button id="add-lab-test" type="button" phx-click="add_test" variant="ghost">
+          <.form_block title="2. Tests">
+            <:actions>
+              <.button
+                id="add-lab-test"
+                type="button"
+                phx-click="add_test"
+                variant="ghost"
+                class="text-xs py-1 px-2.5 h-auto min-h-0"
+              >
                 + Add Test
               </.button>
-            </div>
-            <div class="space-y-4 p-4 sm:p-5">
-              <div
-                :for={id <- @test_ids}
-                class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-xl border border-thamani-stone bg-thamani-snow p-4 [&>div]:mb-0"
-              >
-                <.input
-                  type="select"
-                  name={"tests[#{id}][lab_test_id]"}
-                  label="Test"
-                  value={nil}
-                  options={Enum.map(@lab_tests, &{"#{&1.name} — KES #{&1.price}", &1.id})}
-                  prompt="Choose a test"
-                />
-                <.input
-                  type="select"
-                  name={"tests[#{id}][sample_type]"}
-                  label="Sample type"
-                  value={nil}
-                  options={@sample_types}
-                  prompt="Choose sample type"
-                />
-                <.button
-                  type="button"
-                  variant="ghost-delete"
-                  phx-click="remove_test"
-                  phx-value-id={id}
-                >
-                  <.icon name="hero-trash" class="w-4 h-4" /> Remove
-                </.button>
-              </div>
-              <div
-                :if={@test_ids == []}
-                class="text-center text-base-content/50 py-4"
-              >
+            </:actions>
+
+            <div class="space-y-4">
+              <%= for {id, idx} <- Enum.with_index(@test_ids) do %>
+                <% test_param = Map.get(@tests_params, to_string(id), %{}) %>
+                <% selected_test_id = test_param["lab_test_id"] %>
+                <% selected_sample_type = test_param["sample_type"] %>
+                <% selected_test =
+                  Enum.find(@lab_tests, &(to_string(&1.id) == to_string(selected_test_id))) %>
+                <div class="rounded-xl border border-thamani-stone bg-thamani-canvas p-4 space-y-3">
+                  <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-2">
+                      <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-thamani-lime text-xs font-semibold text-thamani-forest">
+                        {idx + 1}
+                      </span>
+                      <h4 class="font-medium text-sm text-thamani-forest">
+                        Test {idx + 1}
+                      </h4>
+                      <span
+                        :if={selected_test}
+                        class="text-xs font-semibold text-thamani-forest bg-thamani-snow px-2 py-0.5 rounded border border-thamani-stone"
+                      >
+                        KES {selected_test.price}
+                      </span>
+                    </div>
+                    <button
+                      :if={length(@test_ids) > 1}
+                      type="button"
+                      phx-click="remove_test"
+                      phx-value-id={id}
+                      class="flex size-7 shrink-0 items-center justify-center rounded-md text-thamani-error hover:bg-thamani-error/10 transition-colors"
+                      aria-label="Remove test"
+                    >
+                      <.icon name="hero-trash" class="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <.input
+                      type="select"
+                      name={"tests[#{id}][lab_test_id]"}
+                      label="Test"
+                      value={selected_test_id}
+                      options={Enum.map(@lab_tests, &{"#{&1.name} — KES #{&1.price}", &1.id})}
+                      prompt="Choose a test"
+                      required
+                    />
+                    <.input
+                      type="select"
+                      name={"tests[#{id}][sample_type]"}
+                      label="Sample type"
+                      value={selected_sample_type}
+                      options={@sample_types}
+                      prompt="Choose sample type"
+                      required
+                    />
+                  </div>
+                </div>
+              <% end %>
+
+              <div :if={@test_ids == []} class="text-center text-thamani-pewter py-4">
                 No tests added. Click "+ Add Test" to select lab tests.
               </div>
-              <div class="flex justify-end pt-3 border-t border-thamani-stone">
-                <span class="text-sm font-semibold text-thamani-forest">
-                  Total: KES {@total_amount}
-                </span>
-              </div>
             </div>
-          </section>
+
+            <div class="flex justify-end pt-3 border-t border-thamani-stone/60">
+              <span class="text-sm font-semibold text-thamani-forest">
+                Total: KES {@total_amount}
+              </span>
+            </div>
+          </.form_block>
 
           <%!-- Step 3: Details and payment --%>
-          <section class="rounded-xl border border-thamani-stone bg-thamani-snow">
-            <div class="rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
-              <h3 class="text-base font-semibold text-thamani-forest">3. Details and payment</h3>
-            </div>
-            <div class="space-y-4 p-4 sm:p-5">
+          <.form_block title="3. Details and payment">
+            <.input
+              :if={@site_locked}
+              field={@header_form[:site_id]}
+              type="hidden"
+            />
+            <.input
+              :if={not @site_locked}
+              field={@header_form[:site_id]}
+              type="select"
+              label="Site"
+              options={Enum.map(@sites, &{&1.name, &1.id})}
+              prompt="Choose a site"
+              required
+            />
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <.input
-                :if={@site_locked}
-                field={@header_form[:site_id]}
-                type="hidden"
+                field={@header_form[:prescriber_name]}
+                label="Prescriber name"
+                placeholder="e.g. Dr. Jane Doe"
               />
               <.input
-                :if={not @site_locked}
-                field={@header_form[:site_id]}
+                field={@header_form[:urgency]}
                 type="select"
-                label="Site"
-                options={Enum.map(@sites, &{&1.name, &1.id})}
-                prompt="Choose a site"
-                required
+                label="Urgency"
+                options={Enum.map(@urgencies, &{Phoenix.Naming.humanize(&1), &1})}
+                prompt="Choose urgency"
               />
+            </div>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <.input
-                  field={@header_form[:prescriber_name]}
-                  label="Prescriber name"
-                  placeholder="e.g. Dr. Jane Doe"
-                />
-                <.input
-                  field={@header_form[:urgency]}
-                  type="select"
-                  label="Urgency"
-                  options={Enum.map(@urgencies, &{Phoenix.Naming.humanize(&1), &1})}
-                  prompt="Choose urgency"
-                />
-              </div>
+            <.input
+              field={@header_form[:lab_request]}
+              type="textarea"
+              label="Lab request / notes"
+              placeholder="Instructions or clinical history"
+            />
 
+            <.input
+              field={@header_form[:is_referral]}
+              type="checkbox"
+              label="This order was referred from another facility"
+            />
+
+            <div
+              :if={Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_referral].value)}
+              class="grid grid-cols-1 md:grid-cols-3 gap-4"
+            >
+              <.input field={@header_form[:referring_facility]} label="Referring facility" required />
+              <.input field={@header_form[:referring_doctor]} label="Referring doctor" required />
+              <.date_picker
+                field={@header_form[:referred_date]}
+                label="Referred date"
+                placeholder="Choose date"
+              />
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-thamani-stone">
               <.input
-                field={@header_form[:lab_request]}
-                type="textarea"
-                label="Lab request / notes"
-                placeholder="Instructions or clinical history"
+                field={@header_form[:payment_type]}
+                type="select"
+                label="Payment Method"
+                options={ThamaniDawa.PaymentMethods.all()}
+                prompt="Select payment method"
               />
-
-              <.input
-                field={@header_form[:is_referral]}
-                type="checkbox"
-                label="This order was referred from another facility"
-              />
-
-              <div
-                :if={Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_referral].value)}
-                class="grid grid-cols-1 md:grid-cols-3 gap-4"
-              >
-                <.input field={@header_form[:referring_facility]} label="Referring facility" required />
-                <.input field={@header_form[:referring_doctor]} label="Referring doctor" required />
-                <.date_picker
-                  field={@header_form[:referred_date]}
-                  label="Referred date"
-                  placeholder="Choose date"
-                />
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-thamani-stone">
-                <.input
-                  field={@header_form[:payment_type]}
-                  type="select"
-                  label="Payment Method"
-                  options={ThamaniDawa.PaymentMethods.all()}
-                  prompt="Select payment method"
-                />
-                <div class="flex items-center pt-6">
-                  <.input field={@header_form[:has_paid]} type="checkbox" label="Paid" />
-                </div>
+              <div class="flex items-center pt-6">
+                <.input field={@header_form[:has_paid]} type="checkbox" label="Paid" />
               </div>
             </div>
-          </section>
+          </.form_block>
 
-          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <.button type="button" patch={~p"/lab/orders"} variant="ghost">Cancel</.button>
-            <.button type="submit" variant="primary" phx-disable-with="Creating order…">
-              Create Order
-            </.button>
-          </div>
+          <.button type="submit" variant="primary" phx-disable-with="Creating order…" class="w-full">
+            Create Order
+          </.button>
         </.form>
       </.modal>
 

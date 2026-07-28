@@ -9,6 +9,7 @@ defmodule ThamaniDawa.LabOrders.LabConsumableUsage do
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
     belongs_to :lab_order, ThamaniDawa.LabOrders.LabOrder
+    belongs_to :lab_order_result, ThamaniDawa.LabOrders.LabOrderResult
     belongs_to :batch, ThamaniDawa.Batches.Batch
     belongs_to :used_by, ThamaniDawa.Accounts.User, foreign_key: :used_by_id
 
@@ -18,10 +19,19 @@ defmodule ThamaniDawa.LabOrders.LabConsumableUsage do
   @doc false
   def changeset(lab_consumable_usage, attrs) do
     lab_consumable_usage
-    |> cast(attrs, [:lab_order_id, :batch_id, :quantity, :used_by_id, :purpose, :used_at])
+    |> cast(attrs, [
+      :lab_order_id,
+      :lab_order_result_id,
+      :batch_id,
+      :quantity,
+      :used_by_id,
+      :purpose,
+      :used_at
+    ])
     |> validate_required([:batch_id, :quantity])
     |> validate_number(:quantity, greater_than: 0)
     |> foreign_key_constraint(:lab_order_id)
+    |> foreign_key_constraint(:lab_order_result_id)
     |> foreign_key_constraint(:batch_id)
     |> foreign_key_constraint(:used_by_id)
   end

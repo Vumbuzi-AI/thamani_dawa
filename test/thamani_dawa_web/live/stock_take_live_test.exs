@@ -59,7 +59,7 @@ defmodule ThamaniDawaWeb.StockTakeLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock-takes/new")
 
-      lv |> element("#stock-take-modal a", "Cancel") |> render_click()
+      lv |> element("#stock-take-modal button[aria-label='Cancel']") |> render_click()
 
       assert_patch(lv, ~p"/pharmacy/stock-takes")
       refute has_element?(lv, "#stock-take-modal")

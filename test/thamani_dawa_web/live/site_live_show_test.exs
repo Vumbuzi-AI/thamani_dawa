@@ -246,11 +246,9 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
       |> Repo.update_all(set: [inserted_at: DateTime.add(DateTime.utc_now(), -8, :day)])
 
       {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
-      refute html =~ "site-custom-range-form"
       assert stat_value(html, "Patient visits") == "0"
 
-      html = lv |> element("button", "Custom") |> render_click()
-      assert html =~ "site-custom-range-form"
+      _html = lv |> element("button", "Filters") |> render_click()
 
       from = Date.utc_today() |> Date.add(-10) |> Date.to_iso8601()
       to = Date.utc_today() |> Date.to_iso8601()
@@ -266,7 +264,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
 
-      lv |> element("button", "Custom") |> render_click()
+      lv |> element("button", "Filters") |> render_click()
 
       html =
         render_submit(lv, "apply_custom_range", %{"from" => "not-a-date", "to" => "also-not"})

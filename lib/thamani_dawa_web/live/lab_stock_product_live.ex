@@ -40,9 +40,6 @@ defmodule ThamaniDawaWeb.LabStockProductLive do
       <.header icon="hero-cube">
         {product_name(@product)}
         <:subtitle>Every batch of this product across lab sites — read-only.</:subtitle>
-        <:actions>
-          <.button navigate={~p"/lab/stock"}>Back to stock</.button>
-        </:actions>
       </.header>
 
       <.table

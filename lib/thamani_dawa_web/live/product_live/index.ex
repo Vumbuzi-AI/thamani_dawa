@@ -417,7 +417,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
       >
         <div class="space-y-6">
           <div>
-            <h2 class="text-xl font-semibold">
+            <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
               {if @live_action == :new, do: "Add a product", else: "Edit product"}
             </h2>
           </div>
@@ -488,11 +488,6 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                   variant="ghost"
                 >
                   Skip
-                </.button>
-                <%!-- Matches the form step's affordance, and keeps the modal
-                      dismissible without relying on the JS-driven close button. --%>
-                <.button type="button" patch={~p"/org/products"} variant="ghost">
-                  Cancel
                 </.button>
               </div>
             </form>
@@ -615,16 +610,8 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
               <.input field={@form[:is_active]} type="checkbox" label="Active" />
 
-              <div class="flex gap-3 pt-4 border-t">
-                <.button variant="primary" class="flex-1">Save Product</.button>
-                <.button
-                  type="button"
-                  patch={if @back_path == ~p"/org/products", do: @back_path}
-                  navigate={if @back_path != ~p"/org/products", do: @back_path}
-                  variant="ghost"
-                >
-                  Cancel
-                </.button>
+              <div class="pt-4 border-t">
+                <.button variant="primary" class="w-full">Save Product</.button>
               </div>
             </.form>
           </div>

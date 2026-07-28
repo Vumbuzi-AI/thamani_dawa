@@ -224,7 +224,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
         show
         on_cancel={JS.patch(~p"/org/sites")}
       >
-        <h2 class="font-semibold mb-2">
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
           {if @live_action == :new, do: "Add a site", else: "Edit site"}
         </h2>
         <form id="site-form" phx-submit="save" phx-change="validate">
@@ -251,9 +251,8 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             class="w-full h-64 rounded-lg mt-2"
           >
           </div>
-          <div class="flex gap-2 mt-2">
-            <.button variant="primary">Save</.button>
-            <.button patch={~p"/org/sites"}>Cancel</.button>
+          <div class="mt-2">
+            <.button variant="primary" class="w-full">Save</.button>
           </div>
         </form>
       </.modal>

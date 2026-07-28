@@ -146,11 +146,11 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           lab_test_id: ctx.lab_test.id
         })
 
-      {:ok, view, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/#{lab_order.id}")
-
-      view
-      |> element(~s(button[phx-click="start_collect"][phx-value-id="#{result.id}"]))
-      |> render_click()
+      {:ok, view, _html} =
+        live(
+          log_in_user(ctx.conn, ctx.admin),
+          ~p"/lab/orders/#{lab_order.id}/results/#{result.id}/collect"
+        )
 
       view
       |> form("#collect-sample-form", %{
@@ -424,6 +424,56 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
       expected = ctx.lab_test.price |> Decimal.add(second_test.price) |> Decimal.to_string()
       assert html =~ expected
+    end
+
+    test "renders test item inputs inline without Done or Edit buttons", ctx do
+      {:ok, view, html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/new")
+
+      assert html =~ "2. Tests"
+      refute html =~ "button[phx-click=collapse_test]"
+      refute html =~ "button[phx-click=edit_test]"
+      assert has_element?(view, "select[name='tests[0][lab_test_id]']")
+      assert has_element?(view, "select[name='tests[0][sample_type]']")
+    end
+  end
+
+  describe "checkbox lab results" do
+    test "renders checkbox options in edit result modal and visual preview badges on show page",
+         ctx do
+      checkbox_lab_test =
+        lab_test_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          name: "Parasite Screening",
+          field_definitions: %{
+            "species" => %{"type" => "checkbox", "options" => ["P. falciparum", "P. vivax"]}
+          }
+        })
+
+      lab_order = lab_order_fixture(%{organization_id: ctx.admin.organization_id})
+
+      result =
+        lab_order_result_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          lab_order_id: lab_order.id,
+          lab_test_id: checkbox_lab_test.id
+        })
+
+      conn = log_in_user(build_conn(), ctx.admin)
+      {:ok, lv, _html} = live(conn, ~p"/lab/orders/#{lab_order.id}/results/#{result.id}/edit")
+
+      assert render(lv) =~ "P. falciparum"
+      assert render(lv) =~ "P. vivax"
+
+      # Save results with selected checkbox option
+      {:ok, _show_lv, html} =
+        lv
+        |> form("#result-entry-form", %{"values" => %{"species" => ["P. falciparum"]}})
+        |> render_submit()
+        |> follow_redirect(conn, ~p"/lab/orders/#{lab_order.id}")
+
+      # Visual preview badge with check icon is rendered instead of raw CSV entry
+      assert html =~ "P. falciparum"
+      assert html =~ "hero-check"
     end
   end
 

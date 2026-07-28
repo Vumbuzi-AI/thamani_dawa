@@ -400,7 +400,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         class="max-w-4xl"
         on_cancel={JS.patch(~p"/pharmacy/prescriptions")}
       >
-        <h2 class="font-semibold mb-2">New prescription</h2>
+        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">New prescription</h2>
 
         <.form
           for={@header_form}
@@ -727,12 +727,14 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
             </div>
           </section>
 
-          <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-            <.button type="button" patch={~p"/pharmacy/prescriptions"} variant="ghost">Cancel</.button>
-            <.button type="submit" variant="primary" phx-disable-with="Creating prescription…">
-              Create Prescription
-            </.button>
-          </div>
+          <.button
+            type="submit"
+            variant="primary"
+            phx-disable-with="Creating prescription…"
+            class="w-full"
+          >
+            Create Prescription
+          </.button>
         </.form>
       </.modal>
 

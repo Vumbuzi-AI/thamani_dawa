@@ -49,7 +49,7 @@ defmodule ThamaniDawaWeb.SupplierLiveTest do
       assert has_element?(lv, "#supplier-modal")
       assert html =~ "Add a supplier"
 
-      html = lv |> element("#supplier-modal a", "Cancel") |> render_click()
+      html = lv |> element("#supplier-modal button[aria-label='Cancel']") |> render_click()
 
       refute has_element?(lv, "#supplier-modal")
       assert html =~ "+ Add supplier"

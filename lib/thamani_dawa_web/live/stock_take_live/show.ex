@@ -153,9 +153,6 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
       <div class="space-y-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <.button navigate={~p"/pharmacy/stock-takes"} class="mb-3 gap-2">
-              <.icon name="hero-arrow-left" class="size-4" /> All stock takes
-            </.button>
             <h1 class="text-2xl font-semibold tracking-tight text-slate-900">
               Stock take — {@site.name}
             </h1>
