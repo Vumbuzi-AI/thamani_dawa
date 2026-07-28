@@ -27,10 +27,18 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
     end
 
     test "pharma_lab staff can access the catalog", %{conn: conn, admin: admin} do
-      lab_site = ThamaniDawa.SitesFixtures.site_fixture(%{organization_id: admin.organization_id, type: :pharmacy_lab})
+      lab_site =
+        ThamaniDawa.SitesFixtures.site_fixture(%{
+          organization_id: admin.organization_id,
+          type: :pharmacy_lab
+        })
 
       pharma_lab =
-        staff_fixture(%{role: :pharma_lab, organization_id: admin.organization_id, sites: [lab_site]})
+        staff_fixture(%{
+          role: :pharma_lab,
+          organization_id: admin.organization_id,
+          sites: [lab_site]
+        })
 
       {:ok, _view, html} = live(log_in_user(conn, pharma_lab), ~p"/lab/tests")
       assert html =~ "Catalog"

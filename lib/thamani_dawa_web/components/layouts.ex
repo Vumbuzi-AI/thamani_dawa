@@ -95,6 +95,11 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :inner_block, required: true
 
   def lab_shell(assigns) do
+    assigns =
+      assign(assigns, :nav_badges, %{
+        ~p"/lab/receive-stock" => pending_batches_count(assigns.current_scope, :lab)
+      })
+
     ~H"""
     <.sidebar_shell
       flash={@flash}
@@ -103,6 +108,7 @@ defmodule ThamaniDawaWeb.Layouts do
       title="Thamani Dawa"
       section_label="Lab"
       base_path="/lab"
+      nav_badges={@nav_badges}
       nav_items={[
         {"Dashboard", "hero-squares-2x2", ~p"/lab"},
         {"Patients", "hero-user-group", ~p"/lab/patients"},
@@ -130,7 +136,7 @@ defmodule ThamaniDawaWeb.Layouts do
   def pharmacy_shell(assigns) do
     assigns =
       assign(assigns, :nav_badges, %{
-        ~p"/pharmacy/receive-stock" => pending_batches_count(assigns.current_scope)
+        ~p"/pharmacy/receive-stock" => pending_batches_count(assigns.current_scope, :pharmacy)
       })
 
     ~H"""
@@ -157,11 +163,38 @@ defmodule ThamaniDawaWeb.Layouts do
     """
   end
 
-  defp pending_batches_count(scope) do
-    scope.organization_id
-    |> Batches.list_pending_batches()
-    |> SiteScoping.for_current_site(scope)
-    |> length()
+  defp pending_batches_count(scope, portal_type) do
+    batches =
+      scope.organization_id
+      |> Batches.list_pending_batches()
+      |> SiteScoping.for_current_site(scope)
+
+    case portal_type do
+      :pharmacy ->
+        sites_by_id =
+          scope.organization_id
+          |> ThamaniDawa.Sites.list_sites()
+          |> Map.new(&{&1.id, &1})
+
+        Enum.count(batches, fn batch ->
+          site = sites_by_id[batch.site_id]
+          site && Site.pharmacy?(site)
+        end)
+
+      :lab ->
+        sites_by_id =
+          scope.organization_id
+          |> ThamaniDawa.Sites.list_sites()
+          |> Map.new(&{&1.id, &1})
+
+        Enum.count(batches, fn batch ->
+          site = sites_by_id[batch.site_id]
+          site && Site.lab?(site)
+        end)
+
+      :all ->
+        length(batches)
+    end
   end
 
   @doc """
