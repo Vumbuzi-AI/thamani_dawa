@@ -40,9 +40,20 @@ defmodule ThamaniDawa.Batches do
     |> Repo.paginate(page: page)
   end
 
-  defp filter_by_site_opt(query, site) when is_binary(site) and site != "" do
-    site_id = String.to_integer(site)
+  defp filter_by_site_opt(query, site_id) when is_integer(site_id) do
     from([b, _p] in query, where: b.site_id == ^site_id)
+  end
+
+  defp filter_by_site_opt(query, site) when is_binary(site) and site != "" do
+    case Integer.parse(site) do
+      {site_id, ""} ->
+        filter_by_site_opt(query, site_id)
+
+      # A malformed filter value is dropped rather than raising. Safe because the
+      # permitted-site scoping is a separate argument, applied independently.
+      _ ->
+        query
+    end
   end
 
   defp filter_by_site_opt(query, _), do: query

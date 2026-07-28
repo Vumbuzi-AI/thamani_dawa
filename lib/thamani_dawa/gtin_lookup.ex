@@ -29,7 +29,7 @@ defmodule ThamaniDawa.GtinLookup do
   """
   @spec lookup(String.t()) ::
           {:ok, prefill}
-          | {:error, :invalid_gtin | :not_found | :timeout | :provider_error}
+          | {:error, :invalid_gtin | :not_found | :timeout | :unauthorized | :provider_error}
   def lookup(raw_gtin) do
     with {:ok, normalized} <- Gtin.normalize(raw_gtin) do
       request(normalized)
@@ -52,6 +52,13 @@ defmodule ThamaniDawa.GtinLookup do
 
       {:ok, []} ->
         {:error, :not_found}
+
+      # Our credentials were rejected: every lookup will keep failing until the key
+      # is fixed, and users only see "couldn't reach the service". Log loudly so it
+      # doesn't masquerade as a run of GTIN misses.
+      {:error, :unauthorized} ->
+        Logger.warning("GTIN lookup rejected by GS1: API key unauthorized (401/403)")
+        {:error, :unauthorized}
 
       {:error, reason} ->
         Logger.debug("GTIN lookup for #{normalized_gtin} failed: #{inspect(reason)}")

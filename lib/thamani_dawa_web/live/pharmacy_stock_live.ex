@@ -211,7 +211,10 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   defp sanitize_site_filter("", _allowed_site_ids), do: ""
 
   defp sanitize_site_filter(site_id_str, allowed_site_ids) do
-    if String.to_integer(site_id_str) in allowed_site_ids, do: site_id_str, else: ""
+    case Integer.parse(site_id_str) do
+      {site_id, ""} -> if site_id in allowed_site_ids, do: site_id_str, else: ""
+      _ -> ""
+    end
   end
 
   defp active_filter_count(filters) do
@@ -229,9 +232,9 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   end
 
   defp site_label(site_id_str, sites_by_id) do
-    case sites_by_id[String.to_integer(site_id_str)] do
-      nil -> site_id_str
-      site -> site.name
+    case Integer.parse(site_id_str) do
+      {site_id, ""} -> if site = sites_by_id[site_id], do: site.name, else: site_id_str
+      _ -> site_id_str
     end
   end
 

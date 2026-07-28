@@ -163,6 +163,16 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
       refute html =~ "LAB-BATCH-002"
     end
 
+    test "a malformed site filter is ignored rather than crashing", %{conn: conn, tech: tech} do
+      {:ok, view, _html} = live(log_in_user(conn, tech), ~p"/lab/stock")
+
+      view |> element("#batches-tab") |> render_click()
+
+      html = render_submit(view, "apply_filters", %{"filters" => %{"site" => "abc"}})
+
+      assert html =~ "LAB-BATCH-001"
+    end
+
     test "drilling down to product details lists product batches at lab sites", %{
       conn: conn,
       tech: tech,

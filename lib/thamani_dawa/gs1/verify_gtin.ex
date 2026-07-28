@@ -17,13 +17,18 @@ defmodule ThamaniDawa.VerifyGtin do
   @doc """
   Verifies `gtin` against the registry.
 
-  Returns `{:ok, body}` for a 2xx carrying results, `{:ok, :not_verified}` for a
-  2xx carrying none, `{:error, :provider_error}` for any non-2xx, and
-  `{:error, :timeout}` for any transport failure. Callers (`ThamaniDawa.GtinLookup`)
-  decide how to surface each case.
+  Returns `{:ok, body}` for a 2xx carrying results and `{:ok, :not_verified}` for a
+  2xx carrying none. An unknown GTIN is *not* an error here — the registry answers
+  `200` with `validationErrors`, which `ThamaniDawa.GtinLookup` maps to `:not_found`.
+
+  Failures are kept distinct so a broken deployment is distinguishable from a
+  broken registry: `{:error, :unauthorized}` for `401`/`403` (our API key is
+  rejected — a configuration fault on our side), `{:error, :provider_error}` for
+  any other non-2xx, and `{:error, :timeout}` for any transport failure.
   """
   @spec verify(String.t()) ::
-          {:ok, list() | :not_verified} | {:error, :provider_error | :timeout}
+          {:ok, list() | :not_verified}
+          | {:error, :unauthorized | :provider_error | :timeout}
   def verify(gtin) do
     case Req.post(url(), req_options(gtin)) do
       {:ok, %Req.Response{status: status, body: []}} when status in 200..299 ->
@@ -31,6 +36,9 @@ defmodule ThamaniDawa.VerifyGtin do
 
       {:ok, %Req.Response{status: status, body: body}} when status in 200..299 ->
         {:ok, body}
+
+      {:ok, %Req.Response{status: status}} when status in [401, 403] ->
+        {:error, :unauthorized}
 
       {:ok, %Req.Response{}} ->
         {:error, :provider_error}

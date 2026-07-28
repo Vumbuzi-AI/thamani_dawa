@@ -255,6 +255,24 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       assert html =~ batch_b.batch_no
     end
 
+    test "a malformed site filter is ignored rather than crashing, for staff and admin", %{
+      conn: conn
+    } do
+      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
+      batch = batch_fixture(%{organization_id: org_id, site_id: site_a.id})
+
+      # Staff path: `sanitize_site_filter/2` used to raise on a non-numeric value.
+      {:ok, staff_lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      html = render_submit(staff_lv, "apply_filters", %{"filters" => %{"site" => "abc"}})
+      assert html =~ batch.batch_no
+
+      # Admin path: the value reached `Batches.filter_by_site_opt/2` unsanitised.
+      admin = user_fixture(%{organization_id: org_id})
+      {:ok, admin_lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
+      html = render_submit(admin_lv, "apply_filters", %{"filters" => %{"site" => "abc"}})
+      assert html =~ batch.batch_no
+    end
+
     test "for an admin, a stale site filter falls back to showing its raw id", %{conn: conn} do
       # Admins are org-wide, so their filter value isn't narrowed to an assigned
       # set — a since-deleted site id survives and is shown as-is on the chip.

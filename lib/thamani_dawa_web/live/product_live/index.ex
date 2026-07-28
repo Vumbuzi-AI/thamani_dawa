@@ -342,6 +342,11 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   defp gtin_lookup_message({:error, :provider_error}),
     do: {:warning, "Couldn't reach the lookup service — enter the product details manually."}
 
+  # Nothing the person filling the form can do about our credentials, so the copy
+  # matches the generic outage case; the cause is in the logs.
+  defp gtin_lookup_message({:error, :unauthorized}),
+    do: {:warning, "Couldn't reach the lookup service — enter the product details manually."}
+
   defp gtin_lookup_message(_), do: nil
 
   def render(assigns) do
