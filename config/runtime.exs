@@ -48,7 +48,7 @@ if company_prefix = System.get_env("GS1_COMPANY_PREFIX") do
 end
 
 config :thamani_dawa, ThamaniDawaWeb.Endpoint,
-  http: [port: String.to_integer(System.get_env("PORT", "4000"))]
+  http: [port: String.to_integer(System.get_env("PORT", "5780"))]
 
 if config_env() == :prod do
   database_url =

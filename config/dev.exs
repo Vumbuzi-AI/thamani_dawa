@@ -70,6 +70,26 @@ config :thamani_dawa, ThamaniDawaWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :thamani_dawa, dev_routes: true
 
+# One-click access to the accounts created by `mix run priv/repo/seeds.exs`.
+# This configuration intentionally lives in dev.exs so demo credentials are
+# never rendered by a production release.
+config :thamani_dawa, :demo_login_accounts, [
+  %{id: "admin", name: "Amina Kamau", role: "Admin", email: "admin@gmail.com"},
+  %{
+    id: "pharmacist",
+    name: "Grace Njeri",
+    role: "Pharmacist",
+    email: "pharmacist@gmail.com"
+  },
+  %{id: "lab", name: "Laban Omondi", role: "Lab technician", email: "lab@gmail.com"},
+  %{
+    id: "pharma-lab",
+    name: "Zawadi Muthoni",
+    role: "Pharmacy + lab",
+    email: "pharmalab@gmail.com"
+  }
+]
+
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 

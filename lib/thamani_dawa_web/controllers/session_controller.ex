@@ -13,7 +13,7 @@ defmodule ThamaniDawaWeb.SessionController do
     if conn.assigns[:current_scope] && conn.assigns.current_scope.user do
       redirect(conn, to: redirect_path_for(conn.assigns.current_scope.user))
     else
-      render(conn, :new, form: to_form(%{"email" => "", "password" => ""}, as: nil))
+      render_login(conn, %{"email" => "", "password" => ""})
     end
   end
 
@@ -27,7 +27,7 @@ defmodule ThamaniDawaWeb.SessionController do
       nil ->
         conn
         |> put_flash(:error, "Invalid email or password")
-        |> render(:new, form: to_form(%{"email" => email, "password" => ""}, as: nil))
+        |> render_login(%{"email" => email, "password" => ""})
     end
   end
 
@@ -53,5 +53,24 @@ defmodule ThamaniDawaWeb.SessionController do
     end
   rescue
     Ecto.NoResultsError -> ~p"/pharmacy"
+  end
+
+  defp render_login(conn, params) do
+    render(conn, :new,
+      form: to_form(params, as: nil),
+      demo_accounts: demo_accounts()
+    )
+  end
+
+  defp demo_accounts do
+    :thamani_dawa
+    |> Application.get_env(:demo_login_accounts, [])
+    |> Enum.map(fn account ->
+      Map.put(
+        account,
+        :form,
+        to_form(%{"email" => account.email, "password" => "password"}, as: nil)
+      )
+    end)
   end
 end

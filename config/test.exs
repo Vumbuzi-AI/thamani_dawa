@@ -35,6 +35,23 @@ config :thamani_dawa, ThamaniDawa.GtinLookup,
 
 config :thamani_dawa, ThamaniDawa.Gln, company_prefix: "0614141"
 
+config :thamani_dawa, :demo_login_accounts, [
+  %{id: "admin", name: "Amina Kamau", role: "Admin", email: "admin@gmail.com"},
+  %{
+    id: "pharmacist",
+    name: "Grace Njeri",
+    role: "Pharmacist",
+    email: "pharmacist@gmail.com"
+  },
+  %{id: "lab", name: "Laban Omondi", role: "Lab technician", email: "lab@gmail.com"},
+  %{
+    id: "pharma-lab",
+    name: "Zawadi Muthoni",
+    role: "Pharmacy + lab",
+    email: "pharmalab@gmail.com"
+  }
+]
+
 # Print only warnings and errors during test
 config :logger, level: :warning
 

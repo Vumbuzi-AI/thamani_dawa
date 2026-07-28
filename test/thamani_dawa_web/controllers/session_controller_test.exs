@@ -20,6 +20,23 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       assert html_response(conn, 200) =~ "Welcome back"
     end
 
+    test "renders one-click login forms for all four seeded roles", %{conn: conn} do
+      document =
+        conn
+        |> get(~p"/login")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      assert Enum.count(LazyHTML.query(document, "#demo-login-accounts form")) == 4
+
+      for id <- ~w(admin pharmacist lab pharma-lab) do
+        assert Enum.count(LazyHTML.query(document, "#demo-login-#{id}")) == 1
+        assert Enum.count(LazyHTML.query(document, "#demo-login-#{id} input[name=email]")) == 1
+        assert Enum.count(LazyHTML.query(document, "#demo-login-#{id} input[name=password]")) == 1
+        assert Enum.count(LazyHTML.query(document, "#demo-login-#{id}-submit")) == 1
+      end
+    end
+
     test "redirects an authenticated user to their portal", %{conn: conn} do
       pharmacist = staff_fixture(%{role: :pharmacist})
 
