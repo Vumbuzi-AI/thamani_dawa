@@ -5,6 +5,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.Sites.Site
 
   @default_filters %{role: "", site_id: "", status: ""}
 
@@ -14,6 +15,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
      |> assign(:editing_user, nil)
+     |> assign(:selected_role, "")
      |> assign(:page, 1)
      |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> assign_lists()}
@@ -21,12 +23,18 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
   def handle_params(params, _url, socket) do
     page = String.to_integer(Map.get(params, "page", "1"))
-    socket = socket |> assign(:page, page) |> assign_lists()
+    search = Map.get(params, "search", "")
 
-    {form, user, checked_site_ids} =
+    socket =
+      socket
+      |> assign(:page, page)
+      |> assign(:search, search)
+      |> assign_lists()
+
+    {form, user, checked_site_ids, selected_role} =
       case socket.assigns.live_action do
         :new ->
-          {to_form(User.invite_changeset(%User{}, %{}), as: :user), nil, []}
+          {to_form(User.invite_changeset(%User{}, %{}), as: :user), nil, [], ""}
 
         :edit ->
           user_id = String.to_integer(params["id"])
@@ -34,17 +42,18 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           user = Accounts.get_user!(organization_id, user_id)
 
           {to_form(User.edit_changeset(user, %{}), as: :user), user,
-           Enum.map(user.sites, & &1.id)}
+           Enum.map(user.sites, & &1.id), to_string(user.role)}
 
         _ ->
-          {nil, nil, []}
+          {nil, nil, [], ""}
       end
 
     {:noreply,
      socket
      |> assign(:form, form)
      |> assign(:editing_user, user)
-     |> assign(:checked_site_ids, checked_site_ids)}
+     |> assign(:checked_site_ids, checked_site_ids)
+     |> assign(:selected_role, selected_role)}
   end
 
   def handle_event("save", %{"user" => attrs}, socket) do
@@ -88,6 +97,10 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :user))}
     end
+  end
+
+  def handle_event("form_change", %{"user" => attrs}, socket) do
+    {:noreply, assign(socket, :selected_role, Map.get(attrs, "role", ""))}
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -199,28 +212,107 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   defp sites_summary([]), do: "—"
   defp sites_summary(sites), do: Enum.map_join(sites, ", ", & &1.name)
 
+  defp compatible_sites(_sites, role) when role in ["", nil], do: []
+  defp compatible_sites(_sites, "admin"), do: []
+
+  defp compatible_sites(sites, "pharmacist") do
+    Enum.filter(
+      sites,
+      &(Site.pharmacy?(&1) or
+          to_string(&1.site_type) in ["pharmacy", "pharmacy_lab", "pharma_lab"])
+    )
+  end
+
+  defp compatible_sites(sites, "lab_technician") do
+    Enum.filter(
+      sites,
+      &(Site.lab?(&1) or to_string(&1.site_type) in ["lab", "pharmacy_lab", "pharma_lab"])
+    )
+  end
+
+  defp compatible_sites(sites, "pharma_lab") do
+    Enum.filter(
+      sites,
+      &(Site.pharmacy?(&1) or Site.lab?(&1) or
+          to_string(&1.site_type) in ["pharmacy", "lab", "pharmacy_lab", "pharma_lab"])
+    )
+  end
+
+  defp compatible_sites(sites, _role), do: sites
+
   attr :sites, :list, required: true
+  attr :all_sites, :list, default: []
   attr :checked_site_ids, :list, required: true
+  attr :selected_role, :string, default: ""
 
   defp site_checkboxes(assigns) do
+    assigns = assign_new(assigns, :selected_role, fn -> "" end)
+
     ~H"""
-    <div id="user-site-checkboxes">
-      <label class="block text-sm font-medium mb-1">Sites</label>
-      <input type="hidden" name="user[site_ids][]" value="" />
-      <div class="flex flex-col gap-1">
-        <label :for={site <- @sites} class="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            id={"user_site_ids_#{site.id}"}
-            name="user[site_ids][]"
-            value={site.id}
-            checked={site.id in @checked_site_ids}
-            class="checkbox checkbox-sm accent-thamani-forest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
-          />
+    <div id="user-site-checkboxes" class="mt-3">
+      <label class="block text-sm font-medium mb-2 text-thamani-forest">Sites</label>
+
+      <select name="user[site_ids][]" class="hidden" multiple>
+        <option value="">None</option>
+        <option
+          :for={site <- if @all_sites != [], do: @all_sites, else: @sites}
+          value={to_string(site.id)}
+        >
           {site.name}
-        </label>
+        </option>
+      </select>
+
+      <div :if={@selected_role in ["", nil]}>
+        <div class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/30 border border-dashed border-thamani-stone rounded-xl p-3.5">
+          <.icon name="hero-lock-closed" class="size-4 shrink-0 text-thamani-pewter" />
+          <span>Select a role above to view and assign compatible sites.</span>
+        </div>
       </div>
-      <p class="text-xs text-gray-500 mt-1">Leave all unchecked for org-wide (admin) access.</p>
+
+      <div :if={@selected_role not in ["", nil, "admin"]}>
+        <input
+          type="text"
+          id="site-search"
+          placeholder="Search compatible sites…"
+          oninput="
+            const q = this.value.toLowerCase();
+            document.querySelectorAll('#site-checkbox-list label').forEach(lbl => {
+              lbl.style.display = lbl.querySelector('span').textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
+          "
+          class="thamani-input mb-2 h-9 w-full rounded-lg px-3 text-sm focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
+          autocomplete="off"
+        />
+
+        <div
+          :if={@sites == []}
+          class="text-xs text-thamani-pewter bg-thamani-stone/30 border border-thamani-stone rounded-xl p-3 text-center"
+        >
+          No compatible sites available for this role.
+        </div>
+
+        <div
+          :if={@sites != []}
+          id="site-checkbox-list"
+          class="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1"
+        >
+          <label
+            :for={site <- @sites}
+            title={site.name}
+            class="flex items-center gap-3 rounded-lg border border-thamani-stone bg-thamani-canvas px-3 py-2 text-sm text-thamani-forest cursor-pointer hover:bg-thamani-stone/50 transition-colors"
+          >
+            <input
+              type="checkbox"
+              id={"user_site_ids_#{site.id}"}
+              name="user[site_ids][]"
+              value={site.id}
+              checked={site.id in @checked_site_ids}
+              class="size-4 shrink-0 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+            />
+            <span class="font-medium truncate min-w-0">{site.name}</span>
+          </label>
+        </div>
+      </div>
     </div>
     """
   end
@@ -288,7 +380,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
           Invite a staff member
         </h2>
-        <form id="invite-form" phx-submit="save">
+        <form id="invite-form" phx-submit="save" phx-change="form_change">
           <.input field={@form[:name]} label="Name" required />
           <.input field={@form[:email]} type="email" label="Email" required />
           <.input
@@ -299,8 +391,21 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             prompt="Choose a role"
             required
           />
-          <.site_checkboxes sites={@sites} checked_site_ids={@checked_site_ids} />
-          <div class="mt-2">
+          <.site_checkboxes
+            :if={@selected_role != "admin"}
+            sites={compatible_sites(@sites, @selected_role)}
+            all_sites={@sites}
+            checked_site_ids={@checked_site_ids}
+            selected_role={@selected_role}
+          />
+          <div
+            :if={@selected_role == "admin"}
+            class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
+          >
+            <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
+            <span>Admins automatically have organization-wide access across all sites.</span>
+          </div>
+          <div class="mt-4">
             <.button variant="primary" class="w-full">Send invite</.button>
           </div>
         </form>
@@ -308,15 +413,15 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
       <.modal :if={@live_action == :edit} id="edit-modal" show on_cancel={JS.patch(~p"/org/team")}>
         <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">Edit team member</h2>
-        <form id="edit-form" phx-submit="save_edit">
+        <form id="edit-form" phx-submit="save_edit" phx-change="form_change">
           <div class="space-y-4">
             <div>
-              <label class="block text-sm font-medium mb-1">Name</label>
-              <p class="text-gray-600">{@editing_user.name}</p>
+              <label class="block text-sm font-medium mb-1 text-thamani-forest">Name</label>
+              <p class="text-sm font-medium text-thamani-forest">{@editing_user.name}</p>
             </div>
             <div>
-              <label class="block text-sm font-medium mb-1">Email</label>
-              <p class="text-gray-600">{@editing_user.email}</p>
+              <label class="block text-sm font-medium mb-1 text-thamani-forest">Email</label>
+              <p class="text-sm font-medium text-thamani-forest">{@editing_user.email}</p>
             </div>
             <.input
               field={@form[:role]}
@@ -326,7 +431,20 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
               prompt="Choose a role"
               required
             />
-            <.site_checkboxes sites={@sites} checked_site_ids={@checked_site_ids} />
+            <.site_checkboxes
+              :if={@selected_role != "admin"}
+              sites={compatible_sites(@sites, @selected_role)}
+              all_sites={@sites}
+              checked_site_ids={@checked_site_ids}
+              selected_role={@selected_role}
+            />
+            <div
+              :if={@selected_role == "admin"}
+              class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
+            >
+              <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
+              <span>Admins automatically have organization-wide access across all sites.</span>
+            </div>
           </div>
           <div class="mt-4">
             <.button variant="primary" class="w-full">Save changes</.button>

@@ -22,7 +22,7 @@ defmodule ThamaniDawaWeb.BatchLabelComponent do
     <div
       id={@id}
       class={[
-        "printable-batch-label border border-base-300 rounded-xl p-5 bg-base-100 shadow-sm",
+        "printable-batch-label border border-thamani-stone rounded-2xl p-5 bg-thamani-snow shadow-none",
         @class
       ]}
     >
@@ -32,47 +32,47 @@ defmodule ThamaniDawaWeb.BatchLabelComponent do
             id={"datamatrix-canvas-#{@batch.id}"}
             phx-hook="DataMatrix"
             data-gs1-text={@bwip_text}
-            class="w-32 h-32 bg-white p-1 rounded border border-base-200 shadow-inner"
+            class="w-32 h-32 bg-white p-1 rounded-xl border border-thamani-stone"
           ></canvas>
-          <span class="text-[10px] text-base-content/60 font-mono mt-1">GS1 DataMatrix</span>
+          <span class="text-[10px] text-thamani-pewter font-mono mt-1">GS1 DataMatrix</span>
         </div>
 
         <div class="flex-1 min-w-0 space-y-2 w-full">
           <div>
-            <div class="text-xs uppercase tracking-wider text-base-content/50 font-semibold">
+            <div class="text-xs uppercase tracking-wider text-thamani-pewter font-semibold">
               Product
             </div>
-            <div class="font-semibold text-base truncate">
+            <div class="font-semibold text-base text-thamani-forest truncate">
               {product_name(@batch.product)}
             </div>
           </div>
 
           <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
             <div>
-              <span class="text-base-content/60">GTIN:</span>
-              <span class="font-mono font-medium ml-1">{@batch.gtin}</span>
+              <span class="text-thamani-pewter">GTIN:</span>
+              <span class="code-pill ml-1">{@batch.gtin}</span>
             </div>
             <div>
-              <span class="text-base-content/60">Batch/Lot:</span>
-              <span class="font-mono font-medium ml-1">{@batch.batch_no}</span>
+              <span class="text-thamani-pewter">Batch/Lot:</span>
+              <span class="code-pill ml-1">{@batch.batch_no}</span>
             </div>
             <div>
-              <span class="text-base-content/60">Mfg Date:</span>
+              <span class="text-thamani-pewter">Mfg Date:</span>
               <span class="font-medium ml-1">{@batch.manufacture_date || "—"}</span>
             </div>
             <div>
-              <span class="text-base-content/60">Expiry:</span>
+              <span class="text-thamani-pewter">Expiry:</span>
               <span class="font-medium ml-1">{@batch.expiry_date}</span>
             </div>
             <%= if @batch.serial do %>
               <div class="col-span-2">
-                <span class="text-base-content/60">Serial:</span>
+                <span class="text-thamani-pewter">Serial:</span>
                 <span class="font-mono font-medium ml-1">{@batch.serial}</span>
               </div>
             <% end %>
             <%= if @batch.site do %>
               <div class="col-span-2">
-                <span class="text-base-content/60">Site:</span>
+                <span class="text-thamani-pewter">Site:</span>
                 <span class="font-medium ml-1">{@batch.site.name}</span>
               </div>
             <% end %>
@@ -101,16 +101,15 @@ defmodule ThamaniDawaWeb.BatchLabelComponent do
 
       <.batch_label_card batch={@batch} />
 
-      <div class="no-print mt-6 flex justify-end gap-2">
+      <div class="no-print mt-6 pt-4">
         <.button
           type="button"
           variant="primary"
           onclick="window.print()"
-          class="flex items-center gap-1.5"
+          class="w-full flex items-center justify-center gap-1.5"
         >
           <.icon name="hero-printer" class="w-4 h-4" /> Print Label
         </.button>
-        <.button type="button" phx-click={@on_close}>Close</.button>
       </div>
     </.modal>
     """

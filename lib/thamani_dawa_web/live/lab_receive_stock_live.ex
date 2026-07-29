@@ -41,8 +41,8 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
       |> Products.list_products()
       |> Map.new(&{&1.id, &1})
 
-    suppliers = Suppliers.list_suppliers(organization_id)
-    suppliers_by_id = Map.new(suppliers, &{&1.id, &1})
+    suppliers = Suppliers.list_active_suppliers(organization_id)
+    suppliers_by_id = organization_id |> Suppliers.list_suppliers() |> Map.new(&{&1.id, &1})
     initial_attrs = if site_id, do: %{site_id: site_id}, else: %{}
 
     {:ok,
@@ -241,12 +241,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
 
-  defp batch_label(batch, products_by_id) do
-    product = products_by_id[batch.product_id]
-    name = (product && (product.generic_name || product.brand_name)) || "(unknown product)"
-    "#{name} — #{batch.batch_no} (#{batch.remaining_quantity} left, exp. #{batch.expiry_date})"
-  end
-
   defp product_display(batch, products_by_id) do
     case Map.get(products_by_id, batch.product_id) do
       nil -> "(unknown product)"
@@ -424,29 +418,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         <.button phx-click="receive_batch" phx-value-id={@selected_batch.id} variant="primary">
           Approve receipt
         </.button>
-      </div>
-
-      <div class="rounded-2xl bg-thamani-stone p-6 mt-6">
-        <h2 class="text-base font-medium mb-4 text-thamani-forest">Log consumable usage</h2>
-        <.form
-          for={%{}}
-          id="consumable-usage-form"
-          phx-submit="record_usage"
-          class="flex flex-wrap gap-3 items-end [&>div]:mb-0"
-        >
-          <.input
-            type="select"
-            name="batch_id"
-            label="Batch"
-            value={nil}
-            options={Enum.map(@usable_batches, &{batch_label(&1, @products_by_id), &1.id})}
-            prompt="Choose a batch"
-          />
-          <.input type="number" name="quantity" label="Quantity" required />
-          <.input type="number" name="lab_order_id" label="Lab order ID (optional)" />
-          <.input type="text" name="purpose" label="Purpose" />
-          <.button variant="primary">Record usage</.button>
-        </.form>
       </div>
     </Layouts.lab_shell>
     """

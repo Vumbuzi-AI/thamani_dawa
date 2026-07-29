@@ -62,6 +62,8 @@ defmodule ThamaniDawaWeb.PharmacyStockBatchLive do
       flash={@flash}
       current_scope={@current_scope}
       current_path="/pharmacy/stock"
+      back={~p"/pharmacy/stock/products/#{@batch.product_id}"}
+      back_label="Back to product"
     >
       <.header icon="hero-cube">
         Batch {@batch.batch_no}
@@ -74,9 +76,6 @@ defmodule ThamaniDawaWeb.PharmacyStockBatchLive do
             class="no-print flex items-center gap-1.5"
           >
             <.icon name="hero-printer" class="w-4 h-4" /> Print Data Matrix
-          </.button>
-          <.button navigate={~p"/pharmacy/stock/products/#{@batch.product_id}"}>
-            Back to product
           </.button>
         </:actions>
       </.header>

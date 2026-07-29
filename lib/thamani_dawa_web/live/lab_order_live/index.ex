@@ -341,7 +341,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           class="space-y-5"
         >
           <%!-- Step 1: Patient information --%>
-          <section class="rounded-xl border border-thamani-stone bg-thamani-snow">
+          <section class="rounded-xl ff-surface-card">
             <div class="flex flex-col gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 class="text-base font-semibold text-thamani-forest">1. Patient</h3>
               <.tab_group>
@@ -515,11 +515,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
               placeholder="Instructions or clinical history"
             />
 
-            <.input
-              field={@header_form[:is_referral]}
-              type="checkbox"
-              label="This order was referred from another facility"
-            />
+            <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3 mb-3">
+              <p class="text-sm font-medium text-thamani-forest">Referred from another facility</p>
+              <.input
+                field={@header_form[:is_referral]}
+                type="checkbox"
+                label=""
+                class="size-5 rounded accent-thamani-forest cursor-pointer"
+              />
+            </div>
 
             <div
               :if={Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_referral].value)}
@@ -542,8 +546,16 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                 options={ThamaniDawa.PaymentMethods.all()}
                 prompt="Select payment method"
               />
-              <div class="flex items-center pt-6">
-                <.input field={@header_form[:has_paid]} type="checkbox" label="Paid" />
+              <div class="flex items-end pb-3">
+                <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3 w-full">
+                  <p class="text-sm font-medium text-thamani-forest">Paid</p>
+                  <.input
+                    field={@header_form[:has_paid]}
+                    type="checkbox"
+                    label=""
+                    class="size-5 rounded accent-thamani-forest cursor-pointer"
+                  />
+                </div>
               </div>
             </div>
           </.form_block>

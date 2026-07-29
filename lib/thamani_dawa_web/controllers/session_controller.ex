@@ -37,7 +37,7 @@ defmodule ThamaniDawaWeb.SessionController do
     |> redirect(to: ~p"/")
   end
 
-  defp redirect_path_for(%User{role: :admin}), do: ~p"/org/sites"
+  defp redirect_path_for(%User{role: :admin}), do: ~p"/org/dashboard"
   defp redirect_path_for(%User{role: :pharmacist}), do: ~p"/pharmacy"
   defp redirect_path_for(%User{role: :lab_technician}), do: ~p"/lab"
 

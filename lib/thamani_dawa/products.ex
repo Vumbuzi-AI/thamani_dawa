@@ -16,30 +16,76 @@ defmodule ThamaniDawa.Products do
     )
   end
 
-  @doc "Lists an organization's products with pagination."
-  def list_products_paginated(organization_id, page \\ 1, opts \\ []) do
-    search = Keyword.get(opts, :search)
+  @doc "Lists products that have batches at specific sites with pagination and optional search filter."
+  def list_products_with_site_batches_paginated(organization_id, site_ids, page \\ 1, opts \\ []) do
+    if is_list(site_ids) and site_ids != [] do
+      search = Keyword.get(opts, :search)
 
-    query =
-      from(p in Product, where: p.organization_id == ^organization_id, order_by: [asc: p.id])
-
-    query =
-      if search && String.trim(search) != "" do
-        pattern = "%#{String.trim(search)}%"
-
-        from(p in query,
-          where:
-            ilike(p.generic_name, ^pattern) or
-              ilike(p.brand_name, ^pattern) or
-              ilike(p.gtin, ^pattern) or
-              ilike(p.category, ^pattern)
+      query =
+        from(p in Product,
+          join: b in ThamaniDawa.Batches.Batch,
+          on: b.product_id == p.id,
+          where: p.organization_id == ^organization_id,
+          where: b.site_id in ^site_ids,
+          distinct: true,
+          order_by: [asc: p.id]
         )
-      else
-        query
-      end
 
-    Repo.paginate(query, page: page)
+      query = filter_search(query, search)
+      Repo.paginate(query, page: page)
+    else
+      %Scrivener.Page{
+        entries: [],
+        page_number: page,
+        total_pages: 1,
+        total_entries: 0,
+        page_size: 10
+      }
+    end
   end
+
+  def list_products_paginated(organization_id, page \\ 1, opts \\ []) do
+    from(p in Product, where: p.organization_id == ^organization_id, order_by: [asc: p.id])
+    |> filter_search(Keyword.get(opts, :search))
+    |> filter_category(Keyword.get(opts, :category))
+    |> filter_flag(:is_otc, Keyword.get(opts, :is_otc))
+    |> filter_flag(:is_dangerous_drug, Keyword.get(opts, :is_dangerous_drug))
+    |> Repo.paginate(page: page)
+  end
+
+  defp filter_search(query, search) when is_binary(search) do
+    search = String.trim(search)
+
+    if search != "" do
+      pattern = "%#{search}%"
+
+      from(p in query,
+        where:
+          ilike(p.generic_name, ^pattern) or
+            ilike(p.brand_name, ^pattern) or
+            ilike(p.gtin, ^pattern) or
+            ilike(p.category, ^pattern)
+      )
+    else
+      query
+    end
+  end
+
+  defp filter_search(query, _search), do: query
+
+  defp filter_category(query, category) when is_binary(category) do
+    category = String.trim(category)
+    if category != "", do: from(p in query, where: p.category == ^category), else: query
+  end
+
+  defp filter_category(query, _category), do: query
+
+  defp filter_flag(query, :is_otc, true), do: from(p in query, where: p.is_otc == true)
+
+  defp filter_flag(query, :is_dangerous_drug, true),
+    do: from(p in query, where: p.is_dangerous_drug == true)
+
+  defp filter_flag(query, _field, _val), do: query
 
   @doc "Lists products that have active, approved batches at a site."
   def list_active_products_for_site(organization_id, site_id) do

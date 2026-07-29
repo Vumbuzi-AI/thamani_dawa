@@ -410,7 +410,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           class="space-y-5"
         >
           <%!-- Step 1: Patient information --%>
-          <section class="rounded-xl border border-thamani-stone bg-thamani-snow">
+          <section class="rounded-xl ff-surface-card">
             <div class="flex flex-col gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 class="text-base font-semibold text-thamani-forest">1. Patient</h3>
               <.tab_group>
@@ -462,7 +462,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           </section>
 
           <%!-- Step 2: Prescription items --%>
-          <section class="rounded-xl border border-thamani-stone bg-thamani-snow">
+          <section class="rounded-xl ff-surface-card">
             <div class="flex items-center justify-between gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
               <h3 class="text-base font-semibold text-thamani-forest">2. Medication</h3>
               <.button id="add-prescription-item" type="button" phx-click="add-item" variant="ghost">
@@ -681,7 +681,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           </section>
 
           <%!-- Step 3: Prescription details --%>
-          <section class="overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow">
+          <section class="overflow-hidden rounded-xl ff-surface-card">
             <div class="border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
               <h3 class="text-base font-semibold text-thamani-forest">3. Details and payment</h3>
             </div>
@@ -701,11 +701,15 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                 required
               />
 
-              <.input
-                field={@header_form[:is_external]}
-                type="checkbox"
-                label="This is a referral from another facility"
-              />
+              <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3 mb-3">
+                <p class="text-sm font-medium text-thamani-forest">Referral from another facility</p>
+                <.input
+                  field={@header_form[:is_external]}
+                  type="checkbox"
+                  label=""
+                  class="size-5 rounded accent-thamani-forest cursor-pointer"
+                />
+              </div>
 
               <.input
                 :if={Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_external].value)}

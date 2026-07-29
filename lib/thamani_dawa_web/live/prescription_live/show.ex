@@ -224,7 +224,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   defp item_state_classes(:awaiting_verification), do: "bg-amber-50 text-amber-700 ring-amber-200"
   defp item_state_classes(:partially_dispensed), do: "bg-sky-50 text-sky-700 ring-sky-200"
   defp item_state_classes(:out_of_stock), do: "bg-rose-50 text-rose-700 ring-rose-200"
-  defp item_state_classes(:ready), do: "bg-indigo-50 text-thamani-forest ring-indigo-200"
+
+  defp item_state_classes(:ready),
+    do: "bg-thamani-lime/30 text-thamani-forest ring-thamani-forest/20"
 
   defp outstanding_quantity(item),
     do: max(item.quantity_prescribed - item.quantity_dispensed, 0)
@@ -273,9 +275,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
             required
           />
           <.input field={@payment_form[:provider_reference]} label="Reference / receipt no." />
-          <div class="mt-4 flex gap-2">
-            <.button variant="primary" phx-disable-with="Saving…">Record payment</.button>
-            <.button patch={~p"/pharmacy/prescriptions/#{@prescription.id}"}>Cancel</.button>
+          <div class="pt-4">
+            <.button variant="primary" phx-disable-with="Saving…" class="w-full">
+              Record payment
+            </.button>
           </div>
         </.form>
       </.modal>
@@ -283,7 +286,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
       <div id="prescription-show" class="space-y-5">
         <section
           id="prescription-overview"
-          class="overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm"
+          class="overflow-hidden rounded-2xl ff-surface-card"
         >
           <div class="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
             <div class="flex min-w-0 items-start gap-4">
@@ -374,9 +377,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
         <aside
           id="prescription-notes"
-          class="flex items-start gap-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3.5"
+          class="flex items-start gap-3 rounded-xl border border-thamani-stone bg-thamani-stone/40 px-4 py-3.5"
         >
-          <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-thamani-forest ring-1 ring-indigo-100">
+          <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-thamani-forest ring-1 ring-thamani-stone">
             <.icon name="hero-clipboard-document-check" class="size-4" />
           </div>
           <div class="min-w-0">
@@ -415,7 +418,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
               <% state = item_state(item, stock) %>
               <article
                 id={"prescription-item-#{item.id}"}
-                class="overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm transition-shadow hover:shadow-md"
+                class="overflow-hidden rounded-2xl ff-surface-card transition-shadow hover:shadow-md"
               >
                 <div class="p-5 sm:p-6">
                   <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -534,7 +537,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                         required
                         min="1"
                         max={outstanding_quantity(item)}
-                        class="h-11 w-full rounded-lg border border-thamani-stone bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-thamani-accent focus:ring-3 focus:ring-indigo-100"
+                        class="thamani-input h-11 w-full rounded-lg px-3 text-sm focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
                       />
                     </div>
                     <.button
@@ -553,7 +556,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
                   <div
                     :if={(allocation = Map.get(@allocation_previews, item.id, [])) != []}
-                    class="mt-3 rounded-lg border border-thamani-stone bg-white px-3 py-2.5"
+                    class="mt-3 rounded-lg ff-surface-card px-3 py-2.5"
                   >
                     <p class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
                       Will take from (FEFO)
@@ -577,7 +580,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
                 <div
                   :if={(dispenses = Map.get(@dispenses_by_item, item.id, [])) != []}
-                  class="border-t border-thamani-stone bg-white px-5 py-4 sm:px-6"
+                  class="border-t border-thamani-stone bg-[var(--surface-3)] px-5 py-4 sm:px-6"
                 >
                   <p class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
                     Dispensed from
@@ -635,7 +638,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                           label="Scan product barcode"
                           placeholder="Scan or enter GTIN"
                           required
-                          class="h-11 w-full rounded-lg border border-thamani-stone bg-white px-3 font-mono text-sm text-slate-900 outline-none transition placeholder:font-sans focus:border-thamani-accent focus:ring-3 focus:ring-indigo-100"
+                          class="thamani-input h-11 w-full rounded-lg px-3 font-mono text-sm placeholder:font-sans focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
                         />
                       </div>
                       <.button

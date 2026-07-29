@@ -27,35 +27,35 @@
 @plugin "../vendor/daisyui-theme" {
   name: "dark";
   default: false;
-  prefersdark: true;
-  color-scheme: "dark";
-  --color-base-100: oklch(30.33% 0.016 252.42);
-  --color-base-200: oklch(25.26% 0.014 253.1);
-  --color-base-300: oklch(20.15% 0.012 254.09);
-  --color-base-content: oklch(97.807% 0.029 256.847);
-  --color-primary: oklch(58% 0.233 277.117);
-  --color-primary-content: oklch(96% 0.018 272.314);
-  --color-secondary: oklch(58% 0.233 277.117);
-  --color-secondary-content: oklch(96% 0.018 272.314);
-  --color-accent: oklch(60% 0.25 292.717);
-  --color-accent-content: oklch(96% 0.016 293.756);
-  --color-neutral: oklch(37% 0.044 257.287);
-  --color-neutral-content: oklch(98% 0.003 247.858);
-  --color-info: oklch(58% 0.158 241.966);
-  --color-info-content: oklch(97% 0.013 236.62);
-  --color-success: oklch(60% 0.118 184.704);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
+  prefersdark: false;
+  color-scheme: "light";
+  --color-base-100: #fcfcf7;
+  --color-base-200: #eeeee9;
+  --color-base-300: #c4c7c4;
+  --color-base-content: #1c3a13;
+  --color-primary: #1c3a13;
+  --color-primary-content: #fcfcf7;
+  --color-secondary: #757c5d;
+  --color-secondary-content: #fcfcf7;
+  --color-accent: #d3fa99;
+  --color-accent-content: #1c3a13;
+  --color-neutral: #1c3a13;
+  --color-neutral-content: #fcfcf7;
+  --color-info: #698e79;
+  --color-info-content: #fcfcf7;
+  --color-success: #1c3a13;
+  --color-success-content: #d3fa99;
+  --color-warning: #9f995b;
+  --color-warning-content: #1c3a13;
+  --color-error: #c21f17;
+  --color-error-content: #fcfcf7;
+  --radius-selector: 1000px;
+  --radius-field: 8px;
+  --radius-box: 16px;
   --size-selector: 0.21875rem;
   --size-field: 0.21875rem;
   --border: 1.5px;
-  --depth: 1;
+  --depth: 0;
   --noise: 0;
 }
 
@@ -64,33 +64,33 @@
   default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: #ffffff;
-  --color-base-200: #f8fafc;
-  --color-base-300: #e6edf8;
-  --color-base-content: #1f2433;
-  --color-primary: #373896;
-  --color-primary-content: #ffffff;
-  --color-secondary: #687083;
-  --color-secondary-content: #ffffff;
-  --color-accent: #6667ab;
-  --color-accent-content: #ffffff;
-  --color-neutral: #374151;
-  --color-neutral-content: #ffffff;
-  --color-info: #2c66e4;
-  --color-info-content: #ffffff;
-  --color-success: #12b586;
-  --color-success-content: #ffffff;
-  --color-warning: #d79b2b;
-  --color-warning-content: #1f2433;
+  --color-base-100: #fcfcf7;
+  --color-base-200: #eeeee9;
+  --color-base-300: #c4c7c4;
+  --color-base-content: #1c3a13;
+  --color-primary: #1c3a13;
+  --color-primary-content: #fcfcf7;
+  --color-secondary: #757c5d;
+  --color-secondary-content: #fcfcf7;
+  --color-accent: #d3fa99;
+  --color-accent-content: #1c3a13;
+  --color-neutral: #1c3a13;
+  --color-neutral-content: #fcfcf7;
+  --color-info: #698e79;
+  --color-info-content: #fcfcf7;
+  --color-success: #1c3a13;
+  --color-success-content: #d3fa99;
+  --color-warning: #9f995b;
+  --color-warning-content: #1c3a13;
   --color-error: #c21f17;
-  --color-error-content: #ffffff;
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
+  --color-error-content: #fcfcf7;
+  --radius-selector: 1000px;
+  --radius-field: 8px;
+  --radius-box: 16px;
   --size-selector: 0.21875rem;
   --size-field: 0.21875rem;
   --border: 1.5px;
-  --depth: 1;
+  --depth: 0;
   --noise: 0;
 }
 
@@ -157,6 +157,18 @@ body {
    styles, so new sidebar items automatically behave correctly.
    ============================================================ */
 
+/* Override Tailwind's ease-in-out with a decisive iOS drawer curve */
+#sidebar-aside {
+  background: var(--thamani-sidenav, #EFEFF0) !important;
+  transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1) !important;
+  transition-duration: 220ms !important;
+}
+
+/* Sync toggle chevron to the same curve */
+#sidebar-toggle-icon {
+  transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1) !important;
+}
+
 #sidebar-aside.sidebar-collapsed {
   width: 80px !important;
   padding: 24px 16px !important;
@@ -218,8 +230,8 @@ body {
 #sidebar-aside.sidebar-collapsed #sidebar-portal-switch {
   opacity: 0;
   max-width: 0;
-  display: none !important;
   overflow: hidden;
+  pointer-events: none;
 }
 
 #sidebar-aside.sidebar-collapsed #sidebar-toggle-icon {
@@ -234,28 +246,44 @@ body {
   margin-right: auto;
   justify-content: center;
   gap: 0;
+  position: relative;
 }
 
+/* In collapsed mode: pin badge as a small top-right corner dot over the icon */
+#sidebar-aside.sidebar-collapsed nav a .nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  margin-left: 0;
+}
+
+/* Expanding direction: fade in after sidebar has opened a bit */
 #sidebar-brand-text,
 .nav-label,
 #sidebar-profile {
   max-width: 200px;
+  overflow: hidden;
   transition:
-    opacity 150ms ease,
-    max-width 200ms ease-in-out;
+    opacity 120ms ease-out 100ms,
+    max-width 220ms cubic-bezier(0.32, 0.72, 0, 1) 0ms;
 }
 
+/* Collapsing direction: fade out fast, then sidebar contracts */
 #sidebar-aside.sidebar-collapsed .nav-label {
   opacity: 0;
   max-width: 0;
   overflow: hidden;
+  transition:
+    opacity 80ms ease-out,
+    max-width 220ms cubic-bezier(0.32, 0.72, 0, 1) 60ms;
 }
 
 #sidebar-account-card {
-  transition:
-    background-color 200ms ease,
-    padding 200ms ease,
-    border-radius 200ms ease;
+  transition: background-color 220ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 #sidebar-aside.sidebar-collapsed #sidebar-account-card {
@@ -301,59 +329,113 @@ body {
    ============================================================ */
 
 :root {
-  /* Thamani palette — single source of truth (indigo/slate/white) */
-  --thamani-forest: #373896;
-  --thamani-lime: #e7e7ff;
-  --thamani-snow: #ffffff;
-  --thamani-stone: #e6edf8;
-  --thamani-pewter: #4b5164;
-  --thamani-frosted: #c7cfe0;
-  --thamani-subtle: #687083;
-  --thamani-error: #c21f17;
-  --thamani-canvas: #f8fafc;
-  --thamani-accent: #6667ab;
-  --thamani-border-nav: #edf0f8;
+  /* Botanical-Clinical Palette — design.md tokens */
+  --color-forest-depths: #1c3a13;
+  --color-lime-pulse: #d3fa99;
+  --color-sage-moss: #757c5d;
+  --color-olive-gold: #9f995b;
+  --color-eucalyptus: #698e79;
+  --color-snow-white: #fcfcf7;
+  --color-warm-stone: #eeeee9;
+  --color-frosted-glass: #c4c7c4;
+  --color-ash: #b3b3b3;
+  --color-pewter: #666666;
+  --color-ink: #000000;
 
-  /* Dashboard chart series — fixed categorical order, validated for CVD
-     separation and contrast against --thamani-canvas (see dataviz skill). */
-  --thamani-chart-1: #6667ab;
-  --thamani-chart-1-fill: rgba(102, 103, 171, 0.14);
-  --thamani-chart-2: #1f9e8f;
-  --thamani-chart-3: #c2760a;
-  --thamani-chart-4: #2c5aa0;
+  /* Thamani palette — single source of truth */
+  --thamani-forest: #1c3a13;
+  --thamani-lime: #d3fa99;
+  --thamani-snow: #fcfcf7;
+  --thamani-stone: #eeeee9;
+  --thamani-pewter: #666666;
+  --thamani-frosted: #c4c7c4;
+  --thamani-subtle: #b3b3b3;
+  --thamani-error: #c21f17;
+  --thamani-canvas: #fcfcf7;
+  --thamani-accent: #d3fa99;
+  --thamani-border-nav: #eeeee9;
+  --thamani-sidenav: #EFEFF0;
+  --thamani-sidebar-bg: var(--thamani-sidenav);
+
+  /* Dashboard chart series */
+  --thamani-chart-1: #1c3a13;
+  --thamani-chart-1-fill: rgba(28, 58, 19, 0.14);
+  --thamani-chart-2: #757c5d;
+  --thamani-chart-3: #9f995b;
+  --thamani-chart-4: #698e79;
   --thamani-chart-5: #c21f17;
 
-  --shadow-card: 0 12px 28px rgba(15, 23, 42, 0.045);
+  /* ---- Fluid Functionalism surface ladder (light mode, Thamani warm adaptation) ----
+     surface-1  : page / app shell — warm parchment, clearly the ground level
+     surface-2  : sidebar / secondary panels — one step lighter
+     surface-3+ : all elevated content surfaces — pure white; shadow alone signals depth
+  */
+  --surface-1: #F9F9FA;
+  --surface-2: #F8F7F2;
+  --surface-3: #FFFFFF;
+  --surface-4: #FFFFFF;
+  --surface-5: #FFFFFF;
+  --surface-6: #FFFFFF;
+  --surface-7: #FFFFFF;
+  --surface-8: #FFFFFF;
 
-  /* Landing page tokens — always light (Thamani palette) */
-  --brand: #373896;
-  --ld-bg: #ffffff;
-  --ld-surface: #e6edf8;
-  --ld-text: #373896;
-  --ld-text-muted: #687083;
-  --ld-text-subtle: #9aa3b5;
-  --ld-border: rgba(55, 56, 150, 0.1);
+  /* Shadow ladder — cumulative ring + doubling drop layers (shadow-color = 6% black) */
+  --shadow-color: rgb(0 0 0 / 0.06);
+  --shadow-1: 0 0 0 1px var(--shadow-color);
+  --shadow-2: 0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color);
+  --shadow-3: 0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color), 0 3px 3px -1.5px var(--shadow-color);
+  --shadow-4: 0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color), 0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color);
+  --shadow-5: 0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color), 0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color), 0 12px 12px -6px var(--shadow-color);
+  --shadow-6: 0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color), 0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color), 0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color);
+  --shadow-7: 0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color), 0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color), 0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color), 0 48px 48px -24px var(--shadow-color);
+  --shadow-8: 0 0 0 1px var(--shadow-color), 0 1px 1px -0.5px var(--shadow-color), 0 3px 3px -1.5px var(--shadow-color), 0 6px 6px -3px var(--shadow-color), 0 12px 12px -6px var(--shadow-color), 0 24px 24px -12px var(--shadow-color), 0 48px 48px -24px var(--shadow-color), 0 96px 96px -48px var(--shadow-color);
+
+  /* Landing page tokens */
+  --brand: #1c3a13;
+  --ld-bg: #fcfcf7;
+  --ld-surface: #eeeee9;
+  --ld-text: #1c3a13;
+  --ld-text-muted: #666666;
+  --ld-text-subtle: #b3b3b3;
+  --ld-border: rgba(28, 58, 19, 0.12);
   --ld-marquee-dur: 28s;
 }
 
 /* ============================================================
-   Thamani Tailwind Theme — makes bg-thamani-forest, text-thamani-snow,
-   border-thamani-lime etc. available as first-class Tailwind utilities.
-   Change a value here → every component using that token updates.
+   Thamani Tailwind Theme — design.md tokens
    ============================================================ */
 
 @theme {
-  --color-thamani-forest: #373896;
-  --color-thamani-lime: #e7e7ff;
-  --color-thamani-snow: #ffffff;
-  --color-thamani-stone: #e6edf8;
-  --color-thamani-pewter: #687083;
-  --color-thamani-frosted: #c7cfe0;
-  --color-thamani-subtle: #9aa3b5;
+  --color-forest-depths: #1c3a13;
+  --color-lime-pulse: #d3fa99;
+  --color-sage-moss: #757c5d;
+  --color-olive-gold: #9f995b;
+  --color-eucalyptus: #698e79;
+  --color-snow-white: #fcfcf7;
+  --color-warm-stone: #eeeee9;
+  --color-frosted-glass: #c4c7c4;
+  --color-ash: #b3b3b3;
+  --color-pewter: #666666;
+  --color-ink: #000000;
+
+  --color-thamani-forest: #1c3a13;
+  --color-thamani-lime: #d3fa99;
+  --color-thamani-snow: #fcfcf7;
+  --color-thamani-stone: #eeeee9;
+  --color-thamani-pewter: #666666;
+  --color-thamani-frosted: #c4c7c4;
+  --color-thamani-subtle: #b3b3b3;
   --color-thamani-error: #c21f17;
-  --color-thamani-canvas: #f8fafc;
-  --color-thamani-accent: #6667ab;
-  --color-thamani-border-nav: #edf0f8;
+  --color-thamani-canvas: #fcfcf7;
+  --color-thamani-accent: #d3fa99;
+  --color-thamani-border-nav: #eeeee9;
+
+  --font-thamani-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-thamani-sans-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+
+  --radius-full: 1000px;
+  --radius-2xl: 16px;
+  --radius-3xl: 32px;
 }
 
 /* ============================================================
@@ -480,7 +562,7 @@ body {
 }
 
 /* ============================================================
-   Landing Page — Thamani Buttons
+   Landing Page & App UI — Thamani Buttons
    ============================================================ */
 
 .thamani-btn-primary {
@@ -493,15 +575,26 @@ body {
   background: var(--thamani-forest);
   color: var(--thamani-snow);
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 500;
   text-decoration: none;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: transform 160ms ease-out;
+  box-shadow: 0 1px 2px rgba(18, 38, 32, 0.08);
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.thamani-btn-primary:hover {
+  background: #16362c;
+  transform: translateY(-0.5px) scale(1.01);
+  box-shadow: 0 3px 8px rgba(18, 38, 32, 0.16);
 }
 
 .thamani-btn-primary:active {
-  transform: scale(0.96);
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
 }
 
 .thamani-btn-ghost,
@@ -515,15 +608,31 @@ body {
   background: transparent;
   color: var(--thamani-forest);
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 500;
   text-decoration: none;
   border: 1.5px solid var(--thamani-forest);
   cursor: pointer;
-  transition:
-    transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
-    background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
-    color 160ms cubic-bezier(0.23, 1, 0.32, 1),
-    border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: none;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              border-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.thamani-btn-ghost:hover,
+.thamani-btn-ghost-edit:hover {
+  background-color: var(--thamani-forest);
+  color: var(--thamani-snow);
+  border-color: var(--thamani-forest);
+  transform: translateY(-0.5px) scale(1.01);
+  box-shadow: 0 3px 8px rgba(18, 38, 32, 0.14);
+}
+
+.thamani-btn-ghost:active,
+.thamani-btn-ghost-edit:active {
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
 }
 
 .thamani-btn-ghost-delete,
@@ -537,22 +646,31 @@ body {
   background: transparent;
   color: var(--thamani-error);
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 500;
   text-decoration: none;
   border: 1.5px solid var(--thamani-error);
   cursor: pointer;
-  transition:
-    transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
-    background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
-    color 160ms cubic-bezier(0.23, 1, 0.32, 1),
-    border-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: none;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              border-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.thamani-btn-ghost:active,
-.thamani-btn-ghost-edit:active,
+.thamani-btn-ghost-delete:hover,
+.thamani-btn-destructive:hover {
+  background-color: var(--thamani-error);
+  border-color: var(--thamani-error);
+  color: white;
+  transform: translateY(-0.5px) scale(1.01);
+  box-shadow: 0 3px 8px rgba(185, 28, 28, 0.16);
+}
+
 .thamani-btn-ghost-delete:active,
 .thamani-btn-destructive:active {
-  transform: scale(0.96);
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
 }
 
 .thamani-btn-primary:focus-visible,
@@ -566,19 +684,6 @@ body {
   outline-offset: 2px;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  .thamani-btn-ghost-edit:hover {
-    background-color: var(--thamani-forest);
-    color: white;
-  }
-  .thamani-btn-ghost-delete:hover,
-  .thamani-btn-destructive:hover {
-    background-color: var(--thamani-error);
-    border-color: var(--thamani-error);
-    color: white;
-  }
-}
-
 .thamani-btn-ghost-inv {
   display: inline-flex;
   align-items: center;
@@ -589,15 +694,26 @@ body {
   background: transparent;
   color: var(--thamani-snow);
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 500;
   text-decoration: none;
   border: 1.5px solid var(--thamani-snow);
   cursor: pointer;
-  transition: transform 160ms ease-out;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.thamani-btn-ghost-inv:hover {
+  background-color: var(--thamani-snow);
+  color: var(--thamani-forest);
+  transform: translateY(-0.5px) scale(1.01);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
 }
 
 .thamani-btn-ghost-inv:active {
-  transform: scale(0.96);
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
 }
 
 .thamani-btn-lime {
@@ -614,55 +730,117 @@ body {
   text-decoration: none;
   border: none;
   cursor: pointer;
-  transition: transform 160ms ease-out;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.thamani-btn-lime:hover {
+  background: #bcf06f;
+  transform: translateY(-0.5px) scale(1.01);
+  box-shadow: 0 3px 8px rgba(163, 230, 53, 0.2);
 }
 
 .thamani-btn-lime:active {
-  transform: scale(0.96);
+  transform: translateY(0) scale(0.97);
+  box-shadow: none;
 }
 
 /* ============================================================
-   App UI — Thamani Inputs
+   App UI — Thamani Inputs & Form Readability
    ============================================================ */
 
 .thamani-input,
-.thamani-select {
+.thamani-select,
+input[type="text"]:not(.hidden):not([hidden]),
+input[type="email"]:not(.hidden):not([hidden]),
+input[type="password"]:not(.hidden):not([hidden]),
+input[type="number"]:not(.hidden):not([hidden]),
+input[type="date"]:not(.hidden):not([hidden]),
+input[type="tel"]:not(.hidden):not([hidden]),
+input[type="url"]:not(.hidden):not([hidden]),
+select:not(.hidden):not([hidden]),
+textarea:not(.hidden):not([hidden]) {
   display: block;
   width: 100%;
   padding: 9px 12px;
   border-radius: 8px;
-  background: var(--thamani-snow);
-  color: var(--color-base-content);
+  background-color: var(--thamani-snow) !important;
+  color: var(--thamani-forest) !important;
   font-size: 14px;
   font-weight: 400;
   line-height: 1.5;
-  border: 1.5px solid rgba(55, 56, 150, 0.18);
-  outline: none;
-  transition:
-    border-color 150ms ease,
-    box-shadow 150ms ease;
+  border: 2px solid #b8c0af !important;
+  outline: none !important;
+  box-shadow: none !important;
+  transition: border-color 150ms ease;
   appearance: none;
 }
 
-.thamani-input::placeholder {
-  color: var(--thamani-pewter);
+input.hidden,
+input[hidden] {
+  display: none !important;
+}
+
+.thamani-input::placeholder,
+.thamani-select::placeholder,
+input::placeholder,
+textarea::placeholder {
+  color: var(--thamani-pewter) !important;
+  opacity: 0.6 !important;
 }
 
 .thamani-input:focus,
-.thamani-select:focus {
-  border-color: var(--thamani-accent);
-  box-shadow: 0 0 0 3px rgba(102, 103, 171, 0.15);
+.thamani-select:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--thamani-forest) !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
-/* Labels/values are neutral, not brand purple — thamani-forest is reserved
-   for headings, links, and CTAs, same principle as the table/1 fix. */
-.thamani-label {
+/* Custom select chevron — replaces the stripped browser arrow */
+.thamani-select,
+select:not(.hidden):not([hidden]) {
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231c3a13' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 1rem 1rem;
+  cursor: pointer;
+  accent-color: var(--thamani-forest);
+  color-scheme: light;
+}
+
+/* Prompt/placeholder option — muted */
+.thamani-select option[value=""],
+select option[value=""] {
+  color: var(--thamani-pewter);
+}
+
+.thamani-label,
+label,
+.label {
   display: block;
   font-size: 13px;
   font-weight: 500;
-  color: var(--thamani-pewter);
+  color: var(--thamani-forest) !important;
   margin-bottom: 4px;
   letter-spacing: 0.025em;
+}
+
+[role="dialog"] label,
+[role="dialog"] p,
+[role="dialog"] span {
+  color: var(--thamani-forest);
+}
+
+[role="dialog"] .text-gray-500,
+[role="dialog"] .text-gray-600,
+[role="dialog"] .opacity-60 {
+  color: var(--thamani-pewter) !important;
 }
 
 /* ============================================================
@@ -907,6 +1085,30 @@ body {
 }
 
 /* ============================================================
+   Fluid Functionalism — elevation utility classes
+   Use these instead of ad-hoc border + bg + shadow combinations.
+   Elevation mapping (light mode):
+     ff-surface-card    → shadow-2  : base cards, panels, tables
+     ff-surface-popover → shadow-4  : dropdowns, select menus, date pickers
+     ff-surface-modal   → shadow-6  : dialogs, modals, full drawers
+   ============================================================ */
+
+.ff-surface-card {
+  background: var(--surface-3);
+  box-shadow: var(--shadow-2);
+}
+
+.ff-surface-popover {
+  background: var(--surface-4);
+  box-shadow: var(--shadow-4);
+}
+
+.ff-surface-modal {
+  background: var(--surface-5);
+  box-shadow: var(--shadow-6);
+}
+
+/* ============================================================
    Dashboard components — stat tiles, chart cards, range filter
    ============================================================ */
 
@@ -932,11 +1134,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: var(--thamani-snow);
-  border: 1px solid var(--thamani-border-nav);
+  background: var(--surface-3);
   border-radius: 16px;
   padding: 18px 20px;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-2);
 }
 
 .dashboard-stat-tile-header {
@@ -954,7 +1155,7 @@ body {
   height: 32px;
   border-radius: 50%;
   background: var(--thamani-stone);
-  color: var(--thamani-pewter);
+  color: var(--thamani-forest);
   flex-shrink: 0;
 }
 
@@ -966,7 +1167,8 @@ body {
 
 .dashboard-stat-tile-value {
   font-size: 28px;
-  font-weight: 700;
+  font-weight: 350;
+  letter-spacing: -0.48px;
   color: var(--thamani-forest);
   line-height: 1.1;
 }
@@ -989,11 +1191,10 @@ body {
 }
 
 .dashboard-chart-card {
-  background: var(--thamani-snow);
-  border: 1px solid var(--thamani-border-nav);
+  background: var(--surface-3);
   border-radius: 16px;
   padding: 20px;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-2);
 }
 
 .dashboard-chart-title {
@@ -1027,31 +1228,40 @@ body {
   justify-content: center;
   min-height: 34px;
   padding: 6px 16px;
-  border-radius: 9999px;
+  border-radius: 1000px;
   font-size: 13px;
   font-weight: 500;
-  border: 1px solid transparent;
-  background: #f1f4f9;
-  color: #4b5563;
-  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+  border: 1.5px solid var(--thamani-stone);
+  background: var(--thamani-stone);
+  color: var(--thamani-forest);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              background-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              border-color 160ms cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1);
   cursor: pointer;
 }
 
 .dashboard-range-pill:hover {
-  background: #e5e7eb;
-  color: #111827;
+  background: var(--thamani-forest);
+  color: var(--thamani-snow);
+  border-color: var(--thamani-forest);
+  transform: translateY(-0.5px);
+  box-shadow: 0 2.5px 6px rgba(18, 38, 32, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .dashboard-range-pill:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
+  box-shadow: inset 0 1.5px 3px rgba(0, 0, 0, 0.2);
 }
 
 .dashboard-range-pill[aria-pressed="true"] {
-  background: #3b3a98;
-  color: #ffffff;
-  border-color: #3b3a98;
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  background: var(--thamani-forest);
+  color: var(--thamani-snow);
+  border-color: var(--thamani-forest);
+  font-weight: 500;
+  box-shadow: 0 1.5px 4px rgba(18, 38, 32, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 /* Print styles for GS1 Data Matrix Batch Label */

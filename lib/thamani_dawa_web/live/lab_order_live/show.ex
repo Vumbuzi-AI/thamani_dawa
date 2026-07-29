@@ -335,11 +335,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
   defp format_date(other), do: to_string(other)
 
   defp status_meta(:result, :pending), do: {"Not started", "#F1F2F5", "#687083"}
-  defp status_meta(:result, :collected), do: {"Sample collected", "#E6EDF8", "#373896"}
-  defp status_meta(:result, :completed), do: {"Completed", "#373896", "#FFFFFF"}
-  defp status_meta(:order, :pending), do: {"Pending", "#F1F2F5", "#687083"}
-  defp status_meta(:order, :in_progress), do: {"In progress", "#E6EDF8", "#373896"}
-  defp status_meta(:order, :completed), do: {"Completed", "#373896", "#FFFFFF"}
+  defp status_meta(:result, :collected), do: {"Sample collected", "#d3fa99", "#1c3a13"}
+  defp status_meta(:result, :completed), do: {"Completed", "#1c3a13", "#fcfcf7"}
+  defp status_meta(:order, :pending), do: {"Pending", "#eeeee9", "#666666"}
+  defp status_meta(:order, :in_progress), do: {"In progress", "#d3fa99", "#1c3a13"}
+  defp status_meta(:order, :completed), do: {"Completed", "#1c3a13", "#fcfcf7"}
   defp status_meta(:order, :cancelled), do: {"Cancelled", "#FBEAE9", "#C21F17"}
   defp status_meta(_kind, other), do: {Phoenix.Naming.humanize(other), "#F1F2F5", "#687083"}
 
@@ -426,9 +426,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             required
           />
           <.input field={@payment_form[:provider_reference]} label="Reference / receipt no." />
-          <div class="mt-4 flex gap-2">
-            <.button variant="primary" phx-disable-with="Saving…">Record payment</.button>
-            <.button patch={~p"/lab/orders/#{@lab_order.id}"}>Cancel</.button>
+          <div class="pt-4">
+            <.button variant="primary" phx-disable-with="Saving…" class="w-full">
+              Record payment
+            </.button>
           </div>
         </.form>
       </.modal>
@@ -457,9 +458,8 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             value={:blood}
             options={@sample_types}
           />
-          <div class="mt-4 flex gap-2">
-            <.button variant="primary">Add test</.button>
-            <.button type="button" patch={~p"/lab/orders/#{@lab_order.id}"}>Cancel</.button>
+          <div class="pt-4">
+            <.button variant="primary" class="w-full">Add test</.button>
           </div>
         </.form>
       </.modal>

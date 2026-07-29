@@ -60,8 +60,8 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         %{
           label: "Lab orders",
           data: Enum.map(orders_by_day, fn {_date, n} -> n end),
-          borderColor: "#6667ab",
-          backgroundColor: "rgba(102, 103, 171, 0.14)",
+          borderColor: "#1c3a13",
+          backgroundColor: "rgba(28, 58, 19, 0.14)",
           fill: true,
           tension: 0.3,
           pointRadius: 3
@@ -77,7 +77,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         %{
           label: "Lab orders",
           data: Enum.map(orders_by_status, fn {_status, n} -> n end),
-          backgroundColor: ["#6667ab", "#1f9e8f", "#2c5aa0", "#c21f17"],
+          backgroundColor: ["#1c3a13", "#757c5d", "#698e79", "#c21f17"],
           borderRadius: 4
         }
       ]

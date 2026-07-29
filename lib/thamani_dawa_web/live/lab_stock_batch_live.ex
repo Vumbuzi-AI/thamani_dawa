@@ -57,7 +57,13 @@ defmodule ThamaniDawaWeb.LabStockBatchLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path="/lab/stock">
+    <Layouts.lab_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/lab/stock"
+      back={~p"/lab/stock/products/#{@batch.product_id}"}
+      back_label="Back to product"
+    >
       <.header icon="hero-cube">
         Batch {@batch.batch_no}
         <:subtitle>{product_name(@batch.product)} · {@batch.site.name}</:subtitle>
@@ -69,9 +75,6 @@ defmodule ThamaniDawaWeb.LabStockBatchLive do
             class="no-print flex items-center gap-1.5"
           >
             <.icon name="hero-printer" class="w-4 h-4" /> Print Data Matrix
-          </.button>
-          <.button navigate={~p"/lab/stock/products/#{@batch.product_id}"}>
-            Back to product
           </.button>
         </:actions>
       </.header>

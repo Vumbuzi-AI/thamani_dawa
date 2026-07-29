@@ -157,7 +157,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def form_block(assigns) do
     ~H"""
-    <section class={["rounded-xl border border-thamani-stone bg-thamani-snow", @class]}>
+    <section class={["rounded-xl ff-surface-card", @class]}>
       <div class="flex items-center justify-between gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
         <h3 class="text-base font-semibold text-thamani-forest">{@title}</h3>
         <div>{render_slot(@actions)}</div>
@@ -216,7 +216,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   attr :type, :string,
     default: "text",
-    values: ~w(checkbox color date datetime-local email file month number password
+    values: ~w(checkbox color combobox date datetime-local email file month number password
                search select tel text textarea time url week hidden)
 
   attr :field, Phoenix.HTML.FormField,
@@ -238,16 +238,16 @@ defmodule ThamaniDawaWeb.CoreComponents do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
 
     assigns
-    |> assign(field: nil, id: assigns.id || field.id)
+    |> assign(field: nil, id: assigns[:id] || field.id)
     |> assign(:errors, Enum.map(errors, &translate_error(&1)))
-    |> assign_new(:name, fn -> if assigns.multiple, do: field.name <> "[]", else: field.name end)
+    |> assign_new(:name, fn -> if assigns[:multiple], do: field.name <> "[]", else: field.name end)
     |> assign_new(:value, fn -> field.value end)
     |> input()
   end
 
   def input(%{type: "hidden"} = assigns) do
     ~H"""
-    <input type="hidden" id={@id} name={@name} value={assigns[:value]} {@rest} />
+    <input type="hidden" id={assigns[:id]} name={@name} value={assigns[:value]} {@rest} />
     """
   end
 
@@ -259,7 +259,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
     ~H"""
     <div class="mb-2">
-      <label for={@id} class="inline-flex items-center gap-2 cursor-pointer">
+      <label for={assigns[:id]} class="inline-flex items-center gap-2 cursor-pointer">
         <input
           type="hidden"
           name={@name}
@@ -269,13 +269,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
         />
         <input
           type="checkbox"
-          id={@id}
+          id={assigns[:id]}
           name={@name}
           value="true"
           checked={@checked}
           class={
             @class ||
-              "checkbox checkbox-sm accent-thamani-forest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+              "size-5 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
           }
           {@rest}
         />
@@ -287,37 +287,369 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   def input(%{type: "select"} = assigns) do
+    assigns = ensure_id(assigns, "select")
+
+    opts =
+      Enum.map(assigns[:options] || [], fn
+        {label, value} -> [to_string(label), to_string(value)]
+        label -> [to_string(label), to_string(label)]
+      end)
+
+    assigns =
+      assigns
+      |> assign(:opts, opts)
+      |> assign(:opts_json, Jason.encode!(opts))
+
     ~H"""
     <div class="mb-3">
-      <label for={@id}>
-        <span :if={@label} class="thamani-label">
+      <label :if={@label} for={"#{@id}-trigger"}>
+        <span class="thamani-label">
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
             style="color: #C21F17; margin-left: 2px;"
           >*</span>
         </span>
+      </label>
+      <div
+        id={@id}
+        phx-hook=".CustomSelect"
+        data-options={@opts_json}
+        data-prompt={@prompt || ""}
+        class="relative"
+      >
         <select
+          id={"#{@id}-input"}
+          name={@name}
+          data-cs-input
+          class="hidden"
+          disabled={@rest[:disabled]}
+          form={@rest[:form]}
+        >
+          <option :if={@prompt} value="">{@prompt}</option>
+          <option
+            :for={[label, val] <- @opts}
+            value={val}
+            selected={to_string(val) == to_string(assigns[:value] || "")}
+          >
+            {label}
+          </option>
+        </select>
+        <button
+          type="button"
+          id={"#{@id}-trigger"}
+          data-cs-trigger
+          aria-haspopup="listbox"
+          aria-expanded="false"
+          disabled={@rest[:disabled]}
+          class={[
+            "w-full flex items-center justify-between gap-2 px-3 py-[9px] text-left rounded-lg",
+            "border-2 bg-thamani-snow text-sm transition-colors cursor-pointer select-none",
+            "focus:outline-none",
+            @errors != [] && (@error_class || "border-red-600"),
+            @errors == [] &&
+              "border-[#b8c0af] hover:border-thamani-forest/50 focus:border-thamani-forest",
+            @class
+          ]}
+        >
+          <span data-cs-display class="truncate" style="color: #666666;">{@prompt || "Select..."}</span>
+          <svg
+            data-cs-chevron
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="size-4 shrink-0 transition-transform duration-150 text-thamani-pewter"
+            aria-hidden="true"
+          ><path d="M6 9l6 6 6-6" /></svg>
+        </button>
+        <div
+          data-cs-dropdown
+          role="listbox"
+          class="absolute z-[70] w-full mt-1 rounded-xl overflow-hidden hidden ff-surface-popover"
+        >
+          <div class="px-2 pt-2 pb-1.5 border-b border-thamani-stone/50">
+            <input
+              data-cs-search
+              type="text"
+              placeholder="Search…"
+              autocomplete="off"
+              class="w-full px-2.5 py-1.5 text-sm rounded-lg bg-thamani-stone/40 border-0 outline-none placeholder:text-thamani-pewter/50 text-thamani-forest"
+            />
+          </div>
+          <div data-cs-list class="max-h-52 overflow-y-auto py-1"></div>
+        </div>
+      </div>
+      <.error :for={msg <- @errors}>{msg}</.error>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".CustomSelect">
+        export default {
+          mounted() { this.init() },
+          updated() { this.syncDisplay() },
+          destroyed() {
+            document.removeEventListener("click", this.onDocClick)
+            document.removeEventListener("keydown", this.onKey)
+          },
+          init() {
+            this.input    = this.el.querySelector("[data-cs-input]")
+            this.trigger  = this.el.querySelector("[data-cs-trigger]")
+            this.display  = this.el.querySelector("[data-cs-display]")
+            this.dropdown = this.el.querySelector("[data-cs-dropdown]")
+            this.list     = this.el.querySelector("[data-cs-list]")
+            this.search   = this.el.querySelector("[data-cs-search]")
+            this.chevron  = this.el.querySelector("[data-cs-chevron]")
+            this.renderList("")
+            this.syncDisplay()
+            this.onTrigger  = (e) => { e.preventDefault(); e.stopPropagation(); this.toggle() }
+            this.onDocClick = (e) => { if (!this.el.contains(e.target)) this.close() }
+            this.onKey      = (e) => { if (e.key === "Escape") this.close() }
+            this.trigger.addEventListener("click", this.onTrigger)
+            if (this.search) {
+              this.search.addEventListener("input", () => this.renderList(this.search.value))
+              this.search.addEventListener("click", (e) => e.stopPropagation())
+              this.search.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") { e.stopPropagation(); this.close() }
+                if (e.key === "ArrowDown") {
+                  e.preventDefault()
+                  const first = this.list.querySelector("[data-cs-val]")
+                  if (first) first.focus()
+                }
+              })
+            }
+            document.addEventListener("click", this.onDocClick)
+            document.addEventListener("keydown", this.onKey)
+          },
+          opts()   { return JSON.parse(this.el.dataset.options || "[]") },
+          prompt() { return this.el.dataset.prompt || "" },
+          renderList(query) {
+            this.list.innerHTML = ""
+            const q = (query || "").toLowerCase().trim()
+            const cur = this.input ? String(this.input.value) : ""
+            const allOpts = this.opts()
+            const filtered = q === "" ? allOpts : allOpts.filter(([label]) => label.toLowerCase().includes(q))
+            const p = this.prompt()
+            if (p && q === "") this.list.appendChild(this.makeBtn("", p, false, true))
+            if (filtered.length === 0) {
+              const empty = document.createElement("div")
+              empty.textContent = "No matches"
+              empty.style.cssText = "padding:8px 12px;font-size:13px;color:#9ba89e;text-align:center;"
+              this.list.appendChild(empty)
+              return
+            }
+            filtered.forEach(([label, val]) => {
+              this.list.appendChild(this.makeBtn(String(val), label, String(val) === cur, false))
+            })
+          },
+          makeBtn(val, label, active, isPrompt) {
+            const b = document.createElement("button")
+            b.type = "button"
+            b.dataset.csVal = val
+            b.textContent = label
+            b.tabIndex = 0
+            b.style.cssText = "display:block;width:100%;text-align:left;padding:8px 12px;font-size:14px;cursor:pointer;background:transparent;border:0;transition:background 80ms;outline:none;"
+            if (active) {
+              b.style.background = "#d3fa99"
+              b.style.color = "#1c3a13"
+              b.style.fontWeight = "500"
+            } else {
+              b.style.color = isPrompt ? "#666666" : "#1c3a13"
+              b.onmouseenter = () => { b.style.background = "#eeeee9" }
+              b.onmouseleave = () => { b.style.background = "transparent" }
+            }
+            b.addEventListener("mousedown", (e) => { e.preventDefault() })
+            b.addEventListener("click", (e) => { e.stopPropagation(); this.select(b.dataset.csVal) })
+            b.addEventListener("keydown", (e) => {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this.select(b.dataset.csVal) }
+              if (e.key === "ArrowDown") { e.preventDefault(); const n = b.nextElementSibling; if (n) n.focus() }
+              if (e.key === "ArrowUp")   {
+                e.preventDefault()
+                const p = b.previousElementSibling
+                if (p && p.dataset.csVal !== undefined) p.focus()
+                else if (this.search) this.search.focus()
+              }
+            })
+            return b
+          },
+          select(val) {
+            this.input.value = val
+            this.input.dispatchEvent(new Event("input",  { bubbles: true }))
+            this.input.dispatchEvent(new Event("change", { bubbles: true }))
+            this.renderList("")
+            this.syncDisplay()
+            this.close()
+          },
+          syncDisplay() {
+            if (!this.input || !this.display) return
+            const val   = String(this.input.value)
+            const match = this.opts().find(([, v]) => String(v) === val)
+            if (match) {
+              this.display.textContent = match[0]
+              this.display.style.color = "#1c3a13"
+            } else {
+              this.display.textContent = this.prompt() || "Select..."
+              this.display.style.color = "#666666"
+            }
+          },
+          toggle() { this.dropdown.classList.contains("hidden") ? this.open() : this.close() },
+          open() {
+            if (this.search) this.search.value = ""
+            this.renderList("")
+            this.dropdown.classList.remove("hidden")
+            this.trigger.setAttribute("aria-expanded", "true")
+            if (this.chevron) this.chevron.style.transform = "rotate(180deg)"
+            setTimeout(() => { if (this.search) this.search.focus() }, 10)
+          },
+          close() {
+            this.dropdown.classList.add("hidden")
+            this.trigger.setAttribute("aria-expanded", "false")
+            if (this.chevron) this.chevron.style.transform = ""
+            if (this.search) this.search.value = ""
+          }
+        }
+      </script>
+    </div>
+    """
+  end
+
+  def input(%{type: "combobox"} = assigns) do
+    assigns = ensure_id(assigns, "cb")
+
+    opts =
+      Enum.map(assigns[:options] || [], fn
+        {label, value} -> [to_string(label), to_string(value)]
+        label -> [to_string(label), to_string(label)]
+      end)
+
+    assigns = assign(assigns, :opts_json, Jason.encode!(opts))
+
+    ~H"""
+    <div class="mb-3">
+      <label :if={@label} for={@id}>
+        <span class="thamani-label">
+          {@label}<span
+            :if={@rest[:required]}
+            aria-hidden="true"
+            style="color: #C21F17; margin-left: 2px;"
+          >*</span>
+        </span>
+      </label>
+      <div
+        id={"#{@id}-cb"}
+        phx-hook=".CustomCombobox"
+        data-options={@opts_json}
+        class="relative"
+      >
+        <input
+          type="text"
           id={@id}
           name={@name}
+          value={to_string(assigns[:value] || "")}
+          autocomplete="off"
+          data-cb-input
           class={[
-            "thamani-select",
+            "thamani-input",
             @class,
             @errors != [] && (@error_class || "border-red-600")
           ]}
-          multiple={@multiple}
           {@rest}
+        />
+        <div
+          data-cb-dropdown
+          role="listbox"
+          class="absolute z-[70] w-full mt-1 rounded-xl overflow-hidden hidden ff-surface-popover"
         >
-          <option :if={@prompt} value="">{@prompt}</option>
-          {Phoenix.HTML.Form.options_for_select(@options, assigns[:value])}
-        </select>
-      </label>
+          <div data-cb-list class="max-h-56 overflow-y-auto py-1"></div>
+        </div>
+      </div>
       <.error :for={msg <- @errors}>{msg}</.error>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".CustomCombobox">
+        export default {
+          mounted() { this.init() },
+          updated() {},
+          destroyed() {
+            document.removeEventListener("click", this.onDocClick)
+            document.removeEventListener("keydown", this.onKey)
+          },
+          init() {
+            this.input    = this.el.querySelector("[data-cb-input]")
+            this.dropdown = this.el.querySelector("[data-cb-dropdown]")
+            this.list     = this.el.querySelector("[data-cb-list]")
+            this.onDocClick = (e) => { if (!this.el.contains(e.target)) this.close() }
+            this.onKey      = (e) => { if (e.key === "Escape") { this.close(); this.input.blur() } }
+            this.input.addEventListener("focus", () => { this.renderList(this.input.value); this.open() })
+            this.input.addEventListener("input", () => { this.renderList(this.input.value); this.open() })
+            this.input.addEventListener("keydown", (e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault()
+                const first = this.list.querySelector("button")
+                if (first) first.focus()
+              }
+            })
+            document.addEventListener("click", this.onDocClick)
+            document.addEventListener("keydown", this.onKey)
+          },
+          opts() { return JSON.parse(this.el.dataset.options || "[]") },
+          renderList(query) {
+            this.list.innerHTML = ""
+            const q = (query || "").toLowerCase().trim()
+            const filtered = q === "" ? this.opts() : this.opts().filter(([label]) => label.toLowerCase().includes(q))
+            if (filtered.length === 0) {
+              if (q !== "") {
+                const empty = document.createElement("div")
+                empty.textContent = "No matches — press Enter to add"
+                empty.style.cssText = "padding:8px 12px;font-size:13px;color:#9ba89e;text-align:center;"
+                this.list.appendChild(empty)
+                this.open()
+              } else {
+                this.close()
+              }
+              return
+            }
+            filtered.forEach(([label, val]) => {
+              const b = document.createElement("button")
+              b.type = "button"
+              b.dataset.cbLabel = label
+              b.dataset.cbVal = val
+              b.textContent = label
+              b.tabIndex = 0
+              b.style.cssText = "display:block;width:100%;text-align:left;padding:8px 12px;font-size:14px;cursor:pointer;background:transparent;border:0;color:#1c3a13;transition:background 80ms;outline:none;"
+              b.onmouseenter = () => { b.style.background = "#eeeee9" }
+              b.onmouseleave = () => { b.style.background = "transparent" }
+              b.addEventListener("mousedown", (e) => { e.preventDefault() })
+              b.addEventListener("click", () => {
+                this.input.value = b.dataset.cbVal
+                this.input.dispatchEvent(new Event("input",  { bubbles: true }))
+                this.input.dispatchEvent(new Event("change", { bubbles: true }))
+                this.close()
+              })
+              b.addEventListener("keydown", (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  this.input.value = b.dataset.cbVal
+                  this.input.dispatchEvent(new Event("input",  { bubbles: true }))
+                  this.input.dispatchEvent(new Event("change", { bubbles: true }))
+                  this.close()
+                }
+                if (e.key === "ArrowDown") { e.preventDefault(); const n = b.nextElementSibling; if (n) n.focus() }
+                if (e.key === "ArrowUp")   { e.preventDefault(); const p = b.previousElementSibling; if (p) p.focus(); else this.input.focus() }
+              })
+              this.list.appendChild(b)
+            })
+            this.open()
+          },
+          open()  { this.dropdown.classList.remove("hidden") },
+          close() { this.dropdown.classList.add("hidden") }
+        }
+      </script>
     </div>
     """
   end
 
   def input(%{type: "textarea"} = assigns) do
+    assigns = ensure_id(assigns)
+
     ~H"""
     <div class="mb-3">
       <label for={@id}>
@@ -347,6 +679,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
+    assigns = ensure_id(assigns)
+
     ~H"""
     <div class="mb-3">
       <label for={@id}>
@@ -373,6 +707,20 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
     """
+  end
+
+  defp ensure_id(assigns, prefix \\ "input") do
+    cond do
+      assigns[:id] ->
+        assigns
+
+      name = assigns[:name] ->
+        clean_name = name |> to_string() |> String.replace(~r/[^\w-]/, "_")
+        assign(assigns, :id, "#{prefix}-#{clean_name}")
+
+      true ->
+        assign(assigns, :id, "#{prefix}-#{System.unique_integer([:positive])}")
+    end
   end
 
   # Helper used by inputs to generate form errors
@@ -408,6 +756,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
     default: nil,
     doc: ~S(pass "today" to disable future dates — useful for dates of birth)
 
+  attr :align, :string,
+    default: "left",
+    doc: "alignment of date picker popover relative to trigger button: 'left' or 'right'"
+
   attr :errors, :list, default: []
   attr :field, Phoenix.HTML.FormField, doc: "a form field struct, e.g. @form[:date_of_birth]"
 
@@ -415,7 +767,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
 
     assigns
-    |> assign(field: nil, id: assigns.id || field.id)
+    |> assign(field: nil, id: assigns[:id] || field.id)
     |> assign(:errors, Enum.map(errors, &translate_error(&1)))
     |> assign(:name, field.name)
     |> assign(:value, field.value)
@@ -423,7 +775,16 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   def date_picker(assigns) do
-    assigns = assign(assigns, :iso_value, date_iso(assigns[:value]))
+    assigns =
+      assigns
+      |> ensure_id("dp")
+      |> assign_new(:max, fn -> nil end)
+      |> assign_new(:label, fn -> nil end)
+      |> assign_new(:required, fn -> false end)
+      |> assign_new(:placeholder, fn -> nil end)
+      |> assign_new(:errors, fn -> [] end)
+      |> assign_new(:name, fn -> nil end)
+      |> assign(:iso_value, date_iso(assigns[:value]))
 
     ~H"""
     <div id={"#{@id}-dp"} class="mb-3 relative" phx-hook=".DatePicker" data-max={@max}>
@@ -435,7 +796,15 @@ defmodule ThamaniDawaWeb.CoreComponents do
         >*</span>
       </label>
 
-      <input type="text" name={@name} id={@id} value={@iso_value} data-dp-input class="hidden" />
+      <input
+        type="text"
+        name={@name}
+        id={@id}
+        value={@iso_value}
+        data-dp-input
+        class="hidden"
+        style="display: none !important;"
+      />
 
       <button
         type="button"
@@ -458,8 +827,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
         id={"#{@id}-dp-pop"}
         phx-update="ignore"
         hidden
-        class="absolute left-0 top-full z-50 mt-1.5 w-80 p-4 shadow-xl"
-        style="background: var(--thamani-snow); border: 1px solid var(--thamani-stone); border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);"
+        class={[
+          "absolute top-full z-[60] mt-1.5 w-72 p-3.5 rounded-2xl ff-surface-popover",
+          Map.get(assigns, :align, "left") == "right" && "right-0",
+          Map.get(assigns, :align, "left") != "right" && "left-0"
+        ]}
       >
       </div>
 
@@ -467,7 +839,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
     </div>
 
     <script :type={Phoenix.LiveView.ColocatedHook} name=".DatePicker">
-      const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+        const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
       const DOW = ["S","M","T","W","T","F","S"]
 
       export default {
@@ -809,7 +1181,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
   def header(assigns) do
     ~H"""
     <div class={[
-      @variant == "card" && "mb-5 rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm",
+      @variant == "card" && "mb-5 rounded-2xl ff-surface-card",
       @class
     ]}>
       <header class={[
@@ -822,7 +1194,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             :if={is_binary(@back)}
             navigate={@back}
             aria-label="Go back"
-            class="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-2xs shrink-0 cursor-pointer"
+            class="flex size-9 items-center justify-center rounded-xl border border-thamani-stone bg-thamani-snow text-thamani-forest hover:bg-thamani-stone transition-all shrink-0 cursor-pointer"
           >
             <.icon name="hero-arrow-left" class="size-4" />
           </.link>
@@ -831,18 +1203,18 @@ defmodule ThamaniDawaWeb.CoreComponents do
             type="button"
             aria-label="Go back"
             onclick="window.history.back()"
-            class="flex size-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-all shadow-2xs shrink-0 cursor-pointer"
+            class="flex size-9 items-center justify-center rounded-xl border border-thamani-stone bg-thamani-snow text-thamani-forest hover:bg-thamani-stone transition-all shrink-0 cursor-pointer"
           >
             <.icon name="hero-arrow-left" class="size-4" />
           </button>
           <div
             :if={@icon}
-            class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-thamani-lime text-thamani-forest"
+            class="flex size-9 items-center justify-center rounded-xl border border-thamani-stone bg-thamani-canvas text-thamani-forest shrink-0"
           >
             <.icon name={@icon} class="size-5" />
           </div>
           <div>
-            <h1 class="text-xl font-semibold leading-8 tracking-tight text-thamani-forest sm:text-2xl">
+            <h1 class="text-xl font-medium leading-8 tracking-tight text-thamani-forest sm:text-2xl">
               {render_slot(@inner_block)}
             </h1>
             <p :if={@subtitle != []} class="mt-0.5 text-sm leading-6 text-thamani-pewter">
@@ -903,7 +1275,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       end
 
     ~H"""
-    <div class="relative overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow">
+    <div class="relative overflow-hidden rounded-xl ff-surface-card">
       <div
         class="overflow-x-auto overscroll-x-contain"
         tabindex="0"
@@ -940,7 +1312,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
               id={@row_id && @row_id.(row)}
               class={[
                 "transition-colors duration-150",
-                @row_click && "hover:bg-thamani-canvas focus-within:bg-thamani-canvas"
+                @row_click &&
+                  "hover:bg-thamani-stone/70 focus-within:bg-thamani-stone/70 cursor-pointer"
               ]}
             >
               <td
@@ -1033,11 +1406,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
   def status_semantic(status) when status in [:cancelled, :rejected, :flagged], do: :danger
   def status_semantic(_status), do: :neutral
 
-  defp badge_classes(:success), do: "bg-emerald-100 text-emerald-700"
-  defp badge_classes(:warning), do: "bg-amber-100 text-amber-800"
-  defp badge_classes(:info), do: "bg-sky-100 text-sky-700"
-  defp badge_classes(:danger), do: "bg-rose-100 text-rose-700"
-  defp badge_classes(:neutral), do: "bg-slate-100 text-slate-700"
+  defp badge_classes(:success), do: "bg-thamani-lime text-thamani-forest"
+  defp badge_classes(:warning), do: "bg-amber-100 text-amber-900"
+  defp badge_classes(:info), do: "bg-thamani-stone text-thamani-forest"
+  defp badge_classes(:danger), do: "bg-rose-100 text-rose-800"
+  defp badge_classes(:neutral), do: "bg-thamani-stone text-thamani-pewter"
 
   @doc """
   Renders an empty-state placeholder for a list/table with no rows, in Thamani's
@@ -1134,7 +1507,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def list(assigns) do
     ~H"""
-    <dl class="divide-y divide-thamani-stone overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow">
+    <dl class="divide-y divide-thamani-stone overflow-hidden rounded-xl ff-surface-card">
       <div
         :for={item <- @item}
         class="grid gap-1 px-4 py-3 sm:grid-cols-[minmax(8rem,0.4fr)_minmax(0,1fr)] sm:gap-5 sm:px-5"
@@ -1237,7 +1610,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   defp thamani_btn_classes("primary"),
     do:
-      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] hover:opacity-90 w-full #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-all duration-[160ms] ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#16362c] hover:scale-[1.01] hover:-translate-y-0.5 active:scale-[0.97] active:translate-y-0 w-full #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("ghost"),
     do:
@@ -1413,7 +1786,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
               phx-key="escape"
               phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
-              class="hidden relative rounded-2xl bg-thamani-snow shadow-lg ring-1 ring-thamani-stone p-6 transition"
+              class="hidden relative rounded-2xl ff-surface-modal p-6 transition"
             >
               <div class="absolute top-4 right-4">
                 <button
@@ -1462,7 +1835,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
       value={@value}
       placeholder={@placeholder}
       phx-debounce={@debounce}
-      class="h-[40px] w-full rounded-md border border-slate-300 px-3 text-sm focus:border-thamani-accent focus:outline-none focus:ring-0"
+      phx-key="escape"
+      phx-keydown={JS.push("search", value: %{"search" => ""})}
+      class="thamani-input h-[40px] w-full rounded-xl px-4 text-sm focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
       {@rest}
     />
     """
@@ -1568,7 +1943,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <div id={@id} class="relative z-50 hidden" phx-remove={hide_filter_drawer(@id)}>
         <div
           id={"#{@id}-panel"}
-          class="absolute top-full right-0 z-50 mt-2 hidden max-h-[min(36rem,calc(100vh-9rem))] w-screen max-w-2xl origin-top-right scale-95 transform flex-col overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow opacity-0 shadow-xl transition"
+          class="absolute top-full right-0 z-50 mt-2 hidden w-screen min-w-[30rem] sm:min-w-[34rem] max-w-2xl origin-top-right scale-95 transform flex-col rounded-2xl ff-surface-modal opacity-0 transition shadow-2xl border border-thamani-stone bg-white overflow-visible"
           role="dialog"
           aria-modal="true"
           aria-labelledby={"#{@id}-title"}
@@ -1585,7 +1960,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <button
                 type="button"
                 phx-click={JS.push(@clear_event) |> hide_filter_drawer(@id)}
-                class="rounded-md px-2.5 py-1.5 text-sm font-medium text-thamani-accent hover:bg-thamani-lime/70 hover:text-thamani-forest"
+                class="rounded-md px-2.5 py-1.5 text-sm font-semibold text-thamani-forest hover:bg-thamani-stone/70 hover:underline cursor-pointer"
               >
                 Reset all
               </button>
@@ -1608,17 +1983,17 @@ defmodule ThamaniDawaWeb.CoreComponents do
                 do: JS.push(@apply_event),
                 else: JS.push(@apply_event) |> hide_filter_drawer(@id)
             }
-            class="flex min-h-0 flex-1 flex-col"
+            class="flex min-h-0 flex-1 flex-col overflow-visible"
           >
             <button type="reset" id={"#{@id}-reset-btn"} class="hidden" aria-hidden="true" />
 
-            <div class="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+            <div class="flex-1 overflow-visible px-5 py-5 sm:px-6 min-h-[16rem]">
               <div class={["grid grid-cols-1 gap-6", length(@group) > 1 && "sm:grid-cols-2"]}>
-                <div :for={group <- @group}>
+                <div :for={group <- @group} class="overflow-visible">
                   <h3 class="mb-3 text-xs font-semibold tracking-wide text-slate-500 uppercase">
                     {group.label}
                   </h3>
-                  <div>
+                  <div class="overflow-visible">
                     {render_slot(group)}
                   </div>
                 </div>

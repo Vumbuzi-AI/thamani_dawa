@@ -261,7 +261,7 @@ defmodule ThamaniDawaWeb.Layouts do
     <div
       id="sidebar-shell"
       class="internal-app flex min-h-screen overflow-x-hidden lg:h-screen lg:overflow-hidden"
-      style="background: var(--thamani-canvas); font-family: var(--font-thamani-sans, sans-serif);"
+      style="background: var(--surface-1); font-family: var(--font-thamani-sans, sans-serif);"
       phx-hook=".Sidebar"
     >
       <button
@@ -274,7 +274,7 @@ defmodule ThamaniDawaWeb.Layouts do
       <aside
         id="sidebar-aside"
         class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full shrink-0 flex-col border-r transition-[transform,width] duration-200 ease-in-out lg:relative lg:translate-x-0"
-        style="background: var(--thamani-snow); border-color: var(--thamani-border-nav); width: 288px; padding: 24px 20px;"
+        style="background: var(--thamani-sidenav, #EFEFF0); border-color: var(--thamani-border-nav); width: 288px; padding: 24px 20px;"
         aria-label={"#{@section_label} navigation"}
       >
         <%!-- Brand row --%>
@@ -321,7 +321,7 @@ defmodule ThamaniDawaWeb.Layouts do
               style={
                 if active,
                   do:
-                    "background: var(--thamani-lime); color: var(--thamani-forest); padding: 12px; min-height: 48px;",
+                    "background: var(--thamani-forest); color: var(--thamani-snow); padding: 12px; min-height: 48px;",
                   else: "color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
               }
             >
@@ -331,8 +331,8 @@ defmodule ThamaniDawaWeb.Layouts do
               </span>
               <span
                 :if={Map.get(@nav_badges, path, 0) > 0}
-                class="nav-label ml-auto inline-flex items-center justify-center rounded-full bg-warning text-warning-content text-[11px] font-medium leading-none transition-opacity duration-150"
-                style="min-width: 20px; height: 20px; padding: 0 6px;"
+                class="nav-badge bg-warning ml-auto inline-flex items-center justify-center rounded-full text-[11px] font-semibold leading-none"
+                style="min-width: 20px; height: 20px; padding: 0 6px; background: var(--thamani-lime); color: var(--thamani-forest);"
               >
                 {Map.get(@nav_badges, path)}
               </span>
@@ -390,13 +390,13 @@ defmodule ThamaniDawaWeb.Layouts do
             type="button"
             aria-label="Collapse sidebar"
             data-tooltip="Collapse sidebar"
-            class="flex items-center gap-3 w-full rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40 hover:bg-slate-100/80"
-            style="background: #FBFBFF; border: 1px solid #E8EBF3; color: var(--thamani-pewter); padding: 10px 14px; min-height: 42px;"
+            class="flex items-center gap-3 w-full rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40 hover:bg-slate-100/80"
+            style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav); color: var(--thamani-pewter); padding: 10px 14px; min-height: 42px;"
           >
             <span id="sidebar-toggle-icon" class="inline-flex transition-transform duration-200">
               <.icon name="hero-chevron-left" class="size-4 shrink-0" />
             </span>
-            <span class="nav-label text-[13px] font-medium transition-opacity duration-150 text-slate-600 truncate">
+            <span class="nav-label text-[13px] font-medium transition-opacity duration-150 text-thamani-pewter truncate">
               Collapse sidebar
             </span>
           </button>
@@ -405,40 +405,77 @@ defmodule ThamaniDawaWeb.Layouts do
             id="site-switch-form"
             action={~p"/switch-site"}
             method="post"
-            class="flex flex-col gap-1"
+            class="relative flex flex-col gap-1"
           >
             <input type="hidden" name="_method" value="patch" />
             <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
             <input type="hidden" name="return_to" value={@current_path} />
-            <label
-              for="site-switch-select"
-              class="px-3 text-[11px] font-medium uppercase tracking-wide"
+            <input
+              type="hidden"
+              id="site-switch-input"
+              name="site_id"
+              value={@current_scope.current_site_id}
+            />
+
+            <span
+              class="px-1 text-[11px] font-medium uppercase tracking-wide"
               style="color: var(--thamani-subtle);"
             >
               Current site
-            </label>
-            <select
-              id="site-switch-select"
-              name="site_id"
-              class="rounded-lg text-sm"
-              style="background: #FBFBFF; border: 1px solid #E8EBF3; padding: 8px 10px;"
-              onchange="this.form.requestSubmit()"
+            </span>
+
+            <button
+              type="button"
+              id="site-switch-trigger"
+              phx-click={JS.toggle(to: "#site-switch-dropdown")}
+              phx-click-away={JS.hide(to: "#site-switch-dropdown")}
+              class="flex items-center justify-between gap-2 w-full rounded-xl px-3 py-2.5 text-sm font-medium text-thamani-forest transition-colors cursor-pointer"
+              style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav);"
             >
-              <option
+              <div class="flex items-center gap-2 min-w-0 truncate">
+                <.icon name="hero-building-office-2" class="size-4 shrink-0 text-thamani-forest/70" />
+                <span class="truncate">{current_site_name(@current_scope)}</span>
+              </div>
+              <.icon name="hero-chevron-down" class="size-4 shrink-0 text-thamani-pewter" />
+            </button>
+
+            <div
+              id="site-switch-dropdown"
+              class="absolute bottom-full left-0 mb-1.5 w-full z-50 hidden rounded-xl bg-white shadow-xl border border-thamani-stone p-1.5 ff-surface-popover"
+            >
+              <button
                 :for={site <- @current_scope.user.sites}
-                value={site.id}
-                selected={site.id == @current_scope.current_site_id}
+                type="button"
+                onclick={"
+                  document.getElementById('site-switch-input').value = '#{site.id}';
+                  document.getElementById('site-switch-form').requestSubmit();
+                "}
+                class={[
+                  "flex items-center justify-between w-full rounded-lg px-3 py-2 text-xs font-medium text-left transition-colors cursor-pointer",
+                  site.id == @current_scope.current_site_id &&
+                    "bg-thamani-forest/10 text-thamani-forest font-semibold",
+                  site.id != @current_scope.current_site_id &&
+                    "text-slate-700 hover:bg-thamani-stone/60 hover:text-thamani-forest"
+                ]}
               >
-                {site.name}
-              </option>
-            </select>
+                <div class="flex items-center gap-2 truncate min-w-0">
+                  <.icon name="hero-building-office-2" class="size-3.5 shrink-0 opacity-60" />
+                  <span class="truncate">{site.name}</span>
+                </div>
+                <.icon
+                  :if={site.id == @current_scope.current_site_id}
+                  name="hero-check"
+                  class="size-4 shrink-0 text-thamani-forest"
+                />
+              </button>
+            </div>
           </form>
 
           <div
             id="sidebar-account-card"
             data-tooltip={@current_scope.user.name}
             class="flex items-center gap-3 transition-opacity duration-150"
-            style="background: #FBFBFF; border: 1px solid #E8EBF3; border-radius: 16px; padding: 14px 16px;"
+            style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav); border-radius: 16px; padding: 14px 16px;"
           >
             <div
               class="rounded-full flex items-center justify-center shrink-0 aspect-square font-semibold text-[15px]"

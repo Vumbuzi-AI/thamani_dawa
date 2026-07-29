@@ -30,12 +30,16 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
     sites = Enum.map(site_names, &site_fixture(%{organization_id: org_id, name: &1}))
 
     pharmacist =
-      staff_fixture(%{
-        organization_id: org_id,
-        invited_by_id: admin.id,
-        role: :pharmacist,
-        site_ids: Enum.map(sites, & &1.id)
-      })
+      Map.put(
+        staff_fixture(%{
+          organization_id: org_id,
+          invited_by_id: admin.id,
+          role: :pharmacist,
+          site_ids: Enum.map(sites, & &1.id)
+        }),
+        :current_site_id,
+        nil
+      )
 
     {org_id, pharmacist, sites}
   end
@@ -69,7 +73,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
   end
 
   describe "assigned-site reads" do
-    test "a pharmacist sees batches at every site they're assigned to", %{conn: conn} do
+    test "a pharmacist sees batches for their current site", %{conn: conn} do
       {org_id, pharmacist, [site_a, site_b]} = pharmacist_assigned_to(["Site A", "Site B"])
 
       batch_a =
@@ -81,9 +85,8 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
       assert html =~ batch_a.batch_no
-      assert html =~ batch_b.batch_no
+      refute html =~ batch_b.batch_no
       assert html =~ "Site A"
-      assert html =~ "Site B"
     end
 
     test "a pharmacist can neither see nor filter into a site they aren't assigned to", %{
@@ -182,106 +185,6 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
       assert has_element?(view, "#stock td", "—")
-    end
-  end
-
-  describe "site filter" do
-    test "narrows the list to just the selected site", %{conn: conn} do
-      {org_id, pharmacist, [site_a, site_b]} = pharmacist_assigned_to(["Site A", "Site B"])
-
-      batch_a =
-        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BATCH-SITE-A"})
-
-      batch_b =
-        batch_fixture(%{organization_id: org_id, site_id: site_b.id, batch_no: "BATCH-SITE-B"})
-
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
-
-      lv
-      |> form("#stock-filters-form", filters: %{site: to_string(site_a.id)})
-      |> render_submit()
-
-      html = render(lv)
-      assert html =~ batch_a.batch_no
-      refute html =~ batch_b.batch_no
-      assert html =~ "Site: Site A"
-    end
-
-    test "clear_filters shows every assigned site again", %{conn: conn} do
-      {org_id, pharmacist, [site_a, site_b]} = pharmacist_assigned_to(["Site A", "Site B"])
-
-      batch_a =
-        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BATCH-SITE-A"})
-
-      batch_b =
-        batch_fixture(%{organization_id: org_id, site_id: site_b.id, batch_no: "BATCH-SITE-B"})
-
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
-
-      lv
-      |> form("#stock-filters-form", filters: %{site: to_string(site_a.id)})
-      |> render_submit()
-
-      refute render(lv) =~ batch_b.batch_no
-
-      lv |> element("button", "Clear filters") |> render_click()
-
-      html = render(lv)
-      assert html =~ batch_a.batch_no
-      assert html =~ batch_b.batch_no
-    end
-
-    test "clearing the site filter chip removes just that filter", %{conn: conn} do
-      {org_id, pharmacist, [site_a, site_b]} = pharmacist_assigned_to(["Site A", "Site B"])
-
-      batch_a =
-        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BATCH-SITE-A"})
-
-      batch_b =
-        batch_fixture(%{organization_id: org_id, site_id: site_b.id, batch_no: "BATCH-SITE-B"})
-
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
-
-      lv
-      |> form("#stock-filters-form", filters: %{site: to_string(site_a.id)})
-      |> render_submit()
-
-      lv
-      |> element("button[aria-label='Remove Site: Site A filter']")
-      |> render_click()
-
-      html = render(lv)
-      assert html =~ batch_a.batch_no
-      assert html =~ batch_b.batch_no
-    end
-
-    test "a malformed site filter is ignored rather than crashing, for staff and admin", %{
-      conn: conn
-    } do
-      {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
-      batch = batch_fixture(%{organization_id: org_id, site_id: site_a.id})
-
-      # Staff path: `sanitize_site_filter/2` used to raise on a non-numeric value.
-      {:ok, staff_lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
-      html = render_submit(staff_lv, "apply_filters", %{"filters" => %{"site" => "abc"}})
-      assert html =~ batch.batch_no
-
-      # Admin path: the value reached `Batches.filter_by_site_opt/2` unsanitised.
-      admin = user_fixture(%{organization_id: org_id})
-      {:ok, admin_lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
-      html = render_submit(admin_lv, "apply_filters", %{"filters" => %{"site" => "abc"}})
-      assert html =~ batch.batch_no
-    end
-
-    test "for an admin, a stale site filter falls back to showing its raw id", %{conn: conn} do
-      # Admins are org-wide, so their filter value isn't narrowed to an assigned
-      # set — a since-deleted site id survives and is shown as-is on the chip.
-      admin = user_fixture()
-      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
-
-      html = render_submit(lv, "apply_filters", %{"filters" => %{"site" => "999999"}})
-
-      assert html =~ "Site: 999999"
     end
   end
 

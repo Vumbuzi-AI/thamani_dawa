@@ -30,19 +30,19 @@ defmodule ThamaniDawaWeb.PatientLive.Show do
       </.header>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="rounded-xl border border-thamani-stone bg-thamani-snow p-4">
+        <div class="rounded-xl ff-surface-card p-4">
           <div class="text-xs text-thamani-pewter">Phone</div>
           <div class="font-semibold">{@patient.phone}</div>
         </div>
-        <div class="rounded-xl border border-thamani-stone bg-thamani-snow p-4">
+        <div class="rounded-xl ff-surface-card p-4">
           <div class="text-xs text-thamani-pewter">Gender</div>
           <div class="font-semibold">{@patient.gender}</div>
         </div>
-        <div class="rounded-xl border border-thamani-stone bg-thamani-snow p-4">
+        <div class="rounded-xl ff-surface-card p-4">
           <div class="text-xs text-thamani-pewter">Age</div>
           <div class="font-semibold">{Patient.age(@patient)}</div>
         </div>
-        <div class="rounded-xl border border-thamani-stone bg-thamani-snow p-4">
+        <div class="rounded-xl ff-surface-card p-4">
           <div class="text-xs text-thamani-pewter">National ID</div>
           <div class="font-semibold">{@patient.national_id || "-"}</div>
         </div>

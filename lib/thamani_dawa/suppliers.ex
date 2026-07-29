@@ -15,6 +15,13 @@ defmodule ThamaniDawa.Suppliers do
     Repo.all(from s in Supplier, where: s.organization_id == ^organization_id)
   end
 
+  @doc "Lists an organization's active suppliers."
+  def list_active_suppliers(organization_id) do
+    Repo.all(
+      from s in Supplier, where: s.organization_id == ^organization_id and s.is_active == true
+    )
+  end
+
   @doc "Lists an organization's suppliers with pagination."
   def list_suppliers_paginated(organization_id, page \\ 1) do
     from(s in Supplier, where: s.organization_id == ^organization_id)

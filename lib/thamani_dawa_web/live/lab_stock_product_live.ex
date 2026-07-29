@@ -36,7 +36,12 @@ defmodule ThamaniDawaWeb.LabStockProductLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path="/lab/stock">
+    <Layouts.lab_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/lab/stock"
+      back={~p"/lab/stock"}
+    >
       <.header icon="hero-cube">
         {product_name(@product)}
         <:subtitle>Every batch of this product across lab sites — read-only.</:subtitle>

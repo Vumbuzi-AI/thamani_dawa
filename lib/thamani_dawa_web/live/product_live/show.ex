@@ -24,7 +24,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
      socket
      |> assign(:product, product)
      |> assign(:sites_by_id, sites_by_id)
-     |> assign(:suppliers, Suppliers.list_suppliers(organization_id))
+     |> assign(:suppliers, Suppliers.list_active_suppliers(organization_id))
      |> assign(:selected_batch, nil)
      |> stream(:batches, batches)}
   end
@@ -216,12 +216,15 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
             <.input field={@form[:gtin]} label="GTIN" required />
             <.input field={@form[:batch_no]} label="Batch / lot number" required />
             <.input field={@form[:serial]} label="Serial" />
-            <.input field={@form[:manufacture_date]} type="date" label="Manufacture date" />
-            <.input
+            <.date_picker
+              field={@form[:manufacture_date]}
+              label="Manufacture date"
+              placeholder="Choose date"
+            />
+            <.date_picker
               field={@form[:expiry_date]}
-              type="date"
               label="Expiry date"
-              min={Date.to_iso8601(Date.utc_today())}
+              placeholder="Choose expiry date"
               required
             />
             <.input field={@form[:quantity]} type="number" label="Quantity" required />
@@ -234,9 +237,8 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
               prompt="No supplier"
             />
           </div>
-          <div class="flex gap-2 mt-2">
-            <.button variant="primary">Dispatch</.button>
-            <.button patch={~p"/org/products/#{@product.id}"}>Cancel</.button>
+          <div class="pt-4">
+            <.button variant="primary" class="w-full">Dispatch batch</.button>
           </div>
         </.form>
       </.modal>

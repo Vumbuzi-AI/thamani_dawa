@@ -42,14 +42,14 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
       html = render_component(&status_badge/1, status: :partially_dispensed)
 
       assert html =~ "Partially dispensed"
-      assert html =~ "bg-sky-100"
+      assert html =~ "bg-thamani-stone"
     end
 
     test "renders success styling for a success-mapped status" do
       html = render_component(&status_badge/1, status: :verified)
 
       assert html =~ "Verified"
-      assert html =~ "bg-emerald-100"
+      assert html =~ "bg-thamani-lime"
     end
   end
 
@@ -117,7 +117,7 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
       assert html =~ "Product catalog"
       assert html =~ "toolbar content"
       assert html =~ "border-b border-thamani-stone"
-      assert html =~ "rounded-2xl border border-thamani-stone bg-thamani-snow shadow-sm"
+      assert html =~ "ff-surface-card"
     end
 
     test "variant=\"plain\" renders no card shell, for bare section dividers" do

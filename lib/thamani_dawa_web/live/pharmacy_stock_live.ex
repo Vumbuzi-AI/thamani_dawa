@@ -31,7 +31,12 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
     scope = socket.assigns.current_scope
     org_id = scope.organization_id
     sites = if Scope.admin?(scope), do: Sites.list_sites(org_id), else: scope.user.sites
-    site_ids = if Scope.admin?(scope), do: nil, else: Enum.map(sites, & &1.id)
+
+    site_ids =
+      case scope.current_site_id do
+        nil -> if Scope.admin?(scope), do: nil, else: Enum.map(sites, & &1.id)
+        current_id -> [current_id]
+      end
 
     {:ok,
      socket
@@ -163,7 +168,12 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
     org_id = socket.assigns.current_scope.organization_id
 
     page_result =
-      Products.list_products_paginated(org_id, socket.assigns.page, search: socket.assigns.search)
+      Products.list_products_with_site_batches_paginated(
+        org_id,
+        socket.assigns.allowed_site_ids,
+        socket.assigns.page,
+        search: socket.assigns.search
+      )
 
     products = page_result.entries
 
@@ -298,15 +308,6 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
             apply_event="apply_filters"
             active_count={active_filter_count(@filters)}
           >
-            <:group label="Site">
-              <.input
-                type="select"
-                name="filters[site]"
-                value={@filters.site}
-                options={@site_options}
-                prompt="All sites"
-              />
-            </:group>
             <:group label="Status">
               <.input
                 type="select"
