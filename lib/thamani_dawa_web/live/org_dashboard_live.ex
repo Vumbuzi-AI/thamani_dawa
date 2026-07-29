@@ -373,7 +373,8 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               phx-click="toggle_filters"
               class={[
                 "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-normal transition-all shrink-0 cursor-pointer w-full sm:w-auto border",
-                @show_filters && "bg-thamani-forest text-thamani-snow border-thamani-forest shadow-sm",
+                @show_filters &&
+                  "bg-thamani-forest text-thamani-snow border-thamani-forest shadow-sm",
                 !@show_filters &&
                   "bg-thamani-snow text-thamani-forest border-thamani-stone hover:bg-thamani-stone/60"
               ]}
