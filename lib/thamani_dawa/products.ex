@@ -34,13 +34,8 @@ defmodule ThamaniDawa.Products do
       query = filter_search(query, search)
       Repo.paginate(query, page: page)
     else
-      %Scrivener.Page{
-        entries: [],
-        page_number: page,
-        total_pages: 1,
-        total_entries: 0,
-        page_size: 10
-      }
+      from(p in Product, where: false)
+      |> Repo.paginate(page: page)
     end
   end
 
