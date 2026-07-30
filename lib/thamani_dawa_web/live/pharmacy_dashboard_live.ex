@@ -105,8 +105,8 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         %{
           label: "Units dispensed",
           data: Enum.map(dispensed_by_day, fn {_date, qty} -> qty end),
-          borderColor: "#6667ab",
-          backgroundColor: "rgba(102, 103, 171, 0.14)",
+          borderColor: "#1c3a13",
+          backgroundColor: "rgba(28, 58, 19, 0.14)",
           fill: true,
           tension: 0.3,
           pointRadius: 3
@@ -122,7 +122,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         %{
           label: "Units dispensed",
           data: Enum.map(top_products, fn {_name, qty} -> qty end),
-          backgroundColor: "#1f9e8f",
+          backgroundColor: "#757c5d",
           borderRadius: 4
         }
       ]
@@ -254,7 +254,9 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         row_click={fn batch -> JS.navigate(~p"/pharmacy/scan?gtin=#{batch.gtin}") end}
       >
         <:col :let={batch} label="Product">{product_name(@products_by_id[batch.product_id])}</:col>
-        <:col :let={batch} label="Batch no.">{batch.batch_no}</:col>
+        <:col :let={batch} label="Batch no.">
+          <span class="code-pill">{batch.batch_no}</span>
+        </:col>
         <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
         <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
         <:empty_state>

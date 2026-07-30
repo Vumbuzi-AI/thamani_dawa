@@ -168,7 +168,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
         <section
           :if={@stock_take.status == :draft}
           id="add-batch-panel"
-          class="rounded-xl border border-thamani-stone bg-thamani-snow p-4 sm:p-5"
+          class="rounded-xl ff-surface-card p-4 sm:p-5"
         >
           <h2 class="mb-3 text-sm font-semibold text-slate-700">Add a batch to count</h2>
           <form
@@ -218,7 +218,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
               <% batch = item.batch %>
               <article
                 id={"item-#{item.id}"}
-                class="overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow"
+                class="overflow-hidden rounded-xl ff-surface-card"
               >
                 <div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div class="min-w-0">
@@ -280,7 +280,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
                         label="Physical count"
                         min="0"
                         required
-                        class="h-10 w-28 rounded-lg border border-thamani-stone bg-white px-3 text-right text-sm tabular-nums outline-none transition focus:border-thamani-accent focus:ring-2 focus:ring-thamani-accent/15"
+                        class="thamani-input h-10 w-28 rounded-lg px-3 text-right text-sm tabular-nums focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
                       />
                     </div>
                     <.button variant="primary" class="!py-2" phx-disable-with="Saving…">

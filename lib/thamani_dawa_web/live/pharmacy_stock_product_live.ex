@@ -33,6 +33,7 @@ defmodule ThamaniDawaWeb.PharmacyStockProductLive do
       flash={@flash}
       current_scope={@current_scope}
       current_path="/pharmacy/stock"
+      back={~p"/pharmacy/stock"}
     >
       <.header icon="hero-cube">
         {product_name(@product)}

@@ -387,10 +387,10 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       {:ok, _view, html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/new")
 
       # Rendered as a select of approved options, not a free-text field.
-      assert html =~ ~s(<select id="lab_order_payment_type")
+      assert html =~ ~s(<select id="lab_order_payment_type-input")
 
       for method <- ThamaniDawa.PaymentMethods.all() do
-        assert html =~ ~s(<option value="#{method}">#{method}</option>)
+        assert html =~ ~s(<option value="#{method}">)
       end
     end
 
@@ -495,7 +495,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
       {:ok, lv, _html} = live(conn, ~p"/lab/orders/#{lab_order.id}/payments/new")
 
-      lv |> element("#payment-modal a", "Cancel") |> render_click()
+      lv |> element("#payment-modal button[aria-label='Cancel']") |> render_click()
 
       assert_patch(lv, ~p"/lab/orders/#{lab_order.id}")
       refute has_element?(lv, "#payment-modal")

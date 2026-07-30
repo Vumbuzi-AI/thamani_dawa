@@ -189,4 +189,26 @@ defmodule ThamaniDawa.ProductsTest do
       end
     end
   end
+
+  describe "list_products_with_site_batches_paginated/4" do
+    test "returns a valid Scrivener.Page with correct metadata when site_ids is empty or non-list" do
+      organization = organization_fixture()
+
+      assert %Scrivener.Page{
+               entries: [],
+               page_number: 1,
+               total_pages: 1,
+               total_entries: 0,
+               page_size: _page_size
+             } = Products.list_products_with_site_batches_paginated(organization.id, [])
+
+      assert %Scrivener.Page{
+               entries: [],
+               page_number: 1,
+               total_pages: 1,
+               total_entries: 0,
+               page_size: _page_size
+             } = Products.list_products_with_site_batches_paginated(organization.id, nil, 1)
+    end
+  end
 end

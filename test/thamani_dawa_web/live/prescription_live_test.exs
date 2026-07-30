@@ -678,7 +678,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html = render(show_live)
       assert html =~ "Completed"
-      assert html =~ "bg-emerald-100"
+      assert html =~ "bg-thamani-lime"
 
       updated_prescription = ThamaniDawa.Prescriptions.get_prescription!(org.id, prescription.id)
       assert updated_prescription.status == :completed
@@ -1015,7 +1015,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, lv, _html} =
         live(ctx.conn, ~p"/pharmacy/prescriptions/#{ctx.prescription.id}/payments/new")
 
-      lv |> element("#payment-modal a", "Cancel") |> render_click()
+      lv |> element("#payment-modal button[aria-label='Cancel']") |> render_click()
 
       assert_patch(lv, ~p"/pharmacy/prescriptions/#{ctx.prescription.id}")
       refute has_element?(lv, "#payment-modal")

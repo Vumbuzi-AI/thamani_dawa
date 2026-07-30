@@ -46,11 +46,20 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
     {:noreply,
      socket
      |> assign(:search_query, query)
+     |> assign(:search_active, true)
      |> assign(:stats, Dashboards.admin_stats(organization_id, site_id, dates, query))
      |> assign(
        :search_results,
        Dashboards.search_admin_dashboard(organization_id, query, dates, site_id)
      )}
+  end
+
+  def handle_event("activate_search", _params, socket) do
+    {:noreply, assign(socket, :search_active, true)}
+  end
+
+  def handle_event("dismiss_search", _params, socket) do
+    {:noreply, assign(socket, :search_active, false)}
   end
 
   def handle_event("clear_search", _params, socket) do
@@ -62,6 +71,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
     {:noreply,
      socket
      |> assign(:search_query, "")
+     |> assign(:search_active, false)
      |> assign(:stats, Dashboards.admin_stats(organization_id, site_id, dates, ""))
      |> assign(:search_results, %{patients: [], sites: [], staff: [], visits: []})}
   end
@@ -193,6 +203,43 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
     "KSh " <> grouped
   end
 
+  defp combined_search_items(results) do
+    patients =
+      Enum.map(Map.get(results, :patients, []), fn p ->
+        %{
+          type: :patient,
+          title: p.full_name,
+          subtitle: "Phone: #{p.phone} • DOB: #{p.date_of_birth}",
+          badge: "GSRN: #{p.gsrn}",
+          icon: "hero-user"
+        }
+      end)
+
+    staff =
+      Enum.map(Map.get(results, :staff, []), fn u ->
+        %{
+          type: :staff,
+          title: u.name,
+          subtitle: u.email,
+          badge: String.capitalize(to_string(u.role)),
+          icon: "hero-users"
+        }
+      end)
+
+    visits =
+      Enum.map(Map.get(results, :visits, []), fn v ->
+        %{
+          type: :visit,
+          title: v.patient_name,
+          subtitle: "Date: #{Calendar.strftime(to_date_val(v.inserted_at), "%d %b %Y")}",
+          badge: String.capitalize(to_string(v.visit_type)),
+          icon: "hero-document-text"
+        }
+      end)
+
+    patients ++ staff ++ visits
+  end
+
   defp daily_revenue_chart_data(daily_revenue) do
     %{
       labels: Enum.map(daily_revenue, fn {date, _amount} -> Calendar.strftime(date, "%d %b") end),
@@ -200,8 +247,8 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         %{
           label: "KSh Collected",
           data: Enum.map(daily_revenue, fn {_date, amount} -> amount end),
-          borderColor: "#6667ab",
-          backgroundColor: "rgba(102, 103, 171, 0.14)",
+          borderColor: "#1c3a13",
+          backgroundColor: "rgba(28, 58, 19, 0.14)",
           fill: true,
           tension: 0.3,
           pointRadius: 3
@@ -212,13 +259,12 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp monthly_revenue_chart_data(monthly_revenue) do
     %{
-      labels:
-        Enum.map(monthly_revenue, fn {date, _amount} -> Calendar.strftime(date, "%b %Y") end),
+      labels: Enum.map(monthly_revenue, fn {date, _n} -> Calendar.strftime(date, "%b %Y") end),
       datasets: [
         %{
           label: "Revenue",
-          data: Enum.map(monthly_revenue, fn {_date, amount} -> amount end),
-          backgroundColor: "#6667ab",
+          data: Enum.map(monthly_revenue, fn {_date, n} -> n end),
+          backgroundColor: "#757c5d",
           borderRadius: 4
         }
       ]
@@ -315,14 +361,14 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       back={~p"/org/sites"}
     >
       <%!-- Granular Site Header Dashboard Card --%>
-      <div class="relative bg-white rounded-3xl p-6 sm:p-8 shadow-xs border border-slate-100/80 mb-6">
+      <div class="relative ff-surface-card rounded-3xl p-6 sm:p-8 mb-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
               <h1 class="text-2xl sm:text-3xl font-medium text-slate-900 tracking-tight">
                 {@site.name}
               </h1>
-              <span class="px-3 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100/60 capitalize">
+              <span class="px-3 py-1 text-xs font-medium bg-thamani-lime text-thamani-forest rounded-full border border-thamani-forest/10 capitalize">
                 {Phoenix.Naming.humanize(@site.site_type)}
               </span>
             </div>
@@ -342,6 +388,16 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           </div>
         </div>
 
+        <%!-- Fixed backdrop blur overlay when search popover is active --%>
+        <div
+          :if={
+            @search_query != "" and String.trim(@search_query) != "" and
+              Map.get(assigns, :search_active, true)
+          }
+          class="fixed inset-0 z-30 bg-black/15 backdrop-blur-sm transition-opacity"
+          phx-click="dismiss_search"
+        />
+
         <%!-- Search & Filters row --%>
         <div class="mt-6 flex flex-col sm:flex-row items-center gap-3 w-full">
           <div class="relative flex-1 w-full">
@@ -350,118 +406,84 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
               name="search"
               value={@search_query}
               phx-keyup="search"
+              phx-focus="activate_search"
+              phx-click="activate_search"
               phx-debounce="250"
               placeholder={"Search patients, visits, revenue or reports at #{@site.name}..."}
-              class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 placeholder:text-slate-400 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-600/15 shadow-2xs transition-all"
+              class="thamani-input relative z-40 w-full rounded-xl px-4 py-2.5 text-sm placeholder:text-thamani-pewter/60 focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
             />
 
             <%!-- Search Results Popover --%>
             <div
-              :if={@search_query != "" and String.trim(@search_query) != ""}
-              class="absolute left-0 right-0 top-full z-40 mt-2 bg-white rounded-2xl border border-slate-200/90 shadow-2xl p-5 space-y-4 max-h-[460px] overflow-y-auto"
+              :if={
+                @search_query != "" and String.trim(@search_query) != "" and
+                  Map.get(assigns, :search_active, true)
+              }
+              class="absolute left-0 right-0 top-full z-40 mt-2 rounded-2xl p-4 space-y-3 max-h-[460px] overflow-y-auto ff-surface-popover"
             >
-              <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div class="flex items-center justify-between border-b border-thamani-stone pb-2.5">
                 <div class="flex items-center gap-2">
-                  <.icon name="hero-magnifying-glass" class="size-4 text-indigo-600" />
-                  <span class="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                  <.icon name="hero-magnifying-glass" class="size-4 text-thamani-forest" />
+                  <span class="text-xs font-medium text-thamani-forest uppercase tracking-wider">
                     Search hits at {@site.name} for "{@search_query}"
                   </span>
                 </div>
-                <button
-                  type="button"
-                  phx-click="clear_search"
-                  class="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
-                >
-                  Clear search
-                </button>
+                <div class="flex items-center gap-3">
+                  <button
+                    type="button"
+                    phx-click="clear_search"
+                    class="text-xs font-medium text-thamani-forest hover:underline cursor-pointer"
+                  >
+                    Clear search
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="dismiss_search"
+                    class="text-xs font-medium text-thamani-pewter hover:text-thamani-forest cursor-pointer"
+                  >
+                    <.icon name="hero-x-mark" class="size-4" />
+                  </button>
+                </div>
               </div>
 
-              <div class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-100 flex items-center justify-between">
+              <div class="text-xs text-thamani-pewter bg-thamani-stone/50 p-2.5 rounded-lg border border-thamani-stone flex items-center justify-between">
                 <span>Site metrics below filtered for "{@search_query}"</span>
-                <span class="font-bold text-indigo-700">
+                <span class="font-medium text-thamani-forest">
                   {@stats.total_patients} patients • {@stats.patient_visits} visits • {money(
                     @stats.revenue_collected
                   )}
                 </span>
               </div>
 
-              <%!-- Patients Section --%>
-              <div :if={@search_results.patients != []} class="space-y-2">
-                <div class="flex items-center gap-2 text-xs font-bold text-indigo-700 uppercase tracking-wider">
-                  <.icon name="hero-user" class="size-4" />
-                  Patients ({length(@search_results.patients)})
-                </div>
-                <div class="divide-y divide-slate-100 rounded-xl border border-slate-100 bg-white">
-                  <div
-                    :for={patient <- @search_results.patients}
-                    class="p-3 hover:bg-slate-50 transition-colors flex items-center justify-between"
-                  >
-                    <div>
-                      <p class="text-sm font-semibold text-slate-900">{patient.full_name}</p>
-                      <p class="text-xs text-slate-500">
-                        Phone: {patient.phone} • DOB: {patient.date_of_birth}
-                      </p>
+              <%!-- Unified Flat Search Items List --%>
+              <% items = combined_search_items(@search_results) %>
+              <div
+                :if={items != []}
+                class="divide-y divide-thamani-stone/60 rounded-xl ff-surface-card"
+              >
+                <div
+                  :for={item <- items}
+                  class="p-3 hover:bg-thamani-stone/40 transition-colors flex items-center justify-between gap-3"
+                >
+                  <div class="flex items-center gap-3 min-w-0">
+                    <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-thamani-stone text-thamani-forest">
+                      <.icon name={item.icon} class="size-4" />
                     </div>
-                    <span class="px-2.5 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 rounded-full">
-                      GSRN: {patient.gsrn}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <%!-- Staff Section --%>
-              <div :if={@search_results.staff != []} class="space-y-2">
-                <div class="flex items-center gap-2 text-xs font-bold text-violet-700 uppercase tracking-wider">
-                  <.icon name="hero-users" class="size-4" />
-                  Assigned Staff ({length(@search_results.staff)})
-                </div>
-                <div class="divide-y divide-slate-100 rounded-xl border border-slate-100 bg-white">
-                  <div
-                    :for={user <- @search_results.staff}
-                    class="p-3 hover:bg-slate-50 transition-colors flex items-center justify-between"
-                  >
-                    <div>
-                      <p class="text-sm font-semibold text-slate-900">{user.name}</p>
-                      <p class="text-xs text-slate-500">{user.email}</p>
+                    <div class="min-w-0">
+                      <p class="text-sm font-medium text-thamani-forest truncate">{item.title}</p>
+                      <p class="text-xs text-thamani-pewter truncate">{item.subtitle}</p>
                     </div>
-                    <span class="px-2.5 py-1 text-xs font-medium bg-violet-50 text-violet-700 rounded-full capitalize">
-                      {user.role}
-                    </span>
                   </div>
-                </div>
-              </div>
-
-              <%!-- Visits Section --%>
-              <div :if={@search_results.visits != []} class="space-y-2">
-                <div class="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wider">
-                  <.icon name="hero-document-text" class="size-4" />
-                  Site Visits ({length(@search_results.visits)})
-                </div>
-                <div class="divide-y divide-slate-100 rounded-xl border border-slate-100 bg-white">
-                  <div
-                    :for={visit <- @search_results.visits}
-                    class="p-3 hover:bg-slate-50 transition-colors flex items-center justify-between"
-                  >
-                    <div>
-                      <p class="text-sm font-semibold text-slate-900">{visit.patient_name}</p>
-                      <p class="text-xs text-slate-500">
-                        Date: {Calendar.strftime(to_date_val(visit.inserted_at), "%d %b %Y")}
-                      </p>
-                    </div>
-                    <span class="px-2.5 py-1 text-xs font-medium bg-amber-50 text-amber-700 rounded-full capitalize">
-                      {visit.visit_type}
-                    </span>
-                  </div>
+                  <span class="px-2.5 py-1 text-xs font-medium bg-thamani-lime text-thamani-forest rounded-full shrink-0">
+                    {item.badge}
+                  </span>
                 </div>
               </div>
 
               <%!-- Empty state --%>
               <div
-                :if={
-                  @search_results.patients == [] and @search_results.staff == [] and
-                    @search_results.visits == []
-                }
-                class="py-8 text-center text-sm text-slate-500"
+                :if={items == []}
+                class="py-8 text-center text-sm text-thamani-pewter"
               >
                 No matching records found at {@site.name} for "{@search_query}"
               </div>
@@ -471,7 +493,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           <button
             type="button"
             phx-click="toggle_filters"
-            class="inline-flex items-center justify-center gap-2 rounded-xl bg-[#3b3a98] hover:bg-[#312e84] text-white px-5 py-2.5 text-sm font-medium shadow-xs transition-colors shrink-0 cursor-pointer w-full sm:w-auto"
+            class="inline-flex items-center justify-center gap-2 rounded-full bg-thamani-forest hover:opacity-90 text-thamani-snow px-5 py-2.5 text-sm font-normal transition-colors shrink-0 cursor-pointer w-full sm:w-auto"
           >
             <.icon name="hero-adjustments-horizontal" class="size-4" /> Filters
           </button>
@@ -480,30 +502,30 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         <%!-- Date Range Filter Popover Modal --%>
         <div
           :if={@show_filters}
-          class="absolute right-6 top-[80px] z-50 mt-2 w-full max-w-md rounded-2xl border border-slate-200/90 bg-white p-6 shadow-2xl transition-all"
+          class="absolute right-6 top-[80px] z-50 mt-2 w-full max-w-md rounded-2xl p-6 ff-surface-popover transition-all"
         >
           <form phx-submit="apply_custom_range">
-            <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
-              <h3 class="font-semibold text-slate-900 text-base">Filters</h3>
+            <div class="flex items-center justify-between border-b border-thamani-stone pb-3 mb-4">
+              <h3 class="font-medium text-thamani-forest text-base">Filters</h3>
               <div class="flex items-center gap-3">
                 <button
                   type="button"
                   phx-click="reset_filters"
-                  class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                  class="text-xs font-medium text-thamani-forest hover:underline cursor-pointer"
                 >
                   Reset all
                 </button>
                 <button
                   type="button"
                   phx-click="toggle_filters"
-                  class="text-slate-400 hover:text-slate-600 cursor-pointer"
+                  class="text-thamani-pewter hover:text-thamani-forest cursor-pointer"
                 >
                   <.icon name="hero-x-mark" class="size-4" />
                 </button>
               </div>
             </div>
 
-            <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase mb-3">
+            <p class="text-xs font-medium tracking-wider text-thamani-pewter uppercase mb-3">
               Date Range
             </p>
 
@@ -538,7 +560,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
               </button>
               <button
                 type="submit"
-                class="px-5 py-2 text-xs sm:text-sm font-medium text-white bg-[#3b3a98] hover:bg-[#312e84] rounded-xl shadow-xs transition-colors cursor-pointer"
+                class="px-5 py-2 text-xs sm:text-sm font-medium text-thamani-snow bg-thamani-forest hover:opacity-90 rounded-full transition-colors cursor-pointer"
               >
                 Apply filters
               </button>

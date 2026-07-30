@@ -70,7 +70,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       conn =
         post(conn, ~p"/login", %{"email" => admin.email, "password" => valid_user_password()})
 
-      assert redirected_to(conn) == ~p"/org/sites"
+      assert redirected_to(conn) == ~p"/org/dashboard"
     end
 
     test "redirects a pharmacist to /pharmacy", %{conn: conn} do

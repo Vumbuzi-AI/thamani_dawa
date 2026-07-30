@@ -221,6 +221,18 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
             <.input field={@form[:phone]} label="Phone" required />
           </div>
           <.input field={@form[:email]} type="email" label="Email" required />
+          <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3 mb-3">
+            <div>
+              <p class="text-sm font-medium text-thamani-forest">Active</p>
+              <p class="text-xs text-thamani-pewter">Enable this supplier for orders</p>
+            </div>
+            <.input
+              field={@form[:is_active]}
+              type="checkbox"
+              label=""
+              class="size-5 rounded accent-thamani-forest cursor-pointer"
+            />
+          </div>
           <.input id="supplier-location" field={@form[:location]} label="Location" />
           <div class="grid grid-cols-2 gap-x-4">
             <.input id="supplier-lat" field={@form[:lat]} label="Latitude" type="number" step="any" />
@@ -241,11 +253,10 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
             data-address-input="supplier-location"
             data-lat={@form[:lat].value}
             data-lng={@form[:long].value}
-            class="w-full h-56 rounded-lg mt-2"
+            class="w-full h-40 rounded-xl mt-1 overflow-hidden border border-thamani-stone bg-thamani-canvas"
           >
           </div>
-          <.input field={@form[:is_active]} type="checkbox" label="Active" />
-          <div class="mt-2">
+          <div class="mt-3">
             <.button variant="primary" class="w-full">Save</.button>
           </div>
         </.form>

@@ -30,8 +30,6 @@ defmodule ThamaniDawa.Dashboards do
       {"today", "Today"},
       {"this_week", "This Week"},
       {"this_month", "This Month"},
-      {"last_month", "Last Month"},
-      {"last_30_days", "Last 30 Days"},
       {"this_year", "This Year"},
       {"all_time", "All Time"}
     ]
@@ -40,14 +38,11 @@ defmodule ThamaniDawa.Dashboards do
   @doc "Resolves a range key (see `ranges/0`) to a `{from, to}` Date pair. `to` is always today."
   def range_dates(key) do
     today = Date.utc_today()
-    last_day_of_last_month = today |> Date.beginning_of_month() |> Date.add(-1)
 
     case key do
       "today" -> {today, today}
       "this_week" -> {Date.beginning_of_week(today), today}
       "this_month" -> {Date.beginning_of_month(today), today}
-      "last_month" -> {Date.beginning_of_month(last_day_of_last_month), last_day_of_last_month}
-      "last_30_days" -> {Date.add(today, -29), today}
       "this_year" -> {%{today | month: 1, day: 1}, today}
       "all_time" -> {~D[2000-01-01], today}
       _ -> range_dates("this_month")

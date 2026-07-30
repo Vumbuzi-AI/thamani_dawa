@@ -18,7 +18,14 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   def handle_params(params, _url, socket) do
     page = String.to_integer(Map.get(params, "page", "1"))
-    socket = socket |> assign(:page, page) |> assign_sites()
+    search = Map.get(params, "search", "")
+
+    socket =
+      socket
+      |> assign(:page, page)
+      |> assign(:search, search)
+      |> assign_sites()
+
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -232,9 +239,21 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             Fields marked <span class="text-error">*</span> are required.
           </p>
           <.input id="site-name" field={@form[:name]} label="Name" required />
-          <.input id="site-address" field={@form[:address]} label="Address" required />
           <.capability_select field={@form[:site_type]} options={capability_options()} required />
-          <.input id="site-active" field={@form[:is_active]} type="checkbox" label="Active" />
+          <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3 mb-3">
+            <div>
+              <p class="text-sm font-medium text-thamani-forest">Active</p>
+              <p class="text-xs text-thamani-pewter">Enable this site</p>
+            </div>
+            <.input
+              id="site-active"
+              field={@form[:is_active]}
+              type="checkbox"
+              label=""
+              class="size-5 rounded accent-thamani-forest cursor-pointer"
+            />
+          </div>
+          <.input id="site-address" field={@form[:address]} label="Address" required />
           <div class="grid grid-cols-2 gap-2">
             <.input id="site-lat" field={@form[:lat]} label="Latitude" type="number" step="any" />
             <.input id="site-long" field={@form[:long]} label="Longitude" type="number" step="any" />
@@ -248,7 +267,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             data-address-input="site-address"
             data-lat={@form[:lat].value}
             data-lng={@form[:long].value}
-            class="w-full h-64 rounded-lg mt-2"
+            class="w-full h-40 rounded-xl mt-1 overflow-hidden border border-thamani-stone bg-thamani-canvas"
           >
           </div>
           <div class="mt-2">
@@ -266,7 +285,9 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
         <:col :let={site} label="Type">{Phoenix.Naming.humanize(site.site_type)}</:col>
         <:col :let={site} label="GLN">{site.gln}</:col>
         <:col :let={site} label="Address">{site.address}</:col>
-        <:col :let={site} label="Active">{if site.is_active, do: "Yes", else: "No"}</:col>
+        <:col :let={site} label="Status">
+          <.status_badge status={if site.is_active, do: :active, else: :inactive} />
+        </:col>
         <:action :let={site}>
           <.button
             variant="ghost-edit"

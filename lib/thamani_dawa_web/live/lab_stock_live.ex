@@ -29,7 +29,12 @@ defmodule ThamaniDawaWeb.LabStockLive do
     org_id = scope.organization_id
     sites = if Scope.admin?(scope), do: Sites.list_sites(org_id), else: scope.user.sites
     lab_sites = Enum.filter(sites, &Site.lab?/1)
-    allowed_site_ids = Enum.map(lab_sites, & &1.id)
+
+    allowed_site_ids =
+      case scope.current_site_id do
+        nil -> Enum.map(lab_sites, & &1.id)
+        current_id -> [current_id]
+      end
 
     {:ok,
      socket
@@ -161,7 +166,12 @@ defmodule ThamaniDawaWeb.LabStockLive do
     org_id = socket.assigns.current_scope.organization_id
 
     page_result =
-      Products.list_products_paginated(org_id, socket.assigns.page, search: socket.assigns.search)
+      Products.list_products_with_site_batches_paginated(
+        org_id,
+        socket.assigns.allowed_site_ids,
+        socket.assigns.page,
+        search: socket.assigns.search
+      )
 
     products = page_result.entries
 
@@ -291,15 +301,6 @@ defmodule ThamaniDawaWeb.LabStockLive do
             apply_event="apply_filters"
             active_count={active_filter_count(@filters)}
           >
-            <:group label="Site">
-              <.input
-                type="select"
-                name="filters[site]"
-                value={@filters.site}
-                options={@site_options}
-                prompt="All lab sites"
-              />
-            </:group>
             <:group label="Status">
               <.input
                 type="select"

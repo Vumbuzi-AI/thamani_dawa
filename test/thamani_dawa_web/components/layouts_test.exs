@@ -42,8 +42,8 @@ defmodule ThamaniDawaWeb.LayoutsTest do
     } do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
-      assert has_element?(lv, "a[style*='thamani-lime']", "Sites")
-      refute has_element?(lv, "a[style*='thamani-lime']", "Team")
+      assert has_element?(lv, "a[aria-current='page']", "Sites")
+      refute has_element?(lv, "a[aria-current='page']", "Team")
     end
 
     test "highlights Team as active when on the team page, not Sites", %{
@@ -52,8 +52,8 @@ defmodule ThamaniDawaWeb.LayoutsTest do
     } do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/team")
 
-      assert has_element?(lv, "a[style*='thamani-lime']", "Team")
-      refute has_element?(lv, "a[style*='thamani-lime']", "Sites")
+      assert has_element?(lv, "a[aria-current='page']", "Team")
+      refute has_element?(lv, "a[aria-current='page']", "Sites")
     end
   end
 

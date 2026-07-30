@@ -86,7 +86,7 @@
         :if={@demo_accounts != []}
         id="demo-login-accounts"
         aria-labelledby="demo-login-heading"
-        class="mb-8 rounded-2xl border border-thamani-stone/70 bg-white/70 p-4 shadow-sm"
+        class="mb-8 rounded-2xl border border-thamani-stone bg-white/70 p-4"
       >
         <div class="mb-3 flex items-center justify-between gap-3">
           <div>
@@ -119,8 +119,8 @@
               id={"demo-login-#{account.id}-submit"}
               type="submit"
               class={[
-                "group flex min-h-20 w-full items-center gap-3 rounded-xl border border-thamani-stone/70 bg-thamani-snow px-3 py-2.5 text-left",
-                "transition duration-200 ease-out hover:-translate-y-0.5 hover:border-thamani-forest/40 hover:bg-white hover:shadow-md",
+                "group flex min-h-20 w-full items-center gap-3 rounded-xl border border-thamani-stone bg-thamani-snow px-3 py-2.5 text-left cursor-pointer",
+                "transition duration-200 ease-out hover:-translate-y-0.5 hover:border-thamani-forest hover:bg-white",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2 active:translate-y-0"
               ]}
             >

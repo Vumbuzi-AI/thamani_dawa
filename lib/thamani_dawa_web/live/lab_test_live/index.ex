@@ -740,10 +740,12 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
                             </div>
                             <.input
                               type="text"
+                              id={"field-def-#{row["idx"]}-opt-#{opt_idx}"}
                               name={"field_defs[#{row["idx"]}][options][#{opt_idx}]"}
                               value={opt_val}
                               placeholder={"Option #{opt_idx + 1}"}
                               class="flex-1 py-1.5 px-3 text-xs h-9"
+                              phx-debounce="blur"
                             />
                             <button
                               :if={length(opts) > 1}

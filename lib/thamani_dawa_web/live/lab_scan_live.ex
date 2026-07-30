@@ -58,7 +58,7 @@ defmodule ThamaniDawaWeb.LabScanLive do
 
       <section
         id="lab-scan-panel"
-        class="rounded-xl border border-thamani-stone bg-thamani-snow p-4 sm:p-5"
+        class="rounded-xl ff-surface-card p-4 sm:p-5"
       >
         <.form
           for={@scan_form}

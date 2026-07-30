@@ -49,7 +49,14 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
   def handle_params(params, _url, socket) do
     page = String.to_integer(Map.get(params, "page", "1"))
-    socket = socket |> assign(:page, page) |> reload_products()
+    search = Map.get(params, "search", "")
+
+    socket =
+      socket
+      |> assign(:page, page)
+      |> assign(:search, search)
+      |> reload_products()
+
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -88,7 +95,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   end
 
   def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, socket |> assign(:search, search) |> reload_products()}
+    {:noreply, socket |> assign(:search, search) |> assign(:page, 1) |> reload_products()}
   end
 
   def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
@@ -98,27 +105,35 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
       is_dangerous_drug: Map.get(filter_params, "is_dangerous_drug") == "true"
     }
 
-    {:noreply, socket |> assign(:filters, filters) |> reload_products()}
+    {:noreply, socket |> assign(:filters, filters) |> assign(:page, 1) |> reload_products()}
   end
 
   def handle_event("clear_filters", _params, socket) do
-    {:noreply, socket |> assign(:filters, @default_filters) |> reload_products()}
+    {:noreply,
+     socket |> assign(:filters, @default_filters) |> assign(:page, 1) |> reload_products()}
   end
 
   def handle_event("clear_chip", %{"field" => "category"}, socket) do
     {:noreply,
-     socket |> assign(:filters, %{socket.assigns.filters | category: ""}) |> reload_products()}
+     socket
+     |> assign(:filters, %{socket.assigns.filters | category: ""})
+     |> assign(:page, 1)
+     |> reload_products()}
   end
 
   def handle_event("clear_chip", %{"field" => "is_otc"}, socket) do
     {:noreply,
-     socket |> assign(:filters, %{socket.assigns.filters | is_otc: false}) |> reload_products()}
+     socket
+     |> assign(:filters, %{socket.assigns.filters | is_otc: false})
+     |> assign(:page, 1)
+     |> reload_products()}
   end
 
   def handle_event("clear_chip", %{"field" => "is_dangerous_drug"}, socket) do
     {:noreply,
      socket
      |> assign(:filters, %{socket.assigns.filters | is_dangerous_drug: false})
+     |> assign(:page, 1)
      |> reload_products()}
   end
 
@@ -235,16 +250,17 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   defp reload_products(socket) do
     organization_id = socket.assigns.current_scope.organization_id
     page = socket.assigns.page
+    search = socket.assigns.search
+    filters = socket.assigns.filters
 
-    page_result = Products.list_products_paginated(organization_id, page)
-    products = page_result.entries
+    opts = [
+      search: search,
+      category: filters.category,
+      is_otc: filters.is_otc,
+      is_dangerous_drug: filters.is_dangerous_drug
+    ]
 
-    filtered =
-      products
-      |> filter_by_search(socket.assigns.search)
-      |> filter_by_category(socket.assigns.filters.category)
-      |> filter_by_flag(:is_otc, socket.assigns.filters.is_otc)
-      |> filter_by_flag(:is_dangerous_drug, socket.assigns.filters.is_dangerous_drug)
+    page_result = Products.list_products_paginated(organization_id, page, opts)
 
     all_products = Products.list_products(organization_id)
 
@@ -255,28 +271,8 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     socket
     |> assign(:categories, categories)
     |> assign(:page_info, page_result)
-    |> stream(:products, filtered, reset: true)
+    |> stream(:products, page_result.entries, reset: true)
   end
-
-  defp filter_by_search(products, ""), do: products
-
-  defp filter_by_search(products, search) do
-    search = String.downcase(String.trim(search))
-
-    Enum.filter(products, fn product ->
-      [product.generic_name, product.brand_name, product.gtin, product.category]
-      |> Enum.filter(& &1)
-      |> Enum.any?(&String.contains?(String.downcase(&1), search))
-    end)
-  end
-
-  defp filter_by_category(products, ""), do: products
-
-  defp filter_by_category(products, category),
-    do: Enum.filter(products, &(&1.category == category))
-
-  defp filter_by_flag(products, _field, false), do: products
-  defp filter_by_flag(products, field, true), do: Enum.filter(products, &Map.get(&1, field))
 
   defp distinct_categories(products) do
     products
@@ -580,18 +576,13 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
               </div>
 
               <div class="grid grid-cols-2 gap-4">
-                <%!-- Free text with existing categories as suggestions: a plain select
-                      could only ever offer categories already in use, so no new one
-                      could be introduced (not even on the very first product). --%>
                 <.input
                   field={@form[:category]}
+                  type="combobox"
                   label="Category"
-                  list="product-category-options"
+                  options={@categories}
                   placeholder="e.g., Analgesic"
                 />
-                <datalist id="product-category-options">
-                  <option :for={category <- @categories} value={category}></option>
-                </datalist>
                 <.input
                   field={@form[:manufacturer]}
                   label="Manufacturer"
@@ -601,16 +592,43 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
               <.input field={@form[:gtin]} label="GTIN" required placeholder="e.g., 5901234123457" />
 
-              <div class="space-y-3 bg-slate-50 p-3 rounded-lg">
-                <.input field={@form[:is_otc]} type="checkbox" label="Over-the-counter" />
-                <.input field={@form[:is_dangerous_drug]} type="checkbox" label="Dangerous drug" />
-              </div>
-
               <.input field={@form[:reorder_level]} type="number" label="Reorder level" min="0" />
 
-              <.input field={@form[:is_active]} type="checkbox" label="Active" />
+              <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3 mb-3">
+                <div>
+                  <p class="text-sm font-medium text-thamani-forest">Active</p>
+                  <p class="text-xs text-thamani-pewter">Enable this product for orders</p>
+                </div>
+                <.input
+                  field={@form[:is_active]}
+                  type="checkbox"
+                  label=""
+                  class="size-5 rounded accent-thamani-forest cursor-pointer"
+                />
+              </div>
 
-              <div class="pt-4 border-t">
+              <div class="rounded-xl border border-thamani-stone overflow-hidden divide-y divide-thamani-stone mb-3">
+                <div class="flex items-center justify-between px-4 py-3">
+                  <p class="text-sm font-medium text-thamani-forest">Over-the-counter</p>
+                  <.input
+                    field={@form[:is_otc]}
+                    type="checkbox"
+                    label=""
+                    class="size-5 rounded accent-thamani-forest cursor-pointer"
+                  />
+                </div>
+                <div class="flex items-center justify-between px-4 py-3">
+                  <p class="text-sm font-medium text-thamani-forest">Dangerous drug</p>
+                  <.input
+                    field={@form[:is_dangerous_drug]}
+                    type="checkbox"
+                    label=""
+                    class="size-5 rounded accent-thamani-forest cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div class="pt-4">
                 <.button variant="primary" class="w-full">Save Product</.button>
               </div>
             </.form>
@@ -629,16 +647,6 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         <:col :let={{_id, product}} label="Status">
           <.status_badge status={if product.is_active, do: :active, else: :inactive} />
         </:col>
-        <:action :let={{_id, product}}>
-          <.button
-            variant="ghost"
-            navigate={~p"/org/products/#{product.id}"}
-            class="px-3 py-1.5 text-xs"
-            id={"btn-view-#{product.id}"}
-          >
-            View
-          </.button>
-        </:action>
         <:action :let={{_id, product}}>
           <.button
             variant="primary"

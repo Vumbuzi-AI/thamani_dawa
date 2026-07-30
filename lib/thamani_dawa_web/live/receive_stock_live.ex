@@ -250,7 +250,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
 
       <section
         id="receive-stock-scan-panel"
-        class="mb-5 rounded-xl border border-thamani-stone bg-thamani-snow p-4 sm:p-5"
+        class="mb-5 rounded-xl ff-surface-card p-4 sm:p-5"
       >
         <div class="mb-4 flex items-start gap-3">
           <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-thamani-lime text-thamani-forest">

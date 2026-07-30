@@ -147,7 +147,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
 
       <section
         id="scan-lookup-panel"
-        class="mb-5 rounded-xl border border-thamani-stone bg-thamani-snow p-4 sm:p-5"
+        class="mb-5 rounded-xl ff-surface-card p-4 sm:p-5"
       >
         <.form
           for={@scan_form}
