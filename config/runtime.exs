@@ -41,6 +41,10 @@ end
 
 config :thamani_dawa, ThamaniDawa.GtinLookup, api_key: System.get_env("GS1_GRP_API_KEY")
 
+config :thamani_dawa, ThamaniDawa.Gs1Api,
+  base_url: System.get_env("GS1_ADMIN_BASE_URL"),
+  api_token: System.get_env("GS1_ADMIN_API_TOKEN")
+
 config :thamani_dawa, :google_maps, api_key: System.get_env("GOOGLE_MAPS_API_KEY")
 
 if company_prefix = System.get_env("GS1_COMPANY_PREFIX") do

@@ -13,6 +13,7 @@ defmodule ThamaniDawaWeb.UserAuth do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.Accounts.Scope
+  alias ThamaniDawa.Organizations
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
 
@@ -70,7 +71,9 @@ defmodule ThamaniDawaWeb.UserAuth do
   Usage: `live_session :foo, on_mount: [{ThamaniDawaWeb.UserAuth, :mount_current_scope}]`.
   Also supports `:require_authenticated` (halts unless a user is signed in),
   `:require_admin` (halts unless the signed-in user is an org admin, §7),
-  `:require_pharmacy_access`, and `:require_lab_access`.
+  `:require_pharmacy_access`, `:require_lab_access`,
+  `:require_healthcare_org`, and `:require_distributor_org` (the last two
+  additionally gate on organization kind — serialisation.md §1).
 
   The pharmacy/lab guards check two things: role (per §7 — admin, or the
   matching staff role, or `pharma_lab`) AND, for every non-admin, that the
@@ -155,13 +158,54 @@ defmodule ThamaniDawaWeb.UserAuth do
     end
   end
 
+  @doc """
+  Guards the healthcare-only admin screens (products, suppliers, batches):
+  admin, **and** the organization is a `:healthcare` tenant. A distributor
+  organization has no product catalog to manage — only the serialisation
+  module (serialisation.md §1).
+  """
+  def on_mount(:require_healthcare_org, params, session, socket) do
+    case on_mount(:require_admin, params, session, socket) do
+      {:cont, socket} ->
+        if Organizations.healthcare?(socket.assigns.current_scope.organization_id) do
+          {:cont, socket}
+        else
+          {:halt, deny_wrong_org_kind(socket)}
+        end
+
+      {:halt, socket} ->
+        {:halt, socket}
+    end
+  end
+
+  @doc """
+  Guards the distributor-only serialisation screens: admin, **and** the
+  organization is a `:distributor` tenant (serialisation.md §1) — a
+  pharmacy/lab organization never generates SSCCs or serialised codes.
+  """
+  def on_mount(:require_distributor_org, params, session, socket) do
+    case on_mount(:require_admin, params, session, socket) do
+      {:cont, socket} ->
+        if Organizations.distributor?(socket.assigns.current_scope.organization_id) do
+          {:cont, socket}
+        else
+          {:halt, deny_wrong_org_kind(socket)}
+        end
+
+      {:halt, socket} ->
+        {:halt, socket}
+    end
+  end
+
   defp portal_access?(scope, :pharmacy),
     do:
-      Scope.pharmacy_access?(scope) and
+      Organizations.healthcare?(scope.organization_id) and Scope.pharmacy_access?(scope) and
         (Scope.admin?(scope) or current_site_offers?(scope, :pharmacy))
 
   defp portal_access?(scope, :lab),
-    do: Scope.lab_access?(scope) and (Scope.admin?(scope) or current_site_offers?(scope, :lab))
+    do:
+      Organizations.healthcare?(scope.organization_id) and Scope.lab_access?(scope) and
+        (Scope.admin?(scope) or current_site_offers?(scope, :lab))
 
   # No home site picked yet is an existing, intentional state (e.g. a
   # pharmacist invited without a site) — those pages handle it themselves
@@ -204,6 +248,19 @@ defmodule ThamaniDawaWeb.UserAuth do
 
   defp portal_path(:pharmacy), do: ~p"/pharmacy"
   defp portal_path(:lab), do: ~p"/lab"
+
+  defp deny_wrong_org_kind(socket) do
+    scope = socket.assigns.current_scope
+
+    home =
+      if Organizations.distributor?(scope.organization_id),
+        do: ~p"/org/serialisation",
+        else: ~p"/org/dashboard"
+
+    socket
+    |> Phoenix.LiveView.put_flash(:error, "This page isn't available for your organization.")
+    |> Phoenix.LiveView.redirect(to: home)
+  end
 
   defp scope_for_session(session) do
     user =

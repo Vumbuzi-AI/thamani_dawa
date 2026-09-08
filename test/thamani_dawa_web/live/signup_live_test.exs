@@ -78,5 +78,24 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       assert render_change(view, "validate", %{"unexpected" => "shape"})
     end
+
+    test "choosing Distributor / Manufacturer signs up a distributor organization", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/signup")
+
+      view |> element("#kind-distributor") |> render_click()
+
+      attrs = %{
+        organization: %{name: "Acme Distributors", license_number: "GS1-1"},
+        user: %{name: "Jane Admin", email: "jane-dist@example.com", password: "secret"}
+      }
+
+      assert {:error, {:live_redirect, %{to: "/login"}}} =
+               view |> form("form", attrs) |> render_submit()
+
+      organization = Repo.get_by!(Organization, name: "Acme Distributors")
+      assert organization.kind == :distributor
+    end
   end
 end

@@ -40,13 +40,15 @@ defmodule ThamaniDawa.Sites do
   end
 
   @doc """
-  Creates the default site for a brand-new organization (§2.3.1) — a
-  `pharmacy`-type site named after the organization, so a single-pharmacy
-  owner never has to think about "sites" as a concept.
+  Creates the default site for a brand-new organization (§2.3.1) — named
+  after the organization, so a single-site owner never has to think about
+  "sites" as a concept. `site_type` defaults to `:pharmacy` for a healthcare
+  signup; a distributor organization passes `:warehouse` instead.
   """
-  def create_default_site(organization_id, name) when is_integer(organization_id) do
+  def create_default_site(organization_id, name, site_type \\ :pharmacy)
+      when is_integer(organization_id) do
     %Site{}
-    |> Site.default_changeset(%{name: name, site_type: :pharmacy})
+    |> Site.default_changeset(%{name: name, site_type: site_type})
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Ecto.Changeset.put_change(:gln, Gln.generate!())
     |> Repo.insert()

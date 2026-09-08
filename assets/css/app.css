@@ -632,7 +632,11 @@ body {
   padding: 9px 12px;
   border-radius: 8px;
   background: var(--thamani-snow);
-  color: var(--color-base-content);
+  /* These controls always have a white surface, even when the operating
+     system prefers dark mode. Keep their foreground independent of the
+     daisyUI theme so entered values never become white-on-white. */
+  color: #1f2433;
+  caret-color: var(--thamani-forest);
   font-size: 14px;
   font-weight: 400;
   line-height: 1.5;
@@ -645,7 +649,8 @@ body {
 }
 
 .thamani-input::placeholder {
-  color: var(--thamani-pewter);
+  color: #687083;
+  opacity: 1;
 }
 
 .thamani-input:focus,

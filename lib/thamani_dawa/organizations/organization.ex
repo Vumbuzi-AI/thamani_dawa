@@ -5,6 +5,7 @@ defmodule ThamaniDawa.Organizations.Organization do
   @similar_name_message "An organization with a similar name already exists"
   @slug_index :organizations_slug_index
   @name_key_index :organizations_name_key_index
+  @kinds ~w(healthcare distributor)a
 
   schema "organizations" do
     field :name, :string
@@ -14,6 +15,11 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :is_active, :boolean, default: true
     field :is_subscription_active, :boolean, default: false
     field :kyc_details, :map, default: %{}
+    # "healthcare" (pharmacy/lab) is the app's original tenant type. "distributor"
+    # covers distributors and manufacturers, who only ever see the
+    # serialisation module (serialisation.md §1) — no products, prescriptions,
+    # or lab orders.
+    field :kind, Ecto.Enum, values: @kinds, default: :healthcare
 
     has_many :sites, ThamaniDawa.Sites.Site
     has_many :users, ThamaniDawa.Accounts.User
@@ -34,10 +40,13 @@ defmodule ThamaniDawa.Organizations.Organization do
     timestamps(type: :utc_datetime)
   end
 
+  @doc "The kinds of organization the app serves."
+  def kinds, do: @kinds
+
   @doc false
   def changeset(organization, attrs) do
     organization
-    |> cast(attrs, [:name, :slug, :license_number])
+    |> cast(attrs, [:name, :slug, :license_number, :kind])
     |> validate_required([:name], message: "Please enter your organization name")
     |> validate_required([:license_number], message: "Please enter your license number")
     |> maybe_generate_slug()
@@ -46,6 +55,7 @@ defmodule ThamaniDawa.Organizations.Organization do
     |> unique_constraint(:name, name: @slug_index, message: @similar_name_message)
     |> unique_constraint(:name, name: @name_key_index, message: @similar_name_message)
   end
+
 
   defp maybe_generate_slug(changeset) do
     if get_field(changeset, :slug) do

@@ -35,6 +35,15 @@ config :thamani_dawa, ThamaniDawa.GtinLookup,
 
 config :thamani_dawa, ThamaniDawa.Gln, company_prefix: "0614141"
 
+config :thamani_dawa, ThamaniDawa.Gs1Api,
+  base_url: "https://gs1-admin.test",
+  api_token: "test-gs1-token",
+  plug: {Req.Test, ThamaniDawa.Gs1Api},
+  # Stubbed responses are final: retrying a stubbed 500 would just burn the
+  # test's timeout budget on backoff.
+  retry: false,
+  receive_timeout: 1_000
+
 config :thamani_dawa, :demo_login_accounts, [
   %{id: "admin", name: "Amina Kamau", role: "Admin", email: "admin@gmail.com"},
   %{
@@ -49,6 +58,12 @@ config :thamani_dawa, :demo_login_accounts, [
     name: "Zawadi Muthoni",
     role: "Pharmacy + lab",
     email: "pharmalab@gmail.com"
+  },
+  %{
+    id: "distributor",
+    name: "Daniel Mwangi",
+    role: "Distributor / Manufacturer",
+    email: "distributor@gmail.com"
   }
 ]
 

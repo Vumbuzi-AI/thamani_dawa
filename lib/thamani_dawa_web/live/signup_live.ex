@@ -8,6 +8,7 @@ defmodule ThamaniDawaWeb.SignupLive do
   def mount(_params, _session, socket) do
     socket =
       socket
+      |> assign(:kind, :healthcare)
       |> assign(
         :org_form,
         to_form(Organization.changeset(%Organization{}, %{}), as: :organization)
@@ -17,10 +18,14 @@ defmodule ThamaniDawaWeb.SignupLive do
     {:ok, socket}
   end
 
+  def handle_event("choose_kind", %{"kind" => kind}, socket) do
+    {:noreply, assign(socket, :kind, String.to_existing_atom(kind))}
+  end
+
   def handle_event("validate", %{"organization" => org_params, "user" => admin_params}, socket) do
     org_changeset =
       %Organization{}
-      |> Organization.changeset(org_params)
+      |> Organization.changeset(with_kind(org_params, socket.assigns.kind))
       |> Map.put(:action, :validate)
 
     admin_changeset =
@@ -39,7 +44,7 @@ defmodule ThamaniDawaWeb.SignupLive do
   end
 
   def handle_event("save", %{"organization" => org_params, "user" => admin_params}, socket) do
-    case Organizations.signup(org_params, admin_params) do
+    case Organizations.signup(with_kind(org_params, socket.assigns.kind), admin_params) do
       {:ok, _result} ->
         {:noreply,
          socket
@@ -61,6 +66,8 @@ defmodule ThamaniDawaWeb.SignupLive do
          )}
     end
   end
+
+  defp with_kind(org_params, kind), do: Map.put(org_params, "kind", Atom.to_string(kind))
 
   def render(assigns) do
     ~H"""
@@ -95,10 +102,14 @@ defmodule ThamaniDawaWeb.SignupLive do
             Free to start · No credit card
           </span>
           <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
-            Set up your pharmacy in under two minutes.
+            {if @kind == :distributor,
+              do: "Serialise your shipments in under two minutes.",
+              else: "Set up your pharmacy in under two minutes."}
           </h2>
           <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
-            Create your organization, add your team, and start managing stock, prescriptions, and lab orders — all GS1 compliant.
+            {if @kind == :distributor,
+              do: "Create your distributor account and start generating GS1-issued SSCCs and serialised Data Matrix codes for your shipments.",
+              else: "Create your organization, add your team, and start managing stock, prescriptions, and lab orders — all GS1 compliant."}
           </p>
         </div>
 
@@ -132,18 +143,49 @@ defmodule ThamaniDawaWeb.SignupLive do
           </p>
 
           <form phx-submit="save" phx-change="validate" id="signup-form">
+            <div
+              role="group"
+              aria-label="Account type"
+              style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px;"
+            >
+              <button
+                type="button"
+                phx-click="choose_kind"
+                phx-value-kind="healthcare"
+                id="kind-healthcare"
+                style={"padding: 12px; border-radius: 10px; border: 1px solid #{if @kind == :healthcare, do: "var(--thamani-forest)", else: "var(--thamani-stone)"}; background: #{if @kind == :healthcare, do: "var(--thamani-forest)", else: "transparent"}; color: #{if @kind == :healthcare, do: "var(--thamani-snow)", else: "var(--thamani-forest)"}; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;"}
+              >
+                Pharmacy / Lab
+              </button>
+              <button
+                type="button"
+                phx-click="choose_kind"
+                phx-value-kind="distributor"
+                id="kind-distributor"
+                style={"padding: 12px; border-radius: 10px; border: 1px solid #{if @kind == :distributor, do: "var(--thamani-forest)", else: "var(--thamani-stone)"}; background: #{if @kind == :distributor, do: "var(--thamani-forest)", else: "transparent"}; color: #{if @kind == :distributor, do: "var(--thamani-snow)", else: "var(--thamani-forest)"}; font-size: 14px; font-weight: 500; text-align: left; cursor: pointer;"}
+              >
+                Distributor / Manufacturer
+              </button>
+            </div>
+
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
               <.thamani_input
                 field={@org_form[:name]}
-                label="Pharmacy / lab name"
-                placeholder="e.g. MedPoint Pharmacy"
+                label={if @kind == :distributor, do: "Company name", else: "Pharmacy / lab name"}
+                placeholder={
+                  if @kind == :distributor, do: "e.g. Acme Distributors", else: "e.g. MedPoint Pharmacy"
+                }
                 phx-debounce="blur"
                 required
               />
               <.thamani_input
                 field={@org_form[:license_number]}
-                label="License number"
-                placeholder="PPB-XXXX"
+                label={
+                  if @kind == :distributor,
+                    do: "Business registration / GS1 prefix",
+                    else: "License number"
+                }
+                placeholder={if @kind == :distributor, do: "GS1-XXXX", else: "PPB-XXXX"}
                 phx-debounce="blur"
                 required
               />

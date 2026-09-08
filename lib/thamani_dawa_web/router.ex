@@ -52,7 +52,12 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/sites/new", SiteLive.Index, :new
       live "/org/sites/:id", SiteLive.Show, :show
       live "/org/sites/:id/edit", SiteLive.Index, :edit
+    end
 
+    # Pharmacy/lab tenants only (serialisation.md §1) — product catalog,
+    # batches, and suppliers have no meaning for a distributor org.
+    live_session :organization_healthcare,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :require_healthcare_org}] do
       live "/org/products", ProductLive.Index, :index
       live "/org/products/new", ProductLive.Index, :new
       live "/org/products/:id", ProductLive.Show, :show
@@ -64,6 +69,15 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/suppliers", SupplierLive.Index, :index
       live "/org/suppliers/new", SupplierLive.Index, :new
       live "/org/suppliers/:id/edit", SupplierLive.Index, :edit
+    end
+
+    # Distributor/manufacturer tenants only (serialisation.md §1) — the only
+    # module they see once they sign up: generating GS1-issued SSCCs and
+    # serialised Data Matrix codes.
+    live_session :organization_distributor,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :require_distributor_org}] do
+      live "/org/serialisation", SerialCatalogLive.Index, :index
+      live "/org/serialisation/new", SerialCatalogLive.Index, :new
     end
 
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do

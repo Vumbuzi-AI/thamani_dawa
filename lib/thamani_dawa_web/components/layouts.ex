@@ -218,6 +218,8 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :inner_block, required: true
 
   def org_shell(assigns) do
+    assigns = assign(assigns, :nav_items, org_nav_items(assigns.current_scope))
+
     ~H"""
     <.sidebar_shell
       flash={@flash}
@@ -228,17 +230,32 @@ defmodule ThamaniDawaWeb.Layouts do
       title="Thamani Dawa"
       section_label="Organization"
       base_path="/org"
-      nav_items={[
+      nav_items={@nav_items}
+    >
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
+  # A distributor/manufacturer organization (serialisation.md §1) only ever
+  # sees the serialisation module — no product catalog, prescriptions, or
+  # supplier list, none of which apply to them.
+  defp org_nav_items(%Scope{organization_id: organization_id}) do
+    if ThamaniDawa.Organizations.distributor?(organization_id) do
+      [
+        {"Serialisation", "hero-qr-code", ~p"/org/serialisation"},
+        {"Sites", "hero-building-office-2", ~p"/org/sites"},
+        {"Team", "hero-user-group", ~p"/org/team"}
+      ]
+    else
+      [
         {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
         {"Sites", "hero-building-office-2", ~p"/org/sites"},
         {"Team", "hero-user-group", ~p"/org/team"},
         {"Products", "hero-cube", ~p"/org/products"},
         {"Suppliers", "hero-truck", ~p"/org/suppliers"}
-      ]}
-    >
-      {render_slot(@inner_block)}
-    </.sidebar_shell>
-    """
+      ]
+    end
   end
 
   attr :flash, :map, required: true

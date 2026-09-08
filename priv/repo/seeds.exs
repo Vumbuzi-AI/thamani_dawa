@@ -18,6 +18,17 @@ alias ThamaniDawa.Prescriptions.{Prescription, PrescriptionItem}
 alias ThamaniDawa.Products
 alias ThamaniDawa.Products.Product
 alias ThamaniDawa.Repo
+alias ThamaniDawa.SerialCatalog
+
+alias ThamaniDawa.Serialisation.{
+  SerialisedCode,
+  SerializationLog,
+  Shipment,
+  ShipmentLine,
+  Sscc,
+  SsccItem
+}
+
 alias ThamaniDawa.Sites
 alias ThamaniDawa.Sites.Site
 alias ThamaniDawa.Suppliers
@@ -198,7 +209,6 @@ accounts =
     {email, ensure_account.(email, name, role, site)}
   end)
 
-primary_admin = Map.fetch!(accounts, "admin@gmail.com")
 primary_pharmacist = Map.fetch!(accounts, "pharmacist@gmail.com")
 primary_lab_technician = Map.fetch!(accounts, "lab@gmail.com")
 primary_pharma_lab = Map.fetch!(accounts, "pharmalab@gmail.com")
@@ -765,6 +775,223 @@ if role_counts != expected_role_counts do
   """
 end
 
+distributor_result =
+  case Repo.get_by(Organization, slug: "demo-distributor") do
+    nil ->
+      {:ok, result} =
+        Organizations.signup(
+          %{
+            name: "Demo Medical Distribution",
+            slug: "demo-distributor",
+            license_number: "GS1-DEMO-001",
+            kind: :distributor
+          },
+          %{name: "Daniel Mwangi", email: "distributor@gmail.com", password: password}
+        )
+
+      result
+
+    distributor ->
+      distributor =
+        if distributor.kind == :distributor do
+          distributor
+        else
+          distributor
+          |> Organization.changeset(%{kind: :distributor})
+          |> Repo.update!()
+        end
+
+      warehouse =
+        Repo.one(
+          from s in Site,
+            where: s.organization_id == ^distributor.id,
+            order_by: [asc: s.id],
+            limit: 1
+        ) ||
+          insert_or_get.(
+            Site,
+            %{organization_id: distributor.id, name: distributor.name},
+            %{site_type: :warehouse},
+            fn attrs -> Sites.create_default_site(distributor.id, attrs.name, :warehouse) end
+          )
+
+      %{
+        organization: distributor,
+        site: warehouse,
+        user: Accounts.get_user_by_email("distributor@gmail.com")
+      }
+  end
+
+distributor = distributor_result.organization
+
+distributor_admin =
+  case distributor_result.user do
+    nil ->
+      {:ok, user} =
+        Accounts.register_user(distributor.id, %{
+          name: "Daniel Mwangi",
+          email: "distributor@gmail.com",
+          password: password
+        })
+
+      user
+
+    user ->
+      user
+  end
+
+if is_nil(distributor_admin.hashed_pin) do
+  {:ok, _user} = Accounts.set_user_pin(distributor_admin, %{pin: pin})
+end
+
+serial_catalog_specs = [
+  {"061611000001", "Paracetamol 500 mg Tablets", "100 tablets", "Demo Care Pharmaceuticals"},
+  {"061611000002", "Amoxicillin 250 mg Capsules", "20 capsules", "Afya Pharma Kenya"},
+  {"061611000003", "Oral Rehydration Salts", "20.5 g sachet", "MediSource Kenya Ltd"},
+  {"061611000004", "Salbutamol Inhaler", "200 doses", "East Africa Respiratory Care"}
+]
+
+serial_catalog_items =
+  Enum.map(serial_catalog_specs, fn {base, name, weight, company} ->
+    {:ok, _item} =
+      SerialCatalog.ensure_item(distributor.id, %{
+        gtin: gtin.(base),
+        name: name,
+        description: "Demo GTIN available for SSCC and serialised Data Matrix generation.",
+        weight: weight,
+        uom: "EA",
+        classification: "Healthcare",
+        target_market: "Kenya",
+        comp_name: company,
+        source: :external
+      })
+
+    SerialCatalog.get_item_by_gtin(distributor.id, gtin.(base))
+  end)
+
+issued_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+sscc_shipment =
+  insert_or_get.(
+    Shipment,
+    %{organization_id: distributor.id, type: :sscc, batch: "DEMO-SSCC-001"},
+    %{
+      status: :issued,
+      production_date: Date.add(today, -30),
+      expiry_date: Date.add(today, 335),
+      order_number: "DEMO-PO-1001",
+      material_description: "Seeded demonstration logistics units",
+      from_address: "Industrial Area, Nairobi",
+      to_address: "Demo Care CBD Pharmacy, Nairobi",
+      user_id: distributor_admin.id
+    },
+    fn attrs ->
+      %Shipment{}
+      |> Shipment.changeset(attrs)
+      |> Repo.insert()
+    end
+  )
+
+serialised_shipment =
+  insert_or_get.(
+    Shipment,
+    %{organization_id: distributor.id, type: :serialised, batch: "DEMO-SERIAL-001"},
+    %{
+      status: :issued,
+      production_date: Date.add(today, -14),
+      expiry_date: Date.add(today, 351),
+      order_number: "DEMO-PO-1002",
+      material_description: "Seeded demonstration trade items",
+      user_id: distributor_admin.id
+    },
+    fn attrs ->
+      %Shipment{}
+      |> Shipment.changeset(attrs)
+      |> Repo.insert()
+    end
+  )
+
+Enum.with_index(serial_catalog_items, 1)
+|> Enum.each(fn {item, index} ->
+  insert_or_get.(
+    ShipmentLine,
+    %{shipment_id: sscc_shipment.id, gtin: item.gtin},
+    %{cases: 12 + index, items_per_case: 24},
+    fn attrs ->
+      %ShipmentLine{}
+      |> ShipmentLine.changeset(attrs)
+      |> Repo.insert()
+    end
+  )
+
+  sscc_code = "1" <> String.pad_leading(Integer.to_string(index), 17, "0")
+
+  sscc =
+    insert_or_get.(
+      Sscc,
+      %{code: sscc_code},
+      %{
+        organization_id: distributor.id,
+        shipment_id: sscc_shipment.id,
+        level: :pallet,
+        extension_digit: "1",
+        issued_at: issued_at
+      },
+      fn attrs ->
+        %Sscc{}
+        |> Sscc.changeset(attrs)
+        |> Repo.insert()
+      end
+    )
+
+  insert_or_get.(
+    SsccItem,
+    %{sscc_id: sscc.id, gtin: item.gtin},
+    %{count: 12 + index, items: (12 + index) * 24},
+    fn attrs ->
+      %SsccItem{}
+      |> SsccItem.changeset(attrs)
+      |> Repo.insert()
+    end
+  )
+
+  Enum.each(1..(index + 2), fn serial_index ->
+    serial = "DEMO-#{String.pad_leading(Integer.to_string(index), 2, "0")}-#{serial_index}"
+
+    insert_or_get.(
+      SerialisedCode,
+      %{organization_id: distributor.id, serial: serial},
+      %{gtin: item.gtin, shipment_id: serialised_shipment.id},
+      fn attrs ->
+        %SerialisedCode{}
+        |> SerialisedCode.changeset(attrs)
+        |> Repo.insert()
+      end
+    )
+  end)
+
+  for {type, shipment, count} <- [
+        {:sscc, sscc_shipment, 1},
+        {:serialised, serialised_shipment, index + 2}
+      ] do
+    insert_or_get.(
+      SerializationLog,
+      %{shipment_id: shipment.id, type: type, gtin: item.gtin},
+      %{
+        organization_id: distributor.id,
+        user_id: distributor_admin.id,
+        batch: shipment.batch,
+        count: count
+      },
+      fn attrs ->
+        %SerializationLog{}
+        |> SerializationLog.changeset(attrs)
+        |> Repo.insert()
+      end
+    )
+  end
+end)
+
 IO.puts("""
 
 Seed complete.
@@ -788,4 +1015,10 @@ Lab technician account:
 
 Pharmacy + lab account:
   pharmalab@gmail.com
+
+Distributor account:
+  distributor@gmail.com
+
+Serialisation data: #{length(serial_catalog_specs)} catalog GTINs with demo SSCC and serial counts
+                    for #{distributor.name}.
 """)

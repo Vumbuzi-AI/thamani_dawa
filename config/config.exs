@@ -50,6 +50,12 @@ config :thamani_dawa, ThamaniDawa.Accounts.UserToken,
 
 config :thamani_dawa, ThamaniDawa.GtinLookup, base_url: "https://grp.gs1.org"
 
+# The gs1_admin GS1 API (serialisation.md §4) — the authority for issuing
+# SSCCs and serials. Host and per-organization token come from the
+# environment (GS1_ADMIN_BASE_URL / GS1_ADMIN_API_TOKEN); with neither set,
+# every call fails fast as :not_configured rather than reaching a wrong host.
+config :thamani_dawa, ThamaniDawa.Gs1Api, base_url: nil, api_token: nil
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",

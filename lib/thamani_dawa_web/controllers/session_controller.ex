@@ -3,6 +3,7 @@ defmodule ThamaniDawaWeb.SessionController do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.Accounts.User
+  alias ThamaniDawa.Organizations
 
   import Phoenix.Component, only: [to_form: 2]
   import ThamaniDawaWeb.UserAuth, only: [log_in_user: 2, log_out_user: 1]
@@ -37,7 +38,16 @@ defmodule ThamaniDawaWeb.SessionController do
     |> redirect(to: ~p"/")
   end
 
-  defp redirect_path_for(%User{role: :admin}), do: ~p"/org/sites"
+  # A distributor org (serialisation.md §1) has no sites/team screen worth
+  # landing on first — it only ever generates SSCCs and serialised codes.
+  defp redirect_path_for(%User{role: :admin} = user) do
+    if Organizations.distributor?(user.organization_id) do
+      ~p"/org/serialisation"
+    else
+      ~p"/org/sites"
+    end
+  end
+
   defp redirect_path_for(%User{role: :pharmacist}), do: ~p"/pharmacy"
   defp redirect_path_for(%User{role: :lab_technician}), do: ~p"/lab"
 

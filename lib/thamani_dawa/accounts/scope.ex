@@ -10,6 +10,12 @@ defmodule ThamaniDawa.Accounts.Scope do
 
   defstruct user: nil, organization_id: nil, current_site_id: nil
 
+  @type t :: %__MODULE__{
+          user: User.t() | nil,
+          organization_id: integer() | nil,
+          current_site_id: integer() | nil
+        }
+
   @doc "Builds a scope for the given user, nil if there is no user."
   def for_user(%User{} = user) do
     %__MODULE__{

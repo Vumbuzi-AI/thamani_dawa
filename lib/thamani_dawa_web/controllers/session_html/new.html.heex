@@ -112,6 +112,7 @@
             id={"demo-login-#{account.id}"}
             action={~p"/login"}
             method="post"
+            class={[account.id == "distributor" && "sm:col-span-2"]}
           >
             <.input field={account.form[:email]} type="hidden" />
             <.input field={account.form[:password]} type="hidden" />
