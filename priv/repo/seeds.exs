@@ -869,6 +869,23 @@ serial_catalog_items =
     SerialCatalog.get_item_by_gtin(distributor.id, gtin.(base))
   end)
 
+# Deterministic, checksum-valid demo logistics units for the serialised runs.
+# Each product gets one pallet and one shipper so the seeded primary codes have
+# the same hierarchy as codes persisted from the GS1 serialisation endpoint.
+serialised_pallet_codes = [
+  "161640050000010011",
+  "161640050000010028",
+  "161640050000010035",
+  "161640050000010042"
+]
+
+serialised_shipper_codes = [
+  "261640050000010117",
+  "261640050000010216",
+  "261640050000010315",
+  "261640050000010414"
+]
+
 issued_at = DateTime.utc_now() |> DateTime.truncate(:second)
 
 sscc_shipment =
@@ -955,19 +972,94 @@ Enum.with_index(serial_catalog_items, 1)
     end
   )
 
-  Enum.each(1..(index + 2), fn serial_index ->
-    serial = "DEMO-#{String.pad_leading(Integer.to_string(index), 2, "0")}-#{serial_index}"
+  primary_count = index + 2
 
+  serialised_pallet =
     insert_or_get.(
-      SerialisedCode,
-      %{organization_id: distributor.id, serial: serial},
-      %{gtin: item.gtin, shipment_id: serialised_shipment.id},
+      Sscc,
+      %{code: Enum.at(serialised_pallet_codes, index - 1)},
+      %{
+        organization_id: distributor.id,
+        shipment_id: serialised_shipment.id,
+        level: :pallet,
+        extension_digit: "1",
+        issued_at: issued_at
+      },
       fn attrs ->
-        %SerialisedCode{}
-        |> SerialisedCode.changeset(attrs)
+        %Sscc{}
+        |> Sscc.changeset(attrs)
         |> Repo.insert()
       end
     )
+
+  insert_or_get.(
+    SsccItem,
+    %{sscc_id: serialised_pallet.id, gtin: item.gtin},
+    %{count: primary_count, items: primary_count},
+    fn attrs ->
+      %SsccItem{}
+      |> SsccItem.changeset(attrs)
+      |> Repo.insert()
+    end
+  )
+
+  serialised_shipper =
+    insert_or_get.(
+      Sscc,
+      %{code: Enum.at(serialised_shipper_codes, index - 1)},
+      %{
+        organization_id: distributor.id,
+        shipment_id: serialised_shipment.id,
+        parent_sscc_id: serialised_pallet.id,
+        level: :case,
+        extension_digit: "2",
+        serial: "DEMO-SHIPPER-#{String.pad_leading(Integer.to_string(index), 2, "0")}",
+        issued_at: issued_at
+      },
+      fn attrs ->
+        %Sscc{}
+        |> Sscc.changeset(attrs)
+        |> Repo.insert()
+      end
+    )
+
+  insert_or_get.(
+    SsccItem,
+    %{sscc_id: serialised_shipper.id, gtin: item.gtin},
+    %{count: primary_count, items: primary_count},
+    fn attrs ->
+      %SsccItem{}
+      |> SsccItem.changeset(attrs)
+      |> Repo.insert()
+    end
+  )
+
+  Enum.each(1..(index + 2), fn serial_index ->
+    serial = "DEMO-#{String.pad_leading(Integer.to_string(index), 2, "0")}-#{serial_index}"
+
+    serialised_code =
+      insert_or_get.(
+        SerialisedCode,
+        %{organization_id: distributor.id, serial: serial},
+        %{
+          gtin: item.gtin,
+          shipment_id: serialised_shipment.id,
+          sscc_id: serialised_shipper.id
+        },
+        fn attrs ->
+          %SerialisedCode{}
+          |> SerialisedCode.changeset(attrs)
+          |> Repo.insert()
+        end
+      )
+
+    # Repair demo rows created by older seed versions, which had serials but
+    # no shipper association and were therefore invisible on the groups page.
+    if serialised_code.sscc_id != serialised_shipper.id do
+      serialised_code
+      |> Ecto.Changeset.change(sscc_id: serialised_shipper.id)
+      |> Repo.update!()
+    end
   end)
 
   for {type, shipment, count} <- [

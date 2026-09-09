@@ -36,7 +36,7 @@ defmodule ThamaniDawaWeb.SerialCatalogLiveTest do
       assert html =~ "No GTINs in the serialisation catalog yet"
     end
 
-    test "opens the issued SSCC and serialised-code lists from their counts", %{
+    test "the count badges link to the batch and group screens", %{
       conn: conn,
       admin: admin
     } do
@@ -73,7 +73,7 @@ defmodule ThamaniDawaWeb.SerialCatalogLiveTest do
           extension_digit: "1"
         })
 
-      Repo.insert!(%SsccItem{sscc_id: sscc.id, gtin: item.gtin, count: 1, items: 24})
+      Repo.insert!(%SsccItem{sscc_id: sscc.id, gtin: item.gtin, count: 24, items: 24})
 
       Repo.insert!(%SerialisedCode{
         organization_id: admin.organization_id,
@@ -84,17 +84,60 @@ defmodule ThamaniDawaWeb.SerialCatalogLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/serialisation")
 
-      lv |> element("#show-ssccs-#{item.id}") |> render_click()
-      assert has_element?(lv, "#serial-code-details-modal")
-      assert has_element?(lv, "#serial-code-details", "100000000000000018")
-      assert has_element?(lv, "#serial-code-details", "BATCH-SSCC")
+      assert lv |> element("#show-ssccs-#{item.id}") |> render() =~ "1"
 
-      lv |> element("button", "Close") |> render_click()
-      refute has_element?(lv, "#serial-code-details-modal")
+      assert {:error, {:live_redirect, %{to: sscc_path}}} =
+               lv |> element("#show-ssccs-#{item.id}") |> render_click()
 
-      lv |> element("#show-serialised-#{item.id}") |> render_click()
-      assert has_element?(lv, "#serial-code-details", "SERIAL-ABC-123")
-      assert has_element?(lv, "#serial-code-details", "BATCH-SERIAL")
+      assert sscc_path =~ "/org/serialisation/#{item.gtin}/batches"
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/serialisation")
+
+      assert {:error, {:live_redirect, %{to: serial_path}}} =
+               lv |> element("#show-serialised-#{item.id}") |> render_click()
+
+      assert serial_path =~ "/org/serialisation/#{item.gtin}/groups"
+    end
+
+    test "a zero count is not a link", %{conn: conn, admin: admin} do
+      {:ok, item} =
+        SerialCatalog.ensure_item(admin.organization_id, %{gtin: "6161100000018"})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/serialisation")
+
+      refute has_element?(lv, "a#show-ssccs-#{item.id}")
+      assert has_element?(lv, "span#show-ssccs-#{item.id}")
+    end
+
+    test "each row offers both generation flows", %{conn: conn, admin: admin} do
+      {:ok, item} =
+        SerialCatalog.ensure_item(admin.organization_id, %{gtin: "6161100000018"})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/serialisation")
+
+      assert lv
+             |> element("#generate-sscc-#{item.id}")
+             |> render_click() ==
+               {:error,
+                {:live_redirect,
+                 %{kind: :push, to: "/org/serialisation/#{item.gtin}/sscc/new"}}}
+    end
+
+    test "search is kept in the URL so Back returns to the same list", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, _item} =
+        SerialCatalog.ensure_item(admin.organization_id, %{
+          gtin: "6161100000018",
+          name: "Panadol 500mg"
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/serialisation")
+
+      lv |> form("#serial-catalog-search", search: "Panadol") |> render_change()
+
+      assert_patched(lv, "/org/serialisation?search=Panadol")
     end
   end
 

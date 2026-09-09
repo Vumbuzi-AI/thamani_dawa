@@ -18,6 +18,8 @@ defmodule ThamaniDawa.Serialisation.Sscc do
     field :code, :string
     field :level, Ecto.Enum, values: @levels
     field :extension_digit, :string
+    # Only a case carries one: the shipper serial printed as AI (21).
+    field :serial, :string
     field :image, :string
     field :issued_at, :utc_datetime
 
@@ -41,6 +43,7 @@ defmodule ThamaniDawa.Serialisation.Sscc do
       :code,
       :level,
       :extension_digit,
+      :serial,
       :image,
       :issued_at,
       :organization_id,

@@ -1,14 +1,21 @@
 defmodule ThamaniDawaWeb.SerialCatalogLive.Index do
   @moduledoc """
-  The serialisation catalog screen (serialisation.md §7, "Catalog listing").
+  The serialisation product list — Screen A of ui.md §4, and the module's
+  landing page.
 
-  Lists the GTINs this organization serialises, each with how many SSCCs and
-  serialised codes have been issued against it, and lets a new GTIN be looked
-  up against GS1 before being added.
+  Each row is a GTIN this organization serialises, with how many SSCCs and
+  serialised codes have been issued against it and the two generation entry
+  points (`+ SSCC`, `+ Serial`). The count badges open the results those runs
+  produced; viewing them stays available whatever the allowance state, because
+  only entering a generation flow is guarded (ui.md §2).
 
-  The lookup **previews only** (§2.4.9): the row is written when someone
-  presses Add, never when they search. That is why the found item is held in
-  `@preview` rather than being saved on arrival.
+  New GTINs are looked up against GS1 first. The lookup **previews only**
+  (§2.4.9): the row is written when someone presses Add, never when they
+  search. That is why the found item is held in `@preview` rather than being
+  saved on arrival.
+
+  Search and page live in the URL so Back returns the member to the same list
+  position (ui.md §4).
   """
 
   use ThamaniDawaWeb, :live_view
@@ -29,38 +36,40 @@ defmodule ThamaniDawaWeb.SerialCatalogLive.Index do
      |> assign(:page, 1)
      |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0, page_size: 10})
      |> assign(:counts, %{})
-     |> assign(:selected_item, nil)
-     |> assign(:code_kind, nil)
-     |> assign(:selected_count, 0)
-     |> stream(:code_details, [])
-     |> reset_lookup()
-     |> reload_items()}
+     |> reset_lookup()}
   end
 
   def handle_params(params, _url, socket) do
-    page = String.to_integer(Map.get(params, "page", "1"))
-
     socket =
       socket
-      |> assign(:page, page)
+      |> assign(:page, page_param(params))
+      |> assign(:search, Map.get(params, "search", ""))
+      |> assign(:source_filter, Map.get(params, "source", ""))
       |> reload_items()
 
     {:noreply, apply_action(socket, socket.assigns.live_action)}
+  end
+
+  defp page_param(params) do
+    case Integer.parse(Map.get(params, "page", "1")) do
+      {page, _rest} when page > 0 -> page
+      _other -> 1
+    end
   end
 
   defp apply_action(socket, :new), do: reset_lookup(socket)
   defp apply_action(socket, :index), do: reset_lookup(socket)
 
   def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, socket |> assign(:search, search) |> assign(:page, 1) |> reload_items()}
+    {:noreply, push_patch(socket, to: list_path(socket.assigns, search: search, page: 1))}
   end
 
   def handle_event("apply_filters", %{"filters" => %{"source" => source}}, socket) do
-    {:noreply, socket |> assign(:source_filter, source) |> assign(:page, 1) |> reload_items()}
+    {:noreply, push_patch(socket, to: list_path(socket.assigns, source: source, page: 1))}
   end
 
   def handle_event("clear_chip", _params, socket) do
-    {:noreply, socket |> assign(:source_filter, "") |> assign(:page, 1) |> reload_items()}
+    {:noreply, push_patch(socket, to: list_path(socket.assigns, source: "", page: 1))}
   end
 
   def handle_event("gtin_change", %{"gtin" => gtin}, socket) do
@@ -117,34 +126,6 @@ defmodule ThamaniDawaWeb.SerialCatalogLive.Index do
     end
   end
 
-  def handle_event("show_codes", %{"id" => id, "kind" => kind}, socket)
-      when kind in ["sscc", "serialised"] do
-    organization_id = socket.assigns.current_scope.organization_id
-    item = SerialCatalog.get_item!(organization_id, id)
-
-    codes =
-      case kind do
-        "sscc" -> Serialisation.list_ssccs_for_gtin(organization_id, item.gtin)
-        "serialised" -> Serialisation.list_serialised_codes(organization_id, item.gtin)
-      end
-
-    {:noreply,
-     socket
-     |> assign(:selected_item, item)
-     |> assign(:code_kind, String.to_existing_atom(kind))
-     |> assign(:selected_count, length(codes))
-     |> stream(:code_details, codes, reset: true)}
-  end
-
-  def handle_event("close_codes", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:selected_item, nil)
-     |> assign(:code_kind, nil)
-     |> assign(:selected_count, 0)
-     |> stream(:code_details, [], reset: true)}
-  end
-
   def handle_async(:lookup, {:ok, {:ok, item, origin}}, socket) do
     {:noreply,
      socket
@@ -195,8 +176,42 @@ defmodule ThamaniDawaWeb.SerialCatalogLive.Index do
     counts |> Map.get(gtin, %{}) |> Map.get(key, 0)
   end
 
+  # The list's own address, so Back and the results screens can return the
+  # member to the search and page they left (ui.md §4).
+  defp list_path(state, overrides) do
+    params =
+      %{
+        "search" => state.search,
+        "source" => state.source_filter,
+        "page" => state.page
+      }
+      |> Map.merge(Map.new(overrides, fn {key, value} -> {to_string(key), value} end))
+      |> Enum.reject(fn {_key, value} -> value in [nil, "", 1, "1"] end)
+      |> Map.new()
+
+    if params == %{}, do: ~p"/org/serialisation", else: ~p"/org/serialisation?#{params}"
+  end
+
+  defp results_path(state, gtin, :sscc),
+    do: ~p"/org/serialisation/#{gtin}/batches?#{return_params(state)}"
+
+  defp results_path(state, gtin, :serialised),
+    do: ~p"/org/serialisation/#{gtin}/groups?#{return_params(state)}"
+
+  defp generate_path(gtin, :sscc), do: ~p"/org/serialisation/#{gtin}/sscc/new"
+  defp generate_path(gtin, :serialised), do: ~p"/org/serialisation/#{gtin}/serials/new"
+
+  defp return_params(state) do
+    %{"return_to" => list_path(state, [])}
+  end
+
   defp item_name(%CatalogItem{name: name}) when is_binary(name) and name != "", do: name
   defp item_name(_item), do: "(unnamed)"
+
+  defp format_date(nil), do: "—"
+  defp format_date(%Date{} = date), do: Calendar.strftime(date, "%Y-%m-%d")
+  defp format_date(%DateTime{} = at), do: Calendar.strftime(at, "%Y-%m-%d")
+  defp format_date(%NaiveDateTime{} = at), do: Calendar.strftime(at, "%Y-%m-%d")
 
   defp changeset_message(changeset) do
     Ecto.Changeset.traverse_errors(changeset, fn {message, _opts} -> message end)
@@ -224,20 +239,46 @@ defmodule ThamaniDawaWeb.SerialCatalogLive.Index do
   defp message_classes(:warning), do: "bg-amber-50 border-amber-200 text-amber-800"
   defp message_classes(:error), do: "bg-rose-50 border-rose-200 text-rose-800"
 
-  defp code_title(:sscc), do: "SSCC logistics units"
-  defp code_title(:serialised), do: "Serialised trade items"
+  attr :id, :string, required: true
+  attr :count, :integer, required: true
+  attr :navigate, :string, required: true
+  attr :label, :string, required: true
+  attr :tone, :string, required: true
 
-  defp code_value(:sscc, code), do: code.code
-  defp code_value(:serialised, code), do: code.serial
+  # A zero count is rendered as a disabled badge rather than a link: ui.md §4
+  # is explicit that it must not imply results exist.
+  defp count_badge(%{count: 0} = assigns) do
+    ~H"""
+    <span
+      id={@id}
+      class="inline-flex min-w-11 items-center justify-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-400"
+      title="Nothing generated for this GTIN yet"
+    >
+      <.icon name="hero-eye-slash" class="size-3.5" />
+      <span class="sr-only">{@label} —</span> 0
+    </span>
+    """
+  end
 
-  defp code_meta(:sscc, code), do: code.level |> Atom.to_string() |> String.capitalize()
-  defp code_meta(:serialised, _code), do: "Serialised Data Matrix"
-
-  defp code_date(:sscc, code), do: code.issued_at || code.inserted_at
-  defp code_date(:serialised, code), do: code.inserted_at
-
-  defp format_code_date(nil), do: "—"
-  defp format_code_date(date), do: Calendar.strftime(date, "%d %b %Y, %H:%M")
+  defp count_badge(assigns) do
+    ~H"""
+    <.link
+      id={@id}
+      navigate={@navigate}
+      aria-label={@label}
+      class={[
+        "inline-flex min-w-11 items-center justify-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2",
+        @tone == "sscc" &&
+          "bg-indigo-50 text-thamani-forest hover:bg-thamani-forest hover:text-white focus-visible:ring-thamani-accent",
+        @tone == "serial" &&
+          "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white focus-visible:ring-emerald-500"
+      ]}
+    >
+      <.icon name="hero-eye" class="size-3.5" />
+      {@count}
+    </.link>
+    """
+  end
 
   def render(assigns) do
     ~H"""
@@ -371,119 +412,60 @@ defmodule ThamaniDawaWeb.SerialCatalogLive.Index do
         </div>
       </.modal>
 
-      <.modal
-        :if={@selected_item}
-        id="serial-code-details-modal"
-        show
-        on_cancel={JS.push("close_codes")}
-      >
-        <div class="space-y-5">
-          <div class="pr-8">
-            <div class="flex items-center gap-2">
-              <span class="rounded-full bg-thamani-lavender px-2.5 py-1 text-xs font-semibold text-thamani-forest">
-                {@selected_count}
-              </span>
-              <p class="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-                {code_title(@code_kind)}
-              </p>
-            </div>
-            <h2 class="mt-2 text-2xl font-medium tracking-tight text-thamani-forest">
-              {item_name(@selected_item)}
-            </h2>
-            <p class="mt-1 font-mono text-sm text-slate-600">GTIN {@selected_item.gtin}</p>
-          </div>
-
-          <div
-            id="serial-code-details"
-            phx-update="stream"
-            class="max-h-[26rem] space-y-2 overflow-y-auto pr-1"
-          >
-            <div
-              id="serial-code-details-empty"
-              class="hidden only:flex flex-col items-center rounded-xl border border-dashed border-slate-300 px-6 py-10 text-center"
-            >
-              <.icon name="hero-qr-code" class="size-8 text-slate-400" />
-              <p class="mt-3 text-sm font-medium text-slate-700">No codes issued yet</p>
-              <p class="mt-1 text-xs text-slate-500">
-                Generated codes for this GTIN will appear here.
-              </p>
-            </div>
-
-            <div
-              :for={{id, code} <- @streams.code_details}
-              id={id}
-              class="group rounded-xl border border-slate-200 bg-white p-4 transition hover:border-thamani-accent/40 hover:shadow-sm"
-            >
-              <div class="flex items-start justify-between gap-4">
-                <div class="min-w-0">
-                  <p class="break-all font-mono text-sm font-semibold text-slate-900">
-                    {code_value(@code_kind, code)}
-                  </p>
-                  <p class="mt-1 text-xs text-slate-500">{code_meta(@code_kind, code)}</p>
-                </div>
-                <.icon name="hero-check-badge" class="size-5 shrink-0 text-emerald-600" />
-              </div>
-              <div class="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500">
-                <span>Batch
-                <strong class="font-medium text-slate-700">{code.shipment.batch || "—"}</strong></span>
-                <span>Issued
-                <strong class="font-medium text-slate-700">{format_code_date(
-                  code_date(@code_kind, code)
-                )}</strong></span>
-              </div>
-            </div>
-          </div>
-
-          <.button variant="ghost" class="w-full" phx-click="close_codes">
-            Close
-          </.button>
-        </div>
-      </.modal>
-
       <.table id="serial-catalog" rows={@streams.items}>
-        <:col :let={{_id, item}} label="GTIN">{item.gtin}</:col>
-        <:col :let={{_id, item}} label="Name">{item_name(item)}</:col>
-        <:col :let={{_id, item}} label="Company">{item.comp_name || "—"}</:col>
-        <:col :let={{_id, item}} label="Source">
-          <.status_badge status={item.source} />
+        <:col :let={{_id, item}} label="GTIN">
+          <span class="font-mono">{item.gtin}</span>
         </:col>
-        <:col :let={{_id, item}} label="SSCCs">
-          <button
+        <:col :let={{_id, item}} label="Product">{item_name(item)}</:col>
+        <:col :let={{_id, item}} label="Description">{item.description || "—"}</:col>
+        <:col :let={{_id, item}} label="Created at">{format_date(item.inserted_at)}</:col>
+        <:col :let={{_id, item}} label="SSCC">
+          <.count_badge
             id={"show-ssccs-#{item.id}"}
-            type="button"
-            phx-click="show_codes"
-            phx-value-id={item.id}
-            phx-value-kind="sscc"
-            class="inline-flex min-w-9 items-center justify-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-thamani-forest transition hover:bg-thamani-forest hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
-            aria-label={"View SSCCs for #{item.gtin}"}
-          >
-            {count_for(@counts, item.gtin, :ssccs)}
-          </button>
+            count={count_for(@counts, item.gtin, :ssccs)}
+            navigate={results_path(assigns, item.gtin, :sscc)}
+            label={"View SSCC batches for GTIN #{item.gtin}"}
+            tone="sscc"
+          />
         </:col>
-        <:col :let={{_id, item}} label="Serialised">
-          <button
+        <:col :let={{_id, item}} label="Serials">
+          <.count_badge
             id={"show-serialised-#{item.id}"}
-            type="button"
-            phx-click="show_codes"
-            phx-value-id={item.id}
-            phx-value-kind="serialised"
-            class="inline-flex min-w-9 items-center justify-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-600 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
-            aria-label={"View serialised codes for #{item.gtin}"}
-          >
-            {count_for(@counts, item.gtin, :serialised)}
-          </button>
+            count={count_for(@counts, item.gtin, :serialised)}
+            navigate={results_path(assigns, item.gtin, :serialised)}
+            label={"View serialised groups for GTIN #{item.gtin}"}
+            tone="serial"
+          />
         </:col>
         <:action :let={{_id, item}}>
-          <.button
-            variant="ghost"
-            phx-click="delete"
-            phx-value-id={item.id}
-            data-confirm="Remove this GTIN from the serialisation catalog? Codes already issued are kept."
-            class="px-3 py-1.5 text-xs"
-            id={"btn-remove-#{item.id}"}
-          >
-            Remove
-          </.button>
+          <div class="flex flex-wrap items-center gap-2">
+            <.link
+              id={"generate-sscc-#{item.id}"}
+              navigate={generate_path(item.gtin, :sscc)}
+              class="inline-flex items-center gap-1.5 rounded-full bg-thamani-forest px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-thamani-forest/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+            >
+              <.icon name="hero-plus-circle" class="size-3.5" />
+              SSCC<span class="sr-only">for GTIN {item.gtin}</span>
+            </.link>
+            <.link
+              id={"generate-serial-#{item.id}"}
+              navigate={generate_path(item.gtin, :serialised)}
+              class="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+            >
+              <.icon name="hero-plus-circle" class="size-3.5" />
+              Serial<span class="sr-only">for GTIN {item.gtin}</span>
+            </.link>
+            <.button
+              variant="ghost"
+              phx-click="delete"
+              phx-value-id={item.id}
+              data-confirm="Remove this GTIN from the serialisation catalog? Codes already issued are kept."
+              class="px-3 py-1.5 text-xs"
+              id={"btn-remove-#{item.id}"}
+            >
+              Remove
+            </.button>
+          </div>
         </:action>
         <:empty_state>
           <.blank_state
@@ -501,7 +483,7 @@ defmodule ThamaniDawaWeb.SerialCatalogLive.Index do
         </:empty_state>
       </.table>
 
-      <.pagination page={@page_info} path={~p"/org/serialisation"} />
+      <.pagination page={@page_info} path={list_path(assigns, page: nil)} />
     </Layouts.org_shell>
     """
   end

@@ -31,6 +31,12 @@ defmodule ThamaniDawaWeb.Router do
     delete "/logout", SessionController, :delete
 
     patch "/switch-site", SiteSwitchController, :update
+
+    # Streamed CSV of a serialised run (ui.md §13). A controller rather than a
+    # LiveView event: a run can be millions of rows.
+    get "/org/serialisation/:gtin/groups/:sscc_id/export",
+        SerialExportController,
+        :export
   end
 
   scope "/", ThamaniDawaWeb do
@@ -78,6 +84,13 @@ defmodule ThamaniDawaWeb.Router do
       on_mount: [{ThamaniDawaWeb.UserAuth, :require_distributor_org}] do
       live "/org/serialisation", SerialCatalogLive.Index, :index
       live "/org/serialisation/new", SerialCatalogLive.Index, :new
+
+      # Generation flows and their results (ui.md §14). The GTIN in the path is
+      # a filter; ownership is verified on every load.
+      live "/org/serialisation/:gtin/sscc/new", SerialisationLive.Generate, :sscc
+      live "/org/serialisation/:gtin/serials/new", SerialisationLive.Generate, :serialised
+      live "/org/serialisation/:gtin/batches", SerialisationLive.Batches, :index
+      live "/org/serialisation/:gtin/groups", SerialisationLive.Groups, :index
     end
 
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do

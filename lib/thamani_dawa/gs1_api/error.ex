@@ -20,6 +20,7 @@ defmodule ThamaniDawa.Gs1Api.Error do
           | :provider_error
           | :timeout
           | :not_configured
+          | :unexpected_response
 
   @type t :: %__MODULE__{
           reason: reason(),
@@ -67,6 +68,23 @@ defmodule ThamaniDawa.Gs1Api.Error do
     }
   end
 
+  @doc """
+  A 2xx whose body carried no identifier.
+
+  Treated as a failure rather than a partial success: the call may well have
+  minted a code on the GS1 side, so it needs the same operator-visible
+  reconciliation as a stranded `pending` request (§4.5).
+  """
+  @spec unexpected_response() :: t()
+  def unexpected_response do
+    %__MODULE__{
+      reason: :unexpected_response,
+      message: fallback_message(:unexpected_response),
+      status: nil,
+      body: nil
+    }
+  end
+
   defp reason_for_status(400), do: :missing_params
   defp reason_for_status(401), do: :unauthorized
   defp reason_for_status(403), do: :forbidden
@@ -92,6 +110,10 @@ defmodule ThamaniDawa.Gs1Api.Error do
 
   defp fallback_message(:not_configured),
     do: "The GS1 connection isn't configured on this deployment."
+
+  defp fallback_message(:unexpected_response),
+    do:
+      "GS1 accepted the request but didn't return a code. Check with GS1 before generating again."
 
   defp fallback_message(_reason), do: "The GS1 service returned an unexpected error."
 end

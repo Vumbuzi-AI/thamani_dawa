@@ -158,12 +158,9 @@ defmodule ThamaniDawaWeb.UserAuth do
     end
   end
 
-  @doc """
-  Guards the healthcare-only admin screens (products, suppliers, batches):
-  admin, **and** the organization is a `:healthcare` tenant. A distributor
-  organization has no product catalog to manage — only the serialisation
-  module (serialisation.md §1).
-  """
+  # Guards healthcare-only admin screens (products, suppliers, batches). The
+  # user must be an admin in a healthcare tenant; distributor tenants only use
+  # the serialisation module (serialisation.md §1).
   def on_mount(:require_healthcare_org, params, session, socket) do
     case on_mount(:require_admin, params, session, socket) do
       {:cont, socket} ->
@@ -178,11 +175,9 @@ defmodule ThamaniDawaWeb.UserAuth do
     end
   end
 
-  @doc """
-  Guards the distributor-only serialisation screens: admin, **and** the
-  organization is a `:distributor` tenant (serialisation.md §1) — a
-  pharmacy/lab organization never generates SSCCs or serialised codes.
-  """
+  # Guards distributor-only serialisation screens. The user must be an admin
+  # in a distributor tenant; pharmacy/lab organizations never generate SSCCs
+  # or serialised codes (serialisation.md §1).
   def on_mount(:require_distributor_org, params, session, socket) do
     case on_mount(:require_admin, params, session, socket) do
       {:cont, socket} ->
