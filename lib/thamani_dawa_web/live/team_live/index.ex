@@ -214,6 +214,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
   defp compatible_sites(_sites, role) when role in ["", nil], do: []
   defp compatible_sites(_sites, "admin"), do: []
+  defp compatible_sites(_sites, "distributor"), do: []
 
   defp compatible_sites(sites, "pharmacist") do
     Enum.filter(
@@ -269,7 +270,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         </div>
       </div>
 
-      <div :if={@selected_role not in ["", nil, "admin"]}>
+      <div :if={@selected_role not in ["", nil, "admin", "distributor"]}>
         <input
           type="text"
           id="site-search"
@@ -392,7 +393,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             required
           />
           <.site_checkboxes
-            :if={@selected_role != "admin"}
+            :if={@selected_role not in ["admin", "distributor"]}
             sites={compatible_sites(@sites, @selected_role)}
             all_sites={@sites}
             checked_site_ids={@checked_site_ids}
@@ -404,6 +405,13 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           >
             <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
             <span>Admins automatically have organization-wide access across all sites.</span>
+          </div>
+          <div
+            :if={@selected_role == "distributor"}
+            class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
+          >
+            <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
+            <span>Distributor users work from organization-wide inventory and do not need a site assignment.</span>
           </div>
           <div class="mt-4">
             <.button variant="primary" class="w-full">Send invite</.button>
@@ -432,7 +440,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
               required
             />
             <.site_checkboxes
-              :if={@selected_role != "admin"}
+              :if={@selected_role not in ["admin", "distributor"]}
               sites={compatible_sites(@sites, @selected_role)}
               all_sites={@sites}
               checked_site_ids={@checked_site_ids}
@@ -444,6 +452,13 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             >
               <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
               <span>Admins automatically have organization-wide access across all sites.</span>
+            </div>
+            <div
+              :if={@selected_role == "distributor"}
+              class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
+            >
+              <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
+              <span>Distributor users work from organization-wide inventory and do not need a site assignment.</span>
             </div>
           </div>
           <div class="mt-4">

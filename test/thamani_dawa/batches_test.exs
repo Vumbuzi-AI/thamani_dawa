@@ -491,13 +491,14 @@ defmodule ThamaniDawa.BatchesTest do
       organization = organization_fixture()
       product = product_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
+      today = Date.utc_today()
 
       soon_batch =
         batch_fixture(%{
           organization_id: organization.id,
           site_id: site.id,
           product_id: product.id,
-          expiry_date: ~D[2026-08-01]
+          expiry_date: Date.add(today, 30)
         })
 
       later_batch =
@@ -505,7 +506,7 @@ defmodule ThamaniDawa.BatchesTest do
           organization_id: organization.id,
           site_id: site.id,
           product_id: product.id,
-          expiry_date: ~D[2027-01-01]
+          expiry_date: Date.add(today, 180)
         })
 
       assert {:ok, batches} =
@@ -523,12 +524,13 @@ defmodule ThamaniDawa.BatchesTest do
       product = product_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
       other_site = site_fixture(%{organization_id: organization.id})
+      today = Date.utc_today()
 
       batch_fixture(%{
         organization_id: organization.id,
         site_id: other_site.id,
         product_id: product.id,
-        expiry_date: ~D[2026-08-15]
+        expiry_date: Date.add(today, 15)
       })
 
       matching_batch =
@@ -536,7 +538,7 @@ defmodule ThamaniDawa.BatchesTest do
           organization_id: organization.id,
           site_id: site.id,
           product_id: product.id,
-          expiry_date: ~D[2027-01-01]
+          expiry_date: Date.add(today, 180)
         })
 
       assert {:ok, batches} =

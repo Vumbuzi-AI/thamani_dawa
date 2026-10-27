@@ -76,6 +76,16 @@ Contexts: `Patients`, `LabTests`, `LabTestTemplates`, `LabOrders`.
 
 Contexts: `Batches`, `LabOrders`, `QualityAssuranceCharts`.
 
+## Distributor Receiving, Order Allocation, And Dispatch
+
+1. A distributor configures warehouses, suppliers, products, and the organization's GS1 Company Prefix.
+2. Staff open `/distributor/receiving/new`, scan or select each product by GTIN, enter batch and expiry details, then post the delivery. The receipt and its batches are created together.
+3. Staff create a customer order and allocate each order line individually. The allocation panel lists eligible batches in FEFO order and lets staff enter a quantity per batch.
+4. Once every order line has been processed, the order is marked allocated and its invoice appears on the order. Staff can record payments there and track the outstanding balance.
+5. Staff print the shipment's GS1 SSCC-18 label, then dispatch the order. The shipment detail page shows its lines and links back to the order.
+
+Contexts: `GoodsReceipts`, `Batches`, `DistributorOrders`, `DistributorShipments`, `DistributorInvoices`, `GS1.SSCC`.
+
 ## Medical Camps
 
 There is no medical-camp route, context, schema, or migration in the current repo.

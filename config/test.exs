@@ -49,6 +49,12 @@ config :thamani_dawa, :demo_login_accounts, [
     name: "Zawadi Muthoni",
     role: "Pharmacy + lab",
     email: "pharmalab@gmail.com"
+  },
+  %{
+    id: "distributor",
+    name: "David Mwangi",
+    role: "Distributor",
+    email: "distributor@gmail.com"
   }
 ]
 

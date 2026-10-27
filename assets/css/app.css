@@ -1286,6 +1286,29 @@ label,
     color: #000 !important;
     box-shadow: none !important;
   }
+  .printable-sscc-label,
+  .printable-sscc-label * {
+    visibility: visible !important;
+  }
+  .printable-sscc-label {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 4in !important;
+    max-width: none !important;
+    min-height: 6in !important;
+    margin: 0 !important;
+    padding: 0.2in !important;
+    border: 2px solid #000 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+  .printable-sscc-label canvas {
+    width: 100% !important;
+    height: auto !important;
+  }
   .no-print {
     display: none !important;
   }

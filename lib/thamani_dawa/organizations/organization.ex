@@ -14,6 +14,10 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :is_active, :boolean, default: true
     field :is_subscription_active, :boolean, default: false
     field :kyc_details, :map, default: %{}
+    field :next_invoice_number, :integer, default: 0
+    field :gs1_company_prefix, :string
+    field :next_sscc_serial, :integer, default: 0
+    field :next_goods_receipt_number, :integer, default: 0
 
     has_many :sites, ThamaniDawa.Sites.Site
     has_many :users, ThamaniDawa.Accounts.User
@@ -22,6 +26,7 @@ defmodule ThamaniDawa.Organizations.Organization do
     has_many :patients, ThamaniDawa.Patients.Patient
     has_many :patient_visits, ThamaniDawa.PatientVisits.PatientVisit
     has_many :batches, ThamaniDawa.Batches.Batch
+    has_many :goods_receipts, ThamaniDawa.GoodsReceipts.GoodsReceipt
     has_many :prescriptions, ThamaniDawa.Prescriptions.Prescription
     has_many :lab_test_categories, ThamaniDawa.LabTests.LabTestCategory
     has_many :lab_tests, ThamaniDawa.LabTests.LabTest
@@ -45,6 +50,12 @@ defmodule ThamaniDawa.Organizations.Organization do
     |> unique_constraint(:name, message: "An organization with this name already exists")
     |> unique_constraint(:name, name: @slug_index, message: @similar_name_message)
     |> unique_constraint(:name, name: @name_key_index, message: @similar_name_message)
+  end
+
+  def gs1_settings_changeset(organization, attrs) do
+    organization
+    |> cast(attrs, [:gs1_company_prefix])
+    |> validate_format(:gs1_company_prefix, ~r/^\d{6,10}$/, message: "must be 6 to 10 digits")
   end
 
   defp maybe_generate_slug(changeset) do

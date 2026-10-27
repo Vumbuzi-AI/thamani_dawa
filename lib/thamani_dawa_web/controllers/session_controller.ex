@@ -40,6 +40,7 @@ defmodule ThamaniDawaWeb.SessionController do
   defp redirect_path_for(%User{role: :admin}), do: ~p"/org/dashboard"
   defp redirect_path_for(%User{role: :pharmacist}), do: ~p"/pharmacy"
   defp redirect_path_for(%User{role: :lab_technician}), do: ~p"/lab"
+  defp redirect_path_for(%User{role: :distributor}), do: ~p"/distributor"
 
   defp redirect_path_for(%User{role: :pharma_lab, current_site_id: nil}), do: ~p"/pharmacy"
 
@@ -69,7 +70,10 @@ defmodule ThamaniDawaWeb.SessionController do
       Map.put(
         account,
         :form,
-        to_form(%{"email" => account.email, "password" => "password"}, as: nil)
+        to_form(
+          %{"email" => account.email, "password" => Map.get(account, :password, "password")},
+          as: nil
+        )
       )
     end)
   end

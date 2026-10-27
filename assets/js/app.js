@@ -27,12 +27,13 @@ import topbar from "../vendor/topbar"
 import {GoogleMaps} from "./hooks/google_maps"
 import {Chart} from "./hooks/chart_hook"
 import {DataMatrix} from "./hooks/datamatrix"
+import {SsccBarcode} from "./hooks/sscc_barcode"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix},
+  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, SsccBarcode},
 })
 
 // Show progress bar on live navigation and form submits

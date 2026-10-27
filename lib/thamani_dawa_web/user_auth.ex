@@ -70,7 +70,8 @@ defmodule ThamaniDawaWeb.UserAuth do
   Usage: `live_session :foo, on_mount: [{ThamaniDawaWeb.UserAuth, :mount_current_scope}]`.
   Also supports `:require_authenticated` (halts unless a user is signed in),
   `:require_admin` (halts unless the signed-in user is an org admin, §7),
-  `:require_pharmacy_access`, and `:require_lab_access`.
+  `:require_pharmacy_access`, `:require_lab_access`, and
+  `:require_distributor_access`.
 
   The pharmacy/lab guards check two things: role (per §7 — admin, or the
   matching staff role, or `pharma_lab`) AND, for every non-admin, that the
@@ -148,6 +149,28 @@ defmodule ThamaniDawaWeb.UserAuth do
           {:cont, socket}
         else
           {:halt, deny_portal(socket, scope, :lab)}
+        end
+
+      {:halt, socket} ->
+        {:halt, socket}
+    end
+  end
+
+  def on_mount(:require_distributor_access, params, session, socket) do
+    case on_mount(:require_authenticated, params, session, socket) do
+      {:cont, socket} ->
+        if Scope.distributor_access?(socket.assigns.current_scope) do
+          {:cont, socket}
+        else
+          socket =
+            socket
+            |> Phoenix.LiveView.put_flash(
+              :error,
+              "You don't have access to the distributor portal."
+            )
+            |> Phoenix.LiveView.redirect(to: ~p"/")
+
+          {:halt, socket}
         end
 
       {:halt, socket} ->

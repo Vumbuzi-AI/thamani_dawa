@@ -452,6 +452,16 @@ defmodule ThamaniDawaWeb.PageComponents do
   def dashboard_path(%ThamaniDawa.Accounts.Scope{user: nil}), do: "/login"
 
   def dashboard_path(%ThamaniDawa.Accounts.Scope{} = scope) do
+    if ThamaniDawa.Accounts.Scope.distributor?(scope) do
+      "/distributor"
+    else
+      clinical_dashboard_path(scope)
+    end
+  end
+
+  def dashboard_path(_), do: "/login"
+
+  defp clinical_dashboard_path(scope) do
     cond do
       ThamaniDawa.Accounts.Scope.admin?(scope) ->
         "/org/dashboard"
@@ -479,8 +489,6 @@ defmodule ThamaniDawaWeb.PageComponents do
         "/login"
     end
   end
-
-  def dashboard_path(_), do: "/login"
 
   defp site_lab_only?(%ThamaniDawa.Accounts.Scope{current_site_id: nil}), do: false
 
