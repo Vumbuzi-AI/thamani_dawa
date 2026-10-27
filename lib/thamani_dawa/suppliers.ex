@@ -49,6 +49,24 @@ defmodule ThamaniDawa.Suppliers do
     |> Repo.update()
   end
 
+  @doc "Updates an organization-scoped supplier."
+  def update_supplier(organization_id, supplier_id, attrs) do
+    organization_id
+    |> get_supplier!(supplier_id)
+    |> update_supplier(attrs)
+  end
+
+  @doc "Deletes an unused organization-scoped supplier."
+  def delete_supplier(organization_id, supplier_id) do
+    supplier = get_supplier!(organization_id, supplier_id)
+
+    if Repo.exists?(from b in ThamaniDawa.Batches.Batch, where: b.supplier_id == ^supplier.id) do
+      {:error, :in_use}
+    else
+      Repo.delete(supplier)
+    end
+  end
+
   @doc "Returns a changeset for the given supplier."
   def change_supplier(supplier_or_changeset, attrs \\ %{}) do
     Supplier.changeset(supplier_or_changeset, attrs)

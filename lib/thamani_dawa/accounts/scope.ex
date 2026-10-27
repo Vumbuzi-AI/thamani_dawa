@@ -44,6 +44,12 @@ defmodule ThamaniDawa.Accounts.Scope do
   """
   def pharma_lab?(scope), do: role?(scope, :pharma_lab)
 
+  @doc "Whether the signed-in user is a distributor."
+  def distributor?(scope), do: role?(scope, :distributor)
+
+  @doc "Whether the signed-in user can enter the distributor portal."
+  def distributor_access?(scope), do: distributor?(scope)
+
   @doc """
   Whether the signed-in user can enter the pharmacy portal: an admin, a
   pharmacist, or combined pharmacy/lab staff.

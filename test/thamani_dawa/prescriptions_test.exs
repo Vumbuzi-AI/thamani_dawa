@@ -623,12 +623,14 @@ defmodule ThamaniDawa.PrescriptionsTest do
     end
 
     test "FEFO-picks the soonest-expiring batch at the prescription's own site", ctx do
+      today = Date.utc_today()
+
       soon_batch =
         batch_fixture(%{
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: Date.add(today, 30),
           quantity: 100,
           remaining_quantity: 100
         })
@@ -638,7 +640,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2027-01-01],
+          expiry_date: Date.add(today, 180),
           quantity: 100,
           remaining_quantity: 100
         })
@@ -647,7 +649,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
         batch_fixture(%{
           organization_id: ctx.organization.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-15],
+          expiry_date: Date.add(today, 15),
           quantity: 100,
           remaining_quantity: 100
         })
@@ -685,12 +687,14 @@ defmodule ThamaniDawa.PrescriptionsTest do
     end
 
     test "dispenses across multiple batches when partial fills are needed", ctx do
+      today = Date.utc_today()
+
       batch1 =
         batch_fixture(%{
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: Date.add(today, 30),
           quantity: 4,
           remaining_quantity: 4
         })
@@ -700,7 +704,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-09-01],
+          expiry_date: Date.add(today, 60),
           quantity: 10,
           remaining_quantity: 10
         })
@@ -732,12 +736,14 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
     test "rolls back and returns :out_of_stock if the combined batches cannot fulfill the requested quantity",
          ctx do
+      today = Date.utc_today()
+
       batch1 =
         batch_fixture(%{
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: Date.add(today, 30),
           quantity: 4,
           remaining_quantity: 4
         })
@@ -747,7 +753,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-09-01],
+          expiry_date: Date.add(today, 60),
           quantity: 5,
           remaining_quantity: 5
         })
@@ -776,12 +782,14 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
     test "never pulls stock from another site or organization, rolling back if local stock is insufficient",
          ctx do
+      today = Date.utc_today()
+
       local_batch =
         batch_fixture(%{
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: Date.add(today, 30),
           quantity: 5,
           remaining_quantity: 5
         })
@@ -793,7 +801,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: other_site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: Date.add(today, 30),
           quantity: 100,
           remaining_quantity: 100
         })

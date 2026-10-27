@@ -115,6 +115,37 @@ defmodule ThamaniDawaWeb.Router do
       live "/lab/tests/new", LabTestLive.Index, :new
       live "/lab/tests/:id/edit", LabTestLive.Index, :edit
     end
+
+    live_session :distributor,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :require_distributor_access}] do
+      live "/distributor", DistributorDashboardLive, :index
+      live "/distributor/products", DistributorProductLive.Index, :index
+      live "/distributor/products/new", DistributorProductLive.Index, :new
+      live "/distributor/products/:id", DistributorProductLive.Show, :show
+      live "/distributor/batches/:id", DistributorBatchLive, :show
+      live "/distributor/receiving", DistributorReceivingLive, :index
+      live "/distributor/receiving/new", DistributorReceivingLive, :new
+      live "/distributor/receiving/:id", DistributorGoodsReceiptLive, :show
+      live "/distributor/orders", DistributorOrderLive.Index, :index
+      live "/distributor/orders/new", DistributorOrderLive.Index, :new
+      live "/distributor/orders/:id/edit", DistributorOrderLive.Index, :edit
+      live "/distributor/orders/:id", DistributorOrderLive.Show, :show
+      live "/distributor/shipments", DistributorShipmentsLive, :index
+      live "/distributor/shipments/:id", DistributorShipmentsLive, :show
+      # Kept for existing bookmarks; invoices are no longer exposed in the
+      # distributor navigation and their status is shown on the order instead.
+      live "/distributor/invoices", DistributorInvoiceLive.Index, :index
+      live "/distributor/invoices/:id", DistributorInvoiceLive.Show, :show
+      live "/distributor/suppliers", DistributorSupplierLive.Index, :index
+      live "/distributor/suppliers/new", DistributorSupplierLive.Index, :new
+      live "/distributor/suppliers/:id/edit", DistributorSupplierLive.Index, :edit
+      live "/distributor/customers", DistributorCustomerLive.Index, :index
+      live "/distributor/customers/new", DistributorCustomerLive.Index, :new
+      live "/distributor/customers/:id/edit", DistributorCustomerLive.Index, :edit
+      live "/distributor/warehouses", DistributorWarehouseLive.Index, :index
+      live "/distributor/warehouses/new", DistributorWarehouseLive.Index, :new
+      live "/distributor/settings", DistributorSettingsLive, :index
+    end
   end
 
   # Other scopes may use custom stacks.

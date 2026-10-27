@@ -79,6 +79,26 @@ Routes:
 
 Purpose: create lab orders, collect samples, enter structured results, verify completed tests, manage test templates/categories, receive lab consumables, record consumable usage, and maintain QA charts.
 
+## Distributor Portal
+
+Who: `distributor` users only. Distributor users have organization-wide inventory access and do not need a site assignment.
+
+Live session: `:distributor`, `on_mount {ThamaniDawaWeb.UserAuth, :require_distributor_access}`.
+
+Routes:
+
+- `/distributor` -> distributor inventory and order dashboard
+- `/distributor/products*`, `/distributor/batches/:id` -> catalog and inventory batches
+- `/distributor/receiving*` -> GTIN-scanned delivery intake and receipt history
+- `/distributor/orders*` -> customer orders, per-line FEFO allocation, invoices, and payment status
+- `/distributor/shipments*` -> dispatch records, shipment labels, and shipment details
+- `/distributor/suppliers*`, `/distributor/customers*`, `/distributor/warehouses*` -> distributor records
+- `/distributor/settings` -> distributor organization settings, including GS1 configuration
+
+Invoice and payment details are shown within each order. The invoice list and detail routes remain available for existing links, but are not in the distributor navigation.
+
+Purpose: receive and manage distributor-owned stock, allocate order lines from available batches in earliest-expiry order, track invoice balances and payments, print GS1 SSCC labels, and dispatch shipments.
+
 ## Development Tools
 
 Enabled only when `config :thamani_dawa, dev_routes: true`.

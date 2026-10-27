@@ -241,6 +241,39 @@ defmodule ThamaniDawaWeb.Layouts do
     """
   end
 
+  @doc "Renders the authenticated distributor shell using the shared application navigation."
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, default: ""
+
+  slot :inner_block, required: true
+
+  def distributor_shell(assigns) do
+    ~H"""
+    <.sidebar_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      title="Thamani Dawa"
+      section_label="Distributor"
+      base_path="/distributor"
+      nav_items={[
+        {"Dashboard", "hero-squares-2x2", ~p"/distributor"},
+        {"Receiving", "hero-arrow-down-tray", ~p"/distributor/receiving"},
+        {"Orders", "hero-clipboard-document-list", ~p"/distributor/orders"},
+        {"Shipments", "hero-truck", ~p"/distributor/shipments"},
+        {"Products", "hero-cube", ~p"/distributor/products"},
+        {"Suppliers", "hero-truck", ~p"/distributor/suppliers"},
+        {"Warehouses", "hero-building-office-2", ~p"/distributor/warehouses"},
+        {"Customers", "hero-building-storefront", ~p"/distributor/customers"},
+        {"Settings", "hero-cog-6-tooth", ~p"/distributor/settings"}
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
   attr :current_path, :string, required: true

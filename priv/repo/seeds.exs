@@ -152,7 +152,7 @@ combined_site =
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
 
-ensure_account = fn email, name, role, site ->
+ensure_account = fn email, name, role, site, account_password ->
   site_ids = if site, do: [site.id], else: []
 
   user =
@@ -166,16 +166,24 @@ ensure_account = fn email, name, role, site ->
             site_ids: site_ids
           })
 
-        {:ok, accepted} = Accounts.accept_invite(invited, %{password: password})
+        {:ok, accepted} = Accounts.accept_invite(invited, %{password: account_password})
         accepted
 
       %User{} = existing ->
         {:ok, updated} =
           Accounts.update_user(organization_id, existing.id, %{role: role, site_ids: site_ids})
 
-        updated
-        |> Ecto.Changeset.cast(%{name: name, is_active: true}, [:name, :is_active])
-        |> Repo.update!()
+        updated =
+          updated
+          |> Ecto.Changeset.cast(%{name: name, is_active: true}, [:name, :is_active])
+          |> Repo.update!()
+
+        if is_nil(updated.hashed_password) do
+          {:ok, accepted} = Accounts.accept_invite(updated, %{password: account_password})
+          accepted
+        else
+          updated
+        end
     end
 
   if is_nil(user.hashed_pin) do
@@ -187,18 +195,18 @@ ensure_account = fn email, name, role, site ->
 end
 
 account_specs = [
-  {"admin@gmail.com", "Amina Kamau", :admin, nil},
-  {"pharmacist@gmail.com", "Grace Njeri", :pharmacist, pharmacy_site},
-  {"lab@gmail.com", "Laban Omondi", :lab_technician, lab_site},
-  {"pharmalab@gmail.com", "Zawadi Muthoni", :pharma_lab, combined_site}
+  {"admin@gmail.com", "Amina Kamau", :admin, nil, password},
+  {"pharmacist@gmail.com", "Grace Njeri", :pharmacist, pharmacy_site, password},
+  {"lab@gmail.com", "Laban Omondi", :lab_technician, lab_site, password},
+  {"pharmalab@gmail.com", "Zawadi Muthoni", :pharma_lab, combined_site, password},
+  {"distributor@gmail.com", "David Mwangi", :distributor, nil, password}
 ]
 
 accounts =
-  Map.new(account_specs, fn {email, name, role, site} ->
-    {email, ensure_account.(email, name, role, site)}
+  Map.new(account_specs, fn {email, name, role, site, account_password} ->
+    {email, ensure_account.(email, name, role, site, account_password)}
   end)
 
-primary_admin = Map.fetch!(accounts, "admin@gmail.com")
 primary_pharmacist = Map.fetch!(accounts, "pharmacist@gmail.com")
 primary_lab_technician = Map.fetch!(accounts, "lab@gmail.com")
 primary_pharma_lab = Map.fetch!(accounts, "pharmalab@gmail.com")
@@ -755,7 +763,13 @@ role_counts =
   |> Repo.all()
   |> Map.new()
 
-expected_role_counts = %{admin: 1, pharmacist: 1, lab_technician: 1, pharma_lab: 1}
+expected_role_counts = %{
+  admin: 1,
+  distributor: 1,
+  pharmacist: 1,
+  lab_technician: 1,
+  pharma_lab: 1
+}
 
 if role_counts != expected_role_counts do
   raise """
@@ -775,7 +789,7 @@ Data: #{length(products)} products, #{length(pharmacy_batches) + length(lab_batc
       #{length(suppliers)} suppliers, #{length(patients)} patients,
       12 prescriptions, #{length(lab_tests)} lab tests, and 12 lab orders.
 
-All accounts use password #{password} and PIN #{pin}.
+Care-provider accounts use password #{password} and PIN #{pin}.
 
 Admin account:
   admin@gmail.com
@@ -788,4 +802,8 @@ Lab technician account:
 
 Pharmacy + lab account:
   pharmalab@gmail.com
+
+Distributor account:
+  distributor@gmail.com
+  Password: 123456
 """)

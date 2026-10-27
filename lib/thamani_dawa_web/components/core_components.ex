@@ -1379,6 +1379,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
       when status in [:pending, :pending_review, :under_review, :pending_receipt, :invited],
       do: :warning
 
+  def status_semantic(:near_expiry), do: :warning
+
   def status_semantic(status)
       when status in [
              :completed,
@@ -1388,12 +1390,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
              :accepted,
              :finalised,
              :grn_confirmed,
-             :active
+             :active,
+             :dispatched
            ],
       do: :success
 
   def status_semantic(status)
       when status in [
+             :allocated,
              :in_progress,
              :collected,
              :partially_dispensed,
@@ -1404,6 +1408,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
       do: :info
 
   def status_semantic(status) when status in [:cancelled, :rejected, :flagged], do: :danger
+  def status_semantic(:expired), do: :danger
+  def status_semantic(:paid), do: :success
+  def status_semantic(:partially_paid), do: :info
+  def status_semantic(:issued), do: :warning
   def status_semantic(_status), do: :neutral
 
   defp badge_classes(:success), do: "bg-thamani-lime text-thamani-forest"
