@@ -61,6 +61,15 @@ defmodule ThamaniDawa.Dashboards do
     end
   end
 
+  @doc "Validates a historical custom reporting range against date order and today's date."
+  def validate_custom_range(%Date{} = from, %Date{} = to, today \\ Date.utc_today()) do
+    cond do
+      Date.after?(from, to) -> {:error, :reversed}
+      Date.after?(from, today) or Date.after?(to, today) -> {:error, :future}
+      true -> {:ok, {from, to}}
+    end
+  end
+
   @doc """
   Core admin/org stat-tile numbers for the given window, optional site, and optional search query.
   """
