@@ -497,7 +497,7 @@ defmodule ThamaniDawa.BatchesTest do
           organization_id: organization.id,
           site_id: site.id,
           product_id: product.id,
-          expiry_date: ~D[2026-08-01]
+          expiry_date: ~D[2098-08-01]
         })
 
       later_batch =
@@ -505,7 +505,7 @@ defmodule ThamaniDawa.BatchesTest do
           organization_id: organization.id,
           site_id: site.id,
           product_id: product.id,
-          expiry_date: ~D[2027-01-01]
+          expiry_date: ~D[2099-01-01]
         })
 
       assert {:ok, batches} =
@@ -528,7 +528,7 @@ defmodule ThamaniDawa.BatchesTest do
         organization_id: organization.id,
         site_id: other_site.id,
         product_id: product.id,
-        expiry_date: ~D[2026-08-15]
+        expiry_date: ~D[2098-08-15]
       })
 
       matching_batch =
@@ -536,7 +536,7 @@ defmodule ThamaniDawa.BatchesTest do
           organization_id: organization.id,
           site_id: site.id,
           product_id: product.id,
-          expiry_date: ~D[2027-01-01]
+          expiry_date: ~D[2099-01-01]
         })
 
       assert {:ok, batches} =

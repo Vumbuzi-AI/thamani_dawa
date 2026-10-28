@@ -628,7 +628,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: ~D[2098-08-01],
           quantity: 100,
           remaining_quantity: 100
         })
@@ -638,7 +638,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2027-01-01],
+          expiry_date: ~D[2099-01-01],
           quantity: 100,
           remaining_quantity: 100
         })
@@ -647,7 +647,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
         batch_fixture(%{
           organization_id: ctx.organization.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-15],
+          expiry_date: ~D[2098-08-15],
           quantity: 100,
           remaining_quantity: 100
         })
@@ -690,7 +690,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: ~D[2098-08-01],
           quantity: 4,
           remaining_quantity: 4
         })
@@ -700,7 +700,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-09-01],
+          expiry_date: ~D[2098-09-01],
           quantity: 10,
           remaining_quantity: 10
         })
@@ -737,7 +737,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: ~D[2098-08-01],
           quantity: 4,
           remaining_quantity: 4
         })
@@ -747,7 +747,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-09-01],
+          expiry_date: ~D[2098-09-01],
           quantity: 5,
           remaining_quantity: 5
         })
@@ -781,7 +781,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: ~D[2099-08-01],
           quantity: 5,
           remaining_quantity: 5
         })
@@ -793,7 +793,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: other_site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2026-08-01],
+          expiry_date: ~D[2099-08-01],
           quantity: 100,
           remaining_quantity: 100
         })

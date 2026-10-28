@@ -3,7 +3,7 @@ defmodule ThamaniDawa.AuditLogsTest do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.AuditLogs
-  alias ThamaniDawa.Products
+  alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
 
   import ThamaniDawa.AccountsFixtures
@@ -18,7 +18,9 @@ defmodule ThamaniDawa.AuditLogsTest do
     Repo.put_audit_actor(user)
 
     assert {:ok, product} =
-             Products.create_product(user.organization_id, valid_product_attributes())
+             %Product{organization_id: user.organization_id}
+             |> Product.changeset(valid_product_attributes())
+             |> Repo.audited_insert()
 
     [log] = AuditLogs.list_audit_logs(user.organization_id)
     assert log.user_id == user.id
@@ -33,7 +35,9 @@ defmodule ThamaniDawa.AuditLogsTest do
     user = user_fixture()
 
     assert {:ok, _product} =
-             Products.create_product(user.organization_id, valid_product_attributes())
+             %Product{organization_id: user.organization_id}
+             |> Product.changeset(valid_product_attributes())
+             |> Repo.audited_insert()
 
     assert AuditLogs.list_audit_logs(user.organization_id) == []
   end
