@@ -128,7 +128,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
       assert index_live |> element("a", "+ New prescription") |> render_click()
-      assert index_live |> element("a", "New Patient") |> render_click()
+      assert index_live |> element("#new-patient-mode") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       assert {:error, {:live_redirect, %{to: to}}} =
@@ -164,7 +164,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
       assert index_live |> element("a", "+ New prescription") |> render_click()
-      assert index_live |> element("a", "New Patient") |> render_click()
+      assert index_live |> element("#new-patient-mode") |> render_click()
 
       index_live
       |> form("#prescription-form", patient: %{full_name: "Jane Doe", phone: "0712345678"})
@@ -359,7 +359,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
       assert index_live |> element("a", "+ New prescription") |> render_click()
-      assert index_live |> element("a", "New Patient") |> render_click()
+      assert index_live |> element("#new-patient-mode") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       html =
