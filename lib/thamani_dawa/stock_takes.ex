@@ -5,10 +5,17 @@ defmodule ThamaniDawa.StockTakes do
   batch's `remaining_quantity` to the counted value and recording who finalised
   and when. Finalization is protected against concurrent double-calls via a
   `FOR UPDATE` row-level lock on the session.
+
+  When a stock take is created, a count row is automatically materialised for
+  every active (received and approved) batch at the site via
+  `populate_items_for_site/3`. That function is idempotent — calling it again
+  only adds rows for batches not yet represented, so it is safe to call on
+  every page mount.
   """
 
   import Ecto.Query, warn: false
 
+  alias ThamaniDawa.Batches
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Repo
   alias ThamaniDawa.StockTakes.StockTake
@@ -60,14 +67,69 @@ defmodule ThamaniDawa.StockTakes do
   end
 
   @doc """
-  Creates a new draft stock take for a site. `attrs` must include `site_id`
-  and `started_by_id`; `notes` is optional.
+  Creates a new draft stock take for a site and immediately populates a count
+  row for every active batch at that site. `attrs` must include `site_id` and
+  `started_by_id`; `notes` is optional.
   """
   def create_stock_take(organization_id, attrs) when is_integer(organization_id) do
-    %StockTake{}
-    |> StockTake.changeset(attrs)
-    |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Repo.insert()
+    Repo.transaction(fn ->
+      with {:ok, stock_take} <-
+             %StockTake{}
+             |> StockTake.changeset(attrs)
+             |> Ecto.Changeset.put_change(:organization_id, organization_id)
+             |> Repo.audited_insert(),
+           results <- populate_items_for_site(stock_take, organization_id, stock_take.site_id),
+           :ok <- ensure_items_inserted(results) do
+        stock_take
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp ensure_items_inserted(results) do
+    case Enum.find(results, &match?({:error, _reason}, &1)) do
+      nil -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  Idempotently materialises a `StockTakeItem` for every active (received and
+  approved, with stock remaining) batch at `site_id`. Batches that already
+  have an item in this session are skipped. The snapshot `expected_quantity`
+  is the batch's current `remaining_quantity` at the moment the row is
+  inserted.
+
+  Returns a list of `{:ok, item}` / `{:error, changeset}` tuples — one per
+  batch that needed a new row.
+  """
+  def populate_items_for_site(%StockTake{} = stock_take, organization_id, site_id) do
+    active_batches = Batches.list_active_batches_for_site(organization_id, site_id)
+
+    existing_batch_ids =
+      MapSet.new(
+        Repo.all(
+          from i in StockTakeItem,
+            where: i.stock_take_id == ^stock_take.id,
+            select: i.batch_id
+        )
+      )
+
+    active_batches
+    |> Enum.reject(&MapSet.member?(existing_batch_ids, &1.id))
+    |> Enum.map(&insert_item(stock_take, &1))
+  end
+
+  defp insert_item(%StockTake{} = stock_take, %Batch{} = batch) do
+    %StockTakeItem{}
+    |> StockTakeItem.create_changeset(%{
+      stock_take_id: stock_take.id,
+      batch_id: batch.id,
+      organization_id: stock_take.organization_id,
+      expected_quantity: batch.remaining_quantity
+    })
+    |> Repo.audited_insert()
   end
 
   @doc """
@@ -85,7 +147,7 @@ defmodule ThamaniDawa.StockTakes do
       organization_id: stock_take.organization_id,
       expected_quantity: batch.remaining_quantity
     })
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 
   @doc """
@@ -107,7 +169,7 @@ defmodule ThamaniDawa.StockTakes do
           "counted_at" => DateTime.utc_now()
         })
       )
-      |> Repo.update()
+      |> Repo.audited_update()
     end
   end
 
@@ -156,7 +218,7 @@ defmodule ThamaniDawa.StockTakes do
         |> lock("FOR UPDATE")
         |> Repo.one!()
         |> Ecto.Changeset.change(remaining_quantity: item.counted_quantity)
-        |> Repo.update!()
+        |> Repo.audited_update!()
       end)
 
       locked
@@ -164,7 +226,7 @@ defmodule ThamaniDawa.StockTakes do
         finalized_by_id: user_id,
         finalized_at: DateTime.utc_now()
       })
-      |> Repo.update!()
+      |> Repo.audited_update!()
     end)
   end
 end

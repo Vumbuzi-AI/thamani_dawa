@@ -1,7 +1,9 @@
 defmodule ThamaniDawaWeb.StockTakeLive.Index do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.StockTakes
   alias ThamaniDawa.StockTakes.StockTake
   alias ThamaniDawaWeb.SiteScoping
@@ -10,8 +12,14 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
     scope = socket.assigns.current_scope
     org_id = scope.organization_id
 
+    sites =
+      scope
+      |> Accounts.list_sites_for_user()
+      |> Enum.filter(&Site.pharmacy?/1)
+
     {:ok,
      socket
+     |> assign(:sites, sites)
      |> assign(:sites_by_id, org_id |> Sites.list_sites() |> Map.new(&{&1.id, &1}))
      |> reload_stock_takes()}
   end
@@ -22,13 +30,20 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
 
   defp apply_action(socket, :new, _params) do
     scope = socket.assigns.current_scope
+    sites = socket.assigns.sites
+
+    default_site_id =
+      case sites do
+        [single_site] -> single_site.id
+        _ -> SiteScoping.default_site_id(scope)
+      end
 
     assign(socket,
       form:
         to_form(
           StockTakes.change_stock_take(%StockTake{}, %{
             started_by_id: scope.user.id,
-            site_id: SiteScoping.default_site_id(scope)
+            site_id: default_site_id
           }),
           as: :stock_take
         )
@@ -43,6 +58,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
     changeset =
       %StockTake{}
       |> StockTakes.change_stock_take(attrs)
+      |> validate_site_access(socket.assigns.sites)
       |> Map.put(:action, :validate)
 
     {:noreply, assign(socket, form: to_form(changeset, as: :stock_take))}
@@ -54,15 +70,41 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
 
     attrs = Map.put_new(attrs, "started_by_id", to_string(scope.user.id))
 
-    case StockTakes.create_stock_take(org_id, attrs) do
-      {:ok, stock_take} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Stock take started.")
-         |> push_navigate(to: ~p"/pharmacy/stock-takes/#{stock_take.id}")}
+    changeset =
+      %StockTake{}
+      |> StockTakes.change_stock_take(attrs)
+      |> validate_site_access(socket.assigns.sites)
 
-      {:error, changeset} ->
-        {:noreply, assign(socket, form: to_form(changeset, as: :stock_take))}
+    if changeset.valid? do
+      case StockTakes.create_stock_take(org_id, attrs) do
+        {:ok, stock_take} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Stock take started.")
+           |> push_navigate(to: ~p"/pharmacy/stock-takes/#{stock_take.id}")}
+
+        {:error, changeset} ->
+          {:noreply, assign(socket, form: to_form(changeset, as: :stock_take))}
+      end
+    else
+      {:noreply,
+       assign(socket, form: to_form(Map.put(changeset, :action, :validate), as: :stock_take))}
+    end
+  end
+
+  defp validate_site_access(changeset, allowed_sites) do
+    allowed_ids = Enum.map(allowed_sites, & &1.id)
+
+    case Ecto.Changeset.get_field(changeset, :site_id) do
+      nil ->
+        changeset
+
+      site_id ->
+        if site_id in allowed_ids do
+          changeset
+        else
+          Ecto.Changeset.add_error(changeset, :site_id, "is not a site you can act on")
+        end
     end
   end
 
@@ -98,7 +140,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
         <:subtitle>Count physical inventory and reconcile it with recorded stock.</:subtitle>
         <:actions>
           <.button variant="primary" patch={~p"/pharmacy/stock-takes/new"}>
-            + New stock take
+            <.icon name="hero-plus" class="size-4" /> New stock take
           </.button>
         </:actions>
       </.header>
@@ -114,14 +156,23 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
         </h2>
         <.form for={@form} id="stock-take-form" phx-submit="save" phx-change="validate">
           <input type="hidden" name="stock_take[started_by_id]" value={@current_scope.user.id} />
-          <.input
-            field={@form[:site_id]}
-            type="select"
-            label="Site"
-            options={Enum.map(@sites_by_id, fn {id, site} -> {site.name, id} end)}
-            prompt="Choose a site"
-            required
-          />
+          <%= if length(@sites) == 1 do %>
+            <% site = hd(@sites) %>
+            <.input field={@form[:site_id]} type="hidden" value={site.id} />
+            <div class="mb-3">
+              <span class="thamani-label">Site</span>
+              <p class="text-sm font-medium text-slate-800">{site.name}</p>
+            </div>
+          <% else %>
+            <.input
+              field={@form[:site_id]}
+              type="select"
+              label="Site"
+              options={Enum.map(@sites, &{&1.name, &1.id})}
+              prompt="Choose a site"
+              required
+            />
+          <% end %>
           <.input field={@form[:notes]} type="textarea" label="Notes" rows="3" />
           <div class="mt-4">
             <.button variant="primary" class="w-full">Start counting</.button>

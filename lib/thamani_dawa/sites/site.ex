@@ -30,6 +30,7 @@ defmodule ThamaniDawa.Sites.Site do
   def changeset(site, attrs) do
     site
     |> cast(attrs, [:name, :site_type, :address, :lat, :long, :is_active])
+    |> trim_change(:name)
     |> validate_required([:name, :site_type, :address])
     |> unique_constraint(:gln)
   end
@@ -38,7 +39,15 @@ defmodule ThamaniDawa.Sites.Site do
   def default_changeset(site, attrs) do
     site
     |> cast(attrs, [:name, :site_type, :lat, :long, :is_active])
+    |> trim_change(:name)
     |> validate_required([:name, :site_type])
+  end
+
+  defp trim_change(changeset, field) do
+    update_change(changeset, field, fn
+      value when is_binary(value) -> String.trim(value)
+      value -> value
+    end)
   end
 
   @doc "The valid site types, per §4.1 of project.md."

@@ -31,7 +31,8 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
      |> assign(:site, site)
      |> assign(:products_by_id, products_by_id)
      |> assign(:addable_batches, addable_batches)
-     |> assign(:add_batch_id, nil)}
+     |> assign(:add_batch_id, nil)
+     |> assign(:confirm_finalize, false)}
   end
 
   def handle_event("add_batch", %{"batch_id" => batch_id_str}, socket)
@@ -63,6 +64,14 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
 
   def handle_event("add_batch", _params, socket) do
     {:noreply, put_flash(socket, :error, "Select a batch to add.")}
+  end
+
+  def handle_event("confirm_finalize", _params, socket) do
+    {:noreply, assign(socket, :confirm_finalize, true)}
+  end
+
+  def handle_event("cancel_finalize", _params, socket) do
+    {:noreply, assign(socket, :confirm_finalize, false)}
   end
 
   def handle_event("record_count", %{"item_id" => item_id_str, "counted" => counted_str}, socket) do
@@ -98,13 +107,20 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
         {:noreply,
          socket
          |> put_flash(:info, "Stock take finalized. Batch quantities have been updated.")
+         |> assign(:confirm_finalize, false)
          |> reload(scope.organization_id)}
 
       {:error, :uncounted_items} ->
-        {:noreply, put_flash(socket, :error, "All items must be counted before finalizing.")}
+        {:noreply,
+         socket
+         |> put_flash(:error, "All items must be counted before finalizing.")
+         |> assign(:confirm_finalize, false)}
 
       {:error, :already_finalized} ->
-        {:noreply, put_flash(socket, :error, "This stock take has already been finalized.")}
+        {:noreply,
+         socket
+         |> put_flash(:error, "This stock take has already been finalized.")
+         |> assign(:confirm_finalize, false)}
     end
   end
 
@@ -296,13 +312,37 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
         <div :if={@stock_take.status == :draft} class="flex justify-end pt-2">
           <.button
             variant="primary"
-            phx-click="finalize"
-            phx-disable-with="Finalizing…"
-            data-confirm="Finalizing will update batch quantities to match your physical counts. This cannot be undone. Continue?"
+            phx-click="confirm_finalize"
           >
             <.icon name="hero-lock-closed" class="size-4" /> Finalize stock take
           </.button>
         </div>
+
+        <.modal
+          :if={@confirm_finalize}
+          id="confirm-finalize-modal"
+          show
+          on_cancel={JS.push("cancel_finalize")}
+        >
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            Finalize stock take
+          </h2>
+          <p class="mb-6 text-sm text-thamani-pewter">
+            Finalizing will update batch quantities to match your physical counts. This cannot be undone. Continue?
+          </p>
+          <div class="flex justify-end gap-3">
+            <.button type="button" phx-click="cancel_finalize">
+              Cancel
+            </.button>
+            <.button
+              variant="primary"
+              phx-click="finalize"
+              phx-disable-with="Finalizing…"
+            >
+              Finalize
+            </.button>
+          </div>
+        </.modal>
 
         <aside
           :if={@stock_take.status == :finalized}

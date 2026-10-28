@@ -1,6 +1,7 @@
 defmodule ThamaniDawaWeb.ProductLive.Index do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Batches
   alias ThamaniDawa.GtinLookup
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
@@ -60,10 +61,10 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
-  defp apply_action(socket, :new, _params) do
+  defp apply_action(socket, :new, params) do
     socket
     |> assign(form: to_form(Product.changeset(%Product{}, %{}), as: :product), product: nil)
-    |> assign(:back_path, ~p"/org/products")
+    |> assign(:back_path, back_path(params, ~p"/org/products"))
     |> reset_gtin_lookup()
     |> assign(:gtin_step, :scan)
   end
@@ -215,11 +216,16 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
     case Products.create_product(organization_id, attrs) do
       {:ok, product} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Product created.")
-         |> stream_insert(:products, product)
-         |> push_patch(to: ~p"/org/products")}
+        socket =
+          socket
+          |> put_flash(:info, "Product created.")
+          |> stream_insert(:products, build_row(organization_id, product))
+
+        if socket.assigns.back_path == ~p"/org/dashboard" do
+          {:noreply, push_navigate(socket, to: socket.assigns.back_path)}
+        else
+          {:noreply, push_patch(socket, to: socket.assigns.back_path)}
+        end
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :product))}
@@ -230,11 +236,12 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     case Products.update_product(socket.assigns.product, attrs) do
       {:ok, product} ->
         back_path = socket.assigns[:back_path] || ~p"/org/products"
+        organization_id = socket.assigns.current_scope.organization_id
 
         socket =
           socket
           |> put_flash(:info, "Product updated.")
-          |> stream_insert(:products, product)
+          |> stream_insert(:products, build_row(organization_id, product))
 
         if back_path == ~p"/org/products" do
           {:noreply, push_patch(socket, to: back_path)}
@@ -246,6 +253,9 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         {:noreply, assign(socket, :form, to_form(changeset, as: :product))}
     end
   end
+
+  defp back_path(%{"return_to" => "dashboard"}, _default), do: ~p"/org/dashboard"
+  defp back_path(_params, default), do: default
 
   defp reload_products(socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -268,10 +278,64 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
       all_products
       |> distinct_categories()
 
+    product_ids = Enum.map(page_result.entries, & &1.id)
+    stock_summary = Batches.stock_summary_by_product(organization_id, product_ids)
+    undispatched = Batches.undispatched_summary_by_product(organization_id, product_ids)
+    batch_counts = Batches.batch_counts_by_product(organization_id, product_ids)
+
+    rows =
+      Enum.map(page_result.entries, fn product ->
+        build_stock_row(product, stock_summary, undispatched, batch_counts)
+      end)
+
     socket
     |> assign(:categories, categories)
     |> assign(:page_info, page_result)
-    |> stream(:products, page_result.entries, reset: true)
+    |> stream(:products, rows, reset: true)
+  end
+
+  defp uom_label(1, uom), do: uom
+  defp uom_label(_count, nil), do: nil
+  defp uom_label(_count, uom), do: pluralize(uom)
+
+  defp pluralize(word) do
+    cond do
+      String.ends_with?(word, ["s", "x", "z", "ch", "sh"]) -> word <> "es"
+      String.match?(word, ~r/[^aeiou]y$/i) -> String.slice(word, 0..-2//1) <> "ies"
+      true -> word <> "s"
+    end
+  end
+
+  defp stock_level(_total, nil), do: nil
+  defp stock_level(total, _reorder_level) when total <= 0, do: :out_of_stock
+  defp stock_level(total, reorder_level) when total <= reorder_level, do: :low_stock
+  defp stock_level(_total, _reorder_level), do: nil
+
+  defp build_row(organization_id, product) do
+    stock_summary = Batches.stock_summary_by_product(organization_id, [product.id])
+    undispatched = Batches.undispatched_summary_by_product(organization_id, [product.id])
+    batch_counts = Batches.batch_counts_by_product(organization_id, [product.id])
+    build_stock_row(product, stock_summary, undispatched, batch_counts)
+  end
+
+  # "Org-wide stock" is every unit the org has on record for the product: in the
+  # warehouse awaiting dispatch, received at a site, or dispatched but not yet
+  # confirmed received. The breakdown is kept alongside so the single number
+  # can be explained (tooltip) rather than mistaken for "ready to dispense."
+  defp build_stock_row(product, stock_summary, undispatched, batch_counts) do
+    site_summary = Map.get(stock_summary, product.id, %{})
+    awaiting_dispatch = Map.get(undispatched, product.id, 0)
+    received_at_sites = Map.get(site_summary, :received_remaining, 0)
+    in_transit = Map.get(site_summary, :pending_remaining, 0)
+    total_stock = awaiting_dispatch + received_at_sites + in_transit
+
+    %{
+      id: product.id,
+      product: product,
+      total_stock: total_stock,
+      batch_count: Map.get(batch_counts, product.id, 0),
+      stock_level: stock_level(total_stock, product.reorder_level)
+    }
   end
 
   defp distinct_categories(products) do
@@ -352,7 +416,9 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         Product catalog
         <:subtitle>Search, filter, and manage your product catalog.</:subtitle>
         <:actions>
-          <.button variant="primary" patch={~p"/org/products/new"}>+ Add product</.button>
+          <.button id="product-new-button" variant="primary" patch={~p"/org/products/new"}>
+            <.icon name="hero-plus" class="size-4" /> Add product
+          </.button>
         </:actions>
         <:toolbar>
           <form phx-change="search" class="flex-1" id="search-form">
@@ -639,32 +705,67 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
       <.table
         id="products"
         rows={@streams.products}
-        row_click={fn {_id, product} -> JS.navigate(~p"/org/products/#{product.id}") end}
+        mobile_columns={3}
+        row_click={fn {_id, row} -> JS.navigate(~p"/org/products/#{row.product.id}") end}
       >
-        <:col :let={{_id, product}} label="Name">{product_name(product)}</:col>
-        <:col :let={{_id, product}} label="Category">{product.category}</:col>
-        <:col :let={{_id, product}} label="GTIN">{product.gtin}</:col>
-        <:col :let={{_id, product}} label="Status">
-          <.status_badge status={if product.is_active, do: :active, else: :inactive} />
+        <:col :let={{_id, row}} label="Name">
+          <span class="hidden sm:inline">{product_name(row.product)}</span>
+          <span class="flex min-w-0 items-center gap-3.5 sm:hidden">
+            <span class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-thamani-lime/30 text-thamani-forest ring-1 ring-thamani-stone">
+              <.icon name="hero-cube" class="size-6" />
+            </span>
+            <span class="min-w-0">
+              <span class="block truncate text-base font-semibold text-thamani-forest">
+                {product_name(row.product)}
+              </span>
+              <span class="mt-0.5 block truncate text-sm font-normal text-thamani-pewter">
+                {row.product.category || "Uncategorized"}
+              </span>
+            </span>
+          </span>
         </:col>
-        <:action :let={{_id, product}}>
+        <:col :let={{_id, row}} label="Category" mobile="hidden">
+          {row.product.category || "Uncategorized"}
+        </:col>
+        <:col :let={{_id, row}} label="GTIN">
+          <span class="tabular-nums">{row.product.gtin}</span>
+        </:col>
+        <:col :let={{_id, row}} label="Org-wide stock">
+          <span
+            id={"stock-total-#{row.product.id}"}
+            class="inline-flex items-center gap-2 tabular-nums"
+          >
+            {row.total_stock} {uom_label(row.total_stock, row.product.uom)}
+            <.status_badge :if={row.stock_level} status={row.stock_level} class="max-sm:hidden" />
+          </span>
+        </:col>
+        <:col :let={{_id, row}} label="Batches">
+          <span class="tabular-nums">{row.batch_count}</span>
+        </:col>
+        <:col :let={{_id, row}} label="Status" mobile="aside">
+          <span class="flex flex-col items-end gap-1.5">
+            <.status_badge :if={row.stock_level} status={row.stock_level} class="sm:hidden" />
+            <.status_badge status={if row.product.is_active, do: :active, else: :inactive} />
+          </span>
+        </:col>
+        <:action :let={{_id, row}}>
           <.button
             variant="primary"
-            navigate={~p"/org/products/#{product.id}/batches/new"}
-            class="px-3 py-1.5 text-xs"
-            id={"btn-dispatch-#{product.id}"}
+            navigate={~p"/org/products/#{row.product.id}/batches/new"}
+            class="min-h-10 gap-2 px-4 py-2 text-sm"
+            id={"btn-add-stock-#{row.product.id}"}
           >
-            Dispatch batch
+            <.icon name="hero-plus" class="size-4" /> Add stock
           </.button>
         </:action>
-        <:action :let={{_id, product}}>
+        <:action :let={{_id, row}}>
           <.button
             variant="ghost-edit"
-            patch={~p"/org/products/#{product.id}/edit"}
-            class="px-3 py-1.5 text-xs"
-            id={"btn-edit-#{product.id}"}
+            patch={~p"/org/products/#{row.product.id}/edit"}
+            class="min-h-10 gap-2 px-4 py-2 text-sm"
+            id={"btn-edit-#{row.product.id}"}
           >
-            Edit
+            <.icon name="hero-pencil-square" class="size-4" /> Edit
           </.button>
         </:action>
         <:empty_state>

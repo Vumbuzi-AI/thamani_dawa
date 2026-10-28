@@ -43,6 +43,29 @@ defmodule ThamaniDawa.StockTakesTest do
                errors_on(changeset)
     end
 
+    test "pre-populates a count row for every active batch at the site" do
+      org = organization_fixture()
+      site = site_fixture(%{organization_id: org.id})
+      user = user_fixture(%{organization_id: org.id})
+
+      batch_a = batch_fixture(%{organization_id: org.id, site_id: site.id, quantity: 30})
+      batch_b = batch_fixture(%{organization_id: org.id, site_id: site.id, quantity: 15})
+      _pending = batch_fixture(%{organization_id: org.id, site_id: site.id, pending: true})
+
+      {:ok, take} =
+        StockTakes.create_stock_take(org.id, %{site_id: site.id, started_by_id: user.id})
+
+      loaded = StockTakes.get_stock_take!(org.id, take.id)
+      item_batch_ids = loaded.items |> Enum.map(& &1.batch_id) |> MapSet.new()
+
+      assert MapSet.member?(item_batch_ids, batch_a.id)
+      assert MapSet.member?(item_batch_ids, batch_b.id)
+      assert length(loaded.items) == 2
+
+      assert Enum.find(loaded.items, &(&1.batch_id == batch_a.id)).expected_quantity == 30
+      assert Enum.find(loaded.items, &(&1.batch_id == batch_b.id)).expected_quantity == 15
+    end
+
     test "notes is optional" do
       org = organization_fixture()
       site = site_fixture(%{organization_id: org.id})
@@ -53,6 +76,65 @@ defmodule ThamaniDawa.StockTakesTest do
                  site_id: site.id,
                  started_by_id: user.id
                })
+    end
+  end
+
+  describe "populate_items_for_site/3" do
+    test "is idempotent — calling it twice does not create duplicate rows" do
+      org = organization_fixture()
+      site = site_fixture(%{organization_id: org.id})
+      user = user_fixture(%{organization_id: org.id})
+
+      _batch = batch_fixture(%{organization_id: org.id, site_id: site.id, quantity: 10})
+
+      {:ok, take} =
+        StockTakes.create_stock_take(org.id, %{site_id: site.id, started_by_id: user.id})
+
+      StockTakes.populate_items_for_site(take, org.id, site.id)
+      StockTakes.populate_items_for_site(take, org.id, site.id)
+
+      loaded = StockTakes.get_stock_take!(org.id, take.id)
+      assert length(loaded.items) == 1
+    end
+
+    test "adds rows for newly active batches without touching existing rows" do
+      org = organization_fixture()
+      site = site_fixture(%{organization_id: org.id})
+      user = user_fixture(%{organization_id: org.id})
+
+      batch_a = batch_fixture(%{organization_id: org.id, site_id: site.id, quantity: 20})
+
+      {:ok, take} =
+        StockTakes.create_stock_take(org.id, %{site_id: site.id, started_by_id: user.id})
+
+      loaded_before = StockTakes.get_stock_take!(org.id, take.id)
+      assert length(loaded_before.items) == 1
+
+      batch_b = batch_fixture(%{organization_id: org.id, site_id: site.id, quantity: 5})
+
+      StockTakes.populate_items_for_site(take, org.id, site.id)
+
+      loaded_after = StockTakes.get_stock_take!(org.id, take.id)
+      assert length(loaded_after.items) == 2
+
+      item_batch_ids = loaded_after.items |> Enum.map(& &1.batch_id) |> MapSet.new()
+      assert MapSet.member?(item_batch_ids, batch_a.id)
+      assert MapSet.member?(item_batch_ids, batch_b.id)
+    end
+
+    test "skips pending batches" do
+      org = organization_fixture()
+      site = site_fixture(%{organization_id: org.id})
+      user = user_fixture(%{organization_id: org.id})
+
+      _active = batch_fixture(%{organization_id: org.id, site_id: site.id, quantity: 10})
+      _pending = batch_fixture(%{organization_id: org.id, site_id: site.id, pending: true})
+
+      {:ok, take} =
+        StockTakes.create_stock_take(org.id, %{site_id: site.id, started_by_id: user.id})
+
+      loaded = StockTakes.get_stock_take!(org.id, take.id)
+      assert length(loaded.items) == 1
     end
   end
 
@@ -256,7 +338,7 @@ defmodule ThamaniDawa.StockTakesTest do
       {:ok, _item} = StockTakes.add_item(take, batch)
 
       loaded = StockTakes.get_stock_take!(org.id, take.id)
-      assert [%StockTakeItem{batch: %{id: batch_id}}] = loaded.items
+      assert [%StockTakeItem{batch: %{id: batch_id}} | _] = loaded.items
       assert batch_id == batch.id
     end
 

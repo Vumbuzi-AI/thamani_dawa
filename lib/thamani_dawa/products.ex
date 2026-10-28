@@ -16,28 +16,43 @@ defmodule ThamaniDawa.Products do
     )
   end
 
-  @doc "Lists products that have batches at specific sites with pagination and optional search filter."
-  def list_products_with_site_batches_paginated(organization_id, site_ids, page \\ 1, opts \\ []) do
-    if is_list(site_ids) and site_ids != [] do
-      search = Keyword.get(opts, :search)
+  @doc """
+  Lists products that have any batch — dispatched or still awaiting
+  dispatch — with pagination and optional search filter. `site_ids: nil`
+  means unrestricted (every batch, any site, plus org-level undispatched
+  stock); a concrete list restricts to batches dispatched to those sites
+  specifically (undispatched batches have no `site_id` and so can never
+  match a concrete list — correct, since that stock isn't at any site yet).
+  An empty list means "no accessible sites" and returns nothing.
+  """
+  def list_products_with_site_batches_paginated(organization_id, site_ids, page \\ 1, opts \\ [])
 
-      query =
-        from(p in Product,
-          join: b in ThamaniDawa.Batches.Batch,
-          on: b.product_id == p.id,
-          where: p.organization_id == ^organization_id,
-          where: b.site_id in ^site_ids,
-          distinct: true,
-          order_by: [asc: p.id]
-        )
-
-      query = filter_search(query, search)
-      Repo.paginate(query, page: page)
-    else
-      from(p in Product, where: false)
-      |> Repo.paginate(page: page)
-    end
+  def list_products_with_site_batches_paginated(_organization_id, [], page, _opts) do
+    from(p in Product, where: false) |> Repo.paginate(page: page)
   end
+
+  def list_products_with_site_batches_paginated(organization_id, site_ids, page, opts) do
+    search = Keyword.get(opts, :search)
+
+    query =
+      from(p in Product,
+        join: b in ThamaniDawa.Batches.Batch,
+        on: b.product_id == p.id,
+        where: p.organization_id == ^organization_id,
+        distinct: true,
+        order_by: [asc: p.id]
+      )
+
+    query
+    |> filter_by_site_ids(site_ids)
+    |> filter_search(search)
+    |> Repo.paginate(page: page)
+  end
+
+  defp filter_by_site_ids(query, nil), do: query
+
+  defp filter_by_site_ids(query, site_ids) when is_list(site_ids),
+    do: where(query, [_p, b], b.site_id in ^site_ids)
 
   def list_products_paginated(organization_id, page \\ 1, opts \\ []) do
     from(p in Product, where: p.organization_id == ^organization_id, order_by: [asc: p.id])
@@ -134,13 +149,13 @@ defmodule ThamaniDawa.Products do
     %Product{}
     |> Product.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 
   @doc "Updates a product."
   def update_product(%Product{} = product, attrs) do
     product
     |> Product.changeset(attrs)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 end

@@ -39,14 +39,14 @@ defmodule ThamaniDawa.Suppliers do
     |> Supplier.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Ecto.Changeset.put_change(:gln, Gln.generate!())
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 
   @doc "Updates a supplier."
   def update_supplier(%Supplier{} = supplier, attrs) do
     supplier
     |> Supplier.changeset(attrs)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 
   @doc "Returns a changeset for the given supplier."

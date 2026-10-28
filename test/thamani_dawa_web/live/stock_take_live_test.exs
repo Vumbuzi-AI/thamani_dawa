@@ -87,8 +87,9 @@ defmodule ThamaniDawaWeb.StockTakeLiveTest do
 
     test "validation error on missing site_id stays in the modal", %{conn: conn} do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id})
-      pharmacist = pharmacist_at_site(org, site)
+      site_a = site_fixture(%{organization_id: org.id})
+      site_b = site_fixture(%{organization_id: org.id})
+      pharmacist = staff_fixture(%{organization_id: org.id, site_ids: [site_a.id, site_b.id]})
 
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock-takes/new")
 
@@ -98,6 +99,61 @@ defmodule ThamaniDawaWeb.StockTakeLiveTest do
         |> render_submit()
 
       assert html =~ "can&#39;t be blank"
+      assert has_element?(lv, "#stock-take-modal")
+    end
+
+    test "auto-selects single site and renders read-only without a dropdown", %{conn: conn} do
+      org = organization_fixture()
+      site = site_fixture(%{organization_id: org.id})
+      _other_site = site_fixture(%{organization_id: org.id})
+      pharmacist = pharmacist_at_site(org, site)
+
+      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock-takes/new")
+
+      assert html =~ site.name
+      refute has_element?(lv, "select[name='stock_take[site_id]']")
+
+      assert has_element?(
+               lv,
+               "input[type='hidden'][name='stock_take[site_id]'][value='#{site.id}']"
+             )
+    end
+
+    test "renders dropdown limited to user sites for multi-site staff", %{conn: conn} do
+      org = organization_fixture()
+      site_a = site_fixture(%{organization_id: org.id, name: "Alpha Site"})
+      site_b = site_fixture(%{organization_id: org.id, name: "Beta Site"})
+      _other_site = site_fixture(%{organization_id: org.id, name: "Gamma Site"})
+      pharmacist = staff_fixture(%{organization_id: org.id, site_ids: [site_a.id, site_b.id]})
+
+      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock-takes/new")
+
+      assert has_element?(lv, "select[name='stock_take[site_id]']")
+      assert html =~ "Alpha Site"
+      assert html =~ "Beta Site"
+      refute html =~ "Gamma Site"
+    end
+
+    test "rejects submission for a site the user cannot act on", %{conn: conn} do
+      org = organization_fixture()
+      site_a = site_fixture(%{organization_id: org.id})
+      site_b = site_fixture(%{organization_id: org.id})
+      other_site = site_fixture(%{organization_id: org.id})
+      pharmacist = staff_fixture(%{organization_id: org.id, site_ids: [site_a.id, site_b.id]})
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock-takes/new")
+
+      html =
+        lv
+        |> element("#stock-take-form")
+        |> render_submit(%{
+          "stock_take" => %{
+            "site_id" => other_site.id,
+            "notes" => "Unauthorized site attempt"
+          }
+        })
+
+      assert html =~ "is not a site you can act on"
       assert has_element?(lv, "#stock-take-modal")
     end
   end
@@ -136,6 +192,27 @@ defmodule ThamaniDawaWeb.StockTakeLiveTest do
       assert html =~ "42"
     end
 
+    test "finalize confirmation can be cancelled without changing stock", %{conn: conn} do
+      org = organization_fixture()
+      site = site_fixture(%{organization_id: org.id})
+      pharmacist = pharmacist_at_site(org, site)
+      take = stock_take_fixture(%{organization_id: org.id, site_id: site.id})
+      batch = batch_fixture(%{organization_id: org.id, site_id: site.id, quantity: 100})
+      {:ok, item} = StockTakes.add_item(take, batch)
+      StockTakes.record_count(item, 87, pharmacist.id)
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock-takes/#{take.id}")
+
+      refute has_element?(lv, "#confirm-finalize-modal")
+      lv |> element("button", "Finalize stock take") |> render_click()
+      assert has_element?(lv, "#confirm-finalize-modal")
+
+      lv |> element("#confirm-finalize-modal button", "Cancel") |> render_click()
+
+      refute has_element?(lv, "#confirm-finalize-modal")
+      assert Batches.get_batch!(org.id, batch.id).remaining_quantity == 100
+    end
+
     test "finalizing the stock take updates batch quantities", %{conn: conn} do
       org = organization_fixture()
       site = site_fixture(%{organization_id: org.id})
@@ -149,6 +226,12 @@ defmodule ThamaniDawaWeb.StockTakeLiveTest do
 
       lv
       |> element("button", "Finalize stock take")
+      |> render_click()
+
+      assert has_element?(lv, "#confirm-finalize-modal")
+
+      lv
+      |> element("#confirm-finalize-modal button", "Finalize")
       |> render_click()
 
       assert render(lv) =~ "Stock take finalized"

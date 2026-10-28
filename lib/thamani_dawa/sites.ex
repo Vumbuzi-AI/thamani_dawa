@@ -49,7 +49,7 @@ defmodule ThamaniDawa.Sites do
     |> Site.default_changeset(%{name: name, site_type: :pharmacy})
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Ecto.Changeset.put_change(:gln, Gln.generate!())
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 
   @doc "Creates a site under the given organization."
@@ -58,13 +58,13 @@ defmodule ThamaniDawa.Sites do
     |> Site.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Ecto.Changeset.put_change(:gln, Gln.generate!())
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 
   @doc "Updates a site."
   def update_site(%Site{} = site, attrs) do
     site
     |> Site.changeset(attrs)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 end

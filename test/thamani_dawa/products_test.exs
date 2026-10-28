@@ -4,8 +4,10 @@ defmodule ThamaniDawa.ProductsTest do
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
 
+  import ThamaniDawa.BatchesFixtures
   import ThamaniDawa.OrganizationsFixtures
   import ThamaniDawa.ProductsFixtures
+  import ThamaniDawa.SitesFixtures
 
   describe "create_product/2" do
     test "requires price" do
@@ -191,7 +193,7 @@ defmodule ThamaniDawa.ProductsTest do
   end
 
   describe "list_products_with_site_batches_paginated/4" do
-    test "returns a valid Scrivener.Page with correct metadata when site_ids is empty or non-list" do
+    test "returns an empty page when site_ids is an empty list (no accessible sites)" do
       organization = organization_fixture()
 
       assert %Scrivener.Page{
@@ -201,14 +203,57 @@ defmodule ThamaniDawa.ProductsTest do
                total_entries: 0,
                page_size: _page_size
              } = Products.list_products_with_site_batches_paginated(organization.id, [])
+    end
 
-      assert %Scrivener.Page{
-               entries: [],
-               page_number: 1,
-               total_pages: 1,
-               total_entries: 0,
-               page_size: _page_size
-             } = Products.list_products_with_site_batches_paginated(organization.id, nil, 1)
+    test "nil site_ids returns every product with any batch, dispatched or not" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+
+      dispatched_product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: dispatched_product.id
+      })
+
+      undispatched_product = product_fixture(%{organization_id: organization.id})
+
+      org_batch_fixture(%{
+        organization_id: organization.id,
+        product_id: undispatched_product.id
+      })
+
+      page = Products.list_products_with_site_batches_paginated(organization.id, nil, 1)
+
+      product_ids = page.entries |> Enum.map(& &1.id) |> Enum.sort()
+
+      assert product_ids ==
+               Enum.sort([dispatched_product.id, undispatched_product.id])
+    end
+
+    test "a concrete site_ids list excludes products with only undispatched stock" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+
+      dispatched_product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: dispatched_product.id
+      })
+
+      undispatched_product = product_fixture(%{organization_id: organization.id})
+
+      org_batch_fixture(%{
+        organization_id: organization.id,
+        product_id: undispatched_product.id
+      })
+
+      page = Products.list_products_with_site_batches_paginated(organization.id, [site.id], 1)
+
+      assert Enum.map(page.entries, & &1.id) == [dispatched_product.id]
     end
   end
 end

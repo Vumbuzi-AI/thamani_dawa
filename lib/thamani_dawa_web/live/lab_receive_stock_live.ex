@@ -262,7 +262,12 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
       current_scope={@current_scope}
       current_path={~p"/lab/receive-stock"}
     >
-      <.header>Receive stock / consumables</.header>
+      <.header icon="hero-arrow-down-tray">
+        Receive stock / consumables
+        <:subtitle>
+          Confirm dispatched batches at your site by scanning or reviewing the delivery.
+        </:subtitle>
+      </.header>
 
       <.modal
         :if={@live_action == :receive and not is_nil(@receive_batch)}
