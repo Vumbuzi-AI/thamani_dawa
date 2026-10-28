@@ -20,6 +20,11 @@ defmodule ThamaniDawa.LabOrders.LabOrderResult do
     belongs_to :performed_by, ThamaniDawa.Accounts.User, foreign_key: :performed_by_id
     belongs_to :collected_by, ThamaniDawa.Accounts.User, foreign_key: :collected_by_id
 
+    has_one :lab_specimen, ThamaniDawa.LabOrders.LabSpecimen
+    has_many :lab_specimen_results, ThamaniDawa.LabOrders.LabSpecimenResult
+    has_many :lab_specimens, through: [:lab_specimen_results, :lab_specimen]
+    has_many :amendments, ThamaniDawa.LabOrders.LabOrderResultAmendment
+
     timestamps(type: :utc_datetime)
   end
 
@@ -38,7 +43,7 @@ defmodule ThamaniDawa.LabOrders.LabOrderResult do
       :collected_by_id,
       :sample_type
     ])
-    |> validate_required([:lab_test_id, :sample_type])
+    |> validate_required([:lab_test_id])
     |> foreign_key_constraint(:lab_order_id)
     |> foreign_key_constraint(:lab_test_id)
     |> foreign_key_constraint(:performed_by_id)

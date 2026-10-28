@@ -5,7 +5,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
   alias ThamaniDawa.LabOrders
   alias ThamaniDawaWeb.SiteScoping
 
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     scope = socket.assigns.current_scope
     organization_id = scope.organization_id
     site_id = scope.current_site_id
@@ -26,6 +26,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
 
     {:ok,
      socket
+     |> assign(:auto_start_tour?, params["tour"] == "1")
      |> assign(:pending, Enum.filter(lab_orders, &(&1.status == :pending)))
      |> assign(:incomplete, Enum.filter(lab_orders, &(&1.status in [:pending, :in_progress])))
      |> assign(:in_progress_count, Enum.count(lab_orders, &(&1.status == :in_progress)))
@@ -34,6 +35,40 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
      |> assign(:stats, Dashboards.lab_stats(organization_id, site_id))
      |> assign(:orders_by_day, Dashboards.lab_orders_by_day(organization_id, site_id))
      |> assign(:orders_by_status, Dashboards.lab_orders_by_status(organization_id, site_id))}
+  end
+
+  defp product_tour_steps do
+    [
+      %{
+        selector: ~s([data-tour-target="/lab"]),
+        title: "Start with your dashboard",
+        description:
+          "See pending work, completed reports, revenue, and lab activity at your current site."
+      },
+      %{
+        selector: ~s([data-tour-target="/lab/orders"]),
+        title: "Work through lab orders",
+        description:
+          "Collect specimens, enter results, and track every order from request to completion."
+      },
+      %{
+        selector: ~s([data-tour-target="/lab/tests"]),
+        title: "Maintain the test catalogue",
+        description:
+          "Find the tests your lab offers and the information needed to process them correctly."
+      },
+      %{
+        selector: ~s([data-tour-target="/lab/stock"]),
+        title: "Monitor lab stock",
+        description: "Review consumables, batches, quantities, and expiry risk for your site."
+      },
+      %{
+        selector: ~s([data-tour-target="/lab/scan"]),
+        title: "Scan for faster workflows",
+        description:
+          "Use scanning to identify supported records without manually searching for them."
+      }
+    ]
   end
 
   defp patient_name(%{patient_visit: %{patient: patient}}) when not is_nil(patient),
@@ -99,6 +134,11 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
       <.header icon="hero-squares-2x2">
         Lab dashboard
         <:subtitle>Pending orders and incomplete reports at your site.</:subtitle>
+        <:actions>
+          <.button variant="primary" navigate={~p"/lab/orders/new"}>
+            <.icon name="hero-plus" class="size-4" /> New lab order
+          </.button>
+        </:actions>
       </.header>
 
       <div class="dashboard-stat-grid mt-4">
@@ -186,6 +226,13 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <Layouts.product_tour
+        id="lab-product-tour"
+        tour_key={"thamani-lab-tour-v1-#{@current_scope.user.id}"}
+        auto_start={@auto_start_tour?}
+        steps={product_tour_steps()}
+      />
     </Layouts.lab_shell>
     """
   end

@@ -122,17 +122,18 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
     test "renders the order details and test results", ctx do
       lab_order = lab_order_fixture(%{organization_id: ctx.admin.organization_id})
 
-      result =
-        lab_order_result_fixture(%{
-          organization_id: ctx.admin.organization_id,
-          lab_order_id: lab_order.id,
-          lab_test_id: ctx.lab_test.id
-        })
+      lab_order_result_fixture(%{
+        organization_id: ctx.admin.organization_id,
+        lab_order_id: lab_order.id,
+        lab_test_id: ctx.lab_test.id
+      })
 
-      {:ok, _view, html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/#{lab_order.id}")
+      {:ok, view, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/#{lab_order.id}")
 
-      assert html =~ ctx.lab_test.name
-      assert html =~ Phoenix.Naming.humanize(result.status)
+      render_click(view, "switch_tab", %{"tab" => "results"})
+
+      assert has_element?(view, "article h3", ctx.lab_test.name)
+      assert has_element?(view, "article", ctx.lab_test.name)
     end
 
     test "recording a sample collection advances the result to :collected and order to :in_progress",
@@ -147,22 +148,24 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         })
 
       {:ok, view, _html} =
-        live(
-          log_in_user(ctx.conn, ctx.admin),
-          ~p"/lab/orders/#{lab_order.id}/results/#{result.id}/collect"
-        )
+        live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/#{lab_order.id}/collect")
 
       view
-      |> form("#collect-sample-form", %{
+      |> form("#collect-specimen-form", %{
+        "specimen_type" => "blood",
         "collection_date" => "2026-01-15",
         "collection_notes" => "Right antecubital fossa"
       })
-      |> render_submit(%{"result_id" => to_string(result.id)})
+      |> render_submit(%{"result_ids" => [to_string(result.id)]})
 
       updated = LabOrders.get_lab_order_result!(ctx.admin.organization_id, result.id)
       assert updated.status == :collected
-      assert updated.sample_collected_on == ~D[2026-01-15]
       assert updated.collection_notes == "Right antecubital fossa"
+
+      assert [specimen] =
+               LabOrders.list_specimens_for_order(ctx.admin.organization_id, lab_order.id)
+
+      assert specimen.lab_order_results |> Enum.map(& &1.id) == [result.id]
 
       assert LabOrders.get_lab_order!(ctx.admin.organization_id, lab_order.id).status ==
                :in_progress
@@ -184,6 +187,82 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
       assert LabOrders.get_lab_order_result!(organization_id, result.id).status == :completed
       assert LabOrders.get_lab_order!(organization_id, lab_order.id).status == :completed
+    end
+
+    test "collecting a sample creates a specimen, which can then be received or rejected", ctx do
+      organization_id = ctx.admin.organization_id
+      lab_order = lab_order_fixture(%{organization_id: organization_id})
+
+      result =
+        lab_order_result_fixture(%{
+          organization_id: organization_id,
+          lab_order_id: lab_order.id,
+          lab_test_id: ctx.lab_test.id
+        })
+
+      {:ok, view, _html} =
+        live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/#{lab_order.id}/collect")
+
+      view
+      |> form("#collect-specimen-form", %{
+        "specimen_type" => "blood",
+        "collection_date" => "2026-01-15",
+        "collection_notes" => "Left arm"
+      })
+      |> render_submit(%{"result_ids" => [to_string(result.id)]})
+
+      assert [specimen] = LabOrders.list_specimens_for_order(organization_id, lab_order.id)
+
+      assert specimen.status == :collected
+      render_click(view, "switch_tab", %{"tab" => "samples"})
+      render_click(view, "receive_specimen", %{"specimen_id" => to_string(specimen.id)})
+      assert LabOrders.get_specimen!(organization_id, specimen.id).status == :received
+
+      view
+      |> element("a", "Reject")
+      |> render_click()
+
+      view
+      |> form("#reject-specimen-form", %{"rejection_reason" => "Insufficient volume"})
+      |> render_submit(%{"specimen_id" => to_string(specimen.id)})
+
+      rejected = LabOrders.get_specimen!(organization_id, specimen.id)
+      assert rejected.status == :rejected
+      assert rejected.rejection_reason == "Insufficient volume"
+    end
+
+    test "amending a completed result without a reason shows a flash error", ctx do
+      organization_id = ctx.admin.organization_id
+      lab_order = lab_order_fixture(%{organization_id: organization_id})
+
+      result =
+        lab_order_result_fixture(%{
+          organization_id: organization_id,
+          lab_order_id: lab_order.id,
+          lab_test_id: ctx.lab_test.id
+        })
+
+      {:ok, _} =
+        LabOrders.record_result(organization_id, result.id, ctx.lab_tech.id, %{
+          "haemoglobin" => "13"
+        })
+
+      {:ok, view, _html} =
+        live(
+          log_in_user(ctx.conn, ctx.admin),
+          ~p"/lab/orders/#{lab_order.id}/results/#{result.id}/edit"
+        )
+
+      html =
+        view
+        |> form("#result-entry-form", %{"values" => %{"haemoglobin" => "14"}})
+        |> render_submit()
+
+      assert html =~ "reason is required"
+
+      assert LabOrders.get_lab_order_result!(organization_id, result.id).results == %{
+               "haemoglobin" => %{"value" => "13"}
+             }
     end
   end
 
@@ -228,8 +307,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         },
         "tests" => %{
           "0" => %{
-            "lab_test_id" => to_string(ctx.lab_test.id),
-            "sample_type" => "blood"
+            "lab_test_id" => to_string(ctx.lab_test.id)
           }
         }
       })
@@ -265,8 +343,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         },
         "tests" => %{
           "0" => %{
-            "lab_test_id" => to_string(ctx.lab_test.id),
-            "sample_type" => "blood"
+            "lab_test_id" => to_string(ctx.lab_test.id)
           }
         }
       })
@@ -338,8 +415,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           },
           "tests" => %{
             "0" => %{
-              "lab_test_id" => to_string(ctx.lab_test.id),
-              "sample_type" => "blood"
+              "lab_test_id" => to_string(ctx.lab_test.id)
             }
           }
         })
@@ -371,8 +447,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         },
         "tests" => %{
           "0" => %{
-            "lab_test_id" => to_string(ctx.lab_test.id),
-            "sample_type" => "blood"
+            "lab_test_id" => to_string(ctx.lab_test.id)
           }
         }
       })
@@ -411,12 +486,10 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         |> form("#new-lab-order-form", %{
           "tests" => %{
             "0" => %{
-              "lab_test_id" => to_string(ctx.lab_test.id),
-              "sample_type" => ""
+              "lab_test_id" => to_string(ctx.lab_test.id)
             },
             "1" => %{
-              "lab_test_id" => to_string(second_test.id),
-              "sample_type" => ""
+              "lab_test_id" => to_string(second_test.id)
             }
           }
         })
@@ -433,7 +506,6 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       refute html =~ "button[phx-click=collapse_test]"
       refute html =~ "button[phx-click=edit_test]"
       assert has_element?(view, "select[name='tests[0][lab_test_id]']")
-      assert has_element?(view, "select[name='tests[0][sample_type]']")
     end
   end
 
@@ -461,19 +533,21 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       conn = log_in_user(build_conn(), ctx.admin)
       {:ok, lv, _html} = live(conn, ~p"/lab/orders/#{lab_order.id}/results/#{result.id}/edit")
 
-      assert render(lv) =~ "P. falciparum"
-      assert render(lv) =~ "P. vivax"
+      assert has_element?(lv, "#result-entry-form", "P. falciparum")
+      assert has_element?(lv, "#result-entry-form", "P. vivax")
 
       # Save results with selected checkbox option
-      {:ok, _show_lv, html} =
+      {:ok, show_lv, _html} =
         lv
         |> form("#result-entry-form", %{"values" => %{"species" => ["P. falciparum"]}})
         |> render_submit()
         |> follow_redirect(conn, ~p"/lab/orders/#{lab_order.id}")
 
-      # Visual preview badge with check icon is rendered instead of raw CSV entry
-      assert html =~ "P. falciparum"
-      assert html =~ "hero-check"
+      render_click(show_lv, "switch_tab", %{"tab" => "results"})
+
+      updated = LabOrders.get_lab_order_result!(ctx.admin.organization_id, result.id)
+      assert updated.results["species"]["value"] == ["P. falciparum"]
+      assert has_element?(show_lv, "article", "P. falciparum")
     end
   end
 
