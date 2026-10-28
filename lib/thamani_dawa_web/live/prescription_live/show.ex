@@ -39,7 +39,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     visit =
       ThamaniDawa.PatientVisits.get_patient_visit!(organization_id, prescription.patient_visit_id)
 
-    patient = Patients.get_patient!(organization_id, visit.patient_id)
+    patient =
+      if visit.patient_id, do: Patients.get_patient!(organization_id, visit.patient_id)
+
     items = Prescriptions.list_prescription_items(organization_id, prescription.id)
 
     stock_by_product_id =
@@ -67,12 +69,15 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         {item.id, Prescriptions.list_batch_dispenses_for_item(organization_id, item.id)}
       end)
 
+    site = ThamaniDawa.Sites.get_site!(organization_id, visit.site_id)
+
     socket
     |> assign(:prescription, prescription)
     |> assign(:patient, patient)
     |> assign(:items, items)
     |> assign(:stock_by_product_id, stock_by_product_id)
     |> assign(:site_id, visit.site_id)
+    |> assign(:site, site)
     |> assign(:allocation_previews, allocation_previews)
     |> assign(:dispenses_by_item, dispenses_by_item)
   end
@@ -107,6 +112,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
          {:ok, _completed} <- Payments.complete_payment(payment) do
       {:noreply,
        socket
+       |> load_prescription(prescription.id)
        |> put_flash(:info, "Payment recorded and completed.")
        |> push_patch(to: ~p"/pharmacy/prescriptions/#{prescription.id}")}
     else
@@ -231,9 +237,98 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   defp outstanding_quantity(item),
     do: max(item.quantity_prescribed - item.quantity_dispensed, 0)
 
+  defp directions_present?(item) do
+    Enum.any?(
+      [
+        item.dosage_instructions,
+        item.frequency,
+        item.route_of_administration,
+        item.duration_in_days
+      ],
+      &(&1 not in [nil, ""])
+    )
+  end
+
   defp user_display(nil), do: "—"
   defp user_display(%{name: name}) when is_binary(name) and name != "", do: name
   defp user_display(%{email: email}), do: email
+
+  def render(%{live_action: :receipt} = assigns) do
+    ~H"""
+    <Layouts.pharmacy_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/pharmacy/prescriptions"
+    >
+      <div id="prescription-receipt" class="mx-auto max-w-md space-y-4 print:max-w-full">
+        <div class="rounded-2xl ff-surface-card p-6 space-y-4">
+          <div class="text-center">
+            <h1 class="text-lg font-semibold text-thamani-forest">{@site.name}</h1>
+            <p class="text-xs text-thamani-pewter">
+              Receipt · {Calendar.strftime(@prescription.inserted_at, "%b %d, %Y %H:%M")}
+            </p>
+          </div>
+
+          <div class="flex items-center justify-between border-t border-b border-thamani-stone py-2 text-sm">
+            <span class="text-thamani-pewter">Patient</span>
+            <span class="font-medium text-thamani-forest">
+              {if @patient, do: @patient.full_name, else: "Walk-in"}
+            </span>
+          </div>
+
+          <div class="space-y-2">
+            <div :for={item <- @items} class="flex items-center justify-between text-sm">
+              <div class="min-w-0">
+                <p class="font-medium text-thamani-forest">{product_name(item)}</p>
+                <p class="text-xs text-thamani-pewter">
+                  {item.quantity_dispensed} × KES {item.product.price}
+                </p>
+              </div>
+              <span class="font-medium text-thamani-forest">
+                KES {Decimal.mult(item.product.price, item.quantity_dispensed)}
+              </span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between border-t border-thamani-stone pt-3">
+            <span class="text-sm font-semibold text-thamani-forest">Total</span>
+            <span class="text-lg font-semibold text-thamani-forest">
+              KES {@prescription.total_amount}
+            </span>
+          </div>
+
+          <div class="flex items-center justify-between text-sm">
+            <span class="text-thamani-pewter">Payment method</span>
+            <span class="font-medium text-thamani-forest">{@prescription.payment_type}</span>
+          </div>
+
+          <div class="flex items-center justify-center">
+            <span class={[
+              "rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset",
+              @prescription.has_paid && "bg-emerald-50 text-emerald-700 ring-emerald-200",
+              !@prescription.has_paid && "bg-rose-50 text-rose-700 ring-rose-200"
+            ]}>
+              {if @prescription.has_paid, do: "PAID", else: "UNPAID"}
+            </span>
+          </div>
+        </div>
+
+        <div class="flex gap-3 print:hidden">
+          <.button type="button" variant="primary" class="flex-1" onclick="window.print()">
+            <.icon name="hero-printer" class="size-4 mr-1" /> Print
+          </.button>
+          <.button
+            variant="ghost"
+            class="flex-1"
+            navigate={~p"/pharmacy/prescriptions/#{@prescription.id}"}
+          >
+            View full prescription
+          </.button>
+        </div>
+      </div>
+    </Layouts.pharmacy_shell>
+    """
+  end
 
   def render(assigns) do
     ~H"""
@@ -299,11 +394,14 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                 </p>
                 <div class="mt-1 flex flex-wrap items-center gap-2.5">
                   <h1 class="text-xl font-medium tracking-tight text-slate-900 sm:text-2xl">
-                    {@patient.full_name}
+                    {if @patient, do: @patient.full_name, else: "Walk-in"}
                   </h1>
                   <.status_badge status={@prescription.status} />
                 </div>
-                <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-thamani-pewter">
+                <div
+                  :if={@patient}
+                  class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-thamani-pewter"
+                >
                   <span class="inline-flex items-center gap-1.5">
                     <.icon name="hero-calendar-days" class="size-4 text-thamani-subtle" />
                     {if age = Patient.age(@patient), do: "#{age} years", else: "Age not recorded"}
@@ -317,10 +415,22 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                     {@patient.phone || "No phone number"}
                   </span>
                 </div>
+                <p :if={!@patient} class="mt-2 text-sm italic text-thamani-pewter">
+                  No patient was recorded for this prescription.
+                </p>
               </div>
             </div>
 
             <div class="flex flex-col gap-2 self-start sm:flex-row">
+              <.button
+                :if={@prescription.has_paid}
+                id="print-receipt-button"
+                variant="ghost"
+                navigate={~p"/pharmacy/prescriptions/#{@prescription.id}/receipt"}
+                class="gap-2 whitespace-nowrap"
+              >
+                <.icon name="hero-printer" class="size-4" /> Print receipt
+              </.button>
               <.button
                 :if={not @prescription.has_paid}
                 variant="primary"
@@ -376,6 +486,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         </section>
 
         <aside
+          :if={@prescription.notes not in [nil, ""]}
           id="prescription-notes"
           class="flex items-start gap-3 rounded-xl border border-thamani-stone bg-thamani-stone/40 px-4 py-3.5"
         >
@@ -497,7 +608,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                     </div>
                   </dl>
 
-                  <div class="mt-4 flex items-start gap-3 rounded-xl bg-indigo-50/60 px-4 py-3.5">
+                  <div
+                    :if={directions_present?(item)}
+                    class="mt-4 flex items-start gap-3 rounded-xl bg-indigo-50/60 px-4 py-3.5"
+                  >
                     <.icon
                       name="hero-information-circle"
                       class="mt-0.5 size-5 shrink-0 text-thamani-forest"
@@ -604,53 +718,35 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                 </div>
 
                 <div
-                  :if={item.quantity_dispensed > 0}
-                  class={[
-                    "border-t px-5 py-4 sm:px-6",
-                    item.is_verified && "border-emerald-100 bg-emerald-50/60",
-                    !item.is_verified && "border-thamani-stone bg-thamani-canvas/50"
-                  ]}
+                  :if={item.quantity_dispensed > 0 and not item.is_verified}
+                  class="border-t border-thamani-stone bg-thamani-canvas/50 px-5 py-4 sm:px-6"
                 >
-                  <%= if item.is_verified do %>
-                    <div class="flex items-center gap-3 text-emerald-700">
-                      <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-emerald-200">
-                        <.icon name="hero-check" class="size-5" />
-                      </div>
-                      <div>
-                        <p class="text-sm font-medium">Product verified</p>
-                        <p class="text-xs text-emerald-700/75">
-                          The scanned barcode matched this medication.
-                        </p>
-                      </div>
+                  <form
+                    id={"verify-form-#{item.id}"}
+                    phx-submit="verify_item"
+                    class="flex flex-col gap-3 sm:flex-row sm:items-end"
+                  >
+                    <.input type="hidden" name="item_id" value={item.id} />
+                    <div class="w-full sm:max-w-md [&>div]:mb-0">
+                      <.input
+                        id={"verify-gtin-#{item.id}"}
+                        type="text"
+                        name="gtin"
+                        label="Scan product barcode"
+                        placeholder="Scan or enter GTIN"
+                        required
+                        class="thamani-input h-11 w-full rounded-lg px-3 font-mono text-sm placeholder:font-sans focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
+                      />
                     </div>
-                  <% else %>
-                    <form
-                      id={"verify-form-#{item.id}"}
-                      phx-submit="verify_item"
-                      class="flex flex-col gap-3 sm:flex-row sm:items-end"
+                    <.button
+                      type="submit"
+                      variant="primary"
+                      class="h-11 gap-2 whitespace-nowrap"
+                      phx-disable-with="Verifying..."
                     >
-                      <.input type="hidden" name="item_id" value={item.id} />
-                      <div class="w-full sm:max-w-md [&>div]:mb-0">
-                        <.input
-                          id={"verify-gtin-#{item.id}"}
-                          type="text"
-                          name="gtin"
-                          label="Scan product barcode"
-                          placeholder="Scan or enter GTIN"
-                          required
-                          class="thamani-input h-11 w-full rounded-lg px-3 font-mono text-sm placeholder:font-sans focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
-                        />
-                      </div>
-                      <.button
-                        type="submit"
-                        variant="primary"
-                        class="h-11 gap-2 whitespace-nowrap"
-                        phx-disable-with="Verifying..."
-                      >
-                        <.icon name="hero-qr-code" class="size-4" /> Verify product
-                      </.button>
-                    </form>
-                  <% end %>
+                      <.icon name="hero-qr-code" class="size-4" /> Verify product
+                    </.button>
+                  </form>
                 </div>
               </article>
             <% end %>

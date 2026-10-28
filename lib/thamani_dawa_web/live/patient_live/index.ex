@@ -145,7 +145,7 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
       </.table>
 
       <.table :if={@tab == "visits"} id="patient-visits" rows={@patient_visits}>
-        <:col :let={visit} label="Patient">{visit.patient_name}</:col>
+        <:col :let={visit} label="Patient">{visit.patient_name || "Walk-in"}</:col>
         <:col :let={visit} label="Phone">{visit.patient_phone}</:col>
         <:col :let={visit} label="Site">{visit.site_name}</:col>
         <:col :let={visit} label="Seen by">{visit.user_name}</:col>

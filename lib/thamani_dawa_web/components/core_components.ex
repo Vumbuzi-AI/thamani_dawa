@@ -56,12 +56,15 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def flash(assigns) do
     assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
+    assigns = assign(assigns, :timeout_ms, flash_timeout(assigns))
 
     ~H"""
     <div
       :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
+      phx-hook="FlashAutoDismiss"
+      data-timeout={@timeout_ms}
       role="alert"
       class="toast toast-top toast-end z-50"
       {@rest}
@@ -80,6 +83,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <div class="flex-1" />
         <button
           type="button"
+          data-flash-dismiss
           class="group relative self-start cursor-pointer transition-transform active:scale-[0.96] after:absolute after:inset-[-12px] after:content-['']"
           aria-label={gettext("close")}
         >
@@ -92,6 +96,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
     </div>
     """
   end
+
+  defp flash_timeout(%{id: id}) when id in ["client-error", "server-error"], do: 0
+  defp flash_timeout(%{kind: :error}), do: 8_000
+  defp flash_timeout(_assigns), do: 5_000
 
   @doc """
   Renders a button with navigation support.
@@ -726,8 +734,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
   # Helper used by inputs to generate form errors
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
-      <.icon name="hero-exclamation-circle" class="size-5" />
+    <p class="validation-error mt-1.5 flex items-center gap-2 text-sm text-thamani-error">
+      <.icon name="hero-exclamation-circle" class="size-5 shrink-0 text-thamani-error" />
       {render_slot(@inner_block)}
     </p>
     """
@@ -1185,7 +1193,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       @class
     ]}>
       <header class={[
-        "flex flex-col items-stretch gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6",
+        "flex flex-col items-stretch gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-6",
         @variant == "card" && "p-4 sm:p-5",
         @toolbar != [] && "border-b border-thamani-stone"
       ]}>
@@ -1213,8 +1221,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
           >
             <.icon name={@icon} class="size-5" />
           </div>
-          <div>
-            <h1 class="text-xl font-medium leading-8 tracking-tight text-thamani-forest sm:text-2xl">
+          <div class="min-w-0 flex-1">
+            <h1 class="text-xl font-medium leading-tight tracking-tight text-thamani-forest sm:text-2xl">
               {render_slot(@inner_block)}
             </h1>
             <p :if={@subtitle != []} class="mt-0.5 text-sm leading-6 text-thamani-pewter">
@@ -1224,7 +1232,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         </div>
         <div
           :if={@actions != []}
-          class="flex flex-col gap-2 sm:flex-none sm:flex-row sm:items-center [&>*]:w-full sm:[&>*]:w-auto"
+          class="flex flex-col gap-2 xl:flex-none xl:flex-row xl:items-center [&>*]:w-full xl:[&>*]:w-auto"
         >
           {render_slot(@actions)}
         </div>
@@ -1232,7 +1240,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <div
         :if={@toolbar != []}
         class={[
-          "flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center",
+          "grid grid-cols-1 items-start gap-3 min-[480px]:grid-cols-[minmax(0,1fr)_auto] [&>*]:min-w-0",
           @variant == "card" && "p-4 sm:p-5"
         ]}
       >
@@ -1245,6 +1253,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
   @doc """
   Renders a table with generic styling.
 
+  On narrow screens, the first column is promoted to the row's title and the
+  remaining columns become compact label/value metadata. Put the record's most
+  recognizable value (name, reference, site, etc.) in the first column. Set a
+  column's `mobile="hidden"` when it belongs on the desktop/detail view rather
+  than in the compact list, or `mobile="aside"` for a short status/badge that
+  should sit beside the mobile title.
+
   ## Examples
 
       <.table id="users" rows={@users}>
@@ -1256,6 +1271,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :rows, :list, required: true
   attr :row_id, :any, default: nil, doc: "the function for generating the row id"
   attr :row_click, :any, default: nil, doc: "the function for handling phx-click on each row"
+  attr :mobile_columns, :integer, values: [2, 3], default: 2
+  attr :empty_class, :any, default: nil, doc: "additional classes for the empty-state cell"
 
   attr :row_item, :any,
     default: &Function.identity/1,
@@ -1263,6 +1280,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   slot :col, required: true do
     attr :label, :string
+    attr :mobile, :string, values: ~w(hidden aside)
   end
 
   slot :action, doc: "the slot for showing user actions in the last table column"
@@ -1275,15 +1293,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
       end
 
     ~H"""
-    <div class="relative overflow-hidden rounded-xl ff-surface-card">
-      <div
-        class="overflow-x-auto overscroll-x-contain"
-        tabindex="0"
-        role="region"
-        aria-label="Data table"
-      >
-        <table class="w-full min-w-[42rem] text-left">
-          <thead class="bg-thamani-canvas">
+    <div class="responsive-table relative rounded-xl ff-surface-card sm:overflow-hidden">
+      <div class="sm:overflow-x-auto sm:overscroll-x-contain">
+        <table class="block w-full text-left sm:table sm:min-w-[42rem]">
+          <thead class="sr-only bg-thamani-canvas sm:not-sr-only sm:table-header-group">
             <tr>
               <th
                 :for={col <- @col}
@@ -1300,10 +1313,17 @@ defmodule ThamaniDawaWeb.CoreComponents do
           <tbody
             id={@id}
             phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}
-            class="divide-y divide-thamani-stone"
+            class="block space-y-2 sm:table-row-group sm:space-y-0 sm:divide-y sm:divide-thamani-stone"
           >
-            <tr :if={@empty_state != []} id={"#{@id}-empty"} class="hidden only:table-row">
-              <td colspan={length(@col) + ((@action != [] && 1) || 0)} class="px-4 py-8 sm:px-5">
+            <tr
+              :if={@empty_state != []}
+              id={"#{@id}-empty"}
+              class="hidden w-full only:block sm:only:table-row"
+            >
+              <td
+                colspan={length(@col) + ((@action != [] && 1) || 0)}
+                class={["block w-full px-4 py-8 sm:table-cell sm:px-5", @empty_class]}
+              >
                 {render_slot(@empty_state)}
               </td>
             </tr>
@@ -1311,23 +1331,34 @@ defmodule ThamaniDawaWeb.CoreComponents do
               :for={row <- @rows}
               id={@row_id && @row_id.(row)}
               class={[
-                "transition-colors duration-150",
+                "relative grid overflow-visible rounded-2xl border border-thamani-stone bg-thamani-snow shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200 sm:table-row sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none",
+                if(@mobile_columns == 3, do: "grid-cols-3", else: "grid-cols-2"),
                 @row_click &&
-                  "hover:bg-thamani-stone/70 focus-within:bg-thamani-stone/70 cursor-pointer"
+                  "hover:border-thamani-forest/20 hover:shadow-[0_8px_24px_rgba(28,58,19,0.07)] focus-within:border-thamani-forest/20 cursor-pointer sm:hover:bg-thamani-stone/70 sm:focus-within:bg-thamani-stone/70 sm:hover:shadow-none"
               ]}
             >
               <td
                 :for={col <- @col}
                 phx-click={@row_click && @row_click.(row)}
+                data-label={col[:label]}
                 class={[
-                  "px-4 py-3.5 text-sm text-slate-900 sm:px-5",
+                  "flex min-w-0 flex-col items-start gap-1 border-b border-thamani-stone/60 px-4 py-3 text-left text-sm leading-5 text-slate-900 before:block before:text-sm before:font-normal before:text-thamani-pewter before:content-[attr(data-label)] first:col-span-full first:block first:bg-thamani-canvas/70 first:px-4 first:py-3.5 first:text-base first:font-semibold first:leading-6 first:text-thamani-forest first:before:hidden [&:nth-child(even)]:border-r [&:nth-child(even)]:border-thamani-stone/60 sm:table-cell sm:border-r-0 sm:border-b-0 sm:bg-transparent sm:px-5 sm:py-3.5 sm:text-left sm:text-sm sm:font-normal sm:leading-5 sm:text-slate-900 sm:before:hidden",
+                  @mobile_columns == 3 &&
+                    "max-sm:[&:nth-child(3)]:border-r max-sm:[&:nth-child(3)]:border-thamani-stone/60",
+                  col[:mobile] == "hidden" && "max-sm:hidden",
+                  col[:mobile] == "aside" &&
+                    "max-sm:absolute max-sm:right-3 max-sm:top-3 max-sm:z-10 max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:before:hidden",
                   @row_click && "cursor-pointer"
                 ]}
               >
                 {render_slot(col, @row_item.(row))}
               </td>
-              <td :if={@action != []} class="w-0 whitespace-nowrap px-4 py-3.5 text-right sm:px-5">
-                <div class="flex items-center justify-end gap-3">
+              <td
+                :if={@action != []}
+                data-label={gettext("Actions")}
+                class="col-span-full flex items-center justify-end bg-thamani-canvas/60 px-3 py-3 text-right text-sm sm:table-cell sm:w-0 sm:whitespace-nowrap sm:border-t-0 sm:bg-transparent sm:px-5 sm:py-3.5"
+              >
+                <div class="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 [&>*]:flex-1 sm:w-auto sm:flex-nowrap sm:gap-3 sm:[&>*]:flex-none">
                   <%= for action <- @action do %>
                     {render_slot(action, @row_item.(row))}
                   <% end %>
@@ -1376,7 +1407,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
   single source of truth `status_badge/1` renders from.
   """
   def status_semantic(status)
-      when status in [:pending, :pending_review, :under_review, :pending_receipt, :invited],
+      when status in [
+             :pending,
+             :pending_review,
+             :under_review,
+             :pending_receipt,
+             :invited,
+             :low_stock
+           ],
       do: :warning
 
   def status_semantic(status)
@@ -1403,7 +1441,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
            ],
       do: :info
 
-  def status_semantic(status) when status in [:cancelled, :rejected, :flagged], do: :danger
+  def status_semantic(status) when status in [:cancelled, :rejected, :flagged, :out_of_stock],
+    do: :danger
+
   def status_semantic(_status), do: :neutral
 
   defp badge_classes(:success), do: "bg-thamani-lime text-thamani-forest"
@@ -1459,6 +1499,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       </.tab_group>
   """
   attr :class, :any, default: nil
+  attr :variant, :string, default: "compact", values: ~w(compact prominent)
 
   slot :tab, required: true do
     attr :id, :string
@@ -1466,27 +1507,45 @@ defmodule ThamaniDawaWeb.CoreComponents do
     attr :phx_click, :string, required: true
     attr :phx_value_tab, :string
     attr :phx_value_view, :string
+    attr :controls, :string
   end
 
   def tab_group(assigns) do
     ~H"""
-    <div class={["inline-flex rounded-lg border border-thamani-stone bg-thamani-snow p-1", @class]}>
-      <a
+    <div
+      role="tablist"
+      class={[
+        "border border-thamani-stone bg-thamani-snow",
+        @variant == "compact" && "inline-flex rounded-lg p-1",
+        @variant == "prominent" &&
+          "grid w-full grid-cols-2 gap-1 rounded-xl bg-thamani-canvas p-1 shadow-sm",
+        @class
+      ]}
+    >
+      <button
         :for={tab <- @tab}
         id={tab[:id]}
-        role="button"
-        tabindex="0"
+        type="button"
+        role="tab"
+        aria-selected={to_string(tab[:active])}
+        aria-controls={tab[:controls]}
+        tabindex={if(tab[:active], do: "0", else: "-1")}
         class={[
-          "cursor-pointer rounded-md px-3 py-2 text-sm font-medium transition-colors",
-          if(tab[:active],
-            do: "bg-thamani-lime text-thamani-forest",
-            else: "text-thamani-pewter hover:text-thamani-forest"
-          )
+          "cursor-pointer rounded-md text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
+          @variant == "compact" && "px-3 py-2",
+          @variant == "prominent" && "min-w-0 px-3 py-2.5 text-left sm:px-4",
+          tab[:active] && @variant == "compact" && "bg-thamani-lime text-thamani-forest",
+          tab[:active] && @variant == "prominent" &&
+            "bg-white text-thamani-forest shadow-sm ring-1 ring-thamani-stone",
+          !tab[:active] && @variant == "compact" &&
+            "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest",
+          !tab[:active] && @variant == "prominent" &&
+            "text-thamani-pewter hover:bg-white/70 hover:text-thamani-forest"
         ]}
         phx-click={tab[:phx_click]}
         phx-value-tab={tab[:phx_value_tab]}
         phx-value-view={tab[:phx_value_view]}
-      >{render_slot(tab)}</a>
+      >{render_slot(tab)}</button>
     </div>
     """
   end
@@ -1916,12 +1975,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def filter_drawer(assigns) do
     ~H"""
-    <div class="relative inline-block">
+    <div class="relative block w-full min-[480px]:inline-block min-[480px]:w-auto">
       <button
         type="button"
         phx-click={show_filter_drawer(@id)}
         class={[
-          "flex h-[40px] items-center gap-2 rounded-md border px-4 text-sm font-medium whitespace-nowrap transition",
+          "flex h-[40px] w-full items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium whitespace-nowrap transition min-[480px]:w-auto",
           @active_count > 0 &&
             "border-thamani-lime bg-thamani-lime text-thamani-forest hover:bg-thamani-lime/70",
           @active_count == 0 && @variant == "outline" &&
@@ -1943,7 +2002,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <div id={@id} class="relative z-50 hidden" phx-remove={hide_filter_drawer(@id)}>
         <div
           id={"#{@id}-panel"}
-          class="absolute top-full right-0 z-50 mt-2 hidden w-screen min-w-[30rem] sm:min-w-[34rem] max-w-2xl origin-top-right scale-95 transform flex-col rounded-2xl ff-surface-modal opacity-0 transition shadow-2xl border border-thamani-stone bg-white overflow-visible"
+          class="absolute top-full right-0 z-50 mt-2 hidden w-[min(30rem,calc(100vw-2rem))] sm:w-[34rem] max-w-2xl origin-top-right scale-95 transform flex-col rounded-2xl ff-surface-modal opacity-0 transition shadow-2xl border border-thamani-stone bg-white overflow-visible"
           role="dialog"
           aria-modal="true"
           aria-labelledby={"#{@id}-title"}
@@ -2021,7 +2080,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
       </div>
     </div>
 
-    <div :if={@chip != []} class="mt-3 flex w-full flex-wrap items-center gap-2">
+    <div
+      :if={@chip != []}
+      class="mt-3 flex w-full flex-wrap items-center gap-2 min-[480px]:col-span-2"
+    >
       <span
         :for={chip <- @chip}
         class="inline-flex items-center gap-1.5 rounded-full bg-thamani-lime px-3 py-1 text-sm font-medium text-thamani-forest"

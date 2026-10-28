@@ -12,6 +12,19 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
     staff_fixture(%{organization_id: organization.id, site_id: site.id})
   end
 
+  test "offers a replayable pharmacy tour and auto-starts it when requested", %{conn: conn} do
+    organization = organization_fixture()
+    site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy})
+    pharmacist = pharmacist_at(organization, site)
+
+    {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy?tour=1")
+
+    assert has_element?(lv, "#start-product-tour[href='/pharmacy?tour=1']")
+    assert has_element?(lv, "#pharmacy-product-tour[data-auto-start='true']")
+    assert has_element?(lv, "[data-tour-target='/pharmacy/prescriptions']")
+    assert has_element?(lv, "[data-tour-target='/pharmacy/stock']")
+  end
+
   describe "stock alerts" do
     test "a pending (unreceived) batch is excluded from low-stock and near-expiry, but counted as a pending receipt",
          %{conn: conn} do

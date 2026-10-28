@@ -27,7 +27,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       assert {:error, {:live_redirect, %{to: to}}} =
@@ -47,6 +47,170 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert to =~ "/pharmacy/prescriptions/"
     end
 
+    test "creates a walk-in prescription with no patient", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id})
+      batch_fixture(%{organization_id: organization.id, site_id: site.id, product_id: product.id})
+
+      conn = log_in_user(conn, pharmacist)
+      {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
+
+      assert index_live |> element("#prescription-new-button") |> render_click()
+      index_live |> element("#walk-in-patient-mode") |> render_click()
+      assert index_live |> element("button", "+ Add Item") |> render_click()
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               index_live
+               |> form("#prescription-form",
+                 prescription: %{
+                   payment_type: "Cash",
+                   items: %{
+                     "0" => %{product_id: product.id, quantity_prescribed: "1"}
+                   }
+                 }
+               )
+               |> render_submit()
+
+      assert to =~ "/pharmacy/prescriptions/"
+
+      prescription_id = to |> String.split("/") |> List.last() |> String.to_integer()
+      prescription = ThamaniDawa.Prescriptions.get_prescription!(organization.id, prescription_id)
+
+      visit =
+        ThamaniDawa.PatientVisits.get_patient_visit!(
+          organization.id,
+          prescription.patient_visit_id
+        )
+
+      assert is_nil(visit.patient_id)
+    end
+
+    test "quick sale dispenses, verifies, and pays in one submit", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id, price: 50})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 20
+      })
+
+      conn = log_in_user(conn, pharmacist)
+      {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
+
+      assert index_live |> element("a", "+ Quick sale") |> render_click()
+
+      assert has_element?(index_live, "#quick-sale-modal")
+      assert has_element?(index_live, "#quick-sale-items")
+      assert has_element?(index_live, "#quick-sale-item-0")
+      assert has_element?(index_live, "#btn-add-quick-sale-item")
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               index_live
+               |> form("#quick-sale-form", %{
+                 "payment_type" => "Cash",
+                 "items" => %{
+                   "0" => %{
+                     "product_id" => product.id,
+                     "quantity" => "10",
+                     "scanned_gtin" => product.gtin
+                   }
+                 }
+               })
+               |> render_submit()
+
+      assert to =~ "/receipt"
+
+      prescription_id = to |> String.split("/") |> Enum.at(-2) |> String.to_integer()
+      prescription = ThamaniDawa.Prescriptions.get_prescription!(organization.id, prescription_id)
+
+      assert prescription.has_paid
+      assert prescription.status == :completed
+      assert ThamaniDawa.Batches.total_available_stock(organization.id, site.id, product.id) == 10
+    end
+
+    test "quick sale shows an inline error and changes nothing when the scan doesn't match", %{
+      conn: conn
+    } do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 20
+      })
+
+      conn = log_in_user(conn, pharmacist)
+      {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
+
+      assert index_live |> element("a", "+ Quick sale") |> render_click()
+
+      html =
+        index_live
+        |> form("#quick-sale-form", %{
+          "payment_type" => "Cash",
+          "items" => %{
+            "0" => %{
+              "product_id" => product.id,
+              "quantity" => "10",
+              "scanned_gtin" => unique_gtin()
+            }
+          }
+        })
+        |> render_submit()
+
+      assert html =~ "doesn&#39;t match this product"
+      assert ThamaniDawa.Prescriptions.list_prescriptions(organization.id) == []
+      assert ThamaniDawa.Batches.total_available_stock(organization.id, site.id, product.id) == 20
+    end
+
+    test "quick sale requires a payment method before changing stock", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 20
+      })
+
+      {:ok, index_live, _html} =
+        conn
+        |> log_in_user(pharmacist)
+        |> live(~p"/pharmacy/prescriptions/quick-sale")
+
+      html =
+        index_live
+        |> form("#quick-sale-form", %{
+          "payment_type" => "",
+          "items" => %{
+            "0" => %{
+              "product_id" => product.id,
+              "quantity" => "10",
+              "scanned_gtin" => product.gtin
+            }
+          }
+        })
+        |> render_submit()
+
+      assert html =~ "Select a payment method."
+      refute html =~ "Couldn&#39;t complete the sale."
+      assert ThamaniDawa.Prescriptions.list_prescriptions(organization.id) == []
+      assert ThamaniDawa.Batches.total_available_stock(organization.id, site.id, product.id) == 20
+    end
+
     test "referring doctor is hidden and not required unless marked as a referral", %{
       conn: conn
     } do
@@ -60,7 +224,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
 
       refute has_element?(index_live, "input[name='prescription[referring_doctor]']")
 
@@ -99,7 +263,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
 
       html =
         index_live
@@ -127,8 +291,8 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
-      assert index_live |> element("a", "New Patient") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
+      assert index_live |> element("#new-patient-mode") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       assert {:error, {:live_redirect, %{to: to}}} =
@@ -163,8 +327,8 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
-      assert index_live |> element("a", "New Patient") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
+      assert index_live |> element("#new-patient-mode") |> render_click()
 
       index_live
       |> form("#prescription-form", patient: %{full_name: "Jane Doe", phone: "0712345678"})
@@ -196,7 +360,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       index_live
@@ -264,7 +428,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       html =
@@ -308,7 +472,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       html =
@@ -334,7 +498,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
 
       html =
         index_live
@@ -358,8 +522,8 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
-      assert index_live |> element("a", "New Patient") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
+      assert index_live |> element("#new-patient-mode") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       html =
@@ -389,7 +553,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
       assert has_element?(index_live, "select[name='prescription[site_id]']")
 
       index_live
@@ -427,7 +591,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
 
       html =
         index_live
@@ -452,7 +616,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
 
       index_live
       |> form("#prescription-form", prescription: %{site_id: site.id})
@@ -499,7 +663,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       index_live
@@ -547,7 +711,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-      assert index_live |> element("a", "+ New prescription") |> render_click()
+      assert index_live |> element("#prescription-new-button") |> render_click()
       assert index_live |> element("button", "+ Add Item") |> render_click()
 
       index_live
@@ -1046,6 +1210,12 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       assert_patch(lv, ~p"/pharmacy/prescriptions/#{ctx.prescription.id}")
       assert render(lv) =~ "Payment recorded and completed."
+      assert has_element?(lv, "#print-receipt-button")
+
+      assert {:error, {:live_redirect, %{to: receipt_path}}} =
+               lv |> element("#print-receipt-button") |> render_click()
+
+      assert receipt_path == ~p"/pharmacy/prescriptions/#{ctx.prescription.id}/receipt"
     end
   end
 end

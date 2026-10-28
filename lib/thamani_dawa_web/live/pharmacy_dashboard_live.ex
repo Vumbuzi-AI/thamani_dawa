@@ -9,7 +9,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
 
   @near_expiry_days 30
 
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     scope = socket.assigns.current_scope
     organization_id = scope.organization_id
     site_id = scope.current_site_id
@@ -37,6 +37,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
 
     {:ok,
      socket
+     |> assign(:auto_start_tour?, params["tour"] == "1")
      |> assign(:products_by_id, products_by_id)
      |> assign(:out_of_stock, out_of_stock)
      |> assign(:low_stock, low_stock)
@@ -47,6 +48,41 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
      |> assign(:stats, Dashboards.pharmacy_stats(organization_id, site_id))
      |> assign(:dispensed_by_day, Dashboards.dispensed_by_day(organization_id, site_id))
      |> assign(:top_products, Dashboards.top_dispensed_products(organization_id, site_id))}
+  end
+
+  defp product_tour_steps do
+    [
+      %{
+        selector: ~s([data-tour-target="/pharmacy"]),
+        title: "Start with your dashboard",
+        description:
+          "See today’s pharmacy workload, stock alerts, revenue, and dispensing activity at a glance."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/prescriptions"]),
+        title: "Manage prescriptions",
+        description:
+          "Review prescriptions waiting to be dispensed and follow each order through completion."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/stock"]),
+        title: "Keep stock accurate",
+        description:
+          "Check available medicines, batches, expiry dates, and quantities at your current site."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/receive-stock"]),
+        title: "Receive incoming stock",
+        description:
+          "Confirm stock dispatched to your site before it becomes available for dispensing."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/scan"]),
+        title: "Scan when speed matters",
+        description:
+          "Use scanning to identify products and batches quickly during day-to-day work."
+      }
+    ]
   end
 
   defp stock_alerts(batches, products_by_id) do
@@ -144,6 +180,11 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       <.header icon="hero-squares-2x2">
         Pharmacy dashboard
         <:subtitle>Stock alerts and pending prescriptions at your site.</:subtitle>
+        <:actions>
+          <.button variant="primary" navigate={~p"/pharmacy/prescriptions/quick-sale"}>
+            <.icon name="hero-plus" class="size-4" /> Quick sale
+          </.button>
+        </:actions>
       </.header>
 
       <div class="dashboard-stat-grid mt-4">
@@ -287,6 +328,13 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <Layouts.product_tour
+        id="pharmacy-product-tour"
+        tour_key={"thamani-pharmacy-tour-v1-#{@current_scope.user.id}"}
+        auto_start={@auto_start_tour?}
+        steps={product_tour_steps()}
+      />
     </Layouts.pharmacy_shell>
     """
   end

@@ -9,6 +9,7 @@ defmodule ThamaniDawa.Prescriptions do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.PatientVisits
   alias ThamaniDawa.PatientVisits.PatientVisit
+  alias ThamaniDawa.Payments
   alias ThamaniDawa.Prescriptions.{BatchDispense, Prescription, PrescriptionItem}
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
@@ -89,7 +90,7 @@ defmodule ThamaniDawa.Prescriptions do
     |> Prescription.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> put_computed_total_amount(organization_id)
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 
   defp put_computed_total_amount(changeset, organization_id) do
@@ -175,16 +176,152 @@ defmodule ThamaniDawa.Prescriptions do
 
     with {:ok, visit} <-
            ThamaniDawa.PatientVisits.create_patient_visit(organization_id, visit_attrs),
-         attrs =
-           if(Enum.any?(Map.keys(attrs), &is_binary/1),
-             do: Map.put(attrs, "patient_visit_id", visit.id),
-             else: Map.put(attrs, :patient_visit_id, visit.id)
-           ),
+         attrs = put_patient_visit_id(attrs, visit.id),
          attrs = inject_organization_id_into_items(attrs, organization_id),
          {:ok, prescription} <- create_prescription(organization_id, attrs) do
       prescription
     else
       {:error, changeset} -> Repo.rollback(changeset)
+    end
+  end
+
+  @doc """
+  Creates a prescription header for a walk-in with no patient recorded,
+  automatically creating a patient-less `PatientVisit` for the current site
+  and user in the same transaction.
+  """
+  def create_prescription_without_patient(organization_id, site_id, user_id, attrs)
+      when is_integer(organization_id) do
+    Repo.transaction(fn ->
+      visit_attrs = %{site_id: site_id, user_id: user_id, visit_type: :pharmacy}
+
+      with {:ok, visit} <-
+             ThamaniDawa.PatientVisits.create_patient_visit_without_patient(
+               organization_id,
+               visit_attrs
+             ),
+           attrs = put_patient_visit_id(attrs, visit.id),
+           attrs = inject_organization_id_into_items(attrs, organization_id),
+           {:ok, prescription} <- create_prescription(organization_id, attrs) do
+        prescription
+      else
+        {:error, changeset} -> Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  @doc """
+  A one-shot counter sale: creates the visit (with or without a patient),
+  the prescription header and items, then immediately dispenses and
+  GTIN-verifies each item and completes payment for the whole sale — all in
+  one transaction. Anything failing (insufficient stock, a scanned barcode
+  that doesn't match the product, a mismatched/invalid payment) rolls back
+  the entire sale, so nothing is ever half-dispensed or half-charged.
+
+  `attrs` is string-keyed: `"patient_id"` (optional), `"payment_type"`, and
+  `"items"` — a list of `%{"product_id", "quantity_prescribed",
+  "scanned_gtin"}` maps, one per line, in the order they should be
+  dispensed and verified.
+
+  Returns `{:ok, prescription}` or `{:error, {item_index, reason}}` where
+  `reason` is whatever `dispense_item/4` or `verify_dispensed_item/3`
+  returned (e.g. `:out_of_stock`, `:gtin_mismatch`), or `{:error,
+  changeset}` if the header/items themselves fail to validate.
+  """
+  def create_quick_sale(organization_id, site_id, user_id, attrs)
+      when is_integer(organization_id) do
+    patient_id = attrs["patient_id"]
+    items_attrs = attrs["items"] || []
+
+    Repo.transaction(fn ->
+      with {:ok, visit} <- create_quick_sale_visit(organization_id, site_id, user_id, patient_id),
+           header_attrs =
+             attrs
+             |> Map.take(["payment_type", "items"])
+             |> Map.put("patient_visit_id", visit.id)
+             |> inject_organization_id_into_items(organization_id),
+           {:ok, prescription} <- create_prescription(organization_id, header_attrs),
+           inserted_items = quick_sale_items_in_order(organization_id, prescription.id),
+           :ok <-
+             dispense_and_verify_quick_sale_items(
+               organization_id,
+               user_id,
+               Enum.zip(inserted_items, items_attrs)
+             ),
+           {:ok, payment} <-
+             Payments.create_payment(organization_id, %{
+               "prescription_id" => prescription.id,
+               "amount" => prescription.total_amount,
+               "payment_type" => attrs["payment_type"]
+             }),
+           {:ok, _completed} <- Payments.complete_payment(payment) do
+        get_prescription!(organization_id, prescription.id)
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  defp create_quick_sale_visit(organization_id, site_id, user_id, patient_id)
+       when patient_id in [nil, ""] do
+    PatientVisits.create_patient_visit_without_patient(organization_id, %{
+      site_id: site_id,
+      user_id: user_id,
+      visit_type: :pharmacy
+    })
+  end
+
+  defp create_quick_sale_visit(organization_id, site_id, user_id, patient_id) do
+    PatientVisits.create_patient_visit(organization_id, %{
+      patient_id: patient_id,
+      site_id: site_id,
+      user_id: user_id,
+      visit_type: :pharmacy
+    })
+  end
+
+  defp quick_sale_items_in_order(organization_id, prescription_id) do
+    Repo.all(
+      from i in PrescriptionItem,
+        where: i.organization_id == ^organization_id and i.prescription_id == ^prescription_id,
+        order_by: [asc: i.id]
+    )
+  end
+
+  defp dispense_and_verify_quick_sale_items(organization_id, user_id, items_with_attrs) do
+    items_with_attrs
+    |> Enum.with_index()
+    |> Enum.reduce_while(:ok, fn {{item, item_attrs}, index}, :ok ->
+      case dispense_and_verify_quick_sale_item(organization_id, user_id, item, item_attrs) do
+        :ok -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, {index, reason}}}
+      end
+    end)
+  end
+
+  defp dispense_and_verify_quick_sale_item(organization_id, user_id, item, item_attrs) do
+    scanned_gtin = item_attrs["scanned_gtin"]
+
+    with {:ok, _dispensed} <-
+           dispense_item(organization_id, item.id, user_id, item.quantity_prescribed),
+         {:ok, _verified} <-
+           maybe_verify_quick_sale_item(organization_id, item.id, scanned_gtin) do
+      :ok
+    end
+  end
+
+  defp maybe_verify_quick_sale_item(organization_id, item_id, scanned_gtin) do
+    case scanned_gtin && String.trim(scanned_gtin) do
+      blank when blank in [nil, ""] -> {:ok, :not_scanned}
+      trimmed -> verify_dispensed_item(organization_id, item_id, trimmed)
+    end
+  end
+
+  defp put_patient_visit_id(attrs, visit_id) do
+    if Enum.any?(Map.keys(attrs), &is_binary/1) do
+      Map.put(attrs, "patient_visit_id", visit_id)
+    else
+      Map.put(attrs, :patient_visit_id, visit_id)
     end
   end
 
@@ -224,7 +361,7 @@ defmodule ThamaniDawa.Prescriptions do
              |> Ecto.Changeset.change(
                total_amount: total_amount_for_items(items, organization_id)
              )
-             |> Repo.update() do
+             |> Repo.audited_update() do
         %{prescription: prescription, prescription_items: items}
       else
         {:error, changeset} -> Repo.rollback(changeset)
@@ -281,7 +418,7 @@ defmodule ThamaniDawa.Prescriptions do
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> validate_product_active(organization_id)
     |> validate_product_available_at_site(organization_id, prescription_id)
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 
   defp validate_belongs_to_org(changeset, field, schema, organization_id) do
@@ -428,7 +565,7 @@ defmodule ThamaniDawa.Prescriptions do
          {:gtin, true} <- {:gtin, product.gtin == normalized_gtin} do
       item
       |> PrescriptionItem.changeset(%{is_verified: true})
-      |> Repo.update()
+      |> Repo.audited_update()
     else
       {:match, false} -> {:error, :invalid_gtin}
       {:error, _reason} -> {:error, :invalid_gtin}
@@ -462,7 +599,7 @@ defmodule ThamaniDawa.Prescriptions do
         dispensed_by_id: pharmacist_id,
         dispensed_at: DateTime.utc_now()
       })
-      |> Repo.insert()
+      |> Repo.audited_insert()
       |> case do
         {:ok, _} -> {:cont, :ok}
         {:error, changeset} -> {:halt, {:error, changeset}}
@@ -492,7 +629,7 @@ defmodule ThamaniDawa.Prescriptions do
   defp bump_quantity_dispensed(%PrescriptionItem{} = item, quantity) do
     item
     |> Ecto.Changeset.change(quantity_dispensed: item.quantity_dispensed + quantity)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 
   # A prescription is `completed` once every item is fully dispensed,
@@ -510,6 +647,6 @@ defmodule ThamaniDawa.Prescriptions do
 
     prescription
     |> Ecto.Changeset.change(status: status)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 end
