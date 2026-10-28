@@ -60,15 +60,6 @@
 
   <%!-- Right form panel — Snow White --%>
   <div style="flex: 1; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
-    <%!-- Mobile brand mark (hidden on lg) --%>
-    <a
-      href="/"
-      class="lg:hidden"
-      style="font-size: 16px; font-weight: 500; color: var(--thamani-forest); text-decoration: none; letter-spacing: -0.01em; margin-bottom: 40px; align-self: flex-start;"
-    >
-      Thamani Dawa
-    </a>
-
     <div style="width: 100%; max-width: 380px;">
       <%!-- Flash messages --%>
       <Layouts.flash_group flash={@flash} />

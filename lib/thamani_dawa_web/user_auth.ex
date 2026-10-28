@@ -56,11 +56,20 @@ defmodule ThamaniDawaWeb.UserAuth do
 
   @doc "Plug that assigns `current_scope` on the conn for every browser request."
   def fetch_current_scope_for_user(conn, _opts) do
+    token = get_session(conn, @user_token_key)
+
     user =
-      case get_session(conn, @user_token_key) do
+      case token do
         nil -> nil
         token -> Accounts.get_user_by_session_token(token)
       end
+
+    if user do
+      Accounts.touch_user_session(token)
+      ThamaniDawa.Repo.put_audit_actor(user)
+    else
+      ThamaniDawa.Repo.clear_audit_actor()
+    end
 
     assign(conn, :current_scope, Scope.for_user(user))
   end
@@ -85,6 +94,8 @@ defmodule ThamaniDawaWeb.UserAuth do
     socket =
       Phoenix.Component.assign_new(socket, :current_scope, fn -> scope_for_session(session) end)
 
+    set_audit_actor(socket)
+
     {:cont, socket}
   end
 
@@ -93,6 +104,7 @@ defmodule ThamaniDawaWeb.UserAuth do
       Phoenix.Component.assign_new(socket, :current_scope, fn -> scope_for_session(session) end)
 
     if socket.assigns.current_scope && socket.assigns.current_scope.user do
+      socket = socket |> set_audit_actor() |> attach_session_guard(session)
       {:cont, socket}
     else
       socket =
@@ -206,12 +218,57 @@ defmodule ThamaniDawaWeb.UserAuth do
   defp portal_path(:lab), do: ~p"/lab"
 
   defp scope_for_session(session) do
+    token = session[@user_token_key]
+
     user =
-      case session[@user_token_key] do
+      case token do
         nil -> nil
         token -> Accounts.get_user_by_session_token(token)
       end
 
+    if user, do: Accounts.touch_user_session(token)
+
     Scope.for_user(user)
+  end
+
+  defp set_audit_actor(%{assigns: %{current_scope: %{user: user}}} = socket)
+       when not is_nil(user) do
+    ThamaniDawa.Repo.put_audit_actor(user)
+    socket
+  end
+
+  defp set_audit_actor(socket), do: socket
+
+  defp attach_session_guard(socket, session) do
+    if Phoenix.LiveView.connected?(socket) do
+      token = session[@user_token_key]
+
+      Phoenix.LiveView.attach_hook(
+        socket,
+        :enforce_session_timeout,
+        :handle_event,
+        &enforce_session_timeout(&1, &2, &3, token)
+      )
+    else
+      socket
+    end
+  end
+
+  defp enforce_session_timeout(_event, _params, socket, token) do
+    case Accounts.get_user_by_session_token(token) do
+      nil ->
+        {:halt,
+         socket
+         |> Phoenix.LiveView.put_flash(
+           :error,
+           "Your session expired due to inactivity. Please log in again."
+         )
+         |> Phoenix.LiveView.redirect(to: ~p"/")}
+
+      user ->
+        Accounts.touch_user_session(token)
+        ThamaniDawa.Repo.put_audit_actor(user)
+        {:cont, socket}
+    end
   end
 end

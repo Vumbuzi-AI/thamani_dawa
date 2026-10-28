@@ -9,6 +9,7 @@ defmodule ThamaniDawa.Accounts.UserToken do
     field :token, :binary
     field :context, :string
     field :sent_to, :string
+    field :last_used_at, :utc_datetime
     belongs_to :user, ThamaniDawa.Accounts.User
 
     timestamps(type: :utc_datetime, updated_at: false)
@@ -33,7 +34,9 @@ defmodule ThamaniDawa.Accounts.UserToken do
     query =
       from token in by_token_and_context_query(token, "session"),
         join: user in assoc(token, :user),
-        where: token.inserted_at > ago(^validity_in_days("session"), "day") and user.is_active,
+        where:
+          token.inserted_at > ago(^validity_in_days("session"), "day") and
+            token.last_used_at > ago(^idle_timeout_in_minutes(), "minute") and user.is_active,
         select: user
 
     {:ok, query}
@@ -82,6 +85,8 @@ defmodule ThamaniDawa.Accounts.UserToken do
   defp validity_in_days("reset_password"), do: config(:reset_password_validity_in_days)
 
   defp config(key), do: Application.get_env(:thamani_dawa, __MODULE__)[key]
+
+  defp idle_timeout_in_minutes, do: config(:session_idle_timeout_in_minutes)
 
   def invite_validity_in_days, do: config(:invite_validity_in_days)
 

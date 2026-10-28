@@ -5,7 +5,7 @@ defmodule ThamaniDawa.OrganizationsFixtures do
 
   def valid_organization_attributes(attrs \\ %{}) do
     Enum.into(attrs, %{
-      name: "Acme Pharmacy #{System.unique_integer()}",
+      name: "Acme Pharmacy #{System.unique_integer([:positive])}",
       license_number: "LIC-#{System.unique_integer([:positive])}"
     })
   end

@@ -8,6 +8,7 @@ defmodule ThamaniDawa.Accounts do
   import Ecto.Query, warn: false
   alias ThamaniDawa.Accounts.{Scope, User, UserLoginSession, UserNotifier, UserSite, UserToken}
   alias ThamaniDawa.Repo
+  alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
 
   ## Users
@@ -146,6 +147,76 @@ defmodule ThamaniDawa.Accounts do
     Repo.update(changeset)
   end
 
+  @doc """
+  Activates or deactivates a team member within an organization.
+
+  An administrator cannot deactivate their own account or the organization's
+  last active administrator.
+  """
+  def set_user_active(organization_id, acting_user_id, user_id, active?)
+      when is_integer(organization_id) and is_integer(acting_user_id) and
+             is_integer(user_id) and is_boolean(active?) do
+    result =
+      Repo.transaction(fn ->
+        lock_active_admins(organization_id)
+        acting_user = get_user!(organization_id, acting_user_id)
+        user = get_user!(organization_id, user_id)
+        do_set_user_active(organization_id, acting_user, user, acting_user_id, active?)
+      end)
+
+    case result do
+      {:ok, result} -> result
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp do_set_user_active(organization_id, acting_user, user, acting_user_id, active?) do
+    with :ok <- authorize_account_status_change(acting_user),
+         :ok <- validate_account_status_change(user, acting_user_id, active?),
+         :ok <- preserve_active_admin(organization_id, user, active?) do
+      user
+      |> Ecto.Changeset.change(is_active: active?)
+      |> Repo.update()
+    else
+      {:unchanged, user} -> {:ok, user}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp authorize_account_status_change(%User{role: :admin, is_active: true}), do: :ok
+  defp authorize_account_status_change(_user), do: {:error, :unauthorized}
+
+  defp validate_account_status_change(%User{is_active: active?} = user, _acting_id, active?),
+    do: {:unchanged, user}
+
+  defp validate_account_status_change(%User{id: id}, id, false),
+    do: {:error, :cannot_deactivate_self}
+
+  defp validate_account_status_change(_user, _acting_id, _active?), do: :ok
+
+  defp preserve_active_admin(organization_id, %User{role: :admin}, false) do
+    if last_active_admin?(organization_id), do: {:error, :last_active_admin}, else: :ok
+  end
+
+  defp preserve_active_admin(_organization_id, _user, _active?), do: :ok
+
+  defp lock_active_admins(organization_id) do
+    from(u in User,
+      where: u.organization_id == ^organization_id and u.role == :admin and u.is_active == true,
+      lock: "FOR UPDATE"
+    )
+    |> Repo.all()
+  end
+
+  defp last_active_admin?(organization_id) do
+    Repo.aggregate(
+      from(u in User,
+        where: u.organization_id == ^organization_id and u.role == :admin and u.is_active == true
+      ),
+      :count
+    ) <= 1
+  end
+
   defp extract_site_ids(attrs) do
     (Map.get(attrs, :site_ids) || Map.get(attrs, "site_ids") || [])
     |> List.wrap()
@@ -180,6 +251,34 @@ defmodule ThamaniDawa.Accounts do
     else
       Ecto.Changeset.put_change(changeset, :current_site_id, default_current_site_id(sites))
     end
+  end
+
+  @doc """
+  Lists the sites a user belongs to.
+  """
+  def list_sites_for_user(%Scope{organization_id: org_id} = scope) do
+    if Scope.admin?(scope) do
+      Sites.list_sites(org_id)
+    else
+      list_sites_for_user(scope.user)
+    end
+  end
+
+  def list_sites_for_user(%User{role: :admin, organization_id: org_id}) do
+    Sites.list_sites(org_id)
+  end
+
+  def list_sites_for_user(%User{} = user) do
+    user = Repo.preload(user, :sites)
+    user.sites
+  end
+
+  def list_sites_for_user(nil), do: []
+
+  def list_sites_for_user(organization_id, user_id)
+      when is_integer(organization_id) and is_integer(user_id) do
+    user = get_user!(organization_id, user_id)
+    list_sites_for_user(user)
   end
 
   @doc """
@@ -262,7 +361,7 @@ defmodule ThamaniDawa.Accounts do
   @doc "Generates a session token for the given user."
   def generate_user_session_token(user) do
     {token, user_token} = UserToken.build_session_token(user)
-    Repo.insert!(user_token)
+    Repo.insert!(%{user_token | last_used_at: DateTime.utc_now() |> DateTime.truncate(:second)})
     token
   end
 
@@ -270,6 +369,16 @@ defmodule ThamaniDawa.Accounts do
   def get_user_by_session_token(token) do
     {:ok, query} = UserToken.verify_session_token_query(token)
     query |> Repo.one() |> maybe_preload_sites()
+  end
+
+  @doc "Records activity for a valid session token without extending its absolute lifetime."
+  def touch_user_session(token) when is_binary(token) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    query = UserToken.by_token_and_context_query(token, "session")
+    Repo.update_all(query, set: [last_used_at: now])
+
+    :ok
   end
 
   defp maybe_preload_sites(nil), do: nil

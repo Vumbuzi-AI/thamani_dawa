@@ -80,14 +80,6 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
       </div>
 
       <div style="flex: 1; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
-        <.link
-          navigate={~p"/"}
-          class="lg:hidden"
-          style="font-size: 16px; font-weight: 500; color: var(--thamani-forest); text-decoration: none; letter-spacing: -0.01em; margin-bottom: 40px; align-self: flex-start;"
-        >
-          Thamani Dawa
-        </.link>
-
         <div style="width: 100%; max-width: 380px;">
           <Layouts.flash_group flash={@flash} />
 

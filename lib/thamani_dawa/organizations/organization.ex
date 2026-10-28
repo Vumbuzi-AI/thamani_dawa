@@ -38,6 +38,8 @@ defmodule ThamaniDawa.Organizations.Organization do
   def changeset(organization, attrs) do
     organization
     |> cast(attrs, [:name, :slug, :license_number])
+    |> trim_change(:name)
+    |> trim_change(:license_number)
     |> validate_required([:name], message: "Please enter your organization name")
     |> validate_required([:license_number], message: "Please enter your license number")
     |> maybe_generate_slug()
@@ -45,6 +47,10 @@ defmodule ThamaniDawa.Organizations.Organization do
     |> unique_constraint(:name, message: "An organization with this name already exists")
     |> unique_constraint(:name, name: @slug_index, message: @similar_name_message)
     |> unique_constraint(:name, name: @name_key_index, message: @similar_name_message)
+  end
+
+  defp trim_change(changeset, field) do
+    update_change(changeset, field, &String.trim/1)
   end
 
   defp maybe_generate_slug(changeset) do

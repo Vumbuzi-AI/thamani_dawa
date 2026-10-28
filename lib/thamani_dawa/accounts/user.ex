@@ -54,9 +54,15 @@ defmodule ThamaniDawa.Accounts.User do
   def registration_changeset(user, attrs, opts \\ []) do
     user
     |> cast(attrs, [:name, :email, :password])
+    |> trim_change(:name)
+    |> trim_change(:email)
     |> validate_required([:name], message: "Please enter your name")
     |> validate_email()
     |> validate_password(opts)
+  end
+
+  defp trim_change(changeset, field) do
+    update_change(changeset, field, &String.trim/1)
   end
 
   @doc """

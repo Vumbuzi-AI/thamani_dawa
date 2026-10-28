@@ -82,7 +82,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
           "password" => valid_user_password()
         })
 
-      assert redirected_to(conn) == ~p"/pharmacy"
+      assert redirected_to(conn) == ~p"/pharmacy?tour=1"
     end
 
     test "redirects a lab technician to /lab", %{conn: conn} do
@@ -94,7 +94,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
           "password" => valid_user_password()
         })
 
-      assert redirected_to(conn) == ~p"/lab"
+      assert redirected_to(conn) == ~p"/lab?tour=1"
     end
 
     test "redirects combined pharmacy/lab staff to /pharmacy", %{conn: conn} do
@@ -106,7 +106,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
           "password" => valid_user_password()
         })
 
-      assert redirected_to(conn) == ~p"/pharmacy"
+      assert redirected_to(conn) == ~p"/pharmacy?tour=1"
     end
 
     test "redirects combined pharmacy/lab staff to /lab when their current site is lab-only", %{
@@ -124,7 +124,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
           "password" => valid_user_password()
         })
 
-      assert redirected_to(conn) == ~p"/lab"
+      assert redirected_to(conn) == ~p"/lab?tour=1"
     end
 
     test "redirects combined pharmacy/lab staff to /pharmacy when their current site is a combined pharmacy+lab site",
@@ -141,7 +141,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
           "password" => valid_user_password()
         })
 
-      assert redirected_to(conn) == ~p"/pharmacy"
+      assert redirected_to(conn) == ~p"/pharmacy?tour=1"
     end
 
     test "redirects combined pharmacy/lab staff to /pharmacy when their current site is pharmacy-only",
@@ -155,6 +155,19 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       conn =
         post(conn, ~p"/login", %{
           "email" => pharma_lab.email,
+          "password" => valid_user_password()
+        })
+
+      assert redirected_to(conn) == ~p"/pharmacy?tour=1"
+    end
+
+    test "does not automatically replay the tour on a returning staff login", %{conn: conn} do
+      pharmacist = staff_fixture(%{role: :pharmacist})
+      {:ok, pharmacist} = ThamaniDawa.Accounts.update_user_last_logged_in(pharmacist)
+
+      conn =
+        post(conn, ~p"/login", %{
+          "email" => pharmacist.email,
           "password" => valid_user_password()
         })
 

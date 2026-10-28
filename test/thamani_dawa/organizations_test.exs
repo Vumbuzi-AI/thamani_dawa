@@ -22,6 +22,18 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert organization.is_active
     end
 
+    test "trims surrounding whitespace from the organization name and license number" do
+      assert {:ok, organization} =
+               Organizations.create_organization(%{
+                 name: "  Mwangaza Pharmacy  ",
+                 license_number: "  PPB-TEST-01  "
+               })
+
+      assert organization.name == "Mwangaza Pharmacy"
+      assert organization.license_number == "PPB-TEST-01"
+      assert organization.slug == "mwangaza-pharmacy"
+    end
+
     test "ignores client-supplied server-controlled flags, e.g. is_subscription_active" do
       assert {:ok, organization} =
                Organizations.create_organization(%{

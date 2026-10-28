@@ -41,4 +41,22 @@ defmodule ThamaniDawa.Accounts.UserTest do
     assert Ecto.Changeset.get_change(changeset, :password) == nil
     assert Ecto.Changeset.get_change(changeset, :hashed_password) != nil
   end
+
+  test "registration_changeset/2 trims name and email but preserves password whitespace" do
+    changeset =
+      User.registration_changeset(%User{}, %{
+        name: "  Jane Admin  ",
+        email: "  jane@example.com  ",
+        password: " secret "
+      })
+
+    assert changeset.valid?
+    assert Ecto.Changeset.get_field(changeset, :name) == "Jane Admin"
+    assert Ecto.Changeset.get_field(changeset, :email) == "jane@example.com"
+
+    assert User.valid_password?(
+             %User{hashed_password: Ecto.Changeset.get_change(changeset, :hashed_password)},
+             " secret "
+           )
+  end
 end

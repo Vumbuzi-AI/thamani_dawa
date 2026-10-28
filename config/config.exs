@@ -45,6 +45,7 @@ config :thamani_dawa, ThamaniDawa.Accounts.UserNotifier,
 # so the windows can be tuned per environment without touching code.
 config :thamani_dawa, ThamaniDawa.Accounts.UserToken,
   session_validity_in_days: 60,
+  session_idle_timeout_in_minutes: 30,
   invite_validity_in_days: 7,
   reset_password_validity_in_days: 1
 

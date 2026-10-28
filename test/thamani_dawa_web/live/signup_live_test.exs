@@ -8,9 +8,10 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
   alias ThamaniDawa.Repo
 
   describe "signup" do
-    test "creates an organization, admin, and default site, then redirects to login", %{
-      conn: conn
-    } do
+    test "creates an organization, admin, and default site, then submits credentials to log in",
+         %{
+           conn: conn
+         } do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       attrs = %{
@@ -18,10 +19,9 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
         user: %{name: "Jane Admin", email: "jane@example.com", password: "secret"}
       }
 
-      assert {:error, {:live_redirect, %{to: to}}} =
-               view |> form("form", attrs) |> render_submit()
+      view |> form("#signup-form", attrs) |> render_submit()
 
-      assert to == ~p"/login"
+      assert has_element?(view, "#signup-form[phx-trigger-action][action='/login']")
 
       organization = Repo.get_by!(Organization, name: "Acme Pharmacy")
       assert organization.license_number == "LIC-1"

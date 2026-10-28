@@ -13,6 +13,8 @@ defmodule ThamaniDawaWeb.SignupLive do
         to_form(Organization.changeset(%Organization{}, %{}), as: :organization)
       )
       |> assign(:admin_form, to_form(User.registration_changeset(%User{}, %{}), as: :user))
+      |> assign(:signup_form, to_form(%{}, as: nil))
+      |> assign(:trigger_login, false)
 
     {:ok, socket}
   end
@@ -41,10 +43,7 @@ defmodule ThamaniDawaWeb.SignupLive do
   def handle_event("save", %{"organization" => org_params, "user" => admin_params}, socket) do
     case Organizations.signup(org_params, admin_params) do
       {:ok, _result} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Account created — log in with the password you just set.")
-         |> push_navigate(to: ~p"/login")}
+        {:noreply, assign(socket, :trigger_login, true)}
 
       {:error, %Ecto.Changeset{data: %Organization{}} = changeset} ->
         {:noreply, assign(socket, :org_form, to_form(changeset, as: :organization))}
@@ -113,14 +112,6 @@ defmodule ThamaniDawaWeb.SignupLive do
       </div>
 
       <div style="flex: 1; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
-        <.link
-          navigate={~p"/"}
-          class="lg:hidden"
-          style="font-size: 16px; font-weight: 500; color: var(--thamani-forest); text-decoration: none; letter-spacing: -0.01em; margin-bottom: 40px; align-self: flex-start;"
-        >
-          Thamani Dawa
-        </.link>
-
         <div style="width: 100%; max-width: 420px;">
           <ThamaniDawaWeb.Layouts.flash_group flash={@flash} />
 
@@ -131,7 +122,15 @@ defmodule ThamaniDawaWeb.SignupLive do
             Set up your organization and admin profile to get started.
           </p>
 
-          <form phx-submit="save" phx-change="validate" id="signup-form">
+          <.form
+            for={@signup_form}
+            phx-submit="save"
+            phx-change="validate"
+            phx-trigger-action={@trigger_login}
+            action={~p"/login"}
+            method="post"
+            id="signup-form"
+          >
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
               <.thamani_input
                 field={@org_form[:name]}
@@ -185,7 +184,7 @@ defmodule ThamaniDawaWeb.SignupLive do
             <.thamani_btn id="signup-submit" type="submit" variant="primary">
               Create account
             </.thamani_btn>
-          </form>
+          </.form>
 
           <p style="text-align: center; font-size: 14px; color: var(--thamani-pewter); margin-top: 28px;">
             Already have an account?
