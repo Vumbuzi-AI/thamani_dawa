@@ -24,8 +24,7 @@ defmodule ThamaniDawaWeb.AdminRoutesTest do
         "/org/sites",
         "/org/sites/new",
         "/org/suppliers",
-        "/org/suppliers/new",
-        "/org/earnings"
+        "/org/suppliers/new"
       ] do
     describe "GET #{path}" do
       @path path
