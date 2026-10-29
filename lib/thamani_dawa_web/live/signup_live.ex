@@ -198,7 +198,7 @@ defmodule ThamaniDawaWeb.SignupLive do
     <div style="min-height: 100vh; display: flex; flex-direction: row;">
       <div
         class="hidden lg:flex"
-        style="width: 46%; background: var(--thamani-forest); flex-direction: column; justify-content: space-between; padding: 48px 52px; position: relative; overflow: hidden;"
+        style="width: 38%; background: var(--thamani-forest); flex-direction: column; justify-content: space-between; padding: 48px 52px; position: relative; overflow: hidden;"
       >
         <div
           aria-hidden="true"
@@ -243,8 +243,8 @@ defmodule ThamaniDawaWeb.SignupLive do
         </div>
       </div>
 
-      <div style="flex: 1; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
-        <div style="width: 100%; max-width: 420px;">
+      <div style="flex: 1; min-width: 0; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 40px;">
+        <div style="width: 100%; max-width: 560px;">
           <ThamaniDawaWeb.Layouts.flash_group flash={@flash} />
 
           <div
@@ -292,13 +292,22 @@ defmodule ThamaniDawaWeb.SignupLive do
               phx-change="validate_organization"
               phx-submit="continue"
             >
-              <.thamani_input
-                field={@org_form[:name]}
-                label="Organization name"
-                placeholder="e.g. MedPoint Health"
-                phx-debounce="blur"
-                required
-              />
+              <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+                <.thamani_input
+                  field={@org_form[:name]}
+                  label="Organization name"
+                  placeholder="e.g. MedPoint Health"
+                  phx-debounce="blur"
+                  required
+                />
+                <.thamani_input
+                  field={@org_form[:license_number]}
+                  label="License number"
+                  placeholder="e.g. PPB-XXXX"
+                  phx-debounce="blur"
+                  required
+                />
+              </div>
 
               <fieldset class="mb-6">
                 <legend class="text-sm font-medium text-[var(--thamani-forest)]">
@@ -351,14 +360,6 @@ defmodule ThamaniDawaWeb.SignupLive do
                   <p class="mt-2 text-xs text-red-700">{translate_error(error)}</p>
                 <% end %>
               </fieldset>
-
-              <.thamani_input
-                field={@org_form[:license_number]}
-                label="License number"
-                placeholder="e.g. PPB-XXXX"
-                phx-debounce="blur"
-                required
-              />
 
               <div class="my-6 border-t border-[var(--thamani-stone)] pt-5">
                 <div class="mb-4">

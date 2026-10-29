@@ -2,7 +2,7 @@ defmodule ThamaniDawa.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @roles [:admin, :pharmacist, :lab_technician, :pharma_lab]
+  @roles [:admin, :pharmacist, :lab_technician, :pharma_lab, :distributor]
   @legal_policy_version "2026-10-29"
 
   schema "users" do
@@ -208,7 +208,7 @@ defmodule ThamaniDawa.Accounts.User do
     false
   end
 
-  @doc "The valid staff roles, per §7 of project.md."
+  @doc "The valid staff roles, including distributor staff for warehouse organizations."
   def roles, do: @roles
 
   @doc "Whether the account is active. A deactivated user must not be able to log in or keep an existing session."
