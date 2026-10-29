@@ -24,6 +24,12 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
           Date.compare(DateTime.to_date(order.inserted_at), to) != :gt
       end)
 
+    overdue_count =
+      Enum.count(lab_orders, fn order ->
+        order.status in [:pending, :in_progress] and
+          DateTime.diff(DateTime.utc_now(), order.inserted_at, :hour) >= 24
+      end)
+
     {:ok,
      socket
      |> assign(:auto_start_tour?, params["tour"] == "1")
@@ -31,6 +37,11 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
      |> assign(:incomplete, Enum.filter(lab_orders, &(&1.status in [:pending, :in_progress])))
      |> assign(:in_progress_count, Enum.count(lab_orders, &(&1.status == :in_progress)))
      |> assign(:cancelled_count, Enum.count(lab_orders, &(&1.status == :cancelled)))
+     |> assign(
+       :unpaid_count,
+       Enum.count(lab_orders, &(&1.status != :cancelled and not &1.has_paid))
+     )
+     |> assign(:overdue_count, overdue_count)
      |> assign(:completed_this_month, completed_this_month)
      |> assign(:stats, Dashboards.lab_stats(organization_id, site_id))
      |> assign(:orders_by_day, Dashboards.lab_orders_by_day(organization_id, site_id))
@@ -171,6 +182,24 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
           label="Revenue this month"
           value={money(@stats.revenue_this_month)}
           sublabel="Wallet credits collected"
+        />
+        <.stat_tile
+          icon="hero-credit-card"
+          label="Unpaid orders"
+          value={@unpaid_count}
+          sublabel="Active orders awaiting payment"
+        />
+        <.stat_tile
+          icon="hero-clipboard-document-check"
+          label="Tests awaiting results"
+          value={@stats.tests_awaiting_results}
+          sublabel="Samples collected, results not finalized"
+        />
+        <.stat_tile
+          icon="hero-exclamation-triangle"
+          label="Overdue orders"
+          value={@overdue_count}
+          sublabel="Open for more than 24 hours"
         />
       </div>
 

@@ -10,7 +10,6 @@ defmodule ThamaniDawa.Requisitions.Requisition do
 
   schema "requisitions" do
     field :quantity, :integer
-    field :urgency, Ecto.Enum, values: [:routine, :urgent], default: :routine
 
     field :status, Ecto.Enum,
       values: [:pending, :approved, :rejected, :partially_fulfilled, :fulfilled, :cancelled],
@@ -35,7 +34,7 @@ defmodule ThamaniDawa.Requisitions.Requisition do
   @doc "Changeset for a site requesting stock from the organization."
   def create_changeset(requisition, attrs) do
     requisition
-    |> cast(attrs, [:site_id, :product_id, :quantity, :urgency, :notes])
+    |> cast(attrs, [:site_id, :product_id, :quantity, :notes])
     |> validate_required([:site_id, :product_id, :quantity])
     |> validate_number(:quantity, greater_than: 0)
     |> foreign_key_constraint(:site_id)

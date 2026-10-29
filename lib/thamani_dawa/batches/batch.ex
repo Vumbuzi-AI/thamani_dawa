@@ -23,7 +23,6 @@ defmodule ThamaniDawa.Batches.Batch do
     belongs_to :requisition, ThamaniDawa.Requisitions.Requisition
 
     has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage
-    has_many :stock_take_items, ThamaniDawa.StockTakes.StockTakeItem
     has_many :prescription_batch_dispenses, ThamaniDawa.Prescriptions.BatchDispense
 
     timestamps(type: :utc_datetime)

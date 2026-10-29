@@ -4,21 +4,20 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Batches.Batch
-  alias ThamaniDawa.GS1Decoder
   alias ThamaniDawa.LabOrders
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.Suppliers
-  alias ThamaniDawaWeb.SiteScoping
 
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     organization_id = scope.organization_id
-    site_id = SiteScoping.default_site_id(scope)
-
-    lab_sites = organization_id |> Sites.list_sites() |> Enum.filter(&Site.lab?/1)
+    sites = Sites.list_sites(organization_id)
+    lab_sites = Enum.filter(sites, &Site.lab?/1)
     lab_site_ids = MapSet.new(lab_sites, & &1.id)
+    standalone_lab_site = if length(sites) == 1 and Site.lab?(hd(sites)), do: hd(sites)
+    site_id = scope.current_site_id || (standalone_lab_site && standalone_lab_site.id)
 
     pending_batches =
       if site_id do
@@ -41,6 +40,12 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
       |> Products.list_products()
       |> Map.new(&{&1.id, &1})
 
+    lab_products =
+      products_by_id
+      |> Map.values()
+      |> Enum.filter(&(&1.inventory_type == :lab_consumable and &1.is_active))
+      |> Enum.sort_by(&String.downcase(&1.generic_name || &1.brand_name || ""))
+
     suppliers = Suppliers.list_active_suppliers(organization_id)
     suppliers_by_id = organization_id |> Suppliers.list_suppliers() |> Map.new(&{&1.id, &1})
     initial_attrs = if site_id, do: %{site_id: site_id}, else: %{}
@@ -48,16 +53,17 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     {:ok,
      socket
      |> assign(:products_by_id, products_by_id)
+     |> assign(:lab_products, lab_products)
+     |> assign(:lab_products_by_id, Map.new(lab_products, &{&1.id, &1}))
      |> assign(:suppliers, suppliers)
      |> assign(:suppliers_by_id, suppliers_by_id)
      |> assign(:lab_site_ids, MapSet.new(lab_sites, & &1.id))
      |> assign(:lab_sites, lab_sites)
      |> assign(:site_id, site_id)
+     |> assign(:direct_receipt_site, standalone_lab_site)
+     |> assign(:direct_receipt?, not is_nil(standalone_lab_site))
      |> assign(:site_locked, not is_nil(site_id))
      |> assign(:form, to_form(Batch.changeset(%Batch{}, initial_attrs), as: :batch))
-     |> assign(:gs1_used, false)
-     |> assign(:raw_gs1, nil)
-     |> assign(:gs1_decode_error, nil)
      |> assign(:selected_batch, nil)
      |> assign(:receive_batch, nil)
      |> assign(:receive_form, nil)
@@ -101,6 +107,55 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     {:noreply, assign(socket, :selected_batch, nil)}
   end
 
+  def handle_event("validate_direct_receipt", %{"batch" => attrs}, socket) do
+    changeset =
+      direct_receipt_changeset(attrs, socket.assigns.lab_products_by_id, socket.assigns.site_id)
+      |> Ecto.Changeset.validate_number(:quantity, greater_than: 0)
+      |> Map.put(:action, :validate)
+
+    {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
+  end
+
+  def handle_event("save_direct_receipt", %{"batch" => attrs}, socket) do
+    scope = socket.assigns.current_scope
+    site = socket.assigns.direct_receipt_site
+
+    if socket.assigns.direct_receipt? and direct_receipt_authorized?(scope, site) do
+      changeset =
+        direct_receipt_changeset(attrs, socket.assigns.lab_products_by_id, site.id)
+        |> Ecto.Changeset.validate_number(:quantity, greater_than: 0)
+
+      if changeset.valid? do
+        batch_attrs = direct_receipt_batch_attrs(changeset)
+
+        case Batches.receive_directly_at_site(
+               scope.organization_id,
+               site.id,
+               scope.user.id,
+               batch_attrs
+             ) do
+          {:ok, _batch} ->
+            usable_batches =
+              Batches.list_active_batches_for_site(scope.organization_id, site.id)
+
+            {:noreply,
+             socket
+             |> put_flash(:info, "Lab stock received directly at #{site.name}.")
+             |> assign(:form, to_form(Batch.changeset(%Batch{}, %{site_id: site.id}), as: :batch))
+             |> assign(:usable_batches, usable_batches)}
+
+          {:error, changeset} ->
+            {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
+        end
+      else
+        {:noreply, assign(socket, :form, to_form(%{changeset | action: :insert}, as: :batch))}
+      end
+    else
+      {:noreply,
+       put_flash(socket, :error, "Direct receipt is only available at a standalone lab site.")}
+    end
+  end
+
   def handle_event("receive_batch", %{"id" => id}, socket) do
     scope = socket.assigns.current_scope
     batch = Batches.get_batch!(scope.organization_id, String.to_integer(id))
@@ -125,34 +180,6 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
       {:noreply, put_flash(socket, :error, "Not authorized to receive this batch.")}
     else
       do_receive_batch(socket, scope, batch)
-    end
-  end
-
-  def handle_event("decode_gs1", %{"raw_gs1" => raw_gs1}, socket) do
-    case GS1Decoder.parse(raw_gs1) do
-      {:ok, parsed} ->
-        changes =
-          %{
-            gtin: parsed.gtin,
-            batch_no: parsed.batch_no,
-            manufacture_date: parsed.production_date,
-            expiry_date: parsed.expiry_date
-          }
-          |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-          |> Map.new()
-
-        changeset = Ecto.Changeset.change(socket.assigns.form.source, changes)
-
-        {:noreply,
-         socket
-         |> assign(:form, to_form(changeset, as: :batch))
-         |> assign(:gs1_used, true)
-         |> assign(:raw_gs1, raw_gs1)
-         |> assign(:gs1_decode_error, nil)}
-
-      {:error, reason} ->
-        {:noreply,
-         assign(socket, :gs1_decode_error, "Couldn't decode that code: #{inspect(reason)}")}
     end
   end
 
@@ -237,6 +264,74 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     stream(socket, :pending_batches, pending, reset: true)
   end
 
+  defp direct_receipt_authorized?(scope, site) do
+    Scope.admin?(scope) or scope.current_site_id == site.id
+  end
+
+  defp direct_receipt_changeset(attrs, products_by_id, site_id) do
+    attrs = Map.put(attrs, "site_id", site_id)
+
+    case parse_optional_int(attrs["product_id"]) do
+      product_id when is_integer(product_id) ->
+        case Map.get(products_by_id, product_id) do
+          %{inventory_type: :lab_consumable, is_active: true, gtin: gtin} ->
+            attrs
+            |> Map.put("gtin", gtin)
+            |> then(&Batch.changeset(%Batch{}, &1))
+
+          _ ->
+            Batch.changeset(%Batch{}, attrs)
+            |> Ecto.Changeset.add_error(:product_id, "must be an active lab consumable")
+        end
+
+      _ ->
+        Batch.changeset(%Batch{}, attrs)
+        |> Ecto.Changeset.add_error(:product_id, "choose a lab consumable")
+    end
+  end
+
+  defp direct_receipt_batch_attrs(changeset) do
+    changeset
+    |> Ecto.Changeset.apply_changes()
+    |> Map.from_struct()
+    |> Map.take([
+      :product_id,
+      :gtin,
+      :batch_no,
+      :serial,
+      :manufacturer,
+      :manufacture_date,
+      :expiry_date,
+      :quantity,
+      :cost_per_unit,
+      :supplier_id
+    ])
+  end
+
+  defp parse_optional_int(value) when is_integer(value), do: value
+
+  defp parse_optional_int(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {integer, ""} -> integer
+      _ -> nil
+    end
+  end
+
+  defp parse_optional_int(_value), do: nil
+
+  defp product_name(product) do
+    case {product.generic_name, product.brand_name} do
+      {generic_name, brand_name} when is_binary(generic_name) and is_binary(brand_name) ->
+        "#{generic_name} — #{brand_name}"
+
+      {generic_name, _brand_name} when is_binary(generic_name) ->
+        generic_name
+
+      {_generic_name, brand_name} when is_binary(brand_name) ->
+        brand_name
+    end
+  end
+
   defp blank_to_nil(nil), do: nil
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
@@ -265,9 +360,111 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
       <.header icon="hero-arrow-down-tray">
         Receive stock / consumables
         <:subtitle>
-          Confirm dispatched batches at your site by scanning or reviewing the delivery.
+          {if @direct_receipt?,
+            do: "Record lab consumables directly at #{@direct_receipt_site.name}.",
+            else: "Confirm dispatched batches at your site by reviewing the delivery."}
         </:subtitle>
       </.header>
+
+      <section
+        :if={@direct_receipt?}
+        id="direct-lab-stock-receipt"
+        class="rounded-2xl ff-surface-card p-5 sm:p-6"
+      >
+        <div class="mb-5">
+          <h2 class="text-lg font-semibold text-thamani-forest">Receive stock directly</h2>
+          <p class="mt-1 max-w-3xl text-sm leading-6 text-thamani-pewter">
+            This organization has one lab-capable site. Record the delivery straight into {@direct_receipt_site.name}; no warehouse dispatch or second receipt step is needed.
+          </p>
+        </div>
+
+        <p
+          :if={@lab_products == []}
+          class="rounded-xl bg-thamani-canvas px-4 py-3 text-sm text-thamani-pewter"
+        >
+          Create an active lab consumable product before receiving stock.
+        </p>
+
+        <.form
+          :if={@lab_products != []}
+          for={@form}
+          id="direct-lab-stock-form"
+          phx-change="validate_direct_receipt"
+          phx-submit="save_direct_receipt"
+          class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        >
+          <.input
+            field={@form[:product_id]}
+            id="direct-lab-product-id"
+            type="select"
+            label="Lab consumable"
+            options={Enum.map(@lab_products, &{product_name(&1), &1.id})}
+            prompt="Choose product"
+            required
+          />
+          <.input field={@form[:gtin]} type="hidden" />
+          <.input
+            field={@form[:batch_no]}
+            id="direct-lab-batch-no"
+            label="Batch / lot number"
+            required
+          />
+          <.input
+            field={@form[:expiry_date]}
+            id="direct-lab-expiry-date"
+            type="date"
+            label="Expiry date"
+            required
+          />
+          <.input
+            field={@form[:quantity]}
+            id="direct-lab-quantity"
+            type="number"
+            label="Quantity received"
+            min="1"
+            required
+          />
+          <.input
+            field={@form[:supplier_id]}
+            id="direct-lab-supplier-id"
+            type="select"
+            label="Supplier (optional)"
+            options={Enum.map(@suppliers, &{&1.name, &1.id})}
+            prompt="Choose supplier"
+          />
+          <.input field={@form[:serial]} id="direct-lab-serial" label="Serial number (optional)" />
+          <.input
+            field={@form[:manufacture_date]}
+            id="direct-lab-manufacture-date"
+            type="date"
+            label="Manufacture date (optional)"
+          />
+          <.input
+            field={@form[:manufacturer]}
+            id="direct-lab-manufacturer"
+            label="Manufacturer (optional)"
+          />
+          <.input
+            field={@form[:cost_per_unit]}
+            id="direct-lab-cost-per-unit"
+            type="number"
+            label="Cost per unit (optional)"
+            min="0"
+            step="0.01"
+          />
+          <div class="flex items-end sm:col-span-2 xl:col-span-3">
+            <.button
+              id="direct-lab-stock-submit"
+              type="submit"
+              variant="primary"
+              phx-disable-with="Receiving stock…"
+              class="w-full sm:w-auto"
+            >
+              Receive stock at site
+            </.button>
+          </div>
+        </.form>
+      </section>
 
       <.modal
         :if={@live_action == :receive and not is_nil(@receive_batch)}
@@ -343,7 +540,9 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
           </:action>
           <:empty_state>
             <.blank_state icon="hero-check-circle" title="Nothing pending delivery">
-              Batches dispatched to this site will appear here for review.
+              {if @direct_receipt?,
+                do: "New stock is received directly into your site's inventory above.",
+                else: "Batches dispatched to this site will appear here for review."}
             </.blank_state>
           </:empty_state>
         </.table>

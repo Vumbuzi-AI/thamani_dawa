@@ -21,7 +21,6 @@ defmodule ThamaniDawa.Sites.Site do
     has_many :lab_orders, ThamaniDawa.LabOrders.LabOrder
     has_many :payments, ThamaniDawa.Payments.Payment
     has_many :wallet_entries, ThamaniDawa.Payments.WalletEntry
-    has_many :stock_takes, ThamaniDawa.StockTakes.StockTake
 
     timestamps(type: :utc_datetime)
   end
@@ -38,7 +37,7 @@ defmodule ThamaniDawa.Sites.Site do
   @doc "Minimal changeset for system-created sites (signup default site) — no address yet."
   def default_changeset(site, attrs) do
     site
-    |> cast(attrs, [:name, :site_type, :lat, :long, :is_active])
+    |> cast(attrs, [:name, :site_type, :address, :lat, :long, :is_active])
     |> trim_change(:name)
     |> validate_required([:name, :site_type])
   end

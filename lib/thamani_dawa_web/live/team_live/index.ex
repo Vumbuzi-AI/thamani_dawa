@@ -314,20 +314,6 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       </div>
 
       <div :if={@selected_role not in ["", nil, "admin"]}>
-        <input
-          type="text"
-          id="site-search"
-          placeholder="Search compatible sites…"
-          oninput="
-            const q = this.value.toLowerCase();
-            document.querySelectorAll('#site-checkbox-list label').forEach(lbl => {
-              lbl.style.display = lbl.querySelector('span').textContent.toLowerCase().includes(q) ? '' : 'none';
-            });
-          "
-          class="thamani-input mb-2 h-9 w-full rounded-lg px-3 text-sm focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
-          autocomplete="off"
-        />
-
         <div
           :if={@sites == []}
           class="text-xs text-thamani-pewter bg-thamani-stone/30 border border-thamani-stone rounded-xl p-3 text-center"
@@ -335,26 +321,58 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           No compatible sites available for this role.
         </div>
 
-        <div
-          :if={@sites != []}
-          id="site-checkbox-list"
-          class="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1"
+        <label
+          :for={site <- @sites}
+          :if={match?([_], @sites)}
+          title={site.name}
+          class="flex items-center gap-3 rounded-lg border border-thamani-stone bg-thamani-canvas px-3 py-2 text-sm text-thamani-forest"
         >
-          <label
-            :for={site <- @sites}
-            title={site.name}
-            class="flex items-center gap-3 rounded-lg border border-thamani-stone bg-thamani-canvas px-3 py-2 text-sm text-thamani-forest cursor-pointer hover:bg-thamani-stone/50 transition-colors"
+          <input
+            type="checkbox"
+            id={"user_site_ids_#{site.id}"}
+            name="user[site_ids][]"
+            value={site.id}
+            checked
+            class="size-4 shrink-0 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+          />
+          <span class="font-medium truncate min-w-0">{site.name}</span>
+        </label>
+
+        <div :if={length(@sites) > 1}>
+          <input
+            type="text"
+            id="site-search"
+            placeholder="Search compatible sites…"
+            oninput="
+              const q = this.value.toLowerCase();
+              document.querySelectorAll('#site-checkbox-list label').forEach(lbl => {
+                lbl.style.display = lbl.querySelector('span').textContent.toLowerCase().includes(q) ? '' : 'none';
+              });
+            "
+            class="thamani-input mb-2 h-9 w-full rounded-lg px-3 text-sm focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
+            autocomplete="off"
+          />
+
+          <div
+            id="site-checkbox-list"
+            class="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1"
           >
-            <input
-              type="checkbox"
-              id={"user_site_ids_#{site.id}"}
-              name="user[site_ids][]"
-              value={site.id}
-              checked={site.id in @checked_site_ids}
-              class="size-4 shrink-0 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
-            />
-            <span class="font-medium truncate min-w-0">{site.name}</span>
-          </label>
+            <label
+              :for={site <- @sites}
+              title={site.name}
+              class="flex items-center gap-3 rounded-lg border border-thamani-stone bg-thamani-canvas px-3 py-2 text-sm text-thamani-forest cursor-pointer hover:bg-thamani-stone/50 transition-colors"
+            >
+              <input
+                type="checkbox"
+                id={"user_site_ids_#{site.id}"}
+                name="user[site_ids][]"
+                value={site.id}
+                checked={site.id in @checked_site_ids}
+                class="size-4 shrink-0 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+              />
+              <span class="font-medium truncate min-w-0">{site.name}</span>
+            </label>
+          </div>
         </div>
       </div>
     </div>

@@ -618,6 +618,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     end
 
     test "stock tabs expose and switch their associated panels", %{conn: conn, admin: admin} do
+      site_fixture(%{organization_id: admin.organization_id})
       product = product_fixture(%{organization_id: admin.organization_id})
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
@@ -664,6 +665,8 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       admin: admin,
       site: site
     } do
+      site_fixture(%{organization_id: admin.organization_id})
+
       product =
         product_fixture(%{
           organization_id: admin.organization_id,
@@ -759,6 +762,8 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
     test "dispatching a batch captures serial, manufacture date, and supplier, and displays them",
          %{conn: conn, admin: admin, site: site} do
+      site_fixture(%{organization_id: admin.organization_id})
+
       product =
         product_fixture(%{
           organization_id: admin.organization_id,
@@ -841,6 +846,8 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       conn: conn,
       admin: admin
     } do
+      site_fixture(%{organization_id: admin.organization_id})
+
       product =
         product_fixture(%{organization_id: admin.organization_id, gtin: unique_gtin()})
 

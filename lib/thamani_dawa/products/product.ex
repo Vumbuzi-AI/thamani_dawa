@@ -9,6 +9,7 @@ defmodule ThamaniDawa.Products.Product do
     field :manufacturer, :string
     field :uom, :string
     field :gtin, :string
+    field :inventory_type, Ecto.Enum, values: [:medicine, :lab_consumable], default: :medicine
     field :is_otc, :boolean, default: false
     field :is_dangerous_drug, :boolean, default: false
     field :reorder_level, :integer
@@ -33,17 +34,27 @@ defmodule ThamaniDawa.Products.Product do
       :manufacturer,
       :uom,
       :gtin,
+      :inventory_type,
       :is_otc,
       :is_dangerous_drug,
       :reorder_level,
       :price,
       :is_active
     ])
-    |> validate_required([:price, :uom, :gtin])
+    |> update_change(:category, &normalize_category/1)
+    |> validate_required([:price, :uom, :gtin, :inventory_type])
     |> validate_number(:price, greater_than_or_equal_to: 0)
     |> validate_has_a_name()
     |> ThamaniDawa.Gtin.validate_gtin()
     |> unique_constraint(:gtin, name: :products_organization_id_gtin_index)
+  end
+
+  @doc false
+  def normalize_category(nil), do: nil
+
+  def normalize_category(category) when is_binary(category) do
+    category = category |> String.trim() |> String.replace(~r/\s+/, " ")
+    if category == "", do: nil, else: String.capitalize(category)
   end
 
   defp validate_has_a_name(changeset) do
