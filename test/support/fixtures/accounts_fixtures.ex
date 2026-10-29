@@ -14,7 +14,8 @@ defmodule ThamaniDawa.AccountsFixtures do
     Enum.into(attrs, %{
       name: valid_user_name(),
       email: valid_user_email(),
-      password: valid_user_password()
+      password: valid_user_password(),
+      accepted_legal_terms: true
     })
   end
 
@@ -56,7 +57,12 @@ defmodule ThamaniDawa.AccountsFixtures do
     {:ok, invited, _encoded_token} =
       Accounts.invite_user(organization_id, invited_by_id, invite_attrs)
 
-    {:ok, user} = Accounts.accept_invite(invited, %{password: valid_user_password()})
+    {:ok, user} =
+      Accounts.accept_invite(invited, %{
+        password: valid_user_password(),
+        accepted_legal_terms: true
+      })
+
     user
   end
 end

@@ -1281,6 +1281,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
   slot :col, required: true do
     attr :label, :string
     attr :mobile, :string, values: ~w(hidden aside)
+    attr :tablet, :string, values: ~w(hidden)
   end
 
   slot :action, doc: "the slot for showing user actions in the last table column"
@@ -1301,7 +1302,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <th
                 :for={col <- @col}
                 scope="col"
-                class="whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600 sm:px-5"
+                class={[
+                  "whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600 sm:px-5",
+                  col[:tablet] == "hidden" && "sm:max-lg:hidden"
+                ]}
               >
                 {col[:label]}
               </th>
@@ -1346,6 +1350,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
                   @mobile_columns == 3 &&
                     "max-sm:[&:nth-child(3)]:border-r max-sm:[&:nth-child(3)]:border-thamani-stone/60",
                   col[:mobile] == "hidden" && "max-sm:hidden",
+                  col[:tablet] == "hidden" && "sm:max-lg:hidden",
                   col[:mobile] == "aside" &&
                     "max-sm:absolute max-sm:right-3 max-sm:top-3 max-sm:z-10 max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:before:hidden",
                   @row_click && "cursor-pointer"

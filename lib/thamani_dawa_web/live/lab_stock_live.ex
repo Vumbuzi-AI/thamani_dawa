@@ -296,11 +296,7 @@ defmodule ThamaniDawaWeb.LabStockLive do
               </:tab>
             </.tab_group>
 
-            <form
-              phx-change="search"
-              class="min-w-0 md:ml-auto md:w-full md:max-w-xl"
-              id="search-form"
-            >
+            <form phx-change="search" class="min-w-0 w-full" id="search-form">
               <.search_input
                 name="search"
                 value={@search}

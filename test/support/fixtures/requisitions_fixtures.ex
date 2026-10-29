@@ -10,7 +10,7 @@ defmodule ThamaniDawa.RequisitionsFixtures do
   alias ThamaniDawa.SitesFixtures
 
   def valid_requisition_attributes(attrs \\ %{}) do
-    Enum.into(attrs, %{quantity: 10, urgency: :routine})
+    Enum.into(attrs, %{quantity: 10})
   end
 
   @doc """

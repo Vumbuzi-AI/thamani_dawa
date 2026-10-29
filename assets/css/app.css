@@ -806,6 +806,19 @@ textarea:focus {
   box-shadow: none !important;
 }
 
+#quick-sale-scan-form input.quick-sale-search-input {
+  padding-left: 2.75rem;
+}
+
+@media print {
+  html, body { width: 80mm !important; height: auto !important; margin: 0 !important; overflow: hidden !important; }
+  body * { visibility: hidden !important; }
+  #quick-sale-receipt, #quick-sale-receipt * { visibility: visible !important; }
+  #quick-sale-receipt { position: fixed !important; left: 0 !important; top: 0 !important; width: 80mm !important; min-height: 0 !important; margin: 0 !important; padding: 6mm !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; color: #102b0d !important; font-size: 11px !important; line-height: 1.35 !important; }
+  #quick-sale-receipt img { display: block !important; }
+  @page { size: 80mm auto; margin: 0; }
+}
+
 /* Custom select chevron — replaces the stripped browser arrow */
 .thamani-select,
 select:not(.hidden):not([hidden]) {
@@ -1326,6 +1339,8 @@ label,
   }
   .printable-batch-label,
   .printable-batch-label *,
+  .printable-lab-report,
+  .printable-lab-report *,
   #prescription-receipt,
   #prescription-receipt * {
     visibility: visible !important;
@@ -1333,7 +1348,8 @@ label,
   /* Strip the modal dialog's own chrome (background, padding, rounded
      corners, positioning context) from every ancestor of the label so it
      doesn't bleed through as an off-white box around the printed label. */
-  body *:has(.printable-batch-label) {
+  body *:has(.printable-batch-label),
+  body *:has(.printable-lab-report) {
     position: static !important;
     background: transparent !important;
     box-shadow: none !important;
@@ -1351,6 +1367,18 @@ label,
     margin: 0 !important;
     padding: 16px !important;
     border: 2px solid #000 !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+  .printable-lab-report {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 210mm !important;
+    margin: 0 !important;
+    padding: 10mm !important;
     background: #fff !important;
     color: #000 !important;
     box-shadow: none !important;

@@ -133,11 +133,129 @@ defmodule ThamaniDawa.Products do
           id: p.id,
           generic_name: p.generic_name,
           brand_name: p.brand_name,
+          gtin: p.gtin,
           price: p.price,
           stock: sum(b.remaining_quantity)
         }
     )
   end
+
+  @doc """
+  Searches a site's active catalog for Quick sale. Returns at most `limit`
+  products with approved batches. With an empty search, out-of-stock products
+  are omitted; a non-empty search includes them so they can be shown as unavailable.
+  """
+  def quick_sale_products_for_site(organization_id, site_id, search, category, limit) do
+    search = String.trim(search || "")
+
+    query =
+      from p in Product,
+        join: b in ThamaniDawa.Batches.Batch,
+        on: b.product_id == p.id,
+        where: p.organization_id == ^organization_id,
+        where: p.is_active == true,
+        where: b.site_id == ^site_id,
+        where: not is_nil(b.received_at) and not is_nil(b.approver_id),
+        group_by: p.id,
+        order_by: [asc: p.generic_name],
+        select: %{
+          id: p.id,
+          generic_name: p.generic_name,
+          brand_name: p.brand_name,
+          category: p.category,
+          gtin: p.gtin,
+          price: p.price,
+          stock: sum(b.remaining_quantity)
+        }
+
+    query
+    |> filter_quick_sale_search(search)
+    |> filter_quick_sale_category(category)
+    |> maybe_hide_out_of_stock(search)
+    |> limit(^limit)
+    |> Repo.all()
+  end
+
+  @doc """
+  Fetches a single product in the same shape as `quick_sale_products_for_site/5`
+  (id, names, category, gtin, price, aggregated site stock) — used when a
+  scanned barcode resolves to a product via a batch-number fallback rather
+  than the catalog search.
+  """
+  def quick_sale_product_for_site(organization_id, site_id, product_id) do
+    Repo.one(
+      from p in Product,
+        join: b in ThamaniDawa.Batches.Batch,
+        on: b.product_id == p.id,
+        where: p.organization_id == ^organization_id,
+        where: p.id == ^product_id,
+        where: p.is_active == true,
+        where: b.site_id == ^site_id,
+        where: not is_nil(b.received_at) and not is_nil(b.approver_id),
+        group_by: p.id,
+        select: %{
+          id: p.id,
+          generic_name: p.generic_name,
+          brand_name: p.brand_name,
+          category: p.category,
+          gtin: p.gtin,
+          price: p.price,
+          stock: sum(b.remaining_quantity)
+        }
+    )
+  end
+
+  @doc "Lists normalized categories for a site's in-stock Quick sale catalog."
+  def quick_sale_categories_for_site(organization_id, site_id) do
+    from(p in Product,
+      join: b in ThamaniDawa.Batches.Batch,
+      on: b.product_id == p.id,
+      where: p.organization_id == ^organization_id,
+      where: p.is_active == true,
+      where: b.site_id == ^site_id,
+      where: not is_nil(b.received_at) and not is_nil(b.approver_id),
+      where: b.remaining_quantity > 0,
+      where: not is_nil(p.category) and p.category != "",
+      select: p.category,
+      distinct: true
+    )
+    |> Repo.all()
+    |> Enum.map(&Product.normalize_category/1)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq_by(&String.downcase/1)
+    |> Enum.sort()
+  end
+
+  defp filter_quick_sale_search(query, ""), do: query
+
+  defp filter_quick_sale_search(query, search) do
+    pattern = "%#{search}%"
+
+    where(
+      query,
+      [p, _b],
+      ilike(p.generic_name, ^pattern) or ilike(p.brand_name, ^pattern) or
+        ilike(p.gtin, ^pattern) or ilike(p.category, ^pattern)
+    )
+  end
+
+  defp filter_quick_sale_category(query, category) when is_binary(category) do
+    case String.trim(category) do
+      "" ->
+        query
+
+      category ->
+        normalized = category |> Product.normalize_category() |> String.downcase()
+        where(query, [p, _b], fragment("lower(trim(?))", p.category) == ^normalized)
+    end
+  end
+
+  defp filter_quick_sale_category(query, _category), do: query
+
+  defp maybe_hide_out_of_stock(query, ""),
+    do: having(query, [_p, b], sum(b.remaining_quantity) > 0)
+
+  defp maybe_hide_out_of_stock(query, _search), do: query
 
   @doc "Gets a single product scoped to an organization. Raises if not found."
   def get_product!(organization_id, id) do

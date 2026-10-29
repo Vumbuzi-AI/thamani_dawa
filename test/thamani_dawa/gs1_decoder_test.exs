@@ -24,6 +24,26 @@ defmodule ThamaniDawa.GS1DecoderTest do
              }
     end
 
+    test "decodes the human-readable element string printed beside a DataMatrix" do
+      data = "(01)05054563075352(10)BA234(11)261004(17)281031"
+
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.gtin == "05054563075352"
+      assert result.batch_no == "BA234"
+      assert result.production_date == ~D[2026-10-04]
+      assert result.expiry_date == ~D[2028-10-31]
+    end
+
+    test "accepts a GS1 DataMatrix AIM identifier and tab-mapped group separators" do
+      data = "]d2010505456307535210BA234\t1126100417281031"
+
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.gtin == "05054563075352"
+      assert result.batch_no == "BA234"
+      assert result.production_date == ~D[2026-10-04]
+      assert result.expiry_date == ~D[2028-10-31]
+    end
+
     test "decodes a GLN from AI 414" do
       assert {:ok, result} = GS1Decoder.parse("414" <> "0614141000005")
       assert result.gln == "0614141000005"

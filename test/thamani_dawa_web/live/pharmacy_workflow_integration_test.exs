@@ -42,6 +42,10 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
     |> form("#receive-stock-gs1-form", raw_gs1: "01" <> gtin <> "10" <> "LOT-E2E-1")
     |> render_submit()
 
+    receive_live
+    |> form("#receive-batch-form", receive: %{quantity: "50"})
+    |> render_submit()
+
     assert render(receive_live) =~ "Stock received."
 
     received_batch = Batches.get_batch!(organization.id, pending_batch.id)

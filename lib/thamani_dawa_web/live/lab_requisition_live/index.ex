@@ -204,7 +204,6 @@ defmodule ThamaniDawaWeb.LabRequisitionLive.Index do
         <:col :let={{_id, r}} label="Quantity">
           <span class="tabular-nums">{r.quantity}</span>
         </:col>
-        <:col :let={{_id, r}} label="Urgency">{r.urgency}</:col>
         <:col :let={{_id, r}} label="Status">
           <.status_badge status={r.status} />
           {if r.status == :rejected, do: r.rejection_reason}

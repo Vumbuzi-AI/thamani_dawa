@@ -277,36 +277,38 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
         Organization stock
         <:subtitle>{stock_subtitle(@allowed_site_ids)}</:subtitle>
         <:toolbar>
-          <.tab_group>
-            <:tab
-              id="products-tab"
-              active={@view == "products"}
-              phx_click="set_view"
-              phx_value_view="products"
-            >
-              Products
-            </:tab>
-            <:tab
-              id="batches-tab"
-              active={@view == "batches"}
-              phx_click="set_view"
-              phx_value_view="batches"
-            >
-              All batches
-            </:tab>
-          </.tab_group>
+          <div class="flex min-w-0 items-center gap-3">
+            <.tab_group>
+              <:tab
+                id="products-tab"
+                active={@view == "products"}
+                phx_click="set_view"
+                phx_value_view="products"
+              >
+                Products
+              </:tab>
+              <:tab
+                id="batches-tab"
+                active={@view == "batches"}
+                phx_click="set_view"
+                phx_value_view="batches"
+              >
+                All batches
+              </:tab>
+            </.tab_group>
 
-          <form phx-change="search" class="flex-1" id="search-form">
-            <.search_input
-              name="search"
-              value={@search}
-              placeholder={
-                if @view == "products",
-                  do: "Search by product, GTIN, or category",
-                  else: "Search by product, GTIN, or batch no."
-              }
-            />
-          </form>
+            <form phx-change="search" class="min-w-0 flex-1" id="search-form">
+              <.search_input
+                name="search"
+                value={@search}
+                placeholder={
+                  if @view == "products",
+                    do: "Search by product, GTIN, or category",
+                    else: "Search by product, GTIN, or batch no."
+                }
+              />
+            </form>
+          </div>
 
           <.filter_drawer
             id="stock-filters"
