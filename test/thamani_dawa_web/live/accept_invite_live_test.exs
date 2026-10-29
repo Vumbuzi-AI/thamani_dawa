@@ -9,6 +9,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
   use ThamaniDawaWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
+  import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.OrganizationsFixtures
 
   alias ThamaniDawa.Accounts
@@ -35,14 +36,31 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
 
       {:ok, view, html} = live(conn, ~p"/invites/#{encoded_token}")
       assert html =~ "Welcome, New Hire"
+      assert has_element?(view, "#accept-invite-form")
+
+      assert has_element?(
+               view,
+               "input[name='user[accepted_legal_terms]'][type='checkbox'][required]"
+             )
+
+      assert has_element?(view, "a[href='/terms'][target='_blank']", "Terms of Service")
+      assert has_element?(view, "a[href='/privacy'][target='_blank']", "Privacy Policy")
 
       assert {:error, {:live_redirect, %{to: "/login"}}} =
                view
-               |> form("form", user: %{password: "secret"})
+               |> form("#accept-invite-form",
+                 user: %{password: "secret", accepted_legal_terms: "true"}
+               )
                |> render_submit()
 
-      assert %{hashed_password: hashed} = Accounts.get_user!(organization.id, invited.id)
+      assert %{
+               hashed_password: hashed,
+               legal_terms_accepted_at: accepted_at,
+               legal_policy_version: "2026-10-29"
+             } = Accounts.get_user!(organization.id, invited.id)
+
       assert is_binary(hashed)
+      assert %DateTime{} = accepted_at
     end
 
     test "a reused token shows a safe error and redirects to /login", %{conn: conn} do
@@ -52,7 +70,9 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
 
       assert {:error, {:live_redirect, %{to: "/login"}}} =
                view
-               |> form("form", user: %{password: "hello world!"})
+               |> form("#accept-invite-form",
+                 user: %{password: "hello world!", accepted_legal_terms: "true"}
+               )
                |> render_submit()
 
       assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/invites/#{encoded_token}")
@@ -82,12 +102,63 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
 
       html =
         view
-        |> form("form", user: %{password: "short"})
+        |> form("#accept-invite-form",
+          user: %{password: "short", accepted_legal_terms: "true"}
+        )
         |> render_submit()
 
       assert html =~ "Must be at least 6 characters"
 
       assert %{hashed_password: nil} = Accounts.get_user!(organization.id, invited.id)
+    end
+
+    test "legal acknowledgement is required before the account is activated", %{conn: conn} do
+      %{organization: organization, invited: invited, encoded_token: encoded_token} =
+        invite_fixture("legal-acknowledgement@example.com")
+
+      {:ok, view, _html} = live(conn, ~p"/invites/#{encoded_token}")
+
+      html =
+        view
+        |> form("#accept-invite-form",
+          user: %{password: "secret", accepted_legal_terms: "false"}
+        )
+        |> render_submit()
+
+      assert has_element?(view, "#accept-invite-form")
+      assert html =~ "You must accept the Terms of Service and Privacy Policy"
+
+      assert %{hashed_password: nil, legal_terms_accepted_at: nil} =
+               Accounts.get_user!(organization.id, invited.id)
+    end
+
+    test "activation ends an existing inviter session and renders the login form", %{conn: conn} do
+      admin = user_fixture()
+
+      {:ok, invited, encoded_token} =
+        Accounts.invite_user(admin.organization_id, admin.id, %{
+          name: "Session Handoff",
+          email: "session-handoff@example.com",
+          role: :pharmacist
+        })
+
+      authenticated_conn = log_in_user(conn, admin)
+      {:ok, view, _html} = live(authenticated_conn, ~p"/invites/#{encoded_token}")
+
+      {:ok, login_conn} =
+        view
+        |> form("#accept-invite-form",
+          user: %{password: "secret", accepted_legal_terms: "true"}
+        )
+        |> render_submit()
+        |> follow_redirect(authenticated_conn, ~p"/login")
+
+      assert html_response(login_conn, 200) =~
+               "Password set — log in with your new account below."
+
+      assert html_response(login_conn, 200) =~ "Welcome back"
+      assert get_session(login_conn, :user_token) == nil
+      assert Accounts.get_user!(admin.organization_id, invited.id).hashed_password
     end
   end
 end

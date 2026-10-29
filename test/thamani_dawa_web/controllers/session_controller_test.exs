@@ -64,6 +64,18 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
   end
 
   describe "POST /login" do
+    test "starts the organization tour after signup", %{conn: conn} do
+      admin = user_fixture()
+
+      conn =
+        post(conn, ~p"/login", %{
+          "user" => %{"email" => admin.email, "password" => valid_user_password()},
+          "start_tour" => "true"
+        })
+
+      assert redirected_to(conn) == ~p"/org/dashboard?tour=1"
+    end
+
     test "redirects an admin to /org/sites", %{conn: conn} do
       admin = user_fixture()
 
