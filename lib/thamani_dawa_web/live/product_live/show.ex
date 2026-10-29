@@ -18,20 +18,23 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
     undispatched_batches =
       Batches.list_undispatched_batches_for_product(organization_id, product.id)
 
-    sites_by_id =
-      organization_id
-      |> Sites.list_sites()
-      |> Map.new(&{&1.id, &1})
+    sites = Sites.list_sites(organization_id)
+    sites_by_id = Map.new(sites, &{&1.id, &1})
+
+    single_site = if length(sites) == 1, do: hd(sites)
+    show_warehouse_section? = is_nil(single_site) or undispatched_batches != []
 
     {:ok,
      socket
      |> assign(:product, product)
      |> assign(:sites_by_id, sites_by_id)
+     |> assign(:single_site, single_site)
+     |> assign(:show_warehouse_section?, show_warehouse_section?)
      |> assign(:suppliers, Suppliers.list_active_suppliers(organization_id))
      |> assign(:selected_batch, nil)
      |> assign(:dispatch_batch, nil)
      |> assign(:dispatch_form, nil)
-     |> assign(:stock_tab, "warehouse")
+     |> assign(:stock_tab, if(show_warehouse_section?, do: "warehouse", else: "sites"))
      |> stream(:batches, batches)
      |> stream(:undispatched_batches, undispatched_batches)}
   end
@@ -78,27 +81,13 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
   end
 
   def handle_event("save", %{"batch" => attrs}, socket) do
-    scope = socket.assigns.current_scope
     product = socket.assigns.product
-
     attrs = Map.put(attrs, "product_id", product.id)
 
-    case Batches.receive_into_org_stock(scope.organization_id, attrs) do
-      {:ok, batch} ->
-        # A freshly-inserted batch has :product/:supplier as
-        # %Ecto.Association.NotLoaded{} — fill them in from what's already
-        # in memory rather than an extra query.
-        supplier = Enum.find(socket.assigns.suppliers, &(&1.id == batch.supplier_id))
-        batch = %{batch | product: product, supplier: supplier}
-
-        {:noreply,
-         socket
-         |> put_flash(:info, "Batch recorded as stock — dispatch it to a site when ready.")
-         |> stream_insert(:undispatched_batches, batch)
-         |> push_patch(to: ~p"/org/products/#{product.id}")}
-
-      {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
+    if site = socket.assigns.single_site do
+      save_direct_to_site(socket, site, attrs)
+    else
+      save_to_org_stock(socket, attrs)
     end
   end
 
@@ -140,6 +129,49 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Could not update product.")}
+    end
+  end
+
+  defp save_to_org_stock(socket, attrs) do
+    scope = socket.assigns.current_scope
+    product = socket.assigns.product
+
+    case Batches.receive_into_org_stock(scope.organization_id, attrs) do
+      {:ok, batch} ->
+        # A freshly-inserted batch has :product/:supplier as
+        # %Ecto.Association.NotLoaded{} — fill them in from what's already
+        # in memory rather than an extra query.
+        supplier = Enum.find(socket.assigns.suppliers, &(&1.id == batch.supplier_id))
+        batch = %{batch | product: product, supplier: supplier}
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Batch recorded as stock — dispatch it to a site when ready.")
+         |> stream_insert(:undispatched_batches, batch)
+         |> push_patch(to: ~p"/org/products/#{product.id}")}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
+    end
+  end
+
+  defp save_direct_to_site(socket, site, attrs) do
+    scope = socket.assigns.current_scope
+    product = socket.assigns.product
+
+    case Batches.receive_directly_at_site(scope.organization_id, site.id, scope.user.id, attrs) do
+      {:ok, batch} ->
+        supplier = Enum.find(socket.assigns.suppliers, &(&1.id == batch.supplier_id))
+        batch = %{batch | product: product, site: site, approver: scope.user, supplier: supplier}
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Added to stock.")
+         |> stream_insert(:batches, batch)
+         |> push_patch(to: ~p"/org/products/#{product.id}")}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
     end
   end
 
@@ -396,7 +428,11 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         on_close={JS.push("close_datamatrix")}
       />
 
-      <.tab_group variant="compact" class="mb-5 w-full max-w-none sm:max-w-md [&>button]:flex-1">
+      <.tab_group
+        :if={@show_warehouse_section?}
+        variant="compact"
+        class="mb-5 w-full max-w-none lg:max-w-md [&>button]:flex-1"
+      >
         <:tab
           id="warehouse-stock-tab"
           active={@stock_tab == "warehouse"}
@@ -418,6 +454,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
       </.tab_group>
 
       <div
+        :if={@show_warehouse_section?}
         id="warehouse-stock-panel"
         role="tabpanel"
         aria-labelledby="warehouse-stock-tab"
@@ -522,13 +559,17 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
       <div
         id="sites-stock-panel"
-        role="tabpanel"
-        aria-labelledby="sites-stock-tab"
-        class={@stock_tab != "sites" && "hidden"}
+        role={@show_warehouse_section? && "tabpanel"}
+        aria-labelledby={@show_warehouse_section? && "sites-stock-tab"}
+        class={@show_warehouse_section? && @stock_tab != "sites" && "hidden"}
       >
         <p class="mb-4 text-sm text-thamani-pewter">
-          These batches are already assigned to a site, including stock received before centralized
-          stock tracking was introduced.
+          <%= if @single_site do %>
+            Stock received at {@single_site.name}.
+          <% else %>
+            These batches are already assigned to a site, including stock received before centralized
+            stock tracking was introduced.
+          <% end %>
         </p>
         <.table
           id="batches"

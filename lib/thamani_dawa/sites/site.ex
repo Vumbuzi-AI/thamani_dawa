@@ -21,7 +21,6 @@ defmodule ThamaniDawa.Sites.Site do
     has_many :lab_orders, ThamaniDawa.LabOrders.LabOrder
     has_many :payments, ThamaniDawa.Payments.Payment
     has_many :wallet_entries, ThamaniDawa.Payments.WalletEntry
-    has_many :stock_takes, ThamaniDawa.StockTakes.StockTake
 
     timestamps(type: :utc_datetime)
   end
