@@ -10,6 +10,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
   alias ThamaniDawa.PaymentMethods
   alias ThamaniDawa.Payments
   alias ThamaniDawa.Payments.Payment
+  alias ThamaniDawa.Sites
+  alias ThamaniDawaWeb.LabReportComponent
+  alias ThamaniDawaWeb.SpecimenLabelComponent
 
   def mount(%{"id" => id}, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -20,8 +23,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
       |> assign(:detail_tab, "samples")
       |> assign(:editing_result, nil)
       |> assign(:editing_lab_test, nil)
-      |> assign(:rejecting_specimen, nil)
+      |> assign(:consumable_search, "")
+      |> assign(:selected_consumable_product_id, nil)
       |> assign(:payment_form, nil)
+      |> assign(:printing_specimen, nil)
       |> load_lab_order(id)
 
     {:ok, socket}
@@ -29,13 +34,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
   def handle_params(params, _uri, socket) do
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
-  end
-
-  defp apply_action(socket, :reject_specimen, %{"specimen_id" => specimen_id}) do
-    organization_id = socket.assigns.current_scope.organization_id
-    specimen = LabOrders.get_specimen!(organization_id, String.to_integer(specimen_id))
-
-    socket |> reset_modals() |> assign(:rejecting_specimen, specimen)
   end
 
   defp apply_action(socket, :edit_result, %{"result_id" => result_id}) do
@@ -47,6 +45,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     |> reset_modals()
     |> assign(:editing_result, result)
     |> assign(:editing_lab_test, lab_test)
+  end
+
+  defp apply_action(socket, :print_specimen_label, %{"specimen_id" => specimen_id}) do
+    specimen_id = String.to_integer(specimen_id)
+    specimen = Enum.find(socket.assigns.specimens, &(&1.id == specimen_id))
+
+    socket
+    |> reset_modals()
+    |> assign(:printing_specimen, specimen)
   end
 
   defp apply_action(socket, :new_payment, _params) do
@@ -67,8 +74,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     socket
     |> assign(:editing_result, nil)
     |> assign(:editing_lab_test, nil)
-    |> assign(:rejecting_specimen, nil)
+    |> assign(:consumable_search, "")
+    |> assign(:selected_consumable_product_id, nil)
     |> assign(:payment_form, nil)
+    |> assign(:printing_specimen, nil)
   end
 
   defp load_lab_order(socket, id) do
@@ -84,6 +93,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     socket
     |> assign(:lab_order, lab_order)
     |> assign(:patient, patient)
+    |> assign(:site, Sites.get_site!(organization_id, lab_order.site_id))
     |> assign(:results, results)
     |> assign(:specimens, LabOrders.list_specimens_for_order(organization_id, lab_order.id))
     |> assign(
@@ -97,13 +107,49 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     |> assign(:amendments, amendments)
     |> assign(
       :active_batches,
-      Batches.list_active_batches_for_site_with_product(organization_id, lab_order.site_id)
+      Batches.list_active_lab_consumable_batches_for_site(organization_id, lab_order.site_id)
     )
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket)
       when tab in ~w(samples results consumables) do
     {:noreply, assign(socket, :detail_tab, tab)}
+  end
+
+  def handle_event("search_consumable_products", %{"product_query" => query}, socket) do
+    {:noreply,
+     socket
+     |> assign(:consumable_search, query)
+     |> assign(:selected_consumable_product_id, nil)}
+  end
+
+  def handle_event("select_consumable_product", %{"product_id" => product_id}, socket) do
+    case Integer.parse(product_id) do
+      {product_id, ""} ->
+        available_product_ids =
+          socket.assigns.active_batches
+          |> Enum.map(& &1.product_id)
+          |> Enum.uniq()
+
+        if product_id in available_product_ids do
+          {:noreply,
+           socket
+           |> assign(:selected_consumable_product_id, product_id)
+           |> assign(:consumable_search, "")}
+        else
+          {:noreply, put_flash(socket, :error, "Choose a product with stock at this site.")}
+        end
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Choose a valid product.")}
+    end
+  end
+
+  def handle_event("change_consumable_product", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:selected_consumable_product_id, nil)
+     |> assign(:consumable_search, "")}
   end
 
   def handle_event("collect_specimen", params, socket) do
@@ -134,47 +180,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     end
   end
 
-  def handle_event("receive_specimen", %{"specimen_id" => id}, socket) do
-    organization_id = socket.assigns.current_scope.organization_id
-    user_id = socket.assigns.current_scope.user.id
-
-    case LabOrders.receive_specimen(organization_id, String.to_integer(id), user_id) do
-      {:ok, _} ->
-        {:noreply, load_lab_order(socket, socket.assigns.lab_order.id)}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not mark specimen received.")}
-    end
-  end
-
-  def handle_event(
-        "confirm_rejected",
-        %{"specimen_id" => specimen_id, "rejection_reason" => reason},
-        socket
-      ) do
-    organization_id = socket.assigns.current_scope.organization_id
-    user_id = socket.assigns.current_scope.user.id
-
-    case LabOrders.reject_specimen(
-           organization_id,
-           String.to_integer(specimen_id),
-           user_id,
-           reason
-         ) do
-      {:ok, _} ->
-        {:noreply,
-         socket
-         |> load_lab_order(socket.assigns.lab_order.id)
-         |> push_patch(to: ~p"/lab/orders/#{socket.assigns.lab_order.id}")}
-
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not reject the specimen.")}
-    end
-  end
-
   def handle_event(
         "record_consumable",
-        %{"batch_id" => batch_id, "usage_quantity" => qty} = params,
+        %{"batch_id" => batch_id, "product_id" => product_id, "usage_quantity" => qty} = params,
         socket
       ) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -183,8 +191,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     result_id = parse_optional_int(params["lab_order_result_id"])
 
     with {batch_id, ""} <- Integer.parse(batch_id),
+         {product_id, ""} <- Integer.parse(product_id),
          {qty, ""} <- Integer.parse(qty),
          true <- qty > 0,
+         true <-
+           batch_available_for_product?(socket.assigns.active_batches, batch_id, product_id),
          {:ok, _usage} <-
            LabOrders.record_consumable_usage(organization_id, batch_id, user_id, qty,
              lab_order_id: lab_order_id,
@@ -197,7 +208,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
        |> assign(:detail_tab, "consumables")
        |> push_patch(to: ~p"/lab/orders/#{lab_order_id}")}
     else
-      _ -> {:noreply, put_flash(socket, :error, "Choose a batch and a valid quantity.")}
+      _ -> {:noreply, put_flash(socket, :error, "Choose a product, batch, and valid quantity.")}
     end
   end
 
@@ -246,8 +257,17 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
          |> assign(:detail_tab, "results")
          |> push_patch(to: ~p"/lab/orders/#{socket.assigns.lab_order.id}")}
 
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Couldn't add that test.")}
+      {:error, %Ecto.Changeset{} = changeset} ->
+        if duplicate_lab_test?(changeset) do
+          {:noreply, put_flash(socket, :error, "This test is already on the order.")}
+        else
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "Couldn't add that test. Check the test selection and try again."
+           )}
+        end
     end
   end
 
@@ -271,7 +291,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         {:noreply,
          socket
          |> put_flash(:info, "Results recorded.")
-         |> push_navigate(to: ~p"/lab/orders/#{socket.assigns.lab_order.id}")}
+         |> load_lab_order(socket.assigns.lab_order.id)
+         |> assign(:detail_tab, "results")
+         |> push_patch(to: ~p"/lab/orders/#{socket.assigns.lab_order.id}")}
 
       {:error, :reason_required} ->
         {:noreply,
@@ -280,6 +302,12 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Couldn't record results: #{inspect(reason)}")}
     end
+  end
+
+  defp duplicate_lab_test?(changeset) do
+    Enum.any?(changeset.errors, fn {_field, {_message, options}} ->
+      Keyword.get(options, :constraint) == :unique
+    end)
   end
 
   defp parse_optional_int(value) when is_binary(value) do
@@ -303,6 +331,16 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
   defp result_unit(_result, _key), do: ""
 
   defp current_value(result, key), do: get_in(result.results, [key, "value"])
+
+  defp option_description(option) when is_binary(option) do
+    case String.downcase(option) do
+      "negative" -> "Target not detected"
+      "positive" -> "Target detected"
+      _ -> nil
+    end
+  end
+
+  defp option_description(_option), do: nil
 
   defp checkbox_checked?(value, opt) when is_list(value), do: opt in value
 
@@ -422,12 +460,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
   defp status_meta(:specimen, :rejected), do: {"Rejected", "#FBEAE9", "#C21F17"}
   defp status_meta(_kind, other), do: {Phoenix.Naming.humanize(other), "#F1F2F5", "#687083"}
 
-  defp can_receive?(%{status: :collected}), do: true
-  defp can_receive?(_specimen), do: false
-
-  defp can_reject?(%{status: status}), do: status in [:collected, :received]
-  defp can_reject?(_specimen), do: false
-
   defp can_enter?(result), do: result.status in [:collected, :completed]
 
   defp specimen_tests(specimen) do
@@ -450,6 +482,40 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
       end
 
     "#{product_name} — #{batch.batch_no || "##{batch.id}"} (#{batch.remaining_quantity} left)"
+  end
+
+  defp batch_available_for_product?(batches, batch_id, product_id) do
+    Enum.any?(batches, fn batch ->
+      batch.id == batch_id and batch.product_id == product_id
+    end)
+  end
+
+  defp consumable_search_results(batches, query) do
+    query = query |> String.trim() |> String.downcase()
+
+    if query == "" do
+      []
+    else
+      batches
+      |> Enum.map(& &1.product)
+      |> Enum.uniq_by(& &1.id)
+      |> Enum.filter(fn product ->
+        [product.generic_name, product.brand_name, product.gtin]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.any?(&String.contains?(String.downcase(&1), query))
+      end)
+      |> Enum.sort_by(&String.downcase(&1.generic_name || &1.brand_name || ""))
+    end
+  end
+
+  defp batches_for_product(batches, product_id),
+    do: Enum.filter(batches, &(&1.product_id == product_id))
+
+  defp selected_product(batches, product_id) do
+    case Enum.find(batches, &(&1.product_id == product_id)) do
+      nil -> nil
+      batch -> batch.product
+    end
   end
 
   defp specimen_type_options do
@@ -642,29 +708,23 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         </.form>
       </.modal>
 
-      <%!-- Reject specimen modal --%>
-      <.modal
-        :if={@live_action == :reject_specimen && @rejecting_specimen}
-        id="reject-specimen-modal"
-        show
-        on_cancel={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-1">
-          Reject specimen
-        </h2>
-        <p class="mb-5 text-sm text-thamani-pewter">
-          {@rejecting_specimen.specimen_number}
-        </p>
-        <.form for={%{}} id="reject-specimen-form" phx-submit="confirm_rejected">
-          <input type="hidden" name="specimen_id" value={@rejecting_specimen.id} />
-          <.input type="text" name="rejection_reason" label="Rejection reason" value="" required />
-          <div class="mt-5">
-            <.button type="submit" variant="primary" phx-disable-with="Saving…" class="w-full">
-              Reject specimen
-            </.button>
-          </div>
-        </.form>
-      </.modal>
+      <%!-- Specimen label modal --%>
+      <SpecimenLabelComponent.specimen_label_modal
+        :if={@live_action == :print_specimen_label && @printing_specimen}
+        specimen={@printing_specimen}
+        patient={@patient}
+        on_close={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
+      />
+
+      <%!-- Lab report modal --%>
+      <LabReportComponent.lab_report_modal
+        :if={@live_action == :print_report}
+        lab_order={@lab_order}
+        patient={@patient}
+        site={@site}
+        results={@results}
+        on_close={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
+      />
 
       <%!-- Record consumable modal --%>
       <.modal
@@ -679,29 +739,102 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         <p class="mb-5 text-sm text-thamani-pewter">
           Drawn directly from this site's stock.
         </p>
-        <.form for={%{}} id="record-consumable-form" phx-submit="record_consumable">
-          <.input
-            type="select"
-            name="batch_id"
-            label="Reagent / batch"
-            options={Enum.map(@active_batches, &{batch_label(&1), &1.id})}
-            prompt="Choose a batch"
-            required
-          />
-          <.input type="number" name="usage_quantity" label="Quantity used" min="1" required />
-          <.input
-            type="select"
-            name="lab_order_result_id"
-            label="For test (optional)"
-            value=""
-            options={[{"— none —", ""} | Enum.map(@results, &{test_name(&1), &1.id})]}
-          />
-          <div class="mt-5">
-            <.button type="submit" variant="primary" phx-disable-with="Saving…" class="w-full">
-              Record consumable
-            </.button>
+        <%= if is_nil(@selected_consumable_product_id) do %>
+          <form id="consumable-product-search" phx-change="search_consumable_products">
+            <.input
+              id="consumable-product-query"
+              type="text"
+              name="product_query"
+              label="Product"
+              value={@consumable_search}
+              placeholder="Type a product name, brand, or GTIN"
+              autocomplete="off"
+            />
+          </form>
+          <div
+            :if={String.trim(@consumable_search) != ""}
+            id="consumable-product-results"
+            class="mt-2 max-h-56 overflow-y-auto rounded-xl border border-thamani-stone bg-white p-1"
+          >
+            <% results = consumable_search_results(@active_batches, @consumable_search) %>
+            <button
+              :for={product <- results}
+              id={"consumable-product-option-#{product.id}"}
+              type="button"
+              phx-click="select_consumable_product"
+              phx-value-product_id={product.id}
+              class="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-thamani-canvas"
+            >
+              <span>
+                <span class="block text-sm font-medium text-slate-900">{product.generic_name ||
+                  product.brand_name}</span>
+                <span
+                  :if={product.brand_name && product.brand_name != product.generic_name}
+                  class="block text-xs text-thamani-pewter"
+                >{product.brand_name}</span>
+              </span>
+              <span class="text-xs text-thamani-pewter">{Enum.count(
+                @active_batches,
+                &(&1.product_id == product.id)
+              )} batches</span>
+            </button>
+            <p :if={results == []} class="px-3 py-4 text-sm text-thamani-pewter">
+              No in-stock products match that search.
+            </p>
           </div>
-        </.form>
+          <p :if={@active_batches == []} class="mt-2 text-sm text-thamani-pewter">
+            No active consumable stock is available at this site.
+          </p>
+        <% else %>
+          <% product = selected_product(@active_batches, @selected_consumable_product_id) %>
+          <div class="mb-4 flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas/50 px-3 py-3">
+            <div>
+              <p class="text-xs uppercase tracking-wide text-thamani-subtle">Selected product</p>
+              <p class="mt-1 text-sm font-medium text-slate-900">
+                {product.generic_name || product.brand_name}
+                <span
+                  :if={product.brand_name && product.brand_name != product.generic_name}
+                  class="font-normal text-thamani-pewter"
+                >· {product.brand_name}</span>
+              </p>
+            </div>
+            <button
+              id="change-consumable-product"
+              type="button"
+              phx-click="change_consumable_product"
+              class="text-sm font-medium text-thamani-forest hover:underline"
+            >Change</button>
+          </div>
+          <.form for={%{}} id="record-consumable-form" phx-submit="record_consumable">
+            <input type="hidden" name="product_id" value={@selected_consumable_product_id} />
+            <.input
+              type="select"
+              name="batch_id"
+              label="Batch / lot"
+              options={
+                Enum.map(
+                  batches_for_product(@active_batches, @selected_consumable_product_id),
+                  fn batch -> {batch_label(batch), batch.id} end
+                )
+              }
+              prompt="Choose a batch"
+              required
+            />
+            <.input type="number" name="usage_quantity" label="Quantity used" min="1" required />
+            <.input
+              type="select"
+              name="lab_order_result_id"
+              label="For test (optional)"
+              value=""
+              options={[{"— none —", ""} | Enum.map(@results, &{test_name(&1), &1.id})]}
+            />
+            <div class="mt-5">
+              <.button type="submit" variant="primary" phx-disable-with="Saving…" class="w-full">
+                Record consumable
+              </.button>
+            </div>
+          </.form>
+        <% end %>
       </.modal>
 
       <%!-- Result entry modal --%>
@@ -710,37 +843,50 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         id="result-entry-modal"
         show
         on_cancel={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
+        class="max-w-2xl"
       >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-1">
-          Enter results
-        </h2>
-        <p class="mb-5 text-sm text-thamani-pewter">{@editing_lab_test.name}</p>
+        <div class="mb-6 flex items-start gap-4 pr-8">
+          <div class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-thamani-lime/25 text-thamani-forest">
+            <.icon name="hero-beaker" class="size-7" />
+          </div>
+          <div>
+            <h2
+              id="result-entry-modal-title"
+              class="text-2xl font-semibold tracking-tight text-thamani-forest"
+            >
+              Enter test results
+            </h2>
+            <p id="result-entry-modal-description" class="mt-1 text-sm text-thamani-pewter">
+              {@editing_lab_test.name}
+            </p>
+          </div>
+        </div>
 
         <.form for={%{}} id="result-entry-form" phx-submit="save_result">
-          <div class="flex flex-col gap-4">
+          <div class="flex flex-col gap-5">
             <%= for {key, definition} <- @editing_lab_test.field_definitions do %>
               <%= cond do %>
                 <% definition["type"] == "checkbox" and is_list(definition["options"]) and definition["options"] != [] -> %>
                   <% curr_val = current_value(@editing_result, key) %>
-                  <div class="space-y-2">
-                    <label class="block text-sm font-medium text-thamani-forest">
+                  <fieldset class="space-y-2.5">
+                    <legend class="mb-2 block text-sm font-semibold text-thamani-forest">
                       {field_label(key, definition)}
-                    </label>
+                    </legend>
                     <div class="flex flex-wrap gap-3">
                       <%= for opt <- definition["options"] do %>
-                        <label class="inline-flex items-center gap-2 text-sm text-thamani-forest cursor-pointer bg-thamani-snow border border-thamani-stone px-3 py-1.5 rounded-lg hover:border-thamani-accent/50 transition-colors">
+                        <label class="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-thamani-stone bg-thamani-snow px-3 py-2.5 text-sm text-thamani-forest transition-colors hover:border-thamani-accent/50 has-[:checked]:border-thamani-forest has-[:checked]:bg-thamani-lime/20">
                           <input
                             type="checkbox"
                             name={"values[#{key}][]"}
                             value={opt}
                             checked={checkbox_checked?(curr_val, opt)}
-                            class="checkbox checkbox-sm accent-thamani-forest"
+                            class="size-4 accent-thamani-forest"
                           />
                           <span>{opt}</span>
                         </label>
                       <% end %>
                     </div>
-                  </div>
+                  </fieldset>
                 <% definition["type"] == "checkbox" -> %>
                   <% curr_val = current_value(@editing_result, key) %>
                   <.input
@@ -750,6 +896,35 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
                     value="true"
                     checked={single_checkbox_checked?(curr_val)}
                   />
+                <% definition["type"] == "select" and is_list(definition["options"]) and definition["options"] != [] -> %>
+                  <% curr_val = current_value(@editing_result, key) %>
+                  <fieldset class="space-y-2.5">
+                    <legend class="block text-sm font-medium text-thamani-forest">
+                      {field_label(key, definition)}
+                    </legend>
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <%= for opt <- definition["options"] do %>
+                        <label class="group flex min-h-20 cursor-pointer items-start gap-3 rounded-2xl border border-thamani-stone bg-white px-4 py-3.5 text-thamani-forest transition-[border-color,background-color,box-shadow] hover:border-thamani-accent/60 has-[:checked]:border-thamani-forest has-[:checked]:bg-thamani-lime/15 has-[:checked]:shadow-sm">
+                          <input
+                            type="radio"
+                            name={"values[#{key}]"}
+                            value={opt}
+                            checked={to_string(curr_val) == opt}
+                            class="mt-0.5 size-5 shrink-0 accent-thamani-forest focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-thamani-accent"
+                          />
+                          <span class="min-w-0">
+                            <span class="block text-sm font-semibold">{opt}</span>
+                            <span
+                              :if={option_description(opt)}
+                              class="mt-1 block text-xs leading-5 text-thamani-pewter"
+                            >
+                              {option_description(opt)}
+                            </span>
+                          </span>
+                        </label>
+                      <% end %>
+                    </div>
+                  </fieldset>
                 <% true -> %>
                   <.input
                     type={input_type(definition)}
@@ -762,7 +937,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             <% end %>
           </div>
 
-          <div :if={@editing_result.status == :completed} class="mt-6">
+          <div
+            :if={@editing_result.status == :completed}
+            class="mt-5 rounded-xl bg-thamani-canvas p-4"
+          >
             <.input
               type="text"
               name="amendment_reason"
@@ -772,7 +950,23 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             />
           </div>
 
-          <.button variant="primary" class="mt-5">Save results</.button>
+          <div class="mt-6 flex flex-col-reverse gap-3 border-t border-thamani-stone pt-5 sm:flex-row sm:justify-end">
+            <.link
+              patch={~p"/lab/orders/#{@lab_order.id}"}
+              class="inline-flex min-h-11 items-center justify-center rounded-xl border border-thamani-stone px-5 text-sm font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas"
+            >
+              Cancel
+            </.link>
+            <.button
+              id="save-result-button"
+              type="submit"
+              variant="primary"
+              phx-disable-with="Saving…"
+              class="min-h-11 sm:min-w-44"
+            >
+              <.icon name="hero-bookmark-square" class="mr-2 size-4" /> Save results
+            </.button>
+          </div>
         </.form>
       </.modal>
 
@@ -857,68 +1051,41 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
           </.button>
         </div>
 
-        <div
-          :if={@specimens == []}
-          class="rounded-2xl p-8 text-center text-sm"
-          style="background: #F8FAFC; border: 1px dashed #C7CFE0; color: #687083;"
-        >
-          No specimens collected yet.
-        </div>
-
-        <div class="space-y-4">
-          <article
-            :for={specimen <- @specimens}
-            class="rounded-2xl p-5 sm:p-6"
-            style="background: #FFFFFF; border: 1px solid #EDF0F8;"
-          >
-            <div class="flex items-center justify-between gap-4 mb-3">
-              <div class="min-w-0">
-                <h3 class="text-base font-medium" style="color: #1F2430;">
-                  {specimen.specimen_number}
-                </h3>
-                <p class="text-sm mt-0.5" style="color: #9AA3B5;">
-                  {Phoenix.Naming.humanize(specimen.specimen_type || "sample")} · {specimen_tests(
-                    specimen
-                  )}
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <.status_pill kind={:specimen} status={specimen.status} />
-                <.button
-                  :if={can_receive?(specimen)}
-                  phx-click="receive_specimen"
-                  phx-value-specimen_id={specimen.id}
-                  class="gap-1.5 py-1.5 px-3 text-xs"
-                >
-                  <.icon name="hero-inbox-arrow-down" class="size-3.5" /> Mark received
-                </.button>
-                <.button
-                  :if={can_reject?(specimen)}
-                  patch={~p"/lab/orders/#{@lab_order.id}/specimens/#{specimen.id}/reject"}
-                  class="gap-1.5 py-1.5 px-3 text-xs"
-                  style="color: #C21F17;"
-                >
-                  <.icon name="hero-x-circle" class="size-3.5" /> Reject
-                </.button>
-              </div>
+        <.table id="specimens" rows={@specimens}>
+          <:col :let={specimen} label="Specimen">
+            <div class="font-medium" style="color: #1F2430;">{specimen.specimen_number}</div>
+            <div class="mt-0.5 text-xs" style="color: #9AA3B5;">
+              {Phoenix.Naming.humanize(specimen.specimen_type || "sample")}
             </div>
-            <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
-              <.meta_field label="Collected on">
-                {format_date(specimen.collected_at && DateTime.to_date(specimen.collected_at))}
-                <span :if={specimen.collected_by} style="color: #9AA3B5;">
-                  · {user_name(specimen.collected_by)}
-                </span>
-              </.meta_field>
-              <.meta_field :if={specimen.status == :received} label="Received at lab">
-                {user_name(specimen.received_by)}
-              </.meta_field>
-              <.meta_field :if={specimen.status == :rejected} label="Rejection reason">
-                {specimen.rejection_reason}
-                <span style="color: #9AA3B5;">· {user_name(specimen.rejected_by)}</span>
-              </.meta_field>
-            </dl>
-          </article>
-        </div>
+          </:col>
+          <:col :let={specimen} label="Tests">{specimen_tests(specimen)}</:col>
+          <:col :let={specimen} label="Collected on">
+            {format_date(specimen.collected_at && DateTime.to_date(specimen.collected_at))}
+            <div :if={specimen.collected_by} class="mt-0.5 text-xs" style="color: #9AA3B5;">
+              {user_name(specimen.collected_by)}
+            </div>
+          </:col>
+          <:col :let={specimen} label="Status">
+            <.status_pill kind={:specimen} status={specimen.status} />
+            <div :if={specimen.status == :rejected} class="mt-1 text-xs" style="color: #9AA3B5;">
+              {specimen.rejection_reason} · {user_name(specimen.rejected_by)}
+            </div>
+          </:col>
+          <:action :let={specimen}>
+            <.button
+              variant="ghost-edit"
+              patch={~p"/lab/orders/#{@lab_order.id}/specimens/#{specimen.id}/label"}
+              class="gap-1.5 py-1.5 px-3 text-xs"
+            >
+              <.icon name="hero-printer" class="size-3.5" /> Print label
+            </.button>
+          </:action>
+          <:empty_state>
+            <.blank_state icon="hero-beaker" title="No specimens collected yet">
+              Collect a specimen to start tracking samples for this order.
+            </.blank_state>
+          </:empty_state>
+        </.table>
       </div>
 
       <%!-- Results tab --%>
@@ -927,103 +1094,89 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
           <h2 class="text-base font-medium" style="color: #1F2430;">
             Tests <span class="ml-1 font-normal" style="color: #9AA3B5;">({length(@results)})</span>
           </h2>
-          <.button patch={~p"/lab/orders/#{@lab_order.id}/tests/new"} class="gap-1.5">
-            <.icon name="hero-plus" class="size-4" /> Add test
-          </.button>
+          <div class="flex items-center gap-2">
+            <.button
+              :if={@results != []}
+              variant="ghost-edit"
+              patch={~p"/lab/orders/#{@lab_order.id}/report"}
+              class="gap-1.5"
+            >
+              <.icon name="hero-printer" class="size-4" /> Print results
+            </.button>
+            <.button patch={~p"/lab/orders/#{@lab_order.id}/tests/new"} class="gap-1.5">
+              <.icon name="hero-plus" class="size-4" /> Add test
+            </.button>
+          </div>
         </div>
 
-        <div
-          :if={@results == []}
-          class="rounded-2xl p-8 text-center text-sm"
-          style="background: #F8FAFC; border: 1px dashed #C7CFE0; color: #687083;"
-        >
-          No tests on this order yet — use "Add test" above.
-        </div>
-
-        <div class="space-y-4">
-          <article
-            :for={result <- @results}
-            class="rounded-2xl overflow-hidden"
-            style="background: #FFFFFF; border: 1px solid #EDF0F8;"
-          >
-            <div class="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
-              <div class="min-w-0">
-                <h3 class="text-base font-medium" style="color: #1F2430;">
-                  {test_name(result)}
-                </h3>
-                <p class="text-sm mt-0.5" style="color: #9AA3B5;">
-                  KES {result.lab_test && result.lab_test.price}
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <.status_pill kind={:result} status={result.status} />
-                <.button
-                  :if={can_enter?(result)}
-                  variant="primary"
-                  patch={~p"/lab/orders/#{@lab_order.id}/results/#{result.id}/edit"}
-                  class="gap-1.5 py-1.5 px-3 text-xs"
-                >
-                  <.icon name="hero-pencil-square" class="size-3.5" /> Enter results
-                </.button>
-              </div>
+        <.table id="results" rows={@results}>
+          <:col :let={result} label="Test">
+            <div class="font-medium" style="color: #1F2430;">{test_name(result)}</div>
+            <div class="mt-0.5 text-xs" style="color: #9AA3B5;">
+              KES {result.lab_test && result.lab_test.price}
             </div>
-
-            <div class="px-5 py-4 sm:px-6" style="border-top: 1px solid #EDF0F8;">
-              <div
-                :if={result.results != %{}}
-                class="rounded-xl p-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 mb-4"
-                style="background: #F8FAFC;"
-              >
-                <div :for={{key, %{"value" => value}} <- result.results}>
-                  <div
-                    class="text-[11px] font-medium uppercase tracking-wider"
-                    style="color: #9AA3B5;"
-                  >
-                    {key}
-                  </div>
-                  <.render_result_preview
-                    key={key}
-                    value={value}
-                    unit={result_unit(result, key)}
-                    field_definition={get_field_definition(result, key)}
-                  />
-                </div>
-              </div>
-
-              <div :if={result.results == %{}} class="text-sm" style="color: #9AA3B5;">
-                No results recorded yet.
-              </div>
-
-              <dl class="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 mt-3">
-                <.meta_field label="Performed by">{user_name(result.performed_by)}</.meta_field>
-              </dl>
-
-              <% result_amendments = Map.get(@amendments, result.id, []) %>
-              <div :if={result_amendments != []} class="mt-4">
-                <p
-                  class="text-[11px] font-medium uppercase tracking-wider mb-2"
+          </:col>
+          <:col :let={result} label="Result">
+            <div :if={result.results == %{}} class="text-sm" style="color: #9AA3B5;">
+              No results recorded yet.
+            </div>
+            <div :if={result.results != %{}} class="flex flex-col gap-2">
+              <div :for={{key, %{"value" => value}} <- result.results}>
+                <div
+                  class="text-[11px] font-medium uppercase tracking-wider"
                   style="color: #9AA3B5;"
                 >
-                  Amendment history
-                </p>
-                <ul class="space-y-1.5">
-                  <li
-                    :for={amendment <- result_amendments}
-                    class="text-sm"
-                    style="color: #1F2430;"
-                  >
-                    <span style="color: #9AA3B5;">
-                      {Calendar.strftime(amendment.inserted_at, "%d %b %Y %H:%M")} · {user_name(
-                        amendment.amended_by
-                      )} —
-                    </span>
-                    {amendment.reason}
-                  </li>
-                </ul>
+                  {key}
+                </div>
+                <.render_result_preview
+                  key={key}
+                  value={value}
+                  unit={result_unit(result, key)}
+                  field_definition={get_field_definition(result, key)}
+                />
               </div>
             </div>
-          </article>
-        </div>
+
+            <% result_amendments = Map.get(@amendments, result.id, []) %>
+            <div :if={result_amendments != []} class="mt-3">
+              <p
+                class="text-[11px] font-medium uppercase tracking-wider mb-1"
+                style="color: #9AA3B5;"
+              >
+                Amendment history
+              </p>
+              <ul class="space-y-1">
+                <li :for={amendment <- result_amendments} class="text-xs" style="color: #1F2430;">
+                  <span style="color: #9AA3B5;">
+                    {Calendar.strftime(amendment.inserted_at, "%d %b %Y %H:%M")} · {user_name(
+                      amendment.amended_by
+                    )} —
+                  </span>
+                  {amendment.reason}
+                </li>
+              </ul>
+            </div>
+          </:col>
+          <:col :let={result} label="Performed by">{user_name(result.performed_by)}</:col>
+          <:col :let={result} label="Status">
+            <.status_pill kind={:result} status={result.status} />
+          </:col>
+          <:action :let={result}>
+            <.button
+              :if={can_enter?(result)}
+              variant="primary"
+              patch={~p"/lab/orders/#{@lab_order.id}/results/#{result.id}/edit"}
+              class="gap-1.5 py-1.5 px-3 text-xs"
+            >
+              <.icon name="hero-pencil-square" class="size-3.5" /> Enter results
+            </.button>
+          </:action>
+          <:empty_state>
+            <.blank_state icon="hero-clipboard-document-check" title="No tests on this order yet">
+              Use "Add test" above to add the first test.
+            </.blank_state>
+          </:empty_state>
+        </.table>
       </div>
 
       <%!-- Consumables tab --%>
@@ -1043,7 +1196,23 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
           >
             <.icon name="hero-plus" class="size-4" /> Record consumable
           </.button>
+          <span
+            :if={@active_batches == []}
+            class="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium opacity-50"
+            style="background: #F1F2F5; color: #687083;"
+            title="No lab consumable stock at this site yet"
+          >
+            <.icon name="hero-plus" class="size-4" /> Record consumable
+          </span>
         </div>
+
+        <p :if={@active_batches == []} class="mb-4 -mt-2 text-sm" style="color: #9AA3B5;">
+          No lab consumable stock has been received at this site yet.
+          <.link navigate={~p"/lab/receive-stock"} class="underline hover:no-underline">
+            Receive stock
+          </.link>
+          to start recording usage.
+        </p>
 
         <div
           :if={@consumable_usages == []}

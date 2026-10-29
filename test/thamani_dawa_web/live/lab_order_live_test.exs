@@ -3,9 +3,11 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.BatchesFixtures
   import ThamaniDawa.LabOrdersFixtures
   import ThamaniDawa.LabTestsFixtures
   import ThamaniDawa.PatientsFixtures
+  import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
 
   alias ThamaniDawa.LabOrders
@@ -119,6 +121,74 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
   end
 
   describe "show lab order" do
+    test "filters stock to lab consumables and records the selected batch", ctx do
+      organization_id = ctx.admin.organization_id
+      lab_order = lab_order_fixture(%{organization_id: organization_id, site_id: ctx.site.id})
+
+      medicine =
+        product_fixture(%{
+          organization_id: organization_id,
+          generic_name: "Metformin",
+          inventory_type: :medicine
+        })
+
+      consumable =
+        product_fixture(%{
+          organization_id: organization_id,
+          generic_name: "CBC Reagent Pack",
+          inventory_type: :lab_consumable
+        })
+
+      batch_fixture(%{
+        organization_id: organization_id,
+        site_id: ctx.site.id,
+        product_id: medicine.id,
+        gtin: medicine.gtin,
+        batch_no: "MED-LOT"
+      })
+
+      consumable_batch =
+        batch_fixture(%{
+          organization_id: organization_id,
+          site_id: ctx.site.id,
+          product_id: consumable.id,
+          gtin: consumable.gtin,
+          batch_no: "LAB-LOT",
+          quantity: 20
+        })
+
+      {:ok, view, _html} =
+        live(
+          log_in_user(ctx.conn, ctx.admin),
+          ~p"/lab/orders/#{lab_order.id}/consumables/new"
+        )
+
+      view
+      |> form("#consumable-product-search", %{"product_query" => "a"})
+      |> render_change()
+
+      assert has_element?(view, "#consumable-product-option-#{consumable.id}")
+      refute has_element?(view, "#consumable-product-option-#{medicine.id}")
+
+      view
+      |> element("#consumable-product-option-#{consumable.id}")
+      |> render_click()
+
+      view
+      |> form("#record-consumable-form", %{
+        "product_id" => to_string(consumable.id),
+        "batch_id" => to_string(consumable_batch.id),
+        "usage_quantity" => "2",
+        "lab_order_result_id" => ""
+      })
+      |> render_submit()
+
+      assert render(view) =~ "Consumable recorded."
+      assert [usage] = LabOrders.list_consumable_usages_for_order(organization_id, lab_order.id)
+      assert usage.batch_id == consumable_batch.id
+      assert usage.quantity == 2
+    end
+
     test "renders the order details and test results", ctx do
       lab_order = lab_order_fixture(%{organization_id: ctx.admin.organization_id})
 
@@ -189,7 +259,8 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       assert LabOrders.get_lab_order!(organization_id, lab_order.id).status == :completed
     end
 
-    test "collecting a sample creates a specimen, which can then be received or rejected", ctx do
+    test "collecting a sample leaves it ready for lab processing without extra status actions",
+         ctx do
       organization_id = ctx.admin.organization_id
       lab_order = lab_order_fixture(%{organization_id: organization_id})
 
@@ -214,21 +285,9 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       assert [specimen] = LabOrders.list_specimens_for_order(organization_id, lab_order.id)
 
       assert specimen.status == :collected
-      render_click(view, "switch_tab", %{"tab" => "samples"})
-      render_click(view, "receive_specimen", %{"specimen_id" => to_string(specimen.id)})
-      assert LabOrders.get_specimen!(organization_id, specimen.id).status == :received
-
-      view
-      |> element("a", "Reject")
-      |> render_click()
-
-      view
-      |> form("#reject-specimen-form", %{"rejection_reason" => "Insufficient volume"})
-      |> render_submit(%{"specimen_id" => to_string(specimen.id)})
-
-      rejected = LabOrders.get_specimen!(organization_id, specimen.id)
-      assert rejected.status == :rejected
-      assert rejected.rejection_reason == "Insufficient volume"
+      refute has_element?(view, "button", "Mark received")
+      refute has_element?(view, "button", "Reject")
+      assert has_element?(view, "#specimen-#{specimen.id}", "Collected")
     end
 
     test "amending a completed result without a reason shows a flash error", ctx do
