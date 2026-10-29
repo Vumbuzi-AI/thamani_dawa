@@ -984,7 +984,6 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
               </span>
             </div>
 
-
             <div>
               <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-thamani-pewter">
                 Payment method
