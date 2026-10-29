@@ -89,17 +89,6 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert is_nil(visit.patient_id)
     end
 
-    test "does not show the Quick sale action", %{conn: conn} do
-      organization = organization_fixture()
-      site = site_fixture(%{organization_id: organization.id})
-      pharmacist = pharmacist_at_site(organization, site)
-
-      conn = log_in_user(conn, pharmacist)
-      {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
-
-      refute has_element?(index_live, "a[href='/pharmacy/quick-sale']")
-    end
-
     test "referring doctor is hidden and not required unless marked as a referral", %{
       conn: conn
     } do
@@ -676,10 +665,15 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert html =~ "Prescription for"
       name = product.generic_name || product.brand_name || "(unnamed)"
       assert html =~ name
-      assert has_element?(show_live, "button[phx-disable-with='Dispensing...']")
+      assert has_element?(show_live, "button[phx-disable-with='Checking batch...']")
 
       assert show_live
-             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
+             |> form("form", %{
+               "item_id" => item.id,
+               "quantity" => "4",
+               "barcode" => product.gtin,
+               "batch_no" => batch.batch_no
+             })
              |> render_submit()
 
       assert render(show_live) =~ "Item dispensed."
@@ -698,19 +692,25 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       prescription: prescription,
       item: item
     } do
-      batch_fixture(%{
-        organization_id: org.id,
-        site_id: site.id,
-        product_id: product.id,
-        quantity: 50,
-        remaining_quantity: 50
-      })
+      batch =
+        batch_fixture(%{
+          organization_id: org.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 50,
+          remaining_quantity: 50
+        })
 
       {:ok, show_live, html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
       refute html =~ "bg-emerald-100"
 
       show_live
-      |> form("form", %{"item_id" => item.id, "quantity" => "10"})
+      |> form("form", %{
+        "item_id" => item.id,
+        "quantity" => "10",
+        "barcode" => product.gtin,
+        "batch_no" => batch.batch_no
+      })
       |> render_submit()
 
       html = render(show_live)
@@ -723,15 +723,30 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
     test "displays error when there is insufficient stock", %{
       conn: conn,
+      organization: org,
+      site: site,
+      product: product,
       prescription: prescription,
       item: item
     } do
-      # No batches created
+      batch =
+        batch_fixture(%{
+          organization_id: org.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 2,
+          remaining_quantity: 2
+        })
 
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
+             |> form("form", %{
+               "item_id" => item.id,
+               "quantity" => "4",
+               "barcode" => product.gtin,
+               "batch_no" => batch.batch_no
+             })
              |> render_submit()
 
       assert render(show_live) =~ "No stock available at this site for this product."
@@ -800,35 +815,6 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert render(show_live) =~ "Enter a valid quantity."
     end
 
-    test "a non-numeric item_id on verify shows an error instead of crashing", %{
-      conn: conn,
-      organization: org,
-      site: site,
-      product: product,
-      prescription: prescription,
-      item: item
-    } do
-      batch_fixture(%{
-        organization_id: org.id,
-        site_id: site.id,
-        product_id: product.id,
-        quantity: 50,
-        remaining_quantity: 50
-      })
-
-      {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
-
-      assert show_live
-             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
-             |> render_submit()
-
-      assert show_live
-             |> element("form[phx-submit='verify_item']")
-             |> render_submit(%{"item_id" => "not-an-id", "gtin" => product.gtin})
-
-      assert render(show_live) =~ "Couldn&#39;t verify that item."
-    end
-
     test "displays error when trying to over-dispense", %{
       conn: conn,
       organization: org,
@@ -837,19 +823,25 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       prescription: prescription,
       item: item
     } do
-      batch_fixture(%{
-        organization_id: org.id,
-        site_id: site.id,
-        product_id: product.id,
-        quantity: 50,
-        remaining_quantity: 50
-      })
+      batch =
+        batch_fixture(%{
+          organization_id: org.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 50,
+          remaining_quantity: 50
+        })
 
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
              # Prescribed is 10
-             |> form("form", %{"item_id" => item.id, "quantity" => "11"})
+             |> form("form", %{
+               "item_id" => item.id,
+               "quantity" => "11",
+               "barcode" => product.gtin,
+               "batch_no" => batch.batch_no
+             })
              |> render_submit()
 
       assert render(show_live) =~ "That would dispense more than was prescribed."
@@ -863,30 +855,30 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       prescription: prescription,
       item: item
     } do
-      batch_fixture(%{
-        organization_id: org.id,
-        site_id: site.id,
-        product_id: product.id,
-        quantity: 50,
-        remaining_quantity: 50
-      })
+      batch =
+        batch_fixture(%{
+          organization_id: org.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 50,
+          remaining_quantity: 50
+        })
 
-      # First dispense the item
+      # Prescribed is 10 — dispensing it in full auto-marks the item verified,
+      # since verification is now folded into the scan-and-dispense flow
+      # rather than being a separate step.
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
-             |> render_submit()
-
-      # Now verify it
-      assert show_live
-             |> form("form[phx-submit='verify_item']", %{
+             |> form("form", %{
                "item_id" => item.id,
-               "gtin" => product.gtin
+               "quantity" => "10",
+               "barcode" => product.gtin,
+               "batch_no" => batch.batch_no
              })
              |> render_submit()
 
-      assert render(show_live) =~ "Item verified successfully."
+      assert render(show_live) =~ "Item dispensed."
       assert render(show_live) =~ "Verified"
     end
 
@@ -898,24 +890,23 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       prescription: prescription,
       item: item
     } do
-      batch_fixture(%{
-        organization_id: org.id,
-        site_id: site.id,
-        product_id: product.id,
-        quantity: 50,
-        remaining_quantity: 50
-      })
+      batch =
+        batch_fixture(%{
+          organization_id: org.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 50,
+          remaining_quantity: 50
+        })
 
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
-             |> render_submit()
-
-      assert show_live
-             |> form("form[phx-submit='verify_item']", %{
+             |> form("form", %{
                "item_id" => item.id,
-               "gtin" => "12345678901248"
+               "quantity" => "4",
+               "barcode" => "12345678901248",
+               "batch_no" => batch.batch_no
              })
              |> render_submit()
 
@@ -930,28 +921,27 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       prescription: prescription,
       item: item
     } do
-      batch_fixture(%{
-        organization_id: org.id,
-        site_id: site.id,
-        product_id: product.id,
-        quantity: 50,
-        remaining_quantity: 50
-      })
+      batch =
+        batch_fixture(%{
+          organization_id: org.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 50,
+          remaining_quantity: 50
+        })
 
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
-             |> render_submit()
-
-      assert show_live
-             |> form("form[phx-submit='verify_item']", %{
+             |> form("form", %{
                "item_id" => item.id,
-               "gtin" => "not-a-gtin"
+               "quantity" => "4",
+               "barcode" => "not-a-gtin",
+               "batch_no" => batch.batch_no
              })
              |> render_submit()
 
-      assert render(show_live) =~ "Invalid GTIN barcode scanned."
+      assert render(show_live) =~ "Enter a valid product GTIN and the batch or lot number."
     end
 
     test "fails to verify when the scanned code is all-digits but not a valid GTIN checksum/length",
@@ -963,28 +953,27 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
            prescription: prescription,
            item: item
          } do
-      batch_fixture(%{
-        organization_id: org.id,
-        site_id: site.id,
-        product_id: product.id,
-        quantity: 50,
-        remaining_quantity: 50
-      })
+      batch =
+        batch_fixture(%{
+          organization_id: org.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 50,
+          remaining_quantity: 50
+        })
 
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{"item_id" => item.id, "quantity" => "4"})
-             |> render_submit()
-
-      assert show_live
-             |> form("form[phx-submit='verify_item']", %{
+             |> form("form", %{
                "item_id" => item.id,
-               "gtin" => "123"
+               "quantity" => "4",
+               "barcode" => "123",
+               "batch_no" => batch.batch_no
              })
              |> render_submit()
 
-      assert render(show_live) =~ "Invalid GTIN barcode scanned."
+      assert render(show_live) =~ "Enter a valid product GTIN and the batch or lot number."
     end
 
     test "shows the patient's gender when set", %{conn: conn, organization: org, site: site} do

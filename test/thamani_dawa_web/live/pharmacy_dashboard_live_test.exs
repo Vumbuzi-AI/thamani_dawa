@@ -12,16 +12,6 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
     staff_fixture(%{organization_id: organization.id, site_id: site.id})
   end
 
-  test "does not show a Quick sale button on the dashboard", %{conn: conn} do
-    organization = organization_fixture()
-    site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy})
-    pharmacist = pharmacist_at(organization, site)
-
-    {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
-
-    refute has_element?(lv, "a[href='/pharmacy/quick-sale']", "Quick sale")
-  end
-
   test "offers a replayable pharmacy tour and auto-starts it when requested", %{conn: conn} do
     organization = organization_fixture()
     site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy})

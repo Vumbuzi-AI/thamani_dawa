@@ -86,19 +86,19 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
     {:ok, show_live, _html} = live(conn, prescription_path)
 
     show_live
-    |> form("form", %{"item_id" => item.id, "quantity" => "5"})
+    |> form("form", %{
+      "item_id" => item.id,
+      "quantity" => "5",
+      "barcode" => gtin,
+      "batch_no" => pending_batch.batch_no
+    })
     |> render_submit()
 
     assert render(show_live) =~ "Item dispensed."
+    assert render(show_live) =~ "Verified"
 
     dispensed_batch = Batches.get_batch!(organization.id, pending_batch.id)
     assert dispensed_batch.remaining_quantity == 45
-
-    show_live
-    |> form("form[phx-submit='verify_item']", %{"item_id" => item.id, "gtin" => gtin})
-    |> render_submit()
-
-    assert render(show_live) =~ "Item verified successfully."
 
     prescription = Prescriptions.get_prescription!(organization.id, prescription_id)
     assert prescription.status == :completed

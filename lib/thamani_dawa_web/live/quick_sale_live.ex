@@ -403,6 +403,10 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       cart == [] ->
         {:noreply, put_flash(socket, :error, "Add at least one item.")}
 
+      Enum.any?(cart, &is_nil(&1.scanned_barcode)) ->
+        {:noreply,
+         put_flash(socket, :error, "Scan each medicine in the cart before taking payment.")}
+
       not PaymentMethods.valid?(payment_type) ->
         {:noreply, assign(socket, :errors, %{payment_type: "Select a payment method."})}
 
@@ -899,6 +903,18 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
                   {product.generic_name}
                 </p>
                 <p class="mt-1 text-sm text-thamani-pewter">KES {product.price} each</p>
+                <span
+                  id={"cart-verification-#{line.product_id}"}
+                  class={[
+                    "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
+                    if(line.scanned_barcode,
+                      do: "bg-thamani-lime/30 text-thamani-forest ring-thamani-forest/20",
+                      else: "bg-amber-50 text-amber-700 ring-amber-200"
+                    )
+                  ]}
+                >
+                  {if line.scanned_barcode, do: "Verified", else: "Scan to verify"}
+                </span>
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <button
@@ -954,6 +970,13 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
           </div>
 
           <div class="space-y-4 border-t border-thamani-stone px-5 py-4">
+            <p
+              :if={@cart != [] and Enum.all?(@cart, & &1.scanned_barcode)}
+              id="quick-sale-verification-summary"
+              class="text-sm font-medium text-thamani-forest"
+            >
+              All medicines verified
+            </p>
             <div class="flex items-center justify-between">
               <span class="text-base font-medium text-thamani-forest">Total</span>
               <span class="text-2xl font-semibold tabular-nums text-thamani-forest">
