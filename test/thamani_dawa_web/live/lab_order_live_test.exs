@@ -202,8 +202,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
       render_click(view, "switch_tab", %{"tab" => "results"})
 
-      assert has_element?(view, "article h3", ctx.lab_test.name)
-      assert has_element?(view, "article", ctx.lab_test.name)
+      assert has_element?(view, "#results", ctx.lab_test.name)
     end
 
     test "recording a sample collection advances the result to :collected and order to :in_progress",
@@ -287,7 +286,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       assert specimen.status == :collected
       refute has_element?(view, "button", "Mark received")
       refute has_element?(view, "button", "Reject")
-      assert has_element?(view, "#specimen-#{specimen.id}", "Collected")
+      assert has_element?(view, "#specimens", "Collected")
     end
 
     test "amending a completed result without a reason shows a flash error", ctx do
@@ -596,17 +595,16 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       assert has_element?(lv, "#result-entry-form", "P. vivax")
 
       # Save results with selected checkbox option
-      {:ok, show_lv, _html} =
-        lv
-        |> form("#result-entry-form", %{"values" => %{"species" => ["P. falciparum"]}})
-        |> render_submit()
-        |> follow_redirect(conn, ~p"/lab/orders/#{lab_order.id}")
+      lv
+      |> form("#result-entry-form", %{"values" => %{"species" => ["P. falciparum"]}})
+      |> render_submit()
 
-      render_click(show_lv, "switch_tab", %{"tab" => "results"})
+      assert_patch(lv, ~p"/lab/orders/#{lab_order.id}")
+      render_click(lv, "switch_tab", %{"tab" => "results"})
 
       updated = LabOrders.get_lab_order_result!(ctx.admin.organization_id, result.id)
       assert updated.results["species"]["value"] == ["P. falciparum"]
-      assert has_element?(show_lv, "article", "P. falciparum")
+      assert has_element?(lv, "#results", "P. falciparum")
     end
   end
 
