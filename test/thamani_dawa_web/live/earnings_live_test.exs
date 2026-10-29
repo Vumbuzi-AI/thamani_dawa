@@ -35,6 +35,28 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
       assert has_element?(lv, "#site-earnings-#{site_b.id}", "KES 0")
     end
 
+    test "hides per-site breakdown and the site filter/column for a single-site organization",
+         %{conn: conn} do
+      admin = user_fixture()
+      site = site_fixture(%{organization_id: admin.organization_id, name: "Only Branch"})
+
+      lab_order =
+        lab_order_fixture(%{organization_id: admin.organization_id, site_id: site.id})
+
+      payment_fixture(%{
+        organization_id: admin.organization_id,
+        lab_order_id: lab_order.id,
+        amount: Decimal.new("500")
+      })
+
+      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/earnings")
+
+      assert html =~ "KES 500"
+      refute has_element?(lv, "#site-earnings-#{site.id}")
+      refute has_element?(lv, "th", "Site")
+      refute has_element?(lv, "select[name='filters[site]']")
+    end
+
     test "shows the organization total and each site's own earnings from completed payments only",
          %{conn: conn} do
       admin = user_fixture()

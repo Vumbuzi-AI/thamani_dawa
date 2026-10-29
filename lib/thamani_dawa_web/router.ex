@@ -80,6 +80,7 @@ defmodule ThamaniDawaWeb.Router do
 
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
       live "/pharmacy", PharmacyDashboardLive, :index
+      live "/pharmacy/transactions", EarningsLive, :pharmacy
       live "/pharmacy/scan", PharmacyScanLive, :index
       live "/pharmacy/stock", PharmacyStockLive, :index
       live "/pharmacy/stock/products/:id", PharmacyStockProductLive, :show
@@ -91,13 +92,10 @@ defmodule ThamaniDawaWeb.Router do
       live "/pharmacy/requisitions", RequisitionLive.Index, :index
       live "/pharmacy/requisitions/new", RequisitionLive.Index, :new
 
-      live "/pharmacy/stock-takes", StockTakeLive.Index, :index
-      live "/pharmacy/stock-takes/new", StockTakeLive.Index, :new
-      live "/pharmacy/stock-takes/:id", StockTakeLive.Show, :show
+      live "/pharmacy/quick-sale", QuickSaleLive, :new
 
       live "/pharmacy/prescriptions", PrescriptionLive.Index, :index
       live "/pharmacy/prescriptions/new", PrescriptionLive.Index, :new
-      live "/pharmacy/prescriptions/quick-sale", PrescriptionLive.Index, :quick_sale
       live "/pharmacy/prescriptions/:id", PrescriptionLive.Show, :show
       live "/pharmacy/prescriptions/:id/receipt", PrescriptionLive.Show, :receipt
       live "/pharmacy/prescriptions/:id/payments/new", PrescriptionLive.Show, :new_payment
@@ -108,6 +106,7 @@ defmodule ThamaniDawaWeb.Router do
 
     live_session :lab, on_mount: [{ThamaniDawaWeb.UserAuth, :require_lab_access}] do
       live "/lab", LabDashboardLive, :index
+      live "/lab/transactions", EarningsLive, :lab
       live "/lab/scan", LabScanLive, :index
 
       live "/lab/patients", LabPatientLive.Index, :index
@@ -118,9 +117,14 @@ defmodule ThamaniDawaWeb.Router do
       live "/lab/orders/:id", LabOrderLive.Show, :show
       live "/lab/orders/:id/tests/new", LabOrderLive.Show, :add_test
       live "/lab/orders/:id/collect", LabOrderLive.Show, :collect_specimen
-      live "/lab/orders/:id/specimens/:specimen_id/reject", LabOrderLive.Show, :reject_specimen
+
+      live "/lab/orders/:id/specimens/:specimen_id/label",
+           LabOrderLive.Show,
+           :print_specimen_label
+
       live "/lab/orders/:id/results/:result_id/edit", LabOrderLive.Show, :edit_result
       live "/lab/orders/:id/consumables/new", LabOrderLive.Show, :record_consumable
+      live "/lab/orders/:id/report", LabOrderLive.Show, :print_report
       live "/lab/orders/:id/payments/new", LabOrderLive.Show, :new_payment
 
       live "/lab/receive-stock", LabReceiveStockLive, :index

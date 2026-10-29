@@ -58,68 +58,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     |> assign(:patient_form, to_form(Patient.changeset(%Patient{}, %{}), as: :patient))
   end
 
-  defp apply_action(socket, :quick_sale) do
-    scope = socket.assigns.current_scope
-    organization_id = scope.organization_id
-    site_id = SiteScoping.default_site_id(scope)
-
-    products =
-      if site_id do
-        ThamaniDawa.Products.list_active_products_with_stock_for_site(organization_id, site_id)
-      else
-        []
-      end
-
-    socket
-    |> assign(:patients, Patients.list_patients(organization_id))
-    |> assign(:sites, Sites.list_sites(organization_id))
-    |> assign(:products, products)
-    |> assign(:site_locked, not is_nil(site_id))
-    |> assign(:quick_sale_site_id, site_id)
-    |> assign(:quick_sale_patient_id, "")
-    |> assign(:quick_sale_payment_type, "")
-    |> assign(:quick_sale_errors, %{})
-    |> assign(:quick_sale_items, [%{"product_id" => "", "quantity" => "1", "scanned_gtin" => ""}])
-  end
-
   defp apply_action(socket, :index), do: socket
 
   def handle_event("toggle_patient_mode", %{"tab" => mode}, socket) do
     {:noreply, assign(socket, :patient_mode, String.to_existing_atom(mode))}
-  end
-
-  def handle_event("quick_sale_validate", params, socket) do
-    {:noreply,
-     socket
-     |> assign(:quick_sale_items, quick_sale_items_from_params(params))
-     |> assign(:quick_sale_patient_id, params["patient_id"] || "")
-     |> assign(:quick_sale_payment_type, params["payment_type"] || "")
-     |> assign(:quick_sale_errors, %{})
-     |> maybe_reload_quick_sale_products(params["site_id"])}
-  end
-
-  def handle_event("add_quick_sale_item", _params, socket) do
-    items =
-      socket.assigns.quick_sale_items ++
-        [%{"product_id" => "", "quantity" => "1", "scanned_gtin" => ""}]
-
-    {:noreply, assign(socket, :quick_sale_items, items)}
-  end
-
-  def handle_event("remove_quick_sale_item", %{"index" => index}, socket) do
-    index = String.to_integer(index)
-    items = List.delete_at(socket.assigns.quick_sale_items, index)
-
-    items =
-      if items == [],
-        do: [%{"product_id" => "", "quantity" => "1", "scanned_gtin" => ""}],
-        else: items
-
-    {:noreply, assign(socket, :quick_sale_items, items)}
-  end
-
-  def handle_event("complete_quick_sale", params, socket) do
-    complete_quick_sale(socket, params)
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -253,178 +195,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     end
   end
 
-  defp quick_sale_items_from_params(%{"items" => items}) when is_map(items) do
-    items
-    |> Enum.sort_by(fn {index, _attrs} -> String.to_integer(index) end)
-    |> Enum.map(fn {_index, attrs} -> attrs end)
-  end
-
-  defp quick_sale_items_from_params(_params),
-    do: [%{"product_id" => "", "quantity" => "1", "scanned_gtin" => ""}]
-
-  defp complete_quick_sale(socket, params) do
-    scope = socket.assigns.current_scope
-    organization_id = scope.organization_id
-    user_id = scope.user.id
-
-    site_id =
-      case params["site_id"] do
-        blank when blank in [nil, ""] -> socket.assigns.quick_sale_site_id
-        site_id -> String.to_integer(site_id)
-      end
-
-    items = quick_sale_items_from_params(params)
-
-    cond do
-      is_nil(site_id) ->
-        {:noreply, put_flash(socket, :error, "Site is required.")}
-
-      Enum.all?(items, &(&1["product_id"] in [nil, ""])) ->
-        {:noreply, put_flash(socket, :error, "Add at least one item.")}
-
-      not ThamaniDawa.PaymentMethods.valid?(params["payment_type"]) ->
-        {:noreply,
-         socket
-         |> assign(:quick_sale_items, items)
-         |> assign(:quick_sale_patient_id, params["patient_id"] || "")
-         |> assign(:quick_sale_payment_type, params["payment_type"] || "")
-         |> assign(:quick_sale_errors, %{payment_type: "Select a payment method."})}
-
-      true ->
-        attrs = quick_sale_attrs(params, items)
-        result = Prescriptions.create_quick_sale(organization_id, site_id, user_id, attrs)
-
-        handle_quick_sale_result(socket, items, result)
-    end
-  end
-
-  defp quick_sale_attrs(params, items) do
-    %{
-      "patient_id" => params["patient_id"],
-      "payment_type" => params["payment_type"],
-      "items" =>
-        Enum.map(items, fn item ->
-          %{
-            "product_id" => item["product_id"],
-            "quantity_prescribed" => item["quantity"],
-            "scanned_gtin" => item["scanned_gtin"]
-          }
-        end)
-    }
-  end
-
-  defp handle_quick_sale_result(socket, _items, {:ok, prescription}) do
-    {:noreply,
-     socket
-     |> put_flash(:info, "Sale completed.")
-     |> push_navigate(to: ~p"/pharmacy/prescriptions/#{prescription.id}/receipt")}
-  end
-
-  defp handle_quick_sale_result(socket, items, {:error, {index, reason}}) do
-    message = quick_sale_error_message(index, reason, items, socket.assigns.products)
-    {:noreply, socket |> assign(:quick_sale_items, items) |> put_flash(:error, message)}
-  end
-
-  defp handle_quick_sale_result(socket, items, {:error, %Ecto.Changeset{} = changeset}) do
-    message = "Couldn't complete the sale: #{changeset_error_summary(changeset)}"
-    {:noreply, socket |> assign(:quick_sale_items, items) |> put_flash(:error, message)}
-  end
-
-  defp handle_quick_sale_result(socket, items, {:error, _reason}) do
-    {:noreply,
-     socket
-     |> assign(:quick_sale_items, items)
-     |> put_flash(:error, "Couldn't complete the sale.")}
-  end
-
-  defp maybe_reload_quick_sale_products(socket, nil), do: socket
-  defp maybe_reload_quick_sale_products(socket, ""), do: socket
-
-  defp maybe_reload_quick_sale_products(socket, site_id) when is_binary(site_id) do
-    organization_id = socket.assigns.current_scope.organization_id
-    site_id = String.to_integer(site_id)
-
-    socket
-    |> assign(:quick_sale_site_id, site_id)
-    |> assign(
-      :products,
-      ThamaniDawa.Products.list_active_products_with_stock_for_site(organization_id, site_id)
-    )
-  end
-
-  defp changeset_error_summary(changeset) do
-    changeset
-    |> Ecto.Changeset.traverse_errors(&translate_error/1)
-    |> flatten_changeset_errors()
-    |> Enum.join("; ")
-  end
-
-  defp flatten_changeset_errors(errors) when is_map(errors) do
-    Enum.flat_map(errors, fn
-      {field, messages} when is_list(messages) ->
-        case Enum.split_with(messages, &is_binary/1) do
-          {[], nested} ->
-            flatten_nested_errors(field, nested)
-
-          {strings, []} ->
-            ["#{field} #{Enum.join(strings, ", ")}"]
-
-          {strings, nested} ->
-            ["#{field} #{Enum.join(strings, ", ")}" | flatten_nested_errors(field, nested)]
-        end
-    end)
-  end
-
-  defp flatten_nested_errors(field, nested) do
-    nested
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {entry, index} ->
-      entry
-      |> flatten_changeset_errors()
-      |> Enum.map(&"#{field} ##{index + 1}: #{&1}")
-    end)
-  end
-
-  defp quick_sale_error_message(index, reason, items, products) do
-    product_name =
-      case items
-           |> Enum.at(index)
-           |> then(&(&1 && quick_sale_product(products, &1["product_id"]))) do
-        nil -> "Line #{index + 1}"
-        product -> product.generic_name
-      end
-
-    case reason do
-      :out_of_stock -> "#{product_name}: not enough stock available."
-      :gtin_mismatch -> "#{product_name}: scanned barcode doesn't match this product."
-      :invalid_gtin -> "#{product_name}: invalid barcode scanned."
-      :over_dispensed -> "#{product_name}: quantity exceeds what was prescribed."
-      _ -> "#{product_name}: couldn't complete the sale."
-    end
-  end
-
-  defp quick_sale_product(products, product_id) do
-    case Integer.parse(to_string(product_id)) do
-      {id, ""} -> Enum.find(products, &(&1.id == id))
-      _ -> nil
-    end
-  end
-
-  defp quick_sale_line_total(products, item) do
-    with %{} = product <- quick_sale_product(products, item["product_id"]),
-         {quantity, ""} <- Integer.parse(to_string(item["quantity"] || "")) do
-      Decimal.mult(product.price, quantity)
-    else
-      _ -> Decimal.new(0)
-    end
-  end
-
-  defp quick_sale_total(products, items) do
-    Enum.reduce(items, Decimal.new(0), fn item, acc ->
-      Decimal.add(acc, quick_sale_line_total(products, item))
-    end)
-  end
-
   defp maybe_reload_products(socket, nil), do: socket
   defp maybe_reload_products(socket, ""), do: socket
 
@@ -463,13 +233,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     user_id = socket.assigns.current_scope.user.id
 
     if is_nil(patient_id) or patient_id == "" do
-      changeset =
-        %Prescription{}
-        |> Prescription.changeset(header_attrs)
-        |> Ecto.Changeset.add_error(:patient_id, "can't be blank")
-        |> Map.put(:action, :insert)
-
-      {:error, changeset}
+      Prescriptions.create_prescription_without_patient(
+        organization_id,
+        site_id,
+        user_id,
+        header_attrs
+      )
     else
       Prescriptions.create_prescription_for_patient(
         organization_id,
@@ -585,9 +354,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         Prescriptions
         <:subtitle>Search, filter, and manage prescriptions at your site.</:subtitle>
         <:actions>
-          <.button variant="ghost" patch={~p"/pharmacy/prescriptions/quick-sale"}>
-            + Quick sale
-          </.button>
           <.button
             id="prescription-new-button"
             variant="primary"
@@ -682,14 +448,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                 >
                   New Patient
                 </:tab>
-                <:tab
-                  id="walk-in-patient-mode"
-                  active={@patient_mode == :walk_in}
-                  phx_click="toggle_patient_mode"
-                  phx_value_tab="walk_in"
-                >
-                  Walk-in (no patient)
-                </:tab>
               </.tab_group>
             </div>
             <div class="p-4 sm:p-5">
@@ -697,9 +455,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                 <.input
                   field={@header_form[:patient_id]}
                   type="select"
-                  label="Search and select patient"
+                  label="Search and select patient (optional)"
                   options={Enum.map(@patients, &{patient_label(&1), &1.id})}
-                  prompt="Select patient..."
+                  prompt="No patient selected"
                 />
               </div>
 
@@ -724,10 +482,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                 <.input field={@patient_form[:phone]} label="Phone" required />
                 <.input field={@patient_form[:national_id]} label="National ID" />
               </div>
-
-              <p :if={@patient_mode == :walk_in} class="text-sm text-thamani-pewter italic">
-                No patient will be recorded for this prescription.
-              </p>
             </div>
           </section>
 
@@ -1008,153 +762,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
             class="w-full"
           >
             Create Prescription
-          </.button>
-        </.form>
-      </.modal>
-
-      <.modal
-        :if={@live_action == :quick_sale}
-        id="quick-sale-modal"
-        show
-        class="max-w-5xl"
-        on_cancel={JS.patch(~p"/pharmacy/prescriptions")}
-      >
-        <h2 class="mb-1 text-2xl font-medium tracking-tight text-thamani-forest">Quick sale</h2>
-        <p class="mb-5 text-sm leading-6 text-thamani-pewter">
-          Pick product(s), scan to confirm, and take payment — stock is dispensed and the sale is
-          marked paid immediately.
-        </p>
-
-        <.form
-          for={%{}}
-          id="quick-sale-form"
-          phx-change="quick_sale_validate"
-          phx-submit="complete_quick_sale"
-          class="space-y-4"
-        >
-          <.input
-            :if={not @site_locked}
-            type="select"
-            name="site_id"
-            label="Site"
-            value={@quick_sale_site_id}
-            options={Enum.map(@sites, &{&1.name, &1.id})}
-            prompt="Choose a site"
-            required
-          />
-
-          <.input
-            type="select"
-            name="patient_id"
-            label="Patient"
-            value={@quick_sale_patient_id}
-            options={Enum.map(@patients, &{patient_label(&1), &1.id})}
-            prompt="Walk-in (no patient)"
-          />
-
-          <section
-            id="quick-sale-items"
-            class="relative rounded-2xl border border-thamani-stone bg-thamani-snow"
-          >
-            <div class="flex items-center justify-between gap-4 rounded-t-2xl border-b border-thamani-stone bg-thamani-canvas/70 px-4 py-3 sm:px-5">
-              <div>
-                <h3 class="text-sm font-semibold text-thamani-forest">Sale items</h3>
-                <p class="mt-0.5 text-xs text-thamani-pewter">
-                  Select a product and confirm its barcode.
-                </p>
-              </div>
-              <.button
-                type="button"
-                variant="ghost"
-                phx-click="add_quick_sale_item"
-                id="btn-add-quick-sale-item"
-                class="shrink-0 px-3 py-2 text-sm"
-              >
-                <.icon name="hero-plus" class="size-4" /> Add item
-              </.button>
-            </div>
-
-            <div class="divide-y divide-thamani-stone">
-              <div
-                :for={{item, index} <- Enum.with_index(@quick_sale_items)}
-                id={"quick-sale-item-#{index}"}
-                class="grid grid-cols-1 gap-3 p-4 last:rounded-b-2xl sm:grid-cols-2 sm:p-5 lg:grid-cols-[minmax(0,1.7fr)_7rem_minmax(10rem,1.1fr)_auto_auto] lg:items-start"
-              >
-                <.input
-                  type="select"
-                  name={"items[#{index}][product_id]"}
-                  label="Product"
-                  value={item["product_id"]}
-                  options={
-                    Enum.map(
-                      @products,
-                      &{"#{&1.generic_name}#{if &1.brand_name, do: " (" <> &1.brand_name <> ")"} — KES #{&1.price} — #{&1.stock} in stock",
-                       &1.id}
-                    )
-                  }
-                  prompt="Select product..."
-                />
-                <.input
-                  type="number"
-                  name={"items[#{index}][quantity]"}
-                  label="Qty"
-                  value={item["quantity"]}
-                  min="1"
-                />
-                <.input
-                  type="text"
-                  name={"items[#{index}][scanned_gtin]"}
-                  label="Scan barcode"
-                  value={item["scanned_gtin"]}
-                  placeholder="Scan or type GTIN"
-                  autocomplete="off"
-                />
-                <div class="flex h-[46px] min-w-24 flex-col justify-center text-left lg:mt-[25px] lg:text-right">
-                  <span class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Line total</span>
-                  <span class="mt-0.5 text-sm font-semibold whitespace-nowrap text-thamani-forest">
-                    KES {quick_sale_line_total(@products, item)}
-                  </span>
-                </div>
-                <div class="flex h-[46px] items-center justify-end sm:col-span-2 lg:col-span-1 lg:mt-[25px]">
-                  <.button
-                    type="button"
-                    variant="ghost-delete"
-                    phx-click="remove_quick_sale_item"
-                    phx-value-index={index}
-                    aria-label={"Remove item #{index + 1}"}
-                  >
-                    <.icon name="hero-trash" class="size-4" />
-                  </.button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3">
-            <span class="text-sm font-medium text-thamani-forest">Total</span>
-            <span class="text-lg font-semibold text-thamani-forest">
-              KES {quick_sale_total(@products, @quick_sale_items)}
-            </span>
-          </div>
-
-          <.input
-            type="select"
-            name="payment_type"
-            label="Payment Method"
-            value={@quick_sale_payment_type}
-            options={ThamaniDawa.PaymentMethods.all()}
-            prompt="Select payment method"
-            errors={Map.get(@quick_sale_errors, :payment_type, []) |> List.wrap()}
-            required
-          />
-
-          <.button
-            type="submit"
-            variant="primary"
-            phx-disable-with="Completing sale…"
-            class="w-full"
-          >
-            Complete sale
           </.button>
         </.form>
       </.modal>

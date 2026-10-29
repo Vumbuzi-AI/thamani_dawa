@@ -17,22 +17,37 @@ defmodule ThamaniDawaWeb.EarningsLive do
   alias ThamaniDawa.Payments
   alias ThamaniDawa.Payments.Payment
   alias ThamaniDawa.Sites
+  alias ThamaniDawaWeb.SiteScoping
 
   @default_filters %{site: "", method: "", status: "", date_from: "", date_to: "", search: ""}
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
     sites = Sites.list_sites(organization_id)
+    multi_site? = length(sites) > 1
 
     {:ok,
      socket
+     |> assign(:portal, portal_for(socket.assigns.live_action))
      |> assign(:sites_by_id, Map.new(sites, &{&1.id, &1}))
      |> assign(:site_options, Enum.map(sites, &{&1.name, &1.id}))
      |> assign(:method_options, PaymentMethods.all())
      |> assign(:status_options, Enum.map(Payment.statuses(), &{Phoenix.Naming.humanize(&1), &1}))
      |> assign(:organization_total, Payments.organization_earnings(organization_id))
-     |> assign(:site_totals, site_totals(organization_id, sites))
+     |> assign(:site_totals, if(multi_site?, do: site_totals(organization_id, sites), else: []))
+     |> assign(:multi_site?, multi_site?)
+     |> assign(
+       :show_site_filter?,
+       multi_site? and is_nil(socket.assigns.current_scope.current_site_id)
+     )
      |> assign(:filters, @default_filters)
+     |> reload_transactions()}
+  end
+
+  def handle_params(_params, _url, socket) do
+    {:noreply,
+     socket
+     |> assign(:portal, portal_for(socket.assigns.live_action))
      |> reload_transactions()}
   end
 
@@ -81,6 +96,8 @@ defmodule ThamaniDawaWeb.EarningsLive do
     transactions =
       organization_id
       |> Payments.list_transactions()
+      |> SiteScoping.for_current_site(socket.assigns.current_scope)
+      |> filter_by_portal(socket.assigns.portal)
       |> filter_by_site(socket.assigns.filters.site)
       |> filter_by_method(socket.assigns.filters.method)
       |> filter_by_status(socket.assigns.filters.status)
@@ -90,7 +107,85 @@ defmodule ThamaniDawaWeb.EarningsLive do
         socket.assigns.sites_by_id
       )
 
-    stream(socket, :transactions, transactions, reset: true)
+    earned =
+      transactions
+      |> Enum.filter(&(&1.status == :completed))
+      |> Enum.reduce(Decimal.new(0), &Decimal.add(&2, &1.amount))
+
+    socket
+    |> assign(:transaction_count, length(transactions))
+    |> assign(:filtered_earned, earned)
+    |> stream(:transactions, transactions, reset: true)
+  end
+
+  defp filter_by_portal(transactions, :pharmacy),
+    do: Enum.filter(transactions, &(&1.order_type == :prescription))
+
+  defp filter_by_portal(transactions, :lab),
+    do: Enum.filter(transactions, &(&1.order_type == :lab_order))
+
+  defp filter_by_portal(transactions, :organization), do: transactions
+
+  defp portal_for(:pharmacy), do: :pharmacy
+  defp portal_for(:lab), do: :lab
+  defp portal_for(_), do: :organization
+
+  defp portal_path(:pharmacy), do: "/pharmacy/transactions"
+  defp portal_path(:lab), do: "/lab/transactions"
+  defp portal_path(:organization), do: "/org/earnings"
+
+  defp portal_title(:pharmacy), do: "Pharmacy transactions"
+  defp portal_title(:lab), do: "Lab transactions"
+  defp portal_title(:organization), do: "Transactions"
+
+  defp portal_description(:pharmacy),
+    do: "Review quick sale and prescription payments recorded at your pharmacy."
+
+  defp portal_description(:lab),
+    do: "Review payments recorded for laboratory orders at your site."
+
+  defp portal_description(:organization),
+    do: "Completed earnings by site and the full payment ledger behind your revenue."
+
+  attr :portal, :atom, required: true
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  slot :inner_block, required: true
+
+  defp portal_shell(%{portal: :pharmacy} = assigns) do
+    ~H"""
+    <Layouts.pharmacy_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={portal_path(@portal)}
+    >
+      {render_slot(@inner_block)}
+    </Layouts.pharmacy_shell>
+    """
+  end
+
+  defp portal_shell(%{portal: :lab} = assigns) do
+    ~H"""
+    <Layouts.lab_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={portal_path(@portal)}
+    >
+      {render_slot(@inner_block)}
+    </Layouts.lab_shell>
+    """
+  end
+
+  defp portal_shell(assigns) do
+    ~H"""
+    <Layouts.org_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={portal_path(@portal)}
+    >
+      {render_slot(@inner_block)}
+    </Layouts.org_shell>
+    """
   end
 
   defp filter_by_site(transactions, ""), do: transactions
@@ -216,29 +311,38 @@ defmodule ThamaniDawaWeb.EarningsLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path="/org/earnings">
+    <.portal_shell portal={@portal} flash={@flash} current_scope={@current_scope}>
       <.header icon="hero-banknotes">
-        Transactions
+        {portal_title(@portal)}
         <:subtitle>
-          Completed earnings by site and the full payment ledger behind your revenue.
+          {portal_description(@portal)}
         </:subtitle>
       </.header>
 
-      <div class="mb-5">
+      <div :if={@portal == :organization} class="mb-5">
         <h2 class="text-lg font-semibold text-thamani-forest">Financial activity</h2>
         <p class="mt-1 text-sm text-thamani-pewter">
-          Completed earnings by site and the full payment ledger.
+          <%= if @multi_site? do %>
+            Completed earnings by site and the full payment ledger.
+          <% else %>
+            Completed earnings and the full payment ledger.
+          <% end %>
         </p>
       </div>
 
       <section id="earnings-summary" class="dashboard-stat-grid mb-6">
         <.stat_tile
+          :if={@portal == :organization}
           icon="hero-banknotes"
           label="Total earned"
           value={"KES #{@organization_total}"}
-          sublabel="All sites combined"
+          sublabel={if @multi_site?, do: "All sites combined", else: "Completed earnings"}
         />
-        <div :for={site_total <- @site_totals} id={"site-earnings-#{site_total.site.id}"}>
+        <div
+          :for={site_total <- @site_totals}
+          :if={@portal == :organization}
+          id={"site-earnings-#{site_total.site.id}"}
+        >
           <.stat_tile
             icon="hero-building-office-2"
             label={site_total.site.name}
@@ -246,6 +350,20 @@ defmodule ThamaniDawaWeb.EarningsLive do
             sublabel="Completed earnings"
           />
         </div>
+        <.stat_tile
+          :if={@portal != :organization}
+          icon="hero-banknotes"
+          label="Collected"
+          value={"KES #{@filtered_earned}"}
+          sublabel="Completed payments in this view"
+        />
+        <.stat_tile
+          :if={@portal != :organization}
+          icon="hero-receipt-percent"
+          label="Transactions"
+          value={@transaction_count}
+          sublabel="Payments in this view"
+        />
       </section>
 
       <.header>
@@ -255,7 +373,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
             <.search_input
               name="search"
               value={@filters.search}
-              placeholder="Search site, method, reference, or amount"
+              placeholder="Search method, reference, amount, or order"
             />
           </form>
           <.filter_drawer
@@ -264,7 +382,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
             apply_event="apply_filters"
             active_count={active_filter_count(@filters)}
           >
-            <:group label="Site">
+            <:group :if={@show_site_filter?} label="Site">
               <.input
                 type="select"
                 name="filters[site]"
@@ -310,7 +428,9 @@ defmodule ThamaniDawaWeb.EarningsLive do
         <:col :let={{_id, payment}} label="Date">
           {Calendar.strftime(payment.inserted_at, "%Y-%m-%d %H:%M")}
         </:col>
-        <:col :let={{_id, payment}} label="Site">{site_name(@sites_by_id, payment.site_id)}</:col>
+        <:col :let={{_id, payment}} :if={@multi_site?} label="Site">
+          {site_name(@sites_by_id, payment.site_id)}
+        </:col>
         <:col :let={{_id, payment}} label="Method">{payment.payment_type}</:col>
         <:col :let={{_id, payment}} label="Amount">KES {payment.amount}</:col>
         <:col :let={{_id, payment}} label="Status">
@@ -335,7 +455,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
           </.blank_state>
         </:empty_state>
       </.table>
-    </Layouts.org_shell>
+    </.portal_shell>
     """
   end
 end

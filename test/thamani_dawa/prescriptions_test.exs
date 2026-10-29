@@ -229,6 +229,55 @@ defmodule ThamaniDawa.PrescriptionsTest do
       assert Batches.total_available_stock(organization.id, site.id, product.id) == 40
     end
 
+    test "dispenses from the exact lot encoded in a scanned GS1 barcode" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+
+      earlier_batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: product.gtin,
+          batch_no: "EARLY-LOT",
+          expiry_date: ~D[2026-12-01],
+          quantity: 10
+        })
+
+      scanned_batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: product.gtin,
+          batch_no: "SCANNED-LOT",
+          expiry_date: ~D[2027-12-01],
+          quantity: 10
+        })
+
+      barcode = ThamaniDawa.GS1Encoder.encode_raw(scanned_batch)
+
+      assert {:ok, prescription} =
+               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+                 "payment_type" => "Cash",
+                 "items" => [
+                   %{
+                     "product_id" => product.id,
+                     "quantity_prescribed" => 3,
+                     "scanned_gtin" => product.gtin,
+                     "scanned_barcode" => barcode
+                   }
+                 ]
+               })
+
+      [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
+      assert item.is_verified
+      assert Batches.get_batch!(organization.id, earlier_batch.id).remaining_quantity == 10
+      assert Batches.get_batch!(organization.id, scanned_batch.id).remaining_quantity == 7
+    end
+
     test "creates the visit for an existing patient when patient_id is given" do
       organization = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})

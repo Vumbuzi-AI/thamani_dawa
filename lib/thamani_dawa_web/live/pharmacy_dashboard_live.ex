@@ -34,6 +34,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       |> Enum.filter(&(&1.status in [:pending, :partially_dispensed]))
 
     {out_of_stock, low_stock} = stock_alerts(active_batches, products_by_id)
+    low_stock_value = low_stock_replenishment_value(low_stock ++ out_of_stock, active_batches)
 
     {:ok,
      socket
@@ -41,11 +42,13 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
      |> assign(:products_by_id, products_by_id)
      |> assign(:out_of_stock, out_of_stock)
      |> assign(:low_stock, low_stock)
+     |> assign(:low_stock_value, low_stock_value)
      |> assign(:near_expiry, near_expiry(active_batches))
      |> assign(:near_expiry_days, @near_expiry_days)
      |> assign(:pending_batches_count, length(pending_batches))
      |> assign(:pending_prescriptions, prescriptions)
      |> assign(:stats, Dashboards.pharmacy_stats(organization_id, site_id))
+     |> assign(:dispensed_today, Dashboards.dispensed_today(organization_id, site_id))
      |> assign(:dispensed_by_day, Dashboards.dispensed_by_day(organization_id, site_id))
      |> assign(:top_products, Dashboards.top_dispensed_products(organization_id, site_id))}
   end
@@ -106,6 +109,26 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       end)
 
     {Enum.reverse(out), Enum.reverse(low)}
+  end
+
+  defp low_stock_replenishment_value(low_stock, batches) do
+    Enum.reduce(low_stock, 0.0, fn {product, remaining}, total ->
+      target_quantity = max(product.reorder_level - remaining, 0)
+
+      {cost_total, quantity_total} =
+        batches
+        |> Enum.filter(&(&1.product_id == product.id and &1.quantity > 0 and &1.cost_per_unit))
+        |> Enum.reduce({0.0, 0}, fn batch, {cost, quantity} ->
+          {cost + Decimal.to_float(batch.cost_per_unit) * batch.quantity,
+           quantity + batch.quantity}
+        end)
+
+      if quantity_total > 0 do
+        total + target_quantity * cost_total / quantity_total
+      else
+        total
+      end
+    end)
   end
 
   defp near_expiry(batches) do
@@ -180,11 +203,6 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       <.header icon="hero-squares-2x2">
         Pharmacy dashboard
         <:subtitle>Stock alerts and pending prescriptions at your site.</:subtitle>
-        <:actions>
-          <.button variant="primary" navigate={~p"/pharmacy/prescriptions/quick-sale"}>
-            <.icon name="hero-plus" class="size-4" /> Quick sale
-          </.button>
-        </:actions>
       </.header>
 
       <div class="dashboard-stat-grid mt-4">
@@ -223,6 +241,20 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           label="Revenue this month"
           value={money(@stats.revenue_this_month)}
           sublabel="Wallet credits collected"
+        />
+        <.stat_tile
+          id="dispensed-today-card"
+          icon="hero-check-badge"
+          label="Dispensed today"
+          value={@dispensed_today}
+          sublabel="Units dispensed today"
+        />
+        <.stat_tile
+          id="low-stock-value-card"
+          icon="hero-currency-dollar"
+          label="Low stock value"
+          value={money(@low_stock_value)}
+          sublabel="Estimated cost to reach reorder levels"
         />
       </div>
 

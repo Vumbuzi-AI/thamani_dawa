@@ -16,6 +16,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     organization = Organizations.get_organization!(organization_id)
     sites = Sites.list_sites(organization_id)
     primary_site = List.first(sites)
+    active_sites = Enum.filter(sites, & &1.is_active)
 
     setup_required? = not site_ready?(primary_site)
 
@@ -23,6 +24,8 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     |> assign(:organization, organization)
     |> assign(:primary_site, primary_site)
     |> assign(:setup_required?, setup_required?)
+    |> assign(:pharmacy_metrics?, Enum.any?(active_sites, &Sites.Site.pharmacy?/1))
+    |> assign(:lab_metrics?, Enum.any?(active_sites, &Sites.Site.lab?/1))
     |> assign(:site_profitability, Reports.site_profitability(organization_id))
   end
 
@@ -618,24 +621,32 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           sublabel="Enabled system accounts"
         />
         <.stat_tile
+          :if={@pharmacy_metrics?}
+          id="prescriptions-stat"
           icon="hero-document-text"
           label="Prescriptions"
           value={@stats.prescriptions}
           sublabel="Prescriptions in selected window"
         />
         <.stat_tile
+          :if={@lab_metrics?}
+          id="lab-tests-done-stat"
           icon="hero-beaker"
           label="Lab tests done"
           value={@stats.lab_tests_done}
           sublabel="Completed lab orders in selected window"
         />
         <.stat_tile
+          :if={@pharmacy_metrics?}
+          id="pending-prescriptions-stat"
           icon="hero-clock"
           label="Pending prescriptions"
           value={@stats.pending_prescriptions}
           sublabel="Awaiting dispensing, network-wide"
         />
         <.stat_tile
+          :if={@lab_metrics?}
+          id="pending-lab-orders-stat"
           icon="hero-clipboard-document-list"
           label="Pending lab orders"
           value={@stats.pending_lab_orders}
@@ -701,7 +712,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           role="dialog"
           aria-modal="true"
           aria-labelledby="product-tour-title"
-          class="fixed z-[60] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-white/20 bg-thamani-forest p-5 text-white shadow-2xl transition-[top,left] duration-200"
+          class="fixed z-[100] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-white/20 bg-thamani-forest p-5 text-white shadow-2xl transition-[top,left] duration-200"
         >
           <span
             data-tour-arrow
@@ -764,27 +775,37 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               {
                 selector: '[data-tour-target="/org/dashboard"]',
                 title: "Start with your dashboard",
-                description: "This is your organization’s home page. Come here to see what is happening across all your locations, including patient activity, revenue, prescriptions, and lab work."
+                description: "See patient activity, revenue, and operational work across every site."
               },
               {
                 selector: '[data-tour-target="/org/sites"]',
                 title: "Keep your locations up to date",
-                description: "Use Sites whenever you open a new branch or need to change a location’s address or services. Each site can be set up as a pharmacy, lab, combined facility, or warehouse."
+                description: "Add branches and update each site’s address and services: pharmacy, lab, combined, or warehouse."
               },
               {
                 selector: '[data-tour-target="/org/products"]',
                 title: "Add the medicines and supplies you use",
-                description: "Products is where you create your shared catalog. Add an item here first, then you can record incoming stock and send it to the locations that need it."
+                description: "Create your shared catalog, then receive stock and distribute it to the sites that need it."
               },
               {
                 selector: '[data-tour-target="/org/team"]',
                 title: "Give your staff the right access",
-                description: "Invite pharmacists, lab staff, and other team members from the Team page. You can choose which locations each person can use, so they only see the work relevant to them."
+                description: "Invite staff and assign site access so each person sees only the work relevant to them."
+              },
+              {
+                selector: '[data-tour-target="/org/suppliers"]',
+                title: "Record who supplies your stock",
+                description: "Store contacts and GLNs for businesses that supply your medicines and medical products."
+              },
+              {
+                selector: '[data-tour-target="/org/requisitions"]',
+                title: "Coordinate stock requests between sites",
+                description: "Review and track site stock requests from submission through approval and fulfilment."
               },
               {
                 selector: '[data-tour-target="/org/earnings"]',
                 title: "Follow the money",
-                description: "Transactions is your complete payment ledger. Use it to review completed earnings by site and trace every payment behind your revenue figures. Performance charts and site comparisons now live right here on the dashboard."
+                description: "Trace payments and site earnings here; view performance charts and site comparisons on the dashboard."
               }
             ]
             this.index = 0

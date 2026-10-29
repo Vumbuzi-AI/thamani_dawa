@@ -46,6 +46,42 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
     refute has_element?(view, "#activation-checklist")
   end
 
+  test "a pharmacy-only organization does not see laboratory metrics", %{conn: conn} do
+    admin = user_fixture()
+    site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy})
+
+    {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
+
+    assert has_element?(view, "#prescriptions-stat")
+    assert has_element?(view, "#pending-prescriptions-stat")
+    refute has_element?(view, "#lab-tests-done-stat")
+    refute has_element?(view, "#pending-lab-orders-stat")
+  end
+
+  test "a lab-only organization does not see pharmacy metrics", %{conn: conn} do
+    admin = user_fixture()
+    site_fixture(%{organization_id: admin.organization_id, site_type: :lab})
+
+    {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
+
+    refute has_element?(view, "#prescriptions-stat")
+    refute has_element?(view, "#pending-prescriptions-stat")
+    assert has_element?(view, "#lab-tests-done-stat")
+    assert has_element?(view, "#pending-lab-orders-stat")
+  end
+
+  test "a combined organization sees both pharmacy and laboratory metrics", %{conn: conn} do
+    admin = user_fixture()
+    site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy_lab})
+
+    {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
+
+    assert has_element?(view, "#prescriptions-stat")
+    assert has_element?(view, "#pending-prescriptions-stat")
+    assert has_element?(view, "#lab-tests-done-stat")
+    assert has_element?(view, "#pending-lab-orders-stat")
+  end
+
   test "existing users can replay the product tour without it starting automatically", %{
     conn: conn
   } do
@@ -66,7 +102,9 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
     assert has_element?(view, "#organization-product-tour[data-auto-start='false']")
     assert has_element?(view, "[data-tour-target='/org/sites']")
     assert has_element?(view, "[data-tour-target='/org/products']")
+    assert has_element?(view, "[data-tour-target='/org/suppliers']")
     assert has_element?(view, "[data-tour-target='/org/team']")
+    refute has_element?(view, "[data-tour-target='/org/requisitions']")
   end
 
   test "the product tour starts after initial site setup", %{conn: conn} do
@@ -76,6 +114,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
     {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard?tour=1")
 
     assert has_element?(view, "#organization-product-tour[data-auto-start='true']")
+    assert has_element?(view, "#organization-product-tour [data-tour-card].z-\\[100\\]")
     refute has_element?(view, "#activation-checklist")
   end
 

@@ -252,7 +252,8 @@ defmodule ThamaniDawa.Prescriptions do
              Payments.create_payment(organization_id, %{
                "prescription_id" => prescription.id,
                "amount" => prescription.total_amount,
-               "payment_type" => attrs["payment_type"]
+               "payment_type" => attrs["payment_type"],
+               "provider_reference" => attrs["provider_reference"]
              }),
            {:ok, _completed} <- Payments.complete_payment(payment) do
         get_prescription!(organization_id, prescription.id)
@@ -301,14 +302,43 @@ defmodule ThamaniDawa.Prescriptions do
 
   defp dispense_and_verify_quick_sale_item(organization_id, user_id, item, item_attrs) do
     scanned_gtin = item_attrs["scanned_gtin"]
+    scanned_barcode = item_attrs["scanned_barcode"]
 
-    with {:ok, _dispensed} <-
-           dispense_item(organization_id, item.id, user_id, item.quantity_prescribed),
-         {:ok, _verified} <-
-           maybe_verify_quick_sale_item(organization_id, item.id, scanned_gtin) do
-      :ok
+    case scanned_batch_barcode?(scanned_barcode) do
+      true ->
+        case dispense_scanned_item(
+               organization_id,
+               item.id,
+               user_id,
+               item.quantity_prescribed,
+               scanned_barcode
+             ) do
+          {:ok, _item} -> :ok
+          {:error, reason} -> {:error, reason}
+        end
+
+      false ->
+        with {:ok, _dispensed} <-
+               dispense_item(organization_id, item.id, user_id, item.quantity_prescribed),
+             {:ok, _verified} <-
+               maybe_verify_quick_sale_item(organization_id, item.id, scanned_gtin) do
+          :ok
+        end
     end
   end
+
+  defp scanned_batch_barcode?(barcode) when is_binary(barcode) do
+    case ThamaniDawa.GS1Decoder.parse(barcode) do
+      {:ok, %{gtin: gtin, batch_no: batch_no}}
+      when is_binary(gtin) and is_binary(batch_no) ->
+        String.trim(batch_no) != ""
+
+      _ ->
+        false
+    end
+  end
+
+  defp scanned_batch_barcode?(_barcode), do: false
 
   defp maybe_verify_quick_sale_item(organization_id, item_id, scanned_gtin) do
     case scanned_gtin && String.trim(scanned_gtin) do
@@ -525,6 +555,129 @@ defmodule ThamaniDawa.Prescriptions do
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
+  end
+
+  @doc """
+  Dispenses a prescription item from the exact approved batch identified by a
+  scanned GS1 barcode. The scanned GTIN must match the prescribed product and
+  the scanned lot must identify an available batch at the prescription site.
+  """
+  def dispense_scanned_item(
+        organization_id,
+        prescription_item_id,
+        pharmacist_id,
+        quantity,
+        raw_code,
+        manual_batch_no \\ nil
+      )
+      when is_integer(organization_id) and is_integer(quantity) and quantity > 0 and
+             is_binary(raw_code) do
+    with {:ok, %{gtin: gtin, batch_no: scanned_batch_no}} <- parse_dispense_barcode(raw_code),
+         batch_no <- normalize_batch_no(scanned_batch_no) || normalize_batch_no(manual_batch_no),
+         true <- is_binary(batch_no) and batch_no != "",
+         {:ok, normalized_gtin} <- ExGtin.normalize(gtin) do
+      Repo.transaction(fn ->
+        dispense_scanned_item_transaction(
+          organization_id,
+          prescription_item_id,
+          pharmacist_id,
+          quantity,
+          normalized_gtin,
+          batch_no
+        )
+      end)
+    else
+      {:ok, _parsed} -> {:error, :invalid_batch_barcode}
+      {:error, _reason} -> {:error, :invalid_batch_barcode}
+      false -> {:error, :invalid_batch_barcode}
+    end
+  end
+
+  defp dispense_scanned_item_transaction(
+         organization_id,
+         prescription_item_id,
+         pharmacist_id,
+         quantity,
+         normalized_gtin,
+         batch_no
+       ) do
+    item = get_prescription_item!(organization_id, prescription_item_id)
+    prescription = get_prescription!(organization_id, item.prescription_id)
+    site_id = prescription_site_id(prescription)
+    product = ThamaniDawa.Products.get_product!(organization_id, item.product_id)
+
+    with :ok <- validate_not_over_dispensed(item, quantity),
+         :ok <- validate_site_id_present(site_id),
+         :ok <- validate_scanned_gtin(product.gtin, normalized_gtin),
+         batches = Batches.fefo_batches(organization_id, site_id, item.product_id),
+         {:ok, batch} <- find_batch_by_lot(batches, batch_no),
+         :ok <- validate_batch_quantity(batch, quantity),
+         {:ok, _} <- Batches.decrement_remaining_quantity(batch, quantity),
+         :ok <-
+           record_batch_dispenses(organization_id, item, pharmacist_id, [
+             %{batch: batch, quantity: quantity}
+           ]),
+         {:ok, updated_item} <- bump_quantity_dispensed(item, quantity),
+         {:ok, updated_item} <- maybe_mark_verified(updated_item),
+         {:ok, _prescription} <- recompute_status(prescription) do
+      updated_item
+    else
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  defp parse_dispense_barcode(raw_code) do
+    case ThamaniDawa.GS1Decoder.parse(raw_code) do
+      {:ok, %{gtin: gtin} = parsed} when is_binary(gtin) ->
+        {:ok, parsed}
+
+      _ ->
+        parse_plain_gtin(String.trim(raw_code))
+    end
+  end
+
+  defp parse_plain_gtin(raw_code) do
+    with true <- String.match?(raw_code, ~r/^\d+$/),
+         {:ok, gtin} <- ExGtin.normalize(raw_code) do
+      {:ok, %{gtin: gtin, batch_no: nil}}
+    else
+      false -> {:error, :invalid_batch_barcode}
+      {:error, _reason} -> {:error, :invalid_gtin}
+    end
+  end
+
+  defp normalize_batch_no(batch_no) when is_binary(batch_no) do
+    case String.trim(batch_no) do
+      "" -> nil
+      normalized -> normalized
+    end
+  end
+
+  defp normalize_batch_no(_batch_no), do: nil
+
+  defp validate_scanned_gtin(expected, scanned) do
+    if expected == scanned, do: :ok, else: {:error, :gtin_mismatch}
+  end
+
+  defp find_batch_by_lot(batches, batch_no) do
+    case Enum.find(batches, &(&1.batch_no == batch_no)) do
+      nil -> {:error, :batch_mismatch}
+      batch -> {:ok, batch}
+    end
+  end
+
+  defp validate_batch_quantity(batch, quantity) do
+    if batch.remaining_quantity >= quantity, do: :ok, else: {:error, :out_of_stock}
+  end
+
+  defp maybe_mark_verified(%PrescriptionItem{} = item) do
+    if item.quantity_dispensed >= item.quantity_prescribed do
+      item
+      |> PrescriptionItem.changeset(%{is_verified: true})
+      |> Repo.audited_update()
+    else
+      {:ok, item}
+    end
   end
 
   @doc """
