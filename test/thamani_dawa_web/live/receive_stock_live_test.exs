@@ -264,7 +264,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
   end
 
   describe "GS1-assisted receipt" do
-    test "a scanned code matching a pending batch's gtin and batch_no receives it", %{
+    test "a scanned code opens quantity confirmation before receiving the matched batch", %{
       conn: conn
     } do
       organization = organization_fixture()
@@ -280,6 +280,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
           product_id: product.id,
           gtin: gtin,
           batch_no: "LOT-GS1",
+          quantity: 300,
           pending: true
         })
 
@@ -289,11 +290,56 @@ defmodule ThamaniDawaWeb.ReceiveStockLiveTest do
       |> form("#receive-stock-gs1-form", raw_gs1: "01" <> gtin <> "10" <> "LOT-GS1")
       |> render_submit()
 
+      assert_patch(lv, ~p"/pharmacy/receive-stock/#{batch.id}/receive")
+      assert has_element?(lv, "#receive-batch-modal")
+      assert is_nil(Batches.get_batch!(organization.id, batch.id).approver_id)
+
+      lv
+      |> form("#receive-batch-form", receive: %{quantity: "240"})
+      |> render_submit()
+
       refute has_element?(lv, "#pending_batches-#{batch.id}")
       assert render(lv) =~ "Stock received."
 
       received = Batches.get_batch!(organization.id, batch.id)
       assert received.approver_id == pharmacist.id
+      assert received.quantity == 240
+      assert received.remaining_quantity == 240
+    end
+
+    test "the parenthesized GS1 text printed on a label opens quantity confirmation", %{
+      conn: conn
+    } do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, site_id: site.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      gtin = unique_gtin()
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: gtin,
+          batch_no: "BA234",
+          manufacture_date: ~D[2026-10-04],
+          expiry_date: ~D[2028-10-31],
+          pending: true
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/receive-stock")
+
+      lv
+      |> form(
+        "#receive-stock-gs1-form",
+        raw_gs1: "(01)#{gtin}(10)BA234(11)261004(17)281031"
+      )
+      |> render_submit()
+
+      assert_patch(lv, ~p"/pharmacy/receive-stock/#{batch.id}/receive")
+      assert has_element?(lv, "#receive-batch-modal")
+      assert is_nil(Batches.get_batch!(organization.id, batch.id).approver_id)
     end
 
     test "invalid GS1 input shows a decode error", %{conn: conn} do

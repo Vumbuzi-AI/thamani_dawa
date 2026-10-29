@@ -59,4 +59,35 @@ defmodule ThamaniDawa.Accounts.UserTest do
              " secret "
            )
   end
+
+  test "required legal consent records its timestamp and policy version" do
+    changeset =
+      User.registration_changeset(
+        %User{},
+        %{
+          name: "Jane",
+          email: "jane@example.com",
+          password: "secret",
+          accepted_legal_terms: true
+        },
+        require_legal_consent: true
+      )
+
+    assert changeset.valid?
+    assert %DateTime{} = Ecto.Changeset.get_change(changeset, :legal_terms_accepted_at)
+    assert Ecto.Changeset.get_change(changeset, :legal_policy_version) == "2026-10-29"
+  end
+
+  test "required legal consent rejects an unchecked value" do
+    changeset =
+      User.registration_changeset(
+        %User{},
+        %{name: "Jane", email: "jane@example.com", password: "secret"},
+        require_legal_consent: true
+      )
+
+    refute changeset.valid?
+
+    assert "You must accept the Terms of Service and Privacy Policy" in errors_on(changeset).accepted_legal_terms
+  end
 end

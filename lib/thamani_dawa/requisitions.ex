@@ -62,7 +62,7 @@ defmodule ThamaniDawa.Requisitions do
 
   @doc """
   Creates a requisition for a site. `attrs` must include `site_id`,
-  `product_id`, and `quantity`; `urgency`/`notes` are optional.
+  `product_id`, and `quantity`; `notes` is optional.
   `organization_id`/`requested_by_id` come from the caller's scope, not attrs.
   """
   def create_requisition(organization_id, requested_by_id, attrs)

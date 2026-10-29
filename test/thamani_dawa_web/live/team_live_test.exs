@@ -206,6 +206,38 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
   end
 
   describe "invite a staff member" do
+    test "a single-site org shows the one compatible site without a search box", %{conn: conn} do
+      admin = user_fixture()
+      site = site_fixture(%{organization_id: admin.organization_id, name: "Only Branch"})
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/org/team/new")
+
+      html =
+        view
+        |> form("#invite-form", user: %{role: "pharmacist"})
+        |> render_change()
+
+      assert html =~ "Only Branch"
+      refute has_element?(view, "#site-search")
+      refute has_element?(view, "#site-checkbox-list")
+      assert has_element?(view, "#user_site_ids_#{site.id}[checked]")
+    end
+
+    test "a multi-site org still shows the search box and checklist", %{conn: conn} do
+      admin = user_fixture()
+      site_fixture(%{organization_id: admin.organization_id, name: "Branch A"})
+      site_fixture(%{organization_id: admin.organization_id, name: "Branch B"})
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/org/team/new")
+
+      view
+      |> form("#invite-form", user: %{role: "pharmacist"})
+      |> render_change()
+
+      assert has_element?(view, "#site-search")
+      assert has_element?(view, "#site-checkbox-list")
+    end
+
     test "a successful invite shows a flash and adds the new hire to the staff list", %{
       conn: conn
     } do

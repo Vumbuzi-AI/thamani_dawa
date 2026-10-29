@@ -107,7 +107,10 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
     case Batches.find_pending_batch(scope.organization_id, gtin, batch_no, site_id: site_id) do
       {:ok, batch} ->
         if pharmacy_capable_site?(socket.assigns.sites_by_id, batch) do
-          do_receive(socket, batch, batch.quantity)
+          {:noreply,
+           socket
+           |> assign(:gs1_decode_error, nil)
+           |> push_patch(to: ~p"/pharmacy/receive-stock/#{batch.id}/receive")}
         else
           {:noreply, assign(socket, :gs1_decode_error, "No matching pending batch at your site")}
         end
@@ -259,7 +262,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
           <div>
             <h2 class="text-base font-semibold text-thamani-forest">Scan to receive</h2>
             <p class="mt-0.5 text-sm text-thamani-pewter">
-              Scan the full GS1 barcode to match and receive a pending batch immediately.
+              Scan the full GS1 barcode to match a pending batch, then confirm the quantity received.
             </p>
           </div>
         </div>
@@ -273,12 +276,15 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
             <.input
               field={@scan_form[:raw_gs1]}
               label="GS1 barcode"
-              placeholder="(01)0...(10)LOT1(17)261231"
+              placeholder="Scan a GS1 DataMatrix or enter (01)…(10)…"
               autocomplete="off"
+              phx-hook="ScanCapture"
+              phx-update="ignore"
+              data-scan-event="receive_via_gs1"
             />
           </div>
-          <.button variant="primary" phx-disable-with="Receiving…">
-            Scan and receive
+          <.button variant="primary" phx-disable-with="Matching…">
+            Scan and match
           </.button>
         </.form>
         <p

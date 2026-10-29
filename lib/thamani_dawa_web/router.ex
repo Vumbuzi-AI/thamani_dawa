@@ -84,10 +84,6 @@ defmodule ThamaniDawaWeb.Router do
       live "/pharmacy/requisitions", RequisitionLive.Index, :index
       live "/pharmacy/requisitions/new", RequisitionLive.Index, :new
 
-      live "/pharmacy/stock-takes", StockTakeLive.Index, :index
-      live "/pharmacy/stock-takes/new", StockTakeLive.Index, :new
-      live "/pharmacy/stock-takes/:id", StockTakeLive.Show, :show
-
       live "/pharmacy/prescriptions", PrescriptionLive.Index, :index
       live "/pharmacy/prescriptions/new", PrescriptionLive.Index, :new
       live "/pharmacy/prescriptions/:id", PrescriptionLive.Show, :show

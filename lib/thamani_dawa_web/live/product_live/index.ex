@@ -5,6 +5,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   alias ThamaniDawa.GtinLookup
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
+  alias ThamaniDawa.Sites
 
   @default_filters %{category: "", is_otc: false, is_dangerous_drug: false}
 
@@ -38,11 +39,14 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   ]
 
   def mount(_params, _session, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+
     {:ok,
      socket
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
      |> assign(:units, @units)
+     |> assign(:lab_enabled, Sites.lab_enabled?(organization_id))
      |> assign(:page, 1)
      |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> reload_products()}
@@ -139,6 +143,8 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   end
 
   def handle_event("validate", %{"product" => attrs}, socket) do
+    attrs = enforce_inventory_type(attrs, socket.assigns.lab_enabled)
+
     changeset =
       socket.assigns.product
       |> Kernel.||(%Product{})
@@ -149,7 +155,11 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   end
 
   def handle_event("save", %{"product" => attrs}, socket) do
-    save_product(socket, socket.assigns.live_action, attrs)
+    save_product(
+      socket,
+      socket.assigns.live_action,
+      enforce_inventory_type(attrs, socket.assigns.lab_enabled)
+    )
   end
 
   def handle_event("gtin_search_change", %{"gtin_search" => gtin_search}, socket) do
@@ -210,6 +220,11 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   def handle_async(:gtin_lookup, {:exit, _reason}, socket) do
     {:noreply, assign(socket, :gtin_lookup, {:error, :provider_error})}
   end
+
+  defp enforce_inventory_type(attrs, true), do: attrs
+
+  defp enforce_inventory_type(attrs, false),
+    do: Map.put(attrs, "inventory_type", "medicine")
 
   defp save_product(socket, :new, attrs) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -656,6 +671,15 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                 />
               </div>
 
+              <.input
+                :if={@lab_enabled}
+                field={@form[:inventory_type]}
+                type="select"
+                label="Inventory type"
+                options={[{"Medicine", :medicine}, {"Lab consumable", :lab_consumable}]}
+                required
+              />
+
               <.input field={@form[:gtin]} label="GTIN" required placeholder="e.g., 5901234123457" />
 
               <.input field={@form[:reorder_level]} type="number" label="Reorder level" min="0" />
@@ -724,7 +748,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
             </span>
           </span>
         </:col>
-        <:col :let={{_id, row}} label="Category" mobile="hidden">
+        <:col :let={{_id, row}} label="Category" mobile="hidden" tablet="hidden">
           {row.product.category || "Uncategorized"}
         </:col>
         <:col :let={{_id, row}} label="GTIN">
@@ -733,18 +757,20 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         <:col :let={{_id, row}} label="Org-wide stock">
           <span
             id={"stock-total-#{row.product.id}"}
-            class="inline-flex items-center gap-2 tabular-nums"
+            aria-label={"#{row.total_stock} #{uom_label(row.total_stock, row.product.uom)} in stock"}
+            class={[
+              "inline-flex items-center tabular-nums",
+              row.total_stock == 0 && "font-medium text-red-700"
+            ]}
           >
             {row.total_stock} {uom_label(row.total_stock, row.product.uom)}
-            <.status_badge :if={row.stock_level} status={row.stock_level} class="max-sm:hidden" />
           </span>
         </:col>
-        <:col :let={{_id, row}} label="Batches">
+        <:col :let={{_id, row}} label="Batches" tablet="hidden">
           <span class="tabular-nums">{row.batch_count}</span>
         </:col>
         <:col :let={{_id, row}} label="Status" mobile="aside">
-          <span class="flex flex-col items-end gap-1.5">
-            <.status_badge :if={row.stock_level} status={row.stock_level} class="sm:hidden" />
+          <span class="flex flex-col items-end gap-1.5 sm:items-start">
             <.status_badge status={if row.product.is_active, do: :active, else: :inactive} />
           </span>
         </:col>
