@@ -81,7 +81,7 @@ defmodule ThamaniDawa.Accounts do
   """
   def register_user(organization_id, attrs) when is_integer(organization_id) do
     %User{}
-    |> User.registration_changeset(attrs)
+    |> User.registration_changeset(attrs, require_legal_consent: true)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Ecto.Changeset.put_change(:role, :admin)
     |> Repo.insert()
@@ -128,9 +128,11 @@ defmodule ThamaniDawa.Accounts do
   Updates a team member's role and site assignment. `organization_id` is
   validated to ensure the user belongs to the same organization, and
   `attrs["site_ids"]` (or `attrs[:site_ids]`) is resolved to `Site`s and
-  validated to belong to that organization. If the user's current site is no
-  longer among their assigned sites, it's reset to the first remaining site
-  (or `nil`).
+  validated to belong to that organization. If the user has no current site,
+  or their current site is no longer among their assigned sites, it's (re)set
+  to the first assigned site (or `nil` if they now have none) — so a user
+  invited without a site, then later assigned one, isn't stuck forever
+  without a `current_site_id`.
   """
   def update_user(organization_id, user_id, attrs) when is_integer(organization_id) do
     user = organization_id |> get_user!(user_id)
@@ -246,7 +248,7 @@ defmodule ThamaniDawa.Accounts do
   defp default_current_site_id([site | _]), do: site.id
 
   defp maybe_reset_current_site(changeset, %User{current_site_id: current_site_id}, sites) do
-    if is_nil(current_site_id) or current_site_id in Enum.map(sites, & &1.id) do
+    if current_site_id && current_site_id in Enum.map(sites, & &1.id) do
       changeset
     else
       Ecto.Changeset.put_change(changeset, :current_site_id, default_current_site_id(sites))

@@ -18,9 +18,24 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     {:ok, signup_view, _html} = live(conn, ~p"/signup")
 
     signup_view
+    |> form("#organization-setup-form",
+      organization: %{
+        name: "Acme Pharmacy Co",
+        license_number: "PPB-ACME-001",
+        operating_models: ["pharmacy", "laboratory"]
+      },
+      site: %{name: "Acme First Branch", site_type: "pharmacy_lab"}
+    )
+    |> render_submit()
+
+    signup_view
     |> form("#signup-form",
-      organization: %{name: "Acme Pharmacy Co", license_number: "PPB-ACME-001"},
-      user: %{name: "Ada Admin", email: admin_email, password: "supersecret123"}
+      user: %{
+        name: "Ada Admin",
+        email: admin_email,
+        password: "supersecret123",
+        accepted_legal_terms: "true"
+      }
     )
     |> render_submit()
 

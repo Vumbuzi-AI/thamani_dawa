@@ -194,6 +194,76 @@ defmodule ThamaniDawa.AccountsTest do
     end
   end
 
+  describe "update_user/3" do
+    test "sets current_site_id when a user invited without a site is later assigned one" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, user, _encoded_token} =
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "New Hire",
+                 email: valid_user_email(),
+                 role: :pharmacist
+               })
+
+      assert user.current_site_id == nil
+
+      assert {:ok, updated} =
+               Accounts.update_user(organization.id, user.id, %{
+                 role: :pharmacist,
+                 site_ids: [site.id]
+               })
+
+      assert updated.current_site_id == site.id
+    end
+
+    test "leaves current_site_id alone when it's still among the assigned sites" do
+      organization = organization_fixture()
+      site_a = site_fixture(%{organization_id: organization.id})
+      site_b = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, user, _encoded_token} =
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "New Hire",
+                 email: valid_user_email(),
+                 role: :pharmacist,
+                 site_ids: [site_a.id, site_b.id]
+               })
+
+      assert {:ok, updated} =
+               Accounts.update_user(organization.id, user.id, %{
+                 role: :pharmacist,
+                 site_ids: [site_a.id, site_b.id]
+               })
+
+      assert updated.current_site_id == user.current_site_id
+    end
+
+    test "resets current_site_id to the first remaining site when it's removed from the assignment" do
+      organization = organization_fixture()
+      site_a = site_fixture(%{organization_id: organization.id})
+      site_b = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, user, _encoded_token} =
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "New Hire",
+                 email: valid_user_email(),
+                 role: :pharmacist,
+                 site_ids: [site_a.id]
+               })
+
+      assert user.current_site_id == site_a.id
+
+      assert {:ok, updated} =
+               Accounts.update_user(organization.id, user.id, %{
+                 role: :pharmacist,
+                 site_ids: [site_b.id]
+               })
+
+      assert updated.current_site_id == site_b.id
+    end
+  end
+
   describe "deliver_user_invite/5" do
     test "builds the invite URL from the encoded token and delivers the email" do
       organization = organization_fixture()
@@ -235,7 +305,12 @@ defmodule ThamaniDawa.AccountsTest do
       assert %User{id: id} = Accounts.get_user_by_invite_token(encoded_token)
       assert id == invited.id
 
-      assert {:ok, accepted} = Accounts.accept_invite(invited, %{password: valid_user_password()})
+      assert {:ok, accepted} =
+               Accounts.accept_invite(invited, %{
+                 password: valid_user_password(),
+                 accepted_legal_terms: true
+               })
+
       assert is_binary(accepted.hashed_password)
     end
 
@@ -250,7 +325,10 @@ defmodule ThamaniDawa.AccountsTest do
         })
 
       assert {:ok, _accepted} =
-               Accounts.accept_invite(invited, %{password: valid_user_password()})
+               Accounts.accept_invite(invited, %{
+                 password: valid_user_password(),
+                 accepted_legal_terms: true
+               })
 
       refute Accounts.get_user_by_invite_token(encoded_token)
     end

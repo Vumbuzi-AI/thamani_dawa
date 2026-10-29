@@ -3,12 +3,16 @@ defmodule ThamaniDawa.Accounts.User do
   import Ecto.Changeset
 
   @roles [:admin, :pharmacist, :lab_technician, :pharma_lab]
+  @legal_policy_version "2026-10-29"
 
   schema "users" do
     field :name, :string
     field :email, :string
     field :hashed_password, :string, redact: true
     field :password, :string, virtual: true, redact: true
+    field :accepted_legal_terms, :boolean, virtual: true, default: false
+    field :legal_terms_accepted_at, :utc_datetime
+    field :legal_policy_version, :string
     field :hashed_pin, :string, redact: true
     field :pin, :string, virtual: true, redact: true
     field :role, Ecto.Enum, values: @roles
@@ -22,7 +26,8 @@ defmodule ThamaniDawa.Accounts.User do
 
     many_to_many :sites, ThamaniDawa.Sites.Site,
       join_through: ThamaniDawa.Accounts.UserSite,
-      join_defaults: :put_join_organization_id
+      join_defaults: :put_join_organization_id,
+      on_replace: :delete
 
     has_many :invited_users, __MODULE__, foreign_key: :invited_by_id
     has_many :user_tokens, ThamaniDawa.Accounts.UserToken
@@ -53,12 +58,35 @@ defmodule ThamaniDawa.Accounts.User do
   """
   def registration_changeset(user, attrs, opts \\ []) do
     user
-    |> cast(attrs, [:name, :email, :password])
+    |> cast(attrs, [:name, :email, :password, :accepted_legal_terms])
     |> trim_change(:name)
     |> trim_change(:email)
     |> validate_required([:name], message: "Please enter your name")
     |> validate_email()
     |> validate_password(opts)
+    |> validate_legal_consent(opts)
+  end
+
+  defp validate_legal_consent(changeset, opts) do
+    if Keyword.get(opts, :require_legal_consent, false) do
+      changeset
+      |> validate_acceptance(:accepted_legal_terms,
+        message: "You must accept the Terms of Service and Privacy Policy"
+      )
+      |> maybe_record_legal_consent()
+    else
+      changeset
+    end
+  end
+
+  defp maybe_record_legal_consent(changeset) do
+    if get_field(changeset, :accepted_legal_terms) do
+      changeset
+      |> put_change(:legal_terms_accepted_at, DateTime.utc_now(:second))
+      |> put_change(:legal_policy_version, @legal_policy_version)
+    else
+      changeset
+    end
   end
 
   defp trim_change(changeset, field) do
@@ -85,8 +113,9 @@ defmodule ThamaniDawa.Accounts.User do
   @doc "Changeset for a user setting their password from an invite link."
   def accept_invite_changeset(user, attrs, opts \\ []) do
     user
-    |> cast(attrs, [:password])
+    |> cast(attrs, [:password, :accepted_legal_terms])
     |> validate_password(opts)
+    |> validate_legal_consent(Keyword.put(opts, :require_legal_consent, true))
   end
 
   @doc "Changeset for an admin editing a team member's role and site assignment. Site assignment (`:sites`) is handled separately by `update_user/3` via `put_assoc/3`."
