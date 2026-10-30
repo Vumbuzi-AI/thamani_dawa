@@ -40,25 +40,25 @@ defmodule ThamaniDawaWeb.SupplierLiveTest do
       conn: conn,
       admin: admin
     } do
-      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/suppliers")
-      assert html =~ "+ Add supplier"
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/suppliers")
+      assert has_element?(lv, "#supplier-new-button")
       refute has_element?(lv, "#supplier-modal")
 
-      html = lv |> element("a", "+ Add supplier") |> render_click()
+      html = lv |> element("#supplier-new-button") |> render_click()
 
       assert has_element?(lv, "#supplier-modal")
       assert html =~ "Add a supplier"
 
-      html = lv |> element("#supplier-modal button[aria-label='Cancel']") |> render_click()
+      lv |> element("#supplier-modal button[aria-label='Cancel']") |> render_click()
 
       refute has_element?(lv, "#supplier-modal")
-      assert html =~ "+ Add supplier"
+      assert has_element?(lv, "#supplier-new-button")
     end
 
     test "creates a new supplier", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/suppliers")
 
-      lv |> element("a", "+ Add supplier") |> render_click()
+      lv |> element("#supplier-new-button") |> render_click()
 
       lv
       |> form("#supplier-form",
@@ -80,7 +80,7 @@ defmodule ThamaniDawaWeb.SupplierLiveTest do
     test "shows validation errors when required fields are missing", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/suppliers")
 
-      lv |> element("a", "+ Add supplier") |> render_click()
+      lv |> element("#supplier-new-button") |> render_click()
 
       html =
         lv
@@ -96,7 +96,7 @@ defmodule ThamaniDawaWeb.SupplierLiveTest do
     } do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/suppliers")
 
-      lv |> element("a", "+ Add supplier") |> render_click()
+      lv |> element("#supplier-new-button") |> render_click()
 
       html =
         lv

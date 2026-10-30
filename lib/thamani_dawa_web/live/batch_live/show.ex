@@ -60,16 +60,7 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
         }
       end)
 
-    stock_take_adjustments =
-      Enum.map(batch.stock_take_items, fn item ->
-        %{
-          at: item.counted_at,
-          label: "Counted #{item.counted_quantity} (variance #{item.variance})",
-          detail: "Stock-take ##{item.stock_take_id} · by #{user_display(item.counted_by)}"
-        }
-      end)
-
-    (received ++ dispenses ++ lab_usages ++ stock_take_adjustments)
+    (received ++ dispenses ++ lab_usages)
     |> Enum.filter(& &1.at)
     |> Enum.sort_by(& &1.at, {:desc, DateTime})
   end
@@ -139,7 +130,7 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
         <:col :let={event} label="When">{event.at}</:col>
         <:empty_state>
           <.blank_state icon="hero-clock" title="No activity recorded yet">
-            Receiving, dispensing, lab usage, and stock-take adjustments will appear here.
+            Receiving, dispensing, and lab usage events will appear here.
           </.blank_state>
         </:empty_state>
       </.table>

@@ -177,20 +177,21 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
 
     products = page_result.entries
 
+    product_ids = Enum.map(products, & &1.id)
+
     summary =
-      Batches.stock_summary_by_product(
-        org_id,
-        Enum.map(products, & &1.id),
-        socket.assigns.allowed_site_ids
-      )
+      Batches.stock_summary_by_product(org_id, product_ids, socket.assigns.allowed_site_ids)
 
     rows =
       Enum.map(products, fn product ->
+        total_remaining = get_in(summary, [product.id, :total_remaining]) || 0
+
         %{
           id: product.id,
           product: product,
           batch_count: get_in(summary, [product.id, :batch_count]) || 0,
-          total_remaining: get_in(summary, [product.id, :total_remaining]) || 0
+          total_remaining: total_remaining,
+          stock_level: stock_level(total_remaining, product.reorder_level)
         }
       end)
 
@@ -248,6 +249,11 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
     end
   end
 
+  defp stock_level(_total, nil), do: nil
+  defp stock_level(total, _reorder_level) when total <= 0, do: :out_of_stock
+  defp stock_level(total, reorder_level) when total <= reorder_level, do: :low_stock
+  defp stock_level(_total, _reorder_level), do: nil
+
   defp product_name(nil), do: "(unknown product)"
   defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
 
@@ -271,36 +277,38 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
         Organization stock
         <:subtitle>{stock_subtitle(@allowed_site_ids)}</:subtitle>
         <:toolbar>
-          <.tab_group>
-            <:tab
-              id="products-tab"
-              active={@view == "products"}
-              phx_click="set_view"
-              phx_value_view="products"
-            >
-              Products
-            </:tab>
-            <:tab
-              id="batches-tab"
-              active={@view == "batches"}
-              phx_click="set_view"
-              phx_value_view="batches"
-            >
-              All batches
-            </:tab>
-          </.tab_group>
+          <div class="flex min-w-0 items-center gap-3">
+            <.tab_group>
+              <:tab
+                id="products-tab"
+                active={@view == "products"}
+                phx_click="set_view"
+                phx_value_view="products"
+              >
+                Products
+              </:tab>
+              <:tab
+                id="batches-tab"
+                active={@view == "batches"}
+                phx_click="set_view"
+                phx_value_view="batches"
+              >
+                All batches
+              </:tab>
+            </.tab_group>
 
-          <form phx-change="search" class="flex-1" id="search-form">
-            <.search_input
-              name="search"
-              value={@search}
-              placeholder={
-                if @view == "products",
-                  do: "Search by product, GTIN, or category",
-                  else: "Search by product, GTIN, or batch no."
-              }
-            />
-          </form>
+            <form phx-change="search" class="min-w-0 flex-1" id="search-form">
+              <.search_input
+                name="search"
+                value={@search}
+                placeholder={
+                  if @view == "products",
+                    do: "Search by product, GTIN, or category",
+                    else: "Search by product, GTIN, or batch no."
+                }
+              />
+            </form>
+          </div>
 
           <.filter_drawer
             id="stock-filters"
@@ -339,7 +347,10 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
             {row.product.price && "KES #{row.product.price}"}
           </:col>
           <:col :let={{_id, row}} label="Batches">{row.batch_count}</:col>
-          <:col :let={{_id, row}} label="Remaining">{row.total_remaining}</:col>
+          <:col :let={{_id, row}} label="Remaining">
+            <span class="tabular-nums">{row.total_remaining}</span>
+            <.status_badge :if={row.stock_level} status={row.stock_level} class="ml-2" />
+          </:col>
           <:empty_state>
             <.blank_state
               icon="hero-cube"

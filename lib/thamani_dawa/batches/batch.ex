@@ -19,9 +19,10 @@ defmodule ThamaniDawa.Batches.Batch do
     belongs_to :site, ThamaniDawa.Sites.Site
     belongs_to :supplier, ThamaniDawa.Suppliers.Supplier
     belongs_to :approver, ThamaniDawa.Accounts.User, foreign_key: :approver_id
+    belongs_to :source_batch, __MODULE__
+    belongs_to :requisition, ThamaniDawa.Requisitions.Requisition
 
     has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage
-    has_many :stock_take_items, ThamaniDawa.StockTakes.StockTakeItem
     has_many :prescription_batch_dispenses, ThamaniDawa.Prescriptions.BatchDispense
 
     timestamps(type: :utc_datetime)
@@ -46,7 +47,8 @@ defmodule ThamaniDawa.Batches.Batch do
       :quantity,
       :remaining_quantity,
       :cost_per_unit,
-      :supplier_id
+      :supplier_id,
+      :source_batch_id
     ])
     |> validate_required([
       :product_id,
@@ -63,9 +65,50 @@ defmodule ThamaniDawa.Batches.Batch do
     |> foreign_key_constraint(:product_id)
     |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:supplier_id)
+    |> foreign_key_constraint(:source_batch_id)
     |> unique_constraint(:batch_no,
       name: :batches_org_product_site_batch_no_index,
       message: "has already been dispatched to this site"
+    )
+  end
+
+  @doc """
+  Changeset for recording a batch as org-level stock — received by the
+  organization but not yet assigned to a site. `site_id` is intentionally
+  not cast here; a batch becomes site-bound only via `dispatch_to_site/2`,
+  which produces a separate `Batch` row via `changeset/2`.
+  """
+  def org_intake_changeset(batch, attrs) do
+    batch
+    |> cast(attrs, [
+      :product_id,
+      :gtin,
+      :batch_no,
+      :serial,
+      :manufacturer,
+      :manufacture_date,
+      :expiry_date,
+      :quantity,
+      :remaining_quantity,
+      :cost_per_unit,
+      :supplier_id
+    ])
+    |> validate_required([
+      :product_id,
+      :gtin,
+      :batch_no,
+      :expiry_date,
+      :quantity
+    ])
+    |> ThamaniDawa.Gtin.validate_gtin()
+    |> validate_expiry_date()
+    |> validate_number(:quantity, greater_than_or_equal_to: 0)
+    |> validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
+    |> foreign_key_constraint(:product_id)
+    |> foreign_key_constraint(:supplier_id)
+    |> unique_constraint(:batch_no,
+      name: :batches_org_product_batch_no_undispatched_index,
+      message: "already recorded as org stock for this product"
     )
   end
 

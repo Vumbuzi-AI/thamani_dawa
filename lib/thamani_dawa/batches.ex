@@ -83,18 +83,52 @@ defmodule ThamaniDawa.Batches do
   @doc """
   Batch count and total remaining stock for each of the given product ids —
   the per-product roll-up shown when stock is browsed product-first rather
-  than batch-first. When `site_ids` is given, restricts the roll-up to
-  batches at those sites; `nil` (the default) means org-wide.
+  than batch-first. Restricted to batches actually dispatched to a site
+  (org-level batches still awaiting dispatch are excluded — see
+  `undispatched_summary_by_product/2` for those) so "remaining" always
+  means "at a site," regardless of the `site_ids` filter. `total_remaining`
+  includes batches dispatched but not yet confirmed received at the site;
+  `received_remaining`/`pending_remaining` split that total so callers can
+  tell confirmed on-shelf stock apart from in-transit stock. When
+  `site_ids` is given, restricts the roll-up to batches at those sites;
+  `nil` (the default) means every site in the org.
   """
   def stock_summary_by_product(organization_id, product_ids, site_ids \\ nil) do
     query =
       from(b in Batch,
         where: b.organization_id == ^organization_id,
         where: b.product_id in ^product_ids,
+        where: not is_nil(b.site_id),
         group_by: b.product_id,
-        select:
-          {b.product_id,
-           %{batch_count: count(b.id), total_remaining: coalesce(sum(b.remaining_quantity), 0)}}
+        select: {
+          b.product_id,
+          %{
+            batch_count: count(b.id),
+            total_remaining: coalesce(sum(b.remaining_quantity), 0),
+            received_remaining:
+              coalesce(
+                sum(
+                  fragment(
+                    "CASE WHEN ? IS NOT NULL THEN ? ELSE 0 END",
+                    b.approver_id,
+                    b.remaining_quantity
+                  )
+                ),
+                0
+              ),
+            pending_remaining:
+              coalesce(
+                sum(
+                  fragment(
+                    "CASE WHEN ? IS NULL THEN ? ELSE 0 END",
+                    b.approver_id,
+                    b.remaining_quantity
+                  )
+                ),
+                0
+              )
+          }
+        }
       )
 
     query
@@ -103,14 +137,88 @@ defmodule ThamaniDawa.Batches do
     |> Map.new()
   end
 
+  @doc """
+  Total org-level (not yet dispatched to any site) remaining stock for each
+  of the given product ids — the complement to `stock_summary_by_product/3`.
+  Always org-wide: undispatched stock belongs to no site, so a site filter
+  shouldn't hide it from view.
+  """
+  def undispatched_summary_by_product(organization_id, product_ids) do
+    query =
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.product_id in ^product_ids,
+        where: is_nil(b.site_id),
+        group_by: b.product_id,
+        select: {b.product_id, coalesce(sum(b.remaining_quantity), 0)}
+
+    query |> Repo.all() |> Map.new()
+  end
+
+  @doc """
+  Count of distinct in-stock batches (remaining_quantity > 0) per product id,
+  across the warehouse and every site — the complement count to the unit
+  totals from `stock_summary_by_product/3` and
+  `undispatched_summary_by_product/2`.
+  """
+  def batch_counts_by_product(organization_id, product_ids) do
+    query =
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.product_id in ^product_ids,
+        where: b.remaining_quantity > 0,
+        group_by: b.product_id,
+        select: {b.product_id, count(b.id)}
+
+    query |> Repo.all() |> Map.new()
+  end
+
   defp filter_by_site_ids(query, nil), do: query
   defp filter_by_site_ids(query, site_ids), do: where(query, [b], b.site_id in ^site_ids)
+
+  @doc """
+  Lists org-level batches (received by the organization but not yet
+  dispatched to a site) for a product, preloaded with `supplier` (scoped to
+  the organization), ordered by soonest expiry.
+  """
+  def list_undispatched_batches_for_product(organization_id, product_id) do
+    supplier_query = from s in Supplier, where: s.organization_id == ^organization_id
+
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.product_id == ^product_id,
+        where: is_nil(b.site_id),
+        where: b.remaining_quantity > 0,
+        order_by: [asc: b.expiry_date],
+        preload: [supplier: ^supplier_query]
+    )
+  end
+
+  @doc """
+  Lists all available organization warehouse batches, preloaded with their
+  product and supplier, ordered by soonest expiry.
+  """
+  def list_organization_warehouse_batches(organization_id) do
+    product_query = from p in Product, where: p.organization_id == ^organization_id
+    supplier_query = from s in Supplier, where: s.organization_id == ^organization_id
+
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: is_nil(b.site_id),
+        where: b.remaining_quantity > 0,
+        order_by: [asc: b.expiry_date, asc: b.id],
+        preload: [product: ^product_query, supplier: ^supplier_query]
+    )
+  end
 
   @doc "Lists batches dispatched to a site but not yet received by staff."
   def list_pending_batches(organization_id) do
     Repo.all(
       from b in Batch,
         where: b.organization_id == ^organization_id,
+        where: not is_nil(b.site_id),
         where: is_nil(b.received_at)
     )
   end
@@ -150,6 +258,93 @@ defmodule ThamaniDawa.Batches do
         where: b.remaining_quantity > 0,
         preload: [product: ^product_query]
     )
+  end
+
+  @doc """
+  Finds a single active batch at a site by its exact batch/lot number —
+  the fallback lookup for a barcode scan whose GTIN segment doesn't match
+  any product (e.g. a missing/incorrect product GTIN), used alongside GTIN
+  matching rather than instead of it.
+  """
+  def get_active_batch_by_batch_no(organization_id, site_id, batch_no)
+      when is_binary(batch_no) and batch_no != "" do
+    Repo.one(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: b.batch_no == ^batch_no,
+        where: not is_nil(b.received_at),
+        where: not is_nil(b.approver_id),
+        where: b.remaining_quantity > 0,
+        limit: 1
+    )
+  end
+
+  def get_active_batch_by_batch_no(_organization_id, _site_id, _batch_no), do: nil
+
+  @doc "Lists active lab-consumable batches at a site with their products preloaded."
+  def list_active_lab_consumable_batches_for_site(organization_id, site_id) do
+    product_query =
+      from p in Product,
+        where: p.organization_id == ^organization_id,
+        where: p.inventory_type == :lab_consumable
+
+    Repo.all(
+      from b in Batch,
+        join: p in Product,
+        on: p.id == b.product_id,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: p.inventory_type == :lab_consumable,
+        where: not is_nil(b.received_at),
+        where: not is_nil(b.approver_id),
+        where: b.remaining_quantity > 0,
+        order_by: [asc: p.generic_name, asc: b.expiry_date],
+        preload: [product: ^product_query]
+    )
+  end
+
+  @doc """
+  Searches received and approved batches at a site for stock-taking. With a
+  blank search, batches with no remaining stock are omitted. A non-blank
+  search includes zero-stock batches so unexpected physical stock can be recorded.
+  """
+  def search_countable_batches_for_site(organization_id, site_id, search, excluded_ids, limit) do
+    search = String.trim(search || "")
+
+    query =
+      from b in Batch,
+        join: p in Product,
+        on: p.id == b.product_id,
+        where: b.organization_id == ^organization_id,
+        where: p.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: not is_nil(b.received_at) and not is_nil(b.approver_id),
+        order_by: [asc: p.generic_name, asc: b.batch_no]
+
+    query =
+      if excluded_ids == [],
+        do: query,
+        else: where(query, [b, _p], b.id not in ^excluded_ids)
+
+    query =
+      if search == "" do
+        where(query, [b, _p], b.remaining_quantity > 0)
+      else
+        pattern = "%#{search}%"
+
+        where(
+          query,
+          [b, p],
+          ilike(p.generic_name, ^pattern) or ilike(p.brand_name, ^pattern) or
+            ilike(p.category, ^pattern) or ilike(b.gtin, ^pattern) or
+            ilike(b.batch_no, ^pattern)
+        )
+      end
+
+    query
+    |> limit(^limit)
+    |> Repo.all()
   end
 
   @doc """
@@ -213,7 +408,12 @@ defmodule ThamaniDawa.Batches do
     end
   end
 
-  @doc "Lists a product's batches, preloaded with `site`, `approver`, and `supplier` (all scoped to the organization)."
+  @doc """
+  Lists a product's dispatched (site-bound) batches, preloaded with `site`,
+  `approver`, and `supplier` (all scoped to the organization). Org-level
+  batches not yet dispatched to a site are excluded — see
+  `list_undispatched_batches_for_product/2` for those.
+  """
   def list_batches_for_product(organization_id, product_id, site_ids \\ nil) do
     site_query = from s in Site, where: s.organization_id == ^organization_id
     user_query = from u in User, where: u.organization_id == ^organization_id
@@ -223,6 +423,7 @@ defmodule ThamaniDawa.Batches do
       from(b in Batch,
         where: b.organization_id == ^organization_id,
         where: b.product_id == ^product_id,
+        where: not is_nil(b.site_id),
         order_by: [asc: b.expiry_date],
         preload: [site: ^site_query, approver: ^user_query, supplier: ^supplier_query]
       )
@@ -270,11 +471,9 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc """
-  Gets a single batch scoped to an organization, preloaded with everything a
-  traceability page needs — identity (`product`, `site`, `supplier`,
-  `approver`) plus every event that has touched its stock (prescription
-  dispenses, lab consumable usage, stock-take adjustments), each scoped to
-  the same organization. Raises if not found.
+  Gets a single batch scoped to an organization, preloaded with its identity
+  (`product`, `site`, `supplier`, `approver`) and prescription and lab usage
+  events, each scoped to the same organization. Raises if not found.
   """
   def get_batch_with_details!(organization_id, id) do
     product_query = from p in Product, where: p.organization_id == ^organization_id
@@ -293,8 +492,7 @@ defmodule ThamaniDawa.Batches do
         dispensed_by: user_query,
         prescription_item: [prescription: [patient_visit: :patient]]
       ],
-      lab_consumable_usages: [used_by: user_query, lab_order: [patient_visit: :patient]],
-      stock_take_items: [stock_take: [:finalized_by], counted_by: user_query]
+      lab_consumable_usages: [used_by: user_query, lab_order: [patient_visit: :patient]]
     )
   end
 
@@ -312,7 +510,127 @@ defmodule ThamaniDawa.Batches do
     |> validate_belongs_to_org(:site_id, Site, organization_id)
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
-    |> Repo.insert()
+    |> Repo.audited_insert()
+  end
+
+  @doc """
+  Receives stock directly into a site's own batches, stamping it as already
+  received by `user_id` — for a single-site organization (§5 of project.md),
+  where adding stock to the only site that could use it *is* the receipt,
+  with no org-level warehouse pool or dispatch step in between.
+  """
+  def receive_directly_at_site(organization_id, site_id, user_id, attrs)
+      when is_integer(organization_id) and is_integer(site_id) do
+    attrs =
+      attrs
+      |> default_remaining_quantity()
+      |> Map.put("site_id", site_id)
+
+    %Batch{}
+    |> Batch.changeset(attrs)
+    |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> Ecto.Changeset.put_change(:received_at, DateTime.truncate(DateTime.utc_now(), :second))
+    |> Ecto.Changeset.put_change(:approver_id, user_id)
+    |> validate_belongs_to_org(:site_id, Site, organization_id)
+    |> validate_belongs_to_org(:product_id, Product, organization_id)
+    |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
+    |> Repo.audited_insert()
+  end
+
+  @doc """
+  Records a batch as org-level stock — received by the organization but not
+  yet assigned to any site. This is the first step of intake; stock becomes
+  dispatchable to a site via `dispatch_to_site/2`.
+  """
+  def receive_into_org_stock(organization_id, attrs) when is_integer(organization_id) do
+    %Batch{}
+    |> Batch.org_intake_changeset(default_remaining_quantity(attrs))
+    |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> validate_belongs_to_org(:product_id, Product, organization_id)
+    |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
+    |> Repo.audited_insert()
+  end
+
+  @doc """
+  Dispatches an org-level batch (one with no `site_id`) to a site. The
+  two-argument form dispatches its full remaining quantity. Use the
+  three-argument form to dispatch part of the stock, leaving the balance in
+  the organization warehouse for another site.
+
+  Each dispatch creates a separate site `Batch` (pending receipt, as with
+  `create_batch/2`) linked back through `source_batch_id`.
+  """
+  def dispatch_to_site(%Batch{} = org_batch, site_id) when is_integer(site_id) do
+    if org_batch.remaining_quantity > 0 do
+      dispatch_to_site(org_batch, site_id, org_batch.remaining_quantity)
+    else
+      {:error, :nothing_to_dispatch}
+    end
+  end
+
+  def dispatch_to_site(%Batch{}, site_id, quantity)
+      when is_integer(site_id) and is_integer(quantity) and quantity <= 0 do
+    {:error, :invalid_dispatch_quantity}
+  end
+
+  def dispatch_to_site(%Batch{} = org_batch, site_id, quantity)
+      when is_integer(site_id) and is_integer(quantity) do
+    Repo.transaction(fn -> execute_dispatch(org_batch, site_id, quantity) end)
+  end
+
+  defp execute_dispatch(org_batch, site_id, quantity) do
+    current_org_batch = lock_org_batch(org_batch)
+
+    with :ok <- validate_dispatch(current_org_batch, quantity),
+         {:ok, _} <- debit_org_batch(current_org_batch, quantity),
+         {:ok, dispatched} <- create_dispatched_batch(current_org_batch, site_id, quantity) do
+      dispatched
+    else
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  defp lock_org_batch(org_batch) do
+    Repo.one(
+      from b in Batch,
+        where: b.id == ^org_batch.id and b.organization_id == ^org_batch.organization_id,
+        lock: "FOR UPDATE"
+    )
+  end
+
+  defp validate_dispatch(nil, _quantity), do: {:error, :not_found}
+
+  defp validate_dispatch(%Batch{site_id: site_id}, _quantity) when not is_nil(site_id),
+    do: {:error, :already_dispatched}
+
+  defp validate_dispatch(%Batch{remaining_quantity: remaining}, _quantity) when remaining <= 0,
+    do: {:error, :nothing_to_dispatch}
+
+  defp validate_dispatch(%Batch{remaining_quantity: remaining}, quantity)
+       when quantity > remaining,
+       do: {:error, :insufficient_quantity}
+
+  defp validate_dispatch(_batch, _quantity), do: :ok
+
+  defp debit_org_batch(batch, quantity) do
+    set_remaining_quantity(batch, batch.remaining_quantity - quantity)
+  end
+
+  defp create_dispatched_batch(batch, site_id, quantity) do
+    create_batch(batch.organization_id, %{
+      "product_id" => batch.product_id,
+      "site_id" => site_id,
+      "gtin" => batch.gtin,
+      "batch_no" => batch.batch_no,
+      "serial" => batch.serial,
+      "manufacturer" => batch.manufacturer,
+      "manufacture_date" => batch.manufacture_date,
+      "expiry_date" => batch.expiry_date,
+      "quantity" => quantity,
+      "cost_per_unit" => batch.cost_per_unit,
+      "supplier_id" => batch.supplier_id,
+      "source_batch_id" => batch.id
+    })
   end
 
   @doc """
@@ -331,7 +649,7 @@ defmodule ThamaniDawa.Batches do
 
     batch
     |> Batch.receive_changeset(attrs)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 
   defp validate_belongs_to_org(changeset, field, schema, organization_id) do
@@ -434,18 +752,17 @@ defmodule ThamaniDawa.Batches do
     batch
     |> Ecto.Changeset.change(remaining_quantity: batch.remaining_quantity - quantity)
     |> Ecto.Changeset.validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 
   @doc """
-  Sets `remaining_quantity` directly to `quantity` — a physical stock take correcting the
-  recorded amount to match a fresh count, unlike `decrement_remaining_quantity/2`'s relative
-  adjustment for a single dispense/consumption event.
+  Sets `remaining_quantity` directly to `quantity`, for inventory movements
+  that update a known absolute balance rather than decrementing a usage amount.
   """
   def set_remaining_quantity(%Batch{} = batch, quantity) when is_integer(quantity) do
     batch
     |> Ecto.Changeset.change(remaining_quantity: quantity)
     |> Ecto.Changeset.validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 end

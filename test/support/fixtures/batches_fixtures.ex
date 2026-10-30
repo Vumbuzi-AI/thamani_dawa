@@ -71,4 +71,30 @@ defmodule ThamaniDawa.BatchesFixtures do
       received_batch
     end
   end
+
+  @doc """
+  Creates an org-level batch — received by the organization but not yet
+  dispatched to any site. Unless given, `organization_id` gets a fresh
+  organization, and `product_id` gets a fresh record under that organization.
+  """
+  def org_batch_fixture(attrs \\ %{}) do
+    {organization_id, attrs} =
+      Map.pop_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
+
+    {product_id, attrs} =
+      Map.pop_lazy(attrs, :product_id, fn ->
+        ProductsFixtures.product_fixture(%{organization_id: organization_id}).id
+      end)
+
+    attrs = Map.merge(attrs, %{product_id: product_id})
+
+    {:ok, batch} =
+      attrs
+      |> valid_batch_attributes()
+      |> then(&Batches.receive_into_org_stock(organization_id, &1))
+
+    batch
+  end
 end

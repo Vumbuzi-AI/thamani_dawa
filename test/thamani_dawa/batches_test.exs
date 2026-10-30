@@ -339,6 +339,253 @@ defmodule ThamaniDawa.BatchesTest do
     end
   end
 
+  describe "receive_into_org_stock/2" do
+    test "creates an org-level batch with no site_id" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+
+      assert {:ok, %Batch{site_id: nil} = batch} =
+               Batches.receive_into_org_stock(organization.id, %{
+                 product_id: product.id,
+                 gtin: "00614141000012",
+                 batch_no: "LOT-ORG-1",
+                 expiry_date: ~D[2027-01-01],
+                 quantity: 50
+               })
+
+      assert batch.remaining_quantity == 50
+    end
+
+    test "requires gtin, batch_no, expiry_date, quantity, and product_id (but not site_id)" do
+      organization = organization_fixture()
+      assert {:error, changeset} = Batches.receive_into_org_stock(organization.id, %{})
+
+      assert %{
+               gtin: ["can't be blank"],
+               batch_no: ["can't be blank"],
+               expiry_date: ["can't be blank"],
+               quantity: ["can't be blank"],
+               product_id: ["can't be blank"]
+             } = errors_on(changeset)
+
+      refute Map.has_key?(errors_on(changeset), :site_id)
+    end
+
+    test "rejects a product_id that belongs to a different organization" do
+      organization = organization_fixture()
+      other_org = organization_fixture()
+      hostile_product = product_fixture(%{organization_id: other_org.id})
+
+      assert {:error, changeset} =
+               Batches.receive_into_org_stock(organization.id, %{
+                 product_id: hostile_product.id,
+                 gtin: "00614141000012",
+                 batch_no: "LOT-ORG-X",
+                 expiry_date: ~D[2027-01-01],
+                 quantity: 10
+               })
+
+      assert %{product_id: ["does not belong to this organization"]} = errors_on(changeset)
+    end
+
+    test "rejects recording the same batch_no twice for the same product as org stock" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+
+      attrs = %{
+        product_id: product.id,
+        gtin: "00614141000012",
+        batch_no: "LOT-ORG-DUP",
+        expiry_date: ~D[2027-01-01],
+        quantity: 50
+      }
+
+      assert {:ok, _batch} = Batches.receive_into_org_stock(organization.id, attrs)
+      assert {:error, changeset} = Batches.receive_into_org_stock(organization.id, attrs)
+
+      assert %{batch_no: ["already recorded as org stock for this product"]} =
+               errors_on(changeset)
+    end
+  end
+
+  describe "stock_summary_by_product/3" do
+    test "excludes undispatched (org-level) batches from total_remaining" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 10,
+        remaining_quantity: 10
+      })
+
+      org_batch_fixture(%{
+        organization_id: organization.id,
+        product_id: product.id,
+        quantity: 100
+      })
+
+      summary = Batches.stock_summary_by_product(organization.id, [product.id])
+
+      assert summary[product.id].total_remaining == 10
+      assert summary[product.id].batch_count == 1
+    end
+  end
+
+  describe "undispatched_summary_by_product/2" do
+    test "returns the org-wide undispatched total regardless of a site filter" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 10,
+        remaining_quantity: 10
+      })
+
+      org_batch_fixture(%{
+        organization_id: organization.id,
+        product_id: product.id,
+        quantity: 100
+      })
+
+      summary = Batches.undispatched_summary_by_product(organization.id, [product.id])
+
+      assert summary[product.id] == 100
+    end
+
+    test "returns nothing for a product with no undispatched stock" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      batch_fixture(%{organization_id: organization.id, product_id: product.id})
+
+      assert Batches.undispatched_summary_by_product(organization.id, [product.id]) == %{}
+    end
+  end
+
+  describe "list_undispatched_batches_for_product/2" do
+    test "returns org-level batches but not dispatched ones" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+
+      org_batch = org_batch_fixture(%{organization_id: organization.id, product_id: product.id})
+      batch_fixture(%{organization_id: organization.id, product_id: product.id})
+
+      assert [%Batch{id: id}] =
+               Batches.list_undispatched_batches_for_product(organization.id, product.id)
+
+      assert id == org_batch.id
+    end
+
+    test "excludes an org batch once fully dispatched" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+      org_batch = org_batch_fixture(%{organization_id: organization.id, product_id: product.id})
+
+      assert {:ok, _dispatched} = Batches.dispatch_to_site(org_batch, site.id)
+
+      assert Batches.list_undispatched_batches_for_product(organization.id, product.id) == []
+    end
+  end
+
+  describe "dispatch_to_site/2 and /3" do
+    test "creates a new site-bound batch linked back via source_batch_id" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      org_batch =
+        org_batch_fixture(%{
+          organization_id: organization.id,
+          product_id: product.id,
+          quantity: 30
+        })
+
+      assert {:ok, dispatched} = Batches.dispatch_to_site(org_batch, site.id)
+
+      assert dispatched.site_id == site.id
+      assert dispatched.source_batch_id == org_batch.id
+      assert dispatched.quantity == 30
+      assert dispatched.remaining_quantity == 30
+      assert is_nil(dispatched.approver_id)
+      assert is_nil(dispatched.received_at)
+    end
+
+    test "zeroes out the org batch's remaining_quantity" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      org_batch =
+        org_batch_fixture(%{
+          organization_id: organization.id,
+          product_id: product.id,
+          quantity: 30
+        })
+
+      assert {:ok, _dispatched} = Batches.dispatch_to_site(org_batch, site.id)
+
+      assert Batches.get_batch!(organization.id, org_batch.id).remaining_quantity == 0
+    end
+
+    test "can dispatch part of a warehouse batch to different sites" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      first_site = site_fixture(%{organization_id: organization.id})
+      second_site = site_fixture(%{organization_id: organization.id})
+
+      org_batch =
+        org_batch_fixture(%{
+          organization_id: organization.id,
+          product_id: product.id,
+          quantity: 100
+        })
+
+      assert {:ok, first_dispatch} = Batches.dispatch_to_site(org_batch, first_site.id, 40)
+      assert first_dispatch.site_id == first_site.id
+      assert first_dispatch.quantity == 40
+      assert Batches.get_batch!(organization.id, org_batch.id).remaining_quantity == 60
+
+      remaining_org_batch = Batches.get_batch!(organization.id, org_batch.id)
+
+      assert {:ok, second_dispatch} =
+               Batches.dispatch_to_site(remaining_org_batch, second_site.id, 60)
+
+      assert second_dispatch.site_id == second_site.id
+      assert second_dispatch.quantity == 60
+      assert Batches.get_batch!(organization.id, org_batch.id).remaining_quantity == 0
+    end
+
+    test "rejects dispatching a batch that already has a site" do
+      batch = batch_fixture()
+
+      assert Batches.dispatch_to_site(batch, batch.site_id) == {:error, :already_dispatched}
+    end
+
+    test "rejects dispatching a batch with nothing left" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      org_batch =
+        org_batch_fixture(%{
+          organization_id: organization.id,
+          product_id: product.id,
+          quantity: 30,
+          remaining_quantity: 0
+        })
+
+      assert Batches.dispatch_to_site(org_batch, site.id) == {:error, :nothing_to_dispatch}
+    end
+  end
+
   describe "receive_batch/2" do
     test "stamps approver_id and received_at" do
       organization = organization_fixture()
@@ -497,7 +744,7 @@ defmodule ThamaniDawa.BatchesTest do
           organization_id: organization.id,
           site_id: site.id,
           product_id: product.id,
-          expiry_date: ~D[2098-08-01]
+          expiry_date: ~D[2099-01-01]
         })
 
       later_batch =
@@ -505,7 +752,7 @@ defmodule ThamaniDawa.BatchesTest do
           organization_id: organization.id,
           site_id: site.id,
           product_id: product.id,
-          expiry_date: ~D[2099-01-01]
+          expiry_date: ~D[2099-02-01]
         })
 
       assert {:ok, batches} =
@@ -528,7 +775,7 @@ defmodule ThamaniDawa.BatchesTest do
         organization_id: organization.id,
         site_id: other_site.id,
         product_id: product.id,
-        expiry_date: ~D[2098-08-15]
+        expiry_date: ~D[2098-12-15]
       })
 
       matching_batch =
@@ -536,7 +783,7 @@ defmodule ThamaniDawa.BatchesTest do
           organization_id: organization.id,
           site_id: site.id,
           product_id: product.id,
-          expiry_date: ~D[2099-01-01]
+          expiry_date: ~D[2099-02-01]
         })
 
       assert {:ok, batches} =

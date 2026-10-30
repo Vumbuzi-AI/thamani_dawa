@@ -20,15 +20,22 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
   describe "index" do
     test "lists products for the organization", %{conn: conn, admin: admin} do
-      _product =
+      product =
         product_fixture(%{
           organization_id: admin.organization_id,
           generic_name: "Test Aspirin"
         })
 
-      {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/products")
+      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/products")
 
       assert html =~ "Test Aspirin"
+      assert has_element?(lv, "#products-#{product.id}")
+      assert has_element?(lv, "#btn-add-stock-#{product.id}")
+      assert has_element?(lv, "#btn-edit-#{product.id}")
+
+      assert has_element?(lv, "#stock-total-#{product.id}")
+      assert has_element?(lv, "#products-#{product.id} [data-label='Org-wide stock']")
+      refute has_element?(lv, "#stock-breakdown-#{product.id}")
     end
 
     test "renders sidebar with correct hook for persistence", %{conn: conn, admin: admin} do
@@ -44,26 +51,26 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       conn: conn,
       admin: admin
     } do
-      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/products")
-      assert html =~ "+ Add product"
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+      assert has_element?(lv, "#product-new-button")
       refute has_element?(lv, "#product-modal")
 
-      html = lv |> element("a", "+ Add product") |> render_click()
+      html = lv |> element("#product-new-button") |> render_click()
 
       assert has_element?(lv, "#product-modal")
       assert html =~ "Add a product"
-      assert html =~ "+ Add product"
+      assert has_element?(lv, "#product-new-button")
 
-      html = lv |> element("#product-modal button[aria-label='Cancel']") |> render_click()
+      lv |> element("#product-modal button[aria-label='Cancel']") |> render_click()
 
       refute has_element?(lv, "#product-modal")
-      assert html =~ "+ Add product"
+      assert has_element?(lv, "#product-new-button")
     end
 
     test "creates a new product", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
       skip_gtin_scan(lv)
 
       lv
@@ -260,7 +267,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     test "live-validates the new product form", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
       skip_gtin_scan(lv)
 
       html =
@@ -277,7 +284,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     } do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
       skip_gtin_scan(lv)
 
       html =
@@ -296,7 +303,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     } do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
       skip_gtin_scan(lv)
 
       html =
@@ -320,7 +327,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
       skip_gtin_scan(lv)
 
       html =
@@ -356,7 +363,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     test "adding a product starts at the scan step, not the form", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
 
       assert has_element?(lv, "#gtin-scan-step")
       refute has_element?(lv, "#product-form")
@@ -377,7 +384,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     test "the scan box echoes back what's typed", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
 
       html =
         lv
@@ -393,7 +400,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       Req.Test.stub(ThamaniDawa.GtinLookup, fn _conn -> raise "boom" end)
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
 
       lv
       |> form("#gtin-scan-form", gtin_search: unique_gtin())
@@ -422,7 +429,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
         ])
       end)
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
 
       lv
       |> form("#gtin-scan-form", gtin_search: unique_gtin())
@@ -454,7 +461,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       gtin = unique_gtin()
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
 
       lv
       |> form("#gtin-scan-form", gtin_search: gtin)
@@ -477,7 +484,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       Req.Test.stub(ThamaniDawa.GtinLookup, fn conn -> Plug.Conn.send_resp(conn, 500, "") end)
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
 
       lv
       |> form("#gtin-scan-form", gtin_search: unique_gtin())
@@ -501,7 +508,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
         Req.Test.transport_error(conn, :timeout)
       end)
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
 
       lv
       |> form("#gtin-scan-form", gtin_search: unique_gtin())
@@ -520,7 +527,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     } do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
 
       html =
         lv
@@ -538,7 +545,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
     } do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv |> element("a", "+ Add product") |> render_click()
+      lv |> element("#product-new-button") |> render_click()
 
       html =
         lv
@@ -599,8 +606,35 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Show Me Product"
       assert html =~ "99"
       assert html =~ "GlaxoSmithKline"
+      assert has_element?(lv, "#product-details")
+      assert has_element?(lv, "#btn-add-product-stock")
+      assert has_element?(lv, "#btn-edit-product")
+      assert has_element?(lv, "#btn-toggle-active-product")
+
+      render_click(lv, "switch_stock_tab", %{"tab" => "sites"})
+
       assert has_element?(lv, "#batches", "BATCH-001")
       assert has_element?(lv, "#batches", "Active")
+    end
+
+    test "stock tabs expose and switch their associated panels", %{conn: conn, admin: admin} do
+      site_fixture(%{organization_id: admin.organization_id})
+      product = product_fixture(%{organization_id: admin.organization_id})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
+
+      assert has_element?(lv, "#warehouse-stock-tab[role=tab][aria-selected=true]")
+      assert has_element?(lv, "#warehouse-stock-panel[role=tabpanel]")
+
+      lv |> element("#sites-stock-tab") |> render_click()
+
+      assert has_element?(lv, "#sites-stock-tab[role=tab][aria-selected=true]")
+      assert has_element?(lv, "#sites-stock-panel[role=tabpanel]")
+      # The inactive panel stays mounted (just visually hidden) rather than
+      # being removed from the DOM — removing it would also tear down its
+      # LiveView stream container, silently dropping any stream_insert sent
+      # while that tab wasn't active.
+      assert has_element?(lv, "#warehouse-stock-panel.hidden")
     end
 
     test "pending batch shows Pending receipt status", %{conn: conn, admin: admin, site: site} do
@@ -620,16 +654,19 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
         })
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
+      render_click(lv, "switch_stock_tab", %{"tab" => "sites"})
 
       assert has_element?(lv, "#batches", "PENDING-LOT")
       assert has_element?(lv, "#batches", "Pending receipt")
     end
 
-    test "admin can dispatch a batch to a site from the show page", %{
+    test "admin can add stock and dispatch it to a site from the show page", %{
       conn: conn,
       admin: admin,
       site: site
     } do
+      site_fixture(%{organization_id: admin.organization_id})
+
       product =
         product_fixture(%{
           organization_id: admin.organization_id,
@@ -643,7 +680,6 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       lv
       |> form("#batch-form",
         batch: %{
-          site_id: site.id,
           gtin: product.gtin,
           batch_no: "LOT-ADMIN-1",
           expiry_date: "2027-06-01",
@@ -654,13 +690,80 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       assert_patch(lv, ~p"/org/products/#{product.id}")
       html = render(lv)
-      assert html =~ "Batch dispatched"
+      assert html =~ "Batch recorded as stock"
       assert html =~ "LOT-ADMIN-1"
       assert html =~ "200"
+
+      org_batch =
+        hd(
+          ThamaniDawa.Batches.list_undispatched_batches_for_product(
+            admin.organization_id,
+            product.id
+          )
+        )
+
+      assert has_element?(lv, "#undispatched_batches-#{org_batch.id}")
+      assert has_element?(lv, "#btn-dispatch-batch-#{org_batch.id}")
+
+      {:ok, lv, _html} =
+        live(
+          log_in_user(conn, admin),
+          ~p"/org/products/#{product.id}/batches/#{org_batch.id}/dispatch"
+        )
+
+      lv
+      |> form("#dispatch-batch-form", dispatch: %{site_id: site.id, quantity: 200})
+      |> render_submit()
+
+      assert_patch(lv, ~p"/org/products/#{product.id}")
+      html = render(lv)
+      assert html =~ "Batch dispatched"
+      assert html =~ "LOT-ADMIN-1"
+    end
+
+    test "shows the specific reason, not a generic error, when dispatching the same batch/lot to a site that already has it",
+         %{conn: conn, admin: admin, site: site} do
+      product =
+        product_fixture(%{
+          organization_id: admin.organization_id,
+          gtin: unique_gtin()
+        })
+
+      org_batch =
+        org_batch_fixture(%{
+          organization_id: admin.organization_id,
+          product_id: product.id,
+          gtin: product.gtin,
+          batch_no: "LOT-REPEAT",
+          quantity: 100
+        })
+
+      # First dispatch of 20 units to the site succeeds.
+      assert {:ok, _first} = ThamaniDawa.Batches.dispatch_to_site(org_batch, site.id, 20)
+
+      org_batch = ThamaniDawa.Batches.get_batch!(admin.organization_id, org_batch.id)
+
+      {:ok, lv, _html} =
+        live(
+          log_in_user(conn, admin),
+          ~p"/org/products/#{product.id}/batches/#{org_batch.id}/dispatch"
+        )
+
+      # A second dispatch of more of the same batch/lot to the same site
+      # collides with the per-site uniqueness constraint on batch_no.
+      html =
+        lv
+        |> form("#dispatch-batch-form", dispatch: %{site_id: site.id, quantity: 20})
+        |> render_submit()
+
+      assert html =~ "Couldn&#39;t dispatch that batch:"
+      assert html =~ "already been dispatched to this site"
     end
 
     test "dispatching a batch captures serial, manufacture date, and supplier, and displays them",
          %{conn: conn, admin: admin, site: site} do
+      site_fixture(%{organization_id: admin.organization_id})
+
       product =
         product_fixture(%{
           organization_id: admin.organization_id,
@@ -676,7 +779,6 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       lv
       |> form("#batch-form",
         batch: %{
-          site_id: site.id,
           gtin: product.gtin,
           batch_no: "LOT-TRACE-1",
           serial: "SN-12345",
@@ -688,8 +790,26 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       )
       |> render_submit()
 
+      org_batch =
+        hd(
+          ThamaniDawa.Batches.list_undispatched_batches_for_product(
+            admin.organization_id,
+            product.id
+          )
+        )
+
+      {:ok, lv, _html} =
+        live(
+          log_in_user(conn, admin),
+          ~p"/org/products/#{product.id}/batches/#{org_batch.id}/dispatch"
+        )
+
+      lv
+      |> form("#dispatch-batch-form", dispatch: %{site_id: site.id})
+      |> render_submit()
+
       assert_patch(lv, ~p"/org/products/#{product.id}")
-      html = render(lv)
+      html = render_click(lv, "switch_stock_tab", %{"tab" => "sites"})
       assert html =~ "SN-12345"
       assert html =~ "2026-01-01"
       assert html =~ "Acme Supply"
@@ -700,7 +820,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert supplier_id == supplier.id
     end
 
-    test "batches table shows a dash when serial, manufacture date, or supplier are absent", %{
+    test "batches table omits optional details when serial and manufacture date are absent", %{
       conn: conn,
       admin: admin,
       site: site
@@ -715,22 +835,25 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       })
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
+      render_click(lv, "switch_stock_tab", %{"tab" => "sites"})
 
-      assert has_element?(lv, "#batches td", "—")
+      assert has_element?(lv, "#batches td", "LOT-BARE-1")
+      refute has_element?(lv, "#batches td", "Serial")
+      refute has_element?(lv, "#batches td", "Mfd")
     end
 
-    test "shows an error dispatching the same batch_no to the same site twice", %{
+    test "shows an error recording the same batch_no as stock twice", %{
       conn: conn,
-      admin: admin,
-      site: site
+      admin: admin
     } do
+      site_fixture(%{organization_id: admin.organization_id})
+
       product =
         product_fixture(%{organization_id: admin.organization_id, gtin: unique_gtin()})
 
-      batch_fixture(%{
+      org_batch_fixture(%{
         organization_id: admin.organization_id,
         product_id: product.id,
-        site_id: site.id,
         gtin: product.gtin,
         batch_no: "LOT-REPEAT"
       })
@@ -742,7 +865,6 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
         lv
         |> form("#batch-form",
           batch: %{
-            site_id: site.id,
             gtin: product.gtin,
             batch_no: "LOT-REPEAT",
             expiry_date: "2027-06-01",
@@ -751,14 +873,17 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
         )
         |> render_submit()
 
-      assert html =~ "has already been dispatched to this site"
+      assert html =~ "already recorded as org stock for this product"
 
       assert length(
-               ThamaniDawa.Batches.list_batches_for_product(admin.organization_id, product.id)
+               ThamaniDawa.Batches.list_undispatched_batches_for_product(
+                 admin.organization_id,
+                 product.id
+               )
              ) == 1
     end
 
-    test "live-validates the dispatch batch form", %{conn: conn, admin: admin, site: site} do
+    test "live-validates the add stock form", %{conn: conn, admin: admin} do
       product = product_fixture(%{organization_id: admin.organization_id})
 
       {:ok, lv, _html} =
@@ -766,16 +891,15 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       html =
         lv
-        |> form("#batch-form", batch: %{site_id: site.id, batch_no: ""})
+        |> form("#batch-form", batch: %{batch_no: ""})
         |> render_change()
 
       assert html =~ "can&#39;t be blank"
     end
 
-    test "shows an error and does not dispatch a batch with an invalid GTIN", %{
+    test "shows an error and does not add stock with an invalid GTIN", %{
       conn: conn,
-      admin: admin,
-      site: site
+      admin: admin
     } do
       product = product_fixture(%{organization_id: admin.organization_id})
 
@@ -786,7 +910,6 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
         lv
         |> form("#batch-form",
           batch: %{
-            site_id: site.id,
             gtin: "00614141000011",
             batch_no: "LOT-BAD-GTIN",
             expiry_date: "2027-06-01",
@@ -797,7 +920,10 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       assert html =~ "is not a valid GTIN"
 
-      assert ThamaniDawa.Batches.list_batches_for_product(admin.organization_id, product.id) == []
+      assert ThamaniDawa.Batches.list_undispatched_batches_for_product(
+               admin.organization_id,
+               product.id
+             ) == []
     end
 
     test "dispatched batch opens GS1 Data Matrix print modal", %{
@@ -806,23 +932,25 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       site: site
     } do
       product = product_fixture(%{organization_id: admin.organization_id})
+      gtin = unique_gtin()
+
+      org_batch =
+        org_batch_fixture(%{
+          organization_id: admin.organization_id,
+          product_id: product.id,
+          gtin: gtin,
+          batch_no: "LOT-DM-001"
+        })
 
       {:ok, lv, _html} =
-        live(log_in_user(conn, admin), ~p"/org/products/#{product.id}/batches/new")
-
-      gtin = unique_gtin()
+        live(
+          log_in_user(conn, admin),
+          ~p"/org/products/#{product.id}/batches/#{org_batch.id}/dispatch"
+        )
 
       html =
         lv
-        |> form("#batch-form",
-          batch: %{
-            site_id: site.id,
-            gtin: gtin,
-            batch_no: "LOT-DM-001",
-            expiry_date: "2027-06-01",
-            quantity: 50
-          }
-        )
+        |> form("#dispatch-batch-form", dispatch: %{site_id: site.id})
         |> render_submit()
 
       assert html =~ "Batch dispatched"
@@ -847,6 +975,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
         })
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products/#{product.id}")
+      render_click(lv, "switch_stock_tab", %{"tab" => "sites"})
 
       html = lv |> element("#btn-datamatrix-#{batch.id}") |> render_click()
 
