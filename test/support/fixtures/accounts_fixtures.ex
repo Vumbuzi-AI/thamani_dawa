@@ -6,15 +6,16 @@ defmodule ThamaniDawa.AccountsFixtures do
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.OrganizationsFixtures
 
-  def valid_user_email, do: "user#{System.unique_integer()}@example.com"
+  def valid_user_email, do: "user#{System.unique_integer([:positive])}@example.com"
   def valid_user_password, do: "hello world!"
-  def valid_user_name, do: "Test User #{System.unique_integer()}"
+  def valid_user_name, do: "Test User #{System.unique_integer([:positive])}"
 
   def valid_user_attributes(attrs \\ %{}) do
     Enum.into(attrs, %{
       name: valid_user_name(),
       email: valid_user_email(),
-      password: valid_user_password()
+      password: valid_user_password(),
+      accepted_legal_terms: true
     })
   end
 
@@ -56,7 +57,12 @@ defmodule ThamaniDawa.AccountsFixtures do
     {:ok, invited, _encoded_token} =
       Accounts.invite_user(organization_id, invited_by_id, invite_attrs)
 
-    {:ok, user} = Accounts.accept_invite(invited, %{password: valid_user_password()})
+    {:ok, user} =
+      Accounts.accept_invite(invited, %{
+        password: valid_user_password(),
+        accepted_legal_terms: true
+      })
+
     user
   end
 end

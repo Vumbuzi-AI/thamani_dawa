@@ -40,13 +40,34 @@ defmodule ThamaniDawa.Sites do
   end
 
   @doc """
-  Creates the default site for a brand-new organization (§2.3.1) — a
-  `pharmacy`-type site named after the organization, so a single-pharmacy
-  owner never has to think about "sites" as a concept.
+  Whether an organization has more than one site — the §5 gate for showing
+  the optional requisition/transfer layer at all.
   """
-  def create_default_site(organization_id, name) when is_integer(organization_id) do
+  def multi_site?(organization_id) do
+    Repo.aggregate(from(s in Site, where: s.organization_id == ^organization_id), :count) > 1
+  end
+
+  @doc "Whether an organization has at least one site capable of lab work."
+  def lab_enabled?(organization_id) do
+    Repo.exists?(
+      from s in Site,
+        where: s.organization_id == ^organization_id,
+        where: s.site_type in [:lab, :pharmacy_lab]
+    )
+  end
+
+  @doc """
+  Creates the first site for a brand-new organization during onboarding.
+  """
+  def create_default_site(organization_id, name)
+      when is_integer(organization_id) and is_binary(name) do
+    create_default_site(organization_id, %{name: name, site_type: :pharmacy})
+  end
+
+  def create_default_site(organization_id, attrs)
+      when is_integer(organization_id) and is_map(attrs) do
     %Site{}
-    |> Site.default_changeset(%{name: name, site_type: :pharmacy})
+    |> Site.default_changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Ecto.Changeset.put_change(:gln, Gln.generate!())
     |> Repo.insert()

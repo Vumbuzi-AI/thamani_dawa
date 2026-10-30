@@ -5,12 +5,18 @@ defmodule ThamaniDawa.Organizations.Organization do
   @similar_name_message "An organization with a similar name already exists"
   @slug_index :organizations_slug_index
   @name_key_index :organizations_name_key_index
+  @operating_models [:pharmacy, :laboratory, :distributor]
 
   schema "organizations" do
     field :name, :string
     field :slug, :string
     field :name_key, :string
     field :license_number, :string
+
+    field :operating_models, {:array, Ecto.Enum},
+      values: @operating_models,
+      default: [:pharmacy]
+
     field :is_active, :boolean, default: true
     field :is_subscription_active, :boolean, default: false
     field :kyc_details, :map, default: %{}
@@ -37,14 +43,27 @@ defmodule ThamaniDawa.Organizations.Organization do
   @doc false
   def changeset(organization, attrs) do
     organization
-    |> cast(attrs, [:name, :slug, :license_number])
+    |> cast(attrs, [:name, :slug, :license_number, :operating_models])
+    |> trim_change(:name)
+    |> trim_change(:license_number)
     |> validate_required([:name], message: "Please enter your organization name")
     |> validate_required([:license_number], message: "Please enter your license number")
+    |> validate_length(:operating_models,
+      min: 1,
+      message: "Select at least one operating model"
+    )
     |> maybe_generate_slug()
     |> put_name_key()
     |> unique_constraint(:name, message: "An organization with this name already exists")
     |> unique_constraint(:name, name: @slug_index, message: @similar_name_message)
     |> unique_constraint(:name, name: @name_key_index, message: @similar_name_message)
+  end
+
+  @doc "The operating models an organization may enable during onboarding."
+  def operating_models, do: @operating_models
+
+  defp trim_change(changeset, field) do
+    update_change(changeset, field, &String.trim/1)
   end
 
   defp maybe_generate_slug(changeset) do

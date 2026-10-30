@@ -194,6 +194,76 @@ defmodule ThamaniDawa.AccountsTest do
     end
   end
 
+  describe "update_user/3" do
+    test "sets current_site_id when a user invited without a site is later assigned one" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, user, _encoded_token} =
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "New Hire",
+                 email: valid_user_email(),
+                 role: :pharmacist
+               })
+
+      assert user.current_site_id == nil
+
+      assert {:ok, updated} =
+               Accounts.update_user(organization.id, user.id, %{
+                 role: :pharmacist,
+                 site_ids: [site.id]
+               })
+
+      assert updated.current_site_id == site.id
+    end
+
+    test "leaves current_site_id alone when it's still among the assigned sites" do
+      organization = organization_fixture()
+      site_a = site_fixture(%{organization_id: organization.id})
+      site_b = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, user, _encoded_token} =
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "New Hire",
+                 email: valid_user_email(),
+                 role: :pharmacist,
+                 site_ids: [site_a.id, site_b.id]
+               })
+
+      assert {:ok, updated} =
+               Accounts.update_user(organization.id, user.id, %{
+                 role: :pharmacist,
+                 site_ids: [site_a.id, site_b.id]
+               })
+
+      assert updated.current_site_id == user.current_site_id
+    end
+
+    test "resets current_site_id to the first remaining site when it's removed from the assignment" do
+      organization = organization_fixture()
+      site_a = site_fixture(%{organization_id: organization.id})
+      site_b = site_fixture(%{organization_id: organization.id})
+
+      assert {:ok, user, _encoded_token} =
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "New Hire",
+                 email: valid_user_email(),
+                 role: :pharmacist,
+                 site_ids: [site_a.id]
+               })
+
+      assert user.current_site_id == site_a.id
+
+      assert {:ok, updated} =
+               Accounts.update_user(organization.id, user.id, %{
+                 role: :pharmacist,
+                 site_ids: [site_b.id]
+               })
+
+      assert updated.current_site_id == site_b.id
+    end
+  end
+
   describe "deliver_user_invite/5" do
     test "builds the invite URL from the encoded token and delivers the email" do
       organization = organization_fixture()
@@ -235,7 +305,12 @@ defmodule ThamaniDawa.AccountsTest do
       assert %User{id: id} = Accounts.get_user_by_invite_token(encoded_token)
       assert id == invited.id
 
-      assert {:ok, accepted} = Accounts.accept_invite(invited, %{password: valid_user_password()})
+      assert {:ok, accepted} =
+               Accounts.accept_invite(invited, %{
+                 password: valid_user_password(),
+                 accepted_legal_terms: true
+               })
+
       assert is_binary(accepted.hashed_password)
     end
 
@@ -250,7 +325,10 @@ defmodule ThamaniDawa.AccountsTest do
         })
 
       assert {:ok, _accepted} =
-               Accounts.accept_invite(invited, %{password: valid_user_password()})
+               Accounts.accept_invite(invited, %{
+                 password: valid_user_password(),
+                 accepted_legal_terms: true
+               })
 
       refute Accounts.get_user_by_invite_token(encoded_token)
     end
@@ -322,6 +400,49 @@ defmodule ThamaniDawa.AccountsTest do
     end
   end
 
+  describe "set_user_active/4" do
+    test "deactivates and reactivates another organization user" do
+      admin = user_fixture()
+
+      staff =
+        staff_fixture(%{organization_id: admin.organization_id, invited_by_id: admin.id})
+
+      assert {:ok, %User{is_active: false}} =
+               Accounts.set_user_active(admin.organization_id, admin.id, staff.id, false)
+
+      assert {:ok, %User{is_active: true}} =
+               Accounts.set_user_active(admin.organization_id, admin.id, staff.id, true)
+    end
+
+    test "does not allow an administrator to deactivate themselves" do
+      admin = user_fixture()
+
+      assert {:error, :cannot_deactivate_self} =
+               Accounts.set_user_active(admin.organization_id, admin.id, admin.id, false)
+    end
+
+    test "a deactivated administrator cannot change account access" do
+      acting_admin = user_fixture()
+      other_admin = user_fixture(%{organization_id: acting_admin.organization_id})
+
+      assert {:ok, %User{is_active: false}} =
+               Accounts.set_user_active(
+                 acting_admin.organization_id,
+                 acting_admin.id,
+                 other_admin.id,
+                 false
+               )
+
+      assert {:error, :unauthorized} =
+               Accounts.set_user_active(
+                 acting_admin.organization_id,
+                 other_admin.id,
+                 acting_admin.id,
+                 false
+               )
+    end
+  end
+
   describe "sessions" do
     test "generate_user_session_token/1 and get_user_by_session_token/1 round-trip" do
       user = user_fixture()
@@ -351,6 +472,53 @@ defmodule ThamaniDawa.AccountsTest do
 
       assert :ok = Accounts.delete_user_session_token(token)
       refute Accounts.get_user_by_session_token(token)
+    end
+  end
+
+  describe "list_sites_for_user" do
+    test "returns assigned sites for staff with a single site" do
+      org = organization_fixture()
+      site = site_fixture(%{organization_id: org.id})
+      staff = staff_fixture(%{organization_id: org.id, site_id: site.id})
+
+      assert [%{id: id}] = Accounts.list_sites_for_user(staff)
+      assert id == site.id
+
+      scope = ThamaniDawa.Accounts.Scope.for_user(staff)
+      assert [%{id: ^id}] = Accounts.list_sites_for_user(scope)
+      assert [%{id: ^id}] = Accounts.list_sites_for_user(org.id, staff.id)
+    end
+
+    test "returns only assigned sites for staff with multiple sites" do
+      org = organization_fixture()
+      site_a = site_fixture(%{organization_id: org.id})
+      site_b = site_fixture(%{organization_id: org.id})
+      _other_site = site_fixture(%{organization_id: org.id})
+      staff = staff_fixture(%{organization_id: org.id, site_ids: [site_a.id, site_b.id]})
+
+      sites = Accounts.list_sites_for_user(staff)
+      site_ids = Enum.map(sites, & &1.id)
+
+      assert length(sites) == 2
+      assert site_a.id in site_ids
+      assert site_b.id in site_ids
+    end
+
+    test "returns all organization sites for an admin" do
+      org = organization_fixture()
+      site_a = site_fixture(%{organization_id: org.id})
+      site_b = site_fixture(%{organization_id: org.id})
+      admin = user_fixture(%{organization_id: org.id})
+
+      sites = Accounts.list_sites_for_user(admin)
+      site_ids = Enum.map(sites, & &1.id)
+
+      assert length(sites) == 2
+      assert site_a.id in site_ids
+      assert site_b.id in site_ids
+
+      scope = ThamaniDawa.Accounts.Scope.for_user(admin)
+      assert length(Accounts.list_sites_for_user(scope)) == 2
     end
   end
 end

@@ -22,10 +22,16 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
   def handle_event("save", %{"user" => attrs}, socket) do
     case Accounts.accept_invite(socket.assigns.user, attrs) do
       {:ok, _user} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "Password set — log in below.")
-         |> push_navigate(to: ~p"/login")}
+        socket = put_flash(socket, :invite_accepted, true)
+
+        # A hard redirect is required (not push_navigate) when the browser
+        # already holds another user's session, since only a real page load
+        # reaches SessionController.new/2, which ends that session.
+        if socket.assigns.current_scope && socket.assigns.current_scope.user do
+          {:noreply, redirect(socket, to: ~p"/login")}
+        else
+          {:noreply, push_navigate(socket, to: ~p"/login")}
+        end
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :user))}
@@ -80,14 +86,6 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
       </div>
 
       <div style="flex: 1; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
-        <.link
-          navigate={~p"/"}
-          class="lg:hidden"
-          style="font-size: 16px; font-weight: 500; color: var(--thamani-forest); text-decoration: none; letter-spacing: -0.01em; margin-bottom: 40px; align-self: flex-start;"
-        >
-          Thamani Dawa
-        </.link>
-
         <div style="width: 100%; max-width: 380px;">
           <Layouts.flash_group flash={@flash} />
 
@@ -108,6 +106,43 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
               class="mb-8"
               required
             />
+
+            <div class="mb-7">
+              <label class="grid cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-3">
+                <input
+                  type="hidden"
+                  name={@form[:accepted_legal_terms].name}
+                  value="false"
+                />
+                <input
+                  id={@form[:accepted_legal_terms].id}
+                  type="checkbox"
+                  name={@form[:accepted_legal_terms].name}
+                  value="true"
+                  checked={@form[:accepted_legal_terms].value in [true, "true"]}
+                  required
+                  class="mt-1 size-4 rounded border-[var(--thamani-stone)] bg-transparent text-[var(--thamani-forest)] accent-[var(--thamani-forest)] focus:ring-2 focus:ring-[var(--thamani-lime)]"
+                />
+                <span class="min-w-0 text-xs leading-5 text-[var(--thamani-pewter)]">
+                  I agree to the
+                  <a
+                    href={~p"/terms"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="font-semibold text-[var(--thamani-forest)] underline underline-offset-2 transition hover:text-[var(--thamani-moss)]"
+                  >Terms of Service</a>
+                  and acknowledge the <a
+                    href={~p"/privacy"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="font-semibold text-[var(--thamani-forest)] underline underline-offset-2 transition hover:text-[var(--thamani-moss)]"
+                  >Privacy Policy</a>.
+                </span>
+              </label>
+              <%= for error <- @form[:accepted_legal_terms].errors do %>
+                <p class="mt-1.5 pl-7 text-xs text-red-700">{translate_error(error)}</p>
+              <% end %>
+            </div>
 
             <.thamani_btn id="accept-invite-submit" type="submit" variant="primary">
               Set password

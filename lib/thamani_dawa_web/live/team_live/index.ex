@@ -53,7 +53,8 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      |> assign(:form, form)
      |> assign(:editing_user, user)
      |> assign(:checked_site_ids, checked_site_ids)
-     |> assign(:selected_role, selected_role)}
+     |> assign(:selected_role, selected_role)
+     |> assign(:back_path, back_path(params))}
   end
 
   def handle_event("save", %{"user" => attrs}, socket) do
@@ -71,11 +72,12 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           end
         )
 
-        {:noreply,
-         socket
-         |> put_flash(:info, "Invite sent to #{user.email}.")
-         |> assign_lists()
-         |> push_patch(to: ~p"/org/team")}
+        socket =
+          socket
+          |> put_flash(:info, "Invite sent to #{user.email}.")
+          |> assign_lists()
+
+        {:noreply, return_after_invite(socket)}
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :user))}
@@ -130,6 +132,47 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      |> assign_lists()}
   end
 
+  def handle_event("toggle_active", %{"id" => id}, socket) do
+    %{organization_id: organization_id, user: admin} = socket.assigns.current_scope
+    user = Accounts.get_user!(organization_id, String.to_integer(id))
+    active? = not user.is_active
+
+    case Accounts.set_user_active(organization_id, admin.id, user.id, active?) do
+      {:ok, updated_user} ->
+        action = if updated_user.is_active, do: "reactivated", else: "deactivated"
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "#{updated_user.name} #{action}.")
+         |> assign_lists()}
+
+      {:error, :cannot_deactivate_self} ->
+        {:noreply, put_flash(socket, :error, "You cannot deactivate your own account.")}
+
+      {:error, :last_active_admin} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Assign another active admin before deactivating this account."
+         )}
+
+      {:error, :unauthorized} ->
+        {:noreply, put_flash(socket, :error, "You are not allowed to change account access.")}
+    end
+  end
+
+  defp back_path(%{"return_to" => "dashboard"}), do: ~p"/org/dashboard"
+  defp back_path(_params), do: ~p"/org/team"
+
+  defp return_after_invite(socket) do
+    if socket.assigns.back_path == ~p"/org/dashboard" do
+      push_navigate(socket, to: socket.assigns.back_path)
+    else
+      push_patch(socket, to: socket.assigns.back_path)
+    end
+  end
+
   defp assign_lists(socket) do
     organization_id = socket.assigns.current_scope.organization_id
     page = socket.assigns.page
@@ -182,6 +225,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   defp filter_by_status(users, ""), do: users
   defp filter_by_status(users, "invited"), do: Enum.filter(users, &(status(&1) == :invited))
   defp filter_by_status(users, "active"), do: Enum.filter(users, &(status(&1) == :active))
+  defp filter_by_status(users, "inactive"), do: Enum.filter(users, &(status(&1) == :inactive))
 
   defp active_filter_count(filters) do
     Enum.count([filters.role != "", filters.site_id != "", filters.status != ""], & &1)
@@ -270,20 +314,6 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       </div>
 
       <div :if={@selected_role not in ["", nil, "admin"]}>
-        <input
-          type="text"
-          id="site-search"
-          placeholder="Search compatible sites…"
-          oninput="
-            const q = this.value.toLowerCase();
-            document.querySelectorAll('#site-checkbox-list label').forEach(lbl => {
-              lbl.style.display = lbl.querySelector('span').textContent.toLowerCase().includes(q) ? '' : 'none';
-            });
-          "
-          class="thamani-input mb-2 h-9 w-full rounded-lg px-3 text-sm focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
-          autocomplete="off"
-        />
-
         <div
           :if={@sites == []}
           class="text-xs text-thamani-pewter bg-thamani-stone/30 border border-thamani-stone rounded-xl p-3 text-center"
@@ -291,32 +321,65 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           No compatible sites available for this role.
         </div>
 
-        <div
-          :if={@sites != []}
-          id="site-checkbox-list"
-          class="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1"
+        <label
+          :for={site <- @sites}
+          :if={match?([_], @sites)}
+          title={site.name}
+          class="flex items-center gap-3 rounded-lg border border-thamani-stone bg-thamani-canvas px-3 py-2 text-sm text-thamani-forest"
         >
-          <label
-            :for={site <- @sites}
-            title={site.name}
-            class="flex items-center gap-3 rounded-lg border border-thamani-stone bg-thamani-canvas px-3 py-2 text-sm text-thamani-forest cursor-pointer hover:bg-thamani-stone/50 transition-colors"
+          <input
+            type="checkbox"
+            id={"user_site_ids_#{site.id}"}
+            name="user[site_ids][]"
+            value={site.id}
+            checked
+            class="size-4 shrink-0 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+          />
+          <span class="font-medium truncate min-w-0">{site.name}</span>
+        </label>
+
+        <div :if={length(@sites) > 1}>
+          <input
+            type="text"
+            id="site-search"
+            placeholder="Search compatible sites…"
+            oninput="
+              const q = this.value.toLowerCase();
+              document.querySelectorAll('#site-checkbox-list label').forEach(lbl => {
+                lbl.style.display = lbl.querySelector('span').textContent.toLowerCase().includes(q) ? '' : 'none';
+              });
+            "
+            class="thamani-input mb-2 h-9 w-full rounded-lg px-3 text-sm focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
+            autocomplete="off"
+          />
+
+          <div
+            id="site-checkbox-list"
+            class="grid grid-cols-1 gap-1.5 max-h-48 overflow-y-auto pr-1"
           >
-            <input
-              type="checkbox"
-              id={"user_site_ids_#{site.id}"}
-              name="user[site_ids][]"
-              value={site.id}
-              checked={site.id in @checked_site_ids}
-              class="size-4 shrink-0 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
-            />
-            <span class="font-medium truncate min-w-0">{site.name}</span>
-          </label>
+            <label
+              :for={site <- @sites}
+              title={site.name}
+              class="flex items-center gap-3 rounded-lg border border-thamani-stone bg-thamani-canvas px-3 py-2 text-sm text-thamani-forest cursor-pointer hover:bg-thamani-stone/50 transition-colors"
+            >
+              <input
+                type="checkbox"
+                id={"user_site_ids_#{site.id}"}
+                name="user[site_ids][]"
+                value={site.id}
+                checked={site.id in @checked_site_ids}
+                class="size-4 shrink-0 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+              />
+              <span class="font-medium truncate min-w-0">{site.name}</span>
+            </label>
+          </div>
         </div>
       </div>
     </div>
     """
   end
 
+  defp status(%User{is_active: false}), do: :inactive
   defp status(%User{hashed_password: nil}), do: :invited
   defp status(%User{}), do: :active
 
@@ -327,7 +390,9 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         Team
         <:subtitle>Search, filter, and manage your team.</:subtitle>
         <:actions>
-          <.button variant="primary" patch={~p"/org/team/new"}>+ Invite staff</.button>
+          <.button variant="primary" patch={~p"/org/team/new"}>
+            <.icon name="hero-plus" class="size-4" /> Invite staff
+          </.button>
         </:actions>
         <:toolbar>
           <form phx-change="search" class="flex-1" id="search-form">
@@ -363,7 +428,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
                 type="select"
                 name="filters[status]"
                 value={@filters.status}
-                options={[{"Active", "active"}, {"Invited", "invited"}]}
+                options={[{"Active", "active"}, {"Invited", "invited"}, {"Inactive", "inactive"}]}
                 prompt="All statuses"
               />
             </:group>
@@ -376,7 +441,16 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         </:toolbar>
       </.header>
 
-      <.modal :if={@live_action == :new} id="invite-modal" show on_cancel={JS.patch(~p"/org/team")}>
+      <.modal
+        :if={@live_action == :new}
+        id="invite-modal"
+        show
+        on_cancel={
+          if @back_path == ~p"/org/dashboard",
+            do: JS.navigate(@back_path),
+            else: JS.patch(@back_path)
+        }
+      >
         <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
           Invite a staff member
         </h2>
@@ -468,6 +542,24 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             id={"btn-edit-user-#{user.id}"}
           >
             Edit
+          </.button>
+        </:action>
+        <:action :let={user}>
+          <.button
+            :if={user.id != @current_scope.user.id}
+            type="button"
+            variant={if user.is_active, do: "ghost-delete", else: "ghost"}
+            phx-click="toggle_active"
+            phx-value-id={user.id}
+            data-confirm={
+              if user.is_active,
+                do: "Deactivate #{user.name}? They will immediately lose access.",
+                else: nil
+            }
+            id={"btn-toggle-active-user-#{user.id}"}
+            class="px-3 py-1.5 text-xs"
+          >
+            {if user.is_active, do: "Deactivate", else: "Reactivate"}
           </.button>
         </:action>
         <:empty_state>

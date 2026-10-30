@@ -164,7 +164,80 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
     end
   end
 
+  describe "account status management" do
+    test "an admin can deactivate, filter, and reactivate a team member", %{conn: conn} do
+      admin = user_fixture()
+
+      staff =
+        staff_fixture(%{
+          organization_id: admin.organization_id,
+          invited_by_id: admin.id,
+          name: "Amina Tester"
+        })
+
+      {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
+
+      assert has_element?(lv, "#btn-toggle-active-user-#{staff.id}", "Deactivate")
+
+      html = lv |> element("#btn-toggle-active-user-#{staff.id}") |> render_click()
+
+      assert html =~ "Amina Tester deactivated."
+      assert has_element?(lv, "#btn-toggle-active-user-#{staff.id}", "Reactivate")
+      assert %{is_active: false} = ThamaniDawa.Accounts.get_user!(admin.organization_id, staff.id)
+
+      lv
+      |> form("#team-filters-form", filters: %{status: "inactive"})
+      |> render_submit()
+
+      assert has_element?(lv, "#users", "Amina Tester")
+      assert render(lv) =~ "Status: Inactive"
+
+      lv |> element("#btn-toggle-active-user-#{staff.id}") |> render_click()
+
+      assert %{is_active: true} = ThamaniDawa.Accounts.get_user!(admin.organization_id, staff.id)
+    end
+
+    test "the signed-in administrator cannot deactivate themselves", %{conn: conn} do
+      admin = user_fixture()
+      {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
+
+      refute has_element?(lv, "#btn-toggle-active-user-#{admin.id}")
+    end
+  end
+
   describe "invite a staff member" do
+    test "a single-site org shows the one compatible site without a search box", %{conn: conn} do
+      admin = user_fixture()
+      site = site_fixture(%{organization_id: admin.organization_id, name: "Only Branch"})
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/org/team/new")
+
+      html =
+        view
+        |> form("#invite-form", user: %{role: "pharmacist"})
+        |> render_change()
+
+      assert html =~ "Only Branch"
+      refute has_element?(view, "#site-search")
+      refute has_element?(view, "#site-checkbox-list")
+      assert has_element?(view, "#user_site_ids_#{site.id}[checked]")
+    end
+
+    test "a multi-site org still shows the search box and checklist", %{conn: conn} do
+      admin = user_fixture()
+      site_fixture(%{organization_id: admin.organization_id, name: "Branch A"})
+      site_fixture(%{organization_id: admin.organization_id, name: "Branch B"})
+
+      {:ok, view, _html} = live(log_in(conn, admin), ~p"/org/team/new")
+
+      view
+      |> form("#invite-form", user: %{role: "pharmacist"})
+      |> render_change()
+
+      assert has_element?(view, "#site-search")
+      assert has_element?(view, "#site-checkbox-list")
+    end
+
     test "a successful invite shows a flash and adds the new hire to the staff list", %{
       conn: conn
     } do

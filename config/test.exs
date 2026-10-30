@@ -35,6 +35,17 @@ config :thamani_dawa, ThamaniDawa.GtinLookup,
 
 config :thamani_dawa, ThamaniDawa.Gln, company_prefix: "0614141"
 
+config :thamani_dawa, ThamaniDawa.Daraja,
+  base_url: "https://daraja.test",
+  consumer_key: "test-consumer-key",
+  consumer_secret: "test-consumer-secret",
+  shortcode: "174379",
+  passkey: "test-passkey",
+  callback_url: "https://example.test/api/mpesa/callback/test-callback-token",
+  callback_token: "test-callback-token",
+  plug: {Req.Test, ThamaniDawa.Daraja},
+  retry: false
+
 config :thamani_dawa, :demo_login_accounts, [
   %{id: "admin", name: "Amina Kamau", role: "Admin", email: "admin@gmail.com"},
   %{

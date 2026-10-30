@@ -17,15 +17,29 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     # Step 1: sign up the organization admin
     {:ok, signup_view, _html} = live(conn, ~p"/signup")
 
-    assert {:error, {:live_redirect, %{to: login_path}}} =
-             signup_view
-             |> form("#signup-form",
-               organization: %{name: "Acme Pharmacy Co", license_number: "PPB-ACME-001"},
-               user: %{name: "Ada Admin", email: admin_email, password: "supersecret123"}
-             )
-             |> render_submit()
+    signup_view
+    |> form("#organization-setup-form",
+      organization: %{
+        name: "Acme Pharmacy Co",
+        license_number: "PPB-ACME-001",
+        operating_models: ["pharmacy", "laboratory"]
+      },
+      site: %{name: "Acme First Branch", site_type: "pharmacy_lab"}
+    )
+    |> render_submit()
 
-    assert login_path == ~p"/login"
+    signup_view
+    |> form("#signup-form",
+      user: %{
+        name: "Ada Admin",
+        email: admin_email,
+        password: "supersecret123",
+        accepted_legal_terms: "true"
+      }
+    )
+    |> render_submit()
+
+    assert has_element?(signup_view, "#signup-form[phx-trigger-action][action='/login']")
 
     admin = Accounts.get_user_by_email(admin_email)
     assert admin.role == :admin

@@ -19,7 +19,20 @@ defmodule ThamaniDawa.OrganizationsTest do
 
       assert organization.name == "Acme Pharmacy"
       assert organization.license_number == "LIC-1"
+      assert organization.operating_models == [:pharmacy]
       assert organization.is_active
+    end
+
+    test "trims surrounding whitespace from the organization name and license number" do
+      assert {:ok, organization} =
+               Organizations.create_organization(%{
+                 name: "  Mwangaza Pharmacy  ",
+                 license_number: "  PPB-TEST-01  "
+               })
+
+      assert organization.name == "Mwangaza Pharmacy"
+      assert organization.license_number == "PPB-TEST-01"
+      assert organization.slug == "mwangaza-pharmacy"
     end
 
     test "ignores client-supplied server-controlled flags, e.g. is_subscription_active" do
@@ -179,6 +192,35 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert user.organization_id == organization.id
       assert user.role == :admin
       assert user.name == "Jane Admin"
+    end
+
+    test "creates a distributor with a selected warehouse site" do
+      org_attrs = %{
+        name: "Acme Distribution",
+        license_number: "LIC-D",
+        operating_models: [:distributor]
+      }
+
+      site_attrs = %{name: "Central Warehouse", site_type: :warehouse, address: "Industrial Area"}
+
+      assert {:ok, %{organization: organization, site: site}} =
+               Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
+
+      assert organization.operating_models == [:distributor]
+      assert site.name == "Central Warehouse"
+      assert site.site_type == :warehouse
+      assert site.address == "Industrial Area"
+    end
+
+    test "derives a combined site for pharmacy and laboratory legacy signup" do
+      org_attrs = %{
+        name: "Acme Health",
+        license_number: "LIC-H",
+        operating_models: [:pharmacy, :laboratory]
+      }
+
+      assert {:ok, %{site: site}} = Organizations.signup(org_attrs, valid_user_attributes())
+      assert site.site_type == :pharmacy_lab
     end
 
     test "rolls back the whole signup if the admin user is invalid" do
