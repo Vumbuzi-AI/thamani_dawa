@@ -125,7 +125,8 @@ defmodule ThamaniDawaWeb.Layouts do
           {"Stock", "hero-cube", ~p"/lab/stock"},
           {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
           {"Requisitions", "hero-clipboard-document-list", ~p"/lab/requisitions"},
-          {"Scan", "hero-qr-code", ~p"/lab/scan"}
+          {"Scan", "hero-qr-code", ~p"/lab/scan"},
+          {"Transactions", "hero-banknotes", ~p"/lab/transactions"}
         ]
         |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
       }
@@ -168,12 +169,14 @@ defmodule ThamaniDawaWeb.Layouts do
       nav_items={
         [
           {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
+          {"Quick sale", "hero-bolt", ~p"/pharmacy/quick-sale"},
           {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
           {"Patients", "hero-user-group", ~p"/pharmacy/patients"},
           {"Stock", "hero-cube", ~p"/pharmacy/stock"},
           {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
           {"Requisitions", "hero-clipboard-document-list", ~p"/pharmacy/requisitions"},
-          {"Scan", "hero-qr-code", ~p"/pharmacy/scan"}
+          {"Scan", "hero-qr-code", ~p"/pharmacy/scan"},
+          {"Transactions", "hero-banknotes", ~p"/pharmacy/transactions"}
         ]
         |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
       }
@@ -256,7 +259,8 @@ defmodule ThamaniDawaWeb.Layouts do
           {"Products", "hero-cube", ~p"/org/products"},
           {"Team", "hero-user-group", ~p"/org/team"},
           {"Suppliers", "hero-truck", ~p"/org/suppliers"},
-          {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"}
+          {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"},
+          {"Transactions", "hero-banknotes", ~p"/org/earnings"}
         ]
         |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
       }

@@ -3,10 +3,30 @@ defmodule ThamaniDawaWeb.LayoutsTest do
 
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.SitesFixtures
 
   setup do
     admin = user_fixture()
     {:ok, admin: admin}
+  end
+
+  describe "requisitions nav item" do
+    test "hidden for a single-site organization", %{conn: conn, admin: admin} do
+      site_fixture(%{organization_id: admin.organization_id})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      refute has_element?(lv, "span[id='nav-label-/org/requisitions']")
+    end
+
+    test "shown once an organization has more than one site", %{conn: conn, admin: admin} do
+      site_fixture(%{organization_id: admin.organization_id})
+      site_fixture(%{organization_id: admin.organization_id})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      assert has_element?(lv, "span[id='nav-label-/org/requisitions']")
+    end
   end
 
   describe "organization sidebar navigation" do
@@ -23,6 +43,8 @@ defmodule ThamaniDawaWeb.LayoutsTest do
 
       assert has_element?(lv, "#sidebar-backdrop[aria-label='Close navigation']")
       assert has_element?(lv, "#sidebar-aside[aria-label='Organization navigation']")
+      assert has_element?(lv, "#sidebar-backdrop.z-\\[80\\]")
+      assert has_element?(lv, "#sidebar-aside.z-\\[90\\]")
       assert has_element?(lv, "a[aria-current='page']", "Sites")
     end
 

@@ -39,7 +39,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     visit =
       ThamaniDawa.PatientVisits.get_patient_visit!(organization_id, prescription.patient_visit_id)
 
-    patient = Patients.get_patient!(organization_id, visit.patient_id)
+    patient =
+      if visit.patient_id, do: Patients.get_patient!(organization_id, visit.patient_id)
+
     items = Prescriptions.list_prescription_items(organization_id, prescription.id)
 
     stock_by_product_id =
@@ -51,21 +53,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
          ThamaniDawa.Batches.total_available_stock(organization_id, visit.site_id, product_id)}
       end)
 
-    allocation_previews =
-      Map.new(items, fn item ->
-        {item.id,
-         allocation_preview(
-           organization_id,
-           visit.site_id,
-           item.product_id,
-           outstanding_quantity(item)
-         )}
-      end)
-
     dispenses_by_item =
       Map.new(items, fn item ->
         {item.id, Prescriptions.list_batch_dispenses_for_item(organization_id, item.id)}
       end)
+
+    site = ThamaniDawa.Sites.get_site!(organization_id, visit.site_id)
 
     socket
     |> assign(:prescription, prescription)
@@ -73,16 +66,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     |> assign(:items, items)
     |> assign(:stock_by_product_id, stock_by_product_id)
     |> assign(:site_id, visit.site_id)
-    |> assign(:allocation_previews, allocation_previews)
+    |> assign(:site, site)
     |> assign(:dispenses_by_item, dispenses_by_item)
-  end
-
-  defp allocation_preview(_organization_id, _site_id, _product_id, quantity)
-       when quantity <= 0,
-       do: []
-
-  defp allocation_preview(organization_id, site_id, product_id, quantity) do
-    ThamaniDawa.Batches.preview_fefo_allocation(organization_id, site_id, product_id, quantity)
   end
 
   def handle_event("validate_payment", %{"payment" => attrs}, socket) do
@@ -107,6 +92,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
          {:ok, _completed} <- Payments.complete_payment(payment) do
       {:noreply,
        socket
+       |> load_prescription(prescription.id)
        |> put_flash(:info, "Payment recorded and completed.")
        |> push_patch(to: ~p"/pharmacy/prescriptions/#{prescription.id}")}
     else
@@ -118,37 +104,28 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     end
   end
 
-  def handle_event("dispense", %{"item_id" => item_id, "quantity" => quantity}, socket) do
+  def handle_event(
+        "dispense",
+        %{"item_id" => item_id, "quantity" => quantity, "barcode" => barcode} = params,
+        socket
+      ) do
     organization_id = socket.assigns.current_scope.organization_id
     pharmacist_id = socket.assigns.current_scope.user.id
 
     with {item_id, ""} <- Integer.parse(item_id),
          {quantity, ""} <- Integer.parse(quantity),
          true <- quantity > 0 do
-      do_dispense(socket, organization_id, item_id, pharmacist_id, quantity)
+      do_scan_dispense(
+        socket,
+        organization_id,
+        item_id,
+        pharmacist_id,
+        quantity,
+        barcode,
+        Map.get(params, "batch_no", "")
+      )
     else
       _ -> {:noreply, put_flash(socket, :error, "Enter a valid quantity.")}
-    end
-  end
-
-  def handle_event("preview_dispense", %{"item_id" => item_id, "quantity" => quantity}, socket) do
-    organization_id = socket.assigns.current_scope.organization_id
-
-    with {item_id, ""} <- Integer.parse(item_id),
-         {quantity, ""} <- Integer.parse(quantity) do
-      item = Enum.find(socket.assigns.items, &(&1.id == item_id))
-
-      preview =
-        allocation_preview(organization_id, socket.assigns.site_id, item.product_id, quantity)
-
-      {:noreply,
-       assign(
-         socket,
-         :allocation_previews,
-         Map.put(socket.assigns.allocation_previews, item_id, preview)
-       )}
-    else
-      _ -> {:noreply, socket}
     end
   end
 
@@ -161,8 +138,23 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     end
   end
 
-  defp do_dispense(socket, organization_id, item_id, pharmacist_id, quantity) do
-    case Prescriptions.dispense_item(organization_id, item_id, pharmacist_id, quantity) do
+  defp do_scan_dispense(
+         socket,
+         organization_id,
+         item_id,
+         pharmacist_id,
+         quantity,
+         barcode,
+         batch_no
+       ) do
+    case Prescriptions.dispense_scanned_item(
+           organization_id,
+           item_id,
+           pharmacist_id,
+           quantity,
+           barcode,
+           batch_no
+         ) do
       {:ok, _item} ->
         {:noreply,
          socket
@@ -174,6 +166,17 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
       {:error, :over_dispensed} ->
         {:noreply, put_flash(socket, :error, "That would dispense more than was prescribed.")}
+
+      {:error, :gtin_mismatch} ->
+        {:noreply, put_flash(socket, :error, "GTIN mismatch. This is the wrong product.")}
+
+      {:error, :batch_mismatch} ->
+        {:noreply,
+         put_flash(socket, :error, "That lot is not available for this product at this site.")}
+
+      {:error, :invalid_batch_barcode} ->
+        {:noreply,
+         put_flash(socket, :error, "Enter a valid product GTIN and the batch or lot number.")}
 
       {:error, _changeset} ->
         {:noreply, put_flash(socket, :error, "Couldn't dispense that item.")}
@@ -231,9 +234,162 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   defp outstanding_quantity(item),
     do: max(item.quantity_prescribed - item.quantity_dispensed, 0)
 
+  defp directions_present?(item) do
+    Enum.any?(
+      [
+        item.dosage_instructions,
+        item.frequency,
+        item.route_of_administration,
+        item.duration_in_days
+      ],
+      &(&1 not in [nil, ""])
+    )
+  end
+
   defp user_display(nil), do: "—"
   defp user_display(%{name: name}) when is_binary(name) and name != "", do: name
   defp user_display(%{email: email}), do: email
+
+  def render(%{live_action: :receipt} = assigns) do
+    ~H"""
+    <Layouts.pharmacy_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/pharmacy/prescriptions"
+    >
+      <div id="prescription-receipt" class="mx-auto max-w-lg space-y-4">
+        <div
+          id="prescription-receipt-card"
+          class="receipt-card rounded-2xl ff-surface-card bg-white p-6 text-sm text-slate-900"
+        >
+          <header class="receipt-header text-center">
+            <img
+              src="/images/logo.png"
+              alt="Thamani Dawa"
+              class="receipt-logo mx-auto mb-2 size-14 object-contain"
+            />
+            <p class="receipt-site font-semibold text-thamani-forest">{@site.name}</p>
+            <h1 class="receipt-title mb-3 text-base font-bold uppercase">Sale Receipt</h1>
+            <div class="receipt-meta space-y-1 border-y border-dashed border-thamani-stone py-3 text-left">
+              <div class="flex justify-between gap-2">
+                <span>Receipt no.</span>
+                <strong>RX-{String.pad_leading(Integer.to_string(@prescription.id), 6, "0")}</strong>
+              </div>
+              <div class="flex justify-between gap-2">
+                <span>Date</span>
+                <strong>{Calendar.strftime(@prescription.inserted_at, "%d %b %Y %H:%M")}</strong>
+              </div>
+              <div class="flex justify-between gap-2">
+                <span>Patient</span>
+                <strong>{if @patient, do: @patient.full_name, else: "Walk-in"}</strong>
+              </div>
+            </div>
+          </header>
+
+          <table
+            id="prescription-receipt-items"
+            class="receipt-table my-3 w-full table-fixed border-collapse text-[10px]"
+          >
+            <thead>
+              <tr>
+                <th
+                  scope="col"
+                  class="border-b border-dashed border-thamani-stone py-2 text-left uppercase"
+                >
+                  Qty
+                </th>
+                <th
+                  scope="col"
+                  class="border-b border-dashed border-thamani-stone py-2 text-left uppercase"
+                >
+                  Medicine
+                </th>
+                <th
+                  scope="col"
+                  class="border-b border-dashed border-thamani-stone py-2 text-right uppercase"
+                >
+                  Unit price
+                </th>
+                <th
+                  scope="col"
+                  class="border-b border-dashed border-thamani-stone py-2 text-right uppercase"
+                >
+                  Line total
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={item <- @items}>
+                <td class="py-2 align-top">{item.quantity_dispensed}</td>
+                <td class="receipt-medicine py-2 align-top">
+                  <strong class="block">{product_name(item)}</strong>
+                  <small :if={item.product.brand_name} class="mt-0.5 block text-thamani-pewter">
+                    {item.product.brand_name}
+                  </small>
+                </td>
+                <td class="py-2 text-right align-top">KES {item.product.price}</td>
+                <td class="py-2 text-right align-top">
+                  KES {Decimal.mult(item.product.price, item.quantity_dispensed)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <section class="receipt-payment space-y-1 border-t border-dashed border-thamani-stone pt-3">
+            <div class="receipt-total flex justify-between border-b border-dashed border-thamani-stone pb-2 text-base font-semibold text-thamani-forest">
+              <span>Total</span>
+              <strong>KES {@prescription.total_amount}</strong>
+            </div>
+            <div class="flex justify-between gap-2">
+              <span>Payment method</span>
+              <strong>{@prescription.payment_type}</strong>
+            </div>
+            <div class="receipt-status flex items-center justify-between gap-2">
+              <span>Payment status</span>
+              <strong
+                class={[
+                  "receipt-status-value rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset",
+                  @prescription.has_paid && "bg-emerald-50 text-emerald-700 ring-emerald-200",
+                  !@prescription.has_paid && "bg-rose-50 text-rose-700 ring-rose-200"
+                ]}
+                data-paid={@prescription.has_paid}
+              >
+                {if @prescription.has_paid, do: "PAID", else: "UNPAID"}
+              </strong>
+            </div>
+          </section>
+
+          <p class="receipt-thanks mt-4 text-center font-semibold">
+            Thank you for choosing {@site.name}.
+          </p>
+          <footer class="receipt-powered mt-2 border-t border-dashed border-thamani-stone pt-2 text-center text-xs text-thamani-pewter">
+            Powered by Thamani Dawa
+          </footer>
+        </div>
+
+        <div class="flex gap-3">
+          <.button
+            id="prescription-print-receipt-button"
+            type="button"
+            variant="primary"
+            class="flex-1"
+            phx-hook="QuickSaleReceiptPrint"
+            data-receipt-target="#prescription-receipt-card"
+          >
+            <.icon name="hero-printer" class="size-4 mr-1" /> Print
+          </.button>
+          <.button
+            variant="ghost"
+            class="flex-1"
+            navigate={~p"/pharmacy/prescriptions/#{@prescription.id}"}
+          >
+            View full prescription
+          </.button>
+        </div>
+      </div>
+    </Layouts.pharmacy_shell>
+    """
+  end
 
   def render(assigns) do
     ~H"""
@@ -299,11 +455,14 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                 </p>
                 <div class="mt-1 flex flex-wrap items-center gap-2.5">
                   <h1 class="text-xl font-medium tracking-tight text-slate-900 sm:text-2xl">
-                    {@patient.full_name}
+                    {if @patient, do: @patient.full_name, else: "Walk-in"}
                   </h1>
                   <.status_badge status={@prescription.status} />
                 </div>
-                <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-thamani-pewter">
+                <div
+                  :if={@patient}
+                  class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-thamani-pewter"
+                >
                   <span class="inline-flex items-center gap-1.5">
                     <.icon name="hero-calendar-days" class="size-4 text-thamani-subtle" />
                     {if age = Patient.age(@patient), do: "#{age} years", else: "Age not recorded"}
@@ -317,10 +476,22 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                     {@patient.phone || "No phone number"}
                   </span>
                 </div>
+                <p :if={!@patient} class="mt-2 text-sm italic text-thamani-pewter">
+                  No patient was recorded for this prescription.
+                </p>
               </div>
             </div>
 
             <div class="flex flex-col gap-2 self-start sm:flex-row">
+              <.button
+                :if={@prescription.has_paid}
+                id="print-receipt-button"
+                variant="ghost"
+                navigate={~p"/pharmacy/prescriptions/#{@prescription.id}/receipt"}
+                class="gap-2 whitespace-nowrap"
+              >
+                <.icon name="hero-printer" class="size-4" /> Print receipt
+              </.button>
               <.button
                 :if={not @prescription.has_paid}
                 variant="primary"
@@ -376,6 +547,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         </section>
 
         <aside
+          :if={@prescription.notes not in [nil, ""]}
           id="prescription-notes"
           class="flex items-start gap-3 rounded-xl border border-thamani-stone bg-thamani-stone/40 px-4 py-3.5"
         >
@@ -400,7 +572,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
             <div>
               <h2 class="text-lg font-medium text-slate-900">Medication fulfillment</h2>
               <p class="mt-1 text-sm text-thamani-pewter">
-                Dispense the prescribed quantity, then scan the product barcode to verify it.
+                Scan the product and batch barcode, then dispense from that exact lot.
               </p>
             </div>
             <span class="self-start rounded-full bg-thamani-lime px-3 py-1 text-xs font-medium text-thamani-forest">
@@ -497,7 +669,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                     </div>
                   </dl>
 
-                  <div class="mt-4 flex items-start gap-3 rounded-xl bg-indigo-50/60 px-4 py-3.5">
+                  <div
+                    :if={directions_present?(item)}
+                    class="mt-4 flex items-start gap-3 rounded-xl bg-indigo-50/60 px-4 py-3.5"
+                  >
                     <.icon
                       name="hero-information-circle"
                       class="mt-0.5 size-5 shrink-0 text-thamani-forest"
@@ -523,7 +698,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                   <form
                     id={"dispense-form-#{item.id}"}
                     phx-submit="dispense"
-                    phx-change="preview_dispense"
                     class="flex flex-col gap-3 sm:flex-row sm:items-end"
                   >
                     <.input type="hidden" name="item_id" value={item.id} />
@@ -540,42 +714,47 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                         class="thamani-input h-11 w-full rounded-lg px-3 text-sm focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
                       />
                     </div>
+                    <div
+                      id={"dispense-barcode-fields-#{item.id}"}
+                      phx-hook="ConditionalBatchField"
+                      phx-update="ignore"
+                      class="contents"
+                    >
+                      <div class="w-full sm:max-w-md [&>div]:mb-0">
+                        <.input
+                          id={"dispense-barcode-#{item.id}"}
+                          type="text"
+                          name="barcode"
+                          label="Scan product barcode"
+                          placeholder="Scan GTIN or full GS1 barcode"
+                          required
+                          class="thamani-input h-11 w-full rounded-lg px-3 font-mono text-sm placeholder:font-sans focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
+                        />
+                      </div>
+                      <div data-batch-field class="hidden w-full sm:max-w-48 [&>div]:mb-0">
+                        <.input
+                          id={"dispense-batch-no-#{item.id}"}
+                          type="text"
+                          name="batch_no"
+                          label="Batch / lot number"
+                          placeholder="Enter batch or lot number"
+                          class="thamani-input h-11 w-full rounded-lg px-3 text-sm placeholder:font-sans focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
+                        />
+                      </div>
+                    </div>
                     <.button
                       type="submit"
                       variant="primary"
                       disabled={stock <= 0}
                       class="h-11 gap-2 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
-                      phx-disable-with="Dispensing..."
+                      phx-disable-with="Checking batch..."
                     >
-                      <.icon name="hero-check" class="size-4" /> Dispense medication
+                      <.icon name="hero-qr-code" class="size-4" /> Scan & dispense
                     </.button>
                     <p :if={stock <= 0} class="self-center text-sm font-medium text-rose-600">
                       No stock is available at this site.
                     </p>
                   </form>
-
-                  <div
-                    :if={(allocation = Map.get(@allocation_previews, item.id, [])) != []}
-                    class="mt-3 rounded-lg ff-surface-card px-3 py-2.5"
-                  >
-                    <p class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
-                      Will take from (FEFO)
-                    </p>
-                    <ul class="mt-1.5 space-y-1">
-                      <li
-                        :for={%{batch: batch, quantity: qty} <- allocation}
-                        class="flex items-center justify-between text-sm text-slate-700"
-                      >
-                        <span>
-                          Batch {batch.batch_no || "##{batch.id}"}
-                          <span class="text-thamani-subtle">
-                            · exp {Calendar.strftime(batch.expiry_date, "%b %d, %Y")}
-                          </span>
-                        </span>
-                        <span class="font-medium">{qty} units</span>
-                      </li>
-                    </ul>
-                  </div>
                 </div>
 
                 <div
@@ -601,56 +780,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                       <span class="font-medium">{dispense.quantity} units</span>
                     </li>
                   </ul>
-                </div>
-
-                <div
-                  :if={item.quantity_dispensed > 0}
-                  class={[
-                    "border-t px-5 py-4 sm:px-6",
-                    item.is_verified && "border-emerald-100 bg-emerald-50/60",
-                    !item.is_verified && "border-thamani-stone bg-thamani-canvas/50"
-                  ]}
-                >
-                  <%= if item.is_verified do %>
-                    <div class="flex items-center gap-3 text-emerald-700">
-                      <div class="flex size-9 shrink-0 items-center justify-center rounded-full bg-white ring-1 ring-emerald-200">
-                        <.icon name="hero-check" class="size-5" />
-                      </div>
-                      <div>
-                        <p class="text-sm font-medium">Product verified</p>
-                        <p class="text-xs text-emerald-700/75">
-                          The scanned barcode matched this medication.
-                        </p>
-                      </div>
-                    </div>
-                  <% else %>
-                    <form
-                      id={"verify-form-#{item.id}"}
-                      phx-submit="verify_item"
-                      class="flex flex-col gap-3 sm:flex-row sm:items-end"
-                    >
-                      <.input type="hidden" name="item_id" value={item.id} />
-                      <div class="w-full sm:max-w-md [&>div]:mb-0">
-                        <.input
-                          id={"verify-gtin-#{item.id}"}
-                          type="text"
-                          name="gtin"
-                          label="Scan product barcode"
-                          placeholder="Scan or enter GTIN"
-                          required
-                          class="thamani-input h-11 w-full rounded-lg px-3 font-mono text-sm placeholder:font-sans focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
-                        />
-                      </div>
-                      <.button
-                        type="submit"
-                        variant="primary"
-                        class="h-11 gap-2 whitespace-nowrap"
-                        phx-disable-with="Verifying..."
-                      >
-                        <.icon name="hero-qr-code" class="size-4" /> Verify product
-                      </.button>
-                    </form>
-                  <% end %>
                 </div>
               </article>
             <% end %>

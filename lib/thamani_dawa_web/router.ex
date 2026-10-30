@@ -33,6 +33,12 @@ defmodule ThamaniDawaWeb.Router do
     patch "/switch-site", SiteSwitchController, :update
   end
 
+  scope "/api", ThamaniDawaWeb do
+    pipe_through :api
+
+    post "/mpesa/callback/:token", DarajaCallbackController, :create
+  end
+
   scope "/", ThamaniDawaWeb do
     pipe_through :browser
 
@@ -43,6 +49,7 @@ defmodule ThamaniDawaWeb.Router do
 
     live_session :organization, on_mount: [{ThamaniDawaWeb.UserAuth, :require_admin}] do
       live "/org/dashboard", OrgDashboardLive, :index
+      live "/org/earnings", EarningsLive, :index
 
       live "/org/team", TeamLive.Index, :index
       live "/org/team/new", TeamLive.Index, :new
@@ -73,6 +80,7 @@ defmodule ThamaniDawaWeb.Router do
 
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
       live "/pharmacy", PharmacyDashboardLive, :index
+      live "/pharmacy/transactions", EarningsLive, :pharmacy
       live "/pharmacy/scan", PharmacyScanLive, :index
       live "/pharmacy/stock", PharmacyStockLive, :index
       live "/pharmacy/stock/products/:id", PharmacyStockProductLive, :show
@@ -84,9 +92,12 @@ defmodule ThamaniDawaWeb.Router do
       live "/pharmacy/requisitions", RequisitionLive.Index, :index
       live "/pharmacy/requisitions/new", RequisitionLive.Index, :new
 
+      live "/pharmacy/quick-sale", QuickSaleLive, :new
+
       live "/pharmacy/prescriptions", PrescriptionLive.Index, :index
       live "/pharmacy/prescriptions/new", PrescriptionLive.Index, :new
       live "/pharmacy/prescriptions/:id", PrescriptionLive.Show, :show
+      live "/pharmacy/prescriptions/:id/receipt", PrescriptionLive.Show, :receipt
       live "/pharmacy/prescriptions/:id/payments/new", PrescriptionLive.Show, :new_payment
 
       live "/pharmacy/patients", PatientLive.Index, :index
@@ -95,6 +106,7 @@ defmodule ThamaniDawaWeb.Router do
 
     live_session :lab, on_mount: [{ThamaniDawaWeb.UserAuth, :require_lab_access}] do
       live "/lab", LabDashboardLive, :index
+      live "/lab/transactions", EarningsLive, :lab
       live "/lab/scan", LabScanLive, :index
 
       live "/lab/patients", LabPatientLive.Index, :index
@@ -130,11 +142,6 @@ defmodule ThamaniDawaWeb.Router do
       live "/lab/tests/:id/edit", LabTestLive.Index, :edit
     end
   end
-
-  # Other scopes may use custom stacks.
-  # scope "/api", ThamaniDawaWeb do
-  #   pipe_through :api
-  # end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:thamani_dawa, :dev_routes) do

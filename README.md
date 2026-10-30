@@ -6,8 +6,9 @@ Major areas:
 
 - Public home, login, signup, and invite-acceptance flows
 - Organization admin for team invites and site management
-- Pharmacy dashboard, products, stock receiving, prescriptions, controlled-drug register, logs, and GS1 scan lookup
-- Lab dashboard, lab orders, result entry, verification queue, test templates/categories, stock receiving/consumption, QA charts, and GS1 scan lookup
+- Organization catalogue, suppliers, central stock, dispatch, requisitions, sites, team, dashboards, and earnings
+- Pharmacy stock receipt/browse/scan, requisitions, patients, prescriptions, FEFO dispensing, quick sales, payments, and receipts
+- Lab test catalogue, stock receipt/browse/scan, requisitions, patients, orders, specimens, results/amendments, consumable usage, and payments
 
 ## Prerequisites
 
@@ -88,4 +89,6 @@ sarah/fix-prescription-validation
 - [Authentication and Authorization](docs/AUTH.md)
 - [Data Model](docs/DATA_MODEL.md)
 - [Workflows](docs/WORKFLOWS.md)
+- [Manual test playbook](docs/MANUAL_TEST_PLAYBOOK.md)
+- [Real-world workflow gap analysis](docs/REAL_WORLD_WORKFLOW_GAP_ANALYSIS.md)
 - [Environment](docs/ENVIRONMENT.md)

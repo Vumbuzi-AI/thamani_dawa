@@ -1,11 +1,45 @@
 # Workflows
 
+> **Current-state correction (2026-10-28):** the detailed sections below are retained only
+> as a historical snapshot and are superseded by the implementation review in
+> [the manual test playbook](MANUAL_TEST_PLAYBOOK.md) and
+> [the real-world gap analysis](REAL_WORLD_WORKFLOW_GAP_ANALYSIS.md). In particular, the
+> current application now implements central organization stock, partial dispatch, site
+> receipt, requisitions, patient visits, quick sales, payments, pooled
+> specimens, specimen receipt/rejection, consumable usage, and result amendments. It does
+> **not** currently route controlled-drug registers, pharmacy logs, QA charts, test-template
+> pages, or a standalone result-verification queue. Use the router and the two linked
+> documents as the test baseline.
+
+## Current end-to-end flow map
+
+1. **Onboard:** select organization operating models and the first site → create the
+   administrator → add sites → invite/accept staff → assign and switch active sites.
+2. **Master data:** suppliers → organization product catalogue/GTIN → laboratory test
+   catalogue and dynamic fields.
+3. **Supply:** receive supplier lot into organization stock → partial/full dispatch to site
+   → pharmacy/lab acknowledgement (including short shipment and GS1 match) → active stock.
+4. **Replenishment:** site requisition → admin approve/reject → partial/full fulfilment from
+   central lots → site acknowledgement.
+5. **Pharmacy:** patient/walk-in visit → prescription or quick sale → transactional FEFO
+   allocation → product-scan verification → payment/wallet → receipt; plus stock browse,
+   traceability, and scan lookup.
+6. **Laboratory:** patient visit/order → tests → combined specimen collection → receipt or
+   rejection → result entry/amendment → consumable use → payment. Result entry currently
+   completes results without independent authorization.
+7. **Oversight:** organization/site/pharmacy/lab dashboards, earnings ledger, batch histories,
+   scan events, and repository audit records.
+
+## Historical snapshot (not a test specification)
+
 ## Organization Signup
 
 1. A visitor opens `/signup`.
-2. `ThamaniDawaWeb.SignupLive` builds organization and admin forms.
-3. On submit, `ThamaniDawa.Organizations.signup/2` creates the organization, default pharmacy site, and admin user in one transaction.
-4. The admin can log in and use `/org/team` and `/org/sites`.
+2. Step 1 captures identity, operating models, and first site.
+3. Step 2 captures the administrator and requires explicit acceptance of the Terms of
+   Service and Privacy Policy. Nothing is persisted between steps.
+4. Final submit creates the organization, selected site, and admin in one transaction.
+5. The admin can log in and use `/org/team` and `/org/sites`.
 
 Contexts: `Organizations`, `Sites`, `Accounts`.
 
