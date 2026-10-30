@@ -3,8 +3,10 @@ defmodule ThamaniDawa.LabOrdersTest do
 
   alias ThamaniDawa.Batches
   alias ThamaniDawa.LabOrders
-  alias ThamaniDawa.LabOrders.{LabOrder, LabOrderResult}
+  alias ThamaniDawa.LabOrders.{LabOrder, LabOrderResult, LabOrderResultAmendment, LabSpecimen}
   alias ThamaniDawa.PatientVisits
+  alias ThamaniDawa.Repo
+  alias ThamaniDawa.ScanEvent
 
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.BatchesFixtures
@@ -219,6 +221,67 @@ defmodule ThamaniDawa.LabOrdersTest do
     end
   end
 
+  describe "collect_specimen/5" do
+    setup do
+      organization = organization_fixture()
+      technician = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
+      %{organization: organization, technician: technician}
+    end
+
+    test "one specimen covers multiple tests and collects each result", ctx do
+      lab_order = lab_order_fixture(%{organization_id: ctx.organization.id})
+
+      r1 =
+        lab_order_result_fixture(%{
+          organization_id: ctx.organization.id,
+          lab_order_id: lab_order.id
+        })
+
+      r2 =
+        lab_order_result_fixture(%{
+          organization_id: ctx.organization.id,
+          lab_order_id: lab_order.id
+        })
+
+      assert {:ok, specimen} =
+               LabOrders.collect_specimen(
+                 ctx.organization.id,
+                 lab_order.id,
+                 [r1.id, r2.id],
+                 ctx.technician.id,
+                 %{"specimen_type" => "urine", "collection_date" => "2026-01-20"}
+               )
+
+      assert specimen.status == :collected
+      assert specimen.specimen_type == :urine
+
+      [collected] = LabOrders.list_specimens_for_order(ctx.organization.id, lab_order.id)
+      assert collected.id == specimen.id
+      assert length(collected.lab_order_results) == 2
+
+      for r <- [r1, r2] do
+        reloaded = LabOrders.get_lab_order_result!(ctx.organization.id, r.id)
+        assert reloaded.status == :collected
+        assert reloaded.sample_collected_on == ~D[2026-01-20]
+      end
+
+      assert LabOrders.list_collectable_results(ctx.organization.id, lab_order.id) == []
+    end
+
+    test "returns an error and rolls back when no results are selected", ctx do
+      lab_order = lab_order_fixture(%{organization_id: ctx.organization.id})
+
+      assert {:error, :no_results_selected} =
+               LabOrders.collect_specimen(
+                 ctx.organization.id,
+                 lab_order.id,
+                 [],
+                 ctx.technician.id,
+                 %{"specimen_type" => "blood"}
+               )
+    end
+  end
+
   describe "mark_sample_collected/4" do
     setup do
       organization = organization_fixture()
@@ -317,6 +380,71 @@ defmodule ThamaniDawa.LabOrdersTest do
 
       assert %LabOrder{status: :cancelled} =
                LabOrders.get_lab_order!(ctx.organization.id, lab_order.id)
+    end
+
+    test "creates a specimen with a unique number and status :collected", ctx do
+      lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+
+      assert {:ok, _} =
+               LabOrders.mark_sample_collected(
+                 ctx.organization.id,
+                 lab_order_result.id,
+                 ctx.technician.id,
+                 %{"collection_date" => "2026-01-15"}
+               )
+
+      specimen = Repo.get_by!(LabSpecimen, lab_order_result_id: lab_order_result.id)
+      assert specimen.status == :collected
+      assert specimen.specimen_type == lab_order_result.sample_type
+      assert specimen.collected_by_id == ctx.technician.id
+      assert is_binary(specimen.specimen_number) and specimen.specimen_number != ""
+    end
+  end
+
+  describe "receive_specimen/3 and reject_specimen/4" do
+    setup do
+      organization = organization_fixture()
+      technician = staff_fixture(%{organization_id: organization.id, role: :lab_technician})
+      lab_order_result = lab_order_result_fixture(%{organization_id: organization.id})
+
+      {:ok, _} =
+        LabOrders.mark_sample_collected(organization.id, lab_order_result.id, technician.id)
+
+      specimen = Repo.get_by!(LabSpecimen, lab_order_result_id: lab_order_result.id)
+
+      %{organization: organization, technician: technician, specimen: specimen}
+    end
+
+    test "receive_specimen/3 advances a collected specimen to received", ctx do
+      assert {:ok, received} =
+               LabOrders.receive_specimen(ctx.organization.id, ctx.specimen.id, ctx.technician.id)
+
+      assert received.status == :received
+      assert received.received_by_id == ctx.technician.id
+      assert %DateTime{} = received.received_at
+    end
+
+    test "receive_specimen/3 refuses a specimen that's already received", ctx do
+      assert {:ok, _} =
+               LabOrders.receive_specimen(ctx.organization.id, ctx.specimen.id, ctx.technician.id)
+
+      assert {:error, :not_collected} =
+               LabOrders.receive_specimen(ctx.organization.id, ctx.specimen.id, ctx.technician.id)
+    end
+
+    test "reject_specimen/4 records the reason and rejector", ctx do
+      assert {:ok, rejected} =
+               LabOrders.reject_specimen(
+                 ctx.organization.id,
+                 ctx.specimen.id,
+                 ctx.technician.id,
+                 "Haemolysed sample"
+               )
+
+      assert rejected.status == :rejected
+      assert rejected.rejection_reason == "Haemolysed sample"
+      assert rejected.rejected_by_id == ctx.technician.id
+      assert %DateTime{} = rejected.rejected_at
     end
   end
 
@@ -420,6 +548,54 @@ defmodule ThamaniDawa.LabOrdersTest do
       assert %LabOrder{status: :cancelled} =
                LabOrders.get_lab_order!(ctx.organization.id, lab_order.id)
     end
+
+    test "amending an already-completed result requires a reason", ctx do
+      lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+
+      {:ok, _} =
+        LabOrders.record_result(ctx.organization.id, lab_order_result.id, ctx.technician.id, %{
+          "note" => "first"
+        })
+
+      assert {:error, :reason_required} =
+               LabOrders.record_result(
+                 ctx.organization.id,
+                 lab_order_result.id,
+                 ctx.technician.id,
+                 %{"note" => "corrected"}
+               )
+
+      assert LabOrders.get_lab_order_result!(ctx.organization.id, lab_order_result.id).results ==
+               %{"note" => %{"value" => "first"}}
+    end
+
+    test "amending snapshots the previous results into an amendment row", ctx do
+      lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+
+      {:ok, _} =
+        LabOrders.record_result(ctx.organization.id, lab_order_result.id, ctx.technician.id, %{
+          "note" => "first"
+        })
+
+      assert {:ok, updated} =
+               LabOrders.record_result(
+                 ctx.organization.id,
+                 lab_order_result.id,
+                 ctx.technician.id,
+                 %{"note" => "corrected"},
+                 reason: "transcription error"
+               )
+
+      assert updated.results == %{"note" => %{"value" => "corrected"}}
+
+      assert [amendment] =
+               LabOrders.list_amendments_for_result(ctx.organization.id, lab_order_result.id)
+
+      assert %LabOrderResultAmendment{} = amendment
+      assert amendment.previous_results == %{"note" => %{"value" => "first"}}
+      assert amendment.reason == "transcription error"
+      assert amendment.amended_by_id == ctx.technician.id
+    end
   end
 
   describe "record_consumable_usage/5" do
@@ -462,6 +638,47 @@ defmodule ThamaniDawa.LabOrdersTest do
 
       updated_batch = Batches.get_batch!(ctx.organization.id, ctx.batch.id)
       assert updated_batch.remaining_quantity == ctx.batch.remaining_quantity
+    end
+
+    test "logs a traceable scan event for the draw", ctx do
+      assert {:ok, usage} =
+               LabOrders.record_consumable_usage(
+                 ctx.organization.id,
+                 ctx.batch.id,
+                 ctx.technician.id,
+                 10
+               )
+
+      assert %ScanEvent{} = scan_event = Repo.get_by!(ScanEvent, reference_id: usage.id)
+      assert scan_event.gtin == ctx.batch.gtin
+      assert scan_event.batch_no == ctx.batch.batch_no
+      assert scan_event.event_type == :lab_consumption
+      assert scan_event.user_id == ctx.technician.id
+      assert scan_event.organization_id == ctx.organization.id
+    end
+
+    test "records the specimen a reagent was drawn for, when given", ctx do
+      lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+
+      {:ok, _} =
+        LabOrders.mark_sample_collected(
+          ctx.organization.id,
+          lab_order_result.id,
+          ctx.technician.id
+        )
+
+      specimen = Repo.get_by!(LabSpecimen, lab_order_result_id: lab_order_result.id)
+
+      assert {:ok, usage} =
+               LabOrders.record_consumable_usage(
+                 ctx.organization.id,
+                 ctx.batch.id,
+                 ctx.technician.id,
+                 5,
+                 specimen_id: specimen.id
+               )
+
+      assert usage.specimen_id == specimen.id
     end
   end
 end

@@ -531,7 +531,9 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
         Test catalog
         <:subtitle>Search, filter, and manage your lab test catalog.</:subtitle>
         <:actions>
-          <.button variant="primary" patch={~p"/lab/tests/new"}>+ New test</.button>
+          <.button variant="primary" patch={~p"/lab/tests/new"}>
+            <.icon name="hero-plus" class="size-4" /> New test
+          </.button>
         </:actions>
         <:toolbar>
           <form phx-change="search" class="flex-1" id="search-form">

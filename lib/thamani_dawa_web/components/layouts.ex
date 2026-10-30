@@ -7,6 +7,7 @@ defmodule ThamaniDawaWeb.Layouts do
 
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
+  alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
   alias ThamaniDawaWeb.SiteScoping
 
@@ -98,9 +99,11 @@ defmodule ThamaniDawaWeb.Layouts do
 
   def lab_shell(assigns) do
     assigns =
-      assign(assigns, :nav_badges, %{
+      assigns
+      |> assign(:nav_badges, %{
         ~p"/lab/receive-stock" => pending_batches_count(assigns.current_scope, :lab)
       })
+      |> assign(:multi_site?, Sites.multi_site?(assigns.current_scope.organization_id))
 
     ~H"""
     <.sidebar_shell
@@ -113,15 +116,19 @@ defmodule ThamaniDawaWeb.Layouts do
       section_label="Lab"
       base_path="/lab"
       nav_badges={@nav_badges}
-      nav_items={[
-        {"Dashboard", "hero-squares-2x2", ~p"/lab"},
-        {"Patients", "hero-user-group", ~p"/lab/patients"},
-        {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
-        {"Tests", "hero-beaker", ~p"/lab/tests"},
-        {"Stock", "hero-cube", ~p"/lab/stock"},
-        {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
-        {"Scan", "hero-qr-code", ~p"/lab/scan"}
-      ]}
+      nav_items={
+        [
+          {"Dashboard", "hero-squares-2x2", ~p"/lab"},
+          {"Patients", "hero-user-group", ~p"/lab/patients"},
+          {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
+          {"Tests", "hero-beaker", ~p"/lab/tests"},
+          {"Stock", "hero-cube", ~p"/lab/stock"},
+          {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
+          {"Requisitions", "hero-clipboard-document-list", ~p"/lab/requisitions"},
+          {"Scan", "hero-qr-code", ~p"/lab/scan"}
+        ]
+        |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
+      }
     >
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -141,9 +148,11 @@ defmodule ThamaniDawaWeb.Layouts do
 
   def pharmacy_shell(assigns) do
     assigns =
-      assign(assigns, :nav_badges, %{
+      assigns
+      |> assign(:nav_badges, %{
         ~p"/pharmacy/receive-stock" => pending_batches_count(assigns.current_scope, :pharmacy)
       })
+      |> assign(:multi_site?, Sites.multi_site?(assigns.current_scope.organization_id))
 
     ~H"""
     <.sidebar_shell
@@ -156,14 +165,18 @@ defmodule ThamaniDawaWeb.Layouts do
       section_label="Pharmacy"
       base_path="/pharmacy"
       nav_badges={@nav_badges}
-      nav_items={[
-        {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
-        {"Patients", "hero-user-group", ~p"/pharmacy/patients"},
-        {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
-        {"Stock", "hero-cube", ~p"/pharmacy/stock"},
-        {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
-        {"Scan", "hero-qr-code", ~p"/pharmacy/scan"}
-      ]}
+      nav_items={
+        [
+          {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
+          {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
+          {"Patients", "hero-user-group", ~p"/pharmacy/patients"},
+          {"Stock", "hero-cube", ~p"/pharmacy/stock"},
+          {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
+          {"Requisitions", "hero-clipboard-document-list", ~p"/pharmacy/requisitions"},
+          {"Scan", "hero-qr-code", ~p"/pharmacy/scan"}
+        ]
+        |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
+      }
     >
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -217,6 +230,14 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :inner_block, required: true
 
   def org_shell(assigns) do
+    assigns =
+      assigns
+      |> assign(:nav_badges, %{
+        ~p"/org/requisitions" =>
+          ThamaniDawa.Requisitions.count_pending(assigns.current_scope.organization_id)
+      })
+      |> assign(:multi_site?, Sites.multi_site?(assigns.current_scope.organization_id))
+
     ~H"""
     <.sidebar_shell
       flash={@flash}
@@ -227,13 +248,18 @@ defmodule ThamaniDawaWeb.Layouts do
       title="Thamani Dawa"
       section_label="Organization"
       base_path="/org"
-      nav_items={[
-        {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
-        {"Sites", "hero-building-office-2", ~p"/org/sites"},
-        {"Team", "hero-user-group", ~p"/org/team"},
-        {"Products", "hero-cube", ~p"/org/products"},
-        {"Suppliers", "hero-truck", ~p"/org/suppliers"}
-      ]}
+      nav_badges={@nav_badges}
+      nav_items={
+        [
+          {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
+          {"Sites", "hero-building-office-2", ~p"/org/sites"},
+          {"Products", "hero-cube", ~p"/org/products"},
+          {"Team", "hero-user-group", ~p"/org/team"},
+          {"Suppliers", "hero-truck", ~p"/org/suppliers"},
+          {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"}
+        ]
+        |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
+      }
     >
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -267,12 +293,12 @@ defmodule ThamaniDawaWeb.Layouts do
         id="sidebar-backdrop"
         type="button"
         aria-label="Close navigation"
-        class="fixed inset-0 z-40 hidden bg-slate-950/35 backdrop-blur-[1px] lg:hidden"
+        class="fixed inset-0 z-[80] bg-slate-950/35 backdrop-blur-[1px] lg:hidden"
       />
       <%!-- Sidebar --%>
       <aside
         id="sidebar-aside"
-        class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full shrink-0 flex-col border-r transition-[transform,width] duration-200 ease-in-out lg:relative lg:translate-x-0"
+        class="fixed inset-y-0 left-0 z-[90] flex w-72 -translate-x-full shrink-0 flex-col border-r transition-[transform,width] duration-200 ease-in-out lg:relative lg:z-50 lg:translate-x-0"
         style="background: var(--thamani-sidenav, #EFEFF0); border-color: var(--thamani-border-nav); width: 288px; padding: 24px 20px;"
         aria-label={"#{@section_label} navigation"}
       >
@@ -314,6 +340,7 @@ defmodule ThamaniDawaWeb.Layouts do
                 else: @current_path == path or String.starts_with?(@current_path, path <> "/") %>
             <.link
               navigate={path}
+              data-tour-target={path}
               data-tooltip={label}
               aria-current={active && "page"}
               class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-[background-color,color,scale] whitespace-nowrap active:scale-[0.96]"
@@ -383,13 +410,26 @@ defmodule ThamaniDawaWeb.Layouts do
           class="mt-auto pt-4 flex flex-col gap-3"
           style="border-top: 1px solid var(--thamani-border-nav);"
         >
+          <.link
+            id="start-product-tour"
+            navigate={product_tour_path(@base_path)}
+            data-tooltip="Product tour"
+            class="flex items-center gap-3 w-full rounded-xl text-xs font-medium transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40 hover:bg-thamani-lime/30"
+            style="background: color-mix(in srgb, var(--thamani-lime) 18%, transparent); border: 1px solid color-mix(in srgb, var(--thamani-lime) 65%, var(--thamani-border-nav)); color: var(--thamani-forest); padding: 10px 14px; min-height: 42px;"
+          >
+            <.icon name="hero-map" class="size-4 shrink-0" />
+            <span class="nav-label text-[13px] font-medium transition-opacity duration-150 truncate">
+              Product tour
+            </span>
+          </.link>
+
           <%!-- Collapse sidebar toggle --%>
           <button
             id="sidebar-toggle"
             type="button"
             aria-label="Collapse sidebar"
             data-tooltip="Collapse sidebar"
-            class="flex items-center gap-3 w-full rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40 hover:bg-slate-100/80"
+            class="hidden items-center gap-3 w-full rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40 hover:bg-slate-100/80 lg:flex"
             style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav); color: var(--thamani-pewter); padding: 10px 14px; min-height: 42px;"
           >
             <span id="sidebar-toggle-icon" class="inline-flex transition-transform duration-200">
@@ -515,7 +555,7 @@ defmodule ThamaniDawaWeb.Layouts do
       <main class="min-w-0 flex-1 lg:overflow-y-auto">
         <header
           id="mobile-app-bar"
-          class="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-thamani-border-nav bg-thamani-snow/95 px-4 backdrop-blur lg:hidden"
+          class="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-thamani-border-nav bg-thamani-snow/95 px-4 backdrop-blur lg:hidden"
         >
           <button
             id="mobile-sidebar-toggle"
@@ -523,15 +563,13 @@ defmodule ThamaniDawaWeb.Layouts do
             aria-label="Open navigation"
             aria-controls="sidebar-aside"
             aria-expanded="false"
-            class="flex size-11 items-center justify-center rounded-lg text-thamani-forest transition-[background-color,scale] hover:bg-thamani-lime active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+            class="flex size-11 shrink-0 items-center justify-center rounded-lg text-thamani-forest transition-[background-color,scale] hover:bg-thamani-lime active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
           >
             <.icon name="hero-bars-3" class="size-5" />
           </button>
-          <div class="min-w-0 text-center">
+          <div class="min-w-0">
             <p class="truncate text-sm font-semibold text-thamani-forest">{@title}</p>
-            <p class="truncate text-xs text-thamani-pewter">{@section_label}</p>
           </div>
-          <div class="size-11" aria-hidden="true" />
         </header>
         <div class="mx-auto space-y-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-8" style="max-width: 1600px;">
           <%!-- Page-level back affordance. Lives outside the page's header card
@@ -751,6 +789,81 @@ defmodule ThamaniDawaWeb.Layouts do
     """
   end
 
+  @doc "Renders a reusable guided tour overlay for a staff portal."
+  attr :id, :string, required: true
+  attr :tour_key, :string, required: true
+  attr :auto_start, :boolean, default: false
+  attr :steps, :list, required: true
+
+  def product_tour(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      phx-hook="ProductTour"
+      phx-update="ignore"
+      data-tour-key={@tour_key}
+      data-auto-start={to_string(@auto_start)}
+      data-tour-steps={Jason.encode!(@steps)}
+      class="hidden"
+    >
+      <button
+        type="button"
+        data-tour-dismiss
+        aria-label="Close product tour"
+        class="fixed inset-0 z-40 cursor-default bg-slate-950/45 backdrop-blur-[1px]"
+      ></button>
+      <section
+        data-tour-card
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={"#{@id}-title"}
+        class="fixed z-[100] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-white/20 bg-thamani-forest p-5 text-white shadow-2xl transition-[top,left] duration-200"
+      >
+        <span
+          data-tour-arrow
+          class="absolute left-[-7px] top-1/2 hidden size-3.5 -translate-y-1/2 rotate-45 border-b border-l border-white/20 bg-thamani-forest"
+        ></span>
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p
+              data-tour-progress
+              class="text-xs font-semibold uppercase tracking-[0.16em] text-thamani-lime"
+            >
+            </p>
+            <h2 id={"#{@id}-title"} data-tour-title class="mt-2 text-xl font-semibold"></h2>
+          </div>
+          <button
+            type="button"
+            data-tour-dismiss
+            aria-label="Close product tour"
+            class="rounded-lg p-1 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <.icon name="hero-x-mark" class="size-5" />
+          </button>
+        </div>
+        <p data-tour-description class="mt-3 text-[15px] leading-6 text-white/85"></p>
+        <div class="mt-5 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            data-tour-back
+            class="rounded-full px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 disabled:invisible"
+          >Back</button>
+          <button
+            type="button"
+            data-tour-dismiss
+            class="rounded-full px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+          >Skip tour</button>
+          <button
+            type="button"
+            data-tour-next
+            class="rounded-full bg-thamani-lime px-5 py-2 text-sm font-semibold text-thamani-forest transition-all hover:brightness-95 active:scale-[0.98]"
+          >Next</button>
+        </div>
+      </section>
+    </div>
+    """
+  end
+
   # Label for the page-level back link. An explicit `back_label` always wins;
   # otherwise the destination is matched against the nav items so `/org/sites`
   # reads "Back to Sites" without every page restating it.
@@ -764,6 +877,10 @@ defmodule ThamaniDawaWeb.Layouts do
   end
 
   defp back_label(_assigns), do: nil
+
+  defp product_tour_path("/org"), do: ~p"/org/dashboard?tour=1"
+  defp product_tour_path("/pharmacy"), do: ~p"/pharmacy?tour=1"
+  defp product_tour_path("/lab"), do: ~p"/lab?tour=1"
 
   @doc """
   Provides dark vs light theme toggle based on themes defined in app.css.

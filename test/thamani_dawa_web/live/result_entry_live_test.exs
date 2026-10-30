@@ -58,12 +58,11 @@ defmodule ThamaniDawaWeb.ResultEntryLiveTest do
           ~p"/lab/orders/#{result.lab_order_id}/results/#{result.id}/edit"
         )
 
-      assert {:error, {:live_redirect, %{to: redirect_path}}} =
-               view
-               |> form("#result-entry-form", %{"values" => %{"haemoglobin" => "13.5"}})
-               |> render_submit()
+      view
+      |> form("#result-entry-form", %{"values" => %{"haemoglobin" => "13.5"}})
+      |> render_submit()
 
-      assert redirect_path == ~p"/lab/orders/#{result.lab_order_id}"
+      assert_patch(view, ~p"/lab/orders/#{result.lab_order_id}")
 
       updated = LabOrders.get_lab_order_result!(ctx.admin.organization_id, result.id)
       assert updated.status == :completed

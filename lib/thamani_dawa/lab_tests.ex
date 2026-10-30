@@ -70,7 +70,7 @@ defmodule ThamaniDawa.LabTests do
     %LabTest{}
     |> LabTest.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 
   @doc "Updates a lab test. Raises if the test does not belong to the given organization."
@@ -81,7 +81,7 @@ defmodule ThamaniDawa.LabTests do
 
     lab_test
     |> LabTest.changeset(attrs)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 
   @doc "Returns a changeset for the given lab test."
@@ -119,6 +119,6 @@ defmodule ThamaniDawa.LabTests do
     %LabTestCategory{}
     |> LabTestCategory.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 end
