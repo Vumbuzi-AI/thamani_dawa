@@ -441,11 +441,10 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       message =
         shortages
         |> Enum.reverse()
-        |> Enum.map(fn
+        |> Enum.map_join("; ", fn
           {name, 0} -> "#{name} is now out of stock"
           {name, available} -> "#{name} only has #{available} left"
         end)
-        |> Enum.join("; ")
 
       {:error,
        socket
@@ -595,7 +594,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
   defp fefo_batch_label(organization_id, site_id, product_id, quantity) do
     case Batches.preview_fefo_allocation(organization_id, site_id, product_id, quantity) do
       [] -> nil
-      allocations -> allocations |> Enum.map(& &1.batch.batch_no) |> Enum.join(" + ")
+      allocations -> Enum.map_join(allocations, " + ", & &1.batch.batch_no)
     end
   end
 

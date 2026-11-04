@@ -764,7 +764,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       site_batches =
         ThamaniDawa.Batches.list_pending_batches_for_site(admin.organization_id, site.id)
 
-      assert Enum.filter(site_batches, &(&1.source_batch_id == org_batch.id)) |> length() == 2
+      assert Enum.count(site_batches, &(&1.source_batch_id == org_batch.id)) == 2
       assert Enum.any?(site_batches, &(&1.batch_no == "LOT-REPEAT"))
       assert Enum.any?(site_batches, &(&1.batch_no == "LOT-REPEAT-D2"))
     end

@@ -677,7 +677,7 @@ Enum.each(quick_sale_specs, fn {site, patient, payment_type} ->
   patient_id = patient && patient.id
 
   already_sold? =
-    Repo.all(
+    patient_id in Repo.all(
       from p in Prescription,
         join: v in PatientVisit,
         on: v.id == p.patient_visit_id,
@@ -686,7 +686,6 @@ Enum.each(quick_sale_specs, fn {site, patient, payment_type} ->
             is_nil(p.user_id) and p.payment_type == ^payment_type,
         select: v.patient_id
     )
-    |> Enum.member?(patient_id)
 
   if not already_sold? do
     product =
