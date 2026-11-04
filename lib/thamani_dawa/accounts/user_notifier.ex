@@ -61,6 +61,30 @@ defmodule ThamaniDawa.Accounts.UserNotifier do
     })
   end
 
+  @doc """
+  Emails a distributor mobile app user their sign-in PIN. The PIN is never
+  shown in the portal and only its hash is stored, so this email is the only
+  place it ever appears.
+  """
+  def deliver_mobile_pin(mobile_user, organization_name, pin) do
+    organization_name = sanitize_header_value(organization_name)
+
+    deliver(mobile_user.email, "Your Thamani Dawa mobile app PIN", %{
+      title: "Your mobile app sign-in details",
+      intro: Template.rich(["Hi ", {:bold, mobile_user.name}, ","]),
+      body: [
+        Template.rich([
+          {:bold, organization_name},
+          " has set you up on the Thamani Dawa mobile app for packing and scanning shipments."
+        ]),
+        Template.rich(["Username: ", {:bold, mobile_user.username}]),
+        Template.rich(["PIN: ", {:bold, pin}]),
+        "Keep this PIN private. Any earlier PIN for this account no longer works."
+      ],
+      footer_note: "If you weren't expecting this, contact your distributor administrator."
+    })
+  end
+
   defp sanitize_header_value(nil), do: ""
 
   defp sanitize_header_value(value) do
