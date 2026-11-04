@@ -721,7 +721,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "LOT-ADMIN-1"
     end
 
-    test "shows the specific reason, not a generic error, when dispatching the same batch/lot to a site that already has it",
+    test "dispatching the same batch/lot to a site that already has it succeeds as a separate delivery",
          %{conn: conn, admin: admin, site: site} do
       product =
         product_fixture(%{
@@ -749,15 +749,24 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
           ~p"/org/products/#{product.id}/batches/#{org_batch.id}/dispatch"
         )
 
-      # A second dispatch of more of the same batch/lot to the same site
-      # collides with the per-site uniqueness constraint on batch_no.
+      # A second dispatch of more of the same batch/lot to the same site is a
+      # legitimate second delivery (e.g. fulfilling a different requisition
+      # from the same warehouse lot) — it must not collide with the first.
       html =
         lv
         |> form("#dispatch-batch-form", dispatch: %{site_id: site.id, quantity: 20})
         |> render_submit()
 
-      assert html =~ "Couldn&#39;t dispatch that batch:"
-      assert html =~ "already been dispatched to this site"
+      assert_patch(lv, ~p"/org/products/#{product.id}")
+      html = render(lv) <> html
+      assert html =~ "Batch dispatched"
+
+      site_batches =
+        ThamaniDawa.Batches.list_pending_batches_for_site(admin.organization_id, site.id)
+
+      assert Enum.filter(site_batches, &(&1.source_batch_id == org_batch.id)) |> length() == 2
+      assert Enum.any?(site_batches, &(&1.batch_no == "LOT-REPEAT"))
+      assert Enum.any?(site_batches, &(&1.batch_no == "LOT-REPEAT-D2"))
     end
 
     test "dispatching a batch captures serial, manufacture date, and supplier, and displays them",

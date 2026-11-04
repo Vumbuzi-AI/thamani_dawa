@@ -36,11 +36,8 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
 
     conn = log_in_user(conn, pharmacist)
 
-    {:ok, receive_live, _html} = live(conn, ~p"/pharmacy/receive-stock")
-
-    receive_live
-    |> form("#receive-stock-gs1-form", raw_gs1: "01" <> gtin <> "10" <> "LOT-E2E-1")
-    |> render_submit()
+    {:ok, receive_live, _html} =
+      live(conn, ~p"/pharmacy/receive-stock/#{pending_batch.id}/receive")
 
     receive_live
     |> form("#receive-batch-form", receive: %{quantity: "50"})

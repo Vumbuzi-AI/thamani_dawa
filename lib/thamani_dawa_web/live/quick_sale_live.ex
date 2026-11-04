@@ -308,28 +308,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
   end
 
   defp add_scanned_product(socket, product, raw_barcode) do
-    case Enum.find(socket.assigns.cart, &(&1.product_id == product.id)) do
-      %{scanned_barcode: nil} -> verify_cart_line(socket, product.id, raw_barcode)
-      nil -> add_to_cart(socket, product, 1, raw_barcode)
-      _verified_line -> add_to_cart(socket, product, 1, raw_barcode)
-    end
-  end
-
-  defp verify_cart_line(socket, product_id, raw_barcode) do
-    cart =
-      Enum.map(socket.assigns.cart, fn line ->
-        if line.product_id == product_id,
-          do: %{
-            line
-            | scanned_gtin: scanned_gtin(raw_barcode) || raw_barcode,
-              scanned_barcode: raw_barcode
-          },
-          else: line
-      end)
-
-    socket
-    |> assign(:cart, cart)
-    |> put_flash(:info, "Medicine verified. You can continue the sale.")
+    add_to_cart(socket, product, 1, raw_barcode)
   end
 
   defp add_to_cart(socket, product, quantity, scanned_gtin) do
@@ -343,7 +322,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
               %{
                 product_id: product.id,
                 product: product,
-                quantity: quantity,
+                quantity: clamp_quantity(quantity, product.stock),
                 scanned_gtin: scanned_gtin && (scanned_gtin(scanned_gtin) || scanned_gtin),
                 scanned_barcode: scanned_gtin
               }
@@ -353,7 +332,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
           List.update_at(cart, index, fn line ->
             %{
               line
-              | quantity: line.quantity + quantity,
+              | quantity: clamp_quantity(line.quantity + quantity, line.product.stock),
                 scanned_gtin:
                   (scanned_gtin && (scanned_gtin(scanned_gtin) || scanned_gtin)) ||
                     line.scanned_gtin,
@@ -365,12 +344,15 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
     assign(socket, :cart, cart)
   end
 
+  defp clamp_quantity(quantity, stock) when is_integer(stock), do: min(quantity, stock)
+  defp clamp_quantity(quantity, _stock), do: quantity
+
   defp adjust_cart_quantity(socket, product_id, delta) do
     cart =
       socket.assigns.cart
       |> Enum.map(fn line ->
         if line.product_id == product_id,
-          do: %{line | quantity: line.quantity + delta},
+          do: %{line | quantity: clamp_quantity(line.quantity + delta, line.product.stock)},
           else: line
       end)
       |> Enum.reject(&(&1.quantity <= 0))
@@ -382,7 +364,9 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
     cart =
       socket.assigns.cart
       |> Enum.map(fn line ->
-        if line.product_id == product_id, do: %{line | quantity: quantity}, else: line
+        if line.product_id == product_id,
+          do: %{line | quantity: clamp_quantity(quantity, line.product.stock)},
+          else: line
       end)
       |> Enum.reject(&(&1.quantity <= 0))
 
@@ -403,24 +387,70 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       cart == [] ->
         {:noreply, put_flash(socket, :error, "Add at least one item.")}
 
-      Enum.any?(cart, &is_nil(&1.scanned_barcode)) ->
-        {:noreply,
-         put_flash(socket, :error, "Scan each medicine in the cart before taking payment.")}
-
       not PaymentMethods.valid?(payment_type) ->
         {:noreply, assign(socket, :errors, %{payment_type: "Select a payment method."})}
 
       true ->
-        total = cart_total(cart)
+        case reconcile_cart_with_stock(socket) do
+          {:ok, socket} ->
+            total = cart_total(socket.assigns.cart)
 
-        {:noreply,
-         socket
-         |> assign(:payment_modal, true)
-         |> assign(
-           :payment_form,
-           to_form(%{"tendered" => to_string(total), "provider_reference" => ""}, as: :payment)
-         )
-         |> assign(:errors, Map.delete(socket.assigns.errors, :payment))}
+            {:noreply,
+             socket
+             |> assign(:payment_modal, true)
+             |> assign(
+               :payment_form,
+               to_form(%{"tendered" => to_string(total), "provider_reference" => ""},
+                 as: :payment
+               )
+             )
+             |> assign(:errors, Map.delete(socket.assigns.errors, :payment))}
+
+          {:error, socket} ->
+            {:noreply, socket}
+        end
+    end
+  end
+
+  # Stock can drift between adding an item to the cart and taking payment
+  # (another sale, a stock count, …) — re-check against the current site
+  # stock here so a shortfall surfaces before payment, not after.
+  defp reconcile_cart_with_stock(socket) do
+    %{current_scope: scope, site_id: site_id, cart: cart} = socket.assigns
+
+    {adjusted_cart, shortages} =
+      Enum.map_reduce(cart, [], fn line, shortages ->
+        available = Batches.total_available_stock(scope.organization_id, site_id, line.product_id)
+
+        cond do
+          available <= 0 ->
+            {nil, [{line.product.generic_name, 0} | shortages]}
+
+          line.quantity > available ->
+            {%{line | quantity: available, product: %{line.product | stock: available}},
+             [{line.product.generic_name, available} | shortages]}
+
+          true ->
+            {line, shortages}
+        end
+      end)
+
+    if shortages == [] do
+      {:ok, socket}
+    else
+      message =
+        shortages
+        |> Enum.reverse()
+        |> Enum.map(fn
+          {name, 0} -> "#{name} is now out of stock"
+          {name, available} -> "#{name} only has #{available} left"
+        end)
+        |> Enum.join("; ")
+
+      {:error,
+       socket
+       |> assign(:cart, Enum.reject(adjusted_cart, &is_nil/1))
+       |> put_flash(:error, "Stock changed since you added these items — #{message}.")}
     end
   end
 
@@ -550,6 +580,25 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
     end)
   end
 
+  defp cart_lines(cart, organization_id, site_id) do
+    Enum.map(cart_lines(cart), fn entry ->
+      Map.put(
+        entry,
+        :batch_label,
+        fefo_batch_label(organization_id, site_id, entry.line.product_id, entry.line.quantity)
+      )
+    end)
+  end
+
+  defp fefo_batch_label(_organization_id, nil, _product_id, _quantity), do: nil
+
+  defp fefo_batch_label(organization_id, site_id, product_id, quantity) do
+    case Batches.preview_fefo_allocation(organization_id, site_id, product_id, quantity) do
+      [] -> nil
+      allocations -> allocations |> Enum.map(& &1.batch.batch_no) |> Enum.join(" + ")
+    end
+  end
+
   defp cart_total(cart) do
     cart
     |> cart_lines()
@@ -594,8 +643,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       <.header icon="hero-bolt">
         Quick sale
         <:subtitle>
-          Pick products, scan to confirm, and take payment — stock is dispensed and the sale is
-          marked paid immediately.
+          Pick products and take payment — stock is dispensed and the sale is marked paid
+          immediately.
         </:subtitle>
       </.header>
 
@@ -694,7 +743,12 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
         </div>
       </.modal>
 
-      <.modal :if={@completed_sale} id="quick-sale-receipt-modal" show>
+      <.modal
+        :if={@completed_sale}
+        id="quick-sale-receipt-modal"
+        show
+        on_cancel={JS.push("new_sale")}
+      >
         <div class="space-y-5 text-center">
           <span class="mx-auto flex size-12 items-center justify-center rounded-full bg-thamani-lime text-thamani-forest">
             <.icon name="hero-check" class="size-7" />
@@ -894,7 +948,10 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
               Scan a barcode or tap a product to start the sale.
             </div>
             <div
-              :for={%{line: line, product: product, subtotal: subtotal} <- cart_lines(@cart)}
+              :for={
+                %{line: line, product: product, subtotal: subtotal, batch_label: batch_label} <-
+                  cart_lines(@cart, @current_scope.organization_id, @site_id)
+              }
               id={"cart-line-#{line.product_id}"}
               class="flex items-center gap-4 px-5 py-4"
             >
@@ -903,18 +960,19 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
                   {product.generic_name}
                 </p>
                 <p class="mt-1 text-sm text-thamani-pewter">KES {product.price} each</p>
-                <span
-                  id={"cart-verification-#{line.product_id}"}
-                  class={[
-                    "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset",
-                    if(line.scanned_barcode,
-                      do: "bg-thamani-lime/30 text-thamani-forest ring-thamani-forest/20",
-                      else: "bg-amber-50 text-amber-700 ring-amber-200"
-                    )
-                  ]}
-                >
-                  {if line.scanned_barcode, do: "Verified", else: "Scan to verify"}
-                </span>
+                <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <span class="inline-flex items-center gap-1 rounded-md bg-thamani-stone px-1.5 py-0.5 text-[11px] font-medium text-thamani-pewter">
+                    <span class="text-thamani-subtle">GTIN</span>
+                    <span class="text-thamani-forest">{product.gtin}</span>
+                  </span>
+                  <span
+                    :if={batch_label}
+                    class="inline-flex items-center gap-1 rounded-md bg-thamani-stone px-1.5 py-0.5 text-[11px] font-medium text-thamani-pewter"
+                  >
+                    <span class="text-thamani-subtle">Batch</span>
+                    <span class="text-thamani-forest">{batch_label}</span>
+                  </span>
+                </div>
               </div>
               <div class="flex shrink-0 items-center gap-2">
                 <button
@@ -970,13 +1028,6 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
           </div>
 
           <div class="space-y-4 border-t border-thamani-stone px-5 py-4">
-            <p
-              :if={@cart != [] and Enum.all?(@cart, & &1.scanned_barcode)}
-              id="quick-sale-verification-summary"
-              class="text-sm font-medium text-thamani-forest"
-            >
-              All medicines verified
-            </p>
             <div class="flex items-center justify-between">
               <span class="text-base font-medium text-thamani-forest">Total</span>
               <span class="text-2xl font-semibold tabular-nums text-thamani-forest">

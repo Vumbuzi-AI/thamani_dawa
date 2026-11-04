@@ -616,12 +616,20 @@ defmodule ThamaniDawa.Batches do
     set_remaining_quantity(batch, batch.remaining_quantity - quantity)
   end
 
+  # The destination site batch reuses the source lot's `batch_no` verbatim
+  # (same physical batch, just delivered in installments), so dispatching
+  # the same org batch to the same site more than once — e.g. fulfilling two
+  # different requisitions from one warehouse lot — would otherwise collide
+  # with `batches_org_product_site_batch_no_index`. Each dispatch must stay
+  # its own row (merging into an existing one would re-tag its single
+  # `requisition_id`, silently zeroing out whichever requisition it already
+  # fulfilled), so disambiguate the batch_no instead.
   defp create_dispatched_batch(batch, site_id, quantity) do
     create_batch(batch.organization_id, %{
       "product_id" => batch.product_id,
       "site_id" => site_id,
       "gtin" => batch.gtin,
-      "batch_no" => batch.batch_no,
+      "batch_no" => dispatch_batch_no(batch, site_id),
       "serial" => batch.serial,
       "manufacturer" => batch.manufacturer,
       "manufacture_date" => batch.manufacture_date,
@@ -631,6 +639,24 @@ defmodule ThamaniDawa.Batches do
       "supplier_id" => batch.supplier_id,
       "source_batch_id" => batch.id
     })
+  end
+
+  defp dispatch_batch_no(batch, site_id) do
+    prior_dispatches =
+      Repo.aggregate(
+        from(b in Batch,
+          where: b.organization_id == ^batch.organization_id,
+          where: b.site_id == ^site_id,
+          where: b.source_batch_id == ^batch.id
+        ),
+        :count
+      )
+
+    if prior_dispatches == 0 do
+      batch.batch_no
+    else
+      "#{batch.batch_no}-D#{prior_dispatches + 1}"
+    end
   end
 
   @doc """

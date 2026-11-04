@@ -101,7 +101,6 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
       html = lv |> element("#quick-add-#{product.id}") |> render_click()
 
       assert has_element?(lv, "#cart-line-#{product.id}")
-      assert has_element?(lv, "#cart-verification-#{product.id}", "Scan to verify")
       assert has_element?(lv, "#quick-sale-item-count", "1 item")
       assert html =~ "KES 50"
     end
@@ -124,11 +123,10 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
       render_submit(lv, "scan_submit", %{"query" => product.gtin})
 
       assert has_element?(lv, "#cart-line-#{product.id}")
-      assert has_element?(lv, "#cart-verification-#{product.id}", "Verified")
-      assert has_element?(lv, "#quick-sale-verification-summary", "All medicines verified")
+      assert has_element?(lv, "#cart-quantity-#{product.id}[value='1']")
     end
 
-    test "scanning a catalog-added medicine verifies it without changing its quantity", %{
+    test "scanning a catalog-added medicine's barcode again increments its quantity", %{
       conn: conn
     } do
       organization = organization_fixture()
@@ -148,31 +146,7 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
       lv |> element("#quick-add-#{product.id}") |> render_click()
       render_submit(lv, "scan_submit", %{"query" => product.gtin})
 
-      assert has_element?(lv, "#cart-quantity-#{product.id}[value='1']")
-      assert has_element?(lv, "#cart-verification-#{product.id}", "Verified")
-    end
-
-    test "does not open payment until every medicine has been scanned", %{conn: conn} do
-      organization = organization_fixture()
-      site = site_fixture(%{organization_id: organization.id})
-      pharmacist = pharmacist_at_site(organization, site)
-      product = product_fixture(%{organization_id: organization.id})
-
-      batch_fixture(%{
-        organization_id: organization.id,
-        site_id: site.id,
-        product_id: product.id,
-        quantity: 20
-      })
-
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/quick-sale")
-
-      lv |> element("#quick-add-#{product.id}") |> render_click()
-      render_click(lv, "select_payment_type", %{"payment_type" => "Cash"})
-      html = render_click(lv, "complete_sale", %{})
-
-      assert html =~ "Scan each medicine in the cart before taking payment."
-      refute has_element?(lv, "#quick-sale-payment-modal")
+      assert has_element?(lv, "#cart-quantity-#{product.id}[value='2']")
     end
 
     test "scanning an unknown barcode shows a flash error and adds nothing", %{conn: conn} do
@@ -237,6 +211,93 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
       refute has_element?(lv, "#cart-line-#{product.id}")
     end
 
+    test "quantity controls cannot push the cart past available stock", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 3
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/quick-sale")
+
+      lv |> element("#quick-add-#{product.id}") |> render_click()
+      render_click(lv, "increment_item", %{"product_id" => to_string(product.id)})
+      render_click(lv, "increment_item", %{"product_id" => to_string(product.id)})
+      render_click(lv, "increment_item", %{"product_id" => to_string(product.id)})
+
+      assert has_element?(lv, "#cart-quantity-#{product.id}[value='3']")
+
+      lv
+      |> element("#cart-quantity-form-#{product.id}")
+      |> render_change(%{"product_id" => to_string(product.id), "quantity" => "50"})
+
+      assert has_element?(lv, "#cart-quantity-#{product.id}[value='3']")
+    end
+
+    test "shows each cart line's GTIN and the batch it would be dispensed from", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        batch_no: "LOT-FEFO-1",
+        quantity: 20
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/quick-sale")
+
+      lv |> element("#quick-add-#{product.id}") |> render_click()
+
+      assert has_element?(lv, "#cart-line-#{product.id}", product.gtin)
+      assert has_element?(lv, "#cart-line-#{product.id}", "LOT-FEFO-1")
+    end
+
+    test "a shortfall discovered at checkout clamps the cart and blocks payment instead of failing after it",
+         %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id})
+
+      batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 10
+        })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/quick-sale")
+
+      lv |> element("#quick-add-#{product.id}") |> render_click()
+
+      render_click(lv, "set_item_quantity", %{
+        "product_id" => to_string(product.id),
+        "quantity" => "10"
+      })
+
+      # Stock disappears after the item was added to the cart (e.g. another
+      # sale completed in the meantime) — simulate it by draining the batch.
+      {:ok, _} = ThamaniDawa.Batches.decrement_remaining_quantity(batch, 8)
+
+      render_click(lv, "select_payment_type", %{"payment_type" => "Cash"})
+      html = render_click(lv, "complete_sale", %{})
+
+      refute has_element?(lv, "#quick-sale-payment-modal")
+      assert html =~ "Stock changed since you added these items"
+      assert has_element?(lv, "#cart-quantity-#{product.id}[value='2']")
+    end
+
     test "payment confirmation completes a sale and shows its complete receipt", %{
       conn: conn
     } do
@@ -263,7 +324,6 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
 
       lv |> element("#quick-add-#{product.id}") |> render_click()
       render_click(lv, "increment_item", %{"product_id" => to_string(product.id)})
-      render_submit(lv, "scan_submit", %{"query" => product.gtin})
 
       render_click(lv, "select_payment_type", %{"payment_type" => "Cash"})
 
@@ -307,6 +367,37 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
                "#quick-sale-cart",
                "Scan a barcode or tap a product to start the sale."
              )
+    end
+
+    test "the X button on the receipt modal closes it and starts a new sale", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id, price: 50})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 20
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/quick-sale")
+
+      lv |> element("#quick-add-#{product.id}") |> render_click()
+      render_click(lv, "select_payment_type", %{"payment_type" => "Cash"})
+      render_click(lv, "complete_sale", %{})
+
+      lv
+      |> form("#quick-sale-payment-form", payment: %{tendered: "50"})
+      |> render_submit()
+
+      assert has_element?(lv, "#quick-sale-receipt-modal", "Sale complete")
+
+      lv |> element("#quick-sale-receipt-modal button[aria-label='Cancel']") |> render_click()
+
+      refute has_element?(lv, "#quick-sale-receipt-modal")
+      assert has_element?(lv, "#quick-sale-item-count", "0 items")
     end
 
     test "M-Pesa receipt displays the transaction reference", %{conn: conn} do
