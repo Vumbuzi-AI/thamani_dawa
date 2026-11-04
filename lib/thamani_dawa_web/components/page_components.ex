@@ -462,6 +462,9 @@ defmodule ThamaniDawaWeb.PageComponents do
       ThamaniDawa.Accounts.Scope.lab_technician?(scope) ->
         "/lab"
 
+      ThamaniDawa.Accounts.Scope.distributor?(scope) ->
+        "/distributor"
+
       ThamaniDawa.Accounts.Scope.pharma_lab?(scope) ->
         if site_lab_only?(scope) do
           "/lab"

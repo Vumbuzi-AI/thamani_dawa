@@ -8,6 +8,7 @@ defmodule ThamaniDawa.Batches do
   import Ecto.Query, warn: false
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Batches.Batch
+  alias ThamaniDawa.GoodsReceipts.GoodsReceipt
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
@@ -497,6 +498,7 @@ defmodule ThamaniDawa.Batches do
       product: product_query,
       site: site_query,
       supplier: supplier_query,
+      goods_receipt: [],
       approver: user_query,
       prescription_batch_dispenses: [
         dispensed_by: user_query,
@@ -520,6 +522,7 @@ defmodule ThamaniDawa.Batches do
     |> validate_belongs_to_org(:site_id, Site, organization_id)
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
+    |> validate_belongs_to_org(:goods_receipt_id, GoodsReceipt, organization_id)
     |> Repo.audited_insert()
   end
 

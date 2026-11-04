@@ -12,6 +12,16 @@ defmodule ThamaniDawa.Organizations do
   @doc "Gets a single organization. Raises if not found."
   def get_organization!(id), do: Repo.get!(Organization, id)
 
+  def change_organization_gs1_settings(%Organization{} = organization, attrs \\ %{}) do
+    Organization.gs1_settings_changeset(organization, attrs)
+  end
+
+  def update_organization_gs1_settings(%Organization{} = organization, attrs) do
+    organization
+    |> Organization.gs1_settings_changeset(attrs)
+    |> Repo.update()
+  end
+
   @doc false
   def create_organization(attrs) do
     %Organization{}

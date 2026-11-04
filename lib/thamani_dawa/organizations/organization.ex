@@ -21,6 +21,12 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :is_subscription_active, :boolean, default: false
     field :kyc_details, :map, default: %{}
     field :next_requisition_number, :integer, default: 0
+    field :gs1_company_prefix, :string
+    field :next_sscc_serial, :integer, default: 0
+    field :next_goods_receipt_number, :integer, default: 0
+    field :serialisation_type, :string
+    field :vat_registered, :boolean, default: true
+    field :next_serial_invoice_number, :integer, default: 0
 
     has_many :sites, ThamaniDawa.Sites.Site
     has_many :users, ThamaniDawa.Accounts.User
@@ -29,6 +35,7 @@ defmodule ThamaniDawa.Organizations.Organization do
     has_many :patients, ThamaniDawa.Patients.Patient
     has_many :patient_visits, ThamaniDawa.PatientVisits.PatientVisit
     has_many :batches, ThamaniDawa.Batches.Batch
+    has_many :goods_receipts, ThamaniDawa.GoodsReceipts.GoodsReceipt
     has_many :prescriptions, ThamaniDawa.Prescriptions.Prescription
     has_many :lab_test_categories, ThamaniDawa.LabTests.LabTestCategory
     has_many :lab_tests, ThamaniDawa.LabTests.LabTest
@@ -62,6 +69,19 @@ defmodule ThamaniDawa.Organizations.Organization do
 
   @doc "The operating models an organization may enable during onboarding."
   def operating_models, do: @operating_models
+
+  @doc "Whether the organization operates as a distributor."
+  def distributor?(%__MODULE__{operating_models: models}) when is_list(models),
+    do: :distributor in models
+
+  def distributor?(_organization), do: false
+
+  @doc "Changeset for the distributor's GS1 configuration (company prefix)."
+  def gs1_settings_changeset(organization, attrs) do
+    organization
+    |> cast(attrs, [:gs1_company_prefix])
+    |> validate_format(:gs1_company_prefix, ~r/^\d{6,10}$/, message: "must be 6 to 10 digits")
+  end
 
   defp trim_change(changeset, field) do
     update_change(changeset, field, &String.trim/1)
