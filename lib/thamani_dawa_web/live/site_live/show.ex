@@ -5,6 +5,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Dashboards
   alias ThamaniDawa.LabOrders
+  alias ThamaniDawa.Payments
   alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
@@ -22,6 +23,8 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       |> assign(:site, site)
       |> assign(:near_expiry_days, @near_expiry_days)
       |> assign(:staff, Accounts.list_users_for_site(organization_id, site.id))
+      |> assign(:top_products, Dashboards.top_dispensed_products(organization_id, site.id, 8))
+      |> assign(:sales_by_method, Payments.sales_by_payment_method(organization_id, site.id))
       |> assign_range("today")
       |> load_pharmacy(organization_id, site)
       |> load_lab(organization_id, site)
@@ -90,8 +93,8 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   def handle_event("apply_custom_range", %{"from" => from_str, "to" => to_str}, socket) do
     with {:ok, from_date} <- parse_date(from_str),
-         {:ok, to_date} <- parse_date(to_str) do
-      dates = Dashboards.custom_range_dates(from_date, to_date)
+         {:ok, to_date} <- parse_date(to_str),
+         {:ok, dates} <- Dashboards.validate_custom_range(from_date, to_date) do
       scope = socket.assigns.current_scope
       organization_id = scope.organization_id
       site_id = socket.assigns.site.id
@@ -113,6 +116,12 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
        )
        |> assign(:monthly_revenue, Dashboards.monthly_revenue(organization_id, site_id))}
     else
+      {:error, :reversed} ->
+        {:noreply, put_flash(socket, :error, "Date From must be on or before Date To.")}
+
+      {:error, :future} ->
+        {:noreply, put_flash(socket, :error, "Date range cannot include future dates.")}
+
       _ ->
         {:noreply, put_flash(socket, :error, "Enter a valid from and to date")}
     end
@@ -280,6 +289,69 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
     }
   end
 
+  defp legend_chart_options do
+    %{
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: %{legend: %{display: true, position: "bottom"}}
+    }
+  end
+
+  defp horizontal_bar_options do
+    %{
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: %{legend: %{display: false}},
+      scales: %{x: %{beginAtZero: true, ticks: %{precision: 0}}}
+    }
+  end
+
+  defp method_chart_data(rows) do
+    %{
+      labels: Enum.map(rows, &elem(&1, 0)),
+      datasets: [
+        %{
+          data: Enum.map(rows, &Decimal.to_float(elem(&1, 1))),
+          backgroundColor: ["#31572c", "#84cc16", "#f59e0b", "#0ea5e9", "#8b5cf6"]
+        }
+      ]
+    }
+  end
+
+  defp top_products_chart_data(rows) do
+    %{
+      labels: Enum.map(rows, &elem(&1, 0)),
+      datasets: [
+        %{
+          label: "Quantity dispensed",
+          data: Enum.map(rows, &elem(&1, 1)),
+          backgroundColor: "rgba(132, 204, 22, 0.72)",
+          borderColor: "#4d7c0f",
+          borderWidth: 1,
+          borderRadius: 6
+        }
+      ]
+    }
+  end
+
+  defp lab_volume_chart_data(rows) do
+    %{
+      labels: Enum.map(rows, fn {date, _} -> Calendar.strftime(date, "%d %b") end),
+      datasets: [
+        %{
+          label: "Lab orders",
+          data: Enum.map(rows, fn {_, count} -> count end),
+          borderColor: "#6667ab",
+          backgroundColor: "rgba(102, 103, 171, 0.14)",
+          fill: true,
+          tension: 0.3,
+          pointRadius: 2
+        }
+      ]
+    }
+  end
+
   defp load_pharmacy(socket, organization_id, site) do
     if Site.pharmacy?(site) do
       products_by_id = organization_id |> Products.list_products() |> Map.new(&{&1.id, &1})
@@ -314,6 +386,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         :incomplete_orders,
         Enum.filter(lab_orders, &(&1.status in [:pending, :in_progress]))
       )
+      |> assign(:lab_orders_by_day, Dashboards.lab_orders_by_day(organization_id, site.id))
     else
       socket
     end
@@ -361,11 +434,11 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       back={~p"/org/sites"}
     >
       <%!-- Granular Site Header Dashboard Card --%>
-      <div class="relative ff-surface-card rounded-3xl p-6 sm:p-8 mb-6">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      <div class="relative mb-6 rounded-3xl p-4 ff-surface-card sm:p-6 lg:p-8">
+        <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h1 class="text-2xl sm:text-3xl font-medium text-slate-900 tracking-tight">
+            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+              <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
                 {@site.name}
               </h1>
               <span class="px-3 py-1 text-xs font-medium bg-thamani-lime text-thamani-forest rounded-full border border-thamani-forest/10 capitalize">
@@ -377,15 +450,18 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
             </p>
           </div>
 
-          <div class="flex flex-col items-end gap-3 shrink-0">
-            <.button
-              navigate={~p"/org/sites/#{@site.id}/edit"}
-              class="!rounded-xl text-xs font-medium"
-            >
-              Edit site
-            </.button>
-            <.range_filter event="set_range" current={@range} ranges={Dashboards.ranges()} />
-          </div>
+          <.button
+            navigate={~p"/org/sites/#{@site.id}/edit"}
+            class="shrink-0 !rounded-xl px-3 py-2 text-xs font-medium sm:px-5"
+            id="btn-edit-site"
+          >
+            <.icon name="hero-pencil-square" class="size-4 sm:mr-1" />
+            <span class="max-sm:sr-only">Edit site</span>
+          </.button>
+        </div>
+
+        <div id="site-dashboard-range-filter" class="mt-5">
+          <.range_filter event="set_range" current={@range} ranges={Dashboards.ranges()} />
         </div>
 
         <%!-- Fixed backdrop blur overlay when search popover is active --%>
@@ -399,8 +475,8 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         />
 
         <%!-- Search & Filters row --%>
-        <div class="mt-6 flex flex-col sm:flex-row items-center gap-3 w-full">
-          <div class="relative flex-1 w-full">
+        <div class="mt-5 grid w-full grid-cols-1 items-start gap-3 min-[480px]:grid-cols-[minmax(0,1fr)_auto]">
+          <div class="relative min-w-0 w-full">
             <input
               type="text"
               name="search"
@@ -493,7 +569,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           <button
             type="button"
             phx-click="toggle_filters"
-            class="inline-flex items-center justify-center gap-2 rounded-full bg-thamani-forest hover:opacity-90 text-thamani-snow px-5 py-2.5 text-sm font-normal transition-colors shrink-0 cursor-pointer w-full sm:w-auto"
+            class="inline-flex h-[42px] w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full bg-thamani-forest px-5 text-sm font-normal text-thamani-snow transition-colors hover:opacity-90 min-[480px]:w-auto"
           >
             <.icon name="hero-adjustments-horizontal" class="size-4" /> Filters
           </button>
@@ -502,7 +578,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         <%!-- Date Range Filter Popover Modal --%>
         <div
           :if={@show_filters}
-          class="absolute right-6 top-[80px] z-50 mt-2 w-full max-w-md rounded-2xl p-6 ff-surface-popover transition-all"
+          class="absolute inset-x-4 top-[9.5rem] z-50 mt-2 w-auto rounded-2xl p-5 ff-surface-popover transition-all sm:inset-x-auto sm:right-6 sm:top-[80px] sm:w-full sm:max-w-md sm:p-6"
         >
           <form phx-submit="apply_custom_range">
             <div class="flex items-center justify-between border-b border-thamani-stone pb-3 mb-4">
@@ -537,6 +613,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
                   value={elem(@dates, 0)}
                   label="Date From"
                   placeholder="MM/DD/YYYY"
+                  max="today"
                 />
               </div>
               <div>
@@ -546,6 +623,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
                   value={elem(@dates, 1)}
                   label="Date To"
                   placeholder="MM/DD/YYYY"
+                  max="today"
                 />
               </div>
             </div>
@@ -639,18 +717,68 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           data={monthly_revenue_chart_data(@monthly_revenue)}
           options={chart_options()}
         />
+        <.chart_card
+          :if={@sales_by_method != []}
+          id="site-payment-methods-chart"
+          title="Payment methods"
+          subtitle={"Completed payments at #{@site.name}"}
+          type="doughnut"
+          data={method_chart_data(@sales_by_method)}
+          options={legend_chart_options()}
+        />
+        <div
+          :if={@sales_by_method == []}
+          id="site-payment-methods-empty"
+          class="dashboard-chart-card"
+        >
+          <.blank_state icon="hero-credit-card" title="No completed sales yet">
+            Once payments complete at this site, their mix will appear here.
+          </.blank_state>
+        </div>
+        <.chart_card
+          :if={Site.pharmacy?(@site) and @top_products != []}
+          id="site-top-products-chart"
+          title="Most dispensed medicines"
+          subtitle={"Dispensed at #{@site.name}"}
+          type="bar"
+          data={top_products_chart_data(@top_products)}
+          options={horizontal_bar_options()}
+        />
+        <div
+          :if={Site.pharmacy?(@site) and @top_products == []}
+          id="site-top-products-empty"
+          class="dashboard-chart-card"
+        >
+          <.blank_state icon="hero-cube" title="No dispensing activity yet">
+            Dispensed products will show up here once prescriptions start being filled.
+          </.blank_state>
+        </div>
+        <.chart_card
+          :if={Site.lab?(@site)}
+          id="site-lab-volume-chart"
+          title="Lab order volume"
+          subtitle={"Orders created per day at #{@site.name}, last 30 days"}
+          type="line"
+          data={lab_volume_chart_data(@lab_orders_by_day)}
+          options={chart_options()}
+        />
       </div>
 
-      <.header variant="plain" class="mt-8">Staff assigned</.header>
-      <.table id="site-staff" rows={@staff}>
-        <:col :let={user} label="Name">{user.name}</:col>
-        <:col :let={user} label="Role">{Phoenix.Naming.humanize(user.role)}</:col>
-        <:empty_state>
-          <.blank_state icon="hero-users" title="No staff assigned">
-            Staff assigned to this site will appear here.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+      <section id="site-team" class="mt-8">
+        <.header variant="plain">
+          Site team
+          <:subtitle>People currently assigned to this location</:subtitle>
+        </.header>
+        <.table id="site-staff" rows={@staff}>
+          <:col :let={user} label="Name">{user.name}</:col>
+          <:col :let={user} label="Role">{Phoenix.Naming.humanize(user.role)}</:col>
+          <:empty_state>
+            <.blank_state icon="hero-users" title="No staff assigned">
+              Staff assigned to this site will appear here.
+            </.blank_state>
+          </:empty_state>
+        </.table>
+      </section>
 
       <div
         :if={Site.pharmacy?(@site) and Site.lab?(@site)}
@@ -671,44 +799,81 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       </div>
 
       <div :if={@tab == :pharmacy}>
-        <.header variant="plain" class="mt-6">
-          Low stock
-          <:subtitle>Products at or below their reorder level</:subtitle>
-        </.header>
-        <.table id="site-low-stock" rows={@low_stock}>
-          <:col :let={{product, _total}} label="Product">{product_display_name(product)}</:col>
-          <:col :let={{product, _total}} label="Reorder level">
-            {product && product.reorder_level}
-          </:col>
-          <:col :let={{_product, total}} label="Remaining">{total}</:col>
-          <:empty_state>
-            <.blank_state icon="hero-check-circle" title="No products are low on stock">
-              Products will show up here once they drop to their reorder level.
-            </.blank_state>
-          </:empty_state>
-        </.table>
+        <section id="pharmacy-stock-overview" class="mt-6">
+          <.header variant="plain">
+            Stock attention
+            <:subtitle>Inventory that may need action soon</:subtitle>
+          </.header>
 
-        <.header variant="plain" class="mt-6">
-          Near-expiry batches
-          <:subtitle>Expiring within {@near_expiry_days} days</:subtitle>
-        </.header>
-        <.table
-          id="site-near-expiry"
-          rows={@near_expiry}
-          row_click={fn batch -> JS.navigate(~p"/org/batches/#{batch.id}") end}
-        >
-          <:col :let={batch} label="Product">{product_name(@products_by_id, batch.product_id)}</:col>
-          <:col :let={batch} label="Batch no.">{batch.batch_no}</:col>
-          <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
-          <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
-          <:empty_state>
-            <.blank_state icon="hero-calendar-days" title="No batches expiring soon">
-              Batches will appear here within {@near_expiry_days} days of their expiry date.
-            </.blank_state>
-          </:empty_state>
-        </.table>
+          <div class="grid gap-6 xl:grid-cols-2">
+            <div class="flex min-w-0 flex-col [&>.responsive-table]:flex-1">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="font-medium text-thamani-forest">Low stock</h3>
+                  <p class="mt-0.5 text-sm text-thamani-pewter">At or below reorder level</p>
+                </div>
+                <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                  {length(@low_stock)} items
+                </span>
+              </div>
+              <.table id="site-low-stock" rows={@low_stock}>
+                <:col :let={{product, _total}} label="Product">
+                  {product_display_name(product)}
+                </:col>
+                <:col :let={{product, _total}} label="Reorder level">
+                  {product && product.reorder_level}
+                </:col>
+                <:col :let={{_product, total}} label="Remaining">{total}</:col>
+                <:empty_state>
+                  <.blank_state icon="hero-check-circle" title="Stock levels look healthy">
+                    No products are currently at their reorder level.
+                  </.blank_state>
+                </:empty_state>
+              </.table>
+            </div>
 
-        <.header variant="plain" class="mt-6">Pending prescriptions</.header>
+            <div class="flex min-w-0 flex-col [&>.responsive-table]:flex-1">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h3 class="font-medium text-thamani-forest">Near-expiry batches</h3>
+                  <p class="mt-0.5 text-sm text-thamani-pewter">
+                    Expiring within {@near_expiry_days} days
+                  </p>
+                </div>
+                <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                  {length(@near_expiry)} batches
+                </span>
+              </div>
+              <.table
+                id="site-near-expiry"
+                rows={@near_expiry}
+                empty_class="!px-3 !py-3"
+                row_click={fn batch -> JS.navigate(~p"/org/batches/#{batch.id}") end}
+              >
+                <:col :let={batch} label="Product">
+                  {product_name(@products_by_id, batch.product_id)}
+                </:col>
+                <:col :let={batch} label="Batch no.">{batch.batch_no}</:col>
+                <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
+                <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
+                <:empty_state>
+                  <.blank_state
+                    icon="hero-calendar-days"
+                    title="No batches expiring soon"
+                    class="!border-0 !bg-transparent !py-2 [&>span]:!size-8"
+                  >
+                    Nothing expires within the next {@near_expiry_days} days.
+                  </.blank_state>
+                </:empty_state>
+              </.table>
+            </div>
+          </div>
+        </section>
+
+        <.header variant="plain" class="mt-8">
+          Pending prescriptions
+          <:subtitle>Prescriptions waiting for pharmacy action</:subtitle>
+        </.header>
         <.table
           id="site-pending-prescriptions"
           rows={@pending_prescriptions}

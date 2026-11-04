@@ -13,11 +13,15 @@ alias ThamaniDawa.Patients
 alias ThamaniDawa.Patients.Patient
 alias ThamaniDawa.PatientVisits
 alias ThamaniDawa.PatientVisits.PatientVisit
+alias ThamaniDawa.Payments
+alias ThamaniDawa.Payments.Payment
 alias ThamaniDawa.Prescriptions
 alias ThamaniDawa.Prescriptions.{Prescription, PrescriptionItem}
 alias ThamaniDawa.Products
 alias ThamaniDawa.Products.Product
 alias ThamaniDawa.Repo
+alias ThamaniDawa.Requisitions
+alias ThamaniDawa.Requisitions.Requisition
 alias ThamaniDawa.Sites
 alias ThamaniDawa.Sites.Site
 alias ThamaniDawa.Suppliers
@@ -78,7 +82,12 @@ org_result =
             slug: "demo-care",
             license_number: "KMPDB-DEMO-001"
           },
-          %{name: "Amina Kamau", email: "admin@gmail.com", password: password}
+          %{
+            name: "Amina Kamau",
+            email: "admin@gmail.com",
+            password: password,
+            accepted_legal_terms: true
+          }
         )
 
       result
@@ -152,6 +161,20 @@ combined_site =
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
 
+warehouse_site =
+  insert_or_get.(
+    Site,
+    %{organization_id: organization_id, name: "Demo Care Central Warehouse"},
+    %{
+      site_type: :warehouse,
+      gln: "6160001000032",
+      address: "Mombasa Road Logistics Park, Nairobi",
+      lat: -1.3197,
+      long: 36.8276
+    },
+    fn attrs -> Sites.create_site(organization_id, attrs) end
+  )
+
 ensure_account = fn email, name, role, site ->
   site_ids = if site, do: [site.id], else: []
 
@@ -166,7 +189,12 @@ ensure_account = fn email, name, role, site ->
             site_ids: site_ids
           })
 
-        {:ok, accepted} = Accounts.accept_invite(invited, %{password: password})
+        {:ok, accepted} =
+          Accounts.accept_invite(invited, %{
+            password: password,
+            accepted_legal_terms: true
+          })
+
         accepted
 
       %User{} = existing ->
@@ -274,7 +302,8 @@ products =
           is_otc: otc,
           is_dangerous_drug: dangerous,
           reorder_level: reorder,
-          price: price
+          price: price,
+          inventory_type: if(type == :lab_consumable, do: :lab_consumable, else: :medicine)
         },
         fn attrs -> Products.create_product(organization_id, attrs) end
       )
@@ -376,6 +405,114 @@ Enum.each(
     )
   end
 )
+
+ensure_org_batch = fn product, batch_no, quantity, expiry_days, supplier ->
+  existing =
+    Repo.one(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.product_id == ^product.id,
+        where: b.batch_no == ^batch_no,
+        where: is_nil(b.site_id)
+    )
+
+  existing ||
+    (
+      {:ok, created} =
+        Batches.receive_into_org_stock(organization_id, %{
+          product_id: product.id,
+          batch_no: batch_no,
+          gtin: product.gtin,
+          manufacturer: supplier.name,
+          manufacture_date: Date.add(today, -60),
+          expiry_date: Date.add(today, expiry_days),
+          quantity: quantity,
+          cost_per_unit: Decimal.new("20.00"),
+          supplier_id: supplier.id
+        })
+
+      created
+    )
+end
+
+warehouse_batches =
+  for {product, index} <- Enum.with_index(drug_products ++ lab_products) do
+    supplier = Enum.at(suppliers, rem(index, length(suppliers)))
+
+    ensure_org_batch.(
+      product,
+      "WH-#{index + 1}-A",
+      500 + index * 20,
+      Enum.at([90, 150, 270, 400], rem(index, 4)),
+      supplier
+    )
+  end
+
+# Requisition lifecycle: one pending, one approved-and-fully-fulfilled, one
+# approved-and-partially-fulfilled, one rejected — exercises every branch of
+# the review/fulfillment queue.
+requisition_specs = [
+  {pharmacy_site, primary_pharmacist, Enum.at(drug_products, 0), 40, :pending},
+  {combined_site, primary_pharma_lab, Enum.at(drug_products, 1), 30, :fulfilled},
+  {lab_site, primary_lab_technician, Enum.at(lab_products, 0), 25, :partially_fulfilled},
+  {pharmacy_site, primary_pharmacist, Enum.at(drug_products, 2), 20, :rejected}
+]
+
+Enum.each(requisition_specs, fn {site, requester, product, quantity, target} ->
+  requisition =
+    case Repo.get_by(Requisition,
+           organization_id: organization_id,
+           site_id: site.id,
+           product_id: product.id,
+           quantity: quantity
+         ) do
+      nil ->
+        {:ok, created} =
+          Requisitions.create_requisition(organization_id, requester.id, %{
+            site_id: site.id,
+            product_id: product.id,
+            quantity: quantity,
+            notes: "Seeded demo requisition for #{product.generic_name}"
+          })
+
+        created
+
+      existing ->
+        existing
+    end
+
+  if requisition.status == :pending and target in [:fulfilled, :partially_fulfilled] do
+    {:ok, requisition} =
+      Requisitions.approve_requisition(organization_id, requisition.id, primary_admin.id)
+
+    org_batch =
+      Enum.find(warehouse_batches, &(&1.product_id == product.id and is_nil(&1.site_id)))
+
+    case target do
+      :fulfilled ->
+        {:ok, _dispatched} =
+          Requisitions.fulfill_requisition(organization_id, requisition.id, org_batch, quantity)
+
+      :partially_fulfilled ->
+        {:ok, _dispatched} =
+          Requisitions.fulfill_requisition(
+            organization_id,
+            requisition.id,
+            org_batch,
+            div(quantity, 2)
+          )
+    end
+  end
+
+  if requisition.status == :pending and target == :rejected do
+    Requisitions.reject_requisition(
+      organization_id,
+      requisition.id,
+      primary_admin.id,
+      "Stock already sufficient at site after last delivery."
+    )
+  end
+end)
 
 patient_specs = [
   {"Jane Wanjiku", ~D[1992-04-18], "female", "+254711000111"},
@@ -529,6 +666,40 @@ patients
   end
 end)
 
+quick_sale_specs = [
+  {pharmacy_site, Enum.at(patients, 12), "Cash"},
+  {pharmacy_site, nil, "Mobile Money"},
+  {combined_site, Enum.at(patients, 13), "Insurance"},
+  {combined_site, nil, "Cash"}
+]
+
+Enum.each(quick_sale_specs, fn {site, patient, payment_type} ->
+  patient_id = patient && patient.id
+
+  already_sold? =
+    patient_id in Repo.all(
+      from p in Prescription,
+        join: v in PatientVisit,
+        on: v.id == p.patient_visit_id,
+        where:
+          p.organization_id == ^organization_id and v.site_id == ^site.id and
+            is_nil(p.user_id) and p.payment_type == ^payment_type,
+        select: v.patient_id
+    )
+
+  if not already_sold? do
+    product =
+      Enum.at(drug_products, rem(site.id + String.length(payment_type), length(drug_products)))
+
+    {:ok, _prescription} =
+      Prescriptions.create_quick_sale(organization_id, site.id, primary_admin.id, %{
+        "patient_id" => patient && patient.id,
+        "payment_type" => payment_type,
+        "items" => [%{"product_id" => product.id, "quantity_prescribed" => 2}]
+      })
+  end
+end)
+
 category_specs = [
   {"Hematology", "Blood cell counts and morphology", 1},
   {"Clinical Chemistry", "Metabolic, renal, and liver function testing", 2},
@@ -600,6 +771,27 @@ lab_tests =
       fn attrs -> LabTests.create_lab_test(organization_id, attrs) end
     )
   end)
+
+lab_test_by_id = Map.new(lab_tests, &{&1.id, &1})
+
+sample_result_values = fn lab_test, index ->
+  Map.new(lab_test.field_definitions, fn {field, field_def} ->
+    value =
+      case field_def["type"] do
+        "number" ->
+          Integer.to_string(7 + rem(index, 6))
+
+        "select" ->
+          options = field_def["options"] || ["Normal"]
+          Enum.at(options, rem(index, length(options)))
+
+        _ ->
+          "Within normal limits"
+      end
+
+    {field, value}
+  end)
+end
 
 lab_order_states = [
   :pending,
@@ -716,12 +908,11 @@ patients
           end
 
         if result.status != :completed do
+          lab_test = Map.fetch!(lab_test_by_id, result.lab_test_id)
+          raw_values = sample_result_values.(lab_test, index)
+
           {:ok, _result} =
-            LabOrders.record_result(organization_id, result.id, technician.id, %{
-              "result" => "Within reference range",
-              "value" => Integer.to_string(7 + rem(index, 6)),
-              "comment" => "Verified by the seeded laboratory workflow"
-            })
+            LabOrders.record_result(organization_id, result.id, technician.id, raw_values)
         end
       end)
   end
@@ -744,6 +935,102 @@ patients
         lab_order_id: lab_order.id,
         purpose: "Reagent and collection materials for #{lab_order.lab_request}"
       )
+  end
+end)
+
+ensure_payment = fn order_key, order_id, amount, payment_type, outcome ->
+  existing =
+    Repo.get_by(Payment, [{:organization_id, organization_id}, {order_key, order_id}])
+
+  payment =
+    existing ||
+      (
+        {:ok, created} =
+          Payments.create_payment(organization_id, %{
+            order_key => order_id,
+            amount: amount,
+            payment_type: payment_type
+          })
+
+        created
+      )
+
+  case {payment.status, outcome} do
+    {:pending, :completed} ->
+      {:ok, completed} = Payments.complete_payment(payment)
+      completed
+
+    {:pending, :failed} ->
+      {:ok, failed} = Payments.fail_payment(payment, "Mobile money timeout")
+      failed
+
+    _ ->
+      payment
+  end
+end
+
+prescriptions_for_payment =
+  Repo.all(
+    from p in Prescription,
+      where: p.organization_id == ^organization_id,
+      order_by: [asc: p.id]
+  )
+
+prescriptions_for_payment
+|> Enum.with_index()
+|> Enum.each(fn {prescription, index} ->
+  payment_type = Enum.at(["Cash", "Mobile Money", "Insurance"], rem(index, 3))
+
+  amount =
+    if Decimal.compare(prescription.total_amount, Decimal.new(0)) == :gt,
+      do: prescription.total_amount,
+      else: Decimal.new(Integer.to_string(450 + index * 125))
+
+  cond do
+    prescription.status == :cancelled ->
+      ensure_payment.(:prescription_id, prescription.id, amount, payment_type, :failed)
+
+    prescription.has_paid ->
+      ensure_payment.(:prescription_id, prescription.id, amount, payment_type, :completed)
+
+    rem(index, 3) == 0 ->
+      ensure_payment.(:prescription_id, prescription.id, amount, payment_type, :pending)
+
+    true ->
+      :ok
+  end
+end)
+
+lab_orders_for_payment =
+  Repo.all(
+    from l in LabOrder,
+      where: l.organization_id == ^organization_id,
+      order_by: [asc: l.id]
+  )
+
+lab_orders_for_payment
+|> Enum.with_index()
+|> Enum.each(fn {lab_order, index} ->
+  payment_type = Enum.at(["Cash", "Mobile Money", "Insurance"], rem(index, 3))
+
+  cond do
+    lab_order.status == :cancelled ->
+      ensure_payment.(:lab_order_id, lab_order.id, lab_order.total_amount, payment_type, :failed)
+
+    lab_order.has_paid ->
+      ensure_payment.(
+        :lab_order_id,
+        lab_order.id,
+        lab_order.total_amount,
+        payment_type,
+        :completed
+      )
+
+    rem(index, 3) == 0 ->
+      ensure_payment.(:lab_order_id, lab_order.id, lab_order.total_amount, payment_type, :pending)
+
+    true ->
+      :ok
   end
 end)
 
@@ -770,7 +1057,7 @@ IO.puts("""
 Seed complete.
 
 Organization: #{organization.name}
-Sites: #{pharmacy_site.name}, #{lab_site.name}, #{combined_site.name}
+Sites: #{pharmacy_site.name}, #{lab_site.name}, #{combined_site.name}, #{warehouse_site.name}
 Data: #{length(products)} products, #{length(pharmacy_batches) + length(lab_batches)} active site batches,
       #{length(suppliers)} suppliers, #{length(patients)} patients,
       12 prescriptions, #{length(lab_tests)} lab tests, and 12 lab orders.

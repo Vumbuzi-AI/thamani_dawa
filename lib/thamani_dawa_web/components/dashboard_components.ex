@@ -21,10 +21,11 @@ defmodule ThamaniDawaWeb.DashboardComponents do
   attr :value, :any, required: true
   attr :sublabel, :string, default: nil
   attr :class, :any, default: nil
+  attr :id, :string, default: nil
 
   def stat_tile(assigns) do
     ~H"""
-    <div class={["dashboard-stat-tile", @class]}>
+    <div id={@id} class={["dashboard-stat-tile", @class]}>
       <div class="dashboard-stat-tile-header">
         <span class="dashboard-stat-tile-label">{@label}</span>
         <span class="dashboard-stat-tile-icon">

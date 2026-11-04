@@ -27,7 +27,7 @@ defmodule ThamaniDawa.PatientVisits do
   def list_patient_visits_paginated(organization_id, page \\ 1, opts \\ []) do
     query =
       from(pv in PatientVisit,
-        join: pat in ThamaniDawa.Patients.Patient,
+        left_join: pat in ThamaniDawa.Patients.Patient,
         on: pat.id == pv.patient_id,
         join: s in ThamaniDawa.Sites.Site,
         on: s.id == pv.site_id,
@@ -103,7 +103,22 @@ defmodule ThamaniDawa.PatientVisits do
     %PatientVisit{}
     |> PatientVisit.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Repo.insert()
+    |> Repo.audited_insert()
+  end
+
+  @doc """
+  Creates a patient-less visit — a walk-in prescription with no patient
+  recorded. Kept as its own function (rather than an option on
+  `create_patient_visit/2`) so every call site's intent to allow a missing
+  patient is explicit; lab order creation always goes through
+  `create_patient_visit/2` and keeps requiring one.
+  """
+  def create_patient_visit_without_patient(organization_id, attrs)
+      when is_integer(organization_id) do
+    %PatientVisit{}
+    |> PatientVisit.walk_in_changeset(attrs)
+    |> Ecto.Changeset.put_change(:organization_id, organization_id)
+    |> Repo.audited_insert()
   end
 
   @doc """

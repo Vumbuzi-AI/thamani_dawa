@@ -36,10 +36,11 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
 
     conn = log_in_user(conn, pharmacist)
 
-    {:ok, receive_live, _html} = live(conn, ~p"/pharmacy/receive-stock")
+    {:ok, receive_live, _html} =
+      live(conn, ~p"/pharmacy/receive-stock/#{pending_batch.id}/receive")
 
     receive_live
-    |> form("#receive-stock-gs1-form", raw_gs1: "01" <> gtin <> "10" <> "LOT-E2E-1")
+    |> form("#receive-batch-form", receive: %{quantity: "50"})
     |> render_submit()
 
     assert render(receive_live) =~ "Stock received."
@@ -60,7 +61,7 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
 
     {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
-    assert index_live |> element("a", "+ New prescription") |> render_click()
+    assert index_live |> element("#prescription-new-button") |> render_click()
     assert index_live |> element("button", "+ Add Item") |> render_click()
 
     assert {:error, {:live_redirect, %{to: prescription_path}}} =
@@ -82,19 +83,19 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
     {:ok, show_live, _html} = live(conn, prescription_path)
 
     show_live
-    |> form("form", %{"item_id" => item.id, "quantity" => "5"})
+    |> form("form", %{
+      "item_id" => item.id,
+      "quantity" => "5",
+      "barcode" => gtin,
+      "batch_no" => pending_batch.batch_no
+    })
     |> render_submit()
 
     assert render(show_live) =~ "Item dispensed."
+    assert render(show_live) =~ "Verified"
 
     dispensed_batch = Batches.get_batch!(organization.id, pending_batch.id)
     assert dispensed_batch.remaining_quantity == 45
-
-    show_live
-    |> form("form[phx-submit='verify_item']", %{"item_id" => item.id, "gtin" => gtin})
-    |> render_submit()
-
-    assert render(show_live) =~ "Item verified successfully."
 
     prescription = Prescriptions.get_prescription!(organization.id, prescription_id)
     assert prescription.status == :completed

@@ -184,6 +184,275 @@ defmodule ThamaniDawa.PrescriptionsTest do
     end
   end
 
+  describe "create_quick_sale/4" do
+    test "dispenses, verifies, and pays for every item atomically" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id, price: 100})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 50
+      })
+
+      assert {:ok, prescription} =
+               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+                 "payment_type" => "Cash",
+                 "items" => [
+                   %{
+                     "product_id" => product.id,
+                     "quantity_prescribed" => 10,
+                     "scanned_gtin" => product.gtin
+                   }
+                 ]
+               })
+
+      assert prescription.has_paid
+      assert prescription.status == :completed
+      assert prescription.total_amount == Decimal.new(1000)
+
+      [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
+      assert item.quantity_dispensed == 10
+      assert item.is_verified
+
+      visit =
+        ThamaniDawa.PatientVisits.get_patient_visit!(
+          organization.id,
+          prescription.patient_visit_id
+        )
+
+      assert is_nil(visit.patient_id)
+
+      assert Batches.total_available_stock(organization.id, site.id, product.id) == 40
+    end
+
+    test "dispenses from the exact lot encoded in a scanned GS1 barcode" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+
+      earlier_batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: product.gtin,
+          batch_no: "EARLY-LOT",
+          expiry_date: ~D[2026-12-01],
+          quantity: 10
+        })
+
+      scanned_batch =
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          gtin: product.gtin,
+          batch_no: "SCANNED-LOT",
+          expiry_date: ~D[2027-12-01],
+          quantity: 10
+        })
+
+      barcode = ThamaniDawa.GS1Encoder.encode_raw(scanned_batch)
+
+      assert {:ok, prescription} =
+               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+                 "payment_type" => "Cash",
+                 "items" => [
+                   %{
+                     "product_id" => product.id,
+                     "quantity_prescribed" => 3,
+                     "scanned_gtin" => product.gtin,
+                     "scanned_barcode" => barcode
+                   }
+                 ]
+               })
+
+      [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
+      assert item.is_verified
+      assert Batches.get_batch!(organization.id, earlier_batch.id).remaining_quantity == 10
+      assert Batches.get_batch!(organization.id, scanned_batch.id).remaining_quantity == 7
+    end
+
+    test "creates the visit for an existing patient when patient_id is given" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+      patient = patient_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+      batch_fixture(%{organization_id: organization.id, site_id: site.id, product_id: product.id})
+
+      assert {:ok, prescription} =
+               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+                 "patient_id" => patient.id,
+                 "payment_type" => "Cash",
+                 "items" => [
+                   %{
+                     "product_id" => product.id,
+                     "quantity_prescribed" => 1,
+                     "scanned_gtin" => product.gtin
+                   }
+                 ]
+               })
+
+      visit =
+        ThamaniDawa.PatientVisits.get_patient_visit!(
+          organization.id,
+          prescription.patient_visit_id
+        )
+
+      assert visit.patient_id == patient.id
+    end
+
+    test "rolls back everything when a scanned GTIN doesn't match the product" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 50
+      })
+
+      assert {:error, {0, :gtin_mismatch}} =
+               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+                 "payment_type" => "Cash",
+                 "items" => [
+                   %{
+                     "product_id" => product.id,
+                     "quantity_prescribed" => 10,
+                     "scanned_gtin" => unique_gtin()
+                   }
+                 ]
+               })
+
+      assert Prescriptions.list_prescriptions(organization.id) == []
+      assert Batches.total_available_stock(organization.id, site.id, product.id) == 50
+    end
+
+    test "rolls back everything when stock is insufficient" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 5
+      })
+
+      assert {:error, {0, :out_of_stock}} =
+               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+                 "payment_type" => "Cash",
+                 "items" => [
+                   %{
+                     "product_id" => product.id,
+                     "quantity_prescribed" => 10,
+                     "scanned_gtin" => product.gtin
+                   }
+                 ]
+               })
+
+      assert Prescriptions.list_prescriptions(organization.id) == []
+      assert Batches.total_available_stock(organization.id, site.id, product.id) == 5
+    end
+
+    for {desc, gtin} <- [{"an empty string", ""}, {"nil", nil}, {"whitespace", "   "}] do
+      test "completes the sale without verification when the scanned GTIN is #{desc}", %{} do
+        organization = organization_fixture()
+        site = site_fixture(%{organization_id: organization.id})
+        user = staff_fixture(%{organization_id: organization.id})
+        product = product_fixture(%{organization_id: organization.id, price: 100})
+
+        batch_fixture(%{
+          organization_id: organization.id,
+          site_id: site.id,
+          product_id: product.id,
+          quantity: 50
+        })
+
+        assert {:ok, prescription} =
+                 Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+                   "payment_type" => "Cash",
+                   "items" => [
+                     %{
+                       "product_id" => product.id,
+                       "quantity_prescribed" => 10,
+                       "scanned_gtin" => unquote(gtin)
+                     }
+                   ]
+                 })
+
+        assert prescription.has_paid
+        assert prescription.status == :completed
+
+        [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
+        assert item.quantity_dispensed == 10
+        refute item.is_verified
+        assert Batches.total_available_stock(organization.id, site.id, product.id) == 40
+      end
+    end
+  end
+
+  describe "create_prescription_without_patient/4" do
+    test "creates a patient-less PatientVisit and a Prescription in one transaction" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+
+      assert {:ok, %Prescription{} = prescription} =
+               Prescriptions.create_prescription_without_patient(
+                 organization.id,
+                 site.id,
+                 user.id,
+                 %{payment_type: "Cash"}
+               )
+
+      assert prescription.organization_id == organization.id
+
+      visit =
+        ThamaniDawa.PatientVisits.get_patient_visit!(
+          organization.id,
+          prescription.patient_visit_id
+        )
+
+      assert is_nil(visit.patient_id)
+      assert visit.site_id == site.id
+      assert visit.user_id == user.id
+      assert visit.visit_type == :pharmacy
+    end
+
+    test "accepts a list of items, injecting organization_id into each" do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      user = staff_fixture(%{organization_id: organization.id})
+      product = product_fixture(%{organization_id: organization.id})
+
+      assert {:ok, %Prescription{} = prescription} =
+               Prescriptions.create_prescription_without_patient(
+                 organization.id,
+                 site.id,
+                 user.id,
+                 %{
+                   payment_type: "Cash",
+                   items: [%{product_id: product.id, quantity_prescribed: 5}]
+                 }
+               )
+
+      assert [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
+      assert item.organization_id == organization.id
+    end
+  end
+
   describe "create_prescription_with_new_patient/5" do
     test "creates a Patient, PatientVisit, and Prescription in one transaction" do
       organization = organization_fixture()
@@ -628,7 +897,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2098-08-01],
+          expiry_date: ~D[2099-01-01],
           quantity: 100,
           remaining_quantity: 100
         })
@@ -638,7 +907,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2099-01-01],
+          expiry_date: ~D[2099-02-01],
           quantity: 100,
           remaining_quantity: 100
         })
@@ -647,7 +916,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
         batch_fixture(%{
           organization_id: ctx.organization.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2098-08-15],
+          expiry_date: ~D[2098-12-15],
           quantity: 100,
           remaining_quantity: 100
         })
@@ -690,7 +959,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2098-08-01],
+          expiry_date: ~D[2099-08-01],
           quantity: 4,
           remaining_quantity: 4
         })
@@ -700,7 +969,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2098-09-01],
+          expiry_date: ~D[2099-09-01],
           quantity: 10,
           remaining_quantity: 10
         })
@@ -737,7 +1006,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2098-08-01],
+          expiry_date: ~D[2099-08-01],
           quantity: 4,
           remaining_quantity: 4
         })
@@ -747,7 +1016,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
           organization_id: ctx.organization.id,
           site_id: ctx.site.id,
           product_id: ctx.product.id,
-          expiry_date: ~D[2098-09-01],
+          expiry_date: ~D[2099-09-01],
           quantity: 5,
           remaining_quantity: 5
         })

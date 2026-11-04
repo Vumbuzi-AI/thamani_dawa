@@ -9,7 +9,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
 
   @near_expiry_days 30
 
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     scope = socket.assigns.current_scope
     organization_id = scope.organization_id
     site_id = scope.current_site_id
@@ -34,19 +34,58 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       |> Enum.filter(&(&1.status in [:pending, :partially_dispensed]))
 
     {out_of_stock, low_stock} = stock_alerts(active_batches, products_by_id)
+    low_stock_value = low_stock_replenishment_value(low_stock ++ out_of_stock, active_batches)
 
     {:ok,
      socket
+     |> assign(:auto_start_tour?, params["tour"] == "1")
      |> assign(:products_by_id, products_by_id)
      |> assign(:out_of_stock, out_of_stock)
      |> assign(:low_stock, low_stock)
+     |> assign(:low_stock_value, low_stock_value)
      |> assign(:near_expiry, near_expiry(active_batches))
      |> assign(:near_expiry_days, @near_expiry_days)
      |> assign(:pending_batches_count, length(pending_batches))
      |> assign(:pending_prescriptions, prescriptions)
      |> assign(:stats, Dashboards.pharmacy_stats(organization_id, site_id))
+     |> assign(:dispensed_today, Dashboards.dispensed_today(organization_id, site_id))
      |> assign(:dispensed_by_day, Dashboards.dispensed_by_day(organization_id, site_id))
      |> assign(:top_products, Dashboards.top_dispensed_products(organization_id, site_id))}
+  end
+
+  defp product_tour_steps do
+    [
+      %{
+        selector: ~s([data-tour-target="/pharmacy"]),
+        title: "Start with your dashboard",
+        description:
+          "See today’s pharmacy workload, stock alerts, revenue, and dispensing activity at a glance."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/prescriptions"]),
+        title: "Manage prescriptions",
+        description:
+          "Review prescriptions waiting to be dispensed and follow each order through completion."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/stock"]),
+        title: "Keep stock accurate",
+        description:
+          "Check available medicines, batches, expiry dates, and quantities at your current site."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/receive-stock"]),
+        title: "Receive incoming stock",
+        description:
+          "Confirm stock dispatched to your site before it becomes available for dispensing."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/scan"]),
+        title: "Scan when speed matters",
+        description:
+          "Use scanning to identify products and batches quickly during day-to-day work."
+      }
+    ]
   end
 
   defp stock_alerts(batches, products_by_id) do
@@ -70,6 +109,26 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       end)
 
     {Enum.reverse(out), Enum.reverse(low)}
+  end
+
+  defp low_stock_replenishment_value(low_stock, batches) do
+    Enum.reduce(low_stock, 0.0, fn {product, remaining}, total ->
+      target_quantity = max(product.reorder_level - remaining, 0)
+
+      {cost_total, quantity_total} =
+        batches
+        |> Enum.filter(&(&1.product_id == product.id and &1.quantity > 0 and &1.cost_per_unit))
+        |> Enum.reduce({0.0, 0}, fn batch, {cost, quantity} ->
+          {cost + Decimal.to_float(batch.cost_per_unit) * batch.quantity,
+           quantity + batch.quantity}
+        end)
+
+      if quantity_total > 0 do
+        total + target_quantity * cost_total / quantity_total
+      else
+        total
+      end
+    end)
   end
 
   defp near_expiry(batches) do
@@ -183,6 +242,20 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           value={money(@stats.revenue_this_month)}
           sublabel="Wallet credits collected"
         />
+        <.stat_tile
+          id="dispensed-today-card"
+          icon="hero-check-badge"
+          label="Dispensed today"
+          value={@dispensed_today}
+          sublabel="Units dispensed today"
+        />
+        <.stat_tile
+          id="low-stock-value-card"
+          icon="hero-currency-dollar"
+          label="Low stock value"
+          value={money(@low_stock_value)}
+          sublabel="Estimated cost to reach reorder levels"
+        />
       </div>
 
       <div class="dashboard-chart-grid mt-6">
@@ -287,6 +360,13 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <Layouts.product_tour
+        id="pharmacy-product-tour"
+        tour_key={"thamani-pharmacy-tour-v1-#{@current_scope.user.id}"}
+        auto_start={@auto_start_tour?}
+        steps={product_tour_steps()}
+      />
     </Layouts.pharmacy_shell>
     """
   end

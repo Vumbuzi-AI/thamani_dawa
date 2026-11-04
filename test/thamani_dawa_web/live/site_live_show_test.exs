@@ -271,10 +271,41 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
 
       assert html =~ "Enter a valid from and to date"
     end
+
+    test "custom range rejects reversed dates and prevents future selections", %{conn: conn} do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
+
+      lv |> element("button", "Filters") |> render_click()
+
+      assert has_element?(lv, "#site-filter-date-from-dp[data-max='today']")
+      assert has_element?(lv, "#site-filter-date-to-dp[data-max='today']")
+
+      html =
+        render_submit(lv, "apply_custom_range", %{
+          "from" => Date.utc_today() |> Date.to_iso8601(),
+          "to" => Date.utc_today() |> Date.add(-1) |> Date.to_iso8601()
+        })
+
+      assert html =~ "Date From must be on or before Date To."
+      assert has_element?(lv, "#site-filter-date-from-dp")
+
+      html =
+        render_submit(lv, "apply_custom_range", %{
+          "from" => Date.utc_today() |> Date.to_iso8601(),
+          "to" => Date.utc_today() |> Date.add(1) |> Date.to_iso8601()
+        })
+
+      assert html =~ "Date range cannot include future dates."
+      assert has_element?(lv, "#site-filter-date-to-dp")
+    end
   end
 
   describe "SiteLive.Index" do
-    test "clicking a site row navigates to its show page", %{conn: conn} do
+    test "clicking a site's View action navigates to its show page", %{conn: conn} do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
@@ -282,7 +313,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
       assert {:error, {:live_redirect, %{to: to}}} =
-               lv |> element("#sites td", site.name) |> render_click()
+               lv |> element("#btn-view-site-#{site.id}") |> render_click()
 
       assert to == ~p"/org/sites/#{site.id}"
     end

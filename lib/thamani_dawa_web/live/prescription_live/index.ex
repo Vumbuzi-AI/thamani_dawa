@@ -49,7 +49,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     |> assign(:sites, Sites.list_sites(organization_id))
     |> assign(:products, products)
     |> assign(:site_locked, not is_nil(site_id))
-    |> assign(:use_new_patient, false)
+    |> assign(:patient_mode, :existing)
     |> assign(:editing_items, MapSet.new())
     |> assign(
       :header_form,
@@ -60,8 +60,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
 
   defp apply_action(socket, :index), do: socket
 
-  def handle_event("toggle_patient_mode", _params, socket) do
-    {:noreply, assign(socket, :use_new_patient, not socket.assigns.use_new_patient)}
+  def handle_event("toggle_patient_mode", %{"tab" => mode}, socket) do
+    {:noreply, assign(socket, :patient_mode, String.to_existing_atom(mode))}
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -189,7 +189,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         handle_save_result({:error, changeset}, socket)
 
       true ->
-        socket.assigns.use_new_patient
+        socket.assigns.patient_mode
         |> save_prescription(params, site_id, socket)
         |> handle_save_result(socket)
     end
@@ -211,7 +211,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     )
   end
 
-  defp save_prescription(true = _new_patient, params, site_id, socket) do
+  defp save_prescription(:new, params, site_id, socket) do
     %{"prescription" => header_attrs} = params
     patient_attrs = Map.get(params, "patient", %{})
     organization_id = socket.assigns.current_scope.organization_id
@@ -226,20 +226,19 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     )
   end
 
-  defp save_prescription(false = _new_patient, params, site_id, socket) do
+  defp save_prescription(:existing, params, site_id, socket) do
     %{"prescription" => header_attrs} = params
     patient_id = header_attrs["patient_id"]
     organization_id = socket.assigns.current_scope.organization_id
     user_id = socket.assigns.current_scope.user.id
 
     if is_nil(patient_id) or patient_id == "" do
-      changeset =
-        %Prescription{}
-        |> Prescription.changeset(header_attrs)
-        |> Ecto.Changeset.add_error(:patient_id, "can't be blank")
-        |> Map.put(:action, :insert)
-
-      {:error, changeset}
+      Prescriptions.create_prescription_without_patient(
+        organization_id,
+        site_id,
+        user_id,
+        header_attrs
+      )
     else
       Prescriptions.create_prescription_for_patient(
         organization_id,
@@ -249,6 +248,19 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         header_attrs
       )
     end
+  end
+
+  defp save_prescription(:walk_in, params, site_id, socket) do
+    %{"prescription" => header_attrs} = params
+    organization_id = socket.assigns.current_scope.organization_id
+    user_id = socket.assigns.current_scope.user.id
+
+    Prescriptions.create_prescription_without_patient(
+      organization_id,
+      site_id,
+      user_id,
+      header_attrs
+    )
   end
 
   defp handle_save_result({:ok, prescription}, socket) do
@@ -342,7 +354,13 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         Prescriptions
         <:subtitle>Search, filter, and manage prescriptions at your site.</:subtitle>
         <:actions>
-          <.button variant="primary" patch={~p"/pharmacy/prescriptions/new"}>+ New prescription</.button>
+          <.button
+            id="prescription-new-button"
+            variant="primary"
+            patch={~p"/pharmacy/prescriptions/new"}
+          >
+            <.icon name="hero-plus" class="size-4" /> New prescription
+          </.button>
         </:actions>
         <:toolbar>
           <form phx-change="search" class="flex-1" id="search-form">
@@ -416,28 +434,34 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
               <.tab_group>
                 <:tab
                   id="existing-patient-mode"
-                  active={not @use_new_patient}
+                  active={@patient_mode == :existing}
                   phx_click="toggle_patient_mode"
+                  phx_value_tab="existing"
                 >
                   Existing Patient
                 </:tab>
-                <:tab id="new-patient-mode" active={@use_new_patient} phx_click="toggle_patient_mode">
+                <:tab
+                  id="new-patient-mode"
+                  active={@patient_mode == :new}
+                  phx_click="toggle_patient_mode"
+                  phx_value_tab="new"
+                >
                   New Patient
                 </:tab>
               </.tab_group>
             </div>
             <div class="p-4 sm:p-5">
-              <div :if={not @use_new_patient}>
+              <div :if={@patient_mode == :existing}>
                 <.input
                   field={@header_form[:patient_id]}
                   type="select"
-                  label="Search and select patient"
+                  label="Search and select patient (optional)"
                   options={Enum.map(@patients, &{patient_label(&1), &1.id})}
-                  prompt="Select patient..."
+                  prompt="No patient selected"
                 />
               </div>
 
-              <div :if={@use_new_patient} class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div :if={@patient_mode == :new} class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <.input field={@patient_form[:full_name]} label="Full Name" required />
                 <.input field={@patient_form[:gsrn]} type="text" label="GSRN (Identifier)" required />
                 <.date_picker
@@ -749,7 +773,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
       >
         <:col :let={prescription} label="ID">#{prescription.id}</:col>
         <:col :let={prescription} label="Patient">
-          <div class="font-semibold">{prescription.patient_name}</div>
+          <div class="font-semibold">{prescription.patient_name || "Walk-in"}</div>
           <div class="text-xs text-base-content/70">{prescription.patient_phone}</div>
         </:col>
         <:col :let={prescription} label="Status">

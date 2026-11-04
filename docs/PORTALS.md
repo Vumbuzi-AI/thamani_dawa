@@ -1,5 +1,14 @@
 # Portals
 
+> **Documentation note (2026-10-28):** this page is an older route summary. The router now
+> also contains organization dashboard/earnings/products/batches/suppliers/requisitions;
+> pharmacy stock/requisitions/patients/quick-sale/payment/receipt; and laboratory
+> patients/requisitions/stock/tests/specimen/result-amendment/payment routes. Conversely,
+> dangerous-drug register, pharmacy-log, QA-chart, test-template/category, result-entry, and
+> verification-queue routes listed below no longer exist. See
+> [WORKFLOWS.md](WORKFLOWS.md) and [MANUAL_TEST_PLAYBOOK.md](MANUAL_TEST_PLAYBOOK.md) for the
+> reviewed current-state baseline.
+
 Routes are defined in `lib/thamani_dawa_web/router.ex`.
 
 ## Public And Session Pages

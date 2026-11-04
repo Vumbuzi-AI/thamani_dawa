@@ -125,13 +125,12 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     assert product
     assert product.generic_name == "Paracetamol"
 
-    # Step 5: dispatch initial stock to the new site
+    # Step 5: record initial stock as org-level, then dispatch it to the new site
     {:ok, batch_view, _html} = live(admin_conn, ~p"/org/products/#{product.id}/batches/new")
 
     batch_view
     |> form("#batch-form",
       batch: %{
-        site_id: site.id,
         gtin: gtin,
         batch_no: "LOT-INITIAL-1",
         expiry_date: Date.to_iso8601(Date.add(Date.utc_today(), 365)),
@@ -143,8 +142,24 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
 
     assert_patch(batch_view, ~p"/org/products/#{product.id}")
 
+    assert [org_batch] =
+             Batches.list_undispatched_batches_for_product(organization.id, product.id)
+
+    assert is_nil(org_batch.site_id)
+    assert org_batch.batch_no == "LOT-INITIAL-1"
+
+    {:ok, dispatch_view, _html} =
+      live(admin_conn, ~p"/org/products/#{product.id}/batches/#{org_batch.id}/dispatch")
+
+    dispatch_view
+    |> form("#dispatch-batch-form", dispatch: %{site_id: site.id})
+    |> render_submit()
+
+    assert_patch(dispatch_view, ~p"/org/products/#{product.id}")
+
     assert [batch] = Batches.list_batches_for_product(organization.id, product.id)
     assert batch.site_id == site.id
+    assert batch.source_batch_id == org_batch.id
     assert batch.batch_no == "LOT-INITIAL-1"
     assert batch.quantity == 200
     assert batch.remaining_quantity == 200

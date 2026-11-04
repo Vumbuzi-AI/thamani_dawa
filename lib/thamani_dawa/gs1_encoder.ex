@@ -15,6 +15,8 @@ defmodule ThamaniDawa.GS1Encoder do
 
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Gtin
+  alias ThamaniDawa.LabOrders.LabSpecimen
+  alias ThamaniDawa.Patients.Patient
 
   @gs <<29>>
 
@@ -82,6 +84,17 @@ defmodule ThamaniDawa.GS1Encoder do
   Formats string for bwip-js barcode generator.
   """
   def bwipjs_text(%Batch{} = batch), do: human_readable(batch)
+
+  @doc """
+  Generates the human-readable AI text for a specimen label: patient GSRN
+  (AI 8018, fixed 18 digits) plus the specimen number as the GS1 SRIN
+  (AI 8019). Used both as barcode input and as the on-label AI line, e.g.
+  `"(8018)000000000000012345(8019)SP-84770-138390"`.
+  """
+  def specimen_label_text(%Patient{} = patient, %LabSpecimen{} = specimen) do
+    gsrn = patient.gsrn |> to_string() |> String.pad_leading(18, "0")
+    "(8018)" <> gsrn <> "(8019)" <> specimen.specimen_number
+  end
 
   defp format_gtin(gtin) when is_binary(gtin) do
     case Gtin.normalize(gtin) do

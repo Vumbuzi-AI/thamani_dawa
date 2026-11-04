@@ -16,6 +16,13 @@ defmodule ThamaniDawa.SitesTest do
       assert site.site_type == :pharmacy
       assert site.is_active
     end
+
+    test "trims whitespace from the signup-created site name" do
+      organization = organization_fixture()
+
+      assert {:ok, site} = Sites.create_default_site(organization.id, "  Mwangaza Pharmacy  ")
+      assert site.name == "Mwangaza Pharmacy"
+    end
   end
 
   describe "create_site/2" do
@@ -50,6 +57,19 @@ defmodule ThamaniDawa.SitesTest do
       assert site_a.gln
       assert site_b.gln
       assert site_a.gln != site_b.gln
+    end
+
+    test "trims whitespace from a site's name on create" do
+      organization = organization_fixture()
+
+      assert {:ok, site} =
+               Sites.create_site(organization.id, %{
+                 name: "  Main Branch  ",
+                 site_type: :pharmacy,
+                 address: "Kimathi Street"
+               })
+
+      assert site.name == "Main Branch"
     end
   end
 

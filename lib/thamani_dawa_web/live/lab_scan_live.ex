@@ -70,8 +70,11 @@ defmodule ThamaniDawaWeb.LabScanLive do
             <.input
               field={@scan_form[:raw_gs1]}
               label="GS1 barcode"
-              placeholder="(01)0...(10)LOT1(17)261231"
+              placeholder="Scan a GS1 DataMatrix or enter (01)…(10)…"
               autocomplete="off"
+              phx-hook="ScanCapture"
+              phx-update="ignore"
+              data-scan-event="decode"
             />
           </div>
           <.button variant="primary" phx-disable-with="Decoding…">

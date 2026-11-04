@@ -12,7 +12,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   alias ThamaniDawaWeb.SiteScoping
 
   @urgencies ~w(routine urgent stat)
-  @sample_types [{"Blood", :blood}, {"Urine", :urine}, {"Stool", :stool}, {"Swab", :swab}]
   @default_filters %{status: "", urgency: ""}
 
   def mount(_params, _session, socket) do
@@ -40,7 +39,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
     |> assign(:sites, Sites.list_sites(organization_id))
     |> assign(:site_locked, not is_nil(site_id))
     |> assign(:urgencies, @urgencies)
-    |> assign(:sample_types, @sample_types)
     |> assign(:use_new_patient, false)
     |> assign(:total_amount, Decimal.new(0))
     |> assign(
@@ -284,7 +282,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         Lab orders
         <:subtitle>Search, filter, and manage lab orders at your site.</:subtitle>
         <:actions>
-          <.button variant="primary" patch={~p"/lab/orders/new"}>+ New order</.button>
+          <.button variant="primary" patch={~p"/lab/orders/new"}>
+            <.icon name="hero-plus" class="size-4" /> New order
+          </.button>
         </:actions>
         <:toolbar>
           <form phx-change="search" class="flex-1" id="search-form">
@@ -410,7 +410,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
               <%= for {id, idx} <- Enum.with_index(@test_ids) do %>
                 <% test_param = Map.get(@tests_params, to_string(id), %{}) %>
                 <% selected_test_id = test_param["lab_test_id"] %>
-                <% selected_sample_type = test_param["sample_type"] %>
                 <% selected_test =
                   Enum.find(@lab_tests, &(to_string(&1.id) == to_string(selected_test_id))) %>
                 <div class="rounded-xl border border-thamani-stone bg-thamani-canvas p-4 space-y-3">
@@ -441,26 +440,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                     </button>
                   </div>
 
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <.input
-                      type="select"
-                      name={"tests[#{id}][lab_test_id]"}
-                      label="Test"
-                      value={selected_test_id}
-                      options={Enum.map(@lab_tests, &{"#{&1.name} — KES #{&1.price}", &1.id})}
-                      prompt="Choose a test"
-                      required
-                    />
-                    <.input
-                      type="select"
-                      name={"tests[#{id}][sample_type]"}
-                      label="Sample type"
-                      value={selected_sample_type}
-                      options={@sample_types}
-                      prompt="Choose sample type"
-                      required
-                    />
-                  </div>
+                  <.input
+                    type="select"
+                    name={"tests[#{id}][lab_test_id]"}
+                    label="Test"
+                    value={selected_test_id}
+                    options={Enum.map(@lab_tests, &{"#{&1.name} — KES #{&1.price}", &1.id})}
+                    prompt="Choose a test"
+                    required
+                  />
                 </div>
               <% end %>
 

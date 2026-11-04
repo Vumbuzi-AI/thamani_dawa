@@ -188,6 +188,86 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
     end
   end
 
+  describe "Products tab" do
+    test "an admin sees products with batches, across every site", %{conn: conn} do
+      admin = user_fixture()
+      org_id = admin.organization_id
+      site = site_fixture(%{organization_id: org_id})
+
+      product =
+        product_fixture(%{organization_id: org_id, generic_name: "Admin-Visible Product"})
+
+      batch_fixture(%{organization_id: org_id, site_id: site.id, product_id: product.id})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
+
+      html = render_click(lv, "set_view", %{"view" => "products"})
+
+      assert html =~ "Admin-Visible Product"
+    end
+
+    test "a product with only undispatched (org-level) stock shows as zero site stock, not an org-wide figure",
+         %{conn: conn} do
+      admin = user_fixture()
+      org_id = admin.organization_id
+
+      product =
+        product_fixture(%{organization_id: org_id, generic_name: "Awaiting Dispatch Product"})
+
+      org_batch_fixture(%{organization_id: org_id, product_id: product.id, quantity: 25})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
+
+      html = render_click(lv, "set_view", %{"view" => "products"})
+
+      assert html =~ "Awaiting Dispatch Product"
+      refute html =~ "Awaiting dispatch"
+    end
+
+    test "a product at or below reorder_level shows the Low stock or Out of stock badge", %{
+      conn: conn
+    } do
+      {org_id, pharmacist, [site]} = pharmacist_assigned_to(["Site A"])
+
+      low_stock_product =
+        product_fixture(%{
+          organization_id: org_id,
+          generic_name: "Low Stock Drug",
+          reorder_level: 10
+        })
+
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: site.id,
+        product_id: low_stock_product.id,
+        quantity: 5,
+        remaining_quantity: 5
+      })
+
+      healthy_product =
+        product_fixture(%{
+          organization_id: org_id,
+          generic_name: "Healthy Stock Drug",
+          reorder_level: 10
+        })
+
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: site.id,
+        product_id: healthy_product.id,
+        quantity: 100,
+        remaining_quantity: 100
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      html = render_click(lv, "set_view", %{"view" => "products"})
+
+      assert html =~ "Low Stock Drug"
+      assert html =~ "Low stock"
+      assert html =~ "Healthy Stock Drug"
+    end
+  end
+
   describe "status filter" do
     test "filters by active", %{conn: conn} do
       {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])

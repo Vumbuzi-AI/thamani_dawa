@@ -15,6 +15,7 @@ defmodule ThamaniDawa.Dashboards do
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.LabOrders.LabOrder
+  alias ThamaniDawa.LabOrders.LabOrderResult
   alias ThamaniDawa.Patients.Patient
   alias ThamaniDawa.PatientVisits.PatientVisit
   alias ThamaniDawa.Payments.WalletEntry
@@ -58,6 +59,15 @@ defmodule ThamaniDawa.Dashboards do
     case Date.compare(from, to) do
       :gt -> {to, from}
       _ -> {from, to}
+    end
+  end
+
+  @doc "Validates a historical custom reporting range against date order and today's date."
+  def validate_custom_range(%Date{} = from, %Date{} = to, today \\ Date.utc_today()) do
+    cond do
+      Date.after?(from, to) -> {:error, :reversed}
+      Date.after?(from, today) or Date.after?(to, today) -> {:error, :future}
+      true -> {:ok, {from, to}}
     end
   end
 
@@ -408,6 +418,23 @@ defmodule ThamaniDawa.Dashboards do
     }
   end
 
+  @doc "Total units dispensed today at the given site."
+  def dispensed_today(organization_id, site_id) do
+    today = Date.utc_today()
+
+    total =
+      from(d in BatchDispense,
+        join: b in Batch,
+        on: b.id == d.batch_id,
+        where: d.organization_id == ^organization_id,
+        where: d.dispensed_at >= ^to_start(today) and d.dispensed_at < ^to_end(today)
+      )
+      |> filter_by_site(site_id, dynamic([_d, b], b.site_id == ^site_id))
+      |> Repo.aggregate(:sum, :quantity)
+
+    total || 0
+  end
+
   @doc "Prescriptions dispensed per day over the last `days` days (default 30), zero-filled."
   def dispensed_by_day(organization_id, site_id, days \\ 30) do
     to = Date.utc_today()
@@ -456,8 +483,20 @@ defmodule ThamaniDawa.Dashboards do
   def lab_stats(organization_id, site_id) do
     {from, to} = range_dates("this_month")
 
+    tests_awaiting_results =
+      from(r in LabOrderResult,
+        join: o in LabOrder,
+        on: o.id == r.lab_order_id,
+        where: o.organization_id == ^organization_id,
+        where: o.status != :cancelled,
+        where: r.status == :collected
+      )
+      |> filter_by_site(site_id, dynamic([_r, o], o.site_id == ^site_id))
+      |> Repo.aggregate(:count)
+
     %{
-      revenue_this_month: sum_wallet_entries(organization_id, site_id, from, to)
+      revenue_this_month: sum_wallet_entries(organization_id, site_id, from, to),
+      tests_awaiting_results: tests_awaiting_results
     }
   end
 

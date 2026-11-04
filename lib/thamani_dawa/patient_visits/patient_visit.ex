@@ -34,6 +34,20 @@ defmodule ThamaniDawa.PatientVisits.PatientVisit do
     |> foreign_key_constraint(:user_id)
   end
 
+  @doc """
+  Changeset for a patient-less visit — a walk-in prescription with no
+  patient recorded. Everything else about the visit is still required;
+  only `:patient_id` is allowed to stay blank.
+  """
+  def walk_in_changeset(patient_visit, attrs) do
+    patient_visit
+    |> cast(attrs, [:patient_id, :site_id, :user_id, :visit_type])
+    |> validate_required([:site_id, :user_id, :visit_type])
+    |> foreign_key_constraint(:patient_id)
+    |> foreign_key_constraint(:site_id)
+    |> foreign_key_constraint(:user_id)
+  end
+
   @doc "The valid patient visit types."
   def visit_types, do: @visit_types
 end

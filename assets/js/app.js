@@ -27,12 +27,17 @@ import topbar from "../vendor/topbar"
 import {GoogleMaps} from "./hooks/google_maps"
 import {Chart} from "./hooks/chart_hook"
 import {DataMatrix} from "./hooks/datamatrix"
+import {ScanCapture} from "./hooks/scan_capture"
+import {ProductTour} from "./hooks/product_tour"
+import {FlashAutoDismiss} from "./hooks/flash_auto_dismiss"
+import {QuickSaleReceiptPrint} from "./hooks/quick_sale_receipt_print"
+import {ConditionalBatchField} from "./hooks/conditional_batch_field"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix},
+  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, ScanCapture, ProductTour, FlashAutoDismiss, QuickSaleReceiptPrint, ConditionalBatchField},
 })
 
 // Show progress bar on live navigation and form submits

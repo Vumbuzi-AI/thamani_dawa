@@ -12,13 +12,16 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
   describe "index" do
     test "lists only own org's sites", %{conn: conn, admin: admin} do
-      _own = site_fixture(%{organization_id: admin.organization_id, name: "Own Branch"})
+      own = site_fixture(%{organization_id: admin.organization_id, name: "Own Branch"})
       _other = site_fixture(%{name: "Other Branch"})
 
-      {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/sites")
+      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
       assert html =~ "Own Branch"
       refute html =~ "Other Branch"
+      assert has_element?(lv, "#site-card-#{own.id}")
+      assert has_element?(lv, "#btn-view-site-#{own.id}")
+      assert has_element?(lv, "#btn-edit-site-#{own.id}")
     end
 
     test "searches by name or address", %{conn: conn, admin: admin} do
@@ -179,6 +182,28 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
   end
 
   describe "edit" do
+    test "completing the signup-created site opens the dashboard tour", %{
+      conn: conn,
+      admin: admin
+    } do
+      assert {:ok, site} =
+               ThamaniDawa.Sites.create_default_site(admin.organization_id, "Primary Site")
+
+      {:ok, lv, _} =
+        live(
+          log_in_user(conn, admin),
+          ~p"/org/sites/#{site.id}/edit?return_to=dashboard"
+        )
+
+      lv
+      |> form("#site-form",
+        site: %{name: "Primary Site", address: "12 Market Street", site_type: :pharmacy}
+      )
+      |> render_submit()
+
+      assert_redirect(lv, ~p"/org/dashboard?tour=1")
+    end
+
     test "persists name, address, and capability changes", %{conn: conn, admin: admin} do
       site =
         site_fixture(%{

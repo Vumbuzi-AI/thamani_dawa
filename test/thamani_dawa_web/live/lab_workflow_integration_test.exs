@@ -40,14 +40,15 @@ defmodule ThamaniDawaWeb.LabWorkflowIntegrationTest do
     performer_conn = log_in_user(ctx.conn, performer)
 
     {:ok, view, _html} =
-      live(performer_conn, ~p"/lab/orders/#{lab_order.id}/results/#{result.id}/collect")
+      live(performer_conn, ~p"/lab/orders/#{lab_order.id}/collect")
 
     view
-    |> form("#collect-sample-form", %{
+    |> form("#collect-specimen-form", %{
+      "specimen_type" => "blood",
       "collection_date" => "2026-01-15",
       "collection_notes" => "Left antecubital fossa"
     })
-    |> render_submit(%{"result_id" => to_string(result.id)})
+    |> render_submit(%{"result_ids" => [to_string(result.id)]})
 
     result = LabOrders.get_lab_order_result!(organization_id, result.id)
     assert result.status == :collected

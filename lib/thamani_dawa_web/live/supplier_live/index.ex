@@ -170,7 +170,9 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
         Suppliers
         <:subtitle>Search, filter, and manage your organization's suppliers.</:subtitle>
         <:actions>
-          <.button variant="primary" patch={~p"/org/suppliers/new"}>+ Add supplier</.button>
+          <.button id="supplier-new-button" variant="primary" patch={~p"/org/suppliers/new"}>
+            <.icon name="hero-plus" class="size-4" /> Add supplier
+          </.button>
         </:actions>
         <:toolbar>
           <form phx-change="search" class="flex-1" id="search-form">
@@ -264,11 +266,18 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
 
       <.table id="suppliers" rows={@streams.suppliers}>
         <:col :let={{_id, supplier}} label="Name">{supplier.name}</:col>
-        <:col :let={{_id, supplier}} label="Contact">{supplier.contact}</:col>
-        <:col :let={{_id, supplier}} label="Phone">{supplier.phone}</:col>
-        <:col :let={{_id, supplier}} label="Email">{supplier.email}</:col>
-        <:col :let={{_id, supplier}} label="GLN">{supplier.gln}</:col>
-        <:col :let={{_id, supplier}} label="Status">
+        <:col :let={{_id, supplier}} label="Contact">
+          <span class="block">
+            <span class="block">{supplier.contact}</span>
+            <span class="mt-0.5 block text-xs font-normal text-thamani-pewter sm:hidden">
+              {supplier.phone}
+            </span>
+          </span>
+        </:col>
+        <:col :let={{_id, supplier}} label="Phone" mobile="hidden">{supplier.phone}</:col>
+        <:col :let={{_id, supplier}} label="Email" mobile="hidden">{supplier.email}</:col>
+        <:col :let={{_id, supplier}} label="GLN" mobile="hidden">{supplier.gln}</:col>
+        <:col :let={{_id, supplier}} label="Status" mobile="aside">
           <.status_badge status={if supplier.is_active, do: :active, else: :inactive} />
         </:col>
         <:action :let={{_id, supplier}}>

@@ -50,8 +50,52 @@ defmodule ThamaniDawa.GS1Decoder do
   digits, invalid date).
   """
   def parse(data) when is_binary(data) do
-    with {:ok, ais} <- do_parse(strip_gs(data), %{}) do
+    data = normalize_input(data)
+
+    with {:ok, ais} <- parse_elements(data) do
       build_result(ais)
+    end
+  end
+
+  defp parse_elements("(" <> _ = data), do: parse_parenthesized(data, %{})
+  defp parse_elements(data), do: do_parse(strip_gs(data), %{})
+
+  # GS1 scanners commonly prepend an AIM symbology identifier to DataMatrix
+  # output. It describes the symbol and is not part of the element string.
+  defp normalize_input(data) do
+    data
+    |> String.trim()
+    |> strip_symbology_identifier()
+    |> String.replace("\t", @gs)
+    |> String.trim_leading(@gs)
+  end
+
+  defp strip_symbology_identifier("]d2" <> rest), do: rest
+  defp strip_symbology_identifier("]C1" <> rest), do: rest
+  defp strip_symbology_identifier("]Q3" <> rest), do: rest
+  defp strip_symbology_identifier(data), do: data
+
+  # Parenthesized AI notation is human-readable, not the raw scanner payload,
+  # but accepting it makes printed labels and scanner profiles that emit it
+  # usable without weakening the strict raw GS1 parser below.
+  defp parse_parenthesized("", acc) when map_size(acc) > 0, do: {:ok, acc}
+
+  defp parse_parenthesized(data, acc) do
+    case Regex.run(~r/^\((\d{2,3})\)([^()]*)/, data) do
+      [matched, ai, value] when ai in @known_ais ->
+        remaining = binary_part(data, byte_size(matched), byte_size(data) - byte_size(matched))
+
+        if Map.has_key?(acc, ai) do
+          {:error, {:duplicate_ai, ai}}
+        else
+          parse_parenthesized(remaining, Map.put(acc, ai, String.trim(value)))
+        end
+
+      [_matched, ai, _value] ->
+        {:error, {:unrecognized_ai, ai}}
+
+      _ ->
+        {:error, {:invalid_parenthesized_gs1, data}}
     end
   end
 

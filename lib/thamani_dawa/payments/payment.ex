@@ -42,7 +42,7 @@ defmodule ThamaniDawa.Payments.Payment do
     |> foreign_key_constraint(:prescription_id)
     |> foreign_key_constraint(:lab_order_id)
     |> unique_constraint(:provider_reference,
-      name: :payments_org_provider_reference_index,
+      name: :payments_provider_reference_index,
       message: "has already been used for a payment"
     )
   end
@@ -77,6 +77,14 @@ defmodule ThamaniDawa.Payments.Payment do
     |> cast(attrs, [:paid_at])
     |> validate_required([:paid_at])
     |> put_change(:status, :completed)
+    |> unique_constraint(:prescription_id,
+      name: :payments_one_completed_per_prescription_index,
+      message: "already has a completed payment"
+    )
+    |> unique_constraint(:lab_order_id,
+      name: :payments_one_completed_per_lab_order_index,
+      message: "already has a completed payment"
+    )
   end
 
   @doc "Changeset for marking a pending payment as failed."

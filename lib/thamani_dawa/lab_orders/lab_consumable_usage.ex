@@ -12,6 +12,7 @@ defmodule ThamaniDawa.LabOrders.LabConsumableUsage do
     belongs_to :lab_order_result, ThamaniDawa.LabOrders.LabOrderResult
     belongs_to :batch, ThamaniDawa.Batches.Batch
     belongs_to :used_by, ThamaniDawa.Accounts.User, foreign_key: :used_by_id
+    belongs_to :lab_specimen, ThamaniDawa.LabOrders.LabSpecimen, foreign_key: :specimen_id
 
     timestamps(type: :utc_datetime)
   end
@@ -26,7 +27,8 @@ defmodule ThamaniDawa.LabOrders.LabConsumableUsage do
       :quantity,
       :used_by_id,
       :purpose,
-      :used_at
+      :used_at,
+      :specimen_id
     ])
     |> validate_required([:batch_id, :quantity])
     |> validate_number(:quantity, greater_than: 0)
@@ -34,5 +36,6 @@ defmodule ThamaniDawa.LabOrders.LabConsumableUsage do
     |> foreign_key_constraint(:lab_order_result_id)
     |> foreign_key_constraint(:batch_id)
     |> foreign_key_constraint(:used_by_id)
+    |> foreign_key_constraint(:specimen_id)
   end
 end

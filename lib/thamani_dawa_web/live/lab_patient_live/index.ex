@@ -85,36 +85,38 @@ defmodule ThamaniDawaWeb.LabPatientLive.Index do
         Patients
         <:subtitle>Patients recognized by your organization, and their visits.</:subtitle>
         <:toolbar>
-          <.tab_group>
-            <:tab
-              id="patients-tab"
-              active={@tab == "patients"}
-              phx_click="switch_tab"
-              phx_value_tab="patients"
-            >
-              Patients
-            </:tab>
-            <:tab
-              id="visits-tab"
-              active={@tab == "visits"}
-              phx_click="switch_tab"
-              phx_value_tab="visits"
-            >
-              Patient visits
-            </:tab>
-          </.tab_group>
+          <div class="flex min-w-0 items-center gap-3">
+            <.tab_group>
+              <:tab
+                id="patients-tab"
+                active={@tab == "patients"}
+                phx_click="switch_tab"
+                phx_value_tab="patients"
+              >
+                Patients
+              </:tab>
+              <:tab
+                id="visits-tab"
+                active={@tab == "visits"}
+                phx_click="switch_tab"
+                phx_value_tab="visits"
+              >
+                Patient visits
+              </:tab>
+            </.tab_group>
 
-          <form phx-change="search" class="flex-1" id="search-form">
-            <.search_input
-              name="search"
-              value={@search}
-              placeholder={
-                if @tab == "patients",
-                  do: "Search by name, phone, or national ID",
-                  else: "Search by patient name or phone"
-              }
-            />
-          </form>
+            <form phx-change="search" class="min-w-0 flex-1" id="search-form">
+              <.search_input
+                name="search"
+                value={@search}
+                placeholder={
+                  if @tab == "patients",
+                    do: "Search by name, phone, or national ID",
+                    else: "Search by patient name or phone"
+                }
+              />
+            </form>
+          </div>
         </:toolbar>
       </.header>
 

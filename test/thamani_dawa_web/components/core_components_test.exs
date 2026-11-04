@@ -151,6 +151,33 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
     end
   end
 
+  describe "table/1" do
+    test "renders mobile labels while preserving desktop table semantics" do
+      assigns = %{rows: [%{name: "Amoxicillin", category: "Antibiotic", status: "Active"}]}
+
+      html =
+        rendered_to_string(~H"""
+        <.table id="responsive-products" rows={@rows}>
+          <:col :let={product} label="Name">{product.name}</:col>
+          <:col :let={product} label="Category" mobile="hidden">{product.category}</:col>
+          <:col :let={product} label="Status" mobile="aside">{product.status}</:col>
+        </.table>
+        """)
+
+      assert html =~ ~s(data-label="Name")
+      assert html =~ ~s(data-label="Category")
+      assert html =~ "sm:table-cell"
+      assert html =~ "before:content-[attr(data-label)]"
+      assert html =~ "first:before:hidden"
+      assert html =~ "responsive-table"
+      assert html =~ "grid-cols-2"
+      assert html =~ "first:col-span-full"
+      assert html =~ "max-sm:hidden"
+      assert html =~ "max-sm:absolute"
+      refute html =~ ~s(tabindex="0")
+    end
+  end
+
   describe "filter_drawer/1" do
     test "renders the trigger with an active-count badge and its groups" do
       assigns = %{}

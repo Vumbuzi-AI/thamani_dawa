@@ -8,6 +8,25 @@ defmodule ThamaniDawaWeb.LabDashboardLiveTest do
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
 
+  test "offers a replayable lab tour and auto-starts it when requested", %{conn: conn} do
+    organization = organization_fixture()
+    site = site_fixture(%{organization_id: organization.id, site_type: :lab})
+
+    lab_tech =
+      staff_fixture(%{
+        organization_id: organization.id,
+        role: :lab_technician,
+        site_id: site.id
+      })
+
+    {:ok, lv, _html} = live(log_in_user(conn, lab_tech), ~p"/lab?tour=1")
+
+    assert has_element?(lv, "#start-product-tour[href='/lab?tour=1']")
+    assert has_element?(lv, "#lab-product-tour[data-auto-start='true']")
+    assert has_element?(lv, "[data-tour-target='/lab/orders']")
+    assert has_element?(lv, "[data-tour-target='/lab/stock']")
+  end
+
   describe "lab dashboard pending batches sidebar badge" do
     test "shows a count badge on Receive stock when batches are awaiting receipt at this lab site",
          %{conn: conn} do

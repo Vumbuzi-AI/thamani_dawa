@@ -10,6 +10,10 @@ defmodule ThamaniDawa.PaymentsTest do
   import ThamaniDawa.PaymentsFixtures
   import ThamaniDawa.PrescriptionsFixtures
 
+  defp complete_payment_fixture(attrs) do
+    attrs |> payment_fixture() |> Payments.complete_payment()
+  end
+
   describe "create_payment/2" do
     test "requires amount and payment_type" do
       organization = organization_fixture()
@@ -161,7 +165,7 @@ defmodule ThamaniDawa.PaymentsTest do
       assert Payments.list_payments(organization.id) == []
     end
 
-    test "rejects a duplicate provider_reference within the same organization" do
+    test "rejects a duplicate provider_reference" do
       organization = organization_fixture()
       lab_order_a = lab_order_fixture(%{organization_id: organization.id})
       lab_order_b = lab_order_fixture(%{organization_id: organization.id})
@@ -186,7 +190,7 @@ defmodule ThamaniDawa.PaymentsTest do
                errors_on(changeset)
     end
 
-    test "allows the same provider_reference to be reused across different organizations" do
+    test "rejects the same provider_reference across different organizations" do
       organization_a = organization_fixture()
       organization_b = organization_fixture()
       lab_order_a = lab_order_fixture(%{organization_id: organization_a.id})
@@ -200,13 +204,16 @@ defmodule ThamaniDawa.PaymentsTest do
                  provider_reference: "SHARED-REF"
                })
 
-      assert {:ok, _payment_b} =
+      assert {:error, changeset} =
                Payments.create_payment(organization_b.id, %{
                  lab_order_id: lab_order_b.id,
                  amount: Decimal.new("100"),
                  payment_type: "Mobile Money",
                  provider_reference: "SHARED-REF"
                })
+
+      assert %{provider_reference: ["has already been used for a payment"]} =
+               errors_on(changeset)
     end
 
     test "allows multiple payments with no provider_reference" do
@@ -227,6 +234,18 @@ defmodule ThamaniDawa.PaymentsTest do
                  amount: Decimal.new("100"),
                  payment_type: "Cash"
                })
+    end
+  end
+
+  describe "get_payment_by_reference/1" do
+    test "returns the payment for a provider reference" do
+      payment = payment_fixture(%{provider_reference: "LOOKUP-REF"})
+
+      assert Payments.get_payment_by_reference("LOOKUP-REF").id == payment.id
+    end
+
+    test "returns nil for an unknown provider reference" do
+      assert is_nil(Payments.get_payment_by_reference("UNKNOWN-REF"))
     end
   end
 
@@ -268,6 +287,47 @@ defmodule ThamaniDawa.PaymentsTest do
       assert {:ok, failed} = Payments.fail_payment(payment, "declined")
       assert {:error, :already_failed} = Payments.complete_payment(failed)
       assert Repo.aggregate(WalletEntry, :count) == 0
+    end
+
+    test "marks the linked lab order as paid" do
+      organization = organization_fixture()
+      lab_order = lab_order_fixture(%{organization_id: organization.id})
+      payment = payment_fixture(%{organization_id: organization.id, lab_order_id: lab_order.id})
+
+      refute ThamaniDawa.LabOrders.get_lab_order!(organization.id, lab_order.id).has_paid
+
+      assert {:ok, _completed} = Payments.complete_payment(payment)
+
+      assert ThamaniDawa.LabOrders.get_lab_order!(organization.id, lab_order.id).has_paid
+    end
+
+    test "marks the linked prescription as paid" do
+      organization = organization_fixture()
+      prescription = prescription_fixture(%{organization_id: organization.id})
+
+      payment =
+        payment_fixture(%{organization_id: organization.id, prescription_id: prescription.id})
+
+      refute ThamaniDawa.Prescriptions.get_prescription!(organization.id, prescription.id).has_paid
+
+      assert {:ok, _completed} = Payments.complete_payment(payment)
+
+      assert ThamaniDawa.Prescriptions.get_prescription!(organization.id, prescription.id).has_paid
+    end
+
+    test "rejects a second completed payment for the same order" do
+      organization = organization_fixture()
+      lab_order = lab_order_fixture(%{organization_id: organization.id})
+
+      first =
+        payment_fixture(%{organization_id: organization.id, lab_order_id: lab_order.id})
+
+      second =
+        payment_fixture(%{organization_id: organization.id, lab_order_id: lab_order.id})
+
+      assert {:ok, _completed} = Payments.complete_payment(first)
+      assert {:error, changeset} = Payments.complete_payment(second)
+      assert %{lab_order_id: ["already has a completed payment"]} = errors_on(changeset)
     end
   end
 
@@ -319,19 +379,21 @@ defmodule ThamaniDawa.PaymentsTest do
 
     test "sums wallet credits for completed payments at a site" do
       organization = organization_fixture()
-      lab_order = lab_order_fixture(%{organization_id: organization.id})
+      site = ThamaniDawa.SitesFixtures.site_fixture(%{organization_id: organization.id})
+      lab_order_a = lab_order_fixture(%{organization_id: organization.id, site_id: site.id})
+      lab_order_b = lab_order_fixture(%{organization_id: organization.id, site_id: site.id})
 
       payment_a =
         payment_fixture(%{
           organization_id: organization.id,
-          lab_order_id: lab_order.id,
+          lab_order_id: lab_order_a.id,
           amount: Decimal.new("100")
         })
 
       payment_b =
         payment_fixture(%{
           organization_id: organization.id,
-          lab_order_id: lab_order.id,
+          lab_order_id: lab_order_b.id,
           amount: Decimal.new("40")
         })
 
@@ -339,9 +401,128 @@ defmodule ThamaniDawa.PaymentsTest do
       {:ok, _} = Payments.complete_payment(payment_b)
 
       assert Decimal.equal?(
-               Payments.site_earnings(organization.id, lab_order.site_id),
+               Payments.site_earnings(organization.id, lab_order_a.site_id),
                Decimal.new("140")
              )
+    end
+  end
+
+  describe "organization_earnings/1" do
+    test "sums wallet credits across every site in the organization" do
+      organization = organization_fixture()
+      site_a = ThamaniDawa.SitesFixtures.site_fixture(%{organization_id: organization.id})
+      site_b = ThamaniDawa.SitesFixtures.site_fixture(%{organization_id: organization.id})
+
+      lab_order_a =
+        lab_order_fixture(%{organization_id: organization.id, site_id: site_a.id})
+
+      lab_order_b =
+        lab_order_fixture(%{organization_id: organization.id, site_id: site_b.id})
+
+      assert {:ok, _} =
+               complete_payment_fixture(%{
+                 organization_id: organization.id,
+                 lab_order_id: lab_order_a.id,
+                 amount: Decimal.new("100")
+               })
+
+      assert {:ok, _} =
+               complete_payment_fixture(%{
+                 organization_id: organization.id,
+                 lab_order_id: lab_order_b.id,
+                 amount: Decimal.new("40")
+               })
+
+      assert Decimal.equal?(
+               Payments.organization_earnings(organization.id),
+               Decimal.new("140")
+             )
+    end
+
+    test "returns 0 for an organization with no completed payments" do
+      organization = organization_fixture()
+
+      assert Decimal.equal?(Payments.organization_earnings(organization.id), Decimal.new(0))
+    end
+  end
+
+  describe "site_earnings_by_site/1" do
+    test "maps each site with completed payments to its total, omitting sites with none" do
+      organization = organization_fixture()
+      site_a = ThamaniDawa.SitesFixtures.site_fixture(%{organization_id: organization.id})
+      site_b = ThamaniDawa.SitesFixtures.site_fixture(%{organization_id: organization.id})
+
+      lab_order_a =
+        lab_order_fixture(%{organization_id: organization.id, site_id: site_a.id})
+
+      assert {:ok, _} =
+               complete_payment_fixture(%{
+                 organization_id: organization.id,
+                 lab_order_id: lab_order_a.id,
+                 amount: Decimal.new("100")
+               })
+
+      totals = Payments.site_earnings_by_site(organization.id)
+
+      assert Decimal.equal?(Map.fetch!(totals, site_a.id), Decimal.new("100"))
+      refute Map.has_key?(totals, site_b.id)
+    end
+  end
+
+  describe "list_transactions/1" do
+    test "lists every payment for the org, newest first" do
+      organization = organization_fixture()
+
+      older = payment_fixture(%{organization_id: organization.id})
+      newer = payment_fixture(%{organization_id: organization.id})
+
+      assert [%{id: newer_id}, %{id: older_id}] = Payments.list_transactions(organization.id)
+      assert newer_id == newer.id
+      assert older_id == older.id
+    end
+
+    test "does not include another organization's payments" do
+      organization = organization_fixture()
+      other_organization = organization_fixture()
+
+      payment_fixture(%{organization_id: other_organization.id})
+
+      assert Payments.list_transactions(organization.id) == []
+    end
+  end
+
+  describe "sales_by_payment_method/1" do
+    test "sums completed payments grouped by method, excluding pending/failed" do
+      organization = organization_fixture()
+
+      assert {:ok, _} =
+               complete_payment_fixture(%{
+                 organization_id: organization.id,
+                 payment_type: "Cash",
+                 amount: Decimal.new("100")
+               })
+
+      assert {:ok, _} =
+               complete_payment_fixture(%{
+                 organization_id: organization.id,
+                 payment_type: "Cash",
+                 amount: Decimal.new("50")
+               })
+
+      assert {:ok, _} =
+               complete_payment_fixture(%{
+                 organization_id: organization.id,
+                 payment_type: "Mobile Money",
+                 amount: Decimal.new("200")
+               })
+
+      pending = payment_fixture(%{organization_id: organization.id, payment_type: "Mobile Money"})
+      Payments.fail_payment(pending, "declined")
+
+      totals = Map.new(Payments.sales_by_payment_method(organization.id))
+
+      assert Decimal.equal?(Map.fetch!(totals, "Cash"), Decimal.new("150"))
+      assert Decimal.equal?(Map.fetch!(totals, "Mobile Money"), Decimal.new("200"))
     end
   end
 end

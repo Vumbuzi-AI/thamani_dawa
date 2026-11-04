@@ -118,9 +118,12 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
     end
 
     test "displays products view by default and lists product summary", %{conn: conn, tech: tech} do
-      {:ok, _view, html} = live(log_in_user(conn, tech), ~p"/lab/stock")
+      {:ok, view, html} = live(log_in_user(conn, tech), ~p"/lab/stock")
 
       assert html =~ "Lab stock"
+      assert has_element?(view, "#lab-stock-toolbar")
+      assert has_element?(view, "#lab-stock-toolbar #search-form")
+      assert has_element?(view, "#lab-stock-toolbar button", "Filters")
       assert html =~ "Reagent Alpha"
       assert html =~ "Reagent Beta"
     end
@@ -185,6 +188,56 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
 
       assert html =~ "Batch LAB-BATCH-001"
       assert html =~ "Usage history"
+    end
+  end
+
+  describe "Products tab" do
+    test "a product with a dispatched lab batch also shows its Awaiting dispatch figure", %{
+      conn: conn
+    } do
+      admin = user_fixture()
+      org_id = admin.organization_id
+      lab_site = site_fixture(%{organization_id: org_id, site_type: :lab})
+
+      product =
+        product_fixture(%{organization_id: org_id, generic_name: "Awaiting Dispatch Reagent"})
+
+      batch_fixture(%{organization_id: org_id, site_id: lab_site.id, product_id: product.id})
+      org_batch_fixture(%{organization_id: org_id, product_id: product.id, quantity: 40})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/stock")
+
+      html = render_click(lv, "set_view", %{"view" => "products"})
+
+      assert html =~ "Awaiting Dispatch Reagent"
+      assert html =~ "40"
+    end
+
+    test "a product at or below reorder_level shows the Low stock badge", %{conn: conn} do
+      admin = user_fixture()
+      org_id = admin.organization_id
+      lab_site = site_fixture(%{organization_id: org_id, site_type: :lab})
+
+      low_stock_product =
+        product_fixture(%{
+          organization_id: org_id,
+          generic_name: "Low Stock Reagent",
+          reorder_level: 10
+        })
+
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: lab_site.id,
+        product_id: low_stock_product.id,
+        quantity: 5,
+        remaining_quantity: 5
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/stock")
+      html = render_click(lv, "set_view", %{"view" => "products"})
+
+      assert html =~ "Low Stock Reagent"
+      assert html =~ "Low stock"
     end
   end
 end

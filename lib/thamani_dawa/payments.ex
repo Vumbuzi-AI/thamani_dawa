@@ -24,6 +24,11 @@ defmodule ThamaniDawa.Payments do
     Repo.get_by!(Payment, id: id, organization_id: organization_id)
   end
 
+  @doc "Gets a payment by its globally unique payment-provider reference."
+  def get_payment_by_reference(reference) when is_binary(reference) do
+    Repo.get_by(Payment, provider_reference: reference)
+  end
+
   @doc """
   Records a new payment attempt against exactly one of `prescription_id` or
   `lab_order_id`. `site_id` is derived from that order (not accepted from
@@ -37,7 +42,7 @@ defmodule ThamaniDawa.Payments do
     |> validate_belongs_to_org(:prescription_id, Prescription, organization_id)
     |> validate_belongs_to_org(:lab_order_id, LabOrder, organization_id)
     |> put_site_id(organization_id)
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 
   @doc """
@@ -54,13 +59,29 @@ defmodule ThamaniDawa.Payments do
       with {:ok, completed} <-
              payment
              |> Payment.complete_changeset(%{paid_at: DateTime.utc_now()})
-             |> Repo.update(),
-           {:ok, _entry} <- credit_wallet(completed) do
+             |> Repo.audited_update(),
+           {:ok, _entry} <- credit_wallet(completed),
+           {:ok, _order} <- mark_order_paid(completed) do
         completed
       else
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
+  end
+
+  defp mark_order_paid(%Payment{prescription_id: prescription_id})
+       when not is_nil(prescription_id) do
+    Prescription
+    |> Repo.get!(prescription_id)
+    |> Ecto.Changeset.change(has_paid: true)
+    |> Repo.audited_update()
+  end
+
+  defp mark_order_paid(%Payment{lab_order_id: lab_order_id}) when not is_nil(lab_order_id) do
+    LabOrder
+    |> Repo.get!(lab_order_id)
+    |> Ecto.Changeset.change(has_paid: true)
+    |> Repo.audited_update()
   end
 
   @doc """
@@ -74,7 +95,7 @@ defmodule ThamaniDawa.Payments do
   def fail_payment(%Payment{status: :pending} = payment, reason) do
     payment
     |> Payment.fail_changeset(%{failure_reason: reason})
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 
   @doc "Sums wallet credits for a site — the site's earnings ledger balance."
@@ -87,6 +108,60 @@ defmodule ThamaniDawa.Payments do
     ) || Decimal.new(0)
   end
 
+  @doc "Sums wallet credits for the whole organization — every site combined."
+  def organization_earnings(organization_id) do
+    Repo.one(
+      from w in WalletEntry,
+        where: w.organization_id == ^organization_id,
+        select: sum(w.amount)
+    ) || Decimal.new(0)
+  end
+
+  @doc "Sums wallet credits per site, as a map of `site_id => amount`. Sites with no credits yet are simply absent from the map."
+  def site_earnings_by_site(organization_id) do
+    from(w in WalletEntry,
+      where: w.organization_id == ^organization_id,
+      group_by: w.site_id,
+      select: {w.site_id, sum(w.amount)}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc "Lists every payment for an organization, newest first — the full transaction history behind the earnings totals."
+  def list_transactions(organization_id) do
+    Repo.all(
+      from p in Payment,
+        where: p.organization_id == ^organization_id,
+        order_by: [desc: p.inserted_at, desc: p.id]
+    )
+  end
+
+  @doc "Sums completed-payment amounts grouped by payment method, highest first."
+  def sales_by_payment_method(organization_id) do
+    from(p in Payment,
+      where: p.organization_id == ^organization_id,
+      where: p.status == :completed,
+      group_by: p.payment_type,
+      select: {p.payment_type, sum(p.amount)},
+      order_by: [desc: sum(p.amount)]
+    )
+    |> Repo.all()
+  end
+
+  @doc "Per-site completed-payment amounts grouped by payment method, highest first."
+  def sales_by_payment_method(organization_id, site_id) do
+    from(p in Payment,
+      where: p.organization_id == ^organization_id,
+      where: p.site_id == ^site_id,
+      where: p.status == :completed,
+      group_by: p.payment_type,
+      select: {p.payment_type, sum(p.amount)},
+      order_by: [desc: sum(p.amount)]
+    )
+    |> Repo.all()
+  end
+
   defp credit_wallet(%Payment{} = payment) do
     %WalletEntry{}
     |> WalletEntry.changeset(%{
@@ -95,7 +170,7 @@ defmodule ThamaniDawa.Payments do
       amount: payment.amount
     })
     |> Ecto.Changeset.put_change(:organization_id, payment.organization_id)
-    |> Repo.insert(on_conflict: :nothing, conflict_target: :payment_id)
+    |> Repo.audited_insert(on_conflict: :nothing, conflict_target: :payment_id)
   end
 
   defp put_site_id(changeset, organization_id) do

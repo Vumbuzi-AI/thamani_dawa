@@ -50,6 +50,6 @@ defmodule ThamaniDawa.Patients do
     %Patient{}
     |> Patient.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Repo.insert()
+    |> Repo.audited_insert()
   end
 end
