@@ -141,6 +141,51 @@ defmodule ThamaniDawaWeb.Router do
       live "/lab/tests/new", LabTestLive.Index, :new
       live "/lab/tests/:id/edit", LabTestLive.Index, :edit
     end
+
+    live_session :distributor,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :require_distributor_access}] do
+      live "/distributor", DistributorDashboardLive, :index
+
+      # Serialisation billing — a plan must be chosen before the shipment
+      # workflow is reachable (see ThamaniDawaWeb.DistributorAccess).
+      live "/distributor/billing", DistributorBillingLive.Index, :index
+      live "/distributor/billing/options", DistributorBillingLive.Options, :index
+      live "/distributor/billing/payment", DistributorBillingLive.Payment, :prepay
+      live "/distributor/billing/postpay-payment", DistributorBillingLive.Payment, :postpay
+      live "/distributor/billing/invoices/:id", DistributorBillingLive.Invoice, :show
+
+      live "/distributor/shipments", DistributorShipmentLive.Index, :index
+      live "/distributor/shipments/new", DistributorShipmentLive.Form, :new
+      live "/distributor/shipments/:id/edit", DistributorShipmentLive.Form, :edit
+      live "/distributor/shipments/:id", DistributorShipmentLive.Show, :show
+
+      live "/distributor/mobile-users", DistributorMobileUserLive.Index, :index
+      live "/distributor/mobile-users/new", DistributorMobileUserLive.Index, :new
+      live "/distributor/mobile-users/:id/edit", DistributorMobileUserLive.Index, :edit
+
+      live "/distributor/products", DistributorProductLive.Index, :index
+      live "/distributor/products/new", DistributorProductLive.Index, :new
+      live "/distributor/products/:id", DistributorProductLive.Show, :show
+      live "/distributor/batches/:id", DistributorBatchLive, :show
+      live "/distributor/receiving", DistributorReceivingLive, :index
+      live "/distributor/receiving/new", DistributorReceivingLive, :new
+      live "/distributor/receiving/:id", DistributorGoodsReceiptLive, :show
+      live "/distributor/suppliers", DistributorSupplierLive.Index, :index
+      live "/distributor/suppliers/new", DistributorSupplierLive.Index, :new
+      live "/distributor/suppliers/:id/edit", DistributorSupplierLive.Index, :edit
+      live "/distributor/customers", DistributorCustomerLive.Index, :index
+      live "/distributor/customers/new", DistributorCustomerLive.Index, :new
+      live "/distributor/customers/:id/edit", DistributorCustomerLive.Index, :edit
+      live "/distributor/warehouses", DistributorWarehouseLive.Index, :index
+      live "/distributor/warehouses/new", DistributorWarehouseLive.Index, :new
+      live "/distributor/settings", DistributorSettingsLive, :index
+    end
+  end
+
+  scope "/", ThamaniDawaWeb do
+    pipe_through [:browser, :require_distributor_user]
+
+    get "/distributor/shipments/:id/export", DistributorShipmentExportController, :show
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
