@@ -88,6 +88,29 @@ Routes:
 
 Purpose: create lab orders, collect samples, enter structured results, verify completed tests, manage test templates/categories, receive lab consumables, record consumable usage, and maintain QA charts.
 
+## Distributor Portal
+
+Who: active `distributor` users in an organization whose operating models include `distributor` (the equivalent of ErpLive's "Healthcare Distributor" sector). Removing the distributor model locks out both portal users and mobile app users.
+
+Live session: `:distributor`, `on_mount {ThamaniDawaWeb.UserAuth, :require_distributor_access}`. Shipment and mobile-user screens additionally use `on_mount {ThamaniDawaWeb.DistributorAccess, :require_serialisation_plan}`, which sends the user to `/distributor/billing/options` until a serialisation plan is chosen.
+
+Routes:
+
+- `/distributor` -> shipment pipeline, SSCC and allowance stats, and inventory health
+- `/distributor/shipments` -> shipment list with status tabs, search, mobile-user/date filters, live refresh
+- `/distributor/shipments/new`, `/distributor/shipments/:id/edit` -> create or edit a draft (order number, origin GLN, destination GLN)
+- `/distributor/shipments/:id` -> review, approve (issue SSCCs) or reject, remove units, print SSCC shipper labels
+- `GET /distributor/shipments/:id/export` -> CSV of scanned units (`DistributorShipmentExportController`)
+- `/distributor/mobile-users*` -> mobile scanning-app users: add, edit, resend PIN, activate/deactivate
+- `/distributor/billing/options` -> prepay vs flex plan chooser
+- `/distributor/billing/payment`, `/distributor/billing/postpay-payment` -> prepay bundle checkout, flex cycle settlement (M-Pesa STK Push or manual reference)
+- `/distributor/billing`, `/distributor/billing/invoices/:id` -> allowance usage, payment history, printable invoices
+- `/distributor/products*`, `/distributor/batches/:id`, `/distributor/receiving*` -> catalog, received batches, goods receipts
+- `/distributor/suppliers*`, `/distributor/customers*`, `/distributor/warehouses*` -> trading partners and sites; customers carry an auto-generated GLN used as the shipment destination
+- `/distributor/settings` -> GS1 Company Prefix used for SSCCs
+
+Purpose: run the distributor shipment workflow — portal admins create draft shipments, the mobile team packs and scans them into shippers, and admins approve (one SSCC per shipper, charged to the serialisation allowance) or reject them.
+
 ## Development Tools
 
 Enabled only when `config :thamani_dawa, dev_routes: true`.
