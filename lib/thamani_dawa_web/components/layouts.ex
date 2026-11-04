@@ -270,6 +270,48 @@ defmodule ThamaniDawaWeb.Layouts do
     """
   end
 
+  @doc """
+  Renders the authenticated distributor shell: the shared sidebar with links to
+  the shipment workflow, mobile app users, serialisation billing, and the
+  distributor's inventory and trading-partner records.
+  """
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, default: ""
+  attr :back, :any, default: nil
+  attr :back_label, :string, default: nil
+
+  slot :inner_block, required: true
+
+  def distributor_shell(assigns) do
+    ~H"""
+    <.sidebar_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      back={@back}
+      back_label={@back_label}
+      title="Thamani Dawa"
+      section_label="Distributor"
+      base_path="/distributor"
+      nav_items={[
+        {"Dashboard", "hero-squares-2x2", ~p"/distributor"},
+        {"Shipments", "hero-truck", ~p"/distributor/shipments"},
+        {"Mobile users", "hero-device-phone-mobile", ~p"/distributor/mobile-users"},
+        {"Receiving", "hero-arrow-down-tray", ~p"/distributor/receiving"},
+        {"Products", "hero-cube", ~p"/distributor/products"},
+        {"Suppliers", "hero-building-office", ~p"/distributor/suppliers"},
+        {"Warehouses", "hero-building-office-2", ~p"/distributor/warehouses"},
+        {"Customers", "hero-building-storefront", ~p"/distributor/customers"},
+        {"Billing", "hero-credit-card", ~p"/distributor/billing"},
+        {"Settings", "hero-cog-6-tooth", ~p"/distributor/settings"}
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
   attr :current_path, :string, required: true

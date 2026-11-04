@@ -18,6 +18,7 @@ defmodule ThamaniDawa.Batches.Batch do
     belongs_to :product, ThamaniDawa.Products.Product
     belongs_to :site, ThamaniDawa.Sites.Site
     belongs_to :supplier, ThamaniDawa.Suppliers.Supplier
+    belongs_to :goods_receipt, ThamaniDawa.GoodsReceipts.GoodsReceipt
     belongs_to :approver, ThamaniDawa.Accounts.User, foreign_key: :approver_id
     belongs_to :source_batch, __MODULE__
     belongs_to :requisition, ThamaniDawa.Requisitions.Requisition
@@ -65,6 +66,7 @@ defmodule ThamaniDawa.Batches.Batch do
     |> foreign_key_constraint(:product_id)
     |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:supplier_id)
+    |> foreign_key_constraint(:goods_receipt_id)
     |> foreign_key_constraint(:source_batch_id)
     |> unique_constraint(:batch_no,
       name: :batches_org_product_site_batch_no_index,
@@ -91,7 +93,8 @@ defmodule ThamaniDawa.Batches.Batch do
       :quantity,
       :remaining_quantity,
       :cost_per_unit,
-      :supplier_id
+      :supplier_id,
+      :goods_receipt_id
     ])
     |> validate_required([
       :product_id,

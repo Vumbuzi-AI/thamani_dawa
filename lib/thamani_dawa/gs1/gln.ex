@@ -1,7 +1,7 @@
 defmodule ThamaniDawa.Gln do
   @moduledoc """
-  Auto-generates GS1 Global Location Numbers for `sites.gln` and
-  `suppliers.gln`. A GLN is a 13-digit code: the organization's GS1 company
+  Auto-generates GS1 Global Location Numbers for `sites.gln`,
+  `suppliers.gln`, and `distributor_customers.gln`. A GLN is a 13-digit code: the organization's GS1 company
   prefix, a random extension filling out the remaining digits, and a GS1
   check digit — so it's never entered or shown as an editable field in the
   UI.
@@ -9,6 +9,7 @@ defmodule ThamaniDawa.Gln do
 
   import Ecto.Query, warn: false
 
+  alias ThamaniDawa.DistributorCustomers.Customer
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.Suppliers.Supplier
@@ -17,7 +18,7 @@ defmodule ThamaniDawa.Gln do
   @max_attempts 10
 
   @doc """
-  Generates a GLN unique across sites and suppliers, retrying on the rare
+  Generates a GLN unique across sites, suppliers, and distributor customers, retrying on the rare
   collision with an already-assigned GLN.
   """
   def generate! do
@@ -47,6 +48,7 @@ defmodule ThamaniDawa.Gln do
 
   defp unique?(gln) do
     not Repo.exists?(from s in Site, where: s.gln == ^gln) and
-      not Repo.exists?(from s in Supplier, where: s.gln == ^gln)
+      not Repo.exists?(from s in Supplier, where: s.gln == ^gln) and
+      not Repo.exists?(from c in Customer, where: c.gln == ^gln)
   end
 end

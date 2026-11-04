@@ -44,6 +44,19 @@ defmodule ThamaniDawa.Accounts.Scope do
   """
   def pharma_lab?(scope), do: role?(scope, :pharma_lab)
 
+  @doc "Whether the signed-in user is a distributor."
+  def distributor?(scope), do: role?(scope, :distributor)
+
+  @doc """
+  Whether the signed-in user can enter the distributor portal: an active
+  distributor-role user. The organization's operating model is checked
+  separately by `ThamaniDawaWeb.UserAuth` since it needs a database read.
+  """
+  def distributor_access?(%__MODULE__{user: %User{role: :distributor, is_active: true}}),
+    do: true
+
+  def distributor_access?(_scope), do: false
+
   @doc """
   Whether the signed-in user can enter the pharmacy portal: an admin, a
   pharmacist, or combined pharmacy/lab staff.
