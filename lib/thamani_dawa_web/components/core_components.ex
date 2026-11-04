@@ -1418,7 +1418,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
              :under_review,
              :pending_receipt,
              :invited,
-             :low_stock
+             :low_stock,
+             :unknown_serial
            ],
       do: :warning
 
@@ -1431,7 +1432,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
              :accepted,
              :finalised,
              :grn_confirmed,
-             :active
+             :active,
+             :paid,
+             :ok
            ],
       do: :success
 
@@ -1446,8 +1449,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
            ],
       do: :info
 
-  def status_semantic(status) when status in [:cancelled, :rejected, :flagged, :out_of_stock],
-    do: :danger
+  def status_semantic(status)
+      when status in [:cancelled, :rejected, :flagged, :out_of_stock, :failed, :data_mismatch],
+      do: :danger
 
   def status_semantic(_status), do: :neutral
 
