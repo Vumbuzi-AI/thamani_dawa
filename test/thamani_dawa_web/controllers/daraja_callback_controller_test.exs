@@ -192,4 +192,61 @@ defmodule ThamaniDawaWeb.DarajaCallbackControllerTest do
       assert failed.failure_reason == "cancelled_by_user"
     end
   end
+
+  describe "POST /api/mpesa/callback/:token for distributor serialisation payments" do
+    setup do
+      organization = ThamaniDawa.DistributorFixtures.distributor_organization_fixture()
+      {:ok, organization} = ThamaniDawa.Distributor.Billing.choose_prepay(organization)
+
+      payment =
+        Repo.insert!(%ThamaniDawa.Distributor.SerialPayment{
+          organization_id: organization.id,
+          kind: "prepay",
+          method: "mpesa",
+          status: "pending",
+          quantity: 500,
+          buffer_quantity: 0,
+          unit_price: Decimal.new("2.00"),
+          amount_excl_vat: Decimal.new("1000.00"),
+          vat_amount: Decimal.new("160.00"),
+          amount: Decimal.new("1160.00"),
+          phone: "0712345678",
+          provider_reference: "ws_CO_serial"
+        })
+
+      %{organization: organization, payment: payment}
+    end
+
+    test "success confirms the payment and credits the allowance", %{
+      conn: conn,
+      organization: organization,
+      payment: payment
+    } do
+      conn = post(conn, callback_path(), success_body("ws_CO_serial"))
+      assert json_response(conn, 200)
+
+      paid = ThamaniDawa.Distributor.Billing.get_payment!(organization.id, payment.id)
+      assert paid.status == "paid"
+      assert paid.invoice_number
+
+      usage = ThamaniDawa.Distributor.Billing.active_usage(organization.id)
+      assert usage.quantity_limit == 500
+    end
+
+    test "cancellation fails the payment", %{
+      conn: conn,
+      organization: organization,
+      payment: payment
+    } do
+      conn =
+        post(conn, callback_path(), failure_body("ws_CO_serial", 1032, "Request cancelled by user"))
+
+      assert json_response(conn, 200)
+
+      failed = ThamaniDawa.Distributor.Billing.get_payment!(organization.id, payment.id)
+      assert failed.status == "failed"
+      assert failed.failure_reason == "cancelled_by_user"
+      refute ThamaniDawa.Distributor.Billing.active_usage(organization.id)
+    end
+  end
 end
