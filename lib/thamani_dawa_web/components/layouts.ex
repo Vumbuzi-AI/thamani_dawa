@@ -927,6 +927,7 @@ defmodule ThamaniDawaWeb.Layouts do
   defp product_tour_path("/org"), do: ~p"/org/dashboard?tour=1"
   defp product_tour_path("/pharmacy"), do: ~p"/pharmacy?tour=1"
   defp product_tour_path("/lab"), do: ~p"/lab?tour=1"
+  defp product_tour_path("/distributor"), do: ~p"/distributor?tour=1"
 
   @doc """
   Provides dark vs light theme toggle based on themes defined in app.css.
