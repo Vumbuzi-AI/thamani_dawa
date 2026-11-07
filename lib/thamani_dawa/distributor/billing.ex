@@ -243,7 +243,7 @@ defmodule ThamaniDawa.Distributor.Billing do
       charge = prepay_quote(organization, quantity)
 
       organization
-      |> insert_payment!(user, "prepay", method, charge, attrs)
+      |> insert_payment!(user, "prepay", charge, attrs)
       |> collect(method, attrs, "Serialisation bundle")
     end
   end
@@ -256,7 +256,7 @@ defmodule ThamaniDawa.Distributor.Billing do
          {:ok, method} <- parse_method(attrs),
          %{quantity: billed} = charge when billed > 0 <- postpay_quote(organization) do
       organization
-      |> insert_payment!(user, "postpay", method, charge, attrs)
+      |> insert_payment!(user, "postpay", charge, attrs)
       |> collect(method, attrs, "Serialisation usage")
     else
       nil -> {:error, :nothing_to_pay}
