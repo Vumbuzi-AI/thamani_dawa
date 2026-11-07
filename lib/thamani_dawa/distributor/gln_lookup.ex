@@ -47,7 +47,8 @@ defmodule ThamaniDawa.Distributor.GlnLookup do
   end
 
   @doc "Resolves an origin GLN to one of the organization's own active sites."
-  @spec resolve_origin(pos_integer(), String.t() | nil) :: {:ok, resolved()} | {:error, :not_found}
+  @spec resolve_origin(pos_integer(), String.t() | nil) ::
+          {:ok, resolved()} | {:error, :not_found}
   def resolve_origin(organization_id, gln) when is_binary(gln) do
     case Repo.get_by(Site, organization_id: organization_id, gln: gln, is_active: true) do
       nil ->

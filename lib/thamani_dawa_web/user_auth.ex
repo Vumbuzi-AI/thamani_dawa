@@ -195,7 +195,10 @@ defmodule ThamaniDawaWeb.UserAuth do
         else
           socket =
             socket
-            |> Phoenix.LiveView.put_flash(:error, "You don't have access to the distributor portal.")
+            |> Phoenix.LiveView.put_flash(
+              :error,
+              "You don't have access to the distributor portal."
+            )
             |> Phoenix.LiveView.redirect(to: ~p"/")
 
           {:halt, socket}

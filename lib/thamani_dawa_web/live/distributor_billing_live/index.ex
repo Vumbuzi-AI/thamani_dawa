@@ -41,7 +41,9 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
     |> assign(:payments, Billing.list_payments(organization.id))
   end
 
-  defp flex_quote(organization, %SerialUsage{type: "flex"}), do: Billing.postpay_quote(organization)
+  defp flex_quote(organization, %SerialUsage{type: "flex"}),
+    do: Billing.postpay_quote(organization)
+
   defp flex_quote(_organization, _usage), do: nil
 
   defp plan_label("prepay"), do: "Prepay bundle"
@@ -102,7 +104,11 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
             icon="hero-cube"
             label="Serials left"
             value={number((@usage && SerialUsage.serials_left(@usage)) || 0)}
-            sublabel={if @usage, do: "of #{number(@usage.quantity_limit)} in this bundle", else: "No bundle yet — buy one to start approving"}
+            sublabel={
+              if @usage,
+                do: "of #{number(@usage.quantity_limit)} in this bundle",
+                else: "No bundle yet — buy one to start approving"
+            }
           />
           <.stat_tile
             id="stat-serials-used"

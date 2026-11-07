@@ -171,7 +171,11 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
             </p>
           </div>
         </div>
-        <.button id="distributor-choose-plan" variant="primary" navigate={~p"/distributor/billing/options"}>
+        <.button
+          id="distributor-choose-plan"
+          variant="primary"
+          navigate={~p"/distributor/billing/options"}
+        >
           Choose a plan
         </.button>
       </div>
@@ -331,7 +335,10 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
                 <.shipment_status_badge status={shipment.status} />
               </.link>
             </li>
-            <li :if={@analytics.recent_shipments == []} class="py-6 text-center text-sm text-thamani-pewter">
+            <li
+              :if={@analytics.recent_shipments == []}
+              class="py-6 text-center text-sm text-thamani-pewter"
+            >
               No shipments yet.
             </li>
           </ul>
@@ -360,7 +367,10 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
                 {product.units} units
               </span>
             </li>
-            <li :if={@analytics.top_products == []} class="py-6 text-center text-sm text-thamani-pewter">
+            <li
+              :if={@analytics.top_products == []}
+              class="py-6 text-center text-sm text-thamani-pewter"
+            >
               Nothing shipped yet.
             </li>
           </ul>
