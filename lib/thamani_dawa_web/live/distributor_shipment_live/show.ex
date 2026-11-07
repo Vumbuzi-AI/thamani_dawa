@@ -70,7 +70,8 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
          |> load(shipment.id)}
 
       {:already_approved, _shipment} ->
-        {:noreply, socket |> put_flash(:info, "This shipment is already approved.") |> load(shipment.id)}
+        {:noreply,
+         socket |> put_flash(:info, "This shipment is already approved.") |> load(shipment.id)}
 
       {:error, {:invalid, problems}} ->
         {:noreply,
@@ -107,7 +108,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
          |> load(shipment.id)}
 
       {:error, :reason_required} ->
-        form = to_form(%{"reason" => reason}, as: :reject, errors: [reason: {"Give a reason", []}])
+        form =
+          to_form(%{"reason" => reason}, as: :reject, errors: [reason: {"Give a reason", []}])
+
         {:noreply, assign(socket, :reject_form, form)}
 
       {:error, reason} ->
@@ -136,19 +139,24 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
     do: "Set your GS1 Company Prefix in Settings before approving — it's needed to issue SSCCs."
 
   def error_message({:billing, :no_active_plan}),
-    do: "You have no active serialisation allowance. Buy a bundle on the Billing page to continue."
+    do:
+      "You have no active serialisation allowance. Buy a bundle on the Billing page to continue."
 
   def error_message({:billing, :insufficient_allowance}),
     do:
       "Not enough serials left in your bundle to issue SSCCs for every shipper. Top up on the Billing page."
 
   def error_message({:billing, :overdue}),
-    do: "Your flex billing cycle is overdue. Settle it on the Billing page to keep approving shipments."
+    do:
+      "Your flex billing cycle is overdue. Settle it on the Billing page to keep approving shipments."
 
   def error_message(:reservation_missing),
-    do: "Some scanned units no longer hold a reservation. Reject the shipment so it can be resubmitted."
+    do:
+      "Some scanned units no longer hold a reservation. Reject the shipment so it can be resubmitted."
 
-  def error_message({:invalid_state, status}), do: "This shipment is #{status} and can't be changed."
+  def error_message({:invalid_state, status}),
+    do: "This shipment is #{status} and can't be changed."
+
   def error_message(:already_approved), do: "Approved shipments can't be changed."
   def error_message(:not_found), do: "That item no longer exists."
   def error_message(_reason), do: "Something went wrong. Please try again."
@@ -255,8 +263,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
           <.icon name="hero-x-circle" class="mt-0.5 size-5 shrink-0 text-rose-700" />
           <div class="text-sm">
             <p class="font-semibold text-rose-900">
-              Rejected by {(@shipment.rejected_by && @shipment.rejected_by.name) || "an administrator"}
-              · {date_time(@shipment.rejected_at)}
+              Rejected by {(@shipment.rejected_by && @shipment.rejected_by.name) || "an administrator"} · {date_time(
+                @shipment.rejected_at
+              )}
             </p>
             <p class="mt-1 text-rose-800">{@shipment.rejection_reason}</p>
             <p class="mt-1 text-xs text-rose-700">
@@ -265,7 +274,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
           </div>
         </div>
 
-        <div :if={@problems != []} id="distributor-approval-problems" class="mb-5 rounded-2xl border border-rose-200 bg-white p-4">
+        <div
+          :if={@problems != []}
+          id="distributor-approval-problems"
+          class="mb-5 rounded-2xl border border-rose-200 bg-white p-4"
+        >
           <p class="flex items-center gap-2 text-sm font-semibold text-rose-800">
             <.icon name="hero-exclamation-circle" class="size-5" /> Can't approve yet
           </p>
@@ -325,7 +338,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
           </div>
         </div>
 
-        <div :if={@warnings != []} id="distributor-shipment-warnings" class="mt-5 grid gap-2 sm:grid-cols-2">
+        <div
+          :if={@warnings != []}
+          id="distributor-shipment-warnings"
+          class="mt-5 grid gap-2 sm:grid-cols-2"
+        >
           <div
             :for={warning <- @warnings}
             id={"warning-#{warning.code}"}
@@ -371,9 +388,15 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
               </span>
             </header>
 
-            <p :if={groups == []} class="px-5 py-4 text-sm text-thamani-pewter">No units scanned into this shipper.</p>
+            <p :if={groups == []} class="px-5 py-4 text-sm text-thamani-pewter">
+              No units scanned into this shipper.
+            </p>
 
-            <div :for={group <- groups} id={group.id} class="border-b border-thamani-stone last:border-b-0">
+            <div
+              :for={group <- groups}
+              id={group.id}
+              class="border-b border-thamani-stone last:border-b-0"
+            >
               <button
                 type="button"
                 phx-click="toggle_group"
@@ -391,7 +414,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
                   <span class="block text-xs text-thamani-pewter">Batch</span>{group.batch || "—"}
                 </span>
                 <span class="hidden text-sm sm:block">
-                  <span class="block text-xs text-thamani-pewter">Expiry</span>{short_date(group.expiry_date)}
+                  <span class="block text-xs text-thamani-pewter">Expiry</span>{short_date(
+                    group.expiry_date
+                  )}
                 </span>
                 <span class="hidden text-sm sm:block">
                   <span class="block text-xs text-thamani-pewter">Units</span>{group.count}
@@ -452,13 +477,19 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
           </article>
         </section>
 
-        <section :if={@shipment.events != []} class="mt-6 rounded-2xl ff-surface-card p-5" id="distributor-shipment-activity">
+        <section
+          :if={@shipment.events != []}
+          class="mt-6 rounded-2xl ff-surface-card p-5"
+          id="distributor-shipment-activity"
+        >
           <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">Activity</h2>
           <ol class="mt-3 space-y-3 border-l border-thamani-stone pl-4">
             <li :for={event <- @shipment.events} class="relative text-sm">
               <span class="absolute -left-[21px] top-1.5 size-2.5 rounded-full bg-thamani-forest"></span>
               <p class="font-medium text-thamani-ink">{event_label(event.event)}</p>
-              <p class="text-xs text-thamani-pewter">{actor(event)} · {date_time(event.inserted_at)}</p>
+              <p class="text-xs text-thamani-pewter">
+                {actor(event)} · {date_time(event.inserted_at)}
+              </p>
               <p :if={event.details["reason"]} class="mt-0.5 text-xs text-thamani-ink">
                 “{event.details["reason"]}”
               </p>

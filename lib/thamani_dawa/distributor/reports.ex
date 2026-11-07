@@ -25,7 +25,8 @@ defmodule ThamaniDawa.Distributor.Reports do
        "unit(s) have a serial that isn't on any batch you've received"},
       {:data_mismatch, Enum.count(items, &(&1.validation_status == "data_mismatch")),
        "unit(s) have a batch number or dates that differ from the received batch"},
-      {:expired, Enum.count(items, &(&1.expiry_date && Date.compare(&1.expiry_date, today) == :lt)),
+      {:expired,
+       Enum.count(items, &(&1.expiry_date && Date.compare(&1.expiry_date, today) == :lt)),
        "unit(s) are past their expiry date"},
       {:unverified, Enum.count(items, &(&1.product_source == "unverified")),
        "unit(s) could not be verified against GS1 when scanned"},
@@ -221,7 +222,9 @@ defmodule ThamaniDawa.Distributor.Reports do
       units_shipped: units_shipped(organization_id),
       ssccs_issued:
         Repo.aggregate(
-          from(sh in Shipper, where: sh.organization_id == ^organization_id and not is_nil(sh.sscc)),
+          from(sh in Shipper,
+            where: sh.organization_id == ^organization_id and not is_nil(sh.sscc)
+          ),
           :count,
           :id
         ),

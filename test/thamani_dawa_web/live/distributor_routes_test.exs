@@ -29,10 +29,13 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
     end
 
     test "a distributor-role user outside a distributor organization is redirected away" do
-      pharmacy_org = ThamaniDawa.OrganizationsFixtures.organization_fixture(%{operating_models: [:pharmacy]})
+      pharmacy_org =
+        ThamaniDawa.OrganizationsFixtures.organization_fixture(%{operating_models: [:pharmacy]})
+
       user = staff_fixture(%{organization_id: pharmacy_org.id, role: :distributor})
 
-      assert {:error, {:redirect, %{to: "/"}}} = live(log_in(build_conn(), user), ~p"/distributor")
+      assert {:error, {:redirect, %{to: "/"}}} =
+               live(log_in(build_conn(), user), ~p"/distributor")
     end
 
     test "an anonymous visitor is redirected away" do
@@ -41,7 +44,9 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
   end
 
   describe "portal basics" do
-    test "customers, warehouses, products, suppliers, receiving and settings render", %{conn: conn} do
+    test "customers, warehouses, products, suppliers, receiving and settings render", %{
+      conn: conn
+    } do
       for {path, selector} <- [
             {~p"/distributor/customers", "#distributor-customers"},
             {~p"/distributor/warehouses", "#distributor-warehouses"},

@@ -122,7 +122,9 @@ organization =
   org_result.organization
   |> Ecto.Changeset.change(
     operating_models:
-      Enum.uniq((org_result.organization.operating_models || []) ++ [:pharmacy, :laboratory, :distributor])
+      Enum.uniq(
+        (org_result.organization.operating_models || []) ++ [:pharmacy, :laboratory, :distributor]
+      )
   )
   |> Repo.update!()
 

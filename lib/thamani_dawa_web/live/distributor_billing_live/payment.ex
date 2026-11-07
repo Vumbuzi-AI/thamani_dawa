@@ -168,7 +168,10 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
           <%= if @pending_payment do %>
             <div id="distributor-payment-pending" class="py-6 text-center">
               <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-thamani-lime">
-                <.icon name="hero-device-phone-mobile" class="size-7 animate-pulse text-thamani-forest" />
+                <.icon
+                  name="hero-device-phone-mobile"
+                  class="size-7 animate-pulse text-thamani-forest"
+                />
               </div>
               <h2 class="mt-4 text-lg font-semibold text-thamani-forest">Check your phone</h2>
               <p class="mt-1 text-sm text-thamani-pewter">
@@ -194,7 +197,12 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
                 <legend class="thamani-label">Payment method</legend>
                 <div class="mt-1 grid gap-2 sm:grid-cols-2">
                   <label
-                    :for={{value, label, icon} <- [{"mpesa", "M-Pesa", "hero-device-phone-mobile"}, {"manual", "Bank / manual reference", "hero-building-library"}]}
+                    :for={
+                      {value, label, icon} <- [
+                        {"mpesa", "M-Pesa", "hero-device-phone-mobile"},
+                        {"manual", "Bank / manual reference", "hero-building-library"}
+                      ]
+                    }
                     class={[
                       "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors duration-150",
                       if(@params["method"] == value,
@@ -230,7 +238,11 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
                 placeholder="e.g. bank transfer or M-Pesa paybill confirmation code"
                 required
               />
-              <p :if={@error} id="distributor-payment-error" class="mb-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
+              <p
+                :if={@error}
+                id="distributor-payment-error"
+                class="mb-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800"
+              >
                 {@error}
               </p>
               <.button

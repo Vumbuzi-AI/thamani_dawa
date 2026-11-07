@@ -112,7 +112,9 @@ defmodule ThamaniDawa.DistributorTest do
       {_shipment, mobile_user, shipper} = claimed_draft_with_shipper(ctx)
       raw = data_matrix_for(%{batch | serial: "NEVER-RECEIVED"})
 
-      assert {:ok, item} = Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => raw})
+      assert {:ok, item} =
+               Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => raw})
+
       assert item.validation_status == "unknown_serial"
     end
 
@@ -121,7 +123,9 @@ defmodule ThamaniDawa.DistributorTest do
       {_shipment, mobile_user, shipper} = claimed_draft_with_shipper(ctx)
       raw = data_matrix_for(%{batch | batch_no: "OTHERLOT"})
 
-      assert {:ok, item} = Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => raw})
+      assert {:ok, item} =
+               Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => raw})
+
       assert item.validation_status == "data_mismatch"
     end
 
@@ -151,17 +155,21 @@ defmodule ThamaniDawa.DistributorTest do
       other = mobile_user_fixture(ctx.organization.id)
 
       assert {:error, :not_assigned} =
-               Distributor.scan_item(other, shipper.id, %{"raw_data_matrix" => data_matrix_for(batch)})
+               Distributor.scan_item(other, shipper.id, %{
+                 "raw_data_matrix" => data_matrix_for(batch)
+               })
     end
   end
 
   describe "submit_shipment/2" do
     test "reserves every scanned serial and moves to submitted", ctx do
       batch = unit(ctx)
-      shipment = submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
-        warehouse: ctx.warehouse,
-        customer: ctx.customer
-      })
+
+      shipment =
+        submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
+          warehouse: ctx.warehouse,
+          customer: ctx.customer
+        })
 
       assert shipment.status == "submitted"
       assert Repo.get_by(SerialReservation, barcode: batch.gtin, serial: batch.serial)
@@ -170,7 +178,9 @@ defmodule ThamaniDawa.DistributorTest do
     test "refuses a shipment with an empty shipper", ctx do
       {shipment, mobile_user, _shipper} = claimed_draft_with_shipper(ctx)
 
-      assert {:error, {:invalid, problems}} = Distributor.submit_shipment(mobile_user, shipment.id)
+      assert {:error, {:invalid, problems}} =
+               Distributor.submit_shipment(mobile_user, shipment.id)
+
       assert Enum.any?(problems, &(&1.code == :empty_shipper))
     end
 
@@ -207,7 +217,9 @@ defmodule ThamaniDawa.DistributorTest do
           customer: ctx.customer
         })
 
-      assert {:ok, approved} = Distributor.approve_shipment(ctx.organization.id, ctx.user, shipment.id)
+      assert {:ok, approved} =
+               Distributor.approve_shipment(ctx.organization.id, ctx.user, shipment.id)
+
       assert approved.status == "approved"
 
       [shipper] = Repo.all(from s in Shipper, where: s.shipment_id == ^shipment.id)
@@ -301,7 +313,9 @@ defmodule ThamaniDawa.DistributorTest do
 
       item = Repo.get_by!(ShipmentItem, shipment_id: shipment.id)
 
-      assert {:ok, _} = Distributor.remove_item(ctx.organization.id, ctx.user, shipment.id, item.id)
+      assert {:ok, _} =
+               Distributor.remove_item(ctx.organization.id, ctx.user, shipment.id, item.id)
+
       refute Repo.get(ShipmentItem, item.id)
       refute Repo.get_by(SerialReservation, shipment_id: shipment.id)
     end

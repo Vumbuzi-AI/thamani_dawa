@@ -78,7 +78,10 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Options do
             </div>
           </div>
           <ul class="mt-5 space-y-2 text-sm">
-            <li :for={{minimum, price} <- @tiers} class="flex justify-between gap-3 border-b border-thamani-stone pb-2">
+            <li
+              :for={{minimum, price} <- @tiers}
+              class="flex justify-between gap-3 border-b border-thamani-stone pb-2"
+            >
               <span>From {number(minimum)} serials</span>
               <span class="font-semibold text-thamani-forest">{kes(price)} / serial</span>
             </li>

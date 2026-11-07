@@ -239,7 +239,11 @@ defmodule ThamaniDawaWeb.DarajaCallbackControllerTest do
       payment: payment
     } do
       conn =
-        post(conn, callback_path(), failure_body("ws_CO_serial", 1032, "Request cancelled by user"))
+        post(
+          conn,
+          callback_path(),
+          failure_body("ws_CO_serial", 1032, "Request cancelled by user")
+        )
 
       assert json_response(conn, 200)
 

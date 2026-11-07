@@ -46,6 +46,7 @@ defmodule ThamaniDawa.Distributor.Shipment do
     belongs_to :created_by, ThamaniDawa.Accounts.User
     belongs_to :approved_by, ThamaniDawa.Accounts.User
     belongs_to :rejected_by, ThamaniDawa.Accounts.User
+
     belongs_to :assigned_to, ThamaniDawa.Distributor.MobileUser,
       foreign_key: :assigned_mobile_user_id
 

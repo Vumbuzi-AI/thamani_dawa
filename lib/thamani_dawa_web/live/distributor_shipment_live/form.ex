@@ -134,8 +134,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
               required
             />
             <p :if={@origins == []} class="-mt-1 mb-3 text-xs text-thamani-pewter">
-              No sites with a GLN yet —
-              <.link navigate={~p"/distributor/warehouses/new"} class="font-semibold text-thamani-forest hover:underline">
+              No sites with a GLN yet — <.link
+                navigate={~p"/distributor/warehouses/new"}
+                class="font-semibold text-thamani-forest hover:underline"
+              >
                 add a warehouse
               </.link>.
             </p>
@@ -149,8 +151,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
               required
             />
             <p :if={@destinations == []} class="-mt-1 mb-3 text-xs text-thamani-pewter">
-              No customers yet —
-              <.link navigate={~p"/distributor/customers/new"} class="font-semibold text-thamani-forest hover:underline">
+              No customers yet — <.link
+                navigate={~p"/distributor/customers/new"}
+                class="font-semibold text-thamani-forest hover:underline"
+              >
                 add a customer
               </.link>.
             </p>
@@ -175,7 +179,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
         </section>
 
         <aside class="space-y-4">
-          <.gln_card title="Ship from" icon="hero-building-office-2" record={selected(@origins, @form[:origin_gln].value)} />
+          <.gln_card
+            title="Ship from"
+            icon="hero-building-office-2"
+            record={selected(@origins, @form[:origin_gln].value)}
+          />
           <.gln_card
             title="Ship to"
             icon="hero-building-storefront"

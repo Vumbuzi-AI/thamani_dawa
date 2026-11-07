@@ -86,7 +86,9 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Invoice do
           </div>
           <div class="sm:text-right">
             <p class="text-xs font-semibold uppercase tracking-wide text-thamani-pewter">Invoice</p>
-            <p class="font-mono text-lg font-semibold text-thamani-forest">{@payment.invoice_number}</p>
+            <p class="font-mono text-lg font-semibold text-thamani-forest">
+              {@payment.invoice_number}
+            </p>
             <p class="text-sm text-thamani-pewter">Issued {short_date(@payment.paid_at)}</p>
           </div>
         </header>
@@ -125,7 +127,9 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Invoice do
               <td class="py-3">{description(@payment.kind)}</td>
               <td class="py-3 text-right">{number(@payment.quantity)}</td>
               <td class="py-3 text-right">{kes(@payment.unit_price)}</td>
-              <td class="py-3 text-right">{kes(Decimal.mult(@payment.unit_price, @payment.quantity))}</td>
+              <td class="py-3 text-right">
+                {kes(Decimal.mult(@payment.unit_price, @payment.quantity))}
+              </td>
             </tr>
             <tr :if={@payment.buffer_quantity > 0} class="border-b border-thamani-stone">
               <td class="py-3">Buffer carried from previous cycle</td>

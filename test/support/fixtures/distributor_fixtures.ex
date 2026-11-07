@@ -160,7 +160,8 @@ defmodule ThamaniDawa.DistributorFixtures do
 
     {:ok, shipment} =
       Distributor.create_shipment(organization_id, user, %{
-        "order_number" => Map.get(attrs, :order_number, "PO-#{System.unique_integer([:positive])}"),
+        "order_number" =>
+          Map.get(attrs, :order_number, "PO-#{System.unique_integer([:positive])}"),
         "origin_gln" => warehouse.gln,
         "destination_gln" => customer.gln
       })
@@ -183,7 +184,9 @@ defmodule ThamaniDawa.DistributorFixtures do
 
     Enum.each(batches, fn batch ->
       {:ok, _item} =
-        Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => data_matrix_for(batch)})
+        Distributor.scan_item(mobile_user, shipper.id, %{
+          "raw_data_matrix" => data_matrix_for(batch)
+        })
     end)
 
     {:ok, shipment} = Distributor.submit_shipment(mobile_user, shipment.id)
