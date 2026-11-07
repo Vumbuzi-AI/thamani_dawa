@@ -89,8 +89,11 @@ defmodule ThamaniDawa.Distributor.BillingTest do
     test "caps usage at the buffer limit once overdue", ctx do
       {:ok, usage} = Billing.ensure_first_postpay_cycle(ctx.organization)
 
+      billing_date =
+        DateTime.utc_now() |> DateTime.add(-60, :second) |> DateTime.truncate(:second)
+
       usage
-      |> Ecto.Changeset.change(billing_date: DateTime.add(DateTime.utc_now(), -60, :second))
+      |> Ecto.Changeset.change(billing_date: billing_date)
       |> Repo.update!()
 
       assert {:ok, usage} = Billing.authorize_generation(ctx.organization.id, 2)
