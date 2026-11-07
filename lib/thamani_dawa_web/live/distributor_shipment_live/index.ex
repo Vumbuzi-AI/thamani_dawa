@@ -47,22 +47,22 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
   end
 
   def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, push_patch(socket, to: path(socket, %{"search" => search}))}
+    {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
   end
 
   def handle_event("apply_filters", %{"filters" => filters}, socket) do
     changes = Map.take(filters, ["mobile_user_id", "date_from", "date_to"])
-    {:noreply, push_patch(socket, to: path(socket, changes))}
+    {:noreply, push_patch(socket, to: filter_path(socket, changes))}
   end
 
   def handle_event("clear_filters", _params, socket) do
     changes = %{"mobile_user_id" => "", "date_from" => "", "date_to" => ""}
-    {:noreply, push_patch(socket, to: path(socket, changes))}
+    {:noreply, push_patch(socket, to: filter_path(socket, changes))}
   end
 
   def handle_event("clear_filter", %{"filter" => filter}, socket)
       when filter in ["mobile_user_id", "date_from", "date_to"] do
-    {:noreply, push_patch(socket, to: path(socket, %{filter => ""}))}
+    {:noreply, push_patch(socket, to: filter_path(socket, %{filter => ""}))}
   end
 
   def handle_info({:distributor_shipment, _event, _shipment_id}, socket) do
@@ -89,7 +89,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
     |> stream(:shipments, result.entries, reset: true)
   end
 
-  defp path(socket, changes) do
+  defp filter_path(socket, changes) do
     query =
       socket.assigns.filters
       |> Map.merge(changes)
