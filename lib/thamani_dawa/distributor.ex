@@ -35,6 +35,7 @@ defmodule ThamaniDawa.Distributor do
 
   alias ThamaniDawa.Accounts.UserNotifier
   alias ThamaniDawa.Batches.Batch
+
   alias ThamaniDawa.Distributor.{
     Billing,
     GlnLookup,
@@ -139,11 +140,11 @@ defmodule ThamaniDawa.Distributor do
   def mobile_user_activity(organization_id) do
     rows =
       Repo.all(
-      from s in Shipment,
-        where: s.organization_id == ^organization_id,
-        where: not is_nil(s.assigned_mobile_user_id),
-        group_by: [s.assigned_mobile_user_id, s.status],
-        select: {s.assigned_mobile_user_id, s.status, count(s.id)}
+        from s in Shipment,
+          where: s.organization_id == ^organization_id,
+          where: not is_nil(s.assigned_mobile_user_id),
+          group_by: [s.assigned_mobile_user_id, s.status],
+          select: {s.assigned_mobile_user_id, s.status, count(s.id)}
       )
 
     Enum.reduce(rows, %{}, fn {mobile_user_id, status, count}, acc ->
@@ -227,12 +228,18 @@ defmodule ThamaniDawa.Distributor do
 
     from [shipment: s] in query,
       where:
-        ilike(s.reference, ^pattern) or ilike(s.order_number, ^pattern) or
-          ilike(s.origin_gln, ^pattern) or ilike(s.destination_gln, ^pattern) or
-          ilike(s.origin_company, ^pattern) or ilike(s.destination_company, ^pattern) or
-          ilike(s.origin_address, ^pattern) or ilike(s.destination_address, ^pattern) or
-          exists(mobile_user_match(pattern)) or exists(item_match(pattern)) or
-          exists(shipper_match(pattern))
+        ^shipment_field_match(pattern) or exists(mobile_user_match(pattern)) or
+          exists(item_match(pattern)) or exists(shipper_match(pattern))
+  end
+
+  defp shipment_field_match(pattern) do
+    dynamic(
+      [shipment: s],
+      ilike(s.reference, ^pattern) or ilike(s.order_number, ^pattern) or
+        ilike(s.origin_gln, ^pattern) or ilike(s.destination_gln, ^pattern) or
+        ilike(s.origin_company, ^pattern) or ilike(s.destination_company, ^pattern) or
+        ilike(s.origin_address, ^pattern) or ilike(s.destination_address, ^pattern)
+    )
   end
 
   defp mobile_user_match(pattern) do
@@ -442,8 +449,7 @@ defmodule ThamaniDawa.Distributor do
       from s in Shipment,
         where: s.organization_id == ^mobile_user.organization_id and s.status == "draft",
         where: ilike(s.order_number, ^("%" <> escape_like(order_number) <> "%")),
-        where:
-          is_nil(s.assigned_mobile_user_id) or s.assigned_mobile_user_id == ^mobile_user.id,
+        where: is_nil(s.assigned_mobile_user_id) or s.assigned_mobile_user_id == ^mobile_user.id,
         order_by: [asc: s.order_number],
         limit: 20
     )
@@ -581,14 +587,18 @@ defmodule ThamaniDawa.Distributor do
          :ok <- compare_client_reading(parsed, attrs),
          {:ok, product} <- lookup_product(mobile_user.organization_id, parsed.gtin) do
       edit_draft(mobile_user, shipper.shipment_id, fn shipment ->
-        shipper = Repo.get_by(Shipper, id: shipper.id, shipment_id: shipment.id)
-        if is_nil(shipper), do: Repo.rollback(:not_found)
-
-        ensure_not_scanned!(shipment, parsed)
-        ensure_not_committed!(shipment, parsed)
-        insert_item!(mobile_user, shipment, shipper, parsed, product, attrs["raw_data_matrix"])
+        record_scan(mobile_user, shipment, shipper.id, parsed, product, attrs["raw_data_matrix"])
       end)
     end
+  end
+
+  defp record_scan(mobile_user, shipment, shipper_id, parsed, product, raw_data_matrix) do
+    shipper = Repo.get_by(Shipper, id: shipper_id, shipment_id: shipment.id)
+    if is_nil(shipper), do: Repo.rollback(:not_found)
+
+    ensure_not_scanned!(shipment, parsed)
+    ensure_not_committed!(shipment, parsed)
+    insert_item!(mobile_user, shipment, shipper, parsed, product, raw_data_matrix)
   end
 
   defp parse_data_matrix(raw) when is_binary(raw) and raw != "" do
@@ -747,14 +757,18 @@ defmodule ThamaniDawa.Distributor do
   def move_item(%MobileUser{} = mobile_user, item_id, target_shipper_id) do
     with {:ok, item} <- fetch_mobile_item(mobile_user, item_id) do
       edit_draft(mobile_user, item.shipment_id, fn shipment ->
-        case Repo.get_by(Shipper, id: target_shipper_id, shipment_id: shipment.id) do
-          nil ->
-            Repo.rollback(:invalid_shipper)
-
-          target ->
-            item |> Ecto.Changeset.change(shipper_id: target.id) |> Repo.update!()
-        end
+        move_item_to_shipper(item, target_shipper_id, shipment.id)
       end)
+    end
+  end
+
+  defp move_item_to_shipper(item, target_shipper_id, shipment_id) do
+    case Repo.get_by(Shipper, id: target_shipper_id, shipment_id: shipment_id) do
+      nil ->
+        Repo.rollback(:invalid_shipper)
+
+      target ->
+        item |> Ecto.Changeset.change(shipper_id: target.id) |> Repo.update!()
     end
   end
 
@@ -862,7 +876,10 @@ defmodule ThamaniDawa.Distributor do
     organization_id = shipment.organization_id
 
     [
-      gln_problem(:origin_not_found, GlnLookup.resolve_origin(organization_id, shipment.origin_gln)),
+      gln_problem(
+        :origin_not_found,
+        GlnLookup.resolve_origin(organization_id, shipment.origin_gln)
+      ),
       gln_problem(
         :destination_not_found,
         GlnLookup.resolve_destination(organization_id, shipment.destination_gln)
@@ -881,7 +898,8 @@ defmodule ThamaniDawa.Distributor do
     do: problem(:origin_not_found, "The origin GLN is not one of your active sites.")
 
   defp gln_problem(:destination_not_found, {:error, :not_found}),
-    do: problem(:destination_not_found, "The destination GLN is not one of your active customers.")
+    do:
+      problem(:destination_not_found, "The destination GLN is not one of your active customers.")
 
   defp gln_problem(_code, {:ok, _resolved}), do: nil
 
@@ -948,7 +966,11 @@ defmodule ThamaniDawa.Distributor do
 
         shipment =
           shipment
-          |> Ecto.Changeset.change(status: "approved", approved_at: now(), approved_by_id: user.id)
+          |> Ecto.Changeset.change(
+            status: "approved",
+            approved_at: now(),
+            approved_by_id: user.id
+          )
           |> Repo.update!()
 
         log_event!(shipment, "approved", user: user)
@@ -1043,29 +1065,29 @@ defmodule ThamaniDawa.Distributor do
     if reason == "" do
       {:error, :reason_required}
     else
-      result =
-        Repo.transaction(fn ->
-          shipment = lock_shipment!(organization_id, id)
-          if shipment.status != "submitted", do: Repo.rollback({:invalid_state, shipment.status})
-
-          Repo.delete_all(from r in SerialReservation, where: r.shipment_id == ^shipment.id)
-
-          shipment =
-            shipment
-            |> Ecto.Changeset.change(
-              status: "rejected",
-              rejection_reason: reason,
-              rejected_at: now(),
-              rejected_by_id: user.id
-            )
-            |> Repo.update!()
-
-          log_event!(shipment, "rejected", user: user, details: %{reason: reason})
-          shipment
-        end)
-
+      result = Repo.transaction(fn -> do_reject_shipment(organization_id, id, reason, user) end)
       tap_broadcast(result, "rejected")
     end
+  end
+
+  defp do_reject_shipment(organization_id, id, reason, user) do
+    shipment = lock_shipment!(organization_id, id)
+    if shipment.status != "submitted", do: Repo.rollback({:invalid_state, shipment.status})
+
+    Repo.delete_all(from r in SerialReservation, where: r.shipment_id == ^shipment.id)
+
+    shipment =
+      shipment
+      |> Ecto.Changeset.change(
+        status: "rejected",
+        rejection_reason: reason,
+        rejected_at: now(),
+        rejected_by_id: user.id
+      )
+      |> Repo.update!()
+
+    log_event!(shipment, "rejected", user: user, details: %{reason: reason})
+    shipment
   end
 
   @doc """
