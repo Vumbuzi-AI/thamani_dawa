@@ -49,7 +49,8 @@ defmodule ThamaniDawa.Batches.Batch do
       :remaining_quantity,
       :cost_per_unit,
       :supplier_id,
-      :source_batch_id
+      :source_batch_id,
+      :goods_receipt_id
     ])
     |> validate_required([
       :product_id,
