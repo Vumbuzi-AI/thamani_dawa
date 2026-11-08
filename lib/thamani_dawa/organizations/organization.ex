@@ -20,6 +20,7 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :is_active, :boolean, default: true
     field :is_subscription_active, :boolean, default: false
     field :kyc_details, :map, default: %{}
+    field :next_requisition_number, :integer, default: 0
 
     has_many :sites, ThamaniDawa.Sites.Site
     has_many :users, ThamaniDawa.Accounts.User

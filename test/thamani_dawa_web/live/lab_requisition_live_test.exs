@@ -38,6 +38,29 @@ defmodule ThamaniDawaWeb.LabRequisitionLiveTest do
   end
 
   describe "new lab requisition" do
+    test "creates a requisition for the lab technician's own site", %{conn: conn} do
+      org = organization_fixture()
+      site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      product = product_fixture(%{organization_id: org.id})
+      lab_tech = lab_tech_at_sites(org, [site])
+
+      {:ok, lv, _html} = live(log_in_user(conn, lab_tech), ~p"/lab/requisitions/new")
+
+      lv
+      |> form("#add-item-form", %{
+        "product_id" => product.id,
+        "requested_quantity" => "12"
+      })
+      |> render_submit()
+
+      lv
+      |> form("#requisition-form", %{"site_id" => site.id})
+      |> render_submit()
+
+      assert_patch(lv, ~p"/lab/requisitions")
+      assert render(lv) =~ "12"
+    end
+
     test "auto-selects single lab site and renders read-only without a dropdown", %{conn: conn} do
       org = organization_fixture()
       site = site_fixture(%{organization_id: org.id, site_type: :lab})
@@ -47,11 +70,11 @@ defmodule ThamaniDawaWeb.LabRequisitionLiveTest do
       {:ok, lv, html} = live(log_in_user(conn, lab_tech), ~p"/lab/requisitions/new")
 
       assert html =~ site.name
-      refute has_element?(lv, "select[name='requisition[site_id]']")
+      refute has_element?(lv, "select[name='site_id']")
 
       assert has_element?(
                lv,
-               "input[type='hidden'][name='requisition[site_id]'][value='#{site.id}']"
+               "input[type='hidden'][name='site_id'][value='#{site.id}']"
              )
     end
 
@@ -68,7 +91,7 @@ defmodule ThamaniDawaWeb.LabRequisitionLiveTest do
 
       {:ok, lv, html} = live(log_in_user(conn, lab_tech), ~p"/lab/requisitions/new")
 
-      assert has_element?(lv, "select[name='requisition[site_id]']")
+      assert has_element?(lv, "select[name='site_id']")
       assert html =~ "Alpha Lab"
       assert html =~ "Beta Lab"
       refute html =~ "Gamma Lab"
@@ -85,18 +108,19 @@ defmodule ThamaniDawaWeb.LabRequisitionLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, lab_tech), ~p"/lab/requisitions/new")
 
+      lv
+      |> form("#add-item-form", %{
+        "product_id" => product.id,
+        "requested_quantity" => "3"
+      })
+      |> render_submit()
+
       html =
         lv
         |> element("#requisition-form")
-        |> render_submit(%{
-          "requisition" => %{
-            "site_id" => other_site.id,
-            "product_id" => product.id,
-            "quantity" => "3"
-          }
-        })
+        |> render_submit(%{"site_id" => other_site.id})
 
-      assert html =~ "is not a site you can act on"
+      assert html =~ "Choose a valid site."
       assert has_element?(lv, "#new-requisition-modal")
     end
   end

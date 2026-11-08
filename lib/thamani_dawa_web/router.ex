@@ -74,8 +74,10 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/suppliers/:id/edit", SupplierLive.Index, :edit
 
       live "/org/requisitions", RequisitionQueueLive.Index, :index
+      live "/org/requisitions/:id/review", RequisitionQueueLive.Index, :review
       live "/org/requisitions/:id/reject", RequisitionQueueLive.Index, :reject
       live "/org/requisitions/:id/fulfill", RequisitionQueueLive.Index, :fulfill
+      live "/org/requisitions/:id", RequisitionQueueLive.Show, :show
     end
 
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
@@ -91,6 +93,7 @@ defmodule ThamaniDawaWeb.Router do
 
       live "/pharmacy/requisitions", RequisitionLive.Index, :index
       live "/pharmacy/requisitions/new", RequisitionLive.Index, :new
+      live "/pharmacy/requisitions/:id", RequisitionLive.Show, :show
 
       live "/pharmacy/quick-sale", QuickSaleLive, :new
 
@@ -132,6 +135,7 @@ defmodule ThamaniDawaWeb.Router do
 
       live "/lab/requisitions", LabRequisitionLive.Index, :index
       live "/lab/requisitions/new", LabRequisitionLive.Index, :new
+      live "/lab/requisitions/:id", LabRequisitionLive.Show, :show
 
       live "/lab/stock", LabStockLive, :index
       live "/lab/stock/products/:id", LabStockProductLive, :show
