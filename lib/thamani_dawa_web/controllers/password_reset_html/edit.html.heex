@@ -1,0 +1,20 @@
+<div class="mx-auto mt-24 max-w-md px-6">
+  <Layouts.flash_group flash={@flash} />
+  <h1 class="text-2xl font-semibold text-thamani-forest">Choose a new password</h1>
+  <.form
+    for={@form}
+    id="password-reset-form"
+    action={~p"/reset-password/#{@token}"}
+    method="post"
+    class="mt-6 space-y-4"
+  >
+    <.input
+      field={@form[:password]}
+      type="password"
+      label="New password"
+      autocomplete="new-password"
+      required
+    />
+    <.button type="submit" variant="primary">Reset password</.button>
+  </.form>
+</div>

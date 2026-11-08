@@ -48,6 +48,19 @@ defmodule ThamaniDawa.Accounts.UserNotifier do
     })
   end
 
+  @doc "Delivers a one-time password-reset link."
+  def deliver_password_reset(%User{} = user, url) do
+    deliver(user.email, "Reset your Thamani Dawa password", %{
+      title: "Reset your password",
+      intro: Template.rich(["Hi ", {:bold, user.name}, ","]),
+      body: [
+        "Use the link below to choose a new password. If you did not request this, you can safely ignore this email.",
+        "This link expires in one day."
+      ],
+      cta: %{label: "Reset password", url: url}
+    })
+  end
+
   @doc """
   Emails a distributor mobile app user their sign-in PIN. The PIN is never
   shown in the portal and only its hash is stored, so this email is the only

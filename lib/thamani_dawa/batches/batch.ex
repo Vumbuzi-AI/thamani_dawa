@@ -118,7 +118,7 @@ defmodule ThamaniDawa.Batches.Batch do
 
   defp validate_expiry_date(changeset) do
     validate_change(changeset, :expiry_date, fn :expiry_date, date ->
-      if Date.compare(date, Date.utc_today()) == :gt do
+      if Date.compare(date, ThamaniDawa.BusinessDate.today()) == :gt do
         []
       else
         [expiry_date: "must be in the future"]
@@ -137,8 +137,19 @@ defmodule ThamaniDawa.Batches.Batch do
     |> cast(attrs, [:received_at, :approver_id, :quantity])
     |> validate_required([:received_at, :approver_id])
     |> validate_number(:quantity, greater_than_or_equal_to: 0)
+    |> validate_received_quantity_not_greater_than_dispatched()
     |> put_remaining_quantity_from_received_quantity()
     |> foreign_key_constraint(:approver_id)
+  end
+
+  defp validate_received_quantity_not_greater_than_dispatched(changeset) do
+    validate_change(changeset, :quantity, fn :quantity, quantity ->
+      if quantity > changeset.data.quantity do
+        [quantity: "cannot exceed the dispatched quantity"]
+      else
+        []
+      end
+    end)
   end
 
   defp put_remaining_quantity_from_received_quantity(changeset) do

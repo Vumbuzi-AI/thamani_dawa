@@ -443,6 +443,7 @@ defmodule ThamaniDawa.Batches do
              where: b.product_id == ^product_id,
              where: b.remaining_quantity > 0,
              where: not is_nil(b.approver_id),
+             where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
              select: sum(b.remaining_quantity)
          ) do
       nil -> 0
@@ -469,6 +470,15 @@ defmodule ThamaniDawa.Batches do
   @doc "Gets a single batch scoped to an organization. Raises if not found."
   def get_batch!(organization_id, id) do
     Repo.get_by!(Batch, id: id, organization_id: organization_id)
+  end
+
+  @doc "Gets a batch only when it belongs to the supplied site."
+  def get_batch_for_site!(organization_id, id, site_id) when is_integer(site_id) do
+    Repo.get_by!(Batch, id: id, organization_id: organization_id, site_id: site_id)
+  end
+
+  def get_batch_for_site!(organization_id, _id, nil) do
+    Repo.one!(from b in Batch, where: b.organization_id == ^organization_id and false)
   end
 
   @doc """
@@ -728,6 +738,7 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         where: b.remaining_quantity > 0,
         where: not is_nil(b.approver_id),
+        where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
         order_by: [asc: b.expiry_date, asc: b.id],
         lock: "FOR UPDATE"
 
@@ -756,6 +767,7 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         where: b.remaining_quantity > 0,
         where: not is_nil(b.approver_id),
+        where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
         order_by: [asc: b.expiry_date, asc: b.id]
 
     query

@@ -16,7 +16,8 @@ defmodule ThamaniDawa.LabOrdersFixtures do
       lab_request: "CBC panel",
       referring_facility: "General Hospital",
       referring_doctor: "Dr. Jane Doe",
-      referred_date: ~D[2026-01-15]
+      referred_date: ~D[2026-01-15],
+      total_amount: Decimal.new("100")
     })
   end
 

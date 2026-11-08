@@ -118,6 +118,13 @@ defmodule ThamaniDawa.Accounts.User do
     |> validate_legal_consent(Keyword.put(opts, :require_legal_consent, true))
   end
 
+  @doc "Changeset for a user resetting an existing password."
+  def password_reset_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:password])
+    |> validate_password([])
+  end
+
   @doc "Changeset for an admin editing a team member's role and site assignment. Site assignment (`:sites`) is handled separately by `update_user/3` via `put_assoc/3`."
   def edit_changeset(user, attrs) do
     user
@@ -157,7 +164,7 @@ defmodule ThamaniDawa.Accounts.User do
   defp validate_password(changeset, opts) do
     changeset
     |> validate_required([:password], message: "Please choose a password")
-    |> validate_length(:password, min: 6, max: 72, message: "Must be at least 6 characters")
+    |> validate_length(:password, min: 12, max: 72, message: "Must be at least 12 characters")
     |> maybe_hash_password(opts)
   end
 

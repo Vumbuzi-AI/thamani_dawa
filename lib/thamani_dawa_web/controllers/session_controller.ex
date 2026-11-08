@@ -3,6 +3,7 @@ defmodule ThamaniDawaWeb.SessionController do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.Accounts.User
+  alias ThamaniDawa.LoginRateLimiter
 
   import Phoenix.Component, only: [to_form: 2]
   import ThamaniDawaWeb.UserAuth, only: [log_in_user: 2, log_out_user: 1]
@@ -42,20 +43,37 @@ defmodule ThamaniDawaWeb.SessionController do
   end
 
   defp authenticate(conn, email, password, start_tour?) do
-    case Accounts.get_user_by_email_and_password(email, password) do
-      %User{} = user ->
-        first_staff_login? = user.role != :admin and is_nil(user.last_logged_in_at)
+    rate_keys = ["ip:" <> remote_ip(conn), "email:" <> String.downcase(String.trim(email))]
 
-        conn
-        |> log_in_user(user)
-        |> redirect(to: login_redirect_path(user, start_tour? or first_staff_login?))
+    case LoginRateLimiter.allow?(rate_keys) do
+      :ok ->
+        case Accounts.get_user_by_email_and_password(email, password) do
+          %User{} = user ->
+            LoginRateLimiter.reset(rate_keys)
+            first_staff_login? = user.role != :admin and is_nil(user.last_logged_in_at)
 
-      nil ->
+            conn
+            |> log_in_user(user)
+            |> redirect(to: login_redirect_path(user, start_tour? or first_staff_login?))
+
+          nil ->
+            invalid_login(conn, email)
+        end
+
+      {:error, :rate_limited} ->
         conn
-        |> put_flash(:error, "Invalid email or password")
+        |> put_flash(:error, "Too many login attempts. Please wait before trying again.")
         |> render_login(%{"email" => email, "password" => ""})
     end
   end
+
+  defp invalid_login(conn, email) do
+    conn
+    |> put_flash(:error, "Invalid email or password")
+    |> render_login(%{"email" => email, "password" => ""})
+  end
+
+  defp remote_ip(conn), do: conn.remote_ip |> :inet.ntoa() |> to_string()
 
   def delete(conn, _params) do
     conn

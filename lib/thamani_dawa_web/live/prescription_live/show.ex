@@ -1,6 +1,7 @@
 defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Patients
   alias ThamaniDawa.Patients.Patient
   alias ThamaniDawa.PaymentMethods
@@ -19,10 +20,16 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   defp apply_action(socket, :new_payment, _params) do
     prescription = socket.assigns.prescription
 
+    amount_due =
+      Payments.prescription_amount_due(
+        socket.assigns.current_scope.organization_id,
+        prescription.id
+      )
+
     changeset =
       Payment.changeset(%Payment{}, %{
         "prescription_id" => prescription.id,
-        "amount" => prescription.total_amount
+        "amount" => amount_due
       })
 
     assign(socket, payment_form: to_form(changeset, as: :payment))
@@ -34,7 +41,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
   defp load_prescription(socket, id) do
     organization_id = socket.assigns.current_scope.organization_id
-    prescription = Prescriptions.get_prescription!(organization_id, id)
+    prescription = authorized_prescription!(socket.assigns.current_scope, id)
 
     visit =
       ThamaniDawa.PatientVisits.get_patient_visit!(organization_id, prescription.patient_visit_id)
@@ -70,12 +77,27 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     |> assign(:dispenses_by_item, dispenses_by_item)
   end
 
+  defp authorized_prescription!(%{organization_id: organization_id} = scope, id) do
+    if Scope.admin?(scope) do
+      Prescriptions.get_prescription!(organization_id, id)
+    else
+      Prescriptions.get_prescription_for_site!(organization_id, id, scope.current_site_id)
+    end
+  end
+
   def handle_event("validate_payment", %{"payment" => attrs}, socket) do
     prescription = socket.assigns.prescription
+
+    amount_due =
+      Payments.prescription_amount_due(
+        socket.assigns.current_scope.organization_id,
+        prescription.id
+      )
 
     changeset =
       attrs
       |> Map.put("prescription_id", prescription.id)
+      |> Map.put("amount", amount_due)
       |> then(&Payment.changeset(%Payment{}, &1))
       |> Map.put(:action, :validate)
 
@@ -85,8 +107,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   def handle_event("save_payment", %{"payment" => attrs}, socket) do
     organization_id = socket.assigns.current_scope.organization_id
     prescription = socket.assigns.prescription
+    amount_due = Payments.prescription_amount_due(organization_id, prescription.id)
 
-    attrs = Map.put(attrs, "prescription_id", prescription.id)
+    attrs =
+      attrs
+      |> Map.put("prescription_id", prescription.id)
+      |> Map.put("amount", amount_due)
 
     with {:ok, payment} <- Payments.create_payment(organization_id, attrs),
          {:ok, _completed} <- Payments.complete_payment(payment) do
@@ -428,6 +454,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
             label="Amount (KES)"
             step="0.01"
             min="0.01"
+            readonly
             required
           />
           <.input field={@payment_form[:provider_reference]} label="Reference / receipt no." />
