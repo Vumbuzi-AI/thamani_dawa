@@ -351,21 +351,26 @@ defmodule ThamaniDawa.Accounts do
       when is_function(reset_url_fun, 1) do
     case get_user_by_email(email) do
       %User{is_active: true} = user ->
-        Repo.transaction(fn ->
-          Repo.delete_all(UserToken.by_user_and_context_query(user, "reset_password"))
-          {encoded_token, token} = UserToken.build_email_token(user, "reset_password")
-          Repo.insert!(token)
-
-          user
-          |> UserNotifier.deliver_password_reset(reset_url_fun.(encoded_token))
-          |> case do
-            {:ok, _email} -> :ok
-            {:error, reason} -> Repo.rollback(reason)
-          end
-        end)
+        deliver_reset_password_token(user, reset_url_fun)
 
       _ ->
         {:ok, :ignored}
+    end
+  end
+
+  defp deliver_reset_password_token(user, reset_url_fun) do
+    Repo.transaction(fn ->
+      Repo.delete_all(UserToken.by_user_and_context_query(user, "reset_password"))
+      {encoded_token, token} = UserToken.build_email_token(user, "reset_password")
+      Repo.insert!(token)
+      deliver_reset_password_email(user, reset_url_fun.(encoded_token))
+    end)
+  end
+
+  defp deliver_reset_password_email(user, url) do
+    case UserNotifier.deliver_password_reset(user, url) do
+      {:ok, _email} -> :ok
+      {:error, reason} -> Repo.rollback(reason)
     end
   end
 

@@ -642,30 +642,35 @@ defmodule ThamaniDawa.LabOrders do
     lab_order_id = Keyword.get(opts, :lab_order_id)
     result_id = Keyword.get(opts, :lab_order_result_id)
 
-    cond do
-      is_nil(lab_order_id) and not is_nil(result_id) ->
-        {:error, :result_requires_lab_order}
+    validate_usage_result_link(organization_id, lab_order_id, result_id)
+  end
 
-      is_nil(lab_order_id) ->
-        :ok
+  defp validate_usage_result_link(_organization_id, nil, nil), do: :ok
 
-      is_nil(Repo.get_by(LabOrder, id: lab_order_id, organization_id: organization_id)) ->
-        {:error, :invalid_lab_order}
+  defp validate_usage_result_link(_organization_id, nil, _result_id),
+    do: {:error, :result_requires_lab_order}
 
-      is_nil(result_id) ->
-        :ok
-
-      Repo.exists?(
-        from r in LabOrderResult,
-          where:
-            r.id == ^result_id and r.lab_order_id == ^lab_order_id and
-                r.organization_id == ^organization_id
-      ) ->
-        :ok
-
-      true ->
-        {:error, :invalid_lab_order_result}
+  defp validate_usage_result_link(organization_id, lab_order_id, result_id) do
+    with %LabOrder{} <- Repo.get_by(LabOrder, id: lab_order_id, organization_id: organization_id),
+         :ok <- validate_result_belongs_to_order(organization_id, lab_order_id, result_id) do
+      :ok
+    else
+      nil -> {:error, :invalid_lab_order}
+      {:error, _reason} = error -> error
     end
+  end
+
+  defp validate_result_belongs_to_order(_organization_id, _lab_order_id, nil), do: :ok
+
+  defp validate_result_belongs_to_order(organization_id, lab_order_id, result_id) do
+    if Repo.exists?(
+         from r in LabOrderResult,
+           where:
+             r.id == ^result_id and r.lab_order_id == ^lab_order_id and
+               r.organization_id == ^organization_id
+       ),
+       do: :ok,
+       else: {:error, :invalid_lab_order_result}
   end
 
   defp insert_consumable_usage(organization_id, batch_id, used_by_id, quantity, opts) do
