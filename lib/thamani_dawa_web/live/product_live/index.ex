@@ -217,6 +217,14 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     {:noreply, assign(socket, :gtin_lookup, {:error, reason})}
   end
 
+  def handle_async(:gtin_lookup, {:exit, :timeout}, socket) do
+    {:noreply, assign(socket, :gtin_lookup, {:error, :timeout})}
+  end
+
+  def handle_async(:gtin_lookup, {:exit, {:timeout, _detail}}, socket) do
+    {:noreply, assign(socket, :gtin_lookup, {:error, :timeout})}
+  end
+
   def handle_async(:gtin_lookup, {:exit, _reason}, socket) do
     {:noreply, assign(socket, :gtin_lookup, {:error, :provider_error})}
   end
