@@ -34,11 +34,14 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
     organization = socket.assigns.organization
     usage = Billing.active_usage(organization.id)
 
+    payments = Billing.list_payments(organization.id)
+
     socket
     |> assign(:usage, usage)
     |> assign(:overdue?, SerialUsage.overdue?(usage))
     |> assign(:postpay_quote, flex_quote(organization, usage))
-    |> assign(:payments, Billing.list_payments(organization.id))
+    |> assign(:payments, payments)
+    |> assign(:pending_payment_count, Enum.count(payments, &(&1.status == "pending")))
   end
 
   defp flex_quote(organization, %SerialUsage{type: "flex"}),
@@ -124,6 +127,13 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
             value={number((@usage && @usage.running_buffer) || 0)}
             sublabel={"Up to #{number(Pricing.buffer_limit())}, added to your next purchase"}
           />
+          <.stat_tile
+            id="stat-pending-payments"
+            icon="hero-clock"
+            label="Pending payments"
+            value={@pending_payment_count}
+            sublabel="Awaiting confirmation"
+          />
         </div>
       <% else %>
         <div class="dashboard-stat-grid" id="distributor-flex-usage">
@@ -151,6 +161,13 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
                 do: "#{number((@usage && @usage.running_buffer) || 0)} used — settle to lift the cap",
                 else: "Serials allowed once a cycle is overdue"
             }
+          />
+          <.stat_tile
+            id="stat-pending-payments"
+            icon="hero-clock"
+            label="Pending payments"
+            value={@pending_payment_count}
+            sublabel="Awaiting confirmation"
           />
         </div>
       <% end %>

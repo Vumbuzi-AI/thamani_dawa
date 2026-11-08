@@ -9,7 +9,7 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
 
   @near_expiry_days 90
 
-  def mount(_params, _session, socket) do
+  def mount(params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
     products = Products.list_products(organization_id)
     sites = Sites.list_sites(organization_id)
@@ -72,19 +72,15 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
 
     {:ok,
      socket
+     |> assign(:auto_start_tour?, params["tour"] == "1")
      |> assign(:analytics, analytics)
      |> assign(:plan_selected?, Billing.plan_selected?(organization_id))
      |> assign(:usage, usage)
-     |> assign(:product_count, length(products))
      |> assign(
        :products_in_stock_count,
        available_batches |> Enum.map(& &1.product_id) |> Enum.uniq() |> length()
      )
      |> assign(:available_batch_count, length(available_batches))
-     |> assign(
-       :warehouse_count,
-       sites |> Enum.count(&(&1.site_type == :warehouse and &1.is_active))
-     )
      |> assign(:near_expiry_all, near_expiry)
      |> assign(:near_expiry_days, @near_expiry_days)
      |> assign(:below_reorder_count, below_reorder)
@@ -107,6 +103,57 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
       {"Approved", "bg-thamani-forest", counts["approved"]},
       {"Rejected", "bg-red-600", counts["rejected"]}
     ])
+  end
+
+  defp product_tour_steps do
+    [
+      %{
+        selector: ~s([data-tour-target="/distributor"]),
+        title: "Start with your dashboard",
+        description:
+          "See shipments awaiting review, SSCC issuance, and inventory health at a glance."
+      },
+      %{
+        selector: ~s([data-tour-target="/distributor/shipments"]),
+        title: "Review shipments",
+        description: "Approve or reject submitted shipments and track drafts being packed."
+      },
+      %{
+        selector: ~s([data-tour-target="/distributor/mobile-users"]),
+        title: "Manage mobile users",
+        description: "Add the packers who scan and submit shipments from the mobile app."
+      },
+      %{
+        selector: ~s([data-tour-target="/distributor/receiving"]),
+        title: "Receive incoming stock",
+        description: "Post deliveries from suppliers into your warehouse inventory."
+      },
+      %{
+        selector: ~s([data-tour-target="/distributor/products"]),
+        title: "Maintain your catalog",
+        description: "Register the GTINs you distribute, with reorder levels for each product."
+      },
+      %{
+        selector: ~s([data-tour-target="/distributor/suppliers"]),
+        title: "Track your suppliers",
+        description: "Keep the suppliers you receive stock from up to date."
+      },
+      %{
+        selector: ~s([data-tour-target="/distributor/warehouses"]),
+        title: "Set up your warehouses",
+        description: "Register the sites stock is received into and shipped from."
+      },
+      %{
+        selector: ~s([data-tour-target="/distributor/customers"]),
+        title: "Manage your customers",
+        description: "Keep the GLNs and details of who you ship to up to date."
+      },
+      %{
+        selector: ~s([data-tour-target="/distributor/billing"]),
+        title: "Keep serialisation funded",
+        description: "Buy prepay bundles or settle your flex cycle to keep shipments unlocked."
+      }
+    ]
   end
 
   defp allowance_label(nil), do: "No active plan"
@@ -180,7 +227,8 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
         </.button>
       </div>
 
-      <div class="dashboard-stat-grid mt-4">
+      <p class="dashboard-section-label mt-6">Needs attention</p>
+      <div class="dashboard-stat-grid mt-2">
         <.stat_tile
           id="stat-shipments-submitted"
           icon="hero-inbox-arrow-down"
@@ -195,6 +243,22 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
           value={@analytics.status_counts["draft"]}
           sublabel="Being packed on the mobile app"
         />
+        <.stat_tile
+          icon="hero-exclamation-triangle"
+          label="Near-expiry batches"
+          value={length(@near_expiry_all)}
+          sublabel="Within the current 90-day review window"
+        />
+        <.stat_tile
+          icon="hero-arrow-down-circle"
+          label="Below reorder"
+          value={@below_reorder_count}
+          sublabel="Products needing replenishment"
+        />
+      </div>
+
+      <p class="dashboard-section-label mt-6">Overview</p>
+      <div class="dashboard-stat-grid mt-2">
         <.stat_tile
           id="stat-shipments-approved-month"
           icon="hero-check-badge"
@@ -216,34 +280,10 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
           sublabel="Distinct products with usable stock"
         />
         <.stat_tile
-          icon="hero-tag"
-          label="Catalog products"
-          value={@product_count}
-          sublabel="Registered GTINs"
-        />
-        <.stat_tile
           icon="hero-archive-box"
           label="Active batches"
           value={@available_batch_count}
           sublabel="Usable, unexpired batches with stock"
-        />
-        <.stat_tile
-          icon="hero-map-pin"
-          label="Warehouses"
-          value={@warehouse_count}
-          sublabel="Active distributor warehouse locations"
-        />
-        <.stat_tile
-          icon="hero-exclamation-triangle"
-          label="Near-expiry batches"
-          value={length(@near_expiry_all)}
-          sublabel="Within the current 90-day review window"
-        />
-        <.stat_tile
-          icon="hero-arrow-down-circle"
-          label="Below reorder"
-          value={@below_reorder_count}
-          sublabel="Products needing replenishment"
         />
       </div>
 
@@ -376,6 +416,13 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
           </ul>
         </section>
       </div>
+
+      <Layouts.product_tour
+        id="distributor-product-tour"
+        tour_key={"thamani-distributor-tour-v1-#{@current_scope.user.id}"}
+        auto_start={@auto_start_tour?}
+        steps={product_tour_steps()}
+      />
     </Layouts.distributor_shell>
     """
   end

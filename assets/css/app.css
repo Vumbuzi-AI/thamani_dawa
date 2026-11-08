@@ -855,6 +855,14 @@ label,
   color: var(--thamani-forest);
 }
 
+[data-tour-card] [data-tour-progress] {
+  color: var(--thamani-lime);
+}
+
+[data-tour-card] [data-tour-description] {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 [role="dialog"] .text-gray-500,
 [role="dialog"] .text-gray-600,
 [role="dialog"] .opacity-60 {
@@ -1148,6 +1156,14 @@ label,
 /* ============================================================
    Dashboard components — stat tiles, chart cards, range filter
    ============================================================ */
+
+.dashboard-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--thamani-pewter);
+}
 
 .dashboard-stat-grid {
   display: grid;
