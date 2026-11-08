@@ -3,6 +3,7 @@ defmodule ThamaniDawa.PaymentsFixtures do
   Test helpers for creating entities via `ThamaniDawa.Payments`.
   """
 
+  alias ThamaniDawa.LabOrders.LabOrder
   alias ThamaniDawa.LabOrdersFixtures
   alias ThamaniDawa.OrganizationsFixtures
   alias ThamaniDawa.Payments
@@ -26,17 +27,34 @@ defmodule ThamaniDawa.PaymentsFixtures do
         OrganizationsFixtures.organization_fixture().id
       end)
 
+    attrs = valid_payment_attributes(attrs)
+
     attrs =
       if Map.has_key?(attrs, :prescription_id) or Map.has_key?(attrs, :lab_order_id) do
-        attrs
+        case attrs[:lab_order_id] && ThamaniDawa.Repo.get(LabOrder, attrs[:lab_order_id]) do
+          %LabOrder{} = lab_order ->
+            _ =
+              ThamaniDawa.Repo.update!(
+                Ecto.Changeset.change(lab_order, total_amount: attrs.amount)
+              )
+
+            attrs
+
+          _ ->
+            attrs
+        end
       else
-        lab_order = LabOrdersFixtures.lab_order_fixture(%{organization_id: organization_id})
+        lab_order =
+          LabOrdersFixtures.lab_order_fixture(%{
+            organization_id: organization_id,
+            total_amount: attrs.amount
+          })
+
         Map.put(attrs, :lab_order_id, lab_order.id)
       end
 
     {:ok, payment} =
       attrs
-      |> valid_payment_attributes()
       |> then(&Payments.create_payment(organization_id, &1))
 
     payment

@@ -12,6 +12,8 @@ defmodule ThamaniDawa.Payments do
   alias ThamaniDawa.Payments.Payment
   alias ThamaniDawa.Payments.WalletEntry
   alias ThamaniDawa.Prescriptions.Prescription
+  alias ThamaniDawa.Prescriptions.PrescriptionItem
+  alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
 
   @doc "Lists all payments for an organization."
@@ -29,6 +31,18 @@ defmodule ThamaniDawa.Payments do
     Repo.get_by(Payment, provider_reference: reference)
   end
 
+  @doc "Returns the payable total for a prescription's actually dispensed quantities."
+  def prescription_amount_due(organization_id, prescription_id) do
+    Repo.one(
+      from i in PrescriptionItem,
+        join: p in Product,
+        on: p.id == i.product_id,
+        where: i.organization_id == ^organization_id and i.prescription_id == ^prescription_id,
+        where: p.organization_id == ^organization_id,
+        select: sum(fragment("? * ?", i.quantity_dispensed, p.price))
+    ) || Decimal.new(0)
+  end
+
   @doc """
   Records a new payment attempt against exactly one of `prescription_id` or
   `lab_order_id`. `site_id` is derived from that order (not accepted from
@@ -41,6 +55,7 @@ defmodule ThamaniDawa.Payments do
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> validate_belongs_to_org(:prescription_id, Prescription, organization_id)
     |> validate_belongs_to_org(:lab_order_id, LabOrder, organization_id)
+    |> validate_amount_matches_order(organization_id)
     |> put_site_id(organization_id)
     |> Repo.audited_insert()
   end
@@ -212,4 +227,76 @@ defmodule ThamaniDawa.Payments do
       end
     end)
   end
+
+  # A payment is always for the full outstanding balance today: partial and
+  # split tender are deliberately not modelled yet.  Keep this in the context
+  # (rather than trusting the LiveView's pre-filled input) so a crafted request
+  # cannot settle a KES 5,000 order with KES 1.
+  defp validate_amount_matches_order(changeset, organization_id) do
+    if changeset.valid? do
+      validate_amount_matches_order_total(changeset, organization_id)
+    else
+      changeset
+    end
+  end
+
+  defp validate_amount_matches_order_total(changeset, organization_id) do
+    case payment_order_total(changeset, organization_id) do
+      {:ok, total} when is_struct(total, Decimal) ->
+        if payment_amount_matches?(Ecto.Changeset.get_field(changeset, :amount), total) do
+          changeset
+        else
+          Ecto.Changeset.add_error(changeset, :amount, "must match the order total")
+        end
+
+      {:error, :no_payable_total} ->
+        Ecto.Changeset.add_error(changeset, :amount, "order does not have a payable total")
+
+      :skip ->
+        changeset
+    end
+  end
+
+  defp payment_order_total(changeset, organization_id) do
+    case {Ecto.Changeset.get_field(changeset, :prescription_id),
+          Ecto.Changeset.get_field(changeset, :lab_order_id)} do
+      {prescription_id, nil} when is_integer(prescription_id) ->
+        case Repo.get_by(Prescription, id: prescription_id, organization_id: organization_id) do
+          %Prescription{} ->
+            organization_id
+            |> prescription_amount_due(prescription_id)
+            |> payable_total()
+
+          nil ->
+            :skip
+        end
+
+      {nil, lab_order_id} when is_integer(lab_order_id) ->
+        case Repo.get_by(LabOrder, id: lab_order_id, organization_id: organization_id) do
+          %LabOrder{total_amount: total} ->
+            payable_total(total)
+
+          nil ->
+            :skip
+        end
+
+      _ ->
+        :skip
+    end
+  end
+
+  defp payable_total(%Decimal{} = total) do
+    if Decimal.compare(total, Decimal.new(0)) == :gt,
+      do: {:ok, total},
+      else: {:error, :no_payable_total}
+  end
+
+  defp payable_total(total) when is_integer(total), do: payable_total(Decimal.new(total))
+
+  defp payable_total(_total), do: {:error, :no_payable_total}
+
+  defp payment_amount_matches?(%Decimal{} = amount, %Decimal{} = total),
+    do: Decimal.equal?(amount, total)
+
+  defp payment_amount_matches?(_amount, _total), do: false
 end

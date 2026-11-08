@@ -89,8 +89,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
   end
 
   defp apply_action(socket, :receive, batch_id) do
-    scope = socket.assigns.current_scope
-    batch = Batches.get_batch!(scope.organization_id, String.to_integer(batch_id))
+    batch = authorized_batch!(socket, String.to_integer(batch_id))
 
     {:noreply,
      socket
@@ -103,11 +102,11 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
   end
 
   def handle_event("view_batch", %{"id" => id}, socket) do
+    batch_id = String.to_integer(id)
+    _batch = authorized_batch!(socket, batch_id)
+
     batch =
-      Batches.get_batch_with_details!(
-        socket.assigns.current_scope.organization_id,
-        String.to_integer(id)
-      )
+      Batches.get_batch_with_details!(socket.assigns.current_scope.organization_id, batch_id)
 
     {:noreply, assign(socket, :selected_batch, batch)}
   end
@@ -140,7 +139,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
 
   def handle_event("receive_batch", %{"id" => id}, socket) do
     scope = socket.assigns.current_scope
-    batch = Batches.get_batch!(scope.organization_id, String.to_integer(id))
+    batch = authorized_batch!(socket, String.to_integer(id))
 
     if not Scope.admin?(scope) and scope.current_site_id != batch.site_id do
       {:noreply, put_flash(socket, :error, "Not authorized to receive this batch.")}
@@ -173,6 +172,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     scope = socket.assigns.current_scope
 
     opts = [
+      site_id: socket.assigns.site_id,
       lab_order_id:
         blank_to_nil(attrs["lab_order_id"]) && String.to_integer(attrs["lab_order_id"]),
       purpose: blank_to_nil(attrs["purpose"])
@@ -365,6 +365,16 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
     case Map.get(suppliers_by_id, batch.supplier_id) do
       nil -> "—"
       supplier -> supplier.name
+    end
+  end
+
+  defp authorized_batch!(socket, batch_id) do
+    scope = socket.assigns.current_scope
+
+    if Scope.admin?(scope) do
+      Batches.get_batch!(scope.organization_id, batch_id)
+    else
+      Batches.get_batch_for_site!(scope.organization_id, batch_id, socket.assigns.site_id)
     end
   end
 

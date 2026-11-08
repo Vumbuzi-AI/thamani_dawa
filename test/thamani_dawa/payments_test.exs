@@ -168,7 +168,9 @@ defmodule ThamaniDawa.PaymentsTest do
     test "rejects a duplicate provider_reference" do
       organization = organization_fixture()
       lab_order_a = lab_order_fixture(%{organization_id: organization.id})
-      lab_order_b = lab_order_fixture(%{organization_id: organization.id})
+
+      lab_order_b =
+        lab_order_fixture(%{organization_id: organization.id, total_amount: Decimal.new("50")})
 
       assert {:ok, _payment} =
                Payments.create_payment(organization.id, %{
