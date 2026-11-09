@@ -64,9 +64,14 @@ defmodule ThamaniDawaWeb.RequisitionLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/requisitions/new")
 
       lv
-      |> form("#requisition-form",
-        requisition: %{"site_id" => site.id, "product_id" => product.id, "quantity" => "12"}
-      )
+      |> form("#add-item-form", %{
+        "product_id" => product.id,
+        "requested_quantity" => "12"
+      })
+      |> render_submit()
+
+      lv
+      |> form("#requisition-form", %{"site_id" => site.id})
       |> render_submit()
 
       assert_patch(lv, ~p"/pharmacy/requisitions")
@@ -82,11 +87,11 @@ defmodule ThamaniDawaWeb.RequisitionLiveTest do
       {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/requisitions/new")
 
       assert html =~ site.name
-      refute has_element?(lv, "select[name='requisition[site_id]']")
+      refute has_element?(lv, "select[name='site_id']")
 
       assert has_element?(
                lv,
-               "input[type='hidden'][name='requisition[site_id]'][value='#{site.id}']"
+               "input[type='hidden'][name='site_id'][value='#{site.id}']"
              )
     end
 
@@ -101,7 +106,7 @@ defmodule ThamaniDawaWeb.RequisitionLiveTest do
 
       {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/requisitions/new")
 
-      assert has_element?(lv, "select[name='requisition[site_id]']")
+      assert has_element?(lv, "select[name='site_id']")
       assert html =~ "Alpha Pharmacy"
       assert html =~ "Beta Pharmacy"
       refute html =~ "Gamma Org Pharmacy"
@@ -119,18 +124,19 @@ defmodule ThamaniDawaWeb.RequisitionLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/requisitions/new")
 
+      lv
+      |> form("#add-item-form", %{
+        "product_id" => product.id,
+        "requested_quantity" => "5"
+      })
+      |> render_submit()
+
       html =
         lv
         |> element("#requisition-form")
-        |> render_submit(%{
-          "requisition" => %{
-            "site_id" => other_site.id,
-            "product_id" => product.id,
-            "quantity" => "5"
-          }
-        })
+        |> render_submit(%{"site_id" => other_site.id})
 
-      assert html =~ "is not a site you can act on"
+      assert html =~ "Choose a valid site."
       assert has_element?(lv, "#new-requisition-modal")
     end
   end
