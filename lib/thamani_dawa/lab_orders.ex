@@ -489,9 +489,20 @@ defmodule ThamaniDawa.LabOrders do
   defp ensure_amendment_reason(_lab_order_result, _reason), do: :ok
 
   defp ensure_received_specimen(%LabOrderResult{id: result_id}) do
-    case Repo.get_by(LabSpecimen, lab_order_result_id: result_id) do
-      %LabSpecimen{status: :received} -> :ok
-      _ -> {:error, :specimen_not_received}
+    directly_linked =
+      from s in LabSpecimen,
+        where: s.lab_order_result_id == ^result_id and s.status == :received
+
+    linked_via_join =
+      from s in LabSpecimen,
+        join: sr in LabSpecimenResult,
+        on: sr.lab_specimen_id == s.id,
+        where: sr.lab_order_result_id == ^result_id and s.status == :received
+
+    if Repo.exists?(directly_linked) or Repo.exists?(linked_via_join) do
+      :ok
+    else
+      {:error, :specimen_not_received}
     end
   end
 

@@ -46,6 +46,7 @@ defmodule ThamaniDawa.PaymentsTest do
     test "creates a payment against a prescription, deriving order_type and site_id from its patient_visit" do
       organization = organization_fixture()
       prescription = prescription_fixture(%{organization_id: organization.id})
+      ensure_prescription_payable(organization.id, prescription.id, Decimal.new("100"))
 
       patient_visit =
         Repo.get!(ThamaniDawa.PatientVisits.PatientVisit, prescription.patient_visit_id)

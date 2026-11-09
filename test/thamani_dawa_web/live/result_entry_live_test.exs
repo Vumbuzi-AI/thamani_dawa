@@ -25,6 +25,16 @@ defmodule ThamaniDawaWeb.ResultEntryLiveTest do
     %{admin: admin, lab_tech: lab_tech, site: site, lab_test: lab_test}
   end
 
+  defp collect_and_receive_specimen(organization_id, lab_order_id, result_id, user_id) do
+    {:ok, specimen} =
+      LabOrders.collect_specimen(organization_id, lab_order_id, [result_id], user_id, %{
+        "specimen_type" => "blood",
+        "collection_date" => "2026-01-15"
+      })
+
+    {:ok, _specimen} = LabOrders.receive_specimen(organization_id, specimen.id, user_id)
+  end
+
   describe "result entry" do
     test "renders the test name and a field per definition entry", ctx do
       result =
@@ -51,6 +61,13 @@ defmodule ThamaniDawaWeb.ResultEntryLiveTest do
           organization_id: ctx.admin.organization_id,
           lab_test_id: ctx.lab_test.id
         })
+
+      collect_and_receive_specimen(
+        ctx.admin.organization_id,
+        result.lab_order_id,
+        result.id,
+        ctx.lab_tech.id
+      )
 
       {:ok, view, _html} =
         live(
@@ -79,6 +96,13 @@ defmodule ThamaniDawaWeb.ResultEntryLiveTest do
           lab_order_id: lab_order.id,
           lab_test_id: ctx.lab_test.id
         })
+
+      collect_and_receive_specimen(
+        ctx.admin.organization_id,
+        lab_order.id,
+        result.id,
+        ctx.lab_tech.id
+      )
 
       {:ok, view, _html} =
         live(
