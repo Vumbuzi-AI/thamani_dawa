@@ -67,7 +67,7 @@ defmodule ThamaniDawa.Accounts do
       on: us.user_id == u.id,
       where: us.organization_id == ^organization_id and us.site_id == ^site_id,
       order_by: [asc: u.name],
-      select: %{id: u.id, name: u.name, role: u.role}
+      select: %{id: u.id, name: u.name, roles: u.roles}
     )
     |> Repo.all()
   end
@@ -83,7 +83,7 @@ defmodule ThamaniDawa.Accounts do
     %User{}
     |> User.registration_changeset(attrs, require_legal_consent: true)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Ecto.Changeset.put_change(:role, :admin)
+    |> Ecto.Changeset.put_change(:roles, [:admin])
     |> Repo.insert()
   end
 
@@ -185,7 +185,10 @@ defmodule ThamaniDawa.Accounts do
     end
   end
 
-  defp authorize_account_status_change(%User{role: :admin, is_active: true}), do: :ok
+  defp authorize_account_status_change(%User{roles: roles, is_active: true}) do
+    if :admin in roles, do: :ok, else: {:error, :unauthorized}
+  end
+
   defp authorize_account_status_change(_user), do: {:error, :unauthorized}
 
   defp validate_account_status_change(%User{is_active: active?} = user, _acting_id, active?),
@@ -196,15 +199,19 @@ defmodule ThamaniDawa.Accounts do
 
   defp validate_account_status_change(_user, _acting_id, _active?), do: :ok
 
-  defp preserve_active_admin(organization_id, %User{role: :admin}, false) do
-    if last_active_admin?(organization_id), do: {:error, :last_active_admin}, else: :ok
+  defp preserve_active_admin(organization_id, %User{roles: roles}, false) do
+    if :admin in roles and last_active_admin?(organization_id),
+      do: {:error, :last_active_admin},
+      else: :ok
   end
 
   defp preserve_active_admin(_organization_id, _user, _active?), do: :ok
 
   defp lock_active_admins(organization_id) do
     from(u in User,
-      where: u.organization_id == ^organization_id and u.role == :admin and u.is_active == true,
+      where:
+        u.organization_id == ^organization_id and u.is_active == true and
+          fragment("? @> ?", u.roles, ^["admin"]),
       lock: "FOR UPDATE"
     )
     |> Repo.all()
@@ -213,7 +220,9 @@ defmodule ThamaniDawa.Accounts do
   defp last_active_admin?(organization_id) do
     Repo.aggregate(
       from(u in User,
-        where: u.organization_id == ^organization_id and u.role == :admin and u.is_active == true
+        where:
+          u.organization_id == ^organization_id and u.is_active == true and
+            fragment("? @> ?", u.roles, ^["admin"])
       ),
       :count
     ) <= 1
@@ -266,13 +275,13 @@ defmodule ThamaniDawa.Accounts do
     end
   end
 
-  def list_sites_for_user(%User{role: :admin, organization_id: org_id}) do
-    Sites.list_sites(org_id)
-  end
-
-  def list_sites_for_user(%User{} = user) do
-    user = Repo.preload(user, :sites)
-    user.sites
+  def list_sites_for_user(%User{roles: roles, organization_id: org_id} = user) do
+    if :admin in roles do
+      Sites.list_sites(org_id)
+    else
+      user = Repo.preload(user, :sites)
+      user.sites
+    end
   end
 
   def list_sites_for_user(nil), do: []

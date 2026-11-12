@@ -125,3 +125,32 @@ Purpose: local development diagnostics and email preview.
 ## Not Present Yet
 
 The current router does not include separate reception, radiology, procurement, suppliers, payments, support-staff, or medical-camp portals. Some domain data such as suppliers and payments-adjacent fields exists, but there are no dedicated routes for those portals.
+
+## Future Consideration: Add An Operating Model After Onboarding
+
+Organizations currently choose their operating models during onboarding. Consider allowing an
+administrator to add another model later—for example, enabling laboratory operations after a
+pharmacy opens a laboratory division.
+
+This should not be implemented as an ordinary editable select in organization settings. Adding an
+operating model enables a new operational workspace and may require coordinated setup across:
+
+- sites and the activities each location offers;
+- licences and other regulatory information;
+- staff roles and permissions;
+- model-specific catalogues, inventory, and receiving workflows;
+- billing or subscription entitlements; and
+- navigation and portal access.
+
+The preferred future design is an **Add operating model** action followed by a guided enablement
+flow. At minimum, the flow should select participating sites, collect required regulatory details,
+assign appropriate staff, show incomplete prerequisites, and enable the new workspace only when
+its minimum setup is complete.
+
+For an initial version, models may be added but should not be removable from the general settings
+screen. Removing or deactivating a model is materially riskier because historical transactions,
+stock movements, reports, staff assignments, and regulatory records must remain available. Treat
+deactivation as a separate, guarded workflow or a support-assisted operation.
+
+This is intentionally deferred; the current organization settings page should continue to display
+operating models as read-only information.

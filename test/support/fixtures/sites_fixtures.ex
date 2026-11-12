@@ -3,14 +3,16 @@ defmodule ThamaniDawa.SitesFixtures do
   Test helpers for creating entities via `ThamaniDawa.Sites`.
   """
 
+  alias ThamaniDawa.Gln
   alias ThamaniDawa.OrganizationsFixtures
   alias ThamaniDawa.Sites
 
   def valid_site_attributes(attrs \\ %{}) do
     Enum.into(attrs, %{
       name: "Main Site #{System.unique_integer()}",
-      site_type: :pharmacy,
-      address: "#{System.unique_integer([:positive])} Test Street"
+      activities: [:pharmacy],
+      address: "#{System.unique_integer([:positive])} Test Street",
+      gln: Gln.generate!()
     })
   end
 

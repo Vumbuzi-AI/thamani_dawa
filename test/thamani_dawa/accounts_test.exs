@@ -19,7 +19,7 @@ defmodule ThamaniDawa.AccountsTest do
 
       assert user.organization_id == organization.id
       assert user.email == email
-      assert user.role == :admin
+      assert user.roles == [:admin]
       assert is_binary(user.hashed_password)
     end
 
@@ -60,12 +60,12 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, admin.id, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist
+                 roles: [:pharmacist]
                })
 
       assert user.organization_id == organization.id
       assert user.invited_by_id == admin.id
-      assert user.role == :pharmacist
+      assert user.roles == [:pharmacist]
       assert is_nil(user.hashed_password)
       assert is_binary(encoded_token)
     end
@@ -78,7 +78,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site.id]
                })
 
@@ -96,7 +96,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_a.id, site_b.id]
                })
 
@@ -113,7 +113,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [other_org_site.id]
                })
 
@@ -127,7 +127,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [999_999]
                })
 
@@ -143,7 +143,7 @@ defmodule ThamaniDawa.AccountsTest do
                  email: valid_user_email()
                })
 
-      assert %{role: ["can't be blank"]} = errors_on(changeset)
+      assert %{roles: ["Choose at least one role"]} = errors_on(changeset)
     end
 
     test "rejects a role outside the known roles" do
@@ -153,24 +153,24 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: "owner"
+                 roles: ["owner"]
                })
 
-      assert %{role: ["is invalid"]} = errors_on(changeset)
+      assert %{roles: ["is invalid"]} = errors_on(changeset)
     end
 
-    for role <- [:admin, :pharmacist, :lab_technician, :pharma_lab] do
-      test "accepts the #{role} role" do
+    for roles <- [[:admin], [:pharmacist], [:lab_technician], [:pharmacist, :lab_technician]] do
+      test "accepts the #{inspect(roles)} roles" do
         organization = organization_fixture()
 
         assert {:ok, user, _encoded_token} =
                  Accounts.invite_user(organization.id, nil, %{
                    name: "New Hire",
                    email: valid_user_email(),
-                   role: unquote(role)
+                   roles: unquote(roles)
                  })
 
-        assert user.role == unquote(role)
+        assert user.roles == unquote(roles)
       end
     end
 
@@ -181,7 +181,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist
+                 roles: [:pharmacist]
                })
 
       assert {:ok, hashed_token} = UserToken.verify_email_token_query(encoded_token, "invite")
@@ -203,14 +203,14 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist
+                 roles: [:pharmacist]
                })
 
       assert user.current_site_id == nil
 
       assert {:ok, updated} =
                Accounts.update_user(organization.id, user.id, %{
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site.id]
                })
 
@@ -226,13 +226,13 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_a.id, site_b.id]
                })
 
       assert {:ok, updated} =
                Accounts.update_user(organization.id, user.id, %{
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_a.id, site_b.id]
                })
 
@@ -248,7 +248,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_a.id]
                })
 
@@ -256,7 +256,7 @@ defmodule ThamaniDawa.AccountsTest do
 
       assert {:ok, updated} =
                Accounts.update_user(organization.id, user.id, %{
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_b.id]
                })
 
@@ -273,7 +273,7 @@ defmodule ThamaniDawa.AccountsTest do
         Accounts.invite_user(organization.id, admin.id, %{
           name: "New Hire",
           email: valid_user_email(),
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       assert {:ok, email} =
@@ -299,7 +299,7 @@ defmodule ThamaniDawa.AccountsTest do
         Accounts.invite_user(organization.id, nil, %{
           name: "New Hire",
           email: valid_user_email(),
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       assert %User{id: id} = Accounts.get_user_by_invite_token(encoded_token)
@@ -321,7 +321,7 @@ defmodule ThamaniDawa.AccountsTest do
         Accounts.invite_user(organization.id, nil, %{
           name: "New Hire",
           email: valid_user_email(),
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       assert {:ok, _accepted} =
@@ -340,7 +340,7 @@ defmodule ThamaniDawa.AccountsTest do
         Accounts.invite_user(organization.id, nil, %{
           name: "New Hire",
           email: valid_user_email(),
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       invited

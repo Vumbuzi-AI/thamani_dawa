@@ -13,7 +13,7 @@ defmodule ThamaniDawa.SitesTest do
       assert {:ok, %Site{} = site} = Sites.create_default_site(organization.id, organization.name)
       assert site.organization_id == organization.id
       assert site.name == organization.name
-      assert site.site_type == :pharmacy
+      assert site.activities == [:pharmacy]
       assert site.is_active
     end
 
@@ -26,37 +26,15 @@ defmodule ThamaniDawa.SitesTest do
   end
 
   describe "create_site/2" do
-    test "requires a name, site_type, and address" do
+    test "requires a name, activities, and address" do
       organization = organization_fixture()
       assert {:error, changeset} = Sites.create_site(organization.id, %{})
 
       assert %{
                name: ["can't be blank"],
-               site_type: ["can't be blank"],
+               activities: ["can't be blank"],
                address: ["can't be blank"]
              } = errors_on(changeset)
-    end
-
-    test "auto-generates a unique gln" do
-      organization = organization_fixture()
-
-      assert {:ok, site_a} =
-               Sites.create_site(organization.id, %{
-                 name: "HQ",
-                 site_type: :warehouse,
-                 address: "Industrial Area"
-               })
-
-      assert {:ok, site_b} =
-               Sites.create_site(organization.id, %{
-                 name: "Branch",
-                 site_type: :pharmacy,
-                 address: "Kimathi Street"
-               })
-
-      assert site_a.gln
-      assert site_b.gln
-      assert site_a.gln != site_b.gln
     end
 
     test "trims whitespace from a site's name on create" do
@@ -65,7 +43,7 @@ defmodule ThamaniDawa.SitesTest do
       assert {:ok, site} =
                Sites.create_site(organization.id, %{
                  name: "  Main Branch  ",
-                 site_type: :pharmacy,
+                 activities: [:pharmacy],
                  address: "Kimathi Street"
                })
 
@@ -80,7 +58,8 @@ defmodule ThamaniDawa.SitesTest do
       {:ok, site} =
         Sites.create_site(organization.id, %{
           name: "HQ",
-          site_type: :warehouse,
+          activities: [:distribution],
+          gln: "6160001000001",
           address: "Industrial Area"
         })
 
@@ -95,7 +74,8 @@ defmodule ThamaniDawa.SitesTest do
       {:ok, site} =
         Sites.create_site(organization_a.id, %{
           name: "HQ",
-          site_type: :warehouse,
+          activities: [:distribution],
+          gln: "6160001000002",
           address: "Industrial Area"
         })
 
@@ -123,55 +103,69 @@ defmodule ThamaniDawa.SitesTest do
 
   describe "capabilities" do
     test "pharmacy?/1 identifies sites supporting pharmacy work" do
-      assert Site.pharmacy?(%Site{site_type: :pharmacy})
-      assert Site.pharmacy?(%Site{site_type: :pharmacy_lab})
-      refute Site.pharmacy?(%Site{site_type: :lab})
-      refute Site.pharmacy?(%Site{site_type: :warehouse})
+      assert Site.pharmacy?(%Site{activities: [:pharmacy]})
+      assert Site.pharmacy?(%Site{activities: [:pharmacy, :laboratory]})
+      refute Site.pharmacy?(%Site{activities: [:laboratory]})
+      refute Site.pharmacy?(%Site{activities: [:distribution]})
       refute Site.pharmacy?(nil)
     end
 
     test "lab?/1 identifies sites supporting lab work" do
-      assert Site.lab?(%Site{site_type: :lab})
-      assert Site.lab?(%Site{site_type: :pharmacy_lab})
-      refute Site.lab?(%Site{site_type: :pharmacy})
-      refute Site.lab?(%Site{site_type: :warehouse})
+      assert Site.lab?(%Site{activities: [:laboratory]})
+      assert Site.lab?(%Site{activities: [:pharmacy, :laboratory]})
+      refute Site.lab?(%Site{activities: [:pharmacy]})
+      refute Site.lab?(%Site{activities: [:distribution]})
       refute Site.lab?(nil)
     end
 
-    test "create_site/2 validates combined pharmacy_lab capabilities" do
+    test "validates combined pharmacy and laboratory activities" do
       organization = organization_fixture()
 
-      # valid capabilities
+      # valid activities
       assert {:ok, _site} =
                Sites.create_site(organization.id, %{
                  name: "Joint Branch",
-                 site_type: :pharmacy_lab,
+                 activities: [:pharmacy, :laboratory],
                  address: "Valid Address"
                })
 
       assert {:ok, _site} =
                Sites.create_site(organization.id, %{
                  name: "Pharmacy Branch",
-                 site_type: :pharmacy,
+                 activities: [:pharmacy],
                  address: "Valid Address"
                })
 
       assert {:ok, _site} =
                Sites.create_site(organization.id, %{
                  name: "Lab Branch",
-                 site_type: :lab,
+                 activities: [:laboratory],
                  address: "Valid Address"
                })
 
-      # invalid capability
+      # invalid activity
       assert {:error, changeset} =
                Sites.create_site(organization.id, %{
                  name: "Unknown Branch",
-                 site_type: :unknown_type,
+                 activities: [:unknown_activity],
                  address: "Valid Address"
                })
 
-      assert %{site_type: ["is invalid"]} = errors_on(changeset)
+      assert %{activities: ["is invalid"]} = errors_on(changeset)
+    end
+
+    test "rejects a malformed site GLN" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Sites.create_site(organization.id, %{
+                 name: "HQ",
+                 activities: [:pharmacy],
+                 gln: "not-a-gln",
+                 address: "Valid Address"
+               })
+
+      assert %{gln: ["must be 13 digits"]} = errors_on(changeset)
     end
   end
 end

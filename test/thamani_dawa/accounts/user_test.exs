@@ -25,7 +25,7 @@ defmodule ThamaniDawa.Accounts.UserTest do
         )
 
       refute changeset.valid?
-      assert "Must be at least 12 characters" in errors_on(changeset).password
+      assert "Must be at least 8 characters" in errors_on(changeset).password
     end
   end
 

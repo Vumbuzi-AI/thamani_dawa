@@ -22,7 +22,14 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :kyc_details, :map, default: %{}
     field :next_requisition_number, :integer, default: 0
     field :gs1_company_prefix, :string
+
+    field :gs1_prefix_verification_status, Ecto.Enum,
+      values: [:pending, :verified, :failed],
+      default: :pending
+
     field :gln, :string
+    field :gln_verified_at, :utc_datetime
+    field :gln_verification_source, :string
     field :next_sscc_serial, :integer, default: 0
     field :next_goods_receipt_number, :integer, default: 0
     field :serialisation_type, :string
@@ -52,20 +59,35 @@ defmodule ThamaniDawa.Organizations.Organization do
   @doc false
   def changeset(organization, attrs) do
     organization
-    |> cast(attrs, [:name, :slug, :license_number, :operating_models])
+    |> cast(attrs, [:name, :slug, :license_number, :operating_models, :gs1_company_prefix])
     |> trim_change(:name)
     |> trim_change(:license_number)
+    |> trim_change(:gs1_company_prefix)
     |> validate_required([:name], message: "Please enter your organization name")
     |> validate_required([:license_number], message: "Please enter your license number")
     |> validate_length(:operating_models,
       min: 1,
       message: "Select at least one operating model"
     )
+    |> validate_format(:gs1_company_prefix, ~r/^\d{6,10}$/, message: "must be 6 to 10 digits")
     |> maybe_generate_slug()
     |> put_name_key()
     |> unique_constraint(:name, message: "An organization with this name already exists")
     |> unique_constraint(:name, name: @slug_index, message: @similar_name_message)
     |> unique_constraint(:name, name: @name_key_index, message: @similar_name_message)
+  end
+
+  @doc """
+  Changeset for onboarding: same rules as `changeset/2`, plus a GS1 company
+  prefix, always required. Dispensing (pharmacy) and distribution
+  (distributor) events build org-prefixed identifiers directly, but even a
+  laboratory-only organization needs it: goods receiving (`Epcis.record_goods_receipt/1`)
+  requires the org's GS1 prefix regardless of operating model.
+  """
+  def signup_changeset(organization, attrs) do
+    organization
+    |> changeset(attrs)
+    |> validate_gs1_company_prefix()
   end
 
   @doc "The operating models an organization may enable during onboarding."
@@ -77,15 +99,84 @@ defmodule ThamaniDawa.Organizations.Organization do
 
   def distributor?(_organization), do: false
 
-  @doc "Changeset for the distributor's GS1 configuration (company prefix)."
+  @doc """
+  Whether a GS1 company prefix must be present. Always true — every
+  operating model eventually posts a goods receipt, which requires it
+  regardless of operating model.
+  """
+  def gs1_prefix_required?(_organization), do: true
+
+  @doc "Changeset for the organization's GS1 identifiers (company prefix and GLN)."
   def gs1_settings_changeset(organization, attrs) do
     organization
-    |> cast(attrs, [:gs1_company_prefix])
+    |> cast(attrs, [:gs1_company_prefix, :gln])
+    |> trim_change(:gs1_company_prefix)
+    |> trim_change(:gln)
     |> validate_format(:gs1_company_prefix, ~r/^\d{6,10}$/, message: "must be 6 to 10 digits")
+    |> validate_format(:gln, ~r/^\d{13}$/, message: "must be a 13-digit GLN")
+    |> validate_gln_check_digit()
   end
 
+  @doc "Changeset for the organization details editable from the settings page (licence, VAT status)."
+  def details_changeset(organization, attrs) do
+    organization
+    |> cast(attrs, [:license_number, :vat_registered])
+    |> trim_change(:license_number)
+    |> validate_required([:license_number], message: "Please enter your license number")
+  end
+
+  @doc """
+  Changeset for the organization settings editable from the settings page.
+  The GS1 company prefix is deliberately excluded — it's baked into every
+  GTIN/SSCC already issued under it, so changing it after the fact would
+  desync those identifiers from the org record. It's set once at onboarding.
+  """
+  def settings_changeset(organization, attrs) do
+    organization
+    |> cast(attrs, [:license_number, :vat_registered, :gln])
+    |> trim_change(:license_number)
+    |> trim_change(:gln)
+    |> validate_required([:license_number], message: "Please enter your license number")
+    |> validate_format(:gln, ~r/^\d{13}$/, message: "must be a 13-digit GLN")
+    |> validate_gln_check_digit()
+  end
+
+  defp validate_gln_check_digit(changeset) do
+    case get_change(changeset, :gln) do
+      gln when is_binary(gln) ->
+        if Regex.match?(~r/^\d{13}$/, gln) and not gln_check_digit_valid?(gln) do
+          add_error(changeset, :gln, "check digit does not match — double-check the number")
+        else
+          changeset
+        end
+
+      _not_changed ->
+        changeset
+    end
+  end
+
+  defp gln_check_digit_valid?(gln) do
+    {payload, check} = String.split_at(gln, -1)
+    Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(payload)) == check
+  end
+
+  defp validate_gs1_company_prefix(changeset) do
+    if prefix_blank?(get_field(changeset, :gs1_company_prefix)) do
+      add_error(changeset, :gs1_company_prefix, "Please enter your GS1 company prefix")
+    else
+      changeset
+    end
+  end
+
+  defp prefix_blank?(nil), do: true
+  defp prefix_blank?(""), do: true
+  defp prefix_blank?(_prefix), do: false
+
   defp trim_change(changeset, field) do
-    update_change(changeset, field, &String.trim/1)
+    update_change(changeset, field, fn
+      value when is_binary(value) -> String.trim(value)
+      value -> value
+    end)
   end
 
   defp maybe_generate_slug(changeset) do
