@@ -77,7 +77,13 @@ defmodule ThamaniDawa.Epcis do
   multi-unit or unserialized — stays in the class-level `quantityList`.
   Called inside the dispense transaction.
   """
-  def record_dispense(organization_id, site_id, item_id, allocations)
+  def record_dispense(
+        organization_id,
+        site_id,
+        item_id,
+        allocations,
+        source_type \\ "prescription_item"
+      )
       when is_integer(organization_id) and is_integer(item_id) and is_list(allocations) do
     case site_id && Repo.get(Site, site_id) do
       %Site{} = site ->
@@ -85,7 +91,7 @@ defmodule ThamaniDawa.Epcis do
           organization_id,
           site,
           "dispensing",
-          &dispense_event(organization_id, item_id, allocations, &1, &2)
+          &dispense_event(organization_id, item_id, allocations, source_type, &1, &2)
         )
 
       _site ->
@@ -93,7 +99,7 @@ defmodule ThamaniDawa.Epcis do
     end
   end
 
-  defp dispense_event(organization_id, item_id, allocations, site_gln, prefix) do
+  defp dispense_event(organization_id, item_id, allocations, source_type, site_gln, prefix) do
     {serialized, class_level} =
       Enum.split_with(allocations, fn allocation ->
         allocation.quantity == 1 and allocation.batch.serial not in [nil, ""]
@@ -127,7 +133,7 @@ defmodule ThamaniDawa.Epcis do
           participant_tier: @facility,
           payload: payload,
           occurred_at: args.event_time,
-          source_type: "prescription_item",
+          source_type: source_type,
           source_id: item_id
         })
 
@@ -135,7 +141,7 @@ defmodule ThamaniDawa.Epcis do
         block_event(
           organization_id,
           "dispensing",
-          "prescription_item",
+          source_type,
           item_id,
           reason,
           @facility

@@ -1,29 +1,39 @@
 defmodule ThamaniDawaWeb.DistributorEpcisLive do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Epcis.Client
   alias ThamaniDawa.Epcis.Outbox
   alias ThamaniDawa.Epcis.OutboxEvent
 
   def mount(_params, _session, socket) do
     epcis_portal =
-      if socket.assigns.current_scope.user.role == :admin, do: :organization, else: :distributor
+      if Scope.admin?(socket.assigns.current_scope), do: :organization, else: :distributor
 
-    epcis_path = if epcis_portal == :organization, do: ~p"/org/epcis", else: ~p"/distributor/epcis"
-
-    socket = reload(socket)
+    epcis_path =
+      if epcis_portal == :organization, do: ~p"/org/epcis", else: ~p"/distributor/epcis"
 
     {:ok,
      socket
      |> assign(:epcis_portal, epcis_portal)
      |> assign(:epcis_path, epcis_path)
      |> assign(:page_title, "PPB reporting")
-     |> assign(:inspecting_event, nil)}
+     |> assign(:inspecting_event, nil)
+     |> assign(:selected_status, "all")
+     |> stream_configure(:events, dom_id: fn event -> "epcis-events-#{event.id}" end)
+     |> reload()}
   end
 
   def handle_event("refresh", _params, socket) do
     {:noreply, reload(socket)}
   end
+
+  def handle_event("filter_status", %{"status" => status}, socket)
+      when status in ["all", "pending", "warning", "blocked", "rejected", "dead", "accepted"] do
+    {:noreply, socket |> assign(:selected_status, status) |> reload()}
+  end
+
+  def handle_event("filter_status", _params, socket), do: {:noreply, socket}
 
   def handle_event("inspect_payload", %{"id" => id}, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -57,7 +67,11 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
 
   defp reload(socket) do
     organization_id = socket.assigns.current_scope.organization_id
-    events = Outbox.list_events(organization_id, limit: 200)
+
+    events =
+      organization_id
+      |> Outbox.list_events(limit: 200)
+      |> filter_events(socket.assigns.selected_status)
 
     socket
     |> assign(:submission_enabled?, Client.enabled?())
@@ -81,6 +95,11 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
       counts
     )
   end
+
+  defp filter_events(events, "all"), do: events
+  defp filter_events(events, status), do: Enum.filter(events, &(&1.status == status))
+
+  defp total_events(counts), do: counts |> Map.values() |> Enum.sum()
 
   defp status_label("accepted"), do: "Accepted"
   defp status_label("warning"), do: "Warning"
@@ -127,7 +146,11 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.distributor_shell flash={@flash} current_scope={@current_scope} current_path={@epcis_path}>
+    <Layouts.distributor_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@epcis_path}
+    >
       {epcis_body(assigns)}
     </Layouts.distributor_shell>
     """
@@ -175,41 +198,58 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
         </p>
       </div>
 
-      <div class="mt-4 flex flex-wrap gap-2">
-        <.status_chip
-          id="epcis-count-pending"
+      <div
+        id="epcis-status-filters"
+        class="mt-4 flex flex-wrap gap-2"
+        aria-label="Filter events by status"
+      >
+        <.status_filter
+          status="all"
+          label="All"
+          count={total_events(@status_counts)}
+          selected_status={@selected_status}
+          class="bg-white text-thamani-forest"
+        />
+        <.status_filter
+          status="pending"
           label="Pending"
           count={@status_counts["pending"]}
+          selected_status={@selected_status}
           class="bg-slate-100 text-slate-600"
         />
-        <.status_chip
-          id="epcis-count-warning"
+        <.status_filter
+          status="warning"
           label="Warning"
           count={@status_counts["warning"]}
+          selected_status={@selected_status}
           class="bg-amber-100 text-amber-800"
         />
-        <.status_chip
-          id="epcis-count-blocked"
+        <.status_filter
+          status="blocked"
           label="Blocked"
           count={@status_counts["blocked"]}
+          selected_status={@selected_status}
           class="bg-amber-100 text-amber-800"
         />
-        <.status_chip
-          id="epcis-count-rejected"
+        <.status_filter
+          status="rejected"
           label="Rejected"
           count={@status_counts["rejected"]}
+          selected_status={@selected_status}
           class="bg-red-100 text-red-800"
         />
-        <.status_chip
-          id="epcis-count-dead"
+        <.status_filter
+          status="dead"
           label="Dead"
           count={@status_counts["dead"]}
+          selected_status={@selected_status}
           class="bg-red-100 text-red-800"
         />
-        <.status_chip
-          id="epcis-count-accepted"
+        <.status_filter
+          status="accepted"
           label="Accepted"
           count={@status_counts["accepted"]}
+          selected_status={@selected_status}
           class="bg-emerald-50 text-emerald-700"
         />
       </div>
@@ -218,7 +258,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
         <.table
           id="epcis-events"
           rows={@streams.events}
-          row_id={fn {_dom_id, event} -> "epcis-events-#{event.id}" end}
+          row_id={fn {dom_id, _event} -> dom_id end}
         >
           <:col :let={{_id, event}} label="Event">
             <span class="font-medium capitalize text-thamani-forest">{event.event_type}</span>
@@ -299,20 +339,29 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
     """
   end
 
-  attr :id, :string, required: true
+  attr :status, :string, required: true
   attr :label, :string, required: true
   attr :count, :integer, required: true
+  attr :selected_status, :string, required: true
   attr :class, :string, required: true
 
-  defp status_chip(assigns) do
+  defp status_filter(assigns) do
     ~H"""
-    <span
-      id={@id}
-      class={"inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold #{@class}"}
+    <button
+      id={"epcis-filter-#{@status}"}
+      type="button"
+      phx-click="filter_status"
+      phx-value-status={@status}
+      aria-pressed={to_string(@selected_status == @status)}
+      class={[
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
+        @class,
+        if(@selected_status == @status, do: "ring-thamani-forest shadow-sm", else: "ring-transparent")
+      ]}
     >
       {@count}
       <span class="font-normal opacity-80">{@label}</span>
-    </span>
+    </button>
     """
   end
 end

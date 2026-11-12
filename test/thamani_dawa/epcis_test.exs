@@ -23,7 +23,10 @@ defmodule ThamaniDawa.EpcisTest do
       user = AccountsFixtures.user_fixture(%{organization_id: organization.id})
 
       warehouse =
-        SitesFixtures.site_fixture(%{organization_id: organization.id, site_type: :warehouse})
+        SitesFixtures.site_fixture(%{
+          organization_id: organization.id,
+          activities: [:distribution]
+        })
 
       supplier = SuppliersFixtures.supplier_fixture(%{organization_id: organization.id})
       product = ProductsFixtures.product_fixture(%{organization_id: organization.id})
@@ -108,7 +111,10 @@ defmodule ThamaniDawa.EpcisTest do
       user = AccountsFixtures.user_fixture(%{organization_id: organization.id})
 
       warehouse =
-        SitesFixtures.site_fixture(%{organization_id: organization.id, site_type: :warehouse})
+        SitesFixtures.site_fixture(%{
+          organization_id: organization.id,
+          activities: [:distribution]
+        })
 
       supplier = SuppliersFixtures.supplier_fixture(%{organization_id: organization.id})
       product = ProductsFixtures.product_fixture(%{organization_id: organization.id})
@@ -196,7 +202,7 @@ defmodule ThamaniDawa.EpcisTest do
       user = AccountsFixtures.user_fixture(%{organization_id: organization.id})
 
       pharmacy =
-        SitesFixtures.site_fixture(%{organization_id: organization.id, site_type: :pharmacy})
+        SitesFixtures.site_fixture(%{organization_id: organization.id, activities: [:pharmacy]})
 
       supplier = SuppliersFixtures.supplier_fixture(%{organization_id: organization.id})
       product = ProductsFixtures.product_fixture(%{organization_id: organization.id})
@@ -241,7 +247,10 @@ defmodule ThamaniDawa.EpcisTest do
 
     test "a distributor goods receipt does not double-report as facility receiving", ctx do
       warehouse =
-        SitesFixtures.site_fixture(%{organization_id: ctx.organization.id, site_type: :warehouse})
+        SitesFixtures.site_fixture(%{
+          organization_id: ctx.organization.id,
+          activities: [:distribution]
+        })
 
       assert {:ok, _receipt} =
                GoodsReceipts.receive_delivery(
@@ -272,7 +281,10 @@ defmodule ThamaniDawa.EpcisTest do
 
     test "receipts at non-pharmacy sites are not reported", ctx do
       warehouse =
-        SitesFixtures.site_fixture(%{organization_id: ctx.organization.id, site_type: :warehouse})
+        SitesFixtures.site_fixture(%{
+          organization_id: ctx.organization.id,
+          activities: [:distribution]
+        })
 
       {:ok, batch} =
         pending_batch(%{ctx | pharmacy: warehouse}, "LOT-LAB", 6)
@@ -472,7 +484,10 @@ defmodule ThamaniDawa.EpcisTest do
       user = AccountsFixtures.user_fixture(%{organization_id: organization.id})
 
       warehouse =
-        SitesFixtures.site_fixture(%{organization_id: organization.id, site_type: :warehouse})
+        SitesFixtures.site_fixture(%{
+          organization_id: organization.id,
+          activities: [:distribution]
+        })
 
       supplier = SuppliersFixtures.supplier_fixture(%{organization_id: organization.id})
       product = ProductsFixtures.product_fixture(%{organization_id: organization.id})
@@ -560,7 +575,7 @@ defmodule ThamaniDawa.EpcisTest do
                 warehouse:
                   SitesFixtures.site_fixture(%{
                     organization_id: ctx.organization.id,
-                    site_type: :warehouse
+                    activities: [:distribution]
                   }),
                 supplier:
                   SuppliersFixtures.supplier_fixture(%{organization_id: ctx.organization.id}),

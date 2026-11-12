@@ -26,6 +26,28 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
     assert has_element?(view, "#epcis-events-#{pending.id}", "Pending")
   end
 
+  test "filters events by status and can return to all events", %{
+    conn: conn,
+    distributor: distributor
+  } do
+    accepted = insert_event(distributor.organization_id, "accepted")
+    pending = insert_event(distributor.organization_id, "pending")
+
+    {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
+
+    view |> element("#epcis-filter-pending") |> render_click()
+
+    assert has_element?(view, "#epcis-filter-pending[aria-pressed='true']")
+    assert has_element?(view, "#epcis-events-#{pending.id}", "Pending")
+    refute has_element?(view, "#epcis-events-#{accepted.id}")
+
+    view |> element("#epcis-filter-all") |> render_click()
+
+    assert has_element?(view, "#epcis-filter-all[aria-pressed='true']")
+    assert has_element?(view, "#epcis-events-#{accepted.id}", "Accepted")
+    assert has_element?(view, "#epcis-events-#{pending.id}", "Pending")
+  end
+
   test "warns when hub submission is disabled", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
     assert has_element?(view, "#epcis-submission-disabled")
