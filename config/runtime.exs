@@ -58,7 +58,13 @@ if daraja_enabled do
     retry: false
 end
 
-if company_prefix = System.get_env("GS1_COMPANY_PREFIX") do
+config :thamani_dawa, ThamaniDawa.Epcis.Client,
+  base_url: System.get_env("PPB_TNT_BASE_URL"),
+  capture_path: System.get_env("PPB_TNT_CAPTURE_PATH", "/epcis/v2/capture"),
+  api_key: System.get_env("PPB_TNT_API_KEY"),
+  enabled: System.get_env("PPB_TNT_ENABLED", "false") == "true"
+
+if (company_prefix = System.get_env("GS1_COMPANY_PREFIX")) not in [nil, ""] do
   config :thamani_dawa, ThamaniDawa.Gln, company_prefix: company_prefix
 end
 

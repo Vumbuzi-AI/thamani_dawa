@@ -85,6 +85,7 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/receiving", DistributorReceivingLive, :index
       live "/org/receiving/new", DistributorReceivingLive, :new
       live "/org/receiving/:id", DistributorGoodsReceiptLive, :show
+      live "/org/epcis", DistributorEpcisLive, :index
     end
 
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
@@ -190,6 +191,7 @@ defmodule ThamaniDawaWeb.Router do
       live "/distributor/warehouses", DistributorWarehouseLive.Index, :index
       live "/distributor/warehouses/new", DistributorWarehouseLive.Index, :new
       live "/distributor/settings", DistributorSettingsLive, :index
+      live "/distributor/epcis", DistributorEpcisLive, :index
     end
   end
 

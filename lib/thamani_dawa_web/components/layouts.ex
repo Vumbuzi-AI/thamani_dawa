@@ -261,7 +261,8 @@ defmodule ThamaniDawaWeb.Layouts do
           {"Team", "hero-user-group", ~p"/org/team"},
           {"Suppliers", "hero-truck", ~p"/org/suppliers"},
           {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"},
-          {"Transactions", "hero-banknotes", ~p"/org/earnings"}
+          {"Transactions", "hero-banknotes", ~p"/org/earnings"},
+          {"PPB reporting", "hero-globe-alt", ~p"/org/epcis"}
         ]
         |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
       }
@@ -305,6 +306,7 @@ defmodule ThamaniDawaWeb.Layouts do
         {"Warehouses", "hero-building-office-2", ~p"/distributor/warehouses"},
         {"Customers", "hero-building-storefront", ~p"/distributor/customers"},
         {"Billing", "hero-credit-card", ~p"/distributor/billing"},
+        {"PPB reporting", "hero-globe-alt", ~p"/distributor/epcis"},
         {"Settings", "hero-cog-6-tooth", ~p"/distributor/settings"}
       ]}
     >

@@ -7,6 +7,7 @@ defmodule ThamaniDawa.Prescriptions do
 
   import Ecto.Query, warn: false
   alias ThamaniDawa.Batches
+  alias ThamaniDawa.Epcis
   alias ThamaniDawa.PatientVisits
   alias ThamaniDawa.PatientVisits.PatientVisit
   alias ThamaniDawa.Payments
@@ -603,6 +604,7 @@ defmodule ThamaniDawa.Prescriptions do
            batches = Batches.fefo_batches(organization_id, site_id, item.product_id),
            {:ok, allocations} <- consume_quantity_across_batches(batches, quantity),
            :ok <- record_batch_dispenses(organization_id, item, pharmacist_id, allocations),
+           Epcis.record_dispense(organization_id, site_id, item.id, allocations),
            {:ok, updated_item} <- bump_quantity_dispensed(item, quantity),
            {:ok, _prescription} <- recompute_status(prescription) do
         updated_item
@@ -672,6 +674,9 @@ defmodule ThamaniDawa.Prescriptions do
            record_batch_dispenses(organization_id, item, pharmacist_id, [
              %{batch: batch, quantity: quantity}
            ]),
+         Epcis.record_dispense(organization_id, site_id, item.id, [
+           %{batch: batch, quantity: quantity}
+         ]),
          {:ok, updated_item} <- bump_quantity_dispensed(item, quantity),
          {:ok, updated_item} <- maybe_mark_verified(updated_item),
          {:ok, _prescription} <- recompute_status(prescription) do

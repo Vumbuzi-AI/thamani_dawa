@@ -22,6 +22,7 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :kyc_details, :map, default: %{}
     field :next_requisition_number, :integer, default: 0
     field :gs1_company_prefix, :string
+    field :gln, :string
     field :next_sscc_serial, :integer, default: 0
     field :next_goods_receipt_number, :integer, default: 0
     field :serialisation_type, :string

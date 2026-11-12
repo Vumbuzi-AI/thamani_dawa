@@ -1081,6 +1081,7 @@ defmodule ThamaniDawa.Distributor do
           |> Repo.update!()
 
         log_event!(shipment, "approved", user: user)
+        ThamaniDawa.Epcis.record_shipment_approval(shipment)
         shipment
       end)
 

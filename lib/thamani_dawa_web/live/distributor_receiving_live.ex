@@ -133,7 +133,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   end
 
   def handle_event("add_to_delivery", %{"batch" => attrs}, socket) do
-    {:noreply, add_delivery_item(attrs, socket)}
+    {:noreply, add_delivery_item(normalize_sscc(attrs), socket)}
   end
 
   def handle_event("remove_delivery_item", %{"id" => id}, socket) do
@@ -311,6 +311,25 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
+  defp normalize_sscc(attrs) do
+    case Map.get(attrs, "sscc") do
+      nil -> attrs
+      raw -> Map.put(attrs, "sscc", extract_sscc(raw))
+    end
+  end
+
+  # Accepts either a bare 18-digit SSCC or a full GS1 case-label scan
+  # (e.g. `00<sscc>` or a DataMatrix payload); anything else is handed to the
+  # batch changeset as-is so its validation produces the visible error.
+  defp extract_sscc(raw) do
+    trimmed = String.trim(raw)
+
+    case ThamaniDawa.GS1Decoder.parse(trimmed) do
+      {:ok, %{sscc: sscc}} when is_binary(sscc) -> sscc
+      _ -> trimmed
+    end
+  end
+
   defp scanned_gtin(raw_code) do
     raw_code = String.trim(raw_code)
 
@@ -320,10 +339,17 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
-  defp receipt_changeset(%{assigns: %{receiving_portal: :organization}}, attrs),
-    do: Batch.org_intake_changeset(%Batch{}, Map.delete(attrs, "site_id"))
+  defp receipt_changeset(%{assigns: %{receiving_portal: :organization}}, attrs) do
+    %Batch{}
+    |> Batch.org_intake_changeset(Map.delete(attrs, "site_id"))
+    |> Ecto.Changeset.validate_required([:supplier_id], message: "is required for a delivery receipt")
+  end
 
-  defp receipt_changeset(_socket, attrs), do: Batch.changeset(%Batch{}, attrs)
+  defp receipt_changeset(_socket, attrs) do
+    %Batch{}
+    |> Batch.changeset(attrs)
+    |> Ecto.Changeset.validate_required([:supplier_id], message: "is required for a delivery receipt")
+  end
 
   defp format_changeset_error(changeset) do
     changeset.errors
@@ -488,6 +514,12 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                       </td>
                       <td class="truncate px-3 py-2 font-mono text-xs" title={item.batch_no}>
                         {item.batch_no}
+                        <span
+                          :if={sscc = Map.get(item.attrs, "sscc")}
+                          class="block text-[10px] font-sans text-thamani-subtle"
+                        >
+                          SSCC {sscc}
+                        </span>
                       </td>
                       <td class="hidden px-3 py-2 text-thamani-pewter sm:table-cell">
                         {Map.get(item.attrs, "expiry_date")}
@@ -628,9 +660,31 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                   label="Supplier"
                   options={Enum.map(@suppliers, &{&1.name, &1.id})}
                   prompt="Select supplier"
+                  required
                 />
               </div>
               <.input field={@form[:batch_no]} label="Batch number" required />
+              <.input
+                field={@form[:sscc]}
+                label="Case label SSCC (optional)"
+                placeholder="Scan the pallet/case label, or type its 18-digit SSCC"
+                autocomplete="off"
+              />
+              <p class="-mt-2 mb-3 text-xs text-thamani-pewter">
+                Leave blank if the delivery has no case/pallet label — it will still be
+                received into stock, but won't be reportable to PPB until an SSCC is
+                captured.
+              </p>
+              <.input
+                field={@form[:serial]}
+                label="Serial (optional)"
+                placeholder="Unit serial from the item's own barcode, e.g. AI(21)"
+                autocomplete="off"
+              />
+              <p class="-mt-2 mb-3 text-xs text-thamani-pewter">
+                Only meaningful when quantity is 1 — a serial identifies one physical unit,
+                never a batch of several.
+              </p>
               <.input field={@form[:manufacturer]} label="Manufacturer (optional)" />
               <div class="grid gap-x-4 sm:grid-cols-2">
                 <.input field={@form[:expiry_date]} type="date" label="Expiry date" required />

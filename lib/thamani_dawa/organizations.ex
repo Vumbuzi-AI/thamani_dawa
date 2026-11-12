@@ -5,7 +5,7 @@ defmodule ThamaniDawa.Organizations do
   """
 
   import Ecto.Query, warn: false
-  alias ThamaniDawa.{Accounts, Sites}
+  alias ThamaniDawa.{Accounts, Gln, Sites}
   alias ThamaniDawa.Organizations.Organization
   alias ThamaniDawa.Repo
 
@@ -26,6 +26,7 @@ defmodule ThamaniDawa.Organizations do
   def create_organization(attrs) do
     %Organization{}
     |> Organization.changeset(attrs)
+    |> Ecto.Changeset.put_change(:gln, Gln.generate!())
     |> Repo.insert()
   end
 

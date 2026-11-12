@@ -918,4 +918,51 @@ defmodule ThamaniDawa.BatchesTest do
       assert Enum.map(page.entries, & &1.id) == [other_batch.id]
     end
   end
+
+  describe "inbound sscc capture" do
+    setup do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      base_attrs = %{
+        "product_id" => product.id,
+        "site_id" => site.id,
+        "gtin" => "00614141000012",
+        "batch_no" => "LOT-SSCC",
+        "expiry_date" => ~D[2027-01-01],
+        "quantity" => 10
+      }
+
+      %{organization: organization, base_attrs: base_attrs}
+    end
+
+    test "stores a scanned inbound SSCC on the batch", %{organization: org, base_attrs: attrs} do
+      assert {:ok, %Batch{sscc: sscc}} =
+               Batches.create_batch(org.id, Map.put(attrs, "sscc", "006141411234567890"))
+
+      assert sscc == "006141411234567890"
+    end
+
+    test "rejects an SSCC that is not 18 digits", %{organization: org, base_attrs: attrs} do
+      assert {:error, changeset} = Batches.create_batch(org.id, Map.put(attrs, "sscc", "12345"))
+
+      assert %{sscc: ["must be an 18-digit SSCC from the case label"]} = errors_on(changeset)
+    end
+
+    test "rejects an SSCC with a bad check digit", %{organization: org, base_attrs: attrs} do
+      assert {:error, changeset} =
+               Batches.create_batch(org.id, Map.put(attrs, "sscc", "006141411234567894"))
+
+      assert %{sscc: ["check digit does not match — rescan the case label"]} =
+               errors_on(changeset)
+    end
+
+    test "a blank SSCC is stored as nil instead of an empty string", %{
+      organization: org,
+      base_attrs: attrs
+    } do
+      assert {:ok, %Batch{sscc: nil}} = Batches.create_batch(org.id, Map.put(attrs, "sscc", "  "))
+    end
+  end
 end
