@@ -53,7 +53,7 @@ config :thamani_dawa, ThamaniDawa.GtinLookup, base_url: "https://grp.gs1.org"
 
 config :thamani_dawa, Oban,
   repo: ThamaniDawa.Repo,
-  queues: [epcis: 1],
+  queues: [epcis: 1, gs1: 1],
   plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 30}]
 
 config :thamani_dawa, ThamaniDawa.Epcis.Client,
