@@ -12,7 +12,10 @@ defmodule ThamaniDawa.ProductsFixtures do
       generic_name: "Paracetamol #{System.unique_integer()}",
       uom: "U2",
       gtin: BatchesFixtures.unique_gtin(),
-      price: 100
+      price: 100,
+      # Most tests use this helper to create stock for the quick-sale flow.
+      # Explicit POM/DDA tests still override either flag as needed.
+      is_otc: true
     })
   end
 

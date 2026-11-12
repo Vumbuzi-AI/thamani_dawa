@@ -84,6 +84,22 @@ defmodule ThamaniDawa.Prescriptions do
     Repo.get_by!(Prescription, id: id, organization_id: organization_id)
   end
 
+  @doc "Gets a prescription only when it belongs to the supplied site."
+  def get_prescription_for_site!(organization_id, id, site_id) when is_integer(site_id) do
+    Repo.one!(
+      from p in Prescription,
+        join: v in PatientVisit,
+        on: v.id == p.patient_visit_id,
+        where:
+          p.organization_id == ^organization_id and p.id == ^id and
+            v.organization_id == ^organization_id and v.site_id == ^site_id
+    )
+  end
+
+  def get_prescription_for_site!(organization_id, _id, nil) do
+    Repo.one!(from p in Prescription, where: p.organization_id == ^organization_id and false)
+  end
+
   @doc "Creates a prescription header under the given organization."
   def create_prescription(organization_id, attrs) when is_integer(organization_id) do
     %Prescription{}
@@ -234,7 +250,8 @@ defmodule ThamaniDawa.Prescriptions do
     items_attrs = attrs["items"] || []
 
     Repo.transaction(fn ->
-      with {:ok, visit} <- create_quick_sale_visit(organization_id, site_id, user_id, patient_id),
+      with :ok <- validate_quick_sale_products_are_otc(organization_id, items_attrs),
+           {:ok, visit} <- create_quick_sale_visit(organization_id, site_id, user_id, patient_id),
            header_attrs =
              attrs
              |> Map.take(["payment_type", "items"])
@@ -262,6 +279,44 @@ defmodule ThamaniDawa.Prescriptions do
       end
     end)
   end
+
+  defp validate_quick_sale_products_are_otc(organization_id, items_attrs) do
+    product_ids =
+      items_attrs
+      |> Enum.map(&Map.get(&1, "product_id"))
+      |> Enum.map(&parse_product_id/1)
+
+    if Enum.any?(product_ids, &is_nil/1) do
+      {:error, :prescription_required}
+    else
+      validate_quick_sale_product_ids(organization_id, product_ids)
+    end
+  end
+
+  defp validate_quick_sale_product_ids(organization_id, product_ids) do
+    products =
+      Repo.all(
+        from p in ThamaniDawa.Products.Product,
+          where: p.organization_id == ^organization_id and p.id in ^product_ids,
+          select: {p.id, p.is_otc, p.is_dangerous_drug}
+      )
+
+    case Enum.find(products, fn {_id, is_otc, dangerous?} -> not is_otc or dangerous? end) do
+      nil when length(products) == length(product_ids) -> :ok
+      _ -> {:error, :prescription_required}
+    end
+  end
+
+  defp parse_product_id(id) when is_integer(id), do: id
+
+  defp parse_product_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {parsed, ""} -> parsed
+      _ -> nil
+    end
+  end
+
+  defp parse_product_id(_id), do: nil
 
   defp create_quick_sale_visit(organization_id, site_id, user_id, patient_id)
        when patient_id in [nil, ""] do
@@ -539,7 +594,7 @@ defmodule ThamaniDawa.Prescriptions do
   def dispense_item(organization_id, prescription_item_id, pharmacist_id, quantity)
       when is_integer(organization_id) and is_integer(quantity) and quantity > 0 do
     Repo.transaction(fn ->
-      item = get_prescription_item!(organization_id, prescription_item_id)
+      item = get_prescription_item_for_update!(organization_id, prescription_item_id)
       prescription = get_prescription!(organization_id, item.prescription_id)
       site_id = prescription_site_id(prescription)
 
@@ -601,7 +656,7 @@ defmodule ThamaniDawa.Prescriptions do
          normalized_gtin,
          batch_no
        ) do
-    item = get_prescription_item!(organization_id, prescription_item_id)
+    item = get_prescription_item_for_update!(organization_id, prescription_item_id)
     prescription = get_prescription!(organization_id, item.prescription_id)
     site_id = prescription_site_id(prescription)
     product = ThamaniDawa.Products.get_product!(organization_id, item.product_id)
@@ -766,6 +821,14 @@ defmodule ThamaniDawa.Prescriptions do
 
   defp prescription_site_id(%Prescription{patient_visit_id: patient_visit_id}) do
     Repo.get!(PatientVisit, patient_visit_id).site_id
+  end
+
+  defp get_prescription_item_for_update!(organization_id, prescription_item_id) do
+    Repo.one!(
+      from i in PrescriptionItem,
+        where: i.organization_id == ^organization_id and i.id == ^prescription_item_id,
+        lock: "FOR UPDATE"
+    )
   end
 
   defp validate_site_id_present(nil), do: {:error, :invalid_prescription_site}

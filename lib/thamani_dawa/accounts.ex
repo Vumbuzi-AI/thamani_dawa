@@ -146,7 +146,7 @@ defmodule ThamaniDawa.Accounts do
       |> validate_sites_resolved(site_ids, sites)
       |> maybe_reset_current_site(user, sites)
 
-    Repo.update(changeset)
+    Repo.audited_update(changeset)
   end
 
   @doc """
@@ -178,7 +178,7 @@ defmodule ThamaniDawa.Accounts do
          :ok <- preserve_active_admin(organization_id, user, active?) do
       user
       |> Ecto.Changeset.change(is_active: active?)
-      |> Repo.update()
+      |> Repo.audited_update()
     else
       {:unchanged, user} -> {:ok, user}
       {:error, reason} -> {:error, reason}
@@ -294,7 +294,7 @@ defmodule ThamaniDawa.Accounts do
     if is_nil(site_id) or site_id in allowed_ids do
       user
       |> User.switch_site_changeset(%{current_site_id: site_id})
-      |> Repo.update()
+      |> Repo.audited_update()
     else
       {:error, :not_assigned}
     end
@@ -338,6 +338,59 @@ defmodule ThamaniDawa.Accounts do
       case user |> User.accept_invite_changeset(attrs) |> Repo.update() do
         {:ok, user} ->
           Repo.delete_all(UserToken.by_user_and_context_query(user, "invite"))
+          user
+
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  @doc "Sends a reset link when an active account exists; callers always receive :ok."
+  def deliver_password_reset_instructions(email, reset_url_fun)
+      when is_function(reset_url_fun, 1) do
+    case get_user_by_email(email) do
+      %User{is_active: true} = user ->
+        deliver_reset_password_token(user, reset_url_fun)
+
+      _ ->
+        {:ok, :ignored}
+    end
+  end
+
+  defp deliver_reset_password_token(user, reset_url_fun) do
+    Repo.transaction(fn ->
+      Repo.delete_all(UserToken.by_user_and_context_query(user, "reset_password"))
+      {encoded_token, token} = UserToken.build_email_token(user, "reset_password")
+      Repo.insert!(token)
+      deliver_reset_password_email(user, reset_url_fun.(encoded_token))
+    end)
+  end
+
+  defp deliver_reset_password_email(user, url) do
+    case UserNotifier.deliver_password_reset(user, url) do
+      {:ok, _email} -> :ok
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  @doc "Gets an active user for a valid reset-password token."
+  def get_user_by_reset_password_token(token) do
+    with {:ok, query} <- UserToken.verify_email_token_query(token, "reset_password"),
+         %User{is_active: true} = user <- Repo.one(query) do
+      user
+    else
+      _ -> nil
+    end
+  end
+
+  @doc "Resets a password and invalidates reset links and existing sessions."
+  def reset_password(%User{} = user, attrs) do
+    Repo.transaction(fn ->
+      case user |> User.password_reset_changeset(attrs) |> Repo.update() do
+        {:ok, user} ->
+          Repo.delete_all(UserToken.by_user_and_context_query(user, "reset_password"))
+          Repo.delete_all(UserToken.by_user_and_context_query(user, "session"))
           user
 
         {:error, changeset} ->

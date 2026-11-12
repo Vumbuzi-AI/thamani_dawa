@@ -102,7 +102,8 @@ defmodule ThamaniDawa.ReportsTest do
           organization.id,
           batch.id,
           technician.id,
-          5
+          5,
+          site_id: site.id
         )
 
       assert [row] =

@@ -34,7 +34,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
         user: %{
           name: "Jane Admin",
           email: "jane@example.com",
-          password: "secret",
+          password: "secretpass12",
           accepted_legal_terms: "true"
         }
       )
@@ -215,7 +215,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
           "user" => %{
             "name" => "Consent Admin",
             "email" => "consent@example.com",
-            "password" => "secret",
+            "password" => "secretpass12",
             "accepted_legal_terms" => "false"
           }
         })
@@ -228,7 +228,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
         user: %{
           name: "Consent Admin",
           email: "consent@example.com",
-          password: "secret",
+          password: "secretpass12",
           accepted_legal_terms: "true"
         }
       )

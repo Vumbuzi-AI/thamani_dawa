@@ -29,6 +29,10 @@ defmodule ThamaniDawaWeb.Router do
     get "/login", SessionController, :new
     post "/login", SessionController, :create
     delete "/logout", SessionController, :delete
+    get "/reset-password", PasswordResetController, :new
+    post "/reset-password", PasswordResetController, :create
+    get "/reset-password/:token", PasswordResetController, :edit
+    post "/reset-password/:token", PasswordResetController, :update
 
     patch "/switch-site", SiteSwitchController, :update
   end

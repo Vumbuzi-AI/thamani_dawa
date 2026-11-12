@@ -29,6 +29,16 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
     %{admin: admin, lab_tech: lab_tech, site: site, lab_test: lab_test}
   end
 
+  defp collect_and_receive_specimen(organization_id, lab_order_id, result_id, user_id) do
+    {:ok, specimen} =
+      LabOrders.collect_specimen(organization_id, lab_order_id, [result_id], user_id, %{
+        "specimen_type" => "blood",
+        "collection_date" => "2026-01-15"
+      })
+
+    {:ok, _specimen} = LabOrders.receive_specimen(organization_id, specimen.id, user_id)
+  end
+
   describe "index filters" do
     test "searches by patient name", ctx do
       alice =
@@ -251,6 +261,8 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           lab_test_id: ctx.lab_test.id
         })
 
+      collect_and_receive_specimen(organization_id, lab_order.id, result.id, ctx.lab_tech.id)
+
       {:ok, _} =
         LabOrders.record_result(organization_id, result.id, ctx.lab_tech.id, %{"hb" => "13"})
 
@@ -299,6 +311,8 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           lab_order_id: lab_order.id,
           lab_test_id: ctx.lab_test.id
         })
+
+      collect_and_receive_specimen(organization_id, lab_order.id, result.id, ctx.lab_tech.id)
 
       {:ok, _} =
         LabOrders.record_result(organization_id, result.id, ctx.lab_tech.id, %{
@@ -587,6 +601,13 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           lab_order_id: lab_order.id,
           lab_test_id: checkbox_lab_test.id
         })
+
+      collect_and_receive_specimen(
+        ctx.admin.organization_id,
+        lab_order.id,
+        result.id,
+        ctx.admin.id
+      )
 
       conn = log_in_user(build_conn(), ctx.admin)
       {:ok, lv, _html} = live(conn, ~p"/lab/orders/#{lab_order.id}/results/#{result.id}/edit")
