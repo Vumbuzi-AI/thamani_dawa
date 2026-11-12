@@ -23,7 +23,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         role: :lab_technician
       })
 
-    site = site_fixture(%{organization_id: admin.organization_id, site_type: :lab})
+    site = site_fixture(%{organization_id: admin.organization_id, activities: [:laboratory]})
     lab_test = lab_test_fixture(%{organization_id: admin.organization_id})
 
     %{admin: admin, lab_tech: lab_tech, site: site, lab_test: lab_test}

@@ -100,7 +100,7 @@ defmodule ThamaniDawa.PaymentsTest do
                  payment_type: "Cash"
                })
 
-      assert %{order_type: ["must reference exactly one of prescription_id or lab_order_id"]} =
+      assert %{order_type: ["must reference exactly one order"]} =
                errors_on(changeset)
     end
 
@@ -117,7 +117,7 @@ defmodule ThamaniDawa.PaymentsTest do
                  payment_type: "Cash"
                })
 
-      assert %{order_type: ["must reference exactly one of prescription_id or lab_order_id"]} =
+      assert %{order_type: ["must reference exactly one order"]} =
                errors_on(changeset)
     end
 
