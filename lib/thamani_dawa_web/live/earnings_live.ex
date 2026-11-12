@@ -115,6 +115,8 @@ defmodule ThamaniDawaWeb.EarningsLive do
     socket
     |> assign(:transaction_count, length(transactions))
     |> assign(:filtered_earned, earned)
+    |> assign(:pending_count, Enum.count(transactions, &(&1.status == :pending)))
+    |> assign(:failed_count, Enum.count(transactions, &(&1.status == :failed)))
     |> stream(:transactions, transactions, reset: true)
   end
 
@@ -363,6 +365,20 @@ defmodule ThamaniDawaWeb.EarningsLive do
           label="Transactions"
           value={@transaction_count}
           sublabel="Payments in this view"
+        />
+        <.stat_tile
+          :if={@portal != :organization}
+          icon="hero-clock"
+          label="Pending"
+          value={@pending_count}
+          sublabel="Awaiting confirmation"
+        />
+        <.stat_tile
+          :if={@portal != :organization}
+          icon="hero-exclamation-triangle"
+          label="Failed"
+          value={@failed_count}
+          sublabel="Did not go through"
         />
       </section>
 

@@ -425,7 +425,9 @@ defmodule ThamaniDawa.Distributor do
   ## Shipments — mobile
 
   @doc "The mobile user's own shipments (any status), newest first, paginated."
-  def list_shipments_for_mobile_user(%MobileUser{} = mobile_user, page \\ 1) do
+  def list_shipments_for_mobile_user(mobile_user, page \\ 1)
+
+  def list_shipments_for_mobile_user(%MobileUser{} = mobile_user, page) when is_integer(page) do
     Repo.all(
       from s in Shipment,
         where: s.organization_id == ^mobile_user.organization_id,
@@ -438,11 +440,30 @@ defmodule ThamaniDawa.Distributor do
     )
   end
 
+  def list_shipments_for_mobile_user(%MobileUser{} = mobile_user, opts) when is_map(opts) do
+    {page, per_page} = mobile_pagination(opts)
+
+    mobile_user
+    |> mobile_shipments_query(opts["status"] || opts[:status])
+    |> order_by([s], desc: s.updated_at, desc: s.id)
+    |> limit(^per_page)
+    |> offset(^((page - 1) * per_page))
+    |> preload(shippers: :items)
+    |> Repo.all()
+  end
+
+  def count_shipments_for_mobile_user(%MobileUser{} = mobile_user, opts \\ %{}) do
+    mobile_user
+    |> mobile_shipments_query(opts["status"] || opts[:status])
+    |> Repo.aggregate(:count, :id)
+  end
+
   @doc """
   Finds draft shipments by order number that the mobile user can work on:
   unclaimed, or already claimed by this same user.
   """
-  def search_shipments_for_mobile_user(%MobileUser{} = mobile_user, order_number) do
+  def search_shipments_for_mobile_user(%MobileUser{} = mobile_user, order_number)
+      when is_binary(order_number) or is_nil(order_number) do
     order_number = String.trim(order_number || "")
 
     Repo.all(
@@ -455,6 +476,60 @@ defmodule ThamaniDawa.Distributor do
     )
   end
 
+  def search_shipments_for_mobile_user(%MobileUser{} = mobile_user, opts) when is_map(opts) do
+    {page, per_page} = mobile_pagination(opts)
+
+    mobile_user
+    |> mobile_search_query(opts["order_number"] || opts[:order_number])
+    |> order_by([s], desc: s.updated_at, desc: s.id)
+    |> limit(^per_page)
+    |> offset(^((page - 1) * per_page))
+    |> preload(shippers: :items)
+    |> Repo.all()
+  end
+
+  def count_search_shipments_for_mobile_user(%MobileUser{} = mobile_user, opts \\ %{}) do
+    mobile_user
+    |> mobile_search_query(opts["order_number"] || opts[:order_number])
+    |> Repo.aggregate(:count, :id)
+  end
+
+  defp mobile_shipments_query(mobile_user, status) do
+    from s in Shipment,
+      where: s.organization_id == ^mobile_user.organization_id,
+      where:
+        s.assigned_mobile_user_id == ^mobile_user.id or
+          s.submitted_by_mobile_user_id == ^mobile_user.id,
+      where: ^mobile_status_filter(status)
+  end
+
+  defp mobile_search_query(mobile_user, order_number) do
+    order_number = String.trim(order_number || "")
+
+    from s in Shipment,
+      where: s.organization_id == ^mobile_user.organization_id and s.status == "draft",
+      where: ilike(s.order_number, ^("%" <> escape_like(order_number) <> "%")),
+      where: is_nil(s.assigned_mobile_user_id) or s.assigned_mobile_user_id == ^mobile_user.id
+  end
+
+  defp mobile_status_filter(status) when status in ~w(draft submitted approved rejected),
+    do: dynamic([s], s.status == ^status)
+
+  defp mobile_status_filter(_status), do: dynamic(true)
+
+  defp mobile_pagination(opts) do
+    page = positive_integer(opts["page"] || opts[:page], 1)
+    per_page = min(positive_integer(opts["per_page"] || opts[:per_page], 25), 100)
+    {page, per_page}
+  end
+
+  defp positive_integer(value, default) do
+    case Integer.parse(to_string(value || "")) do
+      {integer, ""} when integer > 0 -> integer
+      _ -> default
+    end
+  end
+
   @doc "Gets one of the mobile user's shipments with shippers and items."
   def get_shipment_for_mobile_user(%MobileUser{} = mobile_user, id) do
     query =
@@ -464,6 +539,22 @@ defmodule ThamaniDawa.Distributor do
           s.assigned_mobile_user_id == ^mobile_user.id or
             s.submitted_by_mobile_user_id == ^mobile_user.id or
             (s.status == "draft" and is_nil(s.assigned_mobile_user_id)),
+        preload: [shippers: :items]
+
+    case Repo.one(query) do
+      nil -> {:error, :not_found}
+      shipment -> {:ok, shipment}
+    end
+  end
+
+  @doc "Gets a shipment already selected or submitted by the mobile user."
+  def get_selected_shipment_for_mobile_user(%MobileUser{} = mobile_user, id) do
+    query =
+      from s in Shipment,
+        where: s.id == ^id and s.organization_id == ^mobile_user.organization_id,
+        where:
+          s.assigned_mobile_user_id == ^mobile_user.id or
+            s.submitted_by_mobile_user_id == ^mobile_user.id,
         preload: [shippers: :items]
 
     case Repo.one(query) do
@@ -539,7 +630,8 @@ defmodule ThamaniDawa.Distributor do
         organization_id: shipment.organization_id,
         shipment_id: shipment.id,
         sequence: sequence,
-        name: shipper_name(attrs, sequence)
+        name: shipper_name(attrs, sequence),
+        material_description: shipper_material_description(attrs)
       })
     end)
   end
@@ -549,7 +641,10 @@ defmodule ThamaniDawa.Distributor do
     with {:ok, shipper} <- fetch_mobile_shipper(mobile_user, shipper_id) do
       edit_draft(mobile_user, shipper.shipment_id, fn _shipment ->
         shipper
-        |> Ecto.Changeset.change(name: shipper_name(attrs, shipper.sequence))
+        |> Ecto.Changeset.change(
+          name: shipper_name(attrs, shipper.sequence),
+          material_description: shipper_material_description(attrs, shipper.material_description)
+        )
         |> Repo.update!()
       end)
     end
@@ -563,9 +658,21 @@ defmodule ThamaniDawa.Distributor do
   end
 
   defp shipper_name(attrs, sequence) do
-    case String.trim(to_string(attrs["name"] || attrs[:name] || "")) do
+    case String.trim(
+           to_string(
+             attrs["temporary_label"] || attrs[:temporary_label] || attrs["name"] || attrs[:name] ||
+               ""
+           )
+         ) do
       "" -> "Shipper #{sequence}"
       name -> name
+    end
+  end
+
+  defp shipper_material_description(attrs, fallback \\ nil) do
+    case Map.get(attrs, "material_description", Map.get(attrs, :material_description, fallback)) do
+      value when is_binary(value) -> String.trim(value)
+      value -> value
     end
   end
 

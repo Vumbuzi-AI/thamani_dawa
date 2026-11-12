@@ -11,6 +11,7 @@ defmodule ThamaniDawa.Distributor.Shipper do
   schema "distributor_shippers" do
     field :sequence, :integer
     field :name, :string
+    field :material_description, :string
     field :sscc, :string
     field :gtin, :string
     field :batch, :string

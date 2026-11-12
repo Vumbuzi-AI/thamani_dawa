@@ -6,8 +6,8 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
       buffer from the current bundle folded in, plus VAT), and pay.
     * `:postpay` — settle the open flex cycle for exactly what it generated.
 
-  Payment is by M-Pesa STK Push (the page waits for the Daraja callback over
-  PubSub) or a manually entered reference.
+  A manually entered reference confirms the payment immediately.
+  M-Pesa is offered only when Daraja is explicitly enabled and configured.
   """
 
   use ThamaniDawaWeb, :live_view
@@ -32,7 +32,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
       true ->
         params = %{
           "quantity" => Integer.to_string(Pricing.minimum_prepay_quantity() * 10),
-          "method" => "mpesa",
+          "method" => "manual",
           "phone" => "",
           "manual_reference" => ""
         }
@@ -128,6 +128,10 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
   defp error_message(:invalid_method), do: "Choose a payment method."
   defp error_message(:invalid_phone), do: "Enter a valid Safaricom number, e.g. 0712 345 678."
   defp error_message(:missing_manual_reference), do: "Enter the payment reference."
+
+  defp error_message(:mpesa_unavailable),
+    do: "M-Pesa checkout is not available yet. Submit a manual payment reference instead."
+
   defp error_message(:nothing_to_pay), do: "There's no usage to settle in this cycle yet."
   defp error_message(:wrong_plan), do: "This payment doesn't match your plan."
 
@@ -169,8 +173,12 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
             <div id="distributor-payment-pending" class="py-6 text-center">
               <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-thamani-lime">
                 <.icon
-                  name="hero-device-phone-mobile"
-                  class="size-7 animate-pulse text-thamani-forest"
+                  name={
+                    if @pending_payment.method == "manual",
+                      do: "hero-clock",
+                      else: "hero-device-phone-mobile"
+                  }
+                  class="size-7 text-thamani-forest"
                 />
               </div>
               <h2 class="mt-4 text-lg font-semibold text-thamani-forest">Check your phone</h2>
@@ -179,7 +187,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
                 This page updates as soon as the payment is confirmed.
               </p>
               <.button id="cancel-pending-payment" class="mt-5" phx-click="cancel_pending">
-                Use a different method
+                Cancel
               </.button>
             </div>
           <% else %>
@@ -198,10 +206,12 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
                 <div class="mt-1 grid gap-2 sm:grid-cols-2">
                   <label
                     :for={
-                      {value, label, icon} <- [
-                        {"mpesa", "M-Pesa", "hero-device-phone-mobile"},
-                        {"manual", "Bank / manual reference", "hero-building-library"}
-                      ]
+                      {value, label, icon} <-
+                        [{"manual", "Bank / manual reference", "hero-building-library"}] ++
+                          if(Billing.mpesa_enabled?(),
+                            do: [{"mpesa", "M-Pesa", "hero-device-phone-mobile"}],
+                            else: []
+                          )
                     }
                     class={[
                       "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors duration-150",
@@ -252,7 +262,9 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
                 phx-disable-with="Processing…"
                 disabled={is_nil(@charge) or @charge.quantity == 0}
               >
-                Pay {if @charge, do: kes(@charge.amount), else: kes(nil)}
+                {if @params["method"] == "manual", do: "Confirm payment", else: "Pay"} {if @charge,
+                  do: kes(@charge.amount),
+                  else: kes(nil)}
               </.button>
             </.form>
           <% end %>

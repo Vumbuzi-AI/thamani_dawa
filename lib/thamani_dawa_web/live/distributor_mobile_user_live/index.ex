@@ -176,7 +176,13 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
           />
           <div class="grid gap-x-4 sm:grid-cols-2">
             <.input field={@form[:email]} type="email" label="Email (receives the PIN)" required />
-            <.input field={@form[:phone]} type="tel" label="Phone" />
+            <.input
+              field={@form[:phone]}
+              type="tel"
+              label="Phone"
+              pattern="(?=.*[0-9])\\+?[0-9 ()-]+"
+              title="Use digits, spaces, hyphens, parentheses, and an optional leading +"
+            />
           </div>
           <.button id="save-distributor-mobile-user" class="mt-3 w-full" variant="primary">
             {if @live_action == :new, do: "Add and email PIN", else: "Save changes"}
@@ -186,23 +192,23 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
 
       <.table id="distributor-mobile-users" rows={@streams.mobile_users}>
         <:col :let={{_id, mobile_user}} label="Name">
-          <div>
-            <p class="font-medium text-thamani-forest">{mobile_user.name}</p>
-            <p class="font-mono text-xs text-thamani-pewter">@{mobile_user.username}</p>
+          <div class="min-w-0 max-w-full">
+            <p class="break-words font-medium text-thamani-forest">{mobile_user.name}</p>
+            <p class="break-words font-mono text-xs text-thamani-pewter">@{mobile_user.username}</p>
           </div>
         </:col>
         <:col :let={{_id, mobile_user}} label="Status" mobile="aside">
           <.status_badge status={if mobile_user.active, do: :active, else: :inactive} />
         </:col>
         <:col :let={{_id, mobile_user}} label="Contact" tablet="hidden">
-          <p class="text-sm">{mobile_user.email}</p>
-          <p class="text-xs text-thamani-pewter">{mobile_user.phone || "—"}</p>
+          <p class="max-w-full break-words text-sm">{mobile_user.email}</p>
+          <p class="max-w-full break-words text-xs text-thamani-pewter">{mobile_user.phone || "—"}</p>
         </:col>
         <:col :let={{_id, mobile_user}} label="Last sign-in">
           <span class="text-sm">{date_time(mobile_user.last_login_at)}</span>
         </:col>
         <:col :let={{_id, mobile_user}} label="Shipments">
-          <span class="text-sm">
+          <span class="max-w-full break-words text-sm">
             {activity(@activity, mobile_user, :total)} total
             <span class="text-thamani-pewter">
               · {activity(@activity, mobile_user, "approved")} approved
@@ -210,10 +216,14 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
           </span>
         </:col>
         <:action :let={{_id, mobile_user}}>
-          <div class="flex flex-wrap justify-end gap-1">
+          <div
+            id={"mobile-user-actions-#{mobile_user.id}"}
+            class="flex min-w-0 flex-wrap justify-start gap-2 sm:min-w-[19rem] sm:justify-end"
+          >
             <.button
               id={"edit-mobile-user-#{mobile_user.id}"}
               variant="ghost-edit"
+              class="shrink-0 whitespace-nowrap"
               patch={~p"/distributor/mobile-users/#{mobile_user.id}/edit"}
             >
               Edit
@@ -221,6 +231,7 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
             <.button
               id={"resend-pin-#{mobile_user.id}"}
               variant="ghost"
+              class="shrink-0 whitespace-nowrap"
               phx-click="resend_pin"
               phx-value-id={mobile_user.id}
               data-confirm={"Email #{mobile_user.name} a new PIN? Their current PIN stops working and they'll be signed out."}
@@ -230,6 +241,7 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
             <.button
               id={"toggle-mobile-user-#{mobile_user.id}"}
               variant={if mobile_user.active, do: "ghost-delete", else: "ghost"}
+              class="shrink-0 whitespace-nowrap"
               phx-click="toggle_active"
               phx-value-id={mobile_user.id}
             >

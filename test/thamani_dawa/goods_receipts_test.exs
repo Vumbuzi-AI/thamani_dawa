@@ -70,6 +70,28 @@ defmodule ThamaniDawa.GoodsReceiptsTest do
     assert length(GoodsReceipts.list_receipts(ctx.organization.id)) == 1
   end
 
+  test "posts a delivery into organization stock when no site is supplied", ctx do
+    item = delivery_item(ctx, "LOT-ORG-STOCK", 15)
+    item = update_in(item.attrs, &Map.delete(&1, "site_id"))
+
+    assert {:ok, receipt} =
+             GoodsReceipts.receive_delivery(
+               ctx.organization.id,
+               ctx.user.id,
+               [item],
+               Ecto.UUID.generate()
+             )
+
+    assert [batch] = receipt.items
+    assert is_nil(batch.site_id)
+    assert batch.remaining_quantity == 15
+
+    assert [org_batch] =
+             Batches.list_undispatched_batches_for_product(ctx.organization.id, ctx.product.id)
+
+    assert org_batch.id == batch.id
+  end
+
   test "invalid delivery rolls back its receipt and all inventory", ctx do
     duplicate_batch_no = "LOT-ATOMIC"
     items = [delivery_item(ctx, duplicate_batch_no, 5), delivery_item(ctx, duplicate_batch_no, 5)]

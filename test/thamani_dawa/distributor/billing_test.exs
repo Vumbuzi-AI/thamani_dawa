@@ -2,7 +2,6 @@ defmodule ThamaniDawa.Distributor.BillingTest do
   use ThamaniDawa.DataCase, async: true
 
   import ThamaniDawa.DistributorFixtures
-
   alias ThamaniDawa.Distributor.{Billing, SerialUsage}
   alias ThamaniDawa.Organizations
 
@@ -105,5 +104,32 @@ defmodule ThamaniDawa.Distributor.BillingTest do
   test "a plan can't be chosen twice", ctx do
     {:ok, organization} = Billing.choose_prepay(ctx.organization)
     assert {:error, :plan_already_selected} = Billing.ensure_first_postpay_cycle(organization)
+  end
+
+  test "a manual reference confirms payment immediately", ctx do
+    {:ok, organization} = Billing.choose_prepay(ctx.organization)
+
+    attrs = %{
+      "quantity" => "200",
+      "method" => "manual",
+      "manual_reference" => "BANK-UNIQUE-1"
+    }
+
+    assert {:ok, payment} = Billing.start_prepay_payment(organization, ctx.user, attrs)
+    assert payment.status == "paid"
+    assert payment.manual_reference == "BANK-UNIQUE-1"
+    assert "INV-SER-" <> _ = payment.invoice_number
+    assert SerialUsage.serials_left(Billing.active_usage(ctx.organization.id)) == 200
+  end
+
+  test "M-Pesa cannot be selected while Daraja is disabled", ctx do
+    {:ok, organization} = Billing.choose_prepay(ctx.organization)
+
+    assert {:error, :mpesa_unavailable} =
+             Billing.start_prepay_payment(organization, ctx.user, %{
+               "quantity" => "200",
+               "method" => "mpesa",
+               "phone" => "0712345678"
+             })
   end
 end

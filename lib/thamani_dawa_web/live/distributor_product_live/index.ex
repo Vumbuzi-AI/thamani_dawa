@@ -230,35 +230,41 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           </.button>
         </:actions>
         <:toolbar>
-          <.tab_group>
-            <:tab
-              id="distributor-products-tab"
-              active={@view == "products"}
-              phx_click="set_view"
-              phx_value_view="products"
+          <div id="distributor-product-toolbar" class="flex min-w-0 items-center gap-3">
+            <.tab_group>
+              <:tab
+                id="distributor-products-tab"
+                active={@view == "products"}
+                phx_click="set_view"
+                phx_value_view="products"
+              >
+                Products
+              </:tab>
+              <:tab
+                id="distributor-batches-tab"
+                active={@view == "batches"}
+                phx_click="set_view"
+                phx_value_view="batches"
+              >
+                All batches
+              </:tab>
+            </.tab_group>
+            <form
+              phx-change="search"
+              id="distributor-product-search"
+              class="min-w-0 flex-1"
             >
-              Products
-            </:tab>
-            <:tab
-              id="distributor-batches-tab"
-              active={@view == "batches"}
-              phx_click="set_view"
-              phx_value_view="batches"
-            >
-              All batches
-            </:tab>
-          </.tab_group>
-          <form phx-change="search" id="distributor-product-search" class="flex-1">
-            <.search_input
-              name="search"
-              value={@search}
-              placeholder={
-                if @view == "products",
-                  do: "Search by product, GTIN, or category",
-                  else: "Search by product, GTIN, or batch number"
-              }
-            />
-          </form>
+              <.search_input
+                name="search"
+                value={@search}
+                placeholder={
+                  if @view == "products",
+                    do: "Search by product, GTIN, or category",
+                    else: "Search by product, GTIN, or batch number"
+                }
+              />
+            </form>
+          </div>
         </:toolbar>
       </.header>
 

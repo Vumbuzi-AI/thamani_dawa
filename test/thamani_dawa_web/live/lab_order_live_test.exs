@@ -39,6 +39,24 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
     {:ok, _specimen} = LabOrders.receive_specimen(organization_id, specimen.id, user_id)
   end
 
+  test "print results uses the lab report document root", ctx do
+    patient = patient_fixture(%{organization_id: ctx.admin.organization_id})
+
+    lab_order =
+      lab_order_fixture(%{
+        organization_id: ctx.admin.organization_id,
+        site_id: ctx.site.id,
+        patient_id: patient.id
+      })
+
+    {:ok, view, _html} =
+      live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/#{lab_order.id}/report")
+
+    assert has_element?(view, "#lab-report-modal")
+    assert has_element?(view, "#lab-report-#{lab_order.id}.printable-lab-report")
+    assert has_element?(view, "#lab-report-#{lab_order.id} img[src='/images/logo.png']")
+  end
+
   describe "index filters" do
     test "searches by patient name", ctx do
       alice =

@@ -36,6 +36,10 @@ defmodule ThamaniDawa.Distributor.MobileUser do
     |> update_change(:email, &trim/1)
     |> validate_required([:name, :username, :email])
     |> validate_length(:username, min: 3, max: 40)
+    |> validate_format(:phone, ~r/^(?=.*\d)\+?[0-9 ()-]+$/,
+      message:
+        "Enter a phone number using digits, spaces, hyphens, parentheses, and an optional leading +"
+    )
     |> validate_format(:username, ~r/^[a-z0-9._-]+$/,
       message: "may only contain lowercase letters, numbers, dots, dashes and underscores"
     )

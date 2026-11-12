@@ -16,10 +16,9 @@ defmodule ThamaniDawa.Distributor.Billing do
   calls `authorize_generation/2` with the number of SSCCs it is about to
   issue, inside its own transaction.
 
-  Payments go through M-Pesa STK Push (`ThamaniDawa.Daraja`, confirmed by
-  `ThamaniDawaWeb.DarajaCallbackController`) or a manually entered
-  reference. `confirm_paid/1` is idempotent, so it is safe whichever of the
-  callback or a retry gets there first.
+  A manually entered reference confirms the payment immediately. M-Pesa STK
+  Push is exposed only when Daraja is explicitly enabled and fully configured;
+  its callback uses the same idempotent `confirm_paid/1` transition.
   """
 
   import Ecto.Query, warn: false
@@ -31,6 +30,16 @@ defmodule ThamaniDawa.Distributor.Billing do
 
   @plans ~w(prepay flex)
   @methods ~w(mpesa manual)
+
+  @doc "Whether the Daraja-backed M-Pesa checkout is explicitly enabled and configured."
+  def mpesa_enabled? do
+    config = Application.get_env(:thamani_dawa, ThamaniDawa.Daraja, [])
+
+    Application.get_env(:thamani_dawa, :daraja_enabled, false) and
+      Enum.all?([:consumer_key, :consumer_secret, :short_code, :passkey, :callback_url], fn key ->
+        config[key] not in [nil, ""]
+      end)
+  end
 
   ## PubSub
 
@@ -234,7 +243,7 @@ defmodule ThamaniDawa.Distributor.Billing do
   Starts a prepay bundle purchase. `attrs` carries `"quantity"`,
   `"method"` (`"mpesa"` or `"manual"`), and `"phone"` or
   `"manual_reference"`. M-Pesa payments stay pending until the Daraja
-  callback confirms them; manual payments are confirmed immediately.
+  callback confirms them; a manual reference confirms immediately.
   """
   def start_prepay_payment(%Organization{} = organization, user, attrs) do
     with :ok <- require_plan(organization, "prepay"),
@@ -242,9 +251,9 @@ defmodule ThamaniDawa.Distributor.Billing do
          {:ok, method} <- parse_method(attrs) do
       charge = prepay_quote(organization, quantity)
 
-      organization
-      |> insert_payment!(user, "prepay", charge, attrs)
-      |> collect(method, attrs, "Serialisation bundle")
+      with {:ok, payment} <- insert_payment(organization, user, "prepay", charge, attrs) do
+        collect(payment, method, attrs, "Serialisation bundle")
+      end
     end
   end
 
@@ -255,9 +264,9 @@ defmodule ThamaniDawa.Distributor.Billing do
     with :ok <- require_plan(organization, "flex"),
          {:ok, method} <- parse_method(attrs),
          %{quantity: billed} = charge when billed > 0 <- postpay_quote(organization) do
-      organization
-      |> insert_payment!(user, "postpay", charge, attrs)
-      |> collect(method, attrs, "Serialisation usage")
+      with {:ok, payment} <- insert_payment(organization, user, "postpay", charge, attrs) do
+        collect(payment, method, attrs, "Serialisation usage")
+      end
     else
       nil -> {:error, :nothing_to_pay}
       %{quantity: 0} -> {:error, :nothing_to_pay}
@@ -280,11 +289,15 @@ defmodule ThamaniDawa.Distributor.Billing do
     end
   end
 
+  defp parse_method(%{"method" => "mpesa"}) do
+    if mpesa_enabled?(), do: {:ok, "mpesa"}, else: {:error, :mpesa_unavailable}
+  end
+
   defp parse_method(%{"method" => method}) when method in @methods, do: {:ok, method}
   defp parse_method(_attrs), do: {:error, :invalid_method}
 
-  defp insert_payment!(organization, user, kind, charge, attrs) do
-    Repo.insert!(%SerialPayment{
+  defp insert_payment(organization, user, kind, charge, attrs) do
+    payment = %SerialPayment{
       organization_id: organization.id,
       serial_usage_id: charge[:usage] && charge.usage.id,
       initiated_by_id: user && user.id,
@@ -299,7 +312,9 @@ defmodule ThamaniDawa.Distributor.Billing do
       amount: charge.amount,
       phone: blank_to_nil(attrs["phone"]),
       manual_reference: blank_to_nil(attrs["manual_reference"])
-    })
+    }
+
+    Repo.insert(payment)
   end
 
   defp collect(payment, "manual", _attrs, _description) do

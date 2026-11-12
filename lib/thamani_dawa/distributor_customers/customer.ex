@@ -21,6 +21,10 @@ defmodule ThamaniDawa.DistributorCustomers.Customer do
     customer
     |> cast(attrs, [:name, :contact_name, :phone, :email, :address, :po_box, :is_active])
     |> validate_required([:name])
+    |> validate_format(:phone, ~r/^(?=.*\d)\+?[0-9 ()-]+$/,
+      message:
+        "Enter a phone number using digits, spaces, hyphens, parentheses, and an optional leading +"
+    )
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+\.[a-zA-Z]{2,}$/,
       message: "Please enter a valid email"
     )

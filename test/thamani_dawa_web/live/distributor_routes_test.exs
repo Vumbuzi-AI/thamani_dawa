@@ -60,6 +60,20 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       end
     end
 
+    test "product tabs and search share the responsive toolbar row", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/distributor/products")
+
+      assert has_element?(
+               view,
+               "#distributor-product-toolbar #distributor-products-tab"
+             )
+
+      assert has_element?(
+               view,
+               "#distributor-product-toolbar #distributor-product-search"
+             )
+    end
+
     test "a new customer gets a GLN", %{conn: conn, distributor: distributor} do
       {:ok, view, _html} = live(conn, ~p"/distributor/customers/new")
 
@@ -92,7 +106,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       assert has_element?(billing, "#distributor-flex-usage")
     end
 
-    test "prepay checkout with a manual reference credits the bundle", %{
+    test "prepay checkout confirms a manual reference immediately", %{
       conn: conn,
       distributor: distributor
     } do
@@ -104,6 +118,8 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       checkout
       |> form("#distributor-payment-form", payment: %{method: "manual"})
       |> render_change()
+
+      refute has_element?(checkout, "input[value='mpesa']")
 
       assert {:error, {:live_redirect, %{to: "/distributor/billing"}}} =
                checkout
@@ -155,6 +171,10 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
           customer: customer
         })
 
+      usage = ThamaniDawa.Distributor.Billing.active_usage(distributor.organization_id)
+
+      ThamaniDawa.Repo.update!(Ecto.Changeset.change(usage, running_quantity: 40))
+
       {:ok, index, _html} = live(conn, ~p"/distributor/shipments")
       assert has_element?(index, "#distributor-shipments")
       assert has_element?(index, "#shipment-tab-submitted")
@@ -163,9 +183,98 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       assert has_element?(view, "#approve-distributor-shipment")
 
       view |> element("#approve-distributor-shipment") |> render_click()
+      assert has_element?(view, "#distributor-approve-modal")
+      assert has_element?(view, "#approval-order-number", shipment.order_number)
+      assert has_element?(view, "#approval-shipper-count", "1")
+      assert has_element?(view, "#approval-sscc-count", "1")
+      assert has_element?(view, "#approval-credit-count", "1")
+      assert has_element?(view, "#approval-current-allowance", "60")
+      assert has_element?(view, "#approval-remaining-allowance", "59")
+      refute has_element?(view, "#distributor-sscc-labels")
+
+      view |> element("#confirm-approve-shipment") |> render_click()
+      render_async(view)
 
       assert has_element?(view, "#distributor-sscc-labels")
+      assert has_element?(view, "#distributor-sscc-labels .printable-sscc-label")
       refute has_element?(view, "#approve-distributor-shipment")
+    end
+
+    test "cancel closes the approval modal without approving", %{
+      conn: conn,
+      distributor: distributor,
+      warehouse: warehouse,
+      customer: customer
+    } do
+      batch = received_unit_fixture(distributor.organization_id, warehouse.id, distributor.id)
+
+      shipment =
+        submitted_shipment_fixture(distributor.organization_id, distributor, [batch], %{
+          warehouse: warehouse,
+          customer: customer
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/distributor/shipments/#{shipment.id}")
+      view |> element("#approve-distributor-shipment") |> render_click()
+      view |> element("#cancel-approve-shipment") |> render_click()
+
+      refute has_element?(view, "#distributor-approve-modal")
+      assert has_element?(view, "#approve-distributor-shipment")
+    end
+
+    test "shows an insufficient allowance warning and ignores repeated confirmation", %{
+      conn: conn,
+      distributor: distributor,
+      warehouse: warehouse,
+      customer: customer
+    } do
+      usage = ThamaniDawa.Distributor.Billing.active_usage(distributor.organization_id)
+
+      ThamaniDawa.Repo.update!(
+        Ecto.Changeset.change(usage, running_quantity: usage.quantity_limit)
+      )
+
+      batch = received_unit_fixture(distributor.organization_id, warehouse.id, distributor.id)
+
+      shipment =
+        submitted_shipment_fixture(distributor.organization_id, distributor, [batch], %{
+          warehouse: warehouse,
+          customer: customer
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/distributor/shipments/#{shipment.id}")
+      view |> element("#approve-distributor-shipment") |> render_click()
+      assert has_element?(view, "#approval-current-allowance", "0")
+      assert has_element?(view, "#approval-insufficient-allowance", "only 0 remain")
+
+      view |> element("#confirm-approve-shipment") |> render_click()
+      render_click(view, "approve", %{})
+      render_async(view)
+      assert has_element?(view, "#distributor-sscc-labels")
+      updated_usage = ThamaniDawa.Distributor.Billing.active_usage(distributor.organization_id)
+
+      assert updated_usage.running_quantity + updated_usage.running_buffer ==
+               updated_usage.quantity_limit + 1
+    end
+
+    test "non-distributor users cannot access a shipment approval screen", %{
+      distributor: distributor,
+      warehouse: warehouse,
+      customer: customer
+    } do
+      batch = received_unit_fixture(distributor.organization_id, warehouse.id, distributor.id)
+
+      shipment =
+        submitted_shipment_fixture(distributor.organization_id, distributor, [batch], %{
+          warehouse: warehouse,
+          customer: customer
+        })
+
+      unauthorized =
+        staff_fixture(%{organization_id: distributor.organization_id, role: :pharmacist})
+
+      assert {:error, {:redirect, %{to: "/"}}} =
+               live(log_in(build_conn(), unauthorized), ~p"/distributor/shipments/#{shipment.id}")
     end
 
     test "rejecting requires a reason", %{
@@ -222,6 +331,22 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
 
       assert has_element?(view, "#distributor-mobile-users", "Jane Packer")
       assert_received {:email, %Swoosh.Email{subject: "Your Thamani Dawa mobile app PIN"}}
+    end
+
+    test "mobile user rows keep all actions in a non-shrinking action area", %{
+      conn: conn,
+      distributor: distributor
+    } do
+      mobile_user = mobile_user_fixture(distributor.organization_id)
+      {:ok, view, _html} = live(conn, ~p"/distributor/mobile-users")
+
+      actions = "#mobile-user-actions-#{mobile_user.id}"
+
+      assert has_element?(view, "#distributor-mobile-users tr")
+      assert has_element?(view, "#{actions}.sm\\:min-w-\\[19rem\\]")
+      assert has_element?(view, "#{actions} > #edit-mobile-user-#{mobile_user.id}.shrink-0")
+      assert has_element?(view, "#{actions} > #resend-pin-#{mobile_user.id}.shrink-0")
+      assert has_element?(view, "#{actions} > #toggle-mobile-user-#{mobile_user.id}.shrink-0")
     end
   end
 

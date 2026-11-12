@@ -1151,8 +1151,11 @@ data_matrix = fn batch ->
     "10" <> batch.batch_no <> <<29>> <> "21" <> batch.serial
 end
 
-if not Repo.exists?(from s in Shipment, where: s.organization_id == ^organization_id) do
-  [first_customer, second_customer | _] = distributor_customers
+if not Repo.exists?(
+     from s in Shipment,
+       where: s.organization_id == ^organization_id and s.order_number == "PO-2026-0101"
+   ) do
+  [_first_customer, second_customer | _] = distributor_customers
 
   {:ok, _draft} =
     Distributor.create_shipment(organization_id, primary_distributor, %{
@@ -1160,6 +1163,13 @@ if not Repo.exists?(from s in Shipment, where: s.organization_id == ^organizatio
       "origin_gln" => warehouse_site.gln,
       "destination_gln" => second_customer.gln
     })
+end
+
+if not Repo.exists?(
+     from s in Shipment,
+       where: s.organization_id == ^organization_id and s.order_number == "PO-2026-0100"
+   ) do
+  [first_customer | _] = distributor_customers
 
   {:ok, submitted} =
     Distributor.create_shipment(organization_id, primary_distributor, %{
@@ -1182,6 +1192,48 @@ if not Repo.exists?(from s in Shipment, where: s.organization_id == ^organizatio
   end)
 
   {:ok, _} = Distributor.submit_shipment(mobile_user, submitted.id)
+end
+
+unless Repo.exists?(
+         from s in Shipment,
+           where:
+             s.organization_id == ^organization_id and
+               (s.status == "submitted" or s.order_number == "PO-2026-APPROVAL-TEST")
+       ) do
+  [first_customer | _] = distributor_customers
+  product = Enum.at(drug_products, 0)
+
+  approval_test_units =
+    for serial_index <- 1..2 do
+      serial = "SN-APPROVAL-TEST-#{serial_index}"
+      batch_no = "SER-APPROVAL-TEST-#{serial_index}"
+
+      case Repo.get_by(Batch,
+             organization_id: organization_id,
+             gtin: product.gtin,
+             serial: serial
+           ) do
+        nil -> receive_serialised_unit.(product, batch_no, serial)
+        batch -> batch
+      end
+    end
+
+  {:ok, approval_test} =
+    Distributor.create_shipment(organization_id, primary_distributor, %{
+      "order_number" => "PO-2026-APPROVAL-TEST",
+      "origin_gln" => warehouse_site.gln,
+      "destination_gln" => first_customer.gln
+    })
+
+  {:ok, _} = Distributor.select_shipment(mobile_user, approval_test.id)
+  {:ok, shipper} = Distributor.create_shipper(mobile_user, approval_test.id, %{})
+
+  Enum.each(approval_test_units, fn batch ->
+    {:ok, _item} =
+      Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => data_matrix.(batch)})
+  end)
+
+  {:ok, _} = Distributor.submit_shipment(mobile_user, approval_test.id)
 end
 
 role_counts =
@@ -1234,7 +1286,7 @@ Pharmacy + lab account:
 
 Distributor account:
   distributor@gmail.com
-  #{length(distributor_customers)} customers, a prepay bundle, one draft and one submitted shipment.
+  #{length(distributor_customers)} customers, a prepay bundle, one draft, and an awaiting-approval shipment.
 
 Distributor mobile app user:
   username packer.demo, PIN #{mobile_pin}

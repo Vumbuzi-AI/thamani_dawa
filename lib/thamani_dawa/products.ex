@@ -16,6 +16,11 @@ defmodule ThamaniDawa.Products do
     )
   end
 
+  @doc "Gets an organization's product by normalized GTIN, or nil."
+  def get_product_by_gtin(organization_id, gtin) when is_binary(gtin) do
+    Repo.get_by(Product, organization_id: organization_id, gtin: gtin)
+  end
+
   @doc """
   Lists products that have any batch — dispatched or still awaiting
   dispatch — with pagination and optional search filter. `site_ids: nil`

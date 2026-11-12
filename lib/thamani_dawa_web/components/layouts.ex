@@ -257,6 +257,7 @@ defmodule ThamaniDawaWeb.Layouts do
           {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
           {"Sites", "hero-building-office-2", ~p"/org/sites"},
           {"Products", "hero-cube", ~p"/org/products"},
+          {"Receiving", "hero-arrow-down-tray", ~p"/org/receiving"},
           {"Team", "hero-user-group", ~p"/org/team"},
           {"Suppliers", "hero-truck", ~p"/org/suppliers"},
           {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"},

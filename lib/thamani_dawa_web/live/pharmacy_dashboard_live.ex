@@ -5,6 +5,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
   alias ThamaniDawa.Dashboards
   alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Products
+  alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
 
   @near_expiry_days 30
@@ -39,6 +40,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
     {:ok,
      socket
      |> assign(:auto_start_tour?, params["tour"] == "1")
+     |> assign(:multi_site?, Sites.multi_site?(organization_id))
      |> assign(:products_by_id, products_by_id)
      |> assign(:out_of_stock, out_of_stock)
      |> assign(:low_stock, low_stock)
@@ -53,7 +55,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
      |> assign(:top_products, Dashboards.top_dispensed_products(organization_id, site_id))}
   end
 
-  defp product_tour_steps do
+  defp product_tour_steps(multi_site?) do
     [
       %{
         selector: ~s([data-tour-target="/pharmacy"]),
@@ -62,10 +64,21 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           "See today’s pharmacy workload, stock alerts, revenue, and dispensing activity at a glance."
       },
       %{
+        selector: ~s([data-tour-target="/pharmacy/quick-sale"]),
+        title: "Make a quick sale",
+        description:
+          "Dispense non-prescription items and complete a sale directly from the pharmacy."
+      },
+      %{
         selector: ~s([data-tour-target="/pharmacy/prescriptions"]),
         title: "Manage prescriptions",
         description:
           "Review prescriptions waiting to be dispensed and follow each order through completion."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/patients"]),
+        title: "Find patient records",
+        description: "Look up patients and review their prescription and dispensing history."
       },
       %{
         selector: ~s([data-tour-target="/pharmacy/stock"]),
@@ -80,12 +93,25 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           "Confirm stock dispatched to your site before it becomes available for dispensing."
       },
       %{
+        selector: ~s([data-tour-target="/pharmacy/requisitions"]),
+        title: "Request stock",
+        description: "Ask your organization for stock when your site needs a replenishment."
+      },
+      %{
         selector: ~s([data-tour-target="/pharmacy/scan"]),
         title: "Scan when speed matters",
         description:
           "Use scanning to identify products and batches quickly during day-to-day work."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/transactions"]),
+        title: "Review transactions",
+        description: "Review completed sales and dispensing activity for your pharmacy."
       }
     ]
+    |> Enum.reject(fn step ->
+      not multi_site? and step.selector == ~s([data-tour-target="/pharmacy/requisitions"])
+    end)
   end
 
   defp stock_alerts(batches, products_by_id) do
@@ -365,7 +391,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         id="pharmacy-product-tour"
         tour_key={"thamani-pharmacy-tour-v1-#{@current_scope.user.id}"}
         auto_start={@auto_start_tour?}
-        steps={product_tour_steps()}
+        steps={product_tour_steps(@multi_site?)}
       />
     </Layouts.pharmacy_shell>
     """

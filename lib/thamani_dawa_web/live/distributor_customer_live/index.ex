@@ -127,7 +127,13 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
           <.input field={@form[:name]} label="Organization name" required />
           <.input field={@form[:contact_name]} label="Contact person" />
           <div class="grid gap-x-4 sm:grid-cols-2">
-            <.input field={@form[:phone]} label="Phone" />
+            <.input
+              field={@form[:phone]}
+              type="tel"
+              label="Phone"
+              pattern="(?=.*[0-9])\\+?[0-9 ()-]+"
+              title="Use digits, spaces, hyphens, parentheses, and an optional leading +"
+            />
             <.input field={@form[:email]} type="email" label="Email" />
           </div>
           <.input field={@form[:address]} type="textarea" label="Delivery address" />

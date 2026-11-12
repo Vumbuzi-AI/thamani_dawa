@@ -10,6 +10,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Distributor
+  alias ThamaniDawa.Distributor.{Billing, SerialUsage}
   alias ThamaniDawa.Distributor.Reports
 
   on_mount {ThamaniDawaWeb.DistributorAccess, :require_serialisation_plan}
@@ -22,6 +23,8 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
      socket
      |> assign(:problems, [])
      |> assign(:expanded, MapSet.new())
+     |> assign(:approving?, false)
+     |> assign(:approval_confirming?, false)
      |> assign(:rejecting?, false)
      |> assign(:reject_form, to_form(%{"reason" => ""}, as: :reject))
      |> load(id)}
@@ -29,6 +32,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
 
   defp load(socket, id) do
     shipment = Distributor.get_shipment!(socket.assigns.current_scope.organization_id, id)
+    usage = Billing.active_usage(socket.assigns.current_scope.organization_id)
+    shipper_count = length(shipment.shippers)
+    remaining_allowance = SerialUsage.serials_left(usage)
 
     socket
     |> assign(:shipment, shipment)
@@ -37,6 +43,13 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
     |> assign(:item_groups, Reports.item_groups(shipment))
     |> assign(:labels, Reports.shipper_labels(shipment))
     |> assign(:unit_count, shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum())
+    |> assign(:serial_usage, usage)
+    |> assign(:shipper_count, shipper_count)
+    |> assign(:remaining_allowance, remaining_allowance)
+    |> assign(
+      :insufficient_allowance?,
+      is_integer(remaining_allowance) and shipper_count > remaining_allowance
+    )
   end
 
   def handle_info({:distributor_shipment, _event, shipment_id}, socket) do
@@ -58,31 +71,26 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
     {:noreply, assign(socket, :expanded, expanded)}
   end
 
+  def handle_event("open_approve", _params, %{assigns: %{approving?: true}} = socket),
+    do: {:noreply, socket}
+
+  def handle_event("open_approve", _params, socket),
+    do: {:noreply, assign(socket, :approval_confirming?, true)}
+
+  def handle_event("close_approve", _params, socket),
+    do: {:noreply, assign(socket, :approval_confirming?, false)}
+
+  def handle_event("approve", _params, %{assigns: %{approving?: true}} = socket),
+    do: {:noreply, socket}
+
   def handle_event("approve", _params, socket) do
+    socket = assign(socket, approving?: true, approval_confirming?: false)
     %{current_scope: scope, shipment: shipment} = socket.assigns
 
-    case Distributor.approve_shipment(scope.organization_id, scope.user, shipment.id) do
-      {:ok, _shipment} ->
-        {:noreply,
-         socket
-         |> assign(:problems, [])
-         |> put_flash(:info, "Shipment approved. SSCCs have been issued for every shipper.")
-         |> load(shipment.id)}
-
-      {:already_approved, _shipment} ->
-        {:noreply,
-         socket |> put_flash(:info, "This shipment is already approved.") |> load(shipment.id)}
-
-      {:error, {:invalid, problems}} ->
-        {:noreply,
-         socket
-         |> assign(:problems, problems)
-         |> put_flash(:error, "This shipment can't be approved yet — see the problems below.")
-         |> load(shipment.id)}
-
-      {:error, reason} ->
-        {:noreply, socket |> put_flash(:error, error_message(reason)) |> load(shipment.id)}
-    end
+    {:noreply,
+     start_async(socket, :approve_shipment, fn ->
+       Distributor.approve_shipment(scope.organization_id, scope.user, shipment.id)
+     end)}
   end
 
   def handle_event("open_reject", _params, socket) do
@@ -131,6 +139,37 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, error_message(reason))}
+    end
+  end
+
+  def handle_async(:approve_shipment, result, socket) do
+    socket = assign(socket, :approving?, false)
+    shipment_id = socket.assigns.shipment.id
+
+    case result do
+      {:ok, {:ok, _shipment}} ->
+        {:noreply,
+         socket
+         |> assign(:problems, [])
+         |> put_flash(:info, "Shipment approved. SSCCs have been issued for every shipper.")
+         |> load(shipment_id)}
+
+      {:ok, {:already_approved, _shipment}} ->
+        {:noreply,
+         socket |> put_flash(:info, "This shipment is already approved.") |> load(shipment_id)}
+
+      {:ok, {:error, {:invalid, problems}}} ->
+        {:noreply,
+         socket
+         |> assign(:problems, problems)
+         |> put_flash(:error, "This shipment can't be approved yet — see the problems below.")
+         |> load(shipment_id)}
+
+      {:ok, {:error, reason}} ->
+        {:noreply, socket |> put_flash(:error, error_message(reason)) |> load(shipment_id)}
+
+      {:exit, _reason} ->
+        {:noreply, socket |> put_flash(:error, error_message(:unknown)) |> load(shipment_id)}
     end
   end
 
@@ -246,11 +285,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
               :if={@shipment.status == "submitted"}
               id="approve-distributor-shipment"
               variant="primary"
-              phx-click="approve"
-              phx-disable-with="Approving…"
-              data-confirm={"Approve and issue #{length(@shipment.shippers)} SSCC(s)? This uses #{length(@shipment.shippers)} serial(s) from your allowance."}
+              phx-click="open_approve"
+              disabled={@approving?}
             >
-              <.icon name="hero-check-badge" class="size-4" /> Approve &amp; issue SSCCs
+              <.icon :if={!@approving?} name="hero-check-badge" class="size-4" />
+              {if @approving?, do: "Approving…", else: "Approve & issue SSCCs"}
             </.button>
           </:actions>
         </.header>
@@ -591,6 +630,73 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
             Reject shipment
           </.button>
         </.form>
+      </.modal>
+
+      <.modal
+        :if={@approval_confirming?}
+        id="distributor-approve-modal"
+        show
+        on_cancel={JS.push("close_approve")}
+      >
+        <h2
+          id="distributor-approve-modal-title"
+          class="mb-1 text-2xl font-medium tracking-tight text-thamani-forest"
+        >
+          Approve shipment?
+        </h2>
+        <p id="distributor-approve-modal-description" class="mb-4 text-sm text-thamani-pewter">
+          Review the serialisation usage before issuing SSCCs.
+        </p>
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-thamani-snow p-4 text-sm">
+          <dt class="text-thamani-pewter">Shipment / order</dt>
+          <dd id="approval-order-number" class="text-right font-semibold text-thamani-forest">
+            {@shipment.order_number}
+          </dd>
+          <dt class="text-thamani-pewter">Shippers</dt>
+          <dd id="approval-shipper-count" class="text-right font-semibold text-thamani-forest">
+            {@shipper_count}
+          </dd>
+          <dt class="text-thamani-pewter">SSCCs to issue</dt>
+          <dd id="approval-sscc-count" class="text-right font-semibold text-thamani-forest">
+            {@shipper_count}
+          </dd>
+          <dt class="text-thamani-pewter">Credits to consume</dt>
+          <dd id="approval-credit-count" class="text-right font-semibold text-thamani-forest">
+            {@shipper_count}
+          </dd>
+          <dt class="text-thamani-pewter">Current allowance</dt>
+          <dd id="approval-current-allowance" class="text-right font-semibold text-thamani-forest">
+            {if is_integer(@remaining_allowance), do: @remaining_allowance, else: "Unlimited"}
+          </dd>
+          <dt class="text-thamani-pewter">Remaining after approval</dt>
+          <dd id="approval-remaining-allowance" class="text-right font-semibold text-thamani-forest">
+            {if is_integer(@remaining_allowance),
+              do: max(@remaining_allowance - @shipper_count, 0),
+              else: "Unlimited"}
+          </dd>
+        </dl>
+        <div
+          :if={@insufficient_allowance?}
+          id="approval-insufficient-allowance"
+          role="alert"
+          class="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+        >
+          This shipment needs {@shipper_count} credits, but only {@remaining_allowance} remain in your allowance. Approval may fail if your available buffer cannot cover the difference.
+        </div>
+        <div class="mt-5 flex justify-end gap-3">
+          <.button id="cancel-approve-shipment" type="button" phx-click="close_approve">
+            Cancel
+          </.button>
+          <.button
+            id="confirm-approve-shipment"
+            variant="primary"
+            phx-click="approve"
+            phx-disable-with="Approving…"
+            disabled={@approving?}
+          >
+            Approve &amp; issue SSCCs
+          </.button>
+        </div>
       </.modal>
     </Layouts.distributor_shell>
     """

@@ -43,6 +43,21 @@ config :thamani_dawa, ThamaniDawa.GtinLookup, api_key: System.get_env("GS1_GRP_A
 
 config :thamani_dawa, :google_maps, api_key: System.get_env("GOOGLE_MAPS_API_KEY")
 
+daraja_enabled = System.get_env("DARAJA_ENABLED", "false") in ~w(true 1 yes)
+config :thamani_dawa, :daraja_enabled, daraja_enabled
+
+if daraja_enabled do
+  config :thamani_dawa, ThamaniDawa.Daraja,
+    base_url: System.get_env("DARAJA_BASE_URL", "https://sandbox.safaricom.co.ke"),
+    consumer_key: System.get_env("DARAJA_CONSUMER_KEY"),
+    consumer_secret: System.get_env("DARAJA_CONSUMER_SECRET"),
+    shortcode: System.get_env("DARAJA_SHORTCODE"),
+    passkey: System.get_env("DARAJA_PASSKEY"),
+    callback_url: System.get_env("DARAJA_CALLBACK_URL"),
+    callback_token: System.get_env("DARAJA_CALLBACK_TOKEN"),
+    retry: false
+end
+
 if company_prefix = System.get_env("GS1_COMPANY_PREFIX") do
   config :thamani_dawa, ThamaniDawa.Gln, company_prefix: company_prefix
 end

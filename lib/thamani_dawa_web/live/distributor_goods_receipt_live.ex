@@ -5,7 +5,18 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
 
   def mount(%{"id" => id}, _session, socket) do
     receipt = GoodsReceipts.get_receipt!(socket.assigns.current_scope.organization_id, id)
-    {:ok, assign(socket, :receipt, receipt)}
+
+    portal =
+      if socket.assigns.current_scope.user.role == :admin, do: :organization, else: :distributor
+
+    index_path =
+      if portal == :organization, do: ~p"/org/receiving", else: ~p"/distributor/receiving"
+
+    {:ok,
+     socket
+     |> assign(:receipt, receipt)
+     |> assign(:receiving_portal, portal)
+     |> assign(:receiving_index_path, index_path)}
   end
 
   defp product_name(product), do: product.generic_name || product.brand_name || "Unknown product"
@@ -27,16 +38,17 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.distributor_shell
+    <.receipt_shell
+      portal={@receiving_portal}
       flash={@flash}
       current_scope={@current_scope}
-      current_path={~p"/distributor/receiving"}
+      current_path={@receiving_index_path}
     >
       <.header icon="hero-document-check">
         {@receipt.number}
         <:subtitle>Complete record of this received delivery.</:subtitle>
         <:actions>
-          <.button variant="ghost" navigate={~p"/distributor/receiving"}><.icon
+          <.button variant="ghost" navigate={@receiving_index_path}><.icon
             name="hero-arrow-left"
             class="size-4"
           /> Receiving</.button>
@@ -80,7 +92,9 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           <:col :let={batch} label="Product">{product_name(batch.product)}</:col>
           <:col :let={batch} label="Batch"><span class="font-mono">{batch.batch_no}</span></:col>
           <:col :let={batch} label="Expiry">{Calendar.strftime(batch.expiry_date, "%b %Y")}</:col>
-          <:col :let={batch} label="Warehouse">{batch.site.name}</:col>
+          <:col :let={batch} label="Location">
+            {if batch.site, do: batch.site.name, else: "Organization stock"}
+          </:col>
           <:col :let={batch} label="Quantity">
             <span class="font-semibold text-thamani-forest">{batch.quantity} {unit_label(
               batch.product.uom
@@ -88,6 +102,32 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           </:col>
         </.table>
       </section>
+    </.receipt_shell>
+    """
+  end
+
+  attr :portal, :atom, required: true
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, required: true
+  slot :inner_block, required: true
+
+  defp receipt_shell(%{portal: :organization} = assigns) do
+    ~H"""
+    <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={@current_path}>
+      {render_slot(@inner_block)}
+    </Layouts.org_shell>
+    """
+  end
+
+  defp receipt_shell(assigns) do
+    ~H"""
+    <Layouts.distributor_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+    >
+      {render_slot(@inner_block)}
     </Layouts.distributor_shell>
     """
   end

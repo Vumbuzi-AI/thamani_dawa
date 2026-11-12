@@ -87,11 +87,20 @@ defmodule ThamaniDawa.GoodsReceipts do
   end
 
   defp post_item!(organization_id, user_id, receipt_id, %{attrs: attrs}) do
-    with {:ok, batch} <-
-           Batches.create_batch(organization_id, Map.put(attrs, "goods_receipt_id", receipt_id)),
-         {:ok, _received} <- Batches.receive_batch(batch, user_id) do
-      :ok
-    else
+    attrs = Map.put(attrs, "goods_receipt_id", receipt_id)
+
+    result =
+      if attrs["site_id"] in [nil, ""] do
+        Batches.receive_into_org_stock(organization_id, Map.delete(attrs, "site_id"))
+      else
+        case Batches.create_batch(organization_id, attrs) do
+          {:ok, batch} -> Batches.receive_batch(batch, user_id)
+          error -> error
+        end
+      end
+
+    case result do
+      {:ok, _batch} -> :ok
       {:error, changeset} -> Repo.rollback(changeset)
     end
   end

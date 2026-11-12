@@ -207,16 +207,6 @@ body {
   transition-delay: 0s;
 }
 
-/* Printing — hide the app chrome while leaving the current page's printable
-   content in the document. Hiding #sidebar-shell itself would also hide batch
-   labels nested within it. */
-@media print {
-  #sidebar-aside,
-  #mobile-app-bar {
-    display: none !important;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .internal-app *,
   .internal-app *::before,
@@ -810,15 +800,6 @@ textarea:focus {
   padding-left: 2.75rem;
 }
 
-@media print {
-  html, body { width: 80mm !important; height: auto !important; margin: 0 !important; overflow: hidden !important; }
-  body * { visibility: hidden !important; }
-  #quick-sale-receipt, #quick-sale-receipt * { visibility: visible !important; }
-  #quick-sale-receipt { position: fixed !important; left: 0 !important; top: 0 !important; width: 80mm !important; min-height: 0 !important; margin: 0 !important; padding: 6mm !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; color: #102b0d !important; font-size: 11px !important; line-height: 1.35 !important; }
-  #quick-sale-receipt img { display: block !important; }
-  @page { size: 80mm auto; margin: 0; }
-}
-
 /* Custom select chevron — replaces the stripped browser arrow */
 .thamani-select,
 select:not(.hidden):not([hidden]) {
@@ -1341,34 +1322,88 @@ label,
   }
 }
 
-/* Print styles for GS1 Data Matrix Batch Label */
+/* Shared print foundation. Individual documents keep their own page geometry. */
+:root {
+  --print-page: #ffffff;
+  --print-brand: #1c3a13;
+  --print-ink: #172414;
+  --print-muted: #4e554b;
+  --print-line: #c9cec5;
+  --print-soft: #f4f6f1;
+  --print-font: Arial, Helvetica, sans-serif;
+}
+
+.print-document {
+  color: var(--print-ink);
+  font-family: var(--print-font);
+  background: var(--print-page);
+}
+
+/* Shared print reset with page geometry scoped to each document type. */
 @media print {
-  /* The authenticated shell has an off-white canvas for the on-screen app.
-     Print the receipt on white paper instead. */
-  body,
-  #sidebar-shell {
-    background: #fff !important;
+  @page {
+    size: auto;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background-color: var(--print-page) !important;
+  }
+
+  #sidebar-shell,
+  #sidebar-shell > main,
+  #sidebar-shell > main > div,
+  .internal-app {
+    display: block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background-color: var(--print-page) !important;
+  }
+
+  #sidebar-aside,
+  #mobile-app-bar,
+  #sidebar-backdrop,
+  .no-print,
+  [role="alert"] {
+    display: none !important;
   }
 
   body * {
     visibility: hidden !important;
   }
+
   .printable-batch-label,
   .printable-batch-label *,
   .printable-lab-report,
   .printable-lab-report *,
+  .printable-invoice,
+  .printable-invoice *,
+  .printable-sscc-labels,
+  .printable-sscc-labels *,
+  #distributor-sscc-labels,
   #prescription-receipt,
   #prescription-receipt * {
     visibility: visible !important;
   }
-  /* Strip the modal dialog's own chrome (background, padding, rounded
-     corners, positioning context) from every ancestor of the label so it
-     doesn't bleed through as an off-white box around the printed label. */
+
+  /* Ancestors remain in the layout tree, so make their canvas white too. */
   body *:has(.printable-batch-label),
   body *:has(.printable-lab-report),
-  body *:has(.printable-sscc-labels) {
+  body *:has(.printable-invoice),
+  body *:has(.printable-sscc-labels),
+  body *:has(#prescription-receipt) {
     position: static !important;
-    background: transparent !important;
+    background-color: var(--print-page) !important;
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
@@ -1387,19 +1422,48 @@ label,
     background: #fff !important;
     color: #000 !important;
     box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .printable-lab-report {
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 100% !important;
-    max-width: 210mm !important;
+    max-width: 186mm !important;
     margin: 0 !important;
-    padding: 10mm !important;
-    background: #fff !important;
+    padding: 0 !important;
+    background-color: var(--print-page) !important;
     color: #000 !important;
     box-shadow: none !important;
   }
+  .printable-invoice {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 186mm !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: var(--print-page) !important;
+    color: var(--print-ink) !important;
+    box-shadow: none !important;
+    outline: 0 !important;
+    font-family: var(--print-font) !important;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .printable-invoice img { print-color-adjust: exact; }
+  .printable-invoice th,
+  .printable-invoice td { padding-top: 3mm !important; padding-bottom: 3mm !important; }
+  .printable-invoice #invoice-header,
+  .printable-invoice #invoice-bill-to,
+  .printable-invoice #invoice-metadata,
+  .printable-invoice #invoice-line-items,
+  .printable-invoice #invoice-totals,
+  .printable-invoice #invoice-remittance { break-inside: avoid; page-break-inside: avoid; }
   .printable-sscc-labels,
   .printable-sscc-labels * {
     visibility: visible !important;
@@ -1413,8 +1477,10 @@ label,
     padding: 0 !important;
   }
   .printable-sscc-label {
+    page: sscc-label;
     width: 4in !important;
     max-width: none !important;
+    height: 6in !important;
     min-height: 6in !important;
     margin: 0 !important;
     padding: 0.2in !important;
@@ -1423,14 +1489,21 @@ label,
     background: #fff !important;
     color: #000 !important;
     box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
     break-after: page;
     page-break-after: always;
+  }
+  .printable-sscc-label:last-child {
+    break-after: auto;
+    page-break-after: auto;
   }
   .printable-sscc-label canvas {
     width: 100% !important;
     height: auto !important;
   }
-  .no-print {
-    display: none !important;
+  @page sscc-label {
+    size: 4in 6in;
+    margin: 0;
   }
 }
