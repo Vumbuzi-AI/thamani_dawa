@@ -84,7 +84,8 @@ org_result =
           %{
             name: "Demo Care Pharmacy and Diagnostics",
             slug: "demo-care",
-            license_number: "KMPDB-DEMO-001"
+            operating_models: [:pharmacy, :laboratory, :distributor],
+            gs1_company_prefix: "6160001"
           },
           %{
             name: "Amina Kamau",
@@ -107,7 +108,7 @@ org_result =
           insert_or_get.(
             Site,
             %{organization_id: organization.id, name: organization.name},
-            %{site_type: :pharmacy, lat: -1.2833, long: 36.8167},
+            %{activities: [:pharmacy], lat: -1.2833, long: 36.8167},
             fn attrs -> Sites.create_site(organization.id, attrs) end
           )
 
@@ -135,7 +136,7 @@ pharmacy_site =
   org_result.site
   |> Sites.update_site(%{
     name: "Demo Care CBD Pharmacy",
-    site_type: :pharmacy,
+    activities: [:pharmacy],
     gln: "6160001000001",
     address: "Kimathi Street, Nairobi CBD",
     lat: -1.2833,
@@ -151,7 +152,7 @@ lab_site =
     Site,
     %{organization_id: organization_id, name: "Demo Care Diagnostic Lab"},
     %{
-      site_type: :lab,
+      activities: [:laboratory],
       gln: "6160001000018",
       address: "Kimathi Street, 2nd Floor, Nairobi",
       lat: -1.2831,
@@ -165,7 +166,7 @@ combined_site =
     Site,
     %{organization_id: organization_id, name: "Demo Care Westlands Medical Centre"},
     %{
-      site_type: :pharmacy_lab,
+      activities: [:pharmacy, :laboratory],
       gln: "6160001000025",
       address: "Woodvale Grove, Westlands, Nairobi",
       lat: -1.2676,
@@ -179,7 +180,7 @@ warehouse_site =
     Site,
     %{organization_id: organization_id, name: "Demo Care Central Warehouse"},
     %{
-      site_type: :warehouse,
+      activities: [:distribution],
       gln: "6160001000032",
       address: "Mombasa Road Logistics Park, Nairobi",
       lat: -1.3197,
