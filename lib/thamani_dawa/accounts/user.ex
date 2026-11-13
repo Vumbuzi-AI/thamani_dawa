@@ -2,7 +2,8 @@ defmodule ThamaniDawa.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @roles [:admin, :pharmacist, :lab_technician, :pharma_lab, :distributor]
+  @staff_roles [:admin, :pharmacist, :lab_technician, :pharma_lab, :distributor]
+  @roles @staff_roles ++ [:superadmin]
   @legal_policy_version "2026-10-29"
 
   schema "users" do
@@ -107,6 +108,7 @@ defmodule ThamaniDawa.Accounts.User do
     user
     |> cast(attrs, [:name, :email, :role])
     |> validate_required([:name, :role])
+    |> validate_inclusion(:role, @staff_roles)
     |> validate_email()
   end
 
@@ -123,6 +125,7 @@ defmodule ThamaniDawa.Accounts.User do
     user
     |> cast(attrs, [:role])
     |> validate_required([:role])
+    |> validate_inclusion(:role, @staff_roles)
   end
 
   @doc "Changeset for a user switching which of their assigned sites they're currently operating at."
@@ -157,7 +160,7 @@ defmodule ThamaniDawa.Accounts.User do
   defp validate_password(changeset, opts) do
     changeset
     |> validate_required([:password], message: "Please choose a password")
-    |> validate_length(:password, min: 6, max: 72, message: "Must be at least 6 characters")
+    |> validate_length(:password, min: 8, max: 72, message: "Must be at least 8 characters")
     |> maybe_hash_password(opts)
   end
 
@@ -208,8 +211,8 @@ defmodule ThamaniDawa.Accounts.User do
     false
   end
 
-  @doc "The valid staff roles, including distributor staff for warehouse organizations."
-  def roles, do: @roles
+  @doc "The valid organization-staff roles. Platform roles are intentionally excluded."
+  def roles, do: @staff_roles
 
   @doc "Whether the account is active. A deactivated user must not be able to log in or keep an existing session."
   def active?(%__MODULE__{is_active: true}), do: true
