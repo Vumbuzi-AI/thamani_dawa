@@ -51,7 +51,31 @@ defmodule ThamaniDawa.AccountsTest do
     end
   end
 
+  describe "create_platform_superadmin/1" do
+    test "creates an active tenant-less platform account" do
+      assert {:ok, user} =
+               Accounts.create_platform_superadmin(valid_user_attributes())
+
+      assert user.role == :superadmin
+      assert is_nil(user.organization_id)
+      assert User.active?(user)
+    end
+  end
+
   describe "invite_user/3" do
+    test "does not allow an organization invite to create a platform superadmin" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "Not a platform operator",
+                 email: valid_user_email(),
+                 role: :superadmin
+               })
+
+      assert %{role: ["is invalid"]} = errors_on(changeset)
+    end
+
     test "creates an unconfirmed user with no password, tied to the inviting organization" do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})

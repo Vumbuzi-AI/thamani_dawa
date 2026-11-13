@@ -74,6 +74,12 @@ config :thamani_dawa, dev_routes: true
 # This configuration intentionally lives in dev.exs so demo credentials are
 # never rendered by a production release.
 config :thamani_dawa, :demo_login_accounts, [
+  %{
+    id: "superadmin",
+    name: "Platform Superadmin",
+    role: "Superadmin",
+    email: "superadmin@gmail.com"
+  },
   %{id: "admin", name: "Amina Kamau", role: "Admin", email: "admin@gmail.com"},
   %{
     id: "pharmacist",

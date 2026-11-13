@@ -79,6 +79,7 @@ defmodule ThamaniDawaWeb.UserAuth do
   Usage: `live_session :foo, on_mount: [{ThamaniDawaWeb.UserAuth, :mount_current_scope}]`.
   Also supports `:require_authenticated` (halts unless a user is signed in),
   `:require_admin` (halts unless the signed-in user is an org admin, §7),
+  `:require_superadmin` (halts unless the signed-in user is a platform superadmin),
   `:require_pharmacy_access`, and `:require_lab_access`.
 
   The pharmacy/lab guards check two things: role (per §7 — admin, or the
@@ -125,6 +126,28 @@ defmodule ThamaniDawaWeb.UserAuth do
           socket =
             socket
             |> Phoenix.LiveView.put_flash(:error, "You must be an admin to access this page.")
+            |> Phoenix.LiveView.redirect(to: ~p"/")
+
+          {:halt, socket}
+        end
+
+      {:halt, socket} ->
+        {:halt, socket}
+    end
+  end
+
+  def on_mount(:require_superadmin, params, session, socket) do
+    case on_mount(:require_authenticated, params, session, socket) do
+      {:cont, socket} ->
+        if Scope.superadmin?(socket.assigns.current_scope) do
+          {:cont, socket}
+        else
+          socket =
+            socket
+            |> Phoenix.LiveView.put_flash(
+              :error,
+              "You don't have access to the platform console."
+            )
             |> Phoenix.LiveView.redirect(to: ~p"/")
 
           {:halt, socket}

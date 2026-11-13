@@ -78,6 +78,11 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/requisitions/:id/fulfill", RequisitionQueueLive.Index, :fulfill
     end
 
+    live_session :platform, on_mount: [{ThamaniDawaWeb.UserAuth, :require_superadmin}] do
+      live "/platform", PlatformDashboardLive, :index
+      live "/platform/audit", PlatformAuditLive, :index
+    end
+
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
       live "/pharmacy", PharmacyDashboardLive, :index
       live "/pharmacy/transactions", EarningsLive, :pharmacy

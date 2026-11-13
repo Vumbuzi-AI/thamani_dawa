@@ -451,6 +451,9 @@ defmodule ThamaniDawaWeb.PageComponents do
   def dashboard_path(nil), do: "/login"
   def dashboard_path(%ThamaniDawa.Accounts.Scope{user: nil}), do: "/login"
 
+  def dashboard_path(%ThamaniDawa.Accounts.Scope{user: %{role: :superadmin, is_active: true}}),
+    do: "/platform"
+
   def dashboard_path(%ThamaniDawa.Accounts.Scope{} = scope) do
     cond do
       ThamaniDawa.Accounts.Scope.admin?(scope) ->

@@ -44,7 +44,8 @@ defmodule ThamaniDawaWeb.SessionController do
   defp authenticate(conn, email, password, start_tour?) do
     case Accounts.get_user_by_email_and_password(email, password) do
       %User{} = user ->
-        first_staff_login? = user.role != :admin and is_nil(user.last_logged_in_at)
+        first_staff_login? =
+          user.role not in [:admin, :superadmin] and is_nil(user.last_logged_in_at)
 
         conn
         |> log_in_user(user)
@@ -64,6 +65,7 @@ defmodule ThamaniDawaWeb.SessionController do
   end
 
   defp redirect_path_for(%User{role: :admin}), do: ~p"/org/dashboard"
+  defp redirect_path_for(%User{role: :superadmin}), do: ~p"/platform"
   defp redirect_path_for(%User{role: :pharmacist}), do: ~p"/pharmacy"
   defp redirect_path_for(%User{role: :lab_technician}), do: ~p"/lab"
 

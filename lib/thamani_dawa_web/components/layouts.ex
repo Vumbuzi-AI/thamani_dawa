@@ -270,6 +270,33 @@ defmodule ThamaniDawaWeb.Layouts do
     """
   end
 
+  @doc "Renders the authenticated platform shell for tenant-less superadmins."
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, default: ""
+
+  slot :inner_block, required: true
+
+  def platform_shell(assigns) do
+    ~H"""
+    <.sidebar_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      title="Thamani Dawa"
+      section_label="Platform"
+      base_path="/platform"
+      show_product_tour={false}
+      nav_items={[
+        {"Dashboard", "hero-squares-2x2", ~p"/platform"},
+        {"Audit activity", "hero-clipboard-document-list", ~p"/platform/audit"}
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
   attr :current_path, :string, required: true
@@ -278,6 +305,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :base_path, :string, required: true
   attr :nav_items, :list, required: true
   attr :nav_badges, :map, default: %{}
+  attr :show_product_tour, :boolean, default: true
   attr :back, :any, default: nil
   attr :back_label, :string, default: nil
 
@@ -415,6 +443,7 @@ defmodule ThamaniDawaWeb.Layouts do
           style="border-top: 1px solid var(--thamani-border-nav);"
         >
           <.link
+            :if={@show_product_tour}
             id="start-product-tour"
             navigate={product_tour_path(@base_path)}
             data-tooltip="Product tour"
