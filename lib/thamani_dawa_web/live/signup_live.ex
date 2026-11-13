@@ -435,27 +435,20 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   def render(assigns) do
     ~H"""
-    <div style="min-height: 100vh; display: flex; flex-direction: row;">
+    <div
+      class="lg:h-svh lg:overflow-hidden"
+      style="min-height: 100vh; display: flex; flex-direction: row;"
+    >
       <div
-        class="hidden lg:flex"
+        class="hidden lg:flex lg:h-svh"
         style="width: 38%; background: var(--thamani-forest); flex-direction: column; justify-content: space-between; padding: 48px 52px; position: relative; overflow: hidden;"
       >
-        <div
-          aria-hidden="true"
-          style="position: absolute; top: -120px; right: -120px; width: 420px; height: 420px; border-radius: 50%; background: var(--thamani-lime); opacity: 0.08; pointer-events: none;"
-        >
-        </div>
-        <div
-          aria-hidden="true"
-          style="position: absolute; bottom: -80px; left: -80px; width: 280px; height: 280px; border-radius: 50%; background: var(--thamani-lime); opacity: 0.06; pointer-events: none;"
-        >
-        </div>
-
         <.link
           navigate={~p"/"}
-          style="font-size: 17px; font-weight: 500; color: var(--thamani-snow); text-decoration: none; letter-spacing: -0.01em; position: relative;"
+          aria-label="Thamani Dawa home"
+          style="position: relative; width: 156px;"
         >
-          Thamani Dawa
+          <img src="/images/logo-transparent.png" alt="" class="h-auto w-full brightness-0 invert" />
         </.link>
 
         <div style="position: relative;">
@@ -483,7 +476,10 @@ defmodule ThamaniDawaWeb.SignupLive do
         </div>
       </div>
 
-      <div style="flex: 1; min-width: 0; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: clamp(24px, 6vw, 48px) clamp(20px, 6vw, 40px);">
+      <div
+        class="lg:h-svh lg:overflow-y-auto"
+        style="flex: 1; min-width: 0; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: clamp(24px, 6vw, 48px) clamp(20px, 6vw, 40px);"
+      >
         <div style="width: 100%; max-width: 560px;">
           <ThamaniDawaWeb.Layouts.flash_group flash={@flash} />
 
@@ -560,21 +556,23 @@ defmodule ThamaniDawaWeb.SignupLive do
               phx-change="validate_organization"
               phx-submit="continue"
             >
-              <.thamani_input
-                field={@org_form[:name]}
-                label="Organization name"
-                placeholder="e.g. MedPoint Health"
-                phx-debounce="blur"
-                required
-              />
+              <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <.thamani_input
+                  field={@org_form[:name]}
+                  label="Organization name"
+                  placeholder="e.g. MedPoint Health"
+                  phx-debounce="blur"
+                  required
+                />
 
-              <.thamani_input
-                field={@org_form[:license_number]}
-                label="License number"
-                placeholder="e.g. PPB-XXXX"
-                phx-debounce="blur"
-                required
-              />
+                <.thamani_input
+                  field={@org_form[:license_number]}
+                  label="License number"
+                  placeholder="e.g. PPB-XXXX"
+                  phx-debounce="blur"
+                  required
+                />
+              </div>
 
               <fieldset class="mb-6">
                 <legend class="text-sm font-medium text-[var(--thamani-forest)]">

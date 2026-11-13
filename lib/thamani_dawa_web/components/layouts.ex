@@ -971,12 +971,61 @@ defmodule ThamaniDawaWeb.Layouts do
   def contact(assigns) do
     ~H"""
     <div class="contact-page">
-      <.page_navbar current_scope={@current_scope} />
+      <.marketing_nav />
       <main class="w-full">
         {@inner_content || render_slot(@inner_block)}
       </main>
       <.flash_group flash={@flash} />
     </div>
+    """
+  end
+
+  defp marketing_nav(assigns) do
+    ~H"""
+    <header class="site-header">
+      <div class="nav-shell">
+        <a class="brand" href="/" aria-label="Thamani Dawa home">
+          <img src="/images/logo-transparent.png" alt="" width="56" height="56" />
+        </a>
+        <nav class="desktop-nav" aria-label="Primary navigation">
+          <a href="/#features">Features</a>
+          <a href="/#results">Why Thamani</a>
+          <a href="/contact" aria-current="page">Contact</a>
+        </nav>
+        <div class="desktop-actions">
+          <a class="button button-small button-light login-cta" href="/login">Log in</a>
+          <a class="button button-small button-dark" href="/signup">Get started</a>
+        </div>
+        <button
+          class="menu-button"
+          type="button"
+          aria-label="Open menu"
+          aria-controls="mobile-menu"
+          aria-expanded="false"
+        >
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </header>
+    <dialog class="mobile-menu" id="mobile-menu" aria-label="Site menu">
+      <div class="menu-top">
+        <a class="brand" href="/" aria-label="Thamani Dawa home">
+          <img src="/images/logo-transparent.png" alt="" width="56" height="56" />
+        </a>
+        <button class="menu-close" type="button" aria-label="Close menu"><span></span><span></span></button>
+      </div>
+      <div class="menu-groups">
+        <div>
+          <p>Product</p><a href="/#features">Features</a><a href="/login">Log in</a><a href="/signup">Create account</a>
+        </div>
+        <div>
+          <p>Company</p><a href="/#results">Why Thamani</a><a href="/contact">Contact</a>
+        </div>
+        <div>
+          <p>Legal</p><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a>
+        </div>
+      </div>
+    </dialog>
     """
   end
 

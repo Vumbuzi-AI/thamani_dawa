@@ -4,31 +4,26 @@
      Inputs:  <.thamani_input>
      Buttons: <.thamani_btn>
      ============================================================ --%>
-<div style="min-height: 100vh; display: flex; flex-direction: row;">
+<div
+  class="lg:h-svh lg:overflow-hidden"
+  style="min-height: 100vh; display: flex; flex-direction: row;"
+>
   <%!-- Left decorative panel — Forest Depths, hidden on mobile --%>
   <div
-    class="hidden lg:flex"
+    class="hidden lg:flex lg:h-svh"
     style="width: 38%; background: var(--thamani-forest); flex-direction: column; justify-content: space-between; padding: 48px 52px; position: relative; overflow: hidden;"
   >
-    <%!-- Decorative lime orb — top right --%>
-    <div
-      aria-hidden="true"
-      style="position: absolute; top: -120px; right: -120px; width: 420px; height: 420px; border-radius: 50%; background: var(--thamani-lime); opacity: 0.08; pointer-events: none;"
-    >
-    </div>
-    <%!-- Decorative lime orb — bottom left --%>
-    <div
-      aria-hidden="true"
-      style="position: absolute; bottom: -80px; left: -80px; width: 280px; height: 280px; border-radius: 50%; background: var(--thamani-lime); opacity: 0.06; pointer-events: none;"
-    >
-    </div>
-
     <%!-- Brand mark --%>
     <a
       href="/"
-      style="font-size: 17px; font-weight: 500; color: var(--thamani-snow); text-decoration: none; letter-spacing: -0.01em; position: relative;"
+      aria-label="Thamani Dawa home"
+      style="position: relative; width: 156px;"
     >
-      Thamani Dawa
+      <img
+        src="/images/logo-transparent.png"
+        alt=""
+        class="h-auto w-full brightness-0 invert"
+      />
     </a>
 
     <%!-- Mid copy --%>
@@ -59,8 +54,11 @@
   </div>
 
   <%!-- Right form panel — Snow White --%>
-  <div style="flex: 1; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
-    <div style="width: 100%; max-width: 380px;">
+  <div
+    class="lg:h-svh lg:overflow-y-auto"
+    style="flex: 1; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 24px;"
+  >
+    <div style="width: 100%; max-width: 456px;">
       <%!-- Flash messages --%>
       <Layouts.flash_group flash={@flash} />
 
@@ -68,7 +66,7 @@
       <h1 style="font-size: 32px; font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-forest); margin-bottom: 8px;">
         Welcome back
       </h1>
-      <p style="font-size: 15px; color: var(--thamani-pewter); line-height: 1.5; margin-bottom: 40px;">
+      <p style="font-size: 15px; color: var(--thamani-pewter); line-height: 1.5; margin-bottom: 28px;">
         Log in to your Thamani Dawa account.
       </p>
 
@@ -77,7 +75,7 @@
         :if={@demo_accounts != []}
         id="demo-login-accounts"
         aria-labelledby="demo-login-heading"
-        class="mb-8 rounded-2xl border border-thamani-stone bg-white/70 p-4"
+        class="mb-6 rounded-2xl border border-thamani-stone bg-white/70 p-4"
       >
         <div class="mb-3 flex items-center justify-between gap-3">
           <div>
@@ -96,7 +94,7 @@
           </span>
         </div>
 
-        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           <.form
             :for={account <- @demo_accounts}
             for={account.form}
@@ -110,7 +108,7 @@
               id={"demo-login-#{account.id}-submit"}
               type="submit"
               class={[
-                "group flex min-h-20 w-full items-center gap-3 rounded-xl border border-thamani-stone bg-thamani-snow px-3 py-2.5 text-left cursor-pointer",
+                "group flex min-h-20 w-full items-center gap-3 rounded-xl border border-thamani-stone bg-thamani-snow px-3 py-2.5 text-left cursor-pointer lg:min-h-[76px] lg:gap-2 lg:px-2.5",
                 "transition duration-200 ease-out hover:-translate-y-0.5 hover:border-thamani-forest hover:bg-white",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2 active:translate-y-0"
               ]}
@@ -162,7 +160,7 @@
       </p>
 
       <%!-- Sign-up link --%>
-      <p style="text-align: center; font-size: 14px; color: var(--thamani-pewter); margin-top: 28px;">
+      <p style="text-align: center; font-size: 14px; color: var(--thamani-pewter); margin-top: 20px;">
         Don't have an account?
         <.link
           navigate={~p"/signup"}
