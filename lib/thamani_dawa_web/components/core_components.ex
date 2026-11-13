@@ -2290,10 +2290,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
       |> assign(:page_numbers, page_numbers)
 
     ~H"""
-    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200 pt-6">
-      <p class="text-sm text-slate-500 order-2 sm:order-1">
-        Showing <span class="font-medium text-slate-900">{@from_item}</span>–<span class="font-medium text-slate-900">{@to_item}</span>
-        of <span class="font-medium text-slate-900">{@total_entries}</span>
+    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-thamani-stone pt-6">
+      <p class="pagination-summary order-2 sm:order-1 text-sm">
+        Showing <span class="pagination-summary-value font-medium">{@from_item}</span>–<span class="pagination-summary-value font-medium">{@to_item}</span>
+        of <span class="pagination-summary-value font-medium">{@total_entries}</span>
         results
       </p>
 
@@ -2305,10 +2305,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page - 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
+            "pagination-link inline-flex items-center justify-center size-10 rounded-lg transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_prev,
-              do: "hover:bg-slate-100 hover:text-slate-900",
-              else: "pointer-events-none opacity-40"
+              do: "",
+              else: "pointer-events-none"
             )
           ]}
           aria-disabled={!@has_prev}
@@ -2324,16 +2324,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
               if page_num != :ellipsis, do: build_pagination_url(@path, page_num, @query_param)
             }
             class={[
-              "inline-flex items-center justify-center size-10 rounded-lg text-sm font-medium transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
+              "inline-flex items-center justify-center size-10 rounded-lg text-sm transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
               if(page_num == :ellipsis,
-                do: "text-slate-400 cursor-default",
-                else:
-                  if(page_num == @current_page,
-                    do: "bg-thamani-forest text-white",
-                    else: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  )
+                do: "pagination-ellipsis cursor-default",
+                else: "pagination-link"
               )
             ]}
+            aria-current={page_num == @current_page && "page"}
           >
             {if page_num == :ellipsis, do: "…", else: page_num}
           </.link>
@@ -2342,10 +2339,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page + 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
+            "pagination-link inline-flex items-center justify-center size-10 rounded-lg transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_next,
-              do: "hover:bg-slate-100 hover:text-slate-900",
-              else: "pointer-events-none opacity-40"
+              do: "",
+              else: "pointer-events-none"
             )
           ]}
           aria-disabled={!@has_next}

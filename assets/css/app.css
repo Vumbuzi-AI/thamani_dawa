@@ -1322,6 +1322,54 @@ label,
   }
 }
 
+/* ============================================================
+   Pagination controls
+
+   These rules live outside Tailwind's utility layer on purpose:
+   the marketing stylesheet (`landing.css`) resets `a { color: inherit }`
+   globally, and because that reset is unlayered it outranks every
+   layered `text-*` utility — which left the current-page number
+   painted in the inherited body ink instead of the inverse snow.
+   Scoping the colors here (specificity over `a`) keeps them applied
+   and gives the pager the same Thamani palette as the rest of the app.
+   ============================================================ */
+
+.pagination-summary {
+  color: var(--thamani-pewter);
+}
+
+.pagination-summary .pagination-summary-value {
+  color: var(--thamani-forest);
+}
+
+.pagination-link {
+  color: var(--thamani-pewter);
+}
+
+.pagination-link:hover:not([aria-disabled="true"]) {
+  background-color: var(--thamani-stone);
+  color: var(--thamani-forest);
+}
+
+.pagination-link[aria-current="page"] {
+  background-color: var(--thamani-forest);
+  color: var(--thamani-snow);
+  font-weight: 600;
+}
+
+.pagination-link[aria-current="page"]:hover {
+  background-color: var(--thamani-forest);
+  color: var(--thamani-snow);
+}
+
+.pagination-link[aria-disabled="true"] {
+  color: var(--thamani-frosted);
+}
+
+.pagination-ellipsis {
+  color: var(--thamani-pewter);
+}
+
 /* Shared print foundation. Individual documents keep their own page geometry. */
 :root {
   --print-page: #ffffff;

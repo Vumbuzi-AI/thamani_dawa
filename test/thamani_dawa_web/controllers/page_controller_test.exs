@@ -6,7 +6,7 @@ defmodule ThamaniDawaWeb.PageControllerTest do
   test "GET / unauthenticated shows Get started and Log in", %{conn: conn} do
     conn = get(conn, ~p"/")
     html = html_response(conn, 200)
-    assert html =~ "The pharmacy OS"
+    assert html =~ "Run pharmacy operations with clarity."
     assert html =~ "Log in"
     assert html =~ "Get started"
   end
