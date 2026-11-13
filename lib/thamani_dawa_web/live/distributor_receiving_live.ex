@@ -1,19 +1,22 @@
 defmodule ThamaniDawaWeb.DistributorReceivingLive do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.GoodsReceipts
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.Suppliers
+  alias ThamaniDawa.Suppliers.Supplier
   alias ThamaniDawaWeb.DistributorPagination
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
 
     receiving_portal =
-      if socket.assigns.current_scope.user.role == :admin, do: :organization, else: :distributor
+      if Scope.admin?(socket.assigns.current_scope), do: :organization, else: :distributor
 
     {receiving_index_path, receiving_new_path} =
       if receiving_portal == :organization,
@@ -36,6 +39,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
      |> assign(:receipt_posting_key, Ecto.UUID.generate())
      |> assign(:editing_delivery_item_id, nil)
      |> assign(:new_product_form, nil)
+     |> assign(:adding_supplier, false)
+     |> assign(:new_supplier_form, nil)
+     |> assign(:add_item_open, false)
      |> assign(:page_number, 1)
      |> reload_receipts()}
   end
@@ -57,6 +63,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
        |> assign(:receipt_posting_key, Ecto.UUID.generate())
        |> assign(:editing_delivery_item_id, nil)
        |> assign(:new_product_form, nil)
+       |> assign(:adding_supplier, false)
+       |> assign(:new_supplier_form, nil)
+       |> assign(:add_item_open, false)
        |> assign(:form, nil)}
     else
       {:noreply,
@@ -67,9 +76,31 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
          delivery_items: [],
          receipt_posting_key: Ecto.UUID.generate(),
          editing_delivery_item_id: nil,
-         new_product_form: nil
+         new_product_form: nil,
+         adding_supplier: false,
+         new_supplier_form: nil,
+         add_item_open: false
        )}
     end
+  end
+
+  def handle_event("open_add_item", _params, socket) do
+    {:noreply, assign(socket, :add_item_open, true)}
+  end
+
+  def handle_event("close_add_item", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:add_item_open, false)
+     |> assign(:receipt_step, :product)
+     |> assign(:selected_product, nil)
+     |> assign(:scan_error, nil)
+     |> assign(:scan_form, to_form(%{"gtin" => ""}, as: :scan))
+     |> assign(:editing_delivery_item_id, nil)
+     |> assign(:new_product_form, nil)
+     |> assign(:adding_supplier, false)
+     |> assign(:new_supplier_form, nil)
+     |> assign(:form, nil)}
   end
 
   def handle_event("choose_product", %{"product_id" => ""}, socket) do
@@ -132,6 +163,43 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
+  def handle_event("toggle_new_supplier", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:adding_supplier, true)
+     |> assign(:new_supplier_form, to_form(Suppliers.change_supplier(%Supplier{}), as: :supplier))}
+  end
+
+  def handle_event("cancel_new_supplier", _params, socket) do
+    {:noreply, socket |> assign(:adding_supplier, false) |> assign(:new_supplier_form, nil)}
+  end
+
+  def handle_event("validate_new_supplier", %{"supplier" => attrs}, socket) do
+    changeset = Map.put(Suppliers.change_supplier(%Supplier{}, attrs), :action, :validate)
+    {:noreply, assign(socket, :new_supplier_form, to_form(changeset, as: :supplier))}
+  end
+
+  def handle_event("save_new_supplier", %{"supplier" => attrs}, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+
+    case Suppliers.create_supplier(organization_id, attrs) do
+      {:ok, supplier} ->
+        batch_attrs =
+          (socket.assigns.form.params || %{})
+          |> Map.put("supplier_id", to_string(supplier.id))
+
+        {:noreply,
+         socket
+         |> assign(:suppliers, [supplier | socket.assigns.suppliers])
+         |> assign(:adding_supplier, false)
+         |> assign(:new_supplier_form, nil)
+         |> assign(:form, to_form(receipt_changeset(socket, batch_attrs), as: :batch))}
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :new_supplier_form, to_form(changeset, as: :supplier))}
+    end
+  end
+
   def handle_event("add_to_delivery", %{"batch" => attrs}, socket) do
     {:noreply, add_delivery_item(normalize_sscc(attrs), socket)}
   end
@@ -149,6 +217,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     if item && product do
       {:noreply,
        socket
+       |> assign(:add_item_open, true)
        |> assign(:editing_delivery_item_id, item.id)
        |> assign(:selected_product, product)
        |> assign(:receipt_step, :details)
@@ -264,6 +333,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     |> assign(:form, nil)
     |> assign(:scan_error, nil)
     |> assign(:scan_form, to_form(%{"gtin" => ""}, as: :scan))
+    |> assign(:add_item_open, false)
   end
 
   defp replace_delivery_item(items, editing_id, item) do
@@ -342,13 +412,17 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   defp receipt_changeset(%{assigns: %{receiving_portal: :organization}}, attrs) do
     %Batch{}
     |> Batch.org_intake_changeset(Map.delete(attrs, "site_id"))
-    |> Ecto.Changeset.validate_required([:supplier_id], message: "is required for a delivery receipt")
+    |> Ecto.Changeset.validate_required([:supplier_id],
+      message: "is required for a delivery receipt"
+    )
   end
 
   defp receipt_changeset(_socket, attrs) do
     %Batch{}
     |> Batch.changeset(attrs)
-    |> Ecto.Changeset.validate_required([:supplier_id], message: "is required for a delivery receipt")
+    |> Ecto.Changeset.validate_required([:supplier_id],
+      message: "is required for a delivery receipt"
+    )
   end
 
   defp format_changeset_error(changeset) do
@@ -369,7 +443,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   defp warehouse_sites(organization_id) do
     organization_id
     |> Sites.list_sites()
-    |> Enum.filter(&(&1.site_type == :warehouse and &1.is_active))
+    |> Enum.filter(&(Site.distribution?(&1) and &1.is_active))
   end
 
   defp product_name(products, product_id) do
@@ -422,7 +496,20 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       current_scope={@current_scope}
       current_path={@receiving_index_path}
     >
-      <.header icon="hero-arrow-down-tray">
+      <.header :if={@live_action == :new} icon="hero-arrow-down-tray">
+        Receive stock
+        <:subtitle>
+          Scan or select each item as it comes off the truck, then add its batch details.
+        </:subtitle>
+        <:actions>
+          <.button variant="ghost" patch={@receiving_index_path}>Cancel</.button>
+          <.button id="open-add-item" variant="primary" phx-click="open_add_item">
+            <.icon name="hero-plus" class="size-4" /> Add item
+          </.button>
+        </:actions>
+      </.header>
+
+      <.header :if={@live_action != :new} icon="hero-arrow-down-tray">
         Receive inventory
         <:subtitle>Check in a delivery directly into a distributor warehouse.</:subtitle>
         <:actions>
@@ -436,16 +523,90 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         </:actions>
       </.header>
 
+      <div :if={@live_action == :new} class="rounded-2xl ff-surface-card p-5 sm:p-6">
+        <div :if={@delivery_items == []} class="py-6">
+          <.blank_state icon="hero-arrow-down-tray" title="No items added yet">
+            Click "Add item" to scan or select the first product in this delivery.
+          </.blank_state>
+        </div>
+        <div :if={@delivery_items != []}>
+          <h3 class="text-sm font-semibold text-thamani-forest">Items in this delivery</h3>
+          <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone bg-white">
+            <table class="w-full table-fixed text-left text-sm">
+              <thead class="bg-thamani-canvas text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+                <tr>
+                  <th class="w-[25%] px-3 py-2">Product</th><th class="w-[18%] px-3 py-2">
+                    Batch
+                  </th><th class="hidden px-3 py-2 sm:table-cell">
+                    Expiry
+                  </th><th class="w-[22%] px-3 py-2">Quantity</th><th class="w-[23%] px-3 py-2 text-right">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-thamani-stone">
+                <tr :for={item <- @delivery_items} id={"delivery-item-#{item.id}"}>
+                  <td
+                    class="truncate px-3 py-2 font-medium text-thamani-forest"
+                    title={item.product_name}
+                  >
+                    {item.product_name}
+                  </td>
+                  <td class="truncate px-3 py-2 font-mono text-xs" title={item.batch_no}>
+                    {item.batch_no}
+                    <span
+                      :if={sscc = Map.get(item.attrs, "sscc")}
+                      class="block text-[10px] font-sans text-thamani-subtle"
+                    >
+                      SSCC {sscc}
+                    </span>
+                  </td>
+                  <td class="hidden px-3 py-2 text-thamani-pewter sm:table-cell">
+                    {Map.get(item.attrs, "expiry_date")}
+                  </td>
+                  <td class="px-3 py-2 whitespace-nowrap">
+                    {item.quantity} {unit_label(item.uom)}
+                  </td>
+                  <td class="px-3 py-2">
+                    <div class="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        phx-click="edit_delivery_item"
+                        phx-value-id={item.id}
+                        class="text-xs font-semibold text-thamani-forest hover:underline"
+                      >Edit</button><button
+                        type="button"
+                        phx-click="remove_delivery_item"
+                        phx-value-id={item.id}
+                        class="text-xs font-semibold text-thamani-error hover:underline"
+                      >Remove</button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <.button
+            id="finish-distributor-delivery"
+            class="mt-4 w-full"
+            variant="primary"
+            phx-click="finish_delivery"
+          >
+            Finish receiving ({length(@delivery_items)} items)
+          </.button>
+        </div>
+      </div>
+
       <.modal
-        :if={@live_action == :new}
-        id="distributor-receipt-modal"
+        :if={@add_item_open}
+        id="distributor-add-item-modal"
         show
-        on_cancel={JS.patch(@receiving_index_path)}
+        on_cancel={JS.push("close_add_item")}
       >
         <div class="border-b border-thamani-stone pb-4">
-          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">Receive stock</h2>
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">Add item</h2>
           <p class="mt-1 text-sm text-thamani-pewter">
-            Scan or select each item as it comes off the truck, then add its batch details.
+            Scan or select the product, then add its batch details.
           </p>
         </div>
 
@@ -486,75 +647,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 options={Enum.map(@products, &{product_name(@products, &1.id), &1.id})}
               />
             </form>
-            <div
-              :if={@delivery_items != []}
-              class="mt-5 rounded-xl border border-thamani-stone bg-thamani-canvas p-4"
-            >
-              <h3 class="text-sm font-semibold text-thamani-forest">Items in this delivery</h3>
-              <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone bg-white">
-                <table class="w-full table-fixed text-left text-sm">
-                  <thead class="bg-thamani-canvas text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
-                    <tr>
-                      <th class="w-[25%] px-3 py-2">Product</th><th class="w-[18%] px-3 py-2">
-                        Batch
-                      </th><th class="hidden px-3 py-2 sm:table-cell">
-                        Expiry
-                      </th><th class="w-[22%] px-3 py-2">Quantity</th><th class="w-[23%] px-3 py-2 text-right">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-thamani-stone">
-                    <tr :for={item <- @delivery_items} id={"delivery-item-#{item.id}"}>
-                      <td
-                        class="truncate px-3 py-2 font-medium text-thamani-forest"
-                        title={item.product_name}
-                      >
-                        {item.product_name}
-                      </td>
-                      <td class="truncate px-3 py-2 font-mono text-xs" title={item.batch_no}>
-                        {item.batch_no}
-                        <span
-                          :if={sscc = Map.get(item.attrs, "sscc")}
-                          class="block text-[10px] font-sans text-thamani-subtle"
-                        >
-                          SSCC {sscc}
-                        </span>
-                      </td>
-                      <td class="hidden px-3 py-2 text-thamani-pewter sm:table-cell">
-                        {Map.get(item.attrs, "expiry_date")}
-                      </td>
-                      <td class="px-3 py-2 whitespace-nowrap">
-                        {item.quantity} {unit_label(item.uom)}
-                      </td>
-                      <td class="px-3 py-2">
-                        <div class="flex justify-end gap-2">
-                          <button
-                            type="button"
-                            phx-click="edit_delivery_item"
-                            phx-value-id={item.id}
-                            class="text-xs font-semibold text-thamani-forest hover:underline"
-                          >Edit</button><button
-                            type="button"
-                            phx-click="remove_delivery_item"
-                            phx-value-id={item.id}
-                            class="text-xs font-semibold text-thamani-error hover:underline"
-                          >Remove</button>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <.button
-                id="finish-distributor-delivery"
-                class="mt-4 w-full"
-                variant="primary"
-                phx-click="finish_delivery"
-              >
-                Finish receiving ({length(@delivery_items)} items)
-              </.button>
-            </div>
           <% @receipt_step == :new_product -> %>
             <div class="mt-5 mb-4 flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3">
               <div>
@@ -636,7 +728,38 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 Change
               </button>
             </div>
+            <div
+              :if={@adding_supplier}
+              class="rounded-xl border border-thamani-stone bg-thamani-canvas p-4"
+            >
+              <div class="mb-3 flex items-center justify-between">
+                <p class="text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+                  New supplier
+                </p>
+                <button
+                  type="button"
+                  phx-click="cancel_new_supplier"
+                  class="text-sm font-semibold text-thamani-forest hover:underline"
+                >
+                  Cancel
+                </button>
+              </div>
+              <.form
+                for={@new_supplier_form}
+                id="distributor-new-supplier-form"
+                phx-change="validate_new_supplier"
+                phx-submit="save_new_supplier"
+              >
+                <.input field={@new_supplier_form[:name]} label="Supplier name" required />
+                <div class="grid gap-x-4 sm:grid-cols-2">
+                  <.input field={@new_supplier_form[:phone]} label="Phone" required />
+                  <.input field={@new_supplier_form[:email]} label="Email" required />
+                </div>
+                <.button class="mt-3 w-full" variant="primary">Add supplier</.button>
+              </.form>
+            </div>
             <.form
+              :if={!@adding_supplier}
               for={@form}
               id="distributor-receipt-form"
               phx-change="validate"
@@ -644,26 +767,68 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             >
               <input type="hidden" name="batch[product_id]" value={@selected_product.id} />
               <input type="hidden" name="batch[gtin]" value={@selected_product.gtin} />
+              <.input
+                :if={@receiving_portal == :distributor}
+                field={@form[:site_id]}
+                type="select"
+                label="Warehouse"
+                options={Enum.map(@warehouses, &{&1.name, &1.id})}
+                prompt="Select warehouse"
+                required
+              />
+              <div class="grid gap-x-4 sm:grid-cols-2">
+                <div>
+                  <.input
+                    field={@form[:supplier_id]}
+                    type="select"
+                    label="Supplier"
+                    options={Enum.map(@suppliers, &{&1.name, &1.id})}
+                    prompt="Select supplier"
+                    required
+                  />
+                  <button
+                    type="button"
+                    phx-click="toggle_new_supplier"
+                    class="-mt-2 mb-3 text-xs font-semibold text-thamani-forest hover:underline"
+                  >
+                    + Add new supplier
+                  </button>
+                </div>
+                <.input field={@form[:batch_no]} label="Batch number" required />
+              </div>
               <div class="grid gap-x-4 sm:grid-cols-2">
                 <.input
-                  :if={@receiving_portal == :distributor}
-                  field={@form[:site_id]}
-                  type="select"
-                  label="Warehouse"
-                  options={Enum.map(@warehouses, &{&1.name, &1.id})}
-                  prompt="Select warehouse"
+                  field={@form[:serial]}
+                  label="Serial (optional)"
+                  placeholder="e.g. AI(21)"
+                  autocomplete="off"
+                />
+                <.input field={@form[:manufacturer]} label="Manufacturer (optional)" />
+              </div>
+              <div class="grid gap-x-4 sm:grid-cols-2">
+                <.input field={@form[:expiry_date]} type="date" label="Expiry date" required />
+                <.input
+                  field={@form[:manufacture_date]}
+                  type="date"
+                  label="Manufacture date (optional)"
+                />
+              </div>
+              <div class="grid gap-x-4 sm:grid-cols-2">
+                <.input
+                  field={@form[:quantity]}
+                  type="number"
+                  label={"Quantity received (#{unit_label(@selected_product.uom)})"}
+                  min="1"
                   required
                 />
                 <.input
-                  field={@form[:supplier_id]}
-                  type="select"
-                  label="Supplier"
-                  options={Enum.map(@suppliers, &{&1.name, &1.id})}
-                  prompt="Select supplier"
-                  required
+                  field={@form[:cost_per_unit]}
+                  type="number"
+                  step="0.01"
+                  label="Cost per unit (optional)"
+                  min="0"
                 />
               </div>
-              <.input field={@form[:batch_no]} label="Batch number" required />
               <.input
                 field={@form[:sscc]}
                 label="Case label SSCC (optional)"
@@ -675,39 +840,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 received into stock, but won't be reportable to PPB until an SSCC is
                 captured.
               </p>
-              <.input
-                field={@form[:serial]}
-                label="Serial (optional)"
-                placeholder="Unit serial from the item's own barcode, e.g. AI(21)"
-                autocomplete="off"
-              />
-              <p class="-mt-2 mb-3 text-xs text-thamani-pewter">
-                Only meaningful when quantity is 1 — a serial identifies one physical unit,
-                never a batch of several.
-              </p>
-              <.input field={@form[:manufacturer]} label="Manufacturer (optional)" />
-              <div class="grid gap-x-4 sm:grid-cols-2">
-                <.input field={@form[:expiry_date]} type="date" label="Expiry date" required />
-                <.input
-                  field={@form[:manufacture_date]}
-                  type="date"
-                  label="Manufacture date (optional)"
-                />
-              </div>
-              <.input
-                field={@form[:quantity]}
-                type="number"
-                label={"Quantity received (#{unit_label(@selected_product.uom)})"}
-                min="1"
-                required
-              />
-              <.input
-                field={@form[:cost_per_unit]}
-                type="number"
-                step="0.01"
-                label="Cost per unit (optional)"
-                min="0"
-              />
               <.button class="mt-3 w-full" variant="primary">
                 {if is_nil(@editing_delivery_item_id),
                   do: "Add received item",
@@ -718,6 +850,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       </.modal>
 
       <.table
+        :if={@live_action != :new}
         id="distributor-receipts"
         rows={@streams.receipts}
         row_click={
@@ -741,7 +874,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           </.blank_state>
         </:empty_state>
       </.table>
-      <.pagination page={@page_info} path={@receiving_index_path} />
+      <.pagination :if={@live_action != :new} page={@page_info} path={@receiving_index_path} />
     </.receiving_shell>
     """
   end

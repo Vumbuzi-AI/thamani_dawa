@@ -116,7 +116,6 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Invoice do
           <div id="invoice-bill-to" class="min-w-0">
             <p class="text-xs font-semibold uppercase tracking-wide text-thamani-pewter">Bill to</p>
             <p class="mt-1 font-medium text-thamani-ink">{@organization.name}</p>
-            <p class="text-sm text-thamani-pewter">Licence {@organization.license_number}</p>
             <p :if={@organization.gs1_company_prefix} class="text-sm text-thamani-pewter">
               GS1 prefix {@organization.gs1_company_prefix}
             </p>

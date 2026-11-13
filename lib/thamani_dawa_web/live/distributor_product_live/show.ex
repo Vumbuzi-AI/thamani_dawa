@@ -4,6 +4,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.Sites.Site
   alias ThamaniDawaWeb.DistributorPagination
 
   def mount(%{"id" => id}, _session, socket) do
@@ -13,7 +14,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
     warehouse_ids =
       organization_id
       |> Sites.list_sites()
-      |> Enum.filter(&(&1.site_type == :warehouse and &1.is_active))
+      |> Enum.filter(&(Site.distribution?(&1) and &1.is_active))
       |> Enum.map(& &1.id)
 
     batches = Batches.list_batches_for_product(organization_id, product.id, warehouse_ids)

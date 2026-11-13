@@ -32,7 +32,7 @@ defmodule ThamaniDawaWeb.DistributorWarehouseLive.Index do
   def handle_event("save", %{"site" => attrs}, socket) do
     case Sites.create_site(
            socket.assigns.current_scope.organization_id,
-           Map.put(attrs, "site_type", "warehouse")
+           Map.put(attrs, "activities", ["distribution"])
          ) do
       {:ok, warehouse} ->
         {:noreply,
@@ -50,7 +50,7 @@ defmodule ThamaniDawaWeb.DistributorWarehouseLive.Index do
     warehouses =
       socket.assigns.current_scope.organization_id
       |> Sites.list_sites()
-      |> Enum.filter(&(&1.site_type == :warehouse))
+      |> Enum.filter(&Site.distribution?/1)
 
     page_info = DistributorPagination.page(warehouses, socket.assigns.page_number)
 
@@ -60,7 +60,7 @@ defmodule ThamaniDawaWeb.DistributorWarehouseLive.Index do
   end
 
   defp warehouse_changeset(site, attrs),
-    do: Site.changeset(site, Map.put(attrs, "site_type", "warehouse"))
+    do: Site.changeset(site, Map.put(attrs, "activities", ["distribution"]))
 
   def render(assigns) do
     ~H"""
