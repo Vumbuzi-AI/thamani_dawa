@@ -4,8 +4,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Gtin
   alias ThamaniDawa.PaymentMethods
-  alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Products
+  alias ThamaniDawa.Sales
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
 
@@ -490,8 +490,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       "items" => Enum.map(cart, &cart_line_attrs/1)
     }
 
-    case Prescriptions.create_quick_sale(scope.organization_id, site_id, scope.user.id, attrs) do
-      {:ok, prescription} ->
+    case Sales.create_quick_sale(scope.organization_id, site_id, scope.user.id, attrs) do
+      {:ok, sale} ->
         site_name =
           case Enum.find(socket.assigns.sites, &(&1.id == site_id)) do
             nil -> "Pharmacy"
@@ -507,8 +507,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
            tendered: payment_details.tendered,
            change: payment_details.change,
            provider_reference: payment_details.provider_reference,
-           prescription: prescription,
-           receipt_number: "TD-#{String.pad_leading(Integer.to_string(prescription.id), 6, "0")}",
+           sale: sale,
+           receipt_number: "TD-#{String.pad_leading(Integer.to_string(sale.id), 6, "0")}",
            site_name: site_name,
            cashier: scope.user.name,
            completed_at: DateTime.utc_now()

@@ -5,6 +5,8 @@ defmodule ThamaniDawa.DistributorCustomers.Customer do
   schema "distributor_customers" do
     field :name, :string
     field :gln, :string
+    field :gln_verified_at, :utc_datetime
+    field :gln_verification_source, :string
     field :contact_name, :string
     field :phone, :string
     field :email, :string

@@ -15,7 +15,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
      |> assign(:editing_user, nil)
-     |> assign(:selected_role, "")
+     |> assign(:selected_roles, [])
      |> assign(:page, 1)
      |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> assign_lists()}
@@ -31,10 +31,10 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       |> assign(:search, search)
       |> assign_lists()
 
-    {form, user, checked_site_ids, selected_role} =
+    {form, user, checked_site_ids, selected_roles} =
       case socket.assigns.live_action do
         :new ->
-          {to_form(User.invite_changeset(%User{}, %{}), as: :user), nil, [], ""}
+          {to_form(User.invite_changeset(%User{}, %{}), as: :user), nil, [], []}
 
         :edit ->
           user_id = String.to_integer(params["id"])
@@ -42,10 +42,10 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           user = Accounts.get_user!(organization_id, user_id)
 
           {to_form(User.edit_changeset(user, %{}), as: :user), user,
-           Enum.map(user.sites, & &1.id), to_string(user.role)}
+           Enum.map(user.sites, & &1.id), Enum.map(user.roles, &to_string/1)}
 
         _ ->
-          {nil, nil, [], ""}
+          {nil, nil, [], []}
       end
 
     {:noreply,
@@ -53,7 +53,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      |> assign(:form, form)
      |> assign(:editing_user, user)
      |> assign(:checked_site_ids, checked_site_ids)
-     |> assign(:selected_role, selected_role)
+     |> assign(:selected_roles, selected_roles)
      |> assign(:back_path, back_path(params))}
   end
 
@@ -102,7 +102,8 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   end
 
   def handle_event("form_change", %{"user" => attrs}, socket) do
-    {:noreply, assign(socket, :selected_role, Map.get(attrs, "role", ""))}
+    selected_roles = attrs |> Map.get("roles", []) |> Enum.reject(&(&1 == ""))
+    {:noreply, assign(socket, :selected_roles, selected_roles)}
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -213,7 +214,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
   defp filter_by_role(users, role) do
     role = String.to_existing_atom(role)
-    Enum.filter(users, &(&1.role == role))
+    Enum.filter(users, &(role in &1.roles))
   end
 
   defp filter_by_site(users, ""), do: users
@@ -256,41 +257,63 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   defp sites_summary([]), do: "—"
   defp sites_summary(sites), do: Enum.map_join(sites, ", ", & &1.name)
 
-  defp compatible_sites(_sites, role) when role in ["", nil], do: []
-  defp compatible_sites(_sites, "admin"), do: []
+  defp compatible_sites(_sites, roles) when roles in [[], nil], do: []
+  defp compatible_sites(_sites, ["admin"]), do: []
 
-  defp compatible_sites(sites, "pharmacist") do
-    Enum.filter(
-      sites,
-      &(Site.pharmacy?(&1) or
-          to_string(&1.site_type) in ["pharmacy", "pharmacy_lab", "pharma_lab"])
-    )
+  defp compatible_sites(sites, roles) do
+    clinical_roles = Enum.reject(roles, &(&1 == "admin"))
+
+    if clinical_roles == [] do
+      []
+    else
+      Enum.filter(sites, fn site ->
+        Enum.any?(clinical_roles, &site_matches_role?(site, &1))
+      end)
+    end
   end
 
-  defp compatible_sites(sites, "lab_technician") do
-    Enum.filter(
-      sites,
-      &(Site.lab?(&1) or to_string(&1.site_type) in ["lab", "pharmacy_lab", "pharma_lab"])
-    )
-  end
+  defp site_matches_role?(site, "pharmacist"), do: Site.pharmacy?(site)
+  defp site_matches_role?(site, "lab_technician"), do: Site.lab?(site)
+  defp site_matches_role?(_site, _role), do: true
 
-  defp compatible_sites(sites, "pharma_lab") do
-    Enum.filter(
-      sites,
-      &(Site.pharmacy?(&1) or Site.lab?(&1) or
-          to_string(&1.site_type) in ["pharmacy", "lab", "pharmacy_lab", "pharma_lab"])
-    )
-  end
+  attr :selected_roles, :list, required: true
+  attr :errors, :list, default: []
+  attr :organization, :map, required: true
 
-  defp compatible_sites(sites, _role), do: sites
+  defp role_checkboxes(assigns) do
+    ~H"""
+    <div class="mt-3">
+      <label class="block text-sm font-medium mb-2 text-thamani-forest">
+        Role<span class="text-red-600">&nbsp;*</span>
+      </label>
+      <input type="hidden" name="user[roles][]" value="" />
+      <div class="grid grid-cols-2 gap-1.5">
+        <label
+          :for={role <- User.assignable_roles(@organization.operating_models)}
+          class="flex items-center gap-2 rounded-lg border border-thamani-stone bg-thamani-canvas px-3 py-2 text-sm text-thamani-forest cursor-pointer hover:bg-thamani-stone/50 transition-colors"
+        >
+          <input
+            type="checkbox"
+            name="user[roles][]"
+            value={role}
+            checked={to_string(role) in @selected_roles}
+            class="size-4 shrink-0 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+          />
+          <span class="font-medium truncate min-w-0">{Phoenix.Naming.humanize(role)}</span>
+        </label>
+      </div>
+      <p :for={error <- @errors} class="mt-2 text-xs text-red-700">{translate_error(error)}</p>
+    </div>
+    """
+  end
 
   attr :sites, :list, required: true
   attr :all_sites, :list, default: []
   attr :checked_site_ids, :list, required: true
-  attr :selected_role, :string, default: ""
+  attr :selected_roles, :list, default: []
 
   defp site_checkboxes(assigns) do
-    assigns = assign_new(assigns, :selected_role, fn -> "" end)
+    assigns = assign_new(assigns, :selected_roles, fn -> [] end)
 
     ~H"""
     <div id="user-site-checkboxes" class="mt-3">
@@ -306,14 +329,14 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         </option>
       </select>
 
-      <div :if={@selected_role in ["", nil]}>
+      <div :if={@selected_roles == []}>
         <div class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/30 border border-dashed border-thamani-stone rounded-xl p-3.5">
           <.icon name="hero-lock-closed" class="size-4 shrink-0 text-thamani-pewter" />
           <span>Select a role above to view and assign compatible sites.</span>
         </div>
       </div>
 
-      <div :if={@selected_role not in ["", nil, "admin"]}>
+      <div :if={@selected_roles != [] and @selected_roles != ["admin"]}>
         <div
           :if={@sites == []}
           class="text-xs text-thamani-pewter bg-thamani-stone/30 border border-thamani-stone rounded-xl p-3 text-center"
@@ -410,7 +433,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
                 type="select"
                 name="filters[role]"
                 value={@filters.role}
-                options={Enum.map(User.roles(), &{Phoenix.Naming.humanize(&1), &1})}
+                options={Enum.map(User.assignable_roles(), &{Phoenix.Naming.humanize(&1), &1})}
                 prompt="All roles"
               />
             </:group>
@@ -457,23 +480,20 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         <form id="invite-form" phx-submit="save" phx-change="form_change">
           <.input field={@form[:name]} label="Name" required />
           <.input field={@form[:email]} type="email" label="Email" required />
-          <.input
-            field={@form[:role]}
-            type="select"
-            label="Role"
-            options={Enum.map(User.roles(), &{Phoenix.Naming.humanize(&1), &1})}
-            prompt="Choose a role"
-            required
+          <.role_checkboxes
+            selected_roles={@selected_roles}
+            errors={@form[:roles].errors}
+            organization={@organization}
           />
           <.site_checkboxes
-            :if={@selected_role != "admin"}
-            sites={compatible_sites(@sites, @selected_role)}
+            :if={@selected_roles != ["admin"]}
+            sites={compatible_sites(@sites, @selected_roles)}
             all_sites={@sites}
             checked_site_ids={@checked_site_ids}
-            selected_role={@selected_role}
+            selected_roles={@selected_roles}
           />
           <div
-            :if={@selected_role == "admin"}
+            :if={"admin" in @selected_roles}
             class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
           >
             <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
@@ -489,31 +509,34 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">Edit team member</h2>
         <form id="edit-form" phx-submit="save_edit" phx-change="form_change">
           <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium mb-1 text-thamani-forest">Name</label>
-              <p class="text-sm font-medium text-thamani-forest">{@editing_user.name}</p>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle mb-1">
+                  Name
+                </p>
+                <p class="text-sm font-semibold text-thamani-forest">{@editing_user.name}</p>
+              </div>
+              <div>
+                <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle mb-1">
+                  Email
+                </p>
+                <p class="text-sm font-semibold text-thamani-forest">{@editing_user.email}</p>
+              </div>
             </div>
-            <div>
-              <label class="block text-sm font-medium mb-1 text-thamani-forest">Email</label>
-              <p class="text-sm font-medium text-thamani-forest">{@editing_user.email}</p>
-            </div>
-            <.input
-              field={@form[:role]}
-              type="select"
-              label="Role"
-              options={Enum.map(User.roles(), &{Phoenix.Naming.humanize(&1), &1})}
-              prompt="Choose a role"
-              required
+            <.role_checkboxes
+              selected_roles={@selected_roles}
+              errors={@form[:roles].errors}
+              organization={@organization}
             />
             <.site_checkboxes
-              :if={@selected_role != "admin"}
-              sites={compatible_sites(@sites, @selected_role)}
+              :if={@selected_roles != ["admin"]}
+              sites={compatible_sites(@sites, @selected_roles)}
               all_sites={@sites}
               checked_site_ids={@checked_site_ids}
-              selected_role={@selected_role}
+              selected_roles={@selected_roles}
             />
             <div
-              :if={@selected_role == "admin"}
+              :if={"admin" in @selected_roles}
               class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
             >
               <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
@@ -529,7 +552,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       <.table id="users" rows={@users}>
         <:col :let={user} label="Name">{user.name}</:col>
         <:col :let={user} label="Email">{user.email}</:col>
-        <:col :let={user} label="Role">{Phoenix.Naming.humanize(user.role)}</:col>
+        <:col :let={user} label="Role">{User.humanize_roles(user)}</:col>
         <:col :let={user} label="Sites">{sites_summary(user.sites)}</:col>
         <:col :let={user} label="Status">
           <.status_badge status={status(user)} />

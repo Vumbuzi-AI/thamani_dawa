@@ -469,7 +469,7 @@ defmodule ThamaniDawa.LabOrders do
       lab_order_result = get_lab_order_result!(organization_id, lab_order_result_id)
       results = compute_results(raw_values)
 
-      with :ok <- ensure_received_specimen(lab_order_result),
+      with :ok <- ensure_collected_specimen(lab_order_result),
            :ok <- ensure_amendment_reason(lab_order_result, reason),
            {:ok, _amendment} <-
              maybe_record_amendment(organization_id, lab_order_result, performer_id, reason),
@@ -488,21 +488,25 @@ defmodule ThamaniDawa.LabOrders do
 
   defp ensure_amendment_reason(_lab_order_result, _reason), do: :ok
 
-  defp ensure_received_specimen(%LabOrderResult{id: result_id}) do
+  defp ensure_collected_specimen(%LabOrderResult{id: result_id}) do
     directly_linked =
       from s in LabSpecimen,
-        where: s.lab_order_result_id == ^result_id and s.status == :received
+        where:
+          s.lab_order_result_id == ^result_id and
+            s.status in [:collected, :received]
 
     linked_via_join =
       from s in LabSpecimen,
         join: sr in LabSpecimenResult,
         on: sr.lab_specimen_id == s.id,
-        where: sr.lab_order_result_id == ^result_id and s.status == :received
+        where:
+          sr.lab_order_result_id == ^result_id and
+            s.status in [:collected, :received]
 
     if Repo.exists?(directly_linked) or Repo.exists?(linked_via_join) do
       :ok
     else
-      {:error, :specimen_not_received}
+      {:error, :specimen_not_collected}
     end
   end
 

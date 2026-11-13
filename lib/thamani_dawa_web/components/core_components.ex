@@ -1082,12 +1082,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
   defp display_date(_), do: nil
 
   @doc """
-  Renders a radio-card group for choosing a site capability.
+  Renders a checkbox-card group for choosing one or more site activities.
 
   ## Examples
 
       <.capability_select
-        field={@form[:site_type]}
+        field={@form[:activities]}
         options={[{"Pharmacy", "Dispensing & stock", :pharmacy}]}
       />
   """
@@ -1102,12 +1102,20 @@ defmodule ThamaniDawaWeb.CoreComponents do
         do: Enum.map(assigns.field.errors, &translate_error/1),
         else: []
 
-    assigns = assign(assigns, :errors, errors)
+    selected =
+      assigns.field.value
+      |> List.wrap()
+      |> Enum.map(&to_string/1)
+
+    assigns =
+      assigns
+      |> assign(:errors, errors)
+      |> assign(:selected, selected)
 
     ~H"""
     <fieldset id={@id} class="fieldset mb-4">
       <legend class="label mb-2">
-        Capability<span :if={@required} aria-hidden="true" class="text-error ml-0.5">*</span>
+        Activities<span :if={@required} aria-hidden="true" class="text-error ml-0.5">*</span>
       </legend>
       <div class="grid grid-cols-2 gap-2">
         <label
@@ -1117,12 +1125,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
         >
           <div class="flex items-center gap-2">
             <input
-              type="radio"
+              type="checkbox"
               id={"#{@id}-#{value}"}
-              name={@field.name}
+              name={"#{@field.name}[]"}
               value={value}
-              checked={to_string(@field.value || "") == to_string(value)}
-              class="radio radio-sm"
+              checked={to_string(value) in @selected}
+              class="checkbox checkbox-sm"
             />
             <div>
               <p class="font-medium text-sm">{label}</p>
@@ -1723,7 +1731,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :placeholder, :string, default: nil
   attr :autocomplete, :string, default: nil
   attr :class, :any, default: nil, doc: "extra classes on the wrapper div"
-  attr :rest, :global, include: ~w(required disabled readonly rows)
+  attr :required, :boolean, default: false, doc: "shows a required marker next to the label"
+  attr :rest, :global, include: ~w(disabled readonly rows)
 
   def thamani_input(%{type: "textarea", field: field} = assigns) do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
@@ -1745,13 +1754,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
           for={@input_id}
           class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
         >
-          {@label}
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
         </label>
       </div>
       <textarea
         id={@input_id}
         name={@name}
         placeholder={@placeholder}
+        required={@required}
         class={[
           "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
           "border-[1.5px] rounded-lg outline-none",
@@ -1788,25 +1798,46 @@ defmodule ThamaniDawaWeb.CoreComponents do
           for={@input_id}
           class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
         >
-          {@label}
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
         </label>
       </div>
-      <input
-        id={@input_id}
-        type={@type}
-        name={@name}
-        value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
-        placeholder={@placeholder}
-        autocomplete={@autocomplete}
-        class={[
-          "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
-          "border-[1.5px] rounded-lg outline-none",
-          "transition-[border-color,box-shadow] duration-150 ease-in-out",
-          "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
-          (@errors != [] && "border-thamani-error") || "border-thamani-stone"
-        ]}
-        {@rest}
-      />
+      <div class="relative">
+        <input
+          id={@input_id}
+          type={@type}
+          name={@name}
+          value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
+          placeholder={@placeholder}
+          autocomplete={@autocomplete}
+          required={@required}
+          class={[
+            "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
+            "border-[1.5px] rounded-lg outline-none",
+            "transition-[border-color,box-shadow] duration-150 ease-in-out",
+            "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
+            @type == "password" && "pr-11",
+            (@errors != [] && "border-thamani-error") || "border-thamani-stone"
+          ]}
+          {@rest}
+        />
+        <button
+          :if={@type == "password"}
+          type="button"
+          id={"#{@input_id}-toggle"}
+          aria-label="Show password"
+          class="absolute inset-y-0 right-3 flex items-center text-thamani-pewter hover:text-thamani-forest"
+          phx-click={
+            JS.toggle_attribute({"type", "text", "password"}, to: "##{@input_id}")
+            |> JS.toggle(to: "##{@input_id}-eye")
+            |> JS.toggle(to: "##{@input_id}-eye-slash")
+          }
+        >
+          <span id={"#{@input_id}-eye"}><.icon name="hero-eye" class="size-5" /></span>
+          <span id={"#{@input_id}-eye-slash"} class="hidden">
+            <.icon name="hero-eye-slash" class="size-5" />
+          </span>
+        </button>
+      </div>
       <p :for={msg <- @errors} class="text-[13px] text-thamani-error mt-1.5">
         {msg}
       </p>

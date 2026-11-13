@@ -51,6 +51,17 @@ config :thamani_dawa, ThamaniDawa.Accounts.UserToken,
 
 config :thamani_dawa, ThamaniDawa.GtinLookup, base_url: "https://grp.gs1.org"
 
+config :thamani_dawa, Oban,
+  repo: ThamaniDawa.Repo,
+  queues: [epcis: 1, gs1: 1],
+  plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 30}]
+
+config :thamani_dawa, ThamaniDawa.Epcis.Client,
+  capture_path: "/epcis/v2/capture",
+  enabled: false
+
+config :thamani_dawa, ThamaniDawa.Epcis.Urn, default_prefix_length: 7
+
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",

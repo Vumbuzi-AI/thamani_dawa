@@ -30,14 +30,14 @@ defmodule ThamaniDawa.Accounts.ScopeTest do
     refute Scope.admin?(Scope.for_user(lab_technician))
   end
 
-  test "pharma_lab?/1 reflects the combined role without granting admin" do
+  test "pharma_lab?/1 reflects holding both the pharmacist and lab technician roles, without granting admin" do
     pharma_lab = staff_fixture(%{role: :pharma_lab})
     scope = Scope.for_user(pharma_lab)
 
     assert Scope.pharma_lab?(scope)
+    assert Scope.pharmacist?(scope)
+    assert Scope.lab_technician?(scope)
     refute Scope.admin?(scope)
-    refute Scope.pharmacist?(scope)
-    refute Scope.lab_technician?(scope)
   end
 
   test "pharmacy_access?/1 and lab_access?/1 cover each capable role" do

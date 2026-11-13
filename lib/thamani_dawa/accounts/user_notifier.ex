@@ -28,7 +28,7 @@ defmodule ThamaniDawa.Accounts.UserNotifier do
   def deliver_invite(%User{} = user, organization_name, invited_by_name, url) do
     organization_name = sanitize_header_value(organization_name)
     invited_by_name = sanitize_header_value(invited_by_name)
-    role = Phoenix.Naming.humanize(user.role)
+    role = User.humanize_roles(user)
 
     deliver(user.email, "You've been invited to #{organization_name} on Thamani Dawa", %{
       title: "You're invited to #{organization_name}",

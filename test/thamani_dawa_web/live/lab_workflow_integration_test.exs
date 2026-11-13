@@ -13,7 +13,7 @@ defmodule ThamaniDawaWeb.LabWorkflowIntegrationTest do
     admin = user_fixture()
     organization_id = admin.organization_id
 
-    site = site_fixture(%{organization_id: organization_id, site_type: :lab})
+    site = site_fixture(%{organization_id: organization_id, activities: [:laboratory]})
 
     performer =
       staff_fixture(%{

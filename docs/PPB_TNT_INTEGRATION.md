@@ -387,6 +387,39 @@ Envelope: `{"@context": [...], "type": "EPCISDocument", "schemaVersion": "2.0",
 
 ## 6. Implementation plan (ordered)
 
+> **Status 2026-11-12:** steps 1–10 are implemented and tested — `Epcis.Urn`,
+> Oban + outbox migrations, `Epcis.Event`/`Document` (D1–D3 distributor events
+> and F1–F2 facility events, now including all-serialized/mixed F2 dispense),
+> `Epcis.Outbox`, triggers in `GoodsReceipts`/`Distributor.approve_shipment`/
+> `Batches`/`Prescriptions`, `Epcis.Client` (one event per capture document,
+> `application/ld+json`), `Epcis.SubmissionWorker`, the receiving SSCC/serial
+> scan fields (step 8), the admin outbox LiveView on both `/distributor/epcis`
+> and `/org/epcis` (step 9), and the facility phase (step 10). The
+> error-declaration builder is in place (`Epcis.Event.error_declaration/2` +
+> `Epcis.declare_error/3`; §7).
+>
+> **Correction to step 8 (2026-11-12):** the original note here said SSCC
+> absence does *not* block D1 — that was wrong, reversed after re-reading the
+> spec's mandatory-fields list (§3.2.1/§3.3.1): Receiving has no `quantityList`
+> fallback, unlike Dispensing. `Event.receiving/1` now requires a non-empty
+> `epcList` unconditionally; no SSCC → `blocked`, not a class-level payload.
+>
+> **Manual testing (2026-11-12): D1, D2, D3, and F2 all verified end-to-end
+> through real application flows** (not scripts calling the builders in
+> isolation) — `GoodsReceipts.receive_delivery/4` → D1, a full mobile-scan →
+> `Distributor.approve_shipment/3` → D2+D3 with correct chronology, and
+> `Prescriptions.dispense_item/4`/`dispense_scanned_item/5` → F2 in all three
+> modes (serialized, class-level, mixed). D1 (facility tier) and D3 (as a
+> structurally valid payload) were also submitted to and **accepted live** by
+> the real PPB sandbox (§10). Remaining, not yet done:
+> - True **distributor-tier** live sandbox validation — still blocked on
+>   getting the actual distributor capture endpoint/token (facility-tier
+>   token's guessed distributor path 404s; a separate Distributor
+>   Certification registration is needed).
+> - §8's **T4–T7**: chronology-under-retry, idempotency/409, hard-reject
+>   halt-and-recover, and the error-declaration round trip — none of these
+>   have been exercised yet, live or via deliberate fault injection.
+
 1. **`Epcis.Urn`** — pure, doctested (§3). Includes check-digit verification on input
    (reuse `ExGtin` / `GS1.Sscc.mod10_check_digit/1`) so bad identifiers fail at build
    time, not as Hub 400s.
@@ -546,3 +579,114 @@ Still open (none block the build):
 3. **Partner GLN data entry** — operational: who backfills real GLNs for existing
    suppliers/customers before go-live (events for partners without verified GLNs sit
    `blocked`).
+
+Must-do before go-live (identified during manual testing, 2026-11-12 — not yet
+implemented, deliberately deferred so this pass could stay focused on the D1–D3
+receiving/packing/shipping flows; revisit as part of a broader org-onboarding QA pass):
+
+4. **Mandatory, GRP-verified GS1 company prefix at org registration.** Today
+   `gs1_company_prefix` is entered post-onboarding on `DistributorSettingsLive`
+   (`gs1_settings_changeset`), format-validated only, and not required — an org can
+   go live with distributor operating model and no prefix, which blocks every D1/D2/D3
+   event with `:missing_gs1_company_prefix` instead of catching the gap at signup.
+   Fix both pieces together, not separately:
+   - Add a `gs1_company_prefix` field to `SignupLive`, required when `distributor` is
+     among the selected operating models.
+   - Verify it against the GS1 GRP licences API at signup time (same call shape as
+     `VerifyGtin`/gs1_admin's `ActivateApis.get_prefix!/2` — see §2's prior-art
+     section), prefilling verified company details, the way gs1_admin already does
+     for its own members. Registry outage must degrade gracefully (reject gracefully
+     or allow retry), never block signup entirely on a third-party outage — mirror
+     gs1_admin's `Global.GlnLookup.fetch_from_registry/1` "never crashes a search"
+     behavior.
+
+5. **Org-level (siteless) stock's physical location is unreviewed.** Receiving into
+   org-level stock (no `site_id` yet — `Batches.receive_into_org_stock/2`, reachable
+   via `/org/receiving`) has no site to resolve a `bizLocation` GLN from. As a stopgap
+   (2026-11-12), `organizations` now has its own self-minted `gln`
+   (`Organizations.create_organization/1`, same `Gln.generate!/0` pattern as
+   sites/suppliers) and `Epcis.enqueue_receiving/3` falls back to it via
+   `location_gln/2` when a line has no site. This unblocks the immediate case but
+   needs a real onboarding review, not just a fallback:
+   - **Single-site orgs**: org-level stock is physically *at* that one site almost
+     always — does it make more sense to skip the org-level pooling step entirely for
+     these orgs (auto-dispatch to the only site) rather than report against a
+     synthetic org GLN that doesn't correspond to a real place?
+   - **Multi-branch orgs**: "the org" isn't a real physical location — a pooled
+     delivery sits somewhere concrete (a head-office warehouse) before dispatch. The
+     org-level GLN fallback papers over this; the correct model is probably a
+     designated default/HQ site per org, not a GLN on the organization record itself.
+   - Whichever model is chosen, the org's self-minted GLN added here is still subject
+     to the same gap as every other self-minted GLN in the system (§2 gap 2, §4.4) —
+     it won't resolve in PPB's national registry and will warn `UNKNOWN_SGLN` until
+     the broader GLN-overhaul (gs1_admin-issued, GRP-verified) lands.
+
+---
+
+## 10. Live sandbox findings (2026-11-12)
+
+Obtained a sandbox token via the Partner Portal's **Facility Certification** page
+(`https://trackiq.apeiro-digital.com/partners/docs`, Partners → Tokens). Findings
+from exercising it against the real Hub:
+
+- **Base URL**: `https://trackiq.apeiro-digital.com`. Facility endpoint:
+  `/api/integration/facility/events` (async, 202). A guessed
+  `/api/integration/distributor/events` path **404s** — the distributor endpoint's
+  real path is still unknown; a separate Distributor Certification registration is
+  needed to get it plus a distributor-scoped token.
+- **Content-Type bug found and fixed**: the sandbox requires
+  `application/ld+json`; `Epcis.Client.submit_document/1` was sending
+  `application/json` (via `Req`'s `json:` option). Fixed by sending the body as a
+  pre-encoded string with an explicit `content-type` header
+  (`lib/thamani_dawa/epcis/client.ex`).
+- **D1 Receiving, live-verified**: built a real payload via `Event.receiving/1`
+  (test GLN `9990001563622` for `bizLocation`/`source`/`destination`, a valid SSCC)
+  and submitted it to the facility endpoint — **HTTP 202, accepted**, one expected
+  `UNKNOWN_SGLN` warning (test GLN isn't in their master-data registry; harmless per
+  §7). Confirmed independently in the portal's request log and the Facility
+  Certification page's **3.3.1 Receiving** case flipping to **Passed** with an
+  incremented attempt count.
+- **Shipping also accepted** under the facility key (202) — the Hub's facility
+  partner-type allow-list includes `shipping` (facilities do Return Shipping, §5.1
+  D5-equivalent), so this doesn't validate distributor-tier Shipping specifically,
+  but does confirm `Event.shipping/1`'s payload shape is Hub-valid.
+- **Packing is tier-restricted — confirmed by a real 403, not guessed.** Submitting
+  an `Event.packing/1` payload to the facility endpoint returned:
+  ```json
+  {
+    "category": "AUTHORIZATION",
+    "code": "PARTNER_TYPE_BIZSTEP_MISMATCH",
+    "message": "Partner type \"facility\" is not allowed to submit bizStep \"packing\".
+      Allowed for this partner: receiving, dispensing, unpacking, shipping,
+      destroying, inspecting, decommissioning, stock_taking."
+  }
+  ```
+  So the Hub does enforce tier-vs-bizStep authorization server-side (not just a
+  schema check). **D2 Packing cannot be live-validated under a facility key** — a
+  genuine distributor-tier token/endpoint is required to confirm it works, closing
+  out §9 open question 2 (service-provider key scoping) only partially: scoping is
+  real and enforced, but which bizSteps a *distributor* key allows is still
+  unconfirmed.
+- **Practical implication**: the facility key is sufficient to live-test Receiving,
+  Shipping, Dispensing, and the special events (destroying, inspecting,
+  decommissioning, stock_taking) right now. Distributor registration is still
+  required specifically to confirm Packing (and to validate the full D1→D2→D3
+  chronology end-to-end under its native tier) before go-live.
+- **D2+D3 verified locally end-to-end via the real approval flow (2026-11-12).**
+  Drove a full mobile-scan → `Distributor.submit_shipment/2` →
+  `Distributor.approve_shipment/3` cycle (two real units scanned into one
+  shipper, real SSCC assignment, real GLNs) and inspected the resulting
+  outbox rows: Packing (`parentID`/`childEPCs` correct, SSCC and SGTINs built
+  under the org's real GS1 prefix since this product's GTIN happens to be
+  minted under it) then Shipping exactly 1 second later (`epcList` = the same
+  SSCC only, never the child SGTINs — the `INVALID_PARENT_CHILD_RELATION`
+  rule held), `bizTransactionList`/`sourceList`/`destinationList` all correct.
+  Not yet submitted to the live Hub (no distributor-tier token) — structurally
+  verified only, same caveat as the rest of D2/D3.
+- **F2 Dispensing's three modes (serialized/class-level/mixed) verified
+  end-to-end (2026-11-12)** via real `Prescriptions.dispense_item/4` calls:
+  a single-unit dispense from a serialized batch produced `epcList` with no
+  `quantityList`; a 5-unit dispense from an unserialized lot produced
+  `quantityList` with no `epcList`. Confirmed in both the outbox table and
+  the admin LiveView (`/org/epcis` renders Dispensing rows with no
+  dispensing-specific code — the generic table handles any event type).

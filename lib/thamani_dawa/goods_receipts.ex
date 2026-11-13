@@ -59,6 +59,7 @@ defmodule ThamaniDawa.GoodsReceipts do
 
       {:ok, receipt} ->
         Enum.each(items, &post_item!(organization_id, user_id, receipt.id, &1))
+        ThamaniDawa.Epcis.record_goods_receipt(receipt)
         preload_receipt(receipt)
 
       {:error, changeset} ->

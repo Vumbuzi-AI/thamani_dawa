@@ -9,6 +9,7 @@ defmodule ThamaniDawaWeb.OrgReceivingLiveTest do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.GoodsReceipts
   alias ThamaniDawa.ProductsFixtures
+  alias ThamaniDawa.SuppliersFixtures
 
   setup %{conn: conn} do
     organization = distributor_organization_fixture()
@@ -37,10 +38,11 @@ defmodule ThamaniDawaWeb.OrgReceivingLiveTest do
     organization: organization
   } do
     product = ProductsFixtures.product_fixture(%{organization_id: organization.id, uom: "U2"})
+    supplier = SuppliersFixtures.supplier_fixture(%{organization_id: organization.id})
     {:ok, view, _html} = live(conn, ~p"/org/receiving/new")
 
-    add_line(view, product.gtin, "ORG-LOT-1", 20)
-    add_line(view, product.gtin, "ORG-LOT-2", 10)
+    add_line(view, product.gtin, "ORG-LOT-1", 20, supplier.id)
+    add_line(view, product.gtin, "ORG-LOT-2", 10, supplier.id)
 
     assert has_element?(view, "#finish-distributor-delivery", "2 items")
     view |> element("#finish-distributor-delivery") |> render_click()
@@ -65,7 +67,7 @@ defmodule ThamaniDawaWeb.OrgReceivingLiveTest do
              live(log_in_user(build_conn(), distributor), ~p"/org/receiving")
   end
 
-  defp add_line(view, gtin, batch_no, quantity) do
+  defp add_line(view, gtin, batch_no, quantity, supplier_id) do
     view
     |> form("#distributor-scan-gtin-form", scan: %{gtin: gtin})
     |> render_change()
@@ -74,6 +76,7 @@ defmodule ThamaniDawaWeb.OrgReceivingLiveTest do
     |> form("#distributor-receipt-form",
       batch: %{
         batch_no: batch_no,
+        supplier_id: Integer.to_string(supplier_id),
         expiry_date: Date.utc_today() |> Date.add(365) |> Date.to_iso8601(),
         quantity: Integer.to_string(quantity)
       }

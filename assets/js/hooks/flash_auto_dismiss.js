@@ -1,10 +1,19 @@
 export const FlashAutoDismiss = {
   mounted() {
+    this.lastMessage = this.currentMessage()
     this.scheduleDismiss()
   },
 
   updated() {
-    this.scheduleDismiss()
+    const message = this.currentMessage()
+    if (message !== this.lastMessage) {
+      this.lastMessage = message
+      this.scheduleDismiss()
+    }
+  },
+
+  currentMessage() {
+    return this.el.textContent
   },
 
   scheduleDismiss() {

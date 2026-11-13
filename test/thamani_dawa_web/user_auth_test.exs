@@ -126,7 +126,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for a pharmacist" do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :pharmacy})
+      site = site_fixture(%{organization_id: org.id, activities: [:pharmacy]})
       staff = staff_fixture(%{role: :pharmacist, organization_id: org.id, site_id: site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -138,7 +138,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for combined pharmacy/lab staff" do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :pharmacy_lab})
+      site = site_fixture(%{organization_id: org.id, activities: [:pharmacy, :laboratory]})
       staff = staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -179,7 +179,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for a lab technician" do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
       staff = staff_fixture(%{role: :lab_technician, organization_id: org.id, site_id: site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -191,7 +191,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for combined pharmacy/lab staff" do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :pharmacy_lab})
+      site = site_fixture(%{organization_id: org.id, activities: [:pharmacy, :laboratory]})
       staff = staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -222,7 +222,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
   describe "on_mount site-capability checks for combined pharmacy/lab staff" do
     test "denied :require_pharmacy_access at a lab-only site, redirected to /lab" do
       org = organization_fixture()
-      lab_site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      lab_site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
       staff = staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: lab_site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -234,7 +234,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "denied :require_lab_access at a pharmacy-only site, redirected to /pharmacy" do
       org = organization_fixture()
-      pharmacy_site = site_fixture(%{organization_id: org.id, site_type: :pharmacy})
+      pharmacy_site = site_fixture(%{organization_id: org.id, activities: [:pharmacy]})
 
       staff =
         staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: pharmacy_site.id})
@@ -249,7 +249,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "denied both portals at a warehouse-only site, redirected to /" do
       org = organization_fixture()
-      warehouse_site = site_fixture(%{organization_id: org.id, site_type: :warehouse})
+      warehouse_site = site_fixture(%{organization_id: org.id, activities: [:distribution]})
 
       staff =
         staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: warehouse_site.id})

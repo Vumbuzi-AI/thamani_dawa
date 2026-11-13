@@ -19,20 +19,18 @@ defmodule ThamaniDawaWeb.ResultEntryLiveTest do
         role: :lab_technician
       })
 
-    site = site_fixture(%{organization_id: admin.organization_id, site_type: :lab})
+    site = site_fixture(%{organization_id: admin.organization_id, activities: [:laboratory]})
     lab_test = lab_test_fixture(%{organization_id: admin.organization_id})
 
     %{admin: admin, lab_tech: lab_tech, site: site, lab_test: lab_test}
   end
 
-  defp collect_and_receive_specimen(organization_id, lab_order_id, result_id, user_id) do
-    {:ok, specimen} =
+  defp collect_specimen(organization_id, lab_order_id, result_id, user_id) do
+    {:ok, _specimen} =
       LabOrders.collect_specimen(organization_id, lab_order_id, [result_id], user_id, %{
         "specimen_type" => "blood",
         "collection_date" => "2026-01-15"
       })
-
-    {:ok, _specimen} = LabOrders.receive_specimen(organization_id, specimen.id, user_id)
   end
 
   describe "result entry" do
@@ -62,7 +60,7 @@ defmodule ThamaniDawaWeb.ResultEntryLiveTest do
           lab_test_id: ctx.lab_test.id
         })
 
-      collect_and_receive_specimen(
+      collect_specimen(
         ctx.admin.organization_id,
         result.lab_order_id,
         result.id,
@@ -97,7 +95,7 @@ defmodule ThamaniDawaWeb.ResultEntryLiveTest do
           lab_test_id: ctx.lab_test.id
         })
 
-      collect_and_receive_specimen(
+      collect_specimen(
         ctx.admin.organization_id,
         lab_order.id,
         result.id,

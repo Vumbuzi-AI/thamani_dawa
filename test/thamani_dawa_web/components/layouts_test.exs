@@ -77,6 +77,15 @@ defmodule ThamaniDawaWeb.LayoutsTest do
       assert has_element?(lv, "a[aria-current='page']", "Team")
       refute has_element?(lv, "a[aria-current='page']", "Sites")
     end
+
+    test "groups help and personal actions in the sidebar footer", %{conn: conn, admin: admin} do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      assert has_element?(lv, "#start-product-tour", "Product tour")
+      assert has_element?(lv, "#sidebar-account-card[aria-label='Open account menu']")
+      assert has_element?(lv, "#sidebar-profile", "Admin")
+      assert has_element?(lv, "#sidebar-account-dropdown #sidebar-logout", "Log out")
+    end
   end
 
   defp nav_order_index(html, id) do
