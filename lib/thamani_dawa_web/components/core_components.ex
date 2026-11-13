@@ -1082,12 +1082,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
   defp display_date(_), do: nil
 
   @doc """
-  Renders a radio-card group for choosing a site capability.
+  Renders a checkbox-card group for choosing one or more site activities.
 
   ## Examples
 
       <.capability_select
-        field={@form[:site_type]}
+        field={@form[:activities]}
         options={[{"Pharmacy", "Dispensing & stock", :pharmacy}]}
       />
   """
@@ -1102,12 +1102,20 @@ defmodule ThamaniDawaWeb.CoreComponents do
         do: Enum.map(assigns.field.errors, &translate_error/1),
         else: []
 
-    assigns = assign(assigns, :errors, errors)
+    selected =
+      assigns.field.value
+      |> List.wrap()
+      |> Enum.map(&to_string/1)
+
+    assigns =
+      assigns
+      |> assign(:errors, errors)
+      |> assign(:selected, selected)
 
     ~H"""
     <fieldset id={@id} class="fieldset mb-4">
       <legend class="label mb-2">
-        Capability<span :if={@required} aria-hidden="true" class="text-error ml-0.5">*</span>
+        Activities<span :if={@required} aria-hidden="true" class="text-error ml-0.5">*</span>
       </legend>
       <div class="grid grid-cols-2 gap-2">
         <label
@@ -1117,12 +1125,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
         >
           <div class="flex items-center gap-2">
             <input
-              type="radio"
+              type="checkbox"
               id={"#{@id}-#{value}"}
-              name={@field.name}
+              name={"#{@field.name}[]"}
               value={value}
-              checked={to_string(@field.value || "") == to_string(value)}
-              class="radio radio-sm"
+              checked={to_string(value) in @selected}
+              class="checkbox checkbox-sm"
             />
             <div>
               <p class="font-medium text-sm">{label}</p>
@@ -1418,7 +1426,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
              :under_review,
              :pending_receipt,
              :invited,
-             :low_stock
+             :low_stock,
+             :unknown_serial
            ],
       do: :warning
 
@@ -1431,7 +1440,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
              :accepted,
              :finalised,
              :grn_confirmed,
-             :active
+             :active,
+             :paid,
+             :ok
            ],
       do: :success
 
@@ -1446,8 +1457,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
            ],
       do: :info
 
-  def status_semantic(status) when status in [:cancelled, :rejected, :flagged, :out_of_stock],
-    do: :danger
+  def status_semantic(status)
+      when status in [:cancelled, :rejected, :flagged, :out_of_stock, :failed, :data_mismatch],
+      do: :danger
 
   def status_semantic(_status), do: :neutral
 
@@ -1719,7 +1731,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :placeholder, :string, default: nil
   attr :autocomplete, :string, default: nil
   attr :class, :any, default: nil, doc: "extra classes on the wrapper div"
-  attr :rest, :global, include: ~w(required disabled readonly rows)
+  attr :required, :boolean, default: false, doc: "shows a required marker next to the label"
+  attr :rest, :global, include: ~w(disabled readonly rows)
 
   def thamani_input(%{type: "textarea", field: field} = assigns) do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
@@ -1741,13 +1754,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
           for={@input_id}
           class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
         >
-          {@label}
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
         </label>
       </div>
       <textarea
         id={@input_id}
         name={@name}
         placeholder={@placeholder}
+        required={@required}
         class={[
           "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
           "border-[1.5px] rounded-lg outline-none",
@@ -1784,25 +1798,46 @@ defmodule ThamaniDawaWeb.CoreComponents do
           for={@input_id}
           class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
         >
-          {@label}
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
         </label>
       </div>
-      <input
-        id={@input_id}
-        type={@type}
-        name={@name}
-        value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
-        placeholder={@placeholder}
-        autocomplete={@autocomplete}
-        class={[
-          "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
-          "border-[1.5px] rounded-lg outline-none",
-          "transition-[border-color,box-shadow] duration-150 ease-in-out",
-          "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
-          (@errors != [] && "border-thamani-error") || "border-thamani-stone"
-        ]}
-        {@rest}
-      />
+      <div class="relative">
+        <input
+          id={@input_id}
+          type={@type}
+          name={@name}
+          value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
+          placeholder={@placeholder}
+          autocomplete={@autocomplete}
+          required={@required}
+          class={[
+            "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
+            "border-[1.5px] rounded-lg outline-none",
+            "transition-[border-color,box-shadow] duration-150 ease-in-out",
+            "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
+            @type == "password" && "pr-11",
+            (@errors != [] && "border-thamani-error") || "border-thamani-stone"
+          ]}
+          {@rest}
+        />
+        <button
+          :if={@type == "password"}
+          type="button"
+          id={"#{@input_id}-toggle"}
+          aria-label="Show password"
+          class="absolute inset-y-0 right-3 flex items-center text-thamani-pewter hover:text-thamani-forest"
+          phx-click={
+            JS.toggle_attribute({"type", "text", "password"}, to: "##{@input_id}")
+            |> JS.toggle(to: "##{@input_id}-eye")
+            |> JS.toggle(to: "##{@input_id}-eye-slash")
+          }
+        >
+          <span id={"#{@input_id}-eye"}><.icon name="hero-eye" class="size-5" /></span>
+          <span id={"#{@input_id}-eye-slash"} class="hidden">
+            <.icon name="hero-eye-slash" class="size-5" />
+          </span>
+        </button>
+      </div>
       <p :for={msg <- @errors} class="text-[13px] text-thamani-error mt-1.5">
         {msg}
       </p>
@@ -2255,10 +2290,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
       |> assign(:page_numbers, page_numbers)
 
     ~H"""
-    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200 pt-6">
-      <p class="text-sm text-slate-500 order-2 sm:order-1">
-        Showing <span class="font-medium text-slate-900">{@from_item}</span>–<span class="font-medium text-slate-900">{@to_item}</span>
-        of <span class="font-medium text-slate-900">{@total_entries}</span>
+    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-thamani-stone pt-6">
+      <p class="pagination-summary order-2 sm:order-1 text-sm">
+        Showing <span class="pagination-summary-value font-medium">{@from_item}</span>–<span class="pagination-summary-value font-medium">{@to_item}</span>
+        of <span class="pagination-summary-value font-medium">{@total_entries}</span>
         results
       </p>
 
@@ -2270,10 +2305,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page - 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
+            "pagination-link inline-flex items-center justify-center size-10 rounded-lg transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_prev,
-              do: "hover:bg-slate-100 hover:text-slate-900",
-              else: "pointer-events-none opacity-40"
+              do: "",
+              else: "pointer-events-none"
             )
           ]}
           aria-disabled={!@has_prev}
@@ -2289,16 +2324,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
               if page_num != :ellipsis, do: build_pagination_url(@path, page_num, @query_param)
             }
             class={[
-              "inline-flex items-center justify-center size-10 rounded-lg text-sm font-medium transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
+              "inline-flex items-center justify-center size-10 rounded-lg text-sm transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
               if(page_num == :ellipsis,
-                do: "text-slate-400 cursor-default",
-                else:
-                  if(page_num == @current_page,
-                    do: "bg-thamani-forest text-white",
-                    else: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  )
+                do: "pagination-ellipsis cursor-default",
+                else: "pagination-link"
               )
             ]}
+            aria-current={page_num == @current_page && "page"}
           >
             {if page_num == :ellipsis, do: "…", else: page_num}
           </.link>
@@ -2307,10 +2339,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page + 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
+            "pagination-link inline-flex items-center justify-center size-10 rounded-lg transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_next,
-              do: "hover:bg-slate-100 hover:text-slate-900",
-              else: "pointer-events-none opacity-40"
+              do: "",
+              else: "pointer-events-none"
             )
           ]}
           aria-disabled={!@has_next}
