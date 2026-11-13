@@ -1,13 +1,14 @@
 defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.GoodsReceipts
 
   def mount(%{"id" => id}, _session, socket) do
     receipt = GoodsReceipts.get_receipt!(socket.assigns.current_scope.organization_id, id)
 
     portal =
-      if socket.assigns.current_scope.user.role == :admin, do: :organization, else: :distributor
+      if Scope.admin?(socket.assigns.current_scope), do: :organization, else: :distributor
 
     index_path =
       if portal == :organization, do: ~p"/org/receiving", else: ~p"/distributor/receiving"

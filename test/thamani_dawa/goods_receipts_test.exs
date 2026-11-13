@@ -14,7 +14,7 @@ defmodule ThamaniDawa.GoodsReceiptsTest do
     user = AccountsFixtures.user_fixture(%{organization_id: organization.id})
 
     warehouse =
-      SitesFixtures.site_fixture(%{organization_id: organization.id, site_type: :warehouse})
+      SitesFixtures.site_fixture(%{organization_id: organization.id, activities: [:distribution]})
 
     supplier = SuppliersFixtures.supplier_fixture(%{organization_id: organization.id})
     product = ProductsFixtures.product_fixture(%{organization_id: organization.id, uom: "U2"})

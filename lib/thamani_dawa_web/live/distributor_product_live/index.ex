@@ -5,6 +5,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.Suppliers
   alias ThamaniDawaWeb.DistributorPagination
 
@@ -14,7 +15,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
     sites = Sites.list_sites(organization_id)
 
     warehouse_ids =
-      sites |> Enum.filter(&(&1.site_type == :warehouse and &1.is_active)) |> Enum.map(& &1.id)
+      sites |> Enum.filter(&(Site.distribution?(&1) and &1.is_active)) |> Enum.map(& &1.id)
 
     {:ok,
      socket
