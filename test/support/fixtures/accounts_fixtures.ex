@@ -34,6 +34,11 @@ defmodule ThamaniDawa.AccountsFixtures do
     user
   end
 
+  def superadmin_fixture(attrs \\ %{}) do
+    {:ok, user} = attrs |> valid_user_attributes() |> Accounts.create_platform_superadmin()
+    user
+  end
+
   @doc """
   Creates a staff user via the invite/accept-invite flow, defaulting to the
   `pharmacist` role. Pass `role:` (a single legacy role atom, translated to

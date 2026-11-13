@@ -2,7 +2,8 @@ defmodule ThamaniDawa.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @roles [:admin, :pharmacist, :lab_technician, :pharma_lab, :distributor]
+  @staff_roles [:admin, :pharmacist, :lab_technician, :pharma_lab, :distributor]
+  @roles @staff_roles ++ [:superadmin]
   @legal_policy_version "2026-10-29"
 
   schema "users" do
@@ -226,12 +227,12 @@ defmodule ThamaniDawa.Accounts.User do
     false
   end
 
-  @doc "The valid staff roles, including distributor staff for warehouse organizations."
-  def assignable_roles, do: @roles
+  @doc "The valid organization-staff roles. Platform roles are intentionally excluded."
+  def assignable_roles, do: @staff_roles
 
   @doc "The roles an organization with the given `operating_models` can actually staff, e.g. no `:lab_technician` for a pharmacy-only org."
   def assignable_roles(operating_models) when is_list(operating_models) do
-    Enum.filter(@roles, &role_compatible?(&1, operating_models))
+    Enum.filter(@staff_roles, &role_compatible?(&1, operating_models))
   end
 
   defp role_compatible?(:admin, _models), do: true

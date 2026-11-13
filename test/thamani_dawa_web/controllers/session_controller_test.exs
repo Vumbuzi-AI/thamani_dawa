@@ -64,6 +64,14 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
   end
 
   describe "POST /login" do
+    test "redirects a platform superadmin to the platform console", %{conn: conn} do
+      superadmin = superadmin_fixture()
+
+      conn = post(conn, ~p"/login", %{email: superadmin.email, password: valid_user_password()})
+
+      assert redirected_to(conn) == ~p"/platform"
+    end
+
     test "starts the organization tour after signup", %{conn: conn} do
       admin = user_fixture()
 

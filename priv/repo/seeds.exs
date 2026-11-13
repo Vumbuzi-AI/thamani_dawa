@@ -34,6 +34,7 @@ alias ThamaniDawa.Suppliers.Supplier
 import Ecto.Query, warn: false
 
 password = "password"
+superadmin_password = "password123"
 pin = "1234"
 today = Date.utc_today()
 
@@ -75,6 +76,28 @@ Enum.each(legacy_emails, fn {old_email, new_email} ->
     end
   end
 end)
+
+superadmin =
+  case Accounts.get_user_by_email("superadmin@gmail.com") do
+    nil ->
+      {:ok, user} =
+        Accounts.create_platform_superadmin(%{
+          name: "Platform Superadmin",
+          email: "superadmin@gmail.com",
+          password: superadmin_password,
+          accepted_legal_terms: true
+        })
+
+      user
+
+    %User{role: :superadmin} = user ->
+      user
+      |> Ecto.Changeset.change(hashed_password: Bcrypt.hash_pwd_salt(superadmin_password))
+      |> Repo.update!()
+
+    %User{} ->
+      raise "superadmin@gmail.com is already assigned to a non-superadmin account"
+  end
 
 org_result =
   case Repo.get_by(Organization, slug: "demo-care") do
@@ -1284,6 +1307,10 @@ Lab technician account:
 
 Pharmacy + lab account:
   pharmalab@gmail.com
+
+Platform superadmin account:
+  #{superadmin.email}
+  #{superadmin_password}
 
 Distributor account:
   distributor@gmail.com

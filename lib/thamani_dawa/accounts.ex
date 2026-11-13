@@ -87,6 +87,19 @@ defmodule ThamaniDawa.Accounts do
     |> Repo.insert()
   end
 
+  @doc """
+  Creates a platform-only superadmin account.
+
+  This is intentionally not reachable through signup or organization invites:
+  platform operators do not belong to a tenant and never receive a tenant role.
+  """
+  def create_platform_superadmin(attrs) when is_map(attrs) do
+    %User{}
+    |> User.registration_changeset(attrs, require_legal_consent: true)
+    |> Ecto.Changeset.put_change(:role, :superadmin)
+    |> Repo.insert()
+  end
+
   ## Invites (§2.3.2, §7)
 
   @doc """

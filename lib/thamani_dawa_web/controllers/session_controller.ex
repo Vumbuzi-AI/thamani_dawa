@@ -52,7 +52,9 @@ defmodule ThamaniDawaWeb.SessionController do
         case Accounts.get_user_by_email_and_password(email, password) do
           %User{} = user ->
             LoginRateLimiter.reset(rate_keys)
-            first_staff_login? = :admin not in user.roles and is_nil(user.last_logged_in_at)
+            first_staff_login? =
+              :admin not in user.roles and :superadmin not in user.roles and
+                is_nil(user.last_logged_in_at)
 
             conn
             |> log_in_user(user)
@@ -85,6 +87,7 @@ defmodule ThamaniDawaWeb.SessionController do
 
   defp redirect_path_for(%User{roles: roles} = user) do
     cond do
+      :superadmin in roles -> ~p"/platform"
       :admin in roles -> ~p"/org/dashboard"
       :distributor in roles -> ~p"/distributor"
       :pharmacist in roles and :lab_technician in roles -> combined_portal_path(user)

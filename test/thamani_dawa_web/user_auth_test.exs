@@ -113,6 +113,26 @@ defmodule ThamaniDawaWeb.UserAuthTest do
     end
   end
 
+  describe "on_mount :require_superadmin" do
+    test "continues only for a platform superadmin" do
+      superadmin = superadmin_fixture()
+      session = %{"user_token" => Accounts.generate_user_session_token(superadmin)}
+
+      assert {:cont, socket} =
+               UserAuth.on_mount(:require_superadmin, %{}, session, live_socket())
+
+      assert socket.assigns.current_scope.user.id == superadmin.id
+    end
+
+    test "halts for an organization admin" do
+      admin = user_fixture()
+      session = %{"user_token" => Accounts.generate_user_session_token(admin)}
+
+      assert {:halt, socket} = UserAuth.on_mount(:require_superadmin, %{}, session, live_socket())
+      assert socket.redirected
+    end
+  end
+
   describe "on_mount :require_pharmacy_access" do
     test "continues for an admin" do
       user = user_fixture()
