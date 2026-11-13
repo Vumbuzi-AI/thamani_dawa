@@ -28,7 +28,10 @@ defmodule ThamaniDawa.Distributor.GlnLookup do
         where: s.organization_id == ^organization_id and s.is_active,
         where: not is_nil(s.gln),
         where: ilike(s.name, ^pattern) or ilike(s.gln, ^pattern),
-        order_by: [desc: s.site_type == :warehouse, asc: s.name],
+        order_by: [
+          desc: fragment("? @> ?", s.activities, ^["distribution"]),
+          asc: s.name
+        ],
         limit: ^limit
     )
   end

@@ -6,6 +6,7 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
   alias ThamaniDawa.Distributor.{Billing, Reports, SerialUsage}
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.Sites.Site
 
   @near_expiry_days 90
 
@@ -15,7 +16,7 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
     sites = Sites.list_sites(organization_id)
 
     warehouse_ids =
-      sites |> Enum.filter(&(&1.site_type == :warehouse and &1.is_active)) |> Enum.map(& &1.id)
+      sites |> Enum.filter(&(Site.distribution?(&1) and &1.is_active)) |> Enum.map(& &1.id)
 
     batches =
       organization_id
