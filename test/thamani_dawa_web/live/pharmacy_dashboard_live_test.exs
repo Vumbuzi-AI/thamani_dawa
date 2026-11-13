@@ -14,7 +14,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
 
   test "offers a replayable pharmacy tour and auto-starts it when requested", %{conn: conn} do
     organization = organization_fixture()
-    site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy})
+    site = site_fixture(%{organization_id: organization.id, activities: [:pharmacy]})
     pharmacist = pharmacist_at(organization, site)
 
     {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy?tour=1")
@@ -178,6 +178,28 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
       refute html =~ "Healthy Stock Drug"
       refute has_element?(lv, "#out-of-stock", "Healthy Stock Drug")
       refute has_element?(lv, "#low-stock", "Healthy Stock Drug")
+    end
+  end
+
+  describe "stock alert tiles" do
+    test "the stock summary tiles live on the stock page, not the dashboard", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at(organization, site)
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
+
+      refute has_element?(lv, "#out-of-stock-card")
+      refute has_element?(lv, "#low-stock-card")
+      refute has_element?(lv, "#near-expiry-card")
+      refute has_element?(lv, "#low-stock-value-card")
+
+      {:ok, stock_lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+
+      assert has_element?(stock_lv, "#out-of-stock-card")
+      assert has_element?(stock_lv, "#low-stock-card")
+      assert has_element?(stock_lv, "#near-expiry-card")
+      assert has_element?(stock_lv, "#low-stock-value-card")
     end
   end
 

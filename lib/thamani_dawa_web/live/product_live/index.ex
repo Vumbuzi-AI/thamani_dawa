@@ -48,8 +48,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
      |> assign(:units, @units)
      |> assign(:lab_enabled, Sites.lab_enabled?(organization_id))
      |> assign(:page, 1)
-     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
-     |> reload_products()}
+     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})}
   end
 
   def handle_params(params, _url, socket) do
@@ -439,6 +438,9 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         Product catalog
         <:subtitle>Search, filter, and manage your product catalog.</:subtitle>
         <:actions>
+          <.button id="product-import-button" variant="ghost" navigate={~p"/org/products/import"}>
+            <.icon name="hero-arrow-up-tray" class="size-4" /> Import products
+          </.button>
           <.button id="product-new-button" variant="primary" patch={~p"/org/products/new"}>
             <.icon name="hero-plus" class="size-4" /> Add product
           </.button>

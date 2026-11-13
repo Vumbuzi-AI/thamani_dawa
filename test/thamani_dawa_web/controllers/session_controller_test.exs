@@ -125,7 +125,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       conn: conn
     } do
       org = organization_fixture()
-      lab_site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      lab_site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
 
       pharma_lab =
         staff_fixture(%{organization_id: org.id, role: :pharma_lab, site_id: lab_site.id})
@@ -142,7 +142,9 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
     test "redirects combined pharmacy/lab staff to /pharmacy when their current site is a combined pharmacy+lab site",
          %{conn: conn} do
       org = organization_fixture()
-      combined_site = site_fixture(%{organization_id: org.id, site_type: :pharmacy_lab})
+
+      combined_site =
+        site_fixture(%{organization_id: org.id, activities: [:pharmacy, :laboratory]})
 
       pharma_lab =
         staff_fixture(%{organization_id: org.id, role: :pharma_lab, site_id: combined_site.id})
@@ -159,7 +161,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
     test "redirects combined pharmacy/lab staff to /pharmacy when their current site is pharmacy-only",
          %{conn: conn} do
       org = organization_fixture()
-      pharmacy_site = site_fixture(%{organization_id: org.id, site_type: :pharmacy})
+      pharmacy_site = site_fixture(%{organization_id: org.id, activities: [:pharmacy]})
 
       pharma_lab =
         staff_fixture(%{organization_id: org.id, role: :pharma_lab, site_id: pharmacy_site.id})

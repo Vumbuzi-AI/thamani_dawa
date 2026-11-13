@@ -31,7 +31,7 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
     end
 
     test "a pharmacist without lab access is redirected", %{conn: conn} do
-      pharmacy_site = site_fixture(%{site_type: :pharmacy})
+      pharmacy_site = site_fixture(%{activities: [:pharmacy]})
 
       pharmacist =
         staff_fixture(%{
@@ -54,10 +54,11 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
       admin = user_fixture()
       org_id = admin.organization_id
 
-      lab_site = site_fixture(%{organization_id: org_id, name: "Main Lab", site_type: :lab})
+      lab_site =
+        site_fixture(%{organization_id: org_id, name: "Main Lab", activities: [:laboratory]})
 
       pharmacy_site =
-        site_fixture(%{organization_id: org_id, name: "Pharma Only", site_type: :pharmacy})
+        site_fixture(%{organization_id: org_id, name: "Pharma Only", activities: [:pharmacy]})
 
       product1 =
         product_fixture(%{organization_id: org_id, generic_name: "Reagent Alpha"})
@@ -197,7 +198,7 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
     } do
       admin = user_fixture()
       org_id = admin.organization_id
-      lab_site = site_fixture(%{organization_id: org_id, site_type: :lab})
+      lab_site = site_fixture(%{organization_id: org_id, activities: [:laboratory]})
 
       product =
         product_fixture(%{organization_id: org_id, generic_name: "Awaiting Dispatch Reagent"})
@@ -216,7 +217,7 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
     test "a product at or below reorder_level shows the Low stock badge", %{conn: conn} do
       admin = user_fixture()
       org_id = admin.organization_id
-      lab_site = site_fixture(%{organization_id: org_id, site_type: :lab})
+      lab_site = site_fixture(%{organization_id: org_id, activities: [:laboratory]})
 
       low_stock_product =
         product_fixture(%{

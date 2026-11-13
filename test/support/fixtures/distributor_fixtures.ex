@@ -10,6 +10,7 @@ defmodule ThamaniDawa.DistributorFixtures do
   alias ThamaniDawa.Distributor
   alias ThamaniDawa.Distributor.Billing
   alias ThamaniDawa.DistributorCustomers
+  alias ThamaniDawa.Gln
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.OrganizationsFixtures
   alias ThamaniDawa.ProductsFixtures
@@ -69,8 +70,9 @@ defmodule ThamaniDawa.DistributorFixtures do
       attrs
       |> Enum.into(%{
         name: "Warehouse #{System.unique_integer([:positive])}",
-        site_type: :warehouse,
+        activities: [:distribution],
         address: "#{System.unique_integer([:positive])} Warehouse Road",
+        gln: Gln.generate!(),
         is_active: true
       })
       |> then(&Sites.create_site(organization_id, &1))

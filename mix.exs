@@ -46,6 +46,7 @@ defmodule ThamaniDawa.MixProject do
       {:postgrex, ">= 0.0.0"},
       {:bcrypt_elixir, "~> 3.0"},
       {:ex_gtin, "~> 1.1.0"},
+      {:nimble_csv, "~> 1.2"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.0"},

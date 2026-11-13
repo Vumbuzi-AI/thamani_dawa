@@ -66,6 +66,7 @@ defmodule ThamaniDawaWeb.Router do
 
       live "/org/products", ProductLive.Index, :index
       live "/org/products/new", ProductLive.Index, :new
+      live "/org/products/import", ProductLive.Import, :new
       live "/org/products/:id", ProductLive.Show, :show
       live "/org/products/:id/batches/new", ProductLive.Show, :new_batch
       live "/org/products/:id/batches/:batch_id/dispatch", ProductLive.Show, :dispatch_batch
@@ -86,6 +87,7 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/receiving/new", DistributorReceivingLive, :new
       live "/org/receiving/:id", DistributorGoodsReceiptLive, :show
       live "/org/epcis", DistributorEpcisLive, :index
+      live "/org/settings", OrganizationSettingsLive, :index
     end
 
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
@@ -190,7 +192,7 @@ defmodule ThamaniDawaWeb.Router do
       live "/distributor/customers/:id/edit", DistributorCustomerLive.Index, :edit
       live "/distributor/warehouses", DistributorWarehouseLive.Index, :index
       live "/distributor/warehouses/new", DistributorWarehouseLive.Index, :new
-      live "/distributor/settings", DistributorSettingsLive, :index
+      live "/distributor/settings", OrganizationSettingsLive, :index
       live "/distributor/epcis", DistributorEpcisLive, :index
     end
   end
@@ -199,6 +201,12 @@ defmodule ThamaniDawaWeb.Router do
     pipe_through [:browser, :require_distributor_user]
 
     get "/distributor/shipments/:id/export", DistributorShipmentExportController, :show
+  end
+
+  scope "/", ThamaniDawaWeb do
+    pipe_through :browser
+
+    get "/org/products/import/template", ProductImportTemplateController, :show
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

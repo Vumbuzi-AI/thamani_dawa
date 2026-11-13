@@ -64,7 +64,9 @@ config :thamani_dawa, ThamaniDawa.Epcis.Client,
   api_key: System.get_env("PPB_TNT_API_KEY"),
   enabled: System.get_env("PPB_TNT_ENABLED", "false") == "true"
 
-if (company_prefix = System.get_env("GS1_COMPANY_PREFIX")) not in [nil, ""] do
+company_prefix = System.get_env("GS1_COMPANY_PREFIX")
+
+if company_prefix not in [nil, ""] do
   config :thamani_dawa, ThamaniDawa.Gln, company_prefix: company_prefix
 end
 

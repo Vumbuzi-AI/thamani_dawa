@@ -105,7 +105,7 @@ defmodule ThamaniDawaWeb.BatchLiveTest do
       conn: conn,
       admin: admin
     } do
-      site = site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy})
+      site = site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy]})
       product = product_fixture(%{organization_id: admin.organization_id})
 
       batch =
