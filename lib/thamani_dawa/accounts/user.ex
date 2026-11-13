@@ -15,7 +15,7 @@ defmodule ThamaniDawa.Accounts.User do
     field :legal_policy_version, :string
     field :hashed_pin, :string, redact: true
     field :pin, :string, virtual: true, redact: true
-    field :role, Ecto.Enum, values: @roles
+    field :roles, {:array, Ecto.Enum}, values: @roles, default: []
     field :is_active, :boolean, default: true
     field :last_logged_in_at, :utc_datetime
     field :last_logged_out_at, :utc_datetime
@@ -105,8 +105,9 @@ defmodule ThamaniDawa.Accounts.User do
   """
   def invite_changeset(user, attrs) do
     user
-    |> cast(attrs, [:name, :email, :role])
-    |> validate_required([:name, :role])
+    |> cast(attrs, [:name, :email, :roles])
+    |> validate_required([:name])
+    |> validate_at_least_one_role()
     |> validate_email()
   end
 
@@ -128,8 +129,18 @@ defmodule ThamaniDawa.Accounts.User do
   @doc "Changeset for an admin editing a team member's role and site assignment. Site assignment (`:sites`) is handled separately by `update_user/3` via `put_assoc/3`."
   def edit_changeset(user, attrs) do
     user
-    |> cast(attrs, [:role])
-    |> validate_required([:role])
+    |> cast(attrs, [:roles])
+    |> validate_at_least_one_role()
+  end
+
+  defp validate_at_least_one_role(changeset) do
+    already_invalid? = Keyword.has_key?(changeset.errors, :roles)
+
+    if not already_invalid? and get_field(changeset, :roles) in [nil, []] do
+      add_error(changeset, :roles, "Choose at least one role")
+    else
+      changeset
+    end
   end
 
   @doc "Changeset for a user switching which of their assigned sites they're currently operating at."
@@ -164,7 +175,7 @@ defmodule ThamaniDawa.Accounts.User do
   defp validate_password(changeset, opts) do
     changeset
     |> validate_required([:password], message: "Please choose a password")
-    |> validate_length(:password, min: 12, max: 72, message: "Must be at least 12 characters")
+    |> validate_length(:password, min: 8, max: 72, message: "Must be at least 8 characters")
     |> maybe_hash_password(opts)
   end
 
@@ -216,7 +227,25 @@ defmodule ThamaniDawa.Accounts.User do
   end
 
   @doc "The valid staff roles, including distributor staff for warehouse organizations."
-  def roles, do: @roles
+  def assignable_roles, do: @roles
+
+  @doc "The roles an organization with the given `operating_models` can actually staff, e.g. no `:lab_technician` for a pharmacy-only org."
+  def assignable_roles(operating_models) when is_list(operating_models) do
+    Enum.filter(@roles, &role_compatible?(&1, operating_models))
+  end
+
+  defp role_compatible?(:admin, _models), do: true
+  defp role_compatible?(:pharmacist, models), do: :pharmacy in models
+  defp role_compatible?(:lab_technician, models), do: :laboratory in models
+  defp role_compatible?(:pharma_lab, models), do: :pharmacy in models and :laboratory in models
+  defp role_compatible?(:distributor, models), do: :distributor in models
+
+  @doc "Humanized, comma-joined display of a user's roles, e.g. \"Admin, Pharmacist\"."
+  def humanize_roles(%__MODULE__{roles: roles}), do: humanize_roles(roles)
+
+  def humanize_roles(roles) when is_list(roles) do
+    Enum.map_join(roles, ", ", &Phoenix.Naming.humanize/1)
+  end
 
   @doc "Whether the account is active. A deactivated user must not be able to log in or keep an existing session."
   def active?(%__MODULE__{is_active: true}), do: true

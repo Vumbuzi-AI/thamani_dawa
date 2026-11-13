@@ -23,7 +23,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
       Accounts.invite_user(organization.id, nil, %{
         name: "New Hire",
         email: email,
-        role: :pharmacist
+        roles: [:pharmacist]
       })
 
     %{organization: organization, invited: invited, encoded_token: encoded_token}
@@ -107,7 +107,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
         )
         |> render_submit()
 
-      assert html =~ "Must be at least 12 characters"
+      assert html =~ "Must be at least 8 characters"
 
       assert %{hashed_password: nil} = Accounts.get_user!(organization.id, invited.id)
     end
@@ -139,7 +139,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
         Accounts.invite_user(admin.organization_id, admin.id, %{
           name: "Session Handoff",
           email: "session-handoff@example.com",
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       authenticated_conn = log_in_user(conn, admin)

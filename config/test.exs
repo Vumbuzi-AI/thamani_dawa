@@ -35,6 +35,14 @@ config :thamani_dawa, ThamaniDawa.GtinLookup,
 
 config :thamani_dawa, ThamaniDawa.Gln, company_prefix: "0614141"
 
+# The GS1 registry is stubbed out so tests never reach the network.
+# `ThamaniDawa.Gs1RegistryStub` answers with a licence for every identifier
+# it is asked about, unless the identifier is listed under
+# `:gs1_unknown_identifiers`.
+config :thamani_dawa, ThamaniDawa.Grp,
+  plug: ThamaniDawa.Gs1RegistryStub,
+  retry: false
+
 config :thamani_dawa, ThamaniDawa.Daraja,
   base_url: "https://daraja.test",
   consumer_key: "test-consumer-key",
@@ -60,6 +68,12 @@ config :thamani_dawa, :demo_login_accounts, [
     name: "Zawadi Muthoni",
     role: "Pharmacy + lab",
     email: "pharmalab@gmail.com"
+  },
+  %{
+    id: "distributor",
+    name: "David Mwangi",
+    role: "Distributor",
+    email: "distributor@gmail.com"
   }
 ]
 
@@ -76,3 +90,5 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+config :thamani_dawa, Oban, testing: :manual

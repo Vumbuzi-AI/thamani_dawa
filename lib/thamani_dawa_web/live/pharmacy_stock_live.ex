@@ -23,9 +23,11 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
+  alias ThamaniDawa.StockAlerts
   alias ThamaniDawa.Suppliers
 
   @default_filters %{site: "", status: ""}
+  @near_expiry_days 30
 
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
@@ -158,11 +160,51 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   end
 
   defp reload(socket) do
+    socket = assign_stock_alerts(socket)
+
     case socket.assigns.view do
       "products" -> reload_products(socket)
       "batches" -> reload_batches(socket)
     end
   end
+
+  defp assign_stock_alerts(socket) do
+    org_id = socket.assigns.current_scope.organization_id
+
+    batches =
+      org_id
+      |> Batches.list_batches()
+      |> Enum.filter(&(not is_nil(&1.approver_id)))
+      |> filter_by_sites(alert_site_ids(socket))
+
+    {out_of_stock, low_stock} = StockAlerts.stock_alerts(batches, socket.assigns.products_by_id)
+
+    socket
+    |> assign(:out_of_stock_count, length(out_of_stock))
+    |> assign(:low_stock_count, length(low_stock))
+    |> assign(:near_expiry_count, length(StockAlerts.near_expiry(batches, @near_expiry_days)))
+    |> assign(:near_expiry_days, @near_expiry_days)
+    |> assign(
+      :low_stock_value,
+      StockAlerts.low_stock_replenishment_value(low_stock ++ out_of_stock, batches)
+    )
+  end
+
+  defp alert_site_ids(socket) do
+    case socket.assigns.filters.site do
+      "" ->
+        socket.assigns.allowed_site_ids
+
+      site_id_str ->
+        case Integer.parse(site_id_str) do
+          {site_id, ""} -> [site_id]
+          _ -> socket.assigns.allowed_site_ids
+        end
+    end
+  end
+
+  defp filter_by_sites(batches, nil), do: batches
+  defp filter_by_sites(batches, site_ids), do: Enum.filter(batches, &(&1.site_id in site_ids))
 
   defp reload_products(socket) do
     org_id = socket.assigns.current_scope.organization_id
@@ -266,6 +308,18 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   defp stock_subtitle(nil), do: "Every batch across every site in your organization — read-only."
   defp stock_subtitle(_site_ids), do: "Every batch across your assigned sites — read-only."
 
+  defp money(amount) do
+    grouped =
+      amount
+      |> round()
+      |> Integer.to_string()
+      |> String.reverse()
+      |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
+      |> String.reverse()
+
+    "KSh " <> grouped
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.pharmacy_shell
@@ -276,63 +330,95 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
       <.header icon="hero-cube">
         Organization stock
         <:subtitle>{stock_subtitle(@allowed_site_ids)}</:subtitle>
-        <:toolbar>
-          <div class="flex min-w-0 items-center gap-3">
-            <.tab_group>
-              <:tab
-                id="products-tab"
-                active={@view == "products"}
-                phx_click="set_view"
-                phx_value_view="products"
-              >
-                Products
-              </:tab>
-              <:tab
-                id="batches-tab"
-                active={@view == "batches"}
-                phx_click="set_view"
-                phx_value_view="batches"
-              >
-                All batches
-              </:tab>
-            </.tab_group>
-
-            <form phx-change="search" class="min-w-0 flex-1" id="search-form">
-              <.search_input
-                name="search"
-                value={@search}
-                placeholder={
-                  if @view == "products",
-                    do: "Search by product, GTIN, or category",
-                    else: "Search by product, GTIN, or batch no."
-                }
-              />
-            </form>
-          </div>
-
-          <.filter_drawer
-            id="stock-filters"
-            title="Filter stock"
-            apply_event="apply_filters"
-            active_count={active_filter_count(@filters)}
-          >
-            <:group label="Status">
-              <.input
-                type="select"
-                name="filters[status]"
-                value={@filters.status}
-                options={[{"Active", "active"}, {"Pending receipt", "pending"}]}
-                prompt="All statuses"
-              />
-            </:group>
-            <:chip
-              :for={chip <- filter_chips(@filters, @sites_by_id)}
-              label={chip.label}
-              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-            />
-          </.filter_drawer>
-        </:toolbar>
       </.header>
+
+      <div class="dashboard-stat-grid mb-5">
+        <.stat_tile
+          id="out-of-stock-card"
+          icon="hero-x-circle"
+          label="Out of stock"
+          value={@out_of_stock_count}
+          sublabel="Products with no remaining stock"
+        />
+        <.stat_tile
+          id="low-stock-card"
+          icon="hero-exclamation-triangle"
+          label="Low stock"
+          value={@low_stock_count}
+          sublabel="At or below reorder level"
+        />
+        <.stat_tile
+          id="near-expiry-card"
+          icon="hero-calendar-days"
+          label="Near-expiry"
+          value={@near_expiry_count}
+          sublabel={"Expiring within #{@near_expiry_days} days"}
+        />
+        <.stat_tile
+          id="low-stock-value-card"
+          icon="hero-currency-dollar"
+          label="Low stock value"
+          value={money(@low_stock_value)}
+          sublabel="Estimated cost to reach reorder levels"
+        />
+      </div>
+
+      <div class="mb-5 grid grid-cols-1 items-start gap-3 rounded-2xl ff-surface-card p-4 sm:p-5 min-[480px]:grid-cols-[minmax(0,1fr)_auto]">
+        <div class="flex min-w-0 items-center gap-3">
+          <.tab_group>
+            <:tab
+              id="products-tab"
+              active={@view == "products"}
+              phx_click="set_view"
+              phx_value_view="products"
+            >
+              Products
+            </:tab>
+            <:tab
+              id="batches-tab"
+              active={@view == "batches"}
+              phx_click="set_view"
+              phx_value_view="batches"
+            >
+              All batches
+            </:tab>
+          </.tab_group>
+
+          <form phx-change="search" class="min-w-0 flex-1" id="search-form">
+            <.search_input
+              name="search"
+              value={@search}
+              placeholder={
+                if @view == "products",
+                  do: "Search by product, GTIN, or category",
+                  else: "Search by product, GTIN, or batch no."
+              }
+            />
+          </form>
+        </div>
+
+        <.filter_drawer
+          id="stock-filters"
+          title="Filter stock"
+          apply_event="apply_filters"
+          active_count={active_filter_count(@filters)}
+        >
+          <:group label="Status">
+            <.input
+              type="select"
+              name="filters[status]"
+              value={@filters.status}
+              options={[{"Active", "active"}, {"Pending receipt", "pending"}]}
+              prompt="All statuses"
+            />
+          </:group>
+          <:chip
+            :for={chip <- filter_chips(@filters, @sites_by_id)}
+            label={chip.label}
+            clear={JS.push("clear_chip", value: %{"field" => chip.field})}
+          />
+        </.filter_drawer>
+      </div>
 
       <div :if={@view == "products"}>
         <.table

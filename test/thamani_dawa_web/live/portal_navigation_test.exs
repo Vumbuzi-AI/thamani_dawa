@@ -16,7 +16,12 @@ defmodule ThamaniDawaWeb.PortalNavigationTest do
   describe "combined pharmacy/lab staff at a combined site" do
     setup %{conn: conn} do
       admin = user_fixture()
-      site = site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy_lab})
+
+      site =
+        site_fixture(%{
+          organization_id: admin.organization_id,
+          activities: [:pharmacy, :laboratory]
+        })
 
       pharma_lab =
         staff_fixture(%{
@@ -49,7 +54,9 @@ defmodule ThamaniDawaWeb.PortalNavigationTest do
   describe "combined pharmacy/lab staff at a single-purpose site" do
     test "at a lab-only site, gets no cross-portal switch from the lab shell", %{conn: conn} do
       admin = user_fixture()
-      lab_site = site_fixture(%{organization_id: admin.organization_id, site_type: :lab})
+
+      lab_site =
+        site_fixture(%{organization_id: admin.organization_id, activities: [:laboratory]})
 
       pharma_lab =
         staff_fixture(%{
@@ -71,7 +78,7 @@ defmodule ThamaniDawaWeb.PortalNavigationTest do
       admin = user_fixture()
 
       pharmacy_site =
-        site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy})
+        site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy]})
 
       pharma_lab =
         staff_fixture(%{
@@ -94,7 +101,7 @@ defmodule ThamaniDawaWeb.PortalNavigationTest do
     end
 
     test "a pharmacist gets no cross-portal link", %{admin: admin, conn: conn} do
-      site = site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy})
+      site = site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy]})
 
       pharmacist =
         staff_fixture(%{
@@ -111,7 +118,7 @@ defmodule ThamaniDawaWeb.PortalNavigationTest do
     end
 
     test "a lab technician gets no cross-portal link", %{admin: admin, conn: conn} do
-      site = site_fixture(%{organization_id: admin.organization_id, site_type: :lab})
+      site = site_fixture(%{organization_id: admin.organization_id, activities: [:laboratory]})
 
       lab_technician =
         staff_fixture(%{

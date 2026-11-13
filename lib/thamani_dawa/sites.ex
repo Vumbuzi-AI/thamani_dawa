@@ -7,7 +7,6 @@ defmodule ThamaniDawa.Sites do
   """
 
   import Ecto.Query, warn: false
-  alias ThamaniDawa.Gln
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
@@ -52,7 +51,7 @@ defmodule ThamaniDawa.Sites do
     Repo.exists?(
       from s in Site,
         where: s.organization_id == ^organization_id,
-        where: s.site_type in [:lab, :pharmacy_lab]
+        where: fragment("? @> ?", s.activities, ^["laboratory"])
     )
   end
 
@@ -61,7 +60,7 @@ defmodule ThamaniDawa.Sites do
   """
   def create_default_site(organization_id, name)
       when is_integer(organization_id) and is_binary(name) do
-    create_default_site(organization_id, %{name: name, site_type: :pharmacy})
+    create_default_site(organization_id, %{name: name, activities: [:pharmacy]})
   end
 
   def create_default_site(organization_id, attrs)
@@ -69,7 +68,6 @@ defmodule ThamaniDawa.Sites do
     %Site{}
     |> Site.default_changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Ecto.Changeset.put_change(:gln, Gln.generate!())
     |> Repo.audited_insert()
   end
 
@@ -78,7 +76,6 @@ defmodule ThamaniDawa.Sites do
     %Site{}
     |> Site.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Ecto.Changeset.put_change(:gln, Gln.generate!())
     |> Repo.audited_insert()
   end
 

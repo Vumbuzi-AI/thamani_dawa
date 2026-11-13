@@ -17,21 +17,41 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     # Step 1: sign up the organization admin
     {:ok, signup_view, _html} = live(conn, ~p"/signup")
 
+    organization_attrs = %{
+      name: "Acme Pharmacy Co",
+      license_number: "PPB-ACME-001",
+      operating_models: ["pharmacy", "laboratory"],
+      gs1_company_prefix: "0614141"
+    }
+
+    # The GS1 company prefix is only revealed once an operating model is
+    # picked, and the wizard needs a second Continue once the registry has
+    # answered.
     signup_view
     |> form("#organization-setup-form",
-      organization: %{
-        name: "Acme Pharmacy Co",
-        license_number: "PPB-ACME-001",
-        operating_models: ["pharmacy", "laboratory"]
-      },
-      site: %{name: "Acme First Branch", site_type: "pharmacy_lab"}
+      organization: %{operating_models: organization_attrs.operating_models}
     )
+    |> render_change(%{"_target" => ["organization", "operating_models"]})
+
+    signup_view
+    |> form("#organization-setup-form", organization: organization_attrs)
+    |> render_submit()
+
+    render_async(signup_view, 5_000)
+
+    signup_view
+    |> form("#organization-setup-form", organization: organization_attrs)
+    |> render_submit()
+
+    signup_view
+    |> form("#site-setup-form", site: %{name: "Acme First Branch"})
     |> render_submit()
 
     signup_view
     |> form("#signup-form",
       user: %{
-        name: "Ada Admin",
+        first_name: "Ada",
+        last_name: "Admin",
         email: admin_email,
         password: "supersecret123",
         accepted_legal_terms: "true"
@@ -42,7 +62,7 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     assert has_element?(signup_view, "#signup-form[phx-trigger-action][action='/login']")
 
     admin = Accounts.get_user_by_email(admin_email)
-    assert admin.role == :admin
+    assert admin.roles == [:admin]
 
     organization = Organizations.get_organization!(admin.organization_id)
     assert organization.name == "Acme Pharmacy Co"
@@ -56,8 +76,9 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     |> form("#site-form",
       site: %{
         name: "Main Branch",
-        site_type: :pharmacy_lab,
-        address: "1 Test Street"
+        activities: [:pharmacy, :laboratory],
+        address: "1 Test Street",
+        gln: "0614141000456"
       }
     )
     |> render_submit()
@@ -66,9 +87,9 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
 
     site = Enum.find(Sites.list_sites(organization.id), &(&1.name == "Main Branch"))
     assert site
-    assert site.site_type == :pharmacy_lab
-    # GLN is assigned by `Sites.create_site/2` (never entered by hand).
-    assert site.gln
+    assert site.activities == [:pharmacy, :laboratory]
+    # The GLN is the one GS1 issued to the location, entered by the admin.
+    assert site.gln == "0614141000456"
 
     # Step 3: invite staff to that site
     staff_email = "pharmacist-#{System.unique_integer([:positive])}@example.com"
@@ -80,7 +101,7 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
       user: %{
         name: "Peter Pharmacist",
         email: staff_email,
-        role: :pharmacist,
+        roles: ["pharmacist"],
         site_ids: [to_string(site.id)]
       }
     )
@@ -90,7 +111,7 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
 
     staff = Accounts.get_user_by_email(staff_email)
     assert staff
-    assert staff.role == :pharmacist
+    assert staff.roles == [:pharmacist]
     # Staff are assigned to one or more sites; `current_site_id` is the active one.
     assert staff.current_site_id == site.id
     assert Enum.map(Accounts.get_user!(organization.id, staff.id).sites, & &1.id) == [site.id]

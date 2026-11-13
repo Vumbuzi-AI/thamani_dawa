@@ -462,12 +462,11 @@ defmodule ThamaniDawaWeb.PageComponents do
       ThamaniDawa.Accounts.Scope.lab_technician?(scope) ->
         "/lab"
 
+      ThamaniDawa.Accounts.Scope.distributor?(scope) ->
+        "/distributor"
+
       ThamaniDawa.Accounts.Scope.pharma_lab?(scope) ->
-        if site_lab_only?(scope) do
-          "/lab"
-        else
-          "/pharmacy"
-        end
+        pharma_lab_dashboard_path(scope)
 
       ThamaniDawa.Accounts.Scope.pharmacy_access?(scope) ->
         "/pharmacy"
@@ -481,6 +480,10 @@ defmodule ThamaniDawaWeb.PageComponents do
   end
 
   def dashboard_path(_), do: "/login"
+
+  defp pharma_lab_dashboard_path(scope) do
+    if site_lab_only?(scope), do: "/lab", else: "/pharmacy"
+  end
 
   defp site_lab_only?(%ThamaniDawa.Accounts.Scope{current_site_id: nil}), do: false
 

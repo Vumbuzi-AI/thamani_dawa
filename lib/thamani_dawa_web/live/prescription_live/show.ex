@@ -135,23 +135,34 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         %{"item_id" => item_id, "quantity" => quantity, "barcode" => barcode} = params,
         socket
       ) do
-    organization_id = socket.assigns.current_scope.organization_id
-    pharmacist_id = socket.assigns.current_scope.user.id
+    scope = socket.assigns.current_scope
 
-    with {item_id, ""} <- Integer.parse(item_id),
-         {quantity, ""} <- Integer.parse(quantity),
-         true <- quantity > 0 do
-      do_scan_dispense(
-        socket,
-        organization_id,
-        item_id,
-        pharmacist_id,
-        quantity,
-        barcode,
-        Map.get(params, "batch_no", "")
-      )
+    if dispense_authorized?(scope) do
+      organization_id = scope.organization_id
+      pharmacist_id = scope.user.id
+
+      with {item_id, ""} <- Integer.parse(item_id),
+           {quantity, ""} <- Integer.parse(quantity),
+           true <- quantity > 0 do
+        do_scan_dispense(
+          socket,
+          organization_id,
+          item_id,
+          pharmacist_id,
+          quantity,
+          barcode,
+          Map.get(params, "batch_no", "")
+        )
+      else
+        _ -> {:noreply, put_flash(socket, :error, "Enter a valid quantity.")}
+      end
     else
-      _ -> {:noreply, put_flash(socket, :error, "Enter a valid quantity.")}
+      {:noreply,
+       put_flash(
+         socket,
+         :error,
+         "Only a registered pharmacist or lab technician can dispense medicines."
+       )}
     end
   end
 
@@ -208,6 +219,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         {:noreply, put_flash(socket, :error, "Couldn't dispense that item.")}
     end
   end
+
+  defp dispense_authorized?(scope), do: Scope.pharmacist?(scope) or Scope.lab_technician?(scope)
 
   defp do_verify(socket, organization_id, item_id, gtin) do
     case Prescriptions.verify_dispensed_item(organization_id, item_id, gtin) do
@@ -719,7 +732,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                 </div>
 
                 <div
-                  :if={item.quantity_dispensed < item.quantity_prescribed}
+                  :if={
+                    item.quantity_dispensed < item.quantity_prescribed and
+                      dispense_authorized?(@current_scope)
+                  }
                   class="border-t border-thamani-stone bg-thamani-canvas/50 px-5 py-4 sm:px-6"
                 >
                   <form
@@ -783,6 +799,16 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                     </p>
                   </form>
                 </div>
+
+                <p
+                  :if={
+                    item.quantity_dispensed < item.quantity_prescribed and
+                      not dispense_authorized?(@current_scope)
+                  }
+                  class="border-t border-thamani-stone bg-thamani-canvas/50 px-5 py-4 text-sm text-thamani-pewter sm:px-6"
+                >
+                  Only a registered pharmacist or lab technician can dispense this item.
+                </p>
 
                 <div
                   :if={(dispenses = Map.get(@dispenses_by_item, item.id, [])) != []}

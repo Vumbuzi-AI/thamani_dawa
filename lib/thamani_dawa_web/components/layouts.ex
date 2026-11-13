@@ -9,6 +9,7 @@ defmodule ThamaniDawaWeb.Layouts do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
+  alias ThamaniDawaWeb.Portals
   alias ThamaniDawaWeb.SiteScoping
 
   # Embed all files in layouts/* within this module.
@@ -257,13 +258,59 @@ defmodule ThamaniDawaWeb.Layouts do
           {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
           {"Sites", "hero-building-office-2", ~p"/org/sites"},
           {"Products", "hero-cube", ~p"/org/products"},
+          {"Receiving", "hero-arrow-down-tray", ~p"/org/receiving"},
           {"Team", "hero-user-group", ~p"/org/team"},
           {"Suppliers", "hero-truck", ~p"/org/suppliers"},
           {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"},
-          {"Transactions", "hero-banknotes", ~p"/org/earnings"}
+          {"Transactions", "hero-banknotes", ~p"/org/earnings"},
+          {"PPB reporting", "hero-globe-alt", ~p"/org/epcis"},
+          {"Settings", "hero-cog-6-tooth", ~p"/org/settings"}
         ]
         |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
       }
+    >
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
+  @doc """
+  Renders the authenticated distributor shell: the shared sidebar with links to
+  the shipment workflow, mobile app users, serialisation billing, and the
+  distributor's inventory and trading-partner records.
+  """
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, default: ""
+  attr :back, :any, default: nil
+  attr :back_label, :string, default: nil
+
+  slot :inner_block, required: true
+
+  def distributor_shell(assigns) do
+    ~H"""
+    <.sidebar_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      back={@back}
+      back_label={@back_label}
+      title="Thamani Dawa"
+      section_label="Distributor"
+      base_path="/distributor"
+      nav_items={[
+        {"Dashboard", "hero-squares-2x2", ~p"/distributor"},
+        {"Shipments", "hero-truck", ~p"/distributor/shipments"},
+        {"Mobile users", "hero-device-phone-mobile", ~p"/distributor/mobile-users"},
+        {"Receiving", "hero-arrow-down-tray", ~p"/distributor/receiving"},
+        {"Products", "hero-cube", ~p"/distributor/products"},
+        {"Suppliers", "hero-building-office", ~p"/distributor/suppliers"},
+        {"Warehouses", "hero-building-office-2", ~p"/distributor/warehouses"},
+        {"Customers", "hero-building-storefront", ~p"/distributor/customers"},
+        {"Billing", "hero-credit-card", ~p"/distributor/billing"},
+        {"PPB reporting", "hero-globe-alt", ~p"/distributor/epcis"},
+        {"Settings", "hero-cog-6-tooth", ~p"/distributor/settings"}
+      ]}
     >
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -284,7 +331,13 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :inner_block, required: true
 
   defp sidebar_shell(assigns) do
-    assigns = assign(assigns, :back_label, back_label(assigns))
+    portal_options = portal_options(Portals.list_for(assigns.current_scope), assigns.base_path)
+
+    assigns =
+      assigns
+      |> assign(:back_label, back_label(assigns))
+      |> assign(:portal_options, portal_options)
+      |> assign(:current_portal, current_portal(portal_options, assigns.base_path))
 
     ~H"""
     <div
@@ -302,7 +355,7 @@ defmodule ThamaniDawaWeb.Layouts do
       <%!-- Sidebar --%>
       <aside
         id="sidebar-aside"
-        class="fixed inset-y-0 left-0 z-[90] flex w-72 -translate-x-full shrink-0 flex-col border-r transition-[transform,width] duration-200 ease-in-out lg:relative lg:z-50 lg:translate-x-0"
+        class="fixed inset-y-0 left-0 z-[90] flex w-72 -translate-x-full shrink-0 flex-col overflow-y-auto border-r transition-[transform,width] duration-200 ease-in-out lg:relative lg:z-50 lg:translate-x-0 lg:overflow-visible"
         style="background: var(--thamani-sidenav, #EFEFF0); border-color: var(--thamani-border-nav); width: 288px; padding: 24px 20px;"
         aria-label={"#{@section_label} navigation"}
       >
@@ -332,6 +385,82 @@ defmodule ThamaniDawaWeb.Layouts do
             <span class="text-[13px] truncate block" style="color: var(--thamani-pewter);">
               {@section_label}
             </span>
+          </div>
+        </div>
+
+        <div
+          :if={length(@portal_options) > 1}
+          id="portal-switch"
+          class="relative mb-5 flex flex-col gap-2 border-b border-thamani-border-nav pb-5"
+        >
+          <span
+            class="px-1 text-[11px] font-medium uppercase tracking-wide"
+            style="color: var(--thamani-subtle);"
+          >
+            Workspace
+          </span>
+          <div class="relative">
+            <button
+              type="button"
+              id="portal-switch-trigger"
+              phx-click={JS.toggle(to: "#portal-switch-dropdown")}
+              phx-click-away={JS.hide(to: "#portal-switch-dropdown")}
+              class="group flex w-full cursor-pointer items-center justify-between gap-3 rounded-2xl px-3.5 py-3 text-left text-thamani-forest transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:bg-white/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40"
+              style="background: color-mix(in srgb, var(--thamani-stone) 72%, white); border: 1px solid color-mix(in srgb, var(--thamani-forest) 25%, var(--thamani-border-nav));"
+            >
+              <span class="flex min-w-0 items-center gap-3">
+                <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-white/70 text-thamani-forest shadow-sm ring-1 ring-thamani-border-nav/70">
+                  <.icon name={@current_portal.icon} class="size-5" />
+                </span>
+                <span class="flex min-w-0 flex-col">
+                  <span class="truncate text-[15px] font-semibold leading-5">{@current_portal.label}</span>
+                  <span class="truncate text-xs font-normal leading-4 text-thamani-pewter">
+                    {@current_portal.description}
+                  </span>
+                </span>
+              </span>
+              <.icon
+                name="hero-chevron-down"
+                class="size-4 shrink-0 text-thamani-forest transition-transform group-hover:translate-y-0.5"
+              />
+            </button>
+            <div
+              id="portal-switch-dropdown"
+              class="absolute left-0 top-full z-50 mt-2 hidden w-full rounded-2xl border border-thamani-stone bg-white p-1.5 shadow-xl ff-surface-popover"
+            >
+              <.link
+                :for={portal <- @portal_options}
+                id={portal.id}
+                navigate={portal.path}
+                class={[
+                  "group flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
+                  portal.active? && "bg-thamani-forest/10 text-thamani-forest",
+                  not portal.active? &&
+                    "text-slate-700 hover:bg-thamani-stone/60 hover:text-thamani-forest"
+                ]}
+              >
+                <span class="flex min-w-0 items-center gap-3">
+                  <span class={[
+                    "flex size-8 shrink-0 items-center justify-center rounded-lg",
+                    portal.active? && "bg-white/70",
+                    not portal.active? && "bg-thamani-stone/60 group-hover:bg-white"
+                  ]}>
+                    <.icon name={portal.icon} class="size-4" />
+                  </span>
+                  <span class="flex min-w-0 flex-col">
+                    <span class="truncate text-sm font-semibold leading-5">{portal.label}</span>
+                    <span class="truncate text-xs font-normal leading-4 text-thamani-pewter">
+                      {portal.description}
+                    </span>
+                  </span>
+                </span>
+                <.icon
+                  :if={portal.active?}
+                  name="hero-check"
+                  class="size-4 shrink-0 text-thamani-forest"
+                />
+              </.link>
+            </div>
           </div>
         </div>
 
@@ -385,7 +514,7 @@ defmodule ThamaniDawaWeb.Layouts do
             class="px-3 text-[11px] font-medium uppercase tracking-wide transition-opacity duration-150"
             style="color: var(--thamani-subtle);"
           >
-            Switch portal
+            Cross-portal
           </span>
           <.link
             :if={@base_path != "/pharmacy"}
@@ -514,44 +643,51 @@ defmodule ThamaniDawaWeb.Layouts do
             </div>
           </form>
 
-          <div
-            id="sidebar-account-card"
-            data-tooltip={@current_scope.user.name}
-            class="flex items-center gap-3 transition-opacity duration-150"
-            style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav); border-radius: 16px; padding: 14px 16px;"
-          >
-            <div
-              class="rounded-full flex items-center justify-center shrink-0 aspect-square font-semibold text-[15px]"
-              style="width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 9999px; background: var(--thamani-forest); color: var(--thamani-snow);"
+          <div id="sidebar-account-menu" class="relative">
+            <button
+              id="sidebar-account-card"
+              type="button"
+              aria-label="Open account menu"
+              data-tooltip={@current_scope.user.name}
+              phx-click={JS.toggle(to: "#sidebar-account-dropdown")}
+              phx-click-away={JS.hide(to: "#sidebar-account-dropdown")}
+              class="flex w-full cursor-pointer items-center gap-3 text-left transition-colors hover:bg-white/70"
+              style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav); border-radius: 16px; padding: 12px 14px;"
             >
-              {String.at(@current_scope.user.name || "U", 0)}
-            </div>
+              <span
+                class="flex size-11 min-w-11 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold"
+                style="background: var(--thamani-forest); color: var(--thamani-snow);"
+              >
+                {String.at(@current_scope.user.name || "U", 0)}
+              </span>
+              <span
+                id="sidebar-profile"
+                class="flex min-w-0 flex-1 flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
+              >
+                <span class="truncate text-[15px] font-semibold" style="color: #1F2433;">{@current_scope.user.name}</span>
+                <span class="text-[13px]" style="color: var(--thamani-pewter);">{ThamaniDawa.Accounts.User.humanize_roles(
+                  @current_scope.user
+                )}</span>
+              </span>
+              <.icon
+                name="hero-ellipsis-vertical"
+                class="nav-label size-5 shrink-0 text-thamani-pewter"
+              />
+            </button>
             <div
-              id="sidebar-profile"
-              class="flex flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
+              id="sidebar-account-dropdown"
+              class="absolute bottom-full left-0 z-50 mb-1.5 hidden w-full rounded-xl border border-thamani-stone bg-white p-1.5 shadow-xl ff-surface-popover"
             >
-              <span class="text-[15px] font-semibold truncate" style="color: #1F2433;">
-                {@current_scope.user.name}
-              </span>
-              <span class="text-[13px]" style="color: var(--thamani-pewter);">
-                {current_site_name(@current_scope)}
-              </span>
+              <.link
+                id="sidebar-logout"
+                href={~p"/logout"}
+                method="delete"
+                class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+              >
+                <.icon name="hero-arrow-right-start-on-rectangle" class="size-4 shrink-0" /> Log out
+              </.link>
             </div>
           </div>
-
-          <.link
-            id="sidebar-logout"
-            data-tooltip="Log out"
-            href={~p"/logout"}
-            method="delete"
-            class="px-3 py-2 rounded-xl text-sm font-medium transition-[background-color,scale] flex items-center gap-3 group hover:bg-red-50 active:scale-[0.96]"
-            style="color: var(--thamani-error);"
-          >
-            <.icon name="hero-arrow-right-start-on-rectangle" class="size-4 shrink-0" />
-            <span id="nav-label-logout" class="nav-label transition-opacity duration-150">
-              Log out
-            </span>
-          </.link>
         </div>
       </aside>
 
@@ -666,6 +802,49 @@ defmodule ThamaniDawaWeb.Layouts do
     """
   end
 
+  # The portal switcher only earns its place when the account can reach more
+  # than one portal — single-role staff never see it.
+  defp portal_options(portals, base_path) do
+    active_path =
+      Enum.find_value(portals, fn {_label, _icon, path} ->
+        if Portals.portal_root(path) == base_path, do: path
+      end)
+
+    Enum.map(portals, fn {label, icon, path} ->
+      %{
+        id: "portal-switch-option-#{portal_slug(label)}",
+        label: label,
+        description: portal_description(path),
+        icon: icon,
+        path: path,
+        active?: active_path == path
+      }
+    end)
+  end
+
+  defp current_portal(options, base_path) do
+    case Enum.find(options, & &1.active?) do
+      nil ->
+        %{
+          label: Portals.root_label(base_path),
+          icon: "hero-squares-2x2",
+          description: portal_description(base_path)
+        }
+
+      option ->
+        option
+    end
+  end
+
+  defp portal_slug(label), do: label |> String.downcase() |> String.replace(" ", "-")
+
+  defp portal_description("/org/dashboard"), do: "Manage organization"
+  defp portal_description("/org"), do: "Manage organization"
+  defp portal_description("/pharmacy"), do: "Dispensing and sales"
+  defp portal_description("/lab"), do: "Laboratory operations"
+  defp portal_description("/distributor"), do: "Distribution operations"
+  defp portal_description(_path), do: "Open workspace"
+
   defp current_site_name(%Scope{current_site_id: nil}), do: "All sites"
 
   defp current_site_name(%Scope{current_site_id: site_id, organization_id: organization_id}) do
@@ -741,6 +920,16 @@ defmodule ThamaniDawaWeb.Layouts do
     </main>
 
     <.flash_group flash={@flash} />
+    """
+  end
+
+  @doc false
+  attr :inner_content, :any, default: nil
+  slot :inner_block, required: false
+
+  def landing(assigns) do
+    ~H"""
+    {@inner_content || render_slot(@inner_block)}
     """
   end
 
@@ -885,6 +1074,7 @@ defmodule ThamaniDawaWeb.Layouts do
   defp product_tour_path("/org"), do: ~p"/org/dashboard?tour=1"
   defp product_tour_path("/pharmacy"), do: ~p"/pharmacy?tour=1"
   defp product_tour_path("/lab"), do: ~p"/lab?tour=1"
+  defp product_tour_path("/distributor"), do: ~p"/distributor?tour=1"
 
   @doc """
   Provides dark vs light theme toggle based on themes defined in app.css.

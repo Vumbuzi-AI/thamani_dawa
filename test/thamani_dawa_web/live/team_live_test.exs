@@ -27,14 +27,14 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
   describe "GET /org/team/new" do
     test "an admin sees the invite form with unique field ids", %{conn: conn} do
       admin = user_fixture()
-      assert admin.role == :admin
+      assert admin.roles == [:admin]
 
       {:ok, _view, html} = live(log_in(conn, admin), ~p"/org/team/new")
 
       assert html =~ ~s(id="invite-form")
       assert html =~ ~s(id="user_name")
       assert html =~ ~s(id="user_email")
-      assert html =~ ~s(id="user_role")
+      assert html =~ ~s(name="user[roles][]")
       assert html =~ ~s(id="user-site-checkboxes")
     end
 
@@ -145,7 +145,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
         ThamaniDawa.Accounts.invite_user(admin.organization_id, admin.id, %{
           name: "Invited Ivy",
           email: "ivy@example.com",
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       assert active.hashed_password
@@ -214,7 +214,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
 
       html =
         view
-        |> form("#invite-form", user: %{role: "pharmacist"})
+        |> form("#invite-form", user: %{roles: ["pharmacist"]})
         |> render_change()
 
       assert html =~ "Only Branch"
@@ -231,7 +231,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
       {:ok, view, _html} = live(log_in(conn, admin), ~p"/org/team/new")
 
       view
-      |> form("#invite-form", user: %{role: "pharmacist"})
+      |> form("#invite-form", user: %{roles: ["pharmacist"]})
       |> render_change()
 
       assert has_element?(view, "#site-search")
@@ -251,7 +251,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
           user: %{
             name: "New Hire",
             email: "new.hire@example.com",
-            role: "pharmacist",
+            roles: ["pharmacist"],
             site_ids: [site.id]
           }
         )
@@ -270,7 +270,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
 
       html =
         view
-        |> form("#invite-form", user: %{name: "", email: "", role: ""})
+        |> form("#invite-form", user: %{name: "", email: "", roles: []})
         |> render_submit()
 
       assert html =~ "can&#39;t be blank"
@@ -284,7 +284,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
       html =
         view
         |> form("#invite-form",
-          user: %{name: "New Hire", email: "not-an-email", role: "pharmacist"}
+          user: %{name: "New Hire", email: "not-an-email", roles: ["pharmacist"]}
         )
         |> render_submit()
 

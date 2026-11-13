@@ -16,7 +16,6 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     organization = Organizations.get_organization!(organization_id)
     sites = Sites.list_sites(organization_id)
     primary_site = List.first(sites)
-    active_sites = Enum.filter(sites, & &1.is_active)
 
     setup_required? = not site_ready?(primary_site)
 
@@ -24,16 +23,21 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     |> assign(:organization, organization)
     |> assign(:primary_site, primary_site)
     |> assign(:setup_required?, setup_required?)
-    |> assign(:pharmacy_metrics?, Enum.any?(active_sites, &Sites.Site.pharmacy?/1))
-    |> assign(:lab_metrics?, Enum.any?(active_sites, &Sites.Site.lab?/1))
     |> assign(:site_profitability, Reports.site_profitability(organization_id))
+    |> assign(:multi_site?, Sites.multi_site?(organization_id))
   end
 
   defp site_ready?(nil), do: false
 
   defp site_ready?(site) do
-    is_binary(site.address) and String.trim(site.address) != "" and not is_nil(site.site_type)
+    is_binary(site.address) and String.trim(site.address) != "" and site.activities != []
   end
+
+  defp format_activities(activities), do: Enum.map_join(activities, ", ", &humanize_activity/1)
+
+  defp humanize_activity(:pharmacy), do: "Pharmacy"
+  defp humanize_activity(:laboratory), do: "Laboratory"
+  defp humanize_activity(:distribution), do: "Distribution"
 
   def handle_event("set_range", %{"range" => range}, socket) do
     {:noreply, assign_range(socket, range)}
@@ -300,7 +304,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
         %{
           type: :site,
           title: s.name,
-          subtitle: "#{s.address || "No address"} • Type: #{s.site_type}",
+          subtitle: "#{s.address || "No address"} • #{format_activities(s.activities)}",
           badge: "GLN: #{s.gln || "N/A"}",
           icon: "hero-building-office-2"
         }
@@ -312,7 +316,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           type: :staff,
           title: u.name,
           subtitle: u.email,
-          badge: String.capitalize(to_string(u.role)),
+          badge: ThamaniDawa.Accounts.User.humanize_roles(u),
           icon: "hero-users"
         }
       end)
@@ -620,38 +624,6 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           value={@stats.active_staff}
           sublabel="Enabled system accounts"
         />
-        <.stat_tile
-          :if={@pharmacy_metrics?}
-          id="prescriptions-stat"
-          icon="hero-document-text"
-          label="Prescriptions"
-          value={@stats.prescriptions}
-          sublabel="Prescriptions in selected window"
-        />
-        <.stat_tile
-          :if={@lab_metrics?}
-          id="lab-tests-done-stat"
-          icon="hero-beaker"
-          label="Lab tests done"
-          value={@stats.lab_tests_done}
-          sublabel="Completed lab orders in selected window"
-        />
-        <.stat_tile
-          :if={@pharmacy_metrics?}
-          id="pending-prescriptions-stat"
-          icon="hero-clock"
-          label="Pending prescriptions"
-          value={@stats.pending_prescriptions}
-          sublabel="Awaiting dispensing, network-wide"
-        />
-        <.stat_tile
-          :if={@lab_metrics?}
-          id="pending-lab-orders-stat"
-          icon="hero-clipboard-document-list"
-          label="Pending lab orders"
-          value={@stats.pending_lab_orders}
-          sublabel="Awaiting results, network-wide"
-        />
       </div>
 
       <div :if={not @setup_required?} id="admin-dashboard-charts" class="dashboard-chart-grid mt-6">
@@ -699,6 +671,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
         phx-update="ignore"
         data-tour-key={"thamani-org-tour-v1-#{@current_scope.user.id}"}
         data-auto-start={to_string(@auto_start_tour?)}
+        data-multi-site={to_string(@multi_site?)}
         class="hidden"
       >
         <button
@@ -788,6 +761,11 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
                 description: "Create your shared catalog, then receive stock and distribute it to the sites that need it."
               },
               {
+                selector: '[data-tour-target="/org/receiving"]',
+                title: "Receive stock into your sites",
+                description: "Log incoming deliveries against purchase orders and get them into the right site's inventory."
+              },
+              {
                 selector: '[data-tour-target="/org/team"]',
                 title: "Give your staff the right access",
                 description: "Invite staff and assign site access so each person sees only the work relevant to them."
@@ -800,14 +778,15 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               {
                 selector: '[data-tour-target="/org/requisitions"]',
                 title: "Coordinate stock requests between sites",
-                description: "Review and track site stock requests from submission through approval and fulfilment."
+                description: "Review and track site stock requests from submission through approval and fulfilment.",
+                multiSiteOnly: true
               },
               {
                 selector: '[data-tour-target="/org/earnings"]',
                 title: "Follow the money",
                 description: "Trace payments and site earnings here; view performance charts and site comparisons on the dashboard."
               }
-            ]
+            ].filter(step => !step.multiSiteOnly || this.el.dataset.multiSite === "true")
             this.index = 0
             this.activeTarget = null
             this.dismiss = () => this.finish()

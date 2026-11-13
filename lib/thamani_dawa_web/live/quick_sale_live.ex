@@ -4,8 +4,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Gtin
   alias ThamaniDawa.PaymentMethods
-  alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Products
+  alias ThamaniDawa.Sales
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
 
@@ -490,8 +490,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       "items" => Enum.map(cart, &cart_line_attrs/1)
     }
 
-    case Prescriptions.create_quick_sale(scope.organization_id, site_id, scope.user.id, attrs) do
-      {:ok, prescription} ->
+    case Sales.create_quick_sale(scope.organization_id, site_id, scope.user.id, attrs) do
+      {:ok, sale} ->
         site_name =
           case Enum.find(socket.assigns.sites, &(&1.id == site_id)) do
             nil -> "Pharmacy"
@@ -507,8 +507,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
            tendered: payment_details.tendered,
            change: payment_details.change,
            provider_reference: payment_details.provider_reference,
-           prescription: prescription,
-           receipt_number: "TD-#{String.pad_leading(Integer.to_string(prescription.id), 6, "0")}",
+           sale: sale,
+           receipt_number: "TD-#{String.pad_leading(Integer.to_string(sale.id), 6, "0")}",
            site_name: site_name,
            cashier: scope.user.name,
            completed_at: DateTime.utc_now()
@@ -694,17 +694,49 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
               />
               <div class="grid grid-cols-4 gap-2">
                 <button
+                  id="cash-tender-exact"
                   type="button"
                   phx-click="set_cash_tendered"
                   phx-value-amount={cart_total(@cart)}
-                  class="rounded-lg border border-thamani-stone px-2 py-2 text-xs font-semibold text-thamani-forest hover:bg-thamani-lime/30"
+                  aria-pressed={
+                    if(
+                      to_string(@payment_form[:tendered].value) == to_string(cart_total(@cart)),
+                      do: "true",
+                      else: "false"
+                    )
+                  }
+                  class={[
+                    "rounded-lg border px-2 py-2 text-xs font-semibold transition-colors",
+                    if(
+                      to_string(@payment_form[:tendered].value) == to_string(cart_total(@cart)),
+                      do:
+                        "border-thamani-forest bg-thamani-lime text-thamani-forest ring-1 ring-thamani-forest",
+                      else: "border-thamani-stone text-thamani-forest hover:bg-thamani-lime/30"
+                    )
+                  ]}
                 >Exact</button>
                 <button
                   :for={amount <- [50, 100, 200, 500, 1_000, 2_000, 5_000]}
+                  id={"cash-tender-#{amount}"}
                   type="button"
                   phx-click="set_cash_tendered"
                   phx-value-amount={amount}
-                  class="rounded-lg border border-thamani-stone px-2 py-2 text-xs font-semibold text-thamani-forest hover:bg-thamani-lime/30"
+                  aria-pressed={
+                    if(
+                      to_string(@payment_form[:tendered].value) == to_string(amount),
+                      do: "true",
+                      else: "false"
+                    )
+                  }
+                  class={[
+                    "rounded-lg border px-2 py-2 text-xs font-semibold transition-colors",
+                    if(
+                      to_string(@payment_form[:tendered].value) == to_string(amount),
+                      do:
+                        "border-thamani-forest bg-thamani-lime text-thamani-forest ring-1 ring-thamani-forest",
+                      else: "border-thamani-stone text-thamani-forest hover:bg-thamani-lime/30"
+                    )
+                  ]}
                 >KES {amount}</button>
               </div>
               <p class="text-xs text-thamani-pewter">

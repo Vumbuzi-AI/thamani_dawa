@@ -2,12 +2,14 @@ defmodule ThamaniDawa.Sites.Site do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @site_types [:pharmacy, :lab, :pharmacy_lab, :warehouse]
+  @activities [:pharmacy, :laboratory, :distribution]
 
   schema "sites" do
     field :name, :string
-    field :site_type, Ecto.Enum, values: @site_types
+    field :activities, {:array, Ecto.Enum}, values: @activities
     field :gln, :string
+    field :gln_verified_at, :utc_datetime
+    field :gln_verification_source, :string
     field :address, :string
     field :lat, :float
     field :long, :float
@@ -28,18 +30,27 @@ defmodule ThamaniDawa.Sites.Site do
   @doc false
   def changeset(site, attrs) do
     site
-    |> cast(attrs, [:name, :site_type, :address, :lat, :long, :is_active])
+    |> cast(attrs, [:name, :activities, :gln, :address, :lat, :long, :is_active])
     |> trim_change(:name)
-    |> validate_required([:name, :site_type, :address])
+    |> trim_change(:gln)
+    |> validate_required([:name, :activities, :address])
+    |> validate_length(:activities, min: 1, message: "Select at least one activity")
+    |> validate_format(:gln, ~r/^\d{13}$/, message: "must be 13 digits")
+    |> validate_gln_check_digit()
     |> unique_constraint(:gln)
   end
 
   @doc "Minimal changeset for system-created sites (signup default site) — no address yet."
   def default_changeset(site, attrs) do
     site
-    |> cast(attrs, [:name, :site_type, :address, :lat, :long, :is_active])
+    |> cast(attrs, [:name, :activities, :gln, :address, :lat, :long, :is_active])
     |> trim_change(:name)
-    |> validate_required([:name, :site_type])
+    |> trim_change(:gln)
+    |> validate_required([:name, :activities])
+    |> validate_length(:activities, min: 1, message: "Select at least one activity")
+    |> validate_format(:gln, ~r/^\d{13}$/, message: "must be 13 digits")
+    |> validate_gln_check_digit()
+    |> unique_constraint(:gln)
   end
 
   defp trim_change(changeset, field) do
@@ -49,14 +60,43 @@ defmodule ThamaniDawa.Sites.Site do
     end)
   end
 
-  @doc "The valid site types, per §4.1 of project.md."
-  def site_types, do: @site_types
+  defp validate_gln_check_digit(changeset) do
+    case get_change(changeset, :gln) do
+      gln when is_binary(gln) ->
+        if Regex.match?(~r/^\d{13}$/, gln) and not gln_check_digit_valid?(gln) do
+          add_error(changeset, :gln, "check digit does not match — double-check the number")
+        else
+          changeset
+        end
+
+      _not_changed ->
+        changeset
+    end
+  end
+
+  defp gln_check_digit_valid?(gln) do
+    {payload, check} = String.split_at(gln, -1)
+    Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(payload)) == check
+  end
+
+  @doc "The activities a site may perform, mirroring Organization.operating_models."
+  def activities, do: @activities
 
   @doc "Returns true if the site is capable of pharmacy work."
-  def pharmacy?(%__MODULE__{site_type: type}) when type in [:pharmacy, :pharmacy_lab], do: true
+  def pharmacy?(%__MODULE__{activities: activities}) when is_list(activities),
+    do: :pharmacy in activities
+
   def pharmacy?(_), do: false
 
   @doc "Returns true if the site is capable of lab work."
-  def lab?(%__MODULE__{site_type: type}) when type in [:lab, :pharmacy_lab], do: true
+  def lab?(%__MODULE__{activities: activities}) when is_list(activities),
+    do: :laboratory in activities
+
   def lab?(_), do: false
+
+  @doc "Returns true if the site is used for distribution/warehousing."
+  def distribution?(%__MODULE__{activities: activities}) when is_list(activities),
+    do: :distribution in activities
+
+  def distribution?(_), do: false
 end

@@ -8,6 +8,8 @@ defmodule ThamaniDawa.Batches do
   import Ecto.Query, warn: false
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Batches.Batch
+  alias ThamaniDawa.Epcis
+  alias ThamaniDawa.GoodsReceipts.GoodsReceipt
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
@@ -497,6 +499,7 @@ defmodule ThamaniDawa.Batches do
       product: product_query,
       site: site_query,
       supplier: supplier_query,
+      goods_receipt: [],
       approver: user_query,
       prescription_batch_dispenses: [
         dispensed_by: user_query,
@@ -520,6 +523,7 @@ defmodule ThamaniDawa.Batches do
     |> validate_belongs_to_org(:site_id, Site, organization_id)
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
+    |> validate_belongs_to_org(:goods_receipt_id, GoodsReceipt, organization_id)
     |> Repo.audited_insert()
   end
 
@@ -545,6 +549,14 @@ defmodule ThamaniDawa.Batches do
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
     |> Repo.audited_insert()
+    |> case do
+      {:ok, batch} ->
+        Epcis.record_facility_receipt(batch)
+        {:ok, batch}
+
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -677,15 +689,24 @@ defmodule ThamaniDawa.Batches do
   can't yet have anything dispensed from it.
   """
   def receive_batch(%Batch{} = batch, user_id, attrs \\ %{}) do
+    was_pending = is_nil(batch.received_at)
+
     attrs =
       Map.merge(attrs, %{
         "received_at" => DateTime.utc_now(),
         "approver_id" => user_id
       })
 
-    batch
-    |> Batch.receive_changeset(attrs)
-    |> Repo.audited_update()
+    case batch
+         |> Batch.receive_changeset(attrs)
+         |> Repo.audited_update() do
+      {:ok, received} ->
+        if was_pending, do: Epcis.record_facility_receipt(received)
+        {:ok, received}
+
+      error ->
+        error
+    end
   end
 
   defp validate_belongs_to_org(changeset, field, schema, organization_id) do

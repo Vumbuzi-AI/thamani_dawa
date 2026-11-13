@@ -19,7 +19,7 @@ defmodule ThamaniDawaWeb.LabRequisitionLiveTest do
   describe "lab requisitions list" do
     test "shows a requisition raised for the lab technician's site", %{conn: conn} do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
       product = product_fixture(%{organization_id: org.id})
       lab_tech = lab_tech_at_sites(org, [site])
 
@@ -40,7 +40,7 @@ defmodule ThamaniDawaWeb.LabRequisitionLiveTest do
   describe "new lab requisition" do
     test "creates a requisition for the lab technician's own site", %{conn: conn} do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
       product = product_fixture(%{organization_id: org.id})
       lab_tech = lab_tech_at_sites(org, [site])
 
@@ -63,8 +63,8 @@ defmodule ThamaniDawaWeb.LabRequisitionLiveTest do
 
     test "auto-selects single lab site and renders read-only without a dropdown", %{conn: conn} do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :lab})
-      _other_lab = site_fixture(%{organization_id: org.id, site_type: :lab})
+      site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
+      _other_lab = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
       lab_tech = lab_tech_at_sites(org, [site])
 
       {:ok, lv, html} = live(log_in_user(conn, lab_tech), ~p"/lab/requisitions/new")
@@ -80,12 +80,18 @@ defmodule ThamaniDawaWeb.LabRequisitionLiveTest do
 
     test "renders dropdown limited to user's lab sites for multi-site staff", %{conn: conn} do
       org = organization_fixture()
-      site_a = site_fixture(%{organization_id: org.id, site_type: :lab, name: "Alpha Lab"})
-      site_b = site_fixture(%{organization_id: org.id, site_type: :lab, name: "Beta Lab"})
-      _other_lab = site_fixture(%{organization_id: org.id, site_type: :lab, name: "Gamma Lab"})
+
+      site_a =
+        site_fixture(%{organization_id: org.id, activities: [:laboratory], name: "Alpha Lab"})
+
+      site_b =
+        site_fixture(%{organization_id: org.id, activities: [:laboratory], name: "Beta Lab"})
+
+      _other_lab =
+        site_fixture(%{organization_id: org.id, activities: [:laboratory], name: "Gamma Lab"})
 
       _pharmacy_site =
-        site_fixture(%{organization_id: org.id, site_type: :pharmacy, name: "Delta Pharmacy"})
+        site_fixture(%{organization_id: org.id, activities: [:pharmacy], name: "Delta Pharmacy"})
 
       lab_tech = lab_tech_at_sites(org, [site_a, site_b])
 
@@ -100,9 +106,9 @@ defmodule ThamaniDawaWeb.LabRequisitionLiveTest do
 
     test "rejects submission for a site the user cannot act on", %{conn: conn} do
       org = organization_fixture()
-      site_a = site_fixture(%{organization_id: org.id, site_type: :lab})
-      site_b = site_fixture(%{organization_id: org.id, site_type: :lab})
-      other_site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      site_a = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
+      site_b = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
+      other_site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
       product = product_fixture(%{organization_id: org.id})
       lab_tech = lab_tech_at_sites(org, [site_a, site_b])
 
