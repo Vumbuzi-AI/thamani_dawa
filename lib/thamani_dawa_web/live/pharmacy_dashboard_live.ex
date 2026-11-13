@@ -5,6 +5,8 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
   alias ThamaniDawa.Dashboards
   alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Products
+  alias ThamaniDawa.Sites
+  alias ThamaniDawa.StockAlerts
   alias ThamaniDawaWeb.SiteScoping
 
   @near_expiry_days 30
@@ -33,17 +35,16 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       |> SiteScoping.for_current_site(scope)
       |> Enum.filter(&(&1.status in [:pending, :partially_dispensed]))
 
-    {out_of_stock, low_stock} = stock_alerts(active_batches, products_by_id)
-    low_stock_value = low_stock_replenishment_value(low_stock ++ out_of_stock, active_batches)
+    {out_of_stock, low_stock} = StockAlerts.stock_alerts(active_batches, products_by_id)
 
     {:ok,
      socket
      |> assign(:auto_start_tour?, params["tour"] == "1")
+     |> assign(:multi_site?, Sites.multi_site?(organization_id))
      |> assign(:products_by_id, products_by_id)
      |> assign(:out_of_stock, out_of_stock)
      |> assign(:low_stock, low_stock)
-     |> assign(:low_stock_value, low_stock_value)
-     |> assign(:near_expiry, near_expiry(active_batches))
+     |> assign(:near_expiry, StockAlerts.near_expiry(active_batches, @near_expiry_days))
      |> assign(:near_expiry_days, @near_expiry_days)
      |> assign(:pending_batches_count, length(pending_batches))
      |> assign(:pending_prescriptions, prescriptions)
@@ -53,7 +54,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
      |> assign(:top_products, Dashboards.top_dispensed_products(organization_id, site_id))}
   end
 
-  defp product_tour_steps do
+  defp product_tour_steps(multi_site?) do
     [
       %{
         selector: ~s([data-tour-target="/pharmacy"]),
@@ -62,10 +63,21 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           "See today’s pharmacy workload, stock alerts, revenue, and dispensing activity at a glance."
       },
       %{
+        selector: ~s([data-tour-target="/pharmacy/quick-sale"]),
+        title: "Make a quick sale",
+        description:
+          "Dispense non-prescription items and complete a sale directly from the pharmacy."
+      },
+      %{
         selector: ~s([data-tour-target="/pharmacy/prescriptions"]),
         title: "Manage prescriptions",
         description:
           "Review prescriptions waiting to be dispensed and follow each order through completion."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/patients"]),
+        title: "Find patient records",
+        description: "Look up patients and review their prescription and dispensing history."
       },
       %{
         selector: ~s([data-tour-target="/pharmacy/stock"]),
@@ -80,66 +92,25 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           "Confirm stock dispatched to your site before it becomes available for dispensing."
       },
       %{
+        selector: ~s([data-tour-target="/pharmacy/requisitions"]),
+        title: "Request stock",
+        description: "Ask your organization for stock when your site needs a replenishment."
+      },
+      %{
         selector: ~s([data-tour-target="/pharmacy/scan"]),
         title: "Scan when speed matters",
         description:
           "Use scanning to identify products and batches quickly during day-to-day work."
+      },
+      %{
+        selector: ~s([data-tour-target="/pharmacy/transactions"]),
+        title: "Review transactions",
+        description: "Review completed sales and dispensing activity for your pharmacy."
       }
     ]
-  end
-
-  defp stock_alerts(batches, products_by_id) do
-    batches
-    |> Enum.group_by(& &1.product_id)
-    |> Enum.map(fn {product_id, product_batches} ->
-      {products_by_id[product_id], Enum.sum(Enum.map(product_batches, & &1.remaining_quantity))}
+    |> Enum.reject(fn step ->
+      not multi_site? and step.selector == ~s([data-tour-target="/pharmacy/requisitions"])
     end)
-    |> Enum.filter(fn {product, _total} -> product && product.reorder_level end)
-    |> split_stock_alerts()
-  end
-
-  defp split_stock_alerts(totals) do
-    {out, low} =
-      Enum.reduce(totals, {[], []}, fn {product, total} = entry, {out, low} ->
-        cond do
-          total <= 0 -> {[entry | out], low}
-          total <= product.reorder_level -> {out, [entry | low]}
-          true -> {out, low}
-        end
-      end)
-
-    {Enum.reverse(out), Enum.reverse(low)}
-  end
-
-  defp low_stock_replenishment_value(low_stock, batches) do
-    Enum.reduce(low_stock, 0.0, fn {product, remaining}, total ->
-      target_quantity = max(product.reorder_level - remaining, 0)
-
-      {cost_total, quantity_total} =
-        batches
-        |> Enum.filter(&(&1.product_id == product.id and &1.quantity > 0 and &1.cost_per_unit))
-        |> Enum.reduce({0.0, 0}, fn batch, {cost, quantity} ->
-          {cost + Decimal.to_float(batch.cost_per_unit) * batch.quantity,
-           quantity + batch.quantity}
-        end)
-
-      if quantity_total > 0 do
-        total + target_quantity * cost_total / quantity_total
-      else
-        total
-      end
-    end)
-  end
-
-  defp near_expiry(batches) do
-    today = Date.utc_today()
-
-    batches
-    |> Enum.filter(fn batch ->
-      batch.remaining_quantity > 0 &&
-        Date.diff(batch.expiry_date, today) in 0..@near_expiry_days
-    end)
-    |> Enum.sort_by(& &1.expiry_date, Date)
   end
 
   defp product_name(nil), do: "(unknown product)"
@@ -202,28 +173,10 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
     <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path="/pharmacy">
       <.header icon="hero-squares-2x2">
         Pharmacy dashboard
-        <:subtitle>Stock alerts and pending prescriptions at your site.</:subtitle>
+        <:subtitle>Pending prescriptions, dispensing, and revenue at your site.</:subtitle>
       </.header>
 
       <div class="dashboard-stat-grid mt-4">
-        <.stat_tile
-          icon="hero-x-circle"
-          label="Out of stock"
-          value={length(@out_of_stock)}
-          sublabel="Products with no remaining stock"
-        />
-        <.stat_tile
-          icon="hero-exclamation-triangle"
-          label="Low stock"
-          value={length(@low_stock)}
-          sublabel="At or below reorder level"
-        />
-        <.stat_tile
-          icon="hero-calendar-days"
-          label="Near-expiry"
-          value={length(@near_expiry)}
-          sublabel={"Expiring within #{@near_expiry_days} days"}
-        />
         <.stat_tile
           icon="hero-document-text"
           label="Pending prescriptions"
@@ -248,13 +201,6 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
           label="Dispensed today"
           value={@dispensed_today}
           sublabel="Units dispensed today"
-        />
-        <.stat_tile
-          id="low-stock-value-card"
-          icon="hero-currency-dollar"
-          label="Low stock value"
-          value={money(@low_stock_value)}
-          sublabel="Estimated cost to reach reorder levels"
         />
       </div>
 
@@ -365,7 +311,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         id="pharmacy-product-tour"
         tour_key={"thamani-pharmacy-tour-v1-#{@current_scope.user.id}"}
         auto_start={@auto_start_tour?}
-        steps={product_tour_steps()}
+        steps={product_tour_steps(@multi_site?)}
       />
     </Layouts.pharmacy_shell>
     """

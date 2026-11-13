@@ -15,7 +15,7 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
   test "pharmacist takes a dispatched batch through receive -> scan -> prescribe -> dispense -> verify",
        %{conn: conn} do
     organization = organization_fixture()
-    site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy})
+    site = site_fixture(%{organization_id: organization.id, activities: [:pharmacy]})
     patient = patient_fixture(%{organization_id: organization.id})
     pharmacist = staff_fixture(%{organization_id: organization.id, site_id: site.id})
     gtin = unique_gtin()

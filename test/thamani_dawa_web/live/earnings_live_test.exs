@@ -1,11 +1,10 @@
 defmodule ThamaniDawaWeb.EarningsLiveTest do
   @moduledoc """
-  Covers the acceptance criteria for the organization money dashboard:
-  organization-scoped totals and per-site earnings from successful ledger
-  credits only, date/site/method/status filters that reconcile exactly with
-  the visible transaction rows, empty states, and cross-organization
-  isolation. Route-level access control is covered generically by
-  `AdminRoutesTest`.
+  Covers the acceptance criteria for the organization transactions page:
+  organization-scoped transaction history, date/site/method/status filters
+  that reconcile exactly with the visible transaction rows, empty states, and
+  cross-organization isolation. Route-level access control is covered
+  generically by `AdminRoutesTest`.
   """
 
   use ThamaniDawaWeb.ConnCase, async: true
@@ -21,22 +20,20 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
   alias ThamaniDawa.Payments
 
   describe "totals" do
-    test "shows KES 0 for every site when there are no payments yet", %{conn: conn} do
+    test "shows the empty ledger and site filter for a multi-site organization with no payments",
+         %{conn: conn} do
       admin = user_fixture()
-      site_a = site_fixture(%{organization_id: admin.organization_id, name: "Branch A"})
-      site_b = site_fixture(%{organization_id: admin.organization_id, name: "Branch B"})
+      site_fixture(%{organization_id: admin.organization_id, name: "Branch A"})
+      site_fixture(%{organization_id: admin.organization_id, name: "Branch B"})
 
       {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/earnings")
 
-      assert html =~ "Branch A"
-      assert html =~ "Branch B"
-      assert html =~ "KES 0"
-      assert has_element?(lv, "#site-earnings-#{site_a.id}", "KES 0")
-      assert has_element?(lv, "#site-earnings-#{site_b.id}", "KES 0")
+      assert html =~ "No transactions yet"
+      assert has_element?(lv, "select[name='filters[site]']")
+      assert has_element?(lv, "th", "Site")
     end
 
-    test "hides per-site breakdown and the site filter/column for a single-site organization",
-         %{conn: conn} do
+    test "hides the site filter/column for a single-site organization", %{conn: conn} do
       admin = user_fixture()
       site = site_fixture(%{organization_id: admin.organization_id, name: "Only Branch"})
 
@@ -52,13 +49,11 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
       {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/earnings")
 
       assert html =~ "KES 500"
-      refute has_element?(lv, "#site-earnings-#{site.id}")
       refute has_element?(lv, "th", "Site")
       refute has_element?(lv, "select[name='filters[site]']")
     end
 
-    test "shows the organization total and each site's own earnings from completed payments only",
-         %{conn: conn} do
+    test "lists completed, pending, and failed payments from this organization", %{conn: conn} do
       admin = user_fixture()
       site_a = site_fixture(%{organization_id: admin.organization_id, name: "Branch A"})
       site_b = site_fixture(%{organization_id: admin.organization_id, name: "Branch B"})
@@ -83,14 +78,15 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
           amount: Decimal.new("250")
         })
 
-      payment_fixture(%{
-        organization_id: admin.organization_id,
-        lab_order_id:
-          lab_order_fixture(%{organization_id: admin.organization_id, site_id: site_a.id}).id,
-        amount: Decimal.new("9999")
-      })
+      pending =
+        payment_fixture(%{
+          organization_id: admin.organization_id,
+          lab_order_id:
+            lab_order_fixture(%{organization_id: admin.organization_id, site_id: site_a.id}).id,
+          amount: Decimal.new("9999")
+        })
 
-      failed_a =
+      failed =
         payment_fixture(%{
           organization_id: admin.organization_id,
           lab_order_id:
@@ -100,16 +96,17 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
 
       {:ok, _} = Payments.complete_payment(completed_a)
       {:ok, _} = Payments.complete_payment(completed_b)
-      {:ok, _} = Payments.fail_payment(failed_a, "declined")
+      {:ok, _} = Payments.fail_payment(failed, "declined")
 
-      {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/earnings")
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/earnings")
 
-      assert html =~ "KES 1250"
-      assert html =~ "KES 1000"
-      assert html =~ "KES 250"
+      assert has_element?(lv, "#transactions-#{completed_a.id}")
+      assert has_element?(lv, "#transactions-#{completed_b.id}")
+      assert has_element?(lv, "#transactions-#{pending.id}")
+      assert has_element?(lv, "#transactions-#{failed.id}")
     end
 
-    test "does not include another organization's earnings", %{conn: conn} do
+    test "does not include another organization's transactions", %{conn: conn} do
       admin = user_fixture()
       other_org = organization_fixture()
 
@@ -119,7 +116,7 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
       {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/earnings")
 
       refute html =~ "KES 5000"
-      assert html =~ "KES 0"
+      assert html =~ "No transactions yet"
     end
   end
 

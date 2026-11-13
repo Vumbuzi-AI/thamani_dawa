@@ -2,10 +2,13 @@ defmodule ThamaniDawa.Batches.Batch do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias ThamaniDawa.GS1.Sscc
+
   schema "batches" do
     field :gtin, :string
     field :batch_no, :string
     field :serial, :string
+    field :sscc, :string
     field :manufacturer, :string
     field :manufacture_date, :date
     field :expiry_date, :date
@@ -18,6 +21,7 @@ defmodule ThamaniDawa.Batches.Batch do
     belongs_to :product, ThamaniDawa.Products.Product
     belongs_to :site, ThamaniDawa.Sites.Site
     belongs_to :supplier, ThamaniDawa.Suppliers.Supplier
+    belongs_to :goods_receipt, ThamaniDawa.GoodsReceipts.GoodsReceipt
     belongs_to :approver, ThamaniDawa.Accounts.User, foreign_key: :approver_id
     belongs_to :source_batch, __MODULE__
     belongs_to :requisition, ThamaniDawa.Requisitions.Requisition
@@ -41,6 +45,7 @@ defmodule ThamaniDawa.Batches.Batch do
       :gtin,
       :batch_no,
       :serial,
+      :sscc,
       :manufacturer,
       :manufacture_date,
       :expiry_date,
@@ -48,7 +53,8 @@ defmodule ThamaniDawa.Batches.Batch do
       :remaining_quantity,
       :cost_per_unit,
       :supplier_id,
-      :source_batch_id
+      :source_batch_id,
+      :goods_receipt_id
     ])
     |> validate_required([
       :product_id,
@@ -62,9 +68,11 @@ defmodule ThamaniDawa.Batches.Batch do
     |> validate_expiry_date()
     |> validate_number(:quantity, greater_than_or_equal_to: 0)
     |> validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
+    |> validate_inbound_sscc()
     |> foreign_key_constraint(:product_id)
     |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:supplier_id)
+    |> foreign_key_constraint(:goods_receipt_id)
     |> foreign_key_constraint(:source_batch_id)
     |> unique_constraint(:batch_no,
       name: :batches_org_product_site_batch_no_index,
@@ -85,13 +93,15 @@ defmodule ThamaniDawa.Batches.Batch do
       :gtin,
       :batch_no,
       :serial,
+      :sscc,
       :manufacturer,
       :manufacture_date,
       :expiry_date,
       :quantity,
       :remaining_quantity,
       :cost_per_unit,
-      :supplier_id
+      :supplier_id,
+      :goods_receipt_id
     ])
     |> validate_required([
       :product_id,
@@ -104,6 +114,7 @@ defmodule ThamaniDawa.Batches.Batch do
     |> validate_expiry_date()
     |> validate_number(:quantity, greater_than_or_equal_to: 0)
     |> validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
+    |> validate_inbound_sscc()
     |> foreign_key_constraint(:product_id)
     |> foreign_key_constraint(:supplier_id)
     |> unique_constraint(:batch_no,
@@ -114,12 +125,42 @@ defmodule ThamaniDawa.Batches.Batch do
 
   defp validate_expiry_date(changeset) do
     validate_change(changeset, :expiry_date, fn :expiry_date, date ->
-      if Date.compare(date, Date.utc_today()) == :gt do
+      if Date.compare(date, ThamaniDawa.BusinessDate.today()) == :gt do
         []
       else
         [expiry_date: "must be in the future"]
       end
     end)
+  end
+
+  # Optional inbound SSCC captured at the dock (docs/PPB_TNT_INTEGRATION.md
+  # §4.4). Only feeds PPB receiving events, so it never blocks posting — an
+  # empty value means no case label was scanned, which falls back to the
+  # class-level receiving event. A mistyped SSCC is rejected here rather than
+  # stored and surfaced later as a Hub-side `INVALID_GS1_IDENTIFIER` reject.
+  defp validate_inbound_sscc(changeset) do
+    case get_change(changeset, :sscc) do
+      nil ->
+        changeset
+
+      raw ->
+        digits = String.trim(raw)
+
+        cond do
+          digits == "" ->
+            put_change(changeset, :sscc, nil)
+
+          not Regex.match?(~r/^\d+$/, digits) or String.length(digits) != 18 ->
+            add_error(changeset, :sscc, "must be an 18-digit SSCC from the case label")
+
+          Sscc.mod10_check_digit(String.slice(digits, 0..-2//1)) !=
+              String.to_integer(String.slice(digits, -1..-1//1)) ->
+            add_error(changeset, :sscc, "check digit does not match — rescan the case label")
+
+          true ->
+            put_change(changeset, :sscc, digits)
+        end
+    end
   end
 
   @doc """
@@ -133,8 +174,19 @@ defmodule ThamaniDawa.Batches.Batch do
     |> cast(attrs, [:received_at, :approver_id, :quantity])
     |> validate_required([:received_at, :approver_id])
     |> validate_number(:quantity, greater_than_or_equal_to: 0)
+    |> validate_received_quantity_not_greater_than_dispatched()
     |> put_remaining_quantity_from_received_quantity()
     |> foreign_key_constraint(:approver_id)
+  end
+
+  defp validate_received_quantity_not_greater_than_dispatched(changeset) do
+    validate_change(changeset, :quantity, fn :quantity, quantity ->
+      if quantity > changeset.data.quantity do
+        [quantity: "cannot exceed the dispatched quantity"]
+      else
+        []
+      end
+    end)
   end
 
   defp put_remaining_quantity_from_received_quantity(changeset) do

@@ -110,6 +110,37 @@ Contexts: `Patients`, `LabTests`, `LabTestTemplates`, `LabOrders`.
 
 Contexts: `Batches`, `LabOrders`, `QualityAssuranceCharts`.
 
+## Distributor Shipment Lifecycle
+
+```
+draft --submit--> submitted --approve--> approved
+                      |
+                   reject (+ reason)
+                      v
+                   rejected --reopen--> draft
+```
+
+1. The organization chooses a serialisation plan at `/distributor/billing/options`: prepay (buy a bundle) or flex (pay-as-you-go cycle opens immediately).
+2. A portal user creates a draft shipment: order number, origin GLN (one of the organization's own sites) and destination GLN (one of its customers). Company, address and P.O. box are snapshotted onto the shipment.
+3. A mobile app user (a `distributor_mobile_users` account signing in with username + emailed 4-digit PIN) finds the draft by order number and claims it.
+4. The mobile user adds shippers and scans GS1 DataMatrix codes into them. Each scan is parsed server-side, cross-checked against any client-parsed fields, resolved to a product (previous scan, catalogue, then Verified by GS1), de-duplicated within the shipment, refused if the serial is already reserved by another shipment, and stored with a validation status against received batches (`ok`, `unknown_serial`, `data_mismatch`).
+5. Submitting validates the shipment and reserves every serial in `distributor_serial_reservations` (unique `barcode, serial`). If another shipment won a race on any unit, submission rolls back with a serial conflict.
+6. A portal user reviews warnings (unknown serials, mismatches, expired or unverified units, conflicts) and either:
+   - approves: re-validates, confirms reservations, charges one serial per shipper from the allowance, issues one SSCC per shipper with a contents snapshot, and commits the reservations; or
+   - rejects with a reason: reservations are released so the units can be packed again.
+7. A rejected shipment can be reopened as a draft by the mobile user, corrected, and resubmitted.
+
+The mobile app's JSON API is not exposed yet; `ThamaniDawa.Distributor` and `ThamaniDawa.Distributor.MobileAuth` already implement the mobile-side operations it will call.
+
+Contexts: `Distributor`, `Distributor.MobileAuth`, `Distributor.Billing`, `Distributor.Reports`, `GS1.Sscc`, `DistributorCustomers`.
+
+## Distributor Serialisation Billing
+
+- **Prepay**: buy a bundle of serials at tiered prices (any buffer used beyond the previous bundle is billed in the next purchase). Unused serials carry over.
+- **Flex**: an uncapped cycle counts up as shipments are approved and is settled for exactly what was used. Past its billing date a cycle is overdue and further approvals are capped by the buffer limit until it is paid.
+- Payments go through Daraja STK Push (confirmed by `/api/mpesa/callback/:token`) or a manual reference. `Billing.confirm_paid/1` is idempotent and assigns an invoice number.
+- Prices, VAT, minimum bundle, cycle length and buffer limit are placeholders in `config :thamani_dawa, ThamaniDawa.Distributor.Pricing`.
+
 ## Medical Camps
 
 There is no medical-camp route, context, schema, or migration in the current repo.

@@ -7,13 +7,16 @@ defmodule ThamaniDawaWeb.PharmacyStockProductLive do
 
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Products
 
   def mount(%{"id" => id}, _session, socket) do
-    org_id = socket.assigns.current_scope.organization_id
+    scope = socket.assigns.current_scope
+    org_id = scope.organization_id
     product = Products.get_product!(org_id, id)
-    batches = Batches.list_batches_for_product(org_id, id)
+    allowed_site_ids = if Scope.admin?(scope), do: nil, else: [scope.current_site_id]
+    batches = Batches.list_batches_for_product(org_id, id, allowed_site_ids)
 
     {:ok,
      socket
@@ -37,7 +40,7 @@ defmodule ThamaniDawaWeb.PharmacyStockProductLive do
     >
       <.header icon="hero-cube">
         {product_name(@product)}
-        <:subtitle>Every batch of this product, across every site — read-only.</:subtitle>
+        <:subtitle>Batches available at your permitted site.</:subtitle>
       </.header>
 
       <.table

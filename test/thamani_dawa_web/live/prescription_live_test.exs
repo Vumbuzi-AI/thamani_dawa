@@ -9,6 +9,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
   import ThamaniDawa.PatientVisitsFixtures
+  import ThamaniDawa.PaymentsFixtures
   import ThamaniDawa.PrescriptionsFixtures
 
   defp pharmacist_at_site(organization, site) do
@@ -1016,6 +1017,8 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       prescription =
         prescription_fixture(%{organization_id: organization.id, patient_visit_id: visit.id})
+
+      ensure_prescription_payable(organization.id, prescription.id, Decimal.new("500"))
 
       %{
         conn: log_in_user(build_conn(), pharmacist),

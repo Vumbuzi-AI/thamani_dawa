@@ -2,6 +2,10 @@ alias ThamaniDawa.Accounts
 alias ThamaniDawa.Accounts.User
 alias ThamaniDawa.Batches
 alias ThamaniDawa.Batches.Batch
+alias ThamaniDawa.Distributor
+alias ThamaniDawa.Distributor.{Billing, MobileUser, Shipment}
+alias ThamaniDawa.DistributorCustomers
+alias ThamaniDawa.DistributorCustomers.Customer
 alias ThamaniDawa.Gtin
 alias ThamaniDawa.LabOrders
 alias ThamaniDawa.LabOrders.{LabConsumableUsage, LabOrder, LabOrderResult}
@@ -103,7 +107,8 @@ org_result =
           %{
             name: "Demo Care Pharmacy and Diagnostics",
             slug: "demo-care",
-            license_number: "KMPDB-DEMO-001"
+            operating_models: [:pharmacy, :laboratory, :distributor],
+            gs1_company_prefix: "6160001"
           },
           %{
             name: "Amina Kamau",
@@ -126,7 +131,7 @@ org_result =
           insert_or_get.(
             Site,
             %{organization_id: organization.id, name: organization.name},
-            %{site_type: :pharmacy, lat: -1.2833, long: 36.8167},
+            %{activities: [:pharmacy], lat: -1.2833, long: 36.8167},
             fn attrs -> Sites.create_site(organization.id, attrs) end
           )
 
@@ -137,7 +142,16 @@ org_result =
       }
   end
 
-organization = org_result.organization
+organization =
+  org_result.organization
+  |> Ecto.Changeset.change(
+    operating_models:
+      Enum.uniq(
+        (org_result.organization.operating_models || []) ++ [:pharmacy, :laboratory, :distributor]
+      )
+  )
+  |> Repo.update!()
+
 organization_id = organization.id
 primary_admin = org_result.user
 
@@ -145,7 +159,7 @@ pharmacy_site =
   org_result.site
   |> Sites.update_site(%{
     name: "Demo Care CBD Pharmacy",
-    site_type: :pharmacy,
+    activities: [:pharmacy],
     gln: "6160001000001",
     address: "Kimathi Street, Nairobi CBD",
     lat: -1.2833,
@@ -161,7 +175,7 @@ lab_site =
     Site,
     %{organization_id: organization_id, name: "Demo Care Diagnostic Lab"},
     %{
-      site_type: :lab,
+      activities: [:laboratory],
       gln: "6160001000018",
       address: "Kimathi Street, 2nd Floor, Nairobi",
       lat: -1.2831,
@@ -175,7 +189,7 @@ combined_site =
     Site,
     %{organization_id: organization_id, name: "Demo Care Westlands Medical Centre"},
     %{
-      site_type: :pharmacy_lab,
+      activities: [:pharmacy, :laboratory],
       gln: "6160001000025",
       address: "Woodvale Grove, Westlands, Nairobi",
       lat: -1.2676,
@@ -189,7 +203,7 @@ warehouse_site =
     Site,
     %{organization_id: organization_id, name: "Demo Care Central Warehouse"},
     %{
-      site_type: :warehouse,
+      activities: [:distribution],
       gln: "6160001000032",
       address: "Mombasa Road Logistics Park, Nairobi",
       lat: -1.3197,
@@ -241,7 +255,8 @@ account_specs = [
   {"admin@gmail.com", "Amina Kamau", :admin, nil},
   {"pharmacist@gmail.com", "Grace Njeri", :pharmacist, pharmacy_site},
   {"lab@gmail.com", "Laban Omondi", :lab_technician, lab_site},
-  {"pharmalab@gmail.com", "Zawadi Muthoni", :pharma_lab, combined_site}
+  {"pharmalab@gmail.com", "Zawadi Muthoni", :pharma_lab, combined_site},
+  {"distributor@gmail.com", "David Mwangi", :distributor, warehouse_site}
 ]
 
 accounts =
@@ -253,6 +268,7 @@ primary_admin = Map.fetch!(accounts, "admin@gmail.com")
 primary_pharmacist = Map.fetch!(accounts, "pharmacist@gmail.com")
 primary_lab_technician = Map.fetch!(accounts, "lab@gmail.com")
 primary_pharma_lab = Map.fetch!(accounts, "pharmalab@gmail.com")
+primary_distributor = Map.fetch!(accounts, "distributor@gmail.com")
 
 supplier_specs = [
   {"MediSource Kenya Ltd", "Amina Otieno", "+254700100200", "medisource@gmail.com",
@@ -1057,6 +1073,193 @@ lab_orders_for_payment
   end
 end)
 
+# Distributor shipment workflow: GS1 prefix, customers (destination GLNs), a
+# mobile app user, a prepay serialisation bundle, serialised units received
+# at the warehouse, and shipments at each stage so the review flow can be
+# exercised without the mobile app.
+{:ok, organization} =
+  Organizations.update_organization_gs1_settings(organization, %{
+    gs1_company_prefix: organization.gs1_company_prefix || "6160001"
+  })
+
+distributor_customers =
+  Enum.map(
+    [
+      {"Kisumu County Referral Hospital", "Jomo Kenyatta Highway, Kisumu", "P.O. Box 1450-40100"},
+      {"Eldoret Family Pharmacy", "Uganda Road, Eldoret", "P.O. Box 2210-30100"},
+      {"Nyeri Medical Centre", "Kimathi Way, Nyeri", "P.O. Box 330-10100"}
+    ],
+    fn {name, address, po_box} ->
+      insert_or_get.(
+        Customer,
+        %{organization_id: organization_id, name: name},
+        %{address: address, po_box: po_box, contact_name: "Stores Manager", is_active: true},
+        fn attrs -> DistributorCustomers.create_customer(organization_id, attrs) end
+      )
+    end
+  )
+
+mobile_pin = "4321"
+
+mobile_user =
+  case Repo.get_by(MobileUser, username: "packer.demo") do
+    nil ->
+      {:ok, created} =
+        Distributor.create_mobile_user(organization_id, %{
+          "name" => "Peter Packer",
+          "username" => "packer.demo",
+          "email" => "packer@gmail.com",
+          "phone" => "0712000111"
+        })
+
+      created
+
+    existing ->
+      existing
+  end
+
+mobile_user = mobile_user |> MobileUser.pin_changeset(mobile_pin) |> Repo.update!()
+
+if is_nil(organization.serialisation_type) do
+  {:ok, organization} = Billing.choose_prepay(organization)
+
+  {:ok, _payment} =
+    Billing.start_prepay_payment(organization, primary_distributor, %{
+      "quantity" => "1000",
+      "method" => "manual",
+      "manual_reference" => "SEED-BUNDLE-001"
+    })
+end
+
+# Each serialised unit is received as its own single-unit batch, since the
+# batches table enforces one batch number per product and site.
+receive_serialised_unit = fn product, batch_no, serial ->
+  {:ok, batch} =
+    Batches.create_batch(organization_id, %{
+      "product_id" => product.id,
+      "site_id" => warehouse_site.id,
+      "gtin" => product.gtin,
+      "batch_no" => batch_no,
+      "serial" => serial,
+      "manufacturer" => product.manufacturer,
+      "manufacture_date" => Date.add(today, -60),
+      "expiry_date" => Date.add(today, 540),
+      "quantity" => 1,
+      "remaining_quantity" => 1,
+      "cost_per_unit" => "50.00"
+    })
+
+  {:ok, batch} = Batches.receive_batch(batch, primary_distributor.id)
+  batch
+end
+
+serialised_units =
+  for {product, index} <- Enum.with_index(Enum.take(drug_products, 2)),
+      serial_index <- 1..3 do
+    suffix = "#{index + 1}#{String.pad_leading(Integer.to_string(serial_index), 4, "0")}"
+    serial = "SN" <> suffix
+
+    case Repo.get_by(Batch, organization_id: organization_id, gtin: product.gtin, serial: serial) do
+      nil -> receive_serialised_unit.(product, "SER-" <> suffix, serial)
+      batch -> batch
+    end
+  end
+
+data_matrix = fn batch ->
+  "01" <>
+    batch.gtin <>
+    "11" <>
+    Calendar.strftime(batch.manufacture_date, "%y%m%d") <>
+    "17" <>
+    Calendar.strftime(batch.expiry_date, "%y%m%d") <>
+    "10" <> batch.batch_no <> <<29>> <> "21" <> batch.serial
+end
+
+if not Repo.exists?(
+     from s in Shipment,
+       where: s.organization_id == ^organization_id and s.order_number == "PO-2026-0101"
+   ) do
+  [_first_customer, second_customer | _] = distributor_customers
+
+  {:ok, _draft} =
+    Distributor.create_shipment(organization_id, primary_distributor, %{
+      "order_number" => "PO-2026-0101",
+      "origin_gln" => warehouse_site.gln,
+      "destination_gln" => second_customer.gln
+    })
+end
+
+if not Repo.exists?(
+     from s in Shipment,
+       where: s.organization_id == ^organization_id and s.order_number == "PO-2026-0100"
+   ) do
+  [first_customer | _] = distributor_customers
+
+  {:ok, submitted} =
+    Distributor.create_shipment(organization_id, primary_distributor, %{
+      "order_number" => "PO-2026-0100",
+      "origin_gln" => warehouse_site.gln,
+      "destination_gln" => first_customer.gln
+    })
+
+  {:ok, _} = Distributor.select_shipment(mobile_user, submitted.id)
+
+  serialised_units
+  |> Enum.chunk_every(3)
+  |> Enum.each(fn units ->
+    {:ok, shipper} = Distributor.create_shipper(mobile_user, submitted.id, %{})
+
+    Enum.each(units, fn batch ->
+      {:ok, _item} =
+        Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => data_matrix.(batch)})
+    end)
+  end)
+
+  {:ok, _} = Distributor.submit_shipment(mobile_user, submitted.id)
+end
+
+unless Repo.exists?(
+         from s in Shipment,
+           where:
+             s.organization_id == ^organization_id and
+               (s.status == "submitted" or s.order_number == "PO-2026-APPROVAL-TEST")
+       ) do
+  [first_customer | _] = distributor_customers
+  product = Enum.at(drug_products, 0)
+
+  approval_test_units =
+    for serial_index <- 1..2 do
+      serial = "SN-APPROVAL-TEST-#{serial_index}"
+      batch_no = "SER-APPROVAL-TEST-#{serial_index}"
+
+      case Repo.get_by(Batch,
+             organization_id: organization_id,
+             gtin: product.gtin,
+             serial: serial
+           ) do
+        nil -> receive_serialised_unit.(product, batch_no, serial)
+        batch -> batch
+      end
+    end
+
+  {:ok, approval_test} =
+    Distributor.create_shipment(organization_id, primary_distributor, %{
+      "order_number" => "PO-2026-APPROVAL-TEST",
+      "origin_gln" => warehouse_site.gln,
+      "destination_gln" => first_customer.gln
+    })
+
+  {:ok, _} = Distributor.select_shipment(mobile_user, approval_test.id)
+  {:ok, shipper} = Distributor.create_shipper(mobile_user, approval_test.id, %{})
+
+  Enum.each(approval_test_units, fn batch ->
+    {:ok, _item} =
+      Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => data_matrix.(batch)})
+  end)
+
+  {:ok, _} = Distributor.submit_shipment(mobile_user, approval_test.id)
+end
+
 role_counts =
   User
   |> where([u], u.organization_id == ^organization_id)
@@ -1065,7 +1268,13 @@ role_counts =
   |> Repo.all()
   |> Map.new()
 
-expected_role_counts = %{admin: 1, pharmacist: 1, lab_technician: 1, pharma_lab: 1}
+expected_role_counts = %{
+  admin: 1,
+  distributor: 1,
+  pharmacist: 1,
+  lab_technician: 1,
+  pharma_lab: 1
+}
 
 if role_counts != expected_role_counts do
   raise """
@@ -1102,4 +1311,11 @@ Pharmacy + lab account:
 Platform superadmin account:
   #{superadmin.email}
   #{superadmin_password}
+
+Distributor account:
+  distributor@gmail.com
+  #{length(distributor_customers)} customers, a prepay bundle, one draft, and an awaiting-approval shipment.
+
+Distributor mobile app user:
+  username packer.demo, PIN #{mobile_pin}
 """)

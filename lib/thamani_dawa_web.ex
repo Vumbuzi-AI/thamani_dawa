@@ -92,6 +92,8 @@ defmodule ThamaniDawaWeb do
       import ThamaniDawaWeb.PageComponents
       # Stat tiles, chart cards, and range filters for role dashboards
       import ThamaniDawaWeb.DashboardComponents
+      # Distributor shipment workflow badges and formatters
+      import ThamaniDawaWeb.DistributorComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

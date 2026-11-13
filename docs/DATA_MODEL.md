@@ -55,6 +55,18 @@ erDiagram
 | `lab_consumable_usage` | Lab stock consumption | `lab_order_id`, `batch_id`, `quantity`, `used_by_id`, `purpose` |
 | `scan_events` | GS1 scan audit log | `gtin`, `batch_no`, `gln`, `event_type`, `reference_id`, `user_id` |
 | `quality_assurance_charts` | Lab QA/QC monthly charts | `site_id`, `chart_type`, `month`, `year`, `daily_entries` |
+| `distributor_customers` | Facilities a distributor ships to | `name`, `gln` (auto-generated), `address`, `po_box` |
+| `goods_receipts` | Distributor delivery intake headers | `number`, `posting_key`, `received_at`, `received_by_id` |
+| `distributor_shipments` | Shipment header and state machine | `reference`, `order_number`, `status`, origin/destination GLN + snapshots, mobile/portal actors |
+| `distributor_shippers` | Cases in a shipment; one SSCC each on approval | `shipment_id`, `sequence`, `name`, `sscc`, contents snapshot |
+| `distributor_shipment_items` | Scanned primary units | `shipper_id`, `gtin`, `batch`, `serial`, dates, `product_source`, `validation_status` |
+| `distributor_serial_reservations` | Concurrency guard: a unit belongs to at most one submitted/approved shipment | `barcode`, `serial` (unique), `shipment_id`, `committed_at` |
+| `distributor_shipment_events` | Append-only shipment audit trail | `event`, `user_id`, `mobile_user_id`, `details` |
+| `distributor_mobile_users` | Mobile scanning-app accounts | `username` (unique), `email`, `pin_hash`, `active`, lockout fields |
+| `distributor_mobile_sessions` | Mobile bearer-token pairs (hashes only) | `access_token_hash`, `refresh_token_hash`, expiries |
+| `distributor_login_attempts` | Mobile sign-in rate-limit counters | `scope`, `key` |
+| `distributor_serial_usages` | Serialisation allowance cycles (one active per org) | `type` (prepay/flex), `quantity_limit`, `running_quantity`, `running_buffer`, `billing_date` |
+| `distributor_serial_payments` | Serialisation payments and invoices | `kind`, `method`, `status`, amounts, `provider_reference`, `invoice_number` |
 
 ## Uniqueness And Constraints
 

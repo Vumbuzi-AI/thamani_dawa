@@ -4,7 +4,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
 
-  @default_filters %{site_type: "", status: ""}
+  @default_filters %{activities: "", status: ""}
 
   def mount(_params, _session, socket) do
     {:ok,
@@ -67,7 +67,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
     filters = %{
-      site_type: Map.get(filter_params, "site_type", ""),
+      activities: Map.get(filter_params, "activities", ""),
       status: Map.get(filter_params, "status", "")
     }
 
@@ -132,7 +132,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     filtered =
       sites
       |> filter_by_search(socket.assigns.search)
-      |> filter_by_type(socket.assigns.filters.site_type)
+      |> filter_by_activity(socket.assigns.filters.activities)
       |> filter_by_status(socket.assigns.filters.status)
 
     socket
@@ -152,11 +152,11 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     end)
   end
 
-  defp filter_by_type(sites, ""), do: sites
+  defp filter_by_activity(sites, ""), do: sites
 
-  defp filter_by_type(sites, site_type) do
-    site_type = String.to_existing_atom(site_type)
-    Enum.filter(sites, &(&1.site_type == site_type))
+  defp filter_by_activity(sites, activity) do
+    activity = String.to_existing_atom(activity)
+    Enum.filter(sites, &(activity in &1.activities))
   end
 
   defp filter_by_status(sites, ""), do: sites
@@ -164,26 +164,29 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   defp filter_by_status(sites, "inactive"), do: Enum.filter(sites, &(!&1.is_active))
 
   defp active_filter_count(filters) do
-    Enum.count([filters.site_type != "", filters.status != ""], & &1)
+    Enum.count([filters.activities != "", filters.status != ""], & &1)
   end
 
   defp filter_chips(filters) do
     [
-      filters.site_type != "" &&
-        %{label: "Type: #{Phoenix.Naming.humanize(filters.site_type)}", field: "site_type"},
+      filters.activities != "" &&
+        %{label: "Activity: #{Phoenix.Naming.humanize(filters.activities)}", field: "activities"},
       filters.status != "" &&
         %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"}
     ]
     |> Enum.filter(& &1)
   end
 
-  defp capability_options do
+  defp activity_options do
     [
       {"Pharmacy", "Dispensing & stock", :pharmacy},
-      {"Lab", "Orders & results", :lab},
-      {"Pharmacy + Lab", "Both workflows", :pharmacy_lab},
-      {"Warehouse", "Stock holding only", :warehouse}
+      {"Laboratory", "Orders & results", :laboratory},
+      {"Distribution", "Stock holding & shipping", :distribution}
     ]
+  end
+
+  defp activity_labels(site) do
+    Enum.map_join(site.activities, ", ", &Phoenix.Naming.humanize/1)
   end
 
   def render(assigns) do
@@ -208,15 +211,13 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             apply_event="apply_filters"
             active_count={active_filter_count(@filters)}
           >
-            <:group label="Type">
+            <:group label="Activity">
               <.input
                 type="select"
-                name="filters[site_type]"
-                value={@filters.site_type}
-                options={
-                  Enum.map(capability_options(), fn {label, _desc, value} -> {label, value} end)
-                }
-                prompt="All types"
+                name="filters[activities]"
+                value={@filters.activities}
+                options={Enum.map(activity_options(), fn {label, _desc, value} -> {label, value} end)}
+                prompt="All activities"
               />
             </:group>
             <:group label="Status">
@@ -255,7 +256,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             Fields marked <span class="text-error">*</span> are required.
           </p>
           <.input id="site-name" field={@form[:name]} label="Name" required />
-          <.capability_select field={@form[:site_type]} options={capability_options()} required />
+          <.capability_select field={@form[:activities]} options={activity_options()} required />
           <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3 mb-3">
             <div>
               <p class="text-sm font-medium text-thamani-forest">Active</p>
@@ -270,6 +271,12 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             />
           </div>
           <.input id="site-address" field={@form[:address]} label="Address" required />
+          <.input
+            id="site-gln"
+            field={@form[:gln]}
+            label="GS1 Global Location Number (GLN)"
+            placeholder="13-digit GLN issued to this location by GS1"
+          />
           <div class="grid grid-cols-2 gap-2">
             <.input id="site-lat" field={@form[:lat]} label="Latitude" type="number" step="any" />
             <.input id="site-long" field={@form[:long]} label="Longitude" type="number" step="any" />
@@ -308,7 +315,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
                   {site.name}
                 </h2>
                 <p class="mt-0.5 text-sm text-thamani-pewter">
-                  {Phoenix.Naming.humanize(site.site_type)}
+                  {activity_labels(site)}
                 </p>
               </div>
               <.status_badge
@@ -377,7 +384,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           row_click={fn site -> JS.navigate(~p"/org/sites/#{site.id}") end}
         >
           <:col :let={site} label="Name">{site.name}</:col>
-          <:col :let={site} label="Type">{Phoenix.Naming.humanize(site.site_type)}</:col>
+          <:col :let={site} label="Activities">{activity_labels(site)}</:col>
           <:col :let={site} label="GLN"><span class="tabular-nums">{site.gln}</span></:col>
           <:col :let={site} label="Address">{site.address}</:col>
           <:col :let={site} label="Status" mobile="aside">

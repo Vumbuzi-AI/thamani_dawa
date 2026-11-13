@@ -9,10 +9,19 @@ defmodule ThamaniDawa.Requisitions.Requisition do
   alias ThamaniDawa.Sites.Site
 
   schema "requisitions" do
+    field :number, :string
     field :quantity, :integer
 
     field :status, Ecto.Enum,
-      values: [:pending, :approved, :rejected, :partially_fulfilled, :fulfilled, :cancelled],
+      values: [
+        :pending,
+        :approved,
+        :partially_approved,
+        :rejected,
+        :partially_fulfilled,
+        :fulfilled,
+        :cancelled
+      ],
       default: :pending
 
     field :notes, :string
@@ -27,6 +36,7 @@ defmodule ThamaniDawa.Requisitions.Requisition do
     belongs_to :reviewed_by, User, foreign_key: :reviewed_by_id
 
     has_many :fulfillment_batches, Batch, foreign_key: :requisition_id
+    has_many :lines, ThamaniDawa.Requisitions.RequisitionLine
 
     timestamps(type: :utc_datetime)
   end
@@ -34,11 +44,25 @@ defmodule ThamaniDawa.Requisitions.Requisition do
   @doc "Changeset for a site requesting stock from the organization."
   def create_changeset(requisition, attrs) do
     requisition
-    |> cast(attrs, [:site_id, :product_id, :quantity, :notes])
-    |> validate_required([:site_id, :product_id, :quantity])
+    |> cast(attrs, [:number, :site_id, :product_id, :quantity, :notes])
+    |> validate_required([:number, :site_id, :product_id, :quantity])
     |> validate_number(:quantity, greater_than: 0)
+    |> unique_constraint([:organization_id, :number])
     |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:product_id)
+  end
+
+  def header_changeset(requisition, attrs) do
+    requisition
+    |> cast(attrs, [:number, :site_id, :notes])
+    |> cast_assoc(:lines,
+      with: &ThamaniDawa.Requisitions.RequisitionLine.changeset/2,
+      required: true
+    )
+    |> validate_required([:number, :site_id])
+    |> validate_length(:lines, min: 1)
+    |> unique_constraint([:organization_id, :number])
+    |> foreign_key_constraint(:site_id)
   end
 
   @doc """

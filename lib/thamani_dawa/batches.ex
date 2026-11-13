@@ -8,6 +8,8 @@ defmodule ThamaniDawa.Batches do
   import Ecto.Query, warn: false
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Batches.Batch
+  alias ThamaniDawa.Epcis
+  alias ThamaniDawa.GoodsReceipts.GoodsReceipt
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
@@ -442,6 +444,7 @@ defmodule ThamaniDawa.Batches do
              where: b.product_id == ^product_id,
              where: b.remaining_quantity > 0,
              where: not is_nil(b.approver_id),
+             where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
              select: sum(b.remaining_quantity)
          ) do
       nil -> 0
@@ -470,6 +473,15 @@ defmodule ThamaniDawa.Batches do
     Repo.get_by!(Batch, id: id, organization_id: organization_id)
   end
 
+  @doc "Gets a batch only when it belongs to the supplied site."
+  def get_batch_for_site!(organization_id, id, site_id) when is_integer(site_id) do
+    Repo.get_by!(Batch, id: id, organization_id: organization_id, site_id: site_id)
+  end
+
+  def get_batch_for_site!(organization_id, _id, nil) do
+    Repo.one!(from b in Batch, where: b.organization_id == ^organization_id and false)
+  end
+
   @doc """
   Gets a single batch scoped to an organization, preloaded with its identity
   (`product`, `site`, `supplier`, `approver`) and prescription and lab usage
@@ -487,6 +499,7 @@ defmodule ThamaniDawa.Batches do
       product: product_query,
       site: site_query,
       supplier: supplier_query,
+      goods_receipt: [],
       approver: user_query,
       prescription_batch_dispenses: [
         dispensed_by: user_query,
@@ -510,6 +523,7 @@ defmodule ThamaniDawa.Batches do
     |> validate_belongs_to_org(:site_id, Site, organization_id)
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
+    |> validate_belongs_to_org(:goods_receipt_id, GoodsReceipt, organization_id)
     |> Repo.audited_insert()
   end
 
@@ -535,6 +549,14 @@ defmodule ThamaniDawa.Batches do
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
     |> Repo.audited_insert()
+    |> case do
+      {:ok, batch} ->
+        Epcis.record_facility_receipt(batch)
+        {:ok, batch}
+
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -667,15 +689,24 @@ defmodule ThamaniDawa.Batches do
   can't yet have anything dispensed from it.
   """
   def receive_batch(%Batch{} = batch, user_id, attrs \\ %{}) do
+    was_pending = is_nil(batch.received_at)
+
     attrs =
       Map.merge(attrs, %{
         "received_at" => DateTime.utc_now(),
         "approver_id" => user_id
       })
 
-    batch
-    |> Batch.receive_changeset(attrs)
-    |> Repo.audited_update()
+    case batch
+         |> Batch.receive_changeset(attrs)
+         |> Repo.audited_update() do
+      {:ok, received} ->
+        if was_pending, do: Epcis.record_facility_receipt(received)
+        {:ok, received}
+
+      error ->
+        error
+    end
   end
 
   defp validate_belongs_to_org(changeset, field, schema, organization_id) do
@@ -725,6 +756,7 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         where: b.remaining_quantity > 0,
         where: not is_nil(b.approver_id),
+        where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
         order_by: [asc: b.expiry_date, asc: b.id],
         lock: "FOR UPDATE"
 
@@ -753,6 +785,7 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         where: b.remaining_quantity > 0,
         where: not is_nil(b.approver_id),
+        where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
         order_by: [asc: b.expiry_date, asc: b.id]
 
     query

@@ -7,9 +7,9 @@ defmodule ThamaniDawa.Prescriptions do
 
   import Ecto.Query, warn: false
   alias ThamaniDawa.Batches
+  alias ThamaniDawa.Epcis
   alias ThamaniDawa.PatientVisits
   alias ThamaniDawa.PatientVisits.PatientVisit
-  alias ThamaniDawa.Payments
   alias ThamaniDawa.Prescriptions.{BatchDispense, Prescription, PrescriptionItem}
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
@@ -82,6 +82,22 @@ defmodule ThamaniDawa.Prescriptions do
   @doc "Gets a single prescription scoped to an organization. Raises if not found."
   def get_prescription!(organization_id, id) do
     Repo.get_by!(Prescription, id: id, organization_id: organization_id)
+  end
+
+  @doc "Gets a prescription only when it belongs to the supplied site."
+  def get_prescription_for_site!(organization_id, id, site_id) when is_integer(site_id) do
+    Repo.one!(
+      from p in Prescription,
+        join: v in PatientVisit,
+        on: v.id == p.patient_visit_id,
+        where:
+          p.organization_id == ^organization_id and p.id == ^id and
+            v.organization_id == ^organization_id and v.site_id == ^site_id
+    )
+  end
+
+  def get_prescription_for_site!(organization_id, _id, nil) do
+    Repo.one!(from p in Prescription, where: p.organization_id == ^organization_id and false)
   end
 
   @doc "Creates a prescription header under the given organization."
@@ -208,143 +224,6 @@ defmodule ThamaniDawa.Prescriptions do
         {:error, changeset} -> Repo.rollback(changeset)
       end
     end)
-  end
-
-  @doc """
-  A one-shot counter sale: creates the visit (with or without a patient),
-  the prescription header and items, then immediately dispenses and
-  GTIN-verifies each item and completes payment for the whole sale — all in
-  one transaction. Anything failing (insufficient stock, a scanned barcode
-  that doesn't match the product, a mismatched/invalid payment) rolls back
-  the entire sale, so nothing is ever half-dispensed or half-charged.
-
-  `attrs` is string-keyed: `"patient_id"` (optional), `"payment_type"`, and
-  `"items"` — a list of `%{"product_id", "quantity_prescribed",
-  "scanned_gtin"}` maps, one per line, in the order they should be
-  dispensed and verified.
-
-  Returns `{:ok, prescription}` or `{:error, {item_index, reason}}` where
-  `reason` is whatever `dispense_item/4` or `verify_dispensed_item/3`
-  returned (e.g. `:out_of_stock`, `:gtin_mismatch`), or `{:error,
-  changeset}` if the header/items themselves fail to validate.
-  """
-  def create_quick_sale(organization_id, site_id, user_id, attrs)
-      when is_integer(organization_id) do
-    patient_id = attrs["patient_id"]
-    items_attrs = attrs["items"] || []
-
-    Repo.transaction(fn ->
-      with {:ok, visit} <- create_quick_sale_visit(organization_id, site_id, user_id, patient_id),
-           header_attrs =
-             attrs
-             |> Map.take(["payment_type", "items"])
-             |> Map.put("patient_visit_id", visit.id)
-             |> inject_organization_id_into_items(organization_id),
-           {:ok, prescription} <- create_prescription(organization_id, header_attrs),
-           inserted_items = quick_sale_items_in_order(organization_id, prescription.id),
-           :ok <-
-             dispense_and_verify_quick_sale_items(
-               organization_id,
-               user_id,
-               Enum.zip(inserted_items, items_attrs)
-             ),
-           {:ok, payment} <-
-             Payments.create_payment(organization_id, %{
-               "prescription_id" => prescription.id,
-               "amount" => prescription.total_amount,
-               "payment_type" => attrs["payment_type"],
-               "provider_reference" => attrs["provider_reference"]
-             }),
-           {:ok, _completed} <- Payments.complete_payment(payment) do
-        get_prescription!(organization_id, prescription.id)
-      else
-        {:error, reason} -> Repo.rollback(reason)
-      end
-    end)
-  end
-
-  defp create_quick_sale_visit(organization_id, site_id, user_id, patient_id)
-       when patient_id in [nil, ""] do
-    PatientVisits.create_patient_visit_without_patient(organization_id, %{
-      site_id: site_id,
-      user_id: user_id,
-      visit_type: :pharmacy
-    })
-  end
-
-  defp create_quick_sale_visit(organization_id, site_id, user_id, patient_id) do
-    PatientVisits.create_patient_visit(organization_id, %{
-      patient_id: patient_id,
-      site_id: site_id,
-      user_id: user_id,
-      visit_type: :pharmacy
-    })
-  end
-
-  defp quick_sale_items_in_order(organization_id, prescription_id) do
-    Repo.all(
-      from i in PrescriptionItem,
-        where: i.organization_id == ^organization_id and i.prescription_id == ^prescription_id,
-        order_by: [asc: i.id]
-    )
-  end
-
-  defp dispense_and_verify_quick_sale_items(organization_id, user_id, items_with_attrs) do
-    items_with_attrs
-    |> Enum.with_index()
-    |> Enum.reduce_while(:ok, fn {{item, item_attrs}, index}, :ok ->
-      case dispense_and_verify_quick_sale_item(organization_id, user_id, item, item_attrs) do
-        :ok -> {:cont, :ok}
-        {:error, reason} -> {:halt, {:error, {index, reason}}}
-      end
-    end)
-  end
-
-  defp dispense_and_verify_quick_sale_item(organization_id, user_id, item, item_attrs) do
-    scanned_gtin = item_attrs["scanned_gtin"]
-    scanned_barcode = item_attrs["scanned_barcode"]
-
-    case scanned_batch_barcode?(scanned_barcode) do
-      true ->
-        case dispense_scanned_item(
-               organization_id,
-               item.id,
-               user_id,
-               item.quantity_prescribed,
-               scanned_barcode
-             ) do
-          {:ok, _item} -> :ok
-          {:error, reason} -> {:error, reason}
-        end
-
-      false ->
-        with {:ok, _dispensed} <-
-               dispense_item(organization_id, item.id, user_id, item.quantity_prescribed),
-             {:ok, _verified} <-
-               maybe_verify_quick_sale_item(organization_id, item.id, scanned_gtin) do
-          :ok
-        end
-    end
-  end
-
-  defp scanned_batch_barcode?(barcode) when is_binary(barcode) do
-    case ThamaniDawa.GS1Decoder.parse(barcode) do
-      {:ok, %{gtin: gtin, batch_no: batch_no}}
-      when is_binary(gtin) and is_binary(batch_no) ->
-        String.trim(batch_no) != ""
-
-      _ ->
-        false
-    end
-  end
-
-  defp scanned_batch_barcode?(_barcode), do: false
-
-  defp maybe_verify_quick_sale_item(organization_id, item_id, scanned_gtin) do
-    case scanned_gtin && String.trim(scanned_gtin) do
-      blank when blank in [nil, ""] -> {:ok, :not_scanned}
-      trimmed -> verify_dispensed_item(organization_id, item_id, trimmed)
-    end
   end
 
   defp put_patient_visit_id(attrs, visit_id) do
@@ -539,7 +418,7 @@ defmodule ThamaniDawa.Prescriptions do
   def dispense_item(organization_id, prescription_item_id, pharmacist_id, quantity)
       when is_integer(organization_id) and is_integer(quantity) and quantity > 0 do
     Repo.transaction(fn ->
-      item = get_prescription_item!(organization_id, prescription_item_id)
+      item = get_prescription_item_for_update!(organization_id, prescription_item_id)
       prescription = get_prescription!(organization_id, item.prescription_id)
       site_id = prescription_site_id(prescription)
 
@@ -548,6 +427,7 @@ defmodule ThamaniDawa.Prescriptions do
            batches = Batches.fefo_batches(organization_id, site_id, item.product_id),
            {:ok, allocations} <- consume_quantity_across_batches(batches, quantity),
            :ok <- record_batch_dispenses(organization_id, item, pharmacist_id, allocations),
+           Epcis.record_dispense(organization_id, site_id, item.id, allocations),
            {:ok, updated_item} <- bump_quantity_dispensed(item, quantity),
            {:ok, _prescription} <- recompute_status(prescription) do
         updated_item
@@ -601,7 +481,7 @@ defmodule ThamaniDawa.Prescriptions do
          normalized_gtin,
          batch_no
        ) do
-    item = get_prescription_item!(organization_id, prescription_item_id)
+    item = get_prescription_item_for_update!(organization_id, prescription_item_id)
     prescription = get_prescription!(organization_id, item.prescription_id)
     site_id = prescription_site_id(prescription)
     product = ThamaniDawa.Products.get_product!(organization_id, item.product_id)
@@ -617,6 +497,9 @@ defmodule ThamaniDawa.Prescriptions do
            record_batch_dispenses(organization_id, item, pharmacist_id, [
              %{batch: batch, quantity: quantity}
            ]),
+         Epcis.record_dispense(organization_id, site_id, item.id, [
+           %{batch: batch, quantity: quantity}
+         ]),
          {:ok, updated_item} <- bump_quantity_dispensed(item, quantity),
          {:ok, updated_item} <- maybe_mark_verified(updated_item),
          {:ok, _prescription} <- recompute_status(prescription) do
@@ -766,6 +649,14 @@ defmodule ThamaniDawa.Prescriptions do
 
   defp prescription_site_id(%Prescription{patient_visit_id: patient_visit_id}) do
     Repo.get!(PatientVisit, patient_visit_id).site_id
+  end
+
+  defp get_prescription_item_for_update!(organization_id, prescription_item_id) do
+    Repo.one!(
+      from i in PrescriptionItem,
+        where: i.organization_id == ^organization_id and i.id == ^prescription_item_id,
+        lock: "FOR UPDATE"
+    )
   end
 
   defp validate_site_id_present(nil), do: {:error, :invalid_prescription_site}

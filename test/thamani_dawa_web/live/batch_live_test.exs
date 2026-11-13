@@ -30,12 +30,12 @@ defmodule ThamaniDawaWeb.BatchLiveTest do
           batch_no: "TRACE-BATCH-1"
         })
 
-      {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/batches/#{batch.id}")
+      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/batches/#{batch.id}")
 
       assert html =~ "TRACE-BATCH-1"
       assert html =~ site.name
       assert html =~ "Print Data Matrix"
-      assert html =~ "printable-batch-label"
+      assert has_element?(lv, "#batch-label-#{batch.id}.printable-batch-label")
     end
 
     test "shows the receiving event and a prescription dispense in the timeline", %{
@@ -105,7 +105,7 @@ defmodule ThamaniDawaWeb.BatchLiveTest do
       conn: conn,
       admin: admin
     } do
-      site = site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy})
+      site = site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy]})
       product = product_fixture(%{organization_id: admin.organization_id})
 
       batch =

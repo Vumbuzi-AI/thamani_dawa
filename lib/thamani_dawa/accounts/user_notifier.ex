@@ -28,7 +28,7 @@ defmodule ThamaniDawa.Accounts.UserNotifier do
   def deliver_invite(%User{} = user, organization_name, invited_by_name, url) do
     organization_name = sanitize_header_value(organization_name)
     invited_by_name = sanitize_header_value(invited_by_name)
-    role = Phoenix.Naming.humanize(user.role)
+    role = User.humanize_roles(user)
 
     deliver(user.email, "You've been invited to #{organization_name} on Thamani Dawa", %{
       title: "You're invited to #{organization_name}",
@@ -45,6 +45,43 @@ defmodule ThamaniDawa.Accounts.UserNotifier do
         "This link expires in #{UserToken.invite_validity_in_days()} days. If you didn't expect this invite, you can safely ignore this email."
       ],
       cta: %{label: "Set your password", url: url}
+    })
+  end
+
+  @doc "Delivers a one-time password-reset link."
+  def deliver_password_reset(%User{} = user, url) do
+    deliver(user.email, "Reset your Thamani Dawa password", %{
+      title: "Reset your password",
+      intro: Template.rich(["Hi ", {:bold, user.name}, ","]),
+      body: [
+        "Use the link below to choose a new password. If you did not request this, you can safely ignore this email.",
+        "This link expires in one day."
+      ],
+      cta: %{label: "Reset password", url: url}
+    })
+  end
+
+  @doc """
+  Emails a distributor mobile app user their sign-in PIN. The PIN is never
+  shown in the portal and only its hash is stored, so this email is the only
+  place it ever appears.
+  """
+  def deliver_mobile_pin(mobile_user, organization_name, pin) do
+    organization_name = sanitize_header_value(organization_name)
+
+    deliver(mobile_user.email, "Your Thamani Dawa mobile app PIN", %{
+      title: "Your mobile app sign-in details",
+      intro: Template.rich(["Hi ", {:bold, mobile_user.name}, ","]),
+      body: [
+        Template.rich([
+          {:bold, organization_name},
+          " has set you up on the Thamani Dawa mobile app for packing and scanning shipments."
+        ]),
+        Template.rich(["Username: ", {:bold, mobile_user.username}]),
+        Template.rich(["PIN: ", {:bold, pin}]),
+        "Keep this PIN private. Any earlier PIN for this account no longer works."
+      ],
+      footer_note: "If you weren't expecting this, contact your distributor administrator."
     })
   end
 

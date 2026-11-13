@@ -23,10 +23,38 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         role: :lab_technician
       })
 
-    site = site_fixture(%{organization_id: admin.organization_id, site_type: :lab})
+    site = site_fixture(%{organization_id: admin.organization_id, activities: [:laboratory]})
     lab_test = lab_test_fixture(%{organization_id: admin.organization_id})
 
     %{admin: admin, lab_tech: lab_tech, site: site, lab_test: lab_test}
+  end
+
+  defp collect_and_receive_specimen(organization_id, lab_order_id, result_id, user_id) do
+    {:ok, specimen} =
+      LabOrders.collect_specimen(organization_id, lab_order_id, [result_id], user_id, %{
+        "specimen_type" => "blood",
+        "collection_date" => "2026-01-15"
+      })
+
+    {:ok, _specimen} = LabOrders.receive_specimen(organization_id, specimen.id, user_id)
+  end
+
+  test "print results uses the lab report document root", ctx do
+    patient = patient_fixture(%{organization_id: ctx.admin.organization_id})
+
+    lab_order =
+      lab_order_fixture(%{
+        organization_id: ctx.admin.organization_id,
+        site_id: ctx.site.id,
+        patient_id: patient.id
+      })
+
+    {:ok, view, _html} =
+      live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/#{lab_order.id}/report")
+
+    assert has_element?(view, "#lab-report-modal")
+    assert has_element?(view, "#lab-report-#{lab_order.id}.printable-lab-report")
+    assert has_element?(view, "#lab-report-#{lab_order.id} img[src='/images/logo.png']")
   end
 
   describe "index filters" do
@@ -251,6 +279,8 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           lab_test_id: ctx.lab_test.id
         })
 
+      collect_and_receive_specimen(organization_id, lab_order.id, result.id, ctx.lab_tech.id)
+
       {:ok, _} =
         LabOrders.record_result(organization_id, result.id, ctx.lab_tech.id, %{"hb" => "13"})
 
@@ -299,6 +329,8 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           lab_order_id: lab_order.id,
           lab_test_id: ctx.lab_test.id
         })
+
+      collect_and_receive_specimen(organization_id, lab_order.id, result.id, ctx.lab_tech.id)
 
       {:ok, _} =
         LabOrders.record_result(organization_id, result.id, ctx.lab_tech.id, %{
@@ -587,6 +619,13 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
           lab_order_id: lab_order.id,
           lab_test_id: checkbox_lab_test.id
         })
+
+      collect_and_receive_specimen(
+        ctx.admin.organization_id,
+        lab_order.id,
+        result.id,
+        ctx.admin.id
+      )
 
       conn = log_in_user(build_conn(), ctx.admin)
       {:ok, lv, _html} = live(conn, ~p"/lab/orders/#{lab_order.id}/results/#{result.id}/edit")

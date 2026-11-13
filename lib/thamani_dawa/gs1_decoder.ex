@@ -5,6 +5,7 @@ defmodule ThamaniDawa.GS1Decoder do
   (§3 of project.md):
 
     * `01`  GTIN (fixed, 14 digits)
+    * `00`  SSCC — pallet/case label serial shipping container code (fixed, 18 digits)
     * `10`  Batch/lot number (variable, up to 20 characters)
     * `11`  Production date, `YYMMDD` (fixed, 6 digits)
     * `17`  Expiry date, `YYMMDD` (fixed, 6 digits)
@@ -18,11 +19,12 @@ defmodule ThamaniDawa.GS1Decoder do
 
   @gs <<29>>
 
-  @fixed_length_ais %{"01" => 14, "11" => 6, "17" => 6, "414" => 13}
+  @fixed_length_ais %{"00" => 18, "01" => 14, "11" => 6, "17" => 6, "414" => 13}
   @variable_length_ais ~w(10 21)
   @known_ais Map.keys(@fixed_length_ais) ++ @variable_length_ais
 
   @field_by_ai %{
+    "00" => :sscc,
     "01" => :gtin,
     "10" => :batch_no,
     "11" => :production_date,
@@ -32,6 +34,7 @@ defmodule ThamaniDawa.GS1Decoder do
   }
 
   @empty_result %{
+    sscc: nil,
     gtin: nil,
     batch_no: nil,
     production_date: nil,
@@ -154,7 +157,7 @@ defmodule ThamaniDawa.GS1Decoder do
     end
   end
 
-  defp cast_field(field, raw) when field in [:gtin, :gln], do: validate_digits(raw)
+  defp cast_field(field, raw) when field in [:gtin, :gln, :sscc], do: validate_digits(raw)
   defp cast_field(field, raw) when field in [:production_date, :expiry_date], do: parse_date(raw)
   defp cast_field(_field, raw), do: {:ok, raw}
 

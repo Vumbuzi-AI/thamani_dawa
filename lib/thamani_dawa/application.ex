@@ -10,8 +10,10 @@ defmodule ThamaniDawa.Application do
     children = [
       ThamaniDawaWeb.Telemetry,
       ThamaniDawa.Repo,
+      ThamaniDawa.LoginRateLimiter,
       {DNSCluster, query: Application.get_env(:thamani_dawa, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ThamaniDawa.PubSub},
+      {Oban, Application.fetch_env!(:thamani_dawa, Oban)},
       # Start a worker by calling: ThamaniDawa.Worker.start_link(arg)
       # {ThamaniDawa.Worker, arg},
       # Start to serve requests, typically the last entry
