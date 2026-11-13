@@ -2,7 +2,7 @@
   style="background: #FFFFFF; min-height: calc(100vh - 64px);"
   class="flex items-center justify-center py-24 px-6 sm:px-10"
 >
-  <div class="max-w-2xl w-full">
+  <div class="contact-shell w-full">
     <h1
       class="mb-6 text-center"
       style="font-size: clamp(32px, 4vw, 42px); font-weight: 350; letter-spacing: -0.72px; color: #1c3a13;"
@@ -13,7 +13,26 @@
       Have a question or need support? We'd love to hear from you.
     </p>
 
-    <div style="background: var(--thamani-snow); border-radius: 16px; padding: 40px; border: 1px solid var(--thamani-stone);">
+    <aside class="contact-proof" aria-label="Support details">
+      <span>Built around your operation</span>
+      <h2>Let’s make every branch easier to run.</h2>
+      <p>
+        Tell us what is slowing your team down. We’ll map the right path across dispensing,
+        inventory, laboratories and compliance.
+      </p>
+      <dl>
+        <div>
+          <dt>01</dt><dd>Share your workflow</dd>
+        </div>
+        <div>
+          <dt>02</dt><dd>See a tailored walkthrough</dd>
+        </div>
+        <div>
+          <dt>03</dt><dd>Plan a calm rollout</dd>
+        </div>
+      </dl>
+    </aside>
+    <div class="contact-form-card">
       <.form for={@form} class="space-y-4">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <.thamani_input field={@form[:name]} label="Full Name" placeholder="Jane Doe" required />

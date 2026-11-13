@@ -193,7 +193,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       refute has_element?(view, "#distributor-sscc-labels")
 
       view |> element("#confirm-approve-shipment") |> render_click()
-      render_async(view)
+      render_async(view, 1_000)
 
       assert has_element?(view, "#distributor-sscc-labels")
       assert has_element?(view, "#distributor-sscc-labels .printable-sscc-label")
@@ -249,7 +249,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
 
       view |> element("#confirm-approve-shipment") |> render_click()
       render_click(view, "approve", %{})
-      render_async(view)
+      render_async(view, 1_000)
       assert has_element?(view, "#distributor-sscc-labels")
       updated_usage = ThamaniDawa.Distributor.Billing.active_usage(distributor.organization_id)
 
@@ -355,6 +355,8 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       product = ProductsFixtures.product_fixture(%{organization_id: distributor.organization_id})
 
       assert {:ok, view, _html} = live(conn, ~p"/distributor/receiving/new")
+
+      view |> element("#open-add-item") |> render_click()
 
       view
       |> form("#distributor-scan-gtin-form", scan: %{gtin: product.gtin <> " "})

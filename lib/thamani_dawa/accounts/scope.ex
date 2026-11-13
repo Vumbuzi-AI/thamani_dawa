@@ -11,7 +11,7 @@ defmodule ThamaniDawa.Accounts.Scope do
   defstruct user: nil, organization_id: nil, current_site_id: nil
 
   @doc "Builds a scope for the given user, nil if there is no user."
-  def for_user(%User{role: :superadmin} = user) do
+  def for_user(%User{roles: [:superadmin]} = user) do
     %__MODULE__{
       user: %{user | sites: []},
       organization_id: nil,
@@ -40,7 +40,9 @@ defmodule ThamaniDawa.Accounts.Scope do
   def admin?(_scope), do: false
 
   @doc "Whether the signed-in user is an active platform superadmin, not an organization admin."
-  def superadmin?(%__MODULE__{user: %User{role: :superadmin, is_active: true}}), do: true
+  def superadmin?(%__MODULE__{user: %User{roles: roles, is_active: true}}),
+    do: :superadmin in roles
+
   def superadmin?(_scope), do: false
 
   @doc "Whether the signed-in user is a pharmacist (§7)."

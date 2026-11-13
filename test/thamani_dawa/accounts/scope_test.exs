@@ -23,6 +23,18 @@ defmodule ThamaniDawa.Accounts.ScopeTest do
     refute Scope.admin?(Scope.for_user(deactivated))
   end
 
+  test "superadmin?/1 recognizes only active platform superadmins" do
+    superadmin = superadmin_fixture()
+    scope = Scope.for_user(superadmin)
+
+    assert Scope.superadmin?(scope)
+    assert is_nil(scope.organization_id)
+
+    {:ok, deactivated} = superadmin |> change(is_active: false) |> Repo.update()
+    refute Scope.superadmin?(Scope.for_user(deactivated))
+    refute Scope.superadmin?(Scope.for_user(user_fixture()))
+  end
+
   test "lab_technician?/1 reflects the user's role" do
     lab_technician = staff_fixture(%{role: :lab_technician})
 

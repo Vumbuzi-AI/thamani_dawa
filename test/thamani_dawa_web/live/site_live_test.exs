@@ -162,7 +162,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
           name: "Warehouse Branch",
           activities: [:distribution],
           address: "4 Test St",
-          gln: "0614141000123"
+          gln: "0614141000128"
         }
       )
       |> render_submit()
@@ -171,7 +171,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       site = ThamaniDawa.Repo.get_by!(ThamaniDawa.Sites.Site, name: "Warehouse Branch")
       assert site.activities == [:distribution]
-      assert site.gln == "0614141000123"
+      assert site.gln == "0614141000128"
     end
 
     test "shows validation error when name is blank", %{conn: conn, admin: admin} do

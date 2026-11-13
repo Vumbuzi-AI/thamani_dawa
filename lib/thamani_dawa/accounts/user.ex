@@ -108,6 +108,7 @@ defmodule ThamaniDawa.Accounts.User do
     user
     |> cast(attrs, [:name, :email, :roles])
     |> validate_required([:name])
+    |> validate_staff_roles()
     |> validate_at_least_one_role()
     |> validate_email()
   end
@@ -131,7 +132,14 @@ defmodule ThamaniDawa.Accounts.User do
   def edit_changeset(user, attrs) do
     user
     |> cast(attrs, [:roles])
+    |> validate_staff_roles()
     |> validate_at_least_one_role()
+  end
+
+  defp validate_staff_roles(changeset) do
+    validate_change(changeset, :roles, fn :roles, roles ->
+      if Enum.all?(roles, &(&1 in @staff_roles)), do: [], else: [roles: "is invalid"]
+    end)
   end
 
   defp validate_at_least_one_role(changeset) do

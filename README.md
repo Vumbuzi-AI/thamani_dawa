@@ -33,15 +33,23 @@ mix phx.server
 
 Open http://localhost:4000. The runtime `PORT` env var can override the port; dev defaults to `4000`.
 
-## Seeded Logins
+## Seeded Demo Care Logins
 
-All seeded users use PIN `1234` for secondary PIN checks.
+`priv/repo/seeds.exs` creates the rerunnable **Demo Care Pharmacy and Diagnostics**
+scenario. Rerunning it restores the demo credentials, valid GS1 identifiers,
+future-dated expiries, and generous stock floors while preserving workflow records.
+Organization users use password `password` and PIN `1234`.
 
-| Email                    | Password       | Role             | Default area                         |
-| ------------------------ | -------------- | ---------------- | ------------------------------------ |
-| `admin@example.com`      | `password1234` | `admin`          | `/pharmacy`, plus `/org/*`, `/lab/*` |
-| `pharmacist@example.com` | `password1234` | `pharmacist`     | `/pharmacy`                          |
-| `lab@example.com`        | `password1234` | `lab_technician` | `/lab`                               |
+| Email                   | Roles                                             | Default area     |
+| ----------------------- | ------------------------------------------------- | ---------------- |
+| `admin@gmail.com`       | Admin, pharmacist, lab technician, distributor    | `/org/dashboard` |
+| `pharmacist@gmail.com`  | Pharmacist                                        | `/pharmacy`      |
+| `lab@gmail.com`         | Lab technician                                    | `/lab`           |
+| `pharmalab@gmail.com`   | Pharmacist and lab technician                     | `/pharmacy`      |
+| `distributor@gmail.com` | Distributor                                       | `/distributor`   |
+
+The platform account is `superadmin@gmail.com` / `password123`. The distributor
+mobile user is `packer.demo` with PIN `4321`.
 
 ## Common Commands
 

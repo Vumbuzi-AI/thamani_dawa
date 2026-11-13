@@ -21,6 +21,8 @@ defmodule ThamaniDawaWeb.OrgReceivingLiveTest do
     gtin = unique_gtin()
     {:ok, view, _html} = live(conn, ~p"/org/receiving/new")
 
+    open_add_item(view)
+
     view
     |> form("#distributor-scan-gtin-form", scan: %{gtin: gtin})
     |> render_change()
@@ -68,6 +70,8 @@ defmodule ThamaniDawaWeb.OrgReceivingLiveTest do
   end
 
   defp add_line(view, gtin, batch_no, quantity, supplier_id) do
+    open_add_item(view)
+
     view
     |> form("#distributor-scan-gtin-form", scan: %{gtin: gtin})
     |> render_change()
@@ -82,5 +86,10 @@ defmodule ThamaniDawaWeb.OrgReceivingLiveTest do
       }
     )
     |> render_submit()
+  end
+
+  # The receiving screen keeps the scan form behind the "Add item" modal.
+  defp open_add_item(view) do
+    view |> element("#open-add-item") |> render_click()
   end
 end

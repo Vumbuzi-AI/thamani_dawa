@@ -59,7 +59,7 @@ defmodule ThamaniDawa.SitesTest do
         Sites.create_site(organization.id, %{
           name: "HQ",
           activities: [:distribution],
-          gln: "6160001000001",
+          gln: "6160001000004",
           address: "Industrial Area"
         })
 
@@ -75,7 +75,7 @@ defmodule ThamaniDawa.SitesTest do
         Sites.create_site(organization_a.id, %{
           name: "HQ",
           activities: [:distribution],
-          gln: "6160001000002",
+          gln: "6160001000011",
           address: "Industrial Area"
         })
 

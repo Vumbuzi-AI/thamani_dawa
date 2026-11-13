@@ -17,6 +17,8 @@ defmodule ThamaniDawaWeb.PageComponents do
   use Phoenix.Component
   import ThamaniDawaWeb.CoreComponents
 
+  alias ThamaniDawa.Accounts.Scope
+
   # ============================================================
   # page_footer
   # ============================================================
@@ -449,48 +451,36 @@ defmodule ThamaniDawaWeb.PageComponents do
   end
 
   def dashboard_path(nil), do: "/login"
-  def dashboard_path(%ThamaniDawa.Accounts.Scope{user: nil}), do: "/login"
+  def dashboard_path(%Scope{user: nil}), do: "/login"
 
-  def dashboard_path(%ThamaniDawa.Accounts.Scope{user: %{role: :superadmin, is_active: true}}),
-    do: "/platform"
-
-  def dashboard_path(%ThamaniDawa.Accounts.Scope{} = scope) do
-    cond do
-      ThamaniDawa.Accounts.Scope.admin?(scope) ->
-        "/org/dashboard"
-
-      ThamaniDawa.Accounts.Scope.pharmacist?(scope) ->
-        "/pharmacy"
-
-      ThamaniDawa.Accounts.Scope.lab_technician?(scope) ->
-        "/lab"
-
-      ThamaniDawa.Accounts.Scope.distributor?(scope) ->
-        "/distributor"
-
-      ThamaniDawa.Accounts.Scope.pharma_lab?(scope) ->
-        pharma_lab_dashboard_path(scope)
-
-      ThamaniDawa.Accounts.Scope.pharmacy_access?(scope) ->
-        "/pharmacy"
-
-      ThamaniDawa.Accounts.Scope.lab_access?(scope) ->
-        "/lab"
-
-      true ->
-        "/login"
-    end
+  def dashboard_path(%Scope{} = scope) do
+    Enum.find_value(dashboard_routes(), fn {matches?, path_for} ->
+      if matches?.(scope), do: path_for.(scope)
+    end) || "/login"
   end
 
   def dashboard_path(_), do: "/login"
+
+  defp dashboard_routes do
+    [
+      {&Scope.superadmin?/1, fn _scope -> "/platform" end},
+      {&Scope.admin?/1, fn _scope -> "/org/dashboard" end},
+      {&Scope.pharmacist?/1, fn _scope -> "/pharmacy" end},
+      {&Scope.lab_technician?/1, fn _scope -> "/lab" end},
+      {&Scope.distributor?/1, fn _scope -> "/distributor" end},
+      {&Scope.pharma_lab?/1, &pharma_lab_dashboard_path/1},
+      {&Scope.pharmacy_access?/1, fn _scope -> "/pharmacy" end},
+      {&Scope.lab_access?/1, fn _scope -> "/lab" end}
+    ]
+  end
 
   defp pharma_lab_dashboard_path(scope) do
     if site_lab_only?(scope), do: "/lab", else: "/pharmacy"
   end
 
-  defp site_lab_only?(%ThamaniDawa.Accounts.Scope{current_site_id: nil}), do: false
+  defp site_lab_only?(%Scope{current_site_id: nil}), do: false
 
-  defp site_lab_only?(%ThamaniDawa.Accounts.Scope{
+  defp site_lab_only?(%Scope{
          current_site_id: site_id,
          organization_id: org_id
        }) do

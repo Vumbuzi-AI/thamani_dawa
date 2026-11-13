@@ -52,6 +52,7 @@ defmodule ThamaniDawaWeb.SessionController do
         case Accounts.get_user_by_email_and_password(email, password) do
           %User{} = user ->
             LoginRateLimiter.reset(rate_keys)
+
             first_staff_login? =
               :admin not in user.roles and :superadmin not in user.roles and
                 is_nil(user.last_logged_in_at)
@@ -116,7 +117,7 @@ defmodule ThamaniDawaWeb.SessionController do
       Map.put(
         account,
         :form,
-        to_form(%{"email" => account.email, "password" => "password"}, as: nil)
+        to_form(%{"email" => account.email, "password" => account.password}, as: nil)
       )
     end)
   end

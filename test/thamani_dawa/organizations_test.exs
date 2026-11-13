@@ -333,14 +333,14 @@ defmodule ThamaniDawa.OrganizationsTest do
                errors_on(changeset)
     end
 
-    test "does not require a GS1 company prefix for a laboratory-only organization" do
+    test "requires a GS1 company prefix for a laboratory-only organization" do
       org_attrs = %{
         name: "Acme Labs",
         license_number: "LIC-L",
         operating_models: [:laboratory]
       }
 
-      assert {:ok, %{organization: organization}} =
+      assert {:error, changeset} =
                Organizations.signup(
                  org_attrs,
                  %{
@@ -350,8 +350,31 @@ defmodule ThamaniDawa.OrganizationsTest do
                  valid_user_attributes()
                )
 
-      assert is_nil(organization.gs1_company_prefix)
+      assert %{gs1_company_prefix: ["Please enter your GS1 company prefix"]} =
+               errors_on(changeset)
+    end
+
+    test "creates a laboratory-only organization once its GS1 company prefix is given" do
+      org_attrs = %{
+        name: "Acme Labs",
+        license_number: "LIC-L",
+        gs1_company_prefix: "6160001",
+        operating_models: [:laboratory]
+      }
+
+      assert {:ok, %{organization: organization, site: site}} =
+               Organizations.signup(
+                 org_attrs,
+                 %{
+                   name: "Acme Labs Main",
+                   activities: [:laboratory]
+                 },
+                 valid_user_attributes()
+               )
+
+      assert organization.gs1_company_prefix == "6160001"
       assert organization.gs1_prefix_verification_status == :pending
+      assert site.activities == [:laboratory]
     end
 
     test "rejects a malformed GS1 company prefix" do
@@ -385,13 +408,13 @@ defmodule ThamaniDawa.OrganizationsTest do
       site_attrs = %{
         name: "Acme Main",
         activities: [:pharmacy],
-        gln: "6160001000001"
+        gln: "6160001000004"
       }
 
       assert {:ok, %{site: site}} =
                Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
 
-      assert site.gln == "6160001000001"
+      assert site.gln == "6160001000004"
       assert is_nil(site.gln_verified_at)
       assert is_nil(site.gln_verification_source)
     end
@@ -406,7 +429,7 @@ defmodule ThamaniDawa.OrganizationsTest do
       site_attrs = %{
         name: "Acme Main",
         activities: [:pharmacy],
-        gln: "6160001000001"
+        gln: "6160001000004"
       }
 
       assert {:ok, %{organization: organization, site: site}} =

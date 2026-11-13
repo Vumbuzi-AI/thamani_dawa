@@ -78,27 +78,43 @@ config :thamani_dawa, :demo_login_accounts, [
     id: "superadmin",
     name: "Platform Superadmin",
     role: "Superadmin",
-    email: "superadmin@gmail.com"
+    email: "superadmin@gmail.com",
+    password: "password123"
   },
-  %{id: "admin", name: "Amina Kamau", role: "Admin", email: "admin@gmail.com"},
+  %{
+    id: "admin",
+    name: "Amina Kamau",
+    role: "Admin",
+    email: "admin@gmail.com",
+    password: "password"
+  },
   %{
     id: "pharmacist",
     name: "Grace Njeri",
     role: "Pharmacist",
-    email: "pharmacist@gmail.com"
+    email: "pharmacist@gmail.com",
+    password: "password"
   },
-  %{id: "lab", name: "Laban Omondi", role: "Lab technician", email: "lab@gmail.com"},
+  %{
+    id: "lab",
+    name: "Laban Omondi",
+    role: "Lab technician",
+    email: "lab@gmail.com",
+    password: "password"
+  },
   %{
     id: "pharma-lab",
     name: "Zawadi Muthoni",
     role: "Pharmacy + lab",
-    email: "pharmalab@gmail.com"
+    email: "pharmalab@gmail.com",
+    password: "password"
   },
   %{
     id: "distributor",
     name: "David Mwangi",
     role: "Distributor",
-    email: "distributor@gmail.com"
+    email: "distributor@gmail.com",
+    password: "password"
   }
 ]
 

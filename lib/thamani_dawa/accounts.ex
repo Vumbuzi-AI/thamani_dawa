@@ -96,7 +96,7 @@ defmodule ThamaniDawa.Accounts do
   def create_platform_superadmin(attrs) when is_map(attrs) do
     %User{}
     |> User.registration_changeset(attrs, require_legal_consent: true)
-    |> Ecto.Changeset.put_change(:role, :superadmin)
+    |> Ecto.Changeset.put_change(:roles, [:superadmin])
     |> Repo.insert()
   end
 

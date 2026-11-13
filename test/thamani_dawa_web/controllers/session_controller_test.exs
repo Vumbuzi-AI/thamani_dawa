@@ -20,21 +20,30 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       assert html_response(conn, 200) =~ "Welcome back"
     end
 
-    test "renders one-click login forms for all five seeded roles", %{conn: conn} do
+    test "renders one-click login forms with the seeded credentials for all six roles", %{
+      conn: conn
+    } do
       document =
         conn
         |> get(~p"/login")
         |> html_response(200)
         |> LazyHTML.from_document()
 
-      assert Enum.count(LazyHTML.query(document, "#demo-login-accounts form")) == 5
+      assert Enum.count(LazyHTML.query(document, "#demo-login-accounts form")) == 6
 
-      for id <- ~w(admin pharmacist lab pharma-lab distributor) do
+      for id <- ~w(superadmin admin pharmacist lab pharma-lab distributor) do
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id}")) == 1
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id} input[name=email]")) == 1
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id} input[name=password]")) == 1
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id}-submit")) == 1
       end
+
+      assert Enum.count(
+               LazyHTML.query(
+                 document,
+                 ~s(#demo-login-superadmin input[name=password][value="password123"])
+               )
+             ) == 1
     end
 
     test "redirects an authenticated user to their portal", %{conn: conn} do

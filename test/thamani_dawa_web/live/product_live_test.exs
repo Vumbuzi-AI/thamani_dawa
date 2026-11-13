@@ -406,7 +406,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       |> form("#gtin-scan-form", gtin_search: unique_gtin())
       |> render_submit()
 
-      html = render_async(lv)
+      html = render_async(lv, 1_000)
 
       assert html =~ "Couldn&#39;t reach the lookup service"
     end
@@ -435,7 +435,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       |> form("#gtin-scan-form", gtin_search: unique_gtin())
       |> render_submit()
 
-      html = render_async(lv)
+      html = render_async(lv, 1_000)
 
       assert has_element?(lv, "#product-form")
       refute has_element?(lv, "#gtin-scan-step")
@@ -467,7 +467,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       |> form("#gtin-scan-form", gtin_search: gtin)
       |> render_submit()
 
-      html = render_async(lv)
+      html = render_async(lv, 1_000)
 
       assert html =~ "No match found for this GTIN"
       assert has_element?(lv, "#product-form")
@@ -490,7 +490,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       |> form("#gtin-scan-form", gtin_search: unique_gtin())
       |> render_submit()
 
-      html = render_async(lv)
+      html = render_async(lv, 1_000)
 
       assert html =~ "Couldn&#39;t reach the lookup service"
       assert has_element?(lv, "#product-form")
@@ -514,7 +514,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       |> form("#gtin-scan-form", gtin_search: unique_gtin())
       |> render_submit()
 
-      html = render_async(lv)
+      html = render_async(lv, 1_000)
 
       assert html =~ "Lookup timed out"
       assert has_element?(lv, "#product-form")

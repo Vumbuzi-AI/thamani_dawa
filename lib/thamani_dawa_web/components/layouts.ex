@@ -962,6 +962,24 @@ defmodule ThamaniDawaWeb.Layouts do
     """
   end
 
+  @doc false
+  attr :flash, :map, required: true
+  attr :current_scope, :map, default: nil
+  attr :inner_content, :any, default: nil
+  slot :inner_block, required: false
+
+  def contact(assigns) do
+    ~H"""
+    <div class="contact-page">
+      <.page_navbar current_scope={@current_scope} />
+      <main class="w-full">
+        {@inner_content || render_slot(@inner_block)}
+      </main>
+      <.flash_group flash={@flash} />
+    </div>
+    """
+  end
+
   @doc """
   Shows the flash group with standard titles and content.
 

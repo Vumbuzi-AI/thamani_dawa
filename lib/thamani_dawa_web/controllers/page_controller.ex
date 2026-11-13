@@ -2,6 +2,7 @@ defmodule ThamaniDawaWeb.PageController do
   use ThamaniDawaWeb, :controller
 
   plug :put_layout, [html: {ThamaniDawaWeb.Layouts, :landing}] when action in [:home]
+  plug :put_layout, [html: {ThamaniDawaWeb.Layouts, :contact}] when action in [:contact]
 
   def home(conn, _params) do
     render(conn, :home)

@@ -37,10 +37,16 @@ password = "password"
 superadmin_password = "password123"
 pin = "1234"
 today = Date.utc_today()
+verified_at = DateTime.utc_now(:second)
 
 gtin = fn base ->
   {:ok, code} = Gtin.generate(base)
   code
+end
+
+gln = fn twelve_digit_payload ->
+  twelve_digit_payload <>
+    Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(twelve_digit_payload))
 end
 
 insert_or_get = fn schema, lookup, attrs, create_fun ->
@@ -90,7 +96,7 @@ superadmin =
 
       user
 
-    %User{role: :superadmin} = user ->
+    %User{roles: [:superadmin]} = user ->
       user
       |> Ecto.Changeset.change(hashed_password: Bcrypt.hash_pwd_salt(superadmin_password))
       |> Repo.update!()
@@ -160,7 +166,7 @@ pharmacy_site =
   |> Sites.update_site(%{
     name: "Demo Care CBD Pharmacy",
     activities: [:pharmacy],
-    gln: "6160001000001",
+    gln: gln.("616000100000"),
     address: "Kimathi Street, Nairobi CBD",
     lat: -1.2833,
     long: 36.8167
@@ -176,7 +182,7 @@ lab_site =
     %{organization_id: organization_id, name: "Demo Care Diagnostic Lab"},
     %{
       activities: [:laboratory],
-      gln: "6160001000018",
+      gln: gln.("616000100001"),
       address: "Kimathi Street, 2nd Floor, Nairobi",
       lat: -1.2831,
       long: 36.8169
@@ -184,13 +190,23 @@ lab_site =
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
 
+{:ok, lab_site} =
+  Sites.update_site(lab_site, %{
+    activities: [:laboratory],
+    gln: gln.("616000100001"),
+    address: "Kimathi Street, 2nd Floor, Nairobi",
+    lat: -1.2831,
+    long: 36.8169,
+    is_active: true
+  })
+
 combined_site =
   insert_or_get.(
     Site,
     %{organization_id: organization_id, name: "Demo Care Westlands Medical Centre"},
     %{
       activities: [:pharmacy, :laboratory],
-      gln: "6160001000025",
+      gln: gln.("616000100002"),
       address: "Woodvale Grove, Westlands, Nairobi",
       lat: -1.2676,
       long: 36.8108
@@ -198,13 +214,23 @@ combined_site =
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
 
+{:ok, combined_site} =
+  Sites.update_site(combined_site, %{
+    activities: [:pharmacy, :laboratory],
+    gln: gln.("616000100002"),
+    address: "Woodvale Grove, Westlands, Nairobi",
+    lat: -1.2676,
+    long: 36.8108,
+    is_active: true
+  })
+
 warehouse_site =
   insert_or_get.(
     Site,
     %{organization_id: organization_id, name: "Demo Care Central Warehouse"},
     %{
       activities: [:distribution],
-      gln: "6160001000032",
+      gln: gln.("616000100003"),
       address: "Mombasa Road Logistics Park, Nairobi",
       lat: -1.3197,
       long: 36.8276
@@ -212,8 +238,40 @@ warehouse_site =
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
 
-ensure_account = fn email, name, role, site ->
-  site_ids = if site, do: [site.id], else: []
+{:ok, warehouse_site} =
+  Sites.update_site(warehouse_site, %{
+    activities: [:distribution],
+    gln: gln.("616000100003"),
+    address: "Mombasa Road Logistics Park, Nairobi",
+    lat: -1.3197,
+    long: 36.8276,
+    is_active: true
+  })
+
+organization =
+  organization
+  |> Ecto.Changeset.change(
+    gln: pharmacy_site.gln,
+    gln_verified_at: verified_at,
+    gln_verification_source: "Demo seed",
+    gs1_prefix_verification_status: :verified,
+    is_active: true,
+    is_subscription_active: true
+  )
+  |> Repo.update!()
+
+for site <- [pharmacy_site, lab_site, combined_site, warehouse_site] do
+  site
+  |> Ecto.Changeset.change(
+    gln_verified_at: verified_at,
+    gln_verification_source: "Demo seed",
+    is_active: true
+  )
+  |> Repo.update!()
+end
+
+ensure_account = fn email, name, roles, sites ->
+  site_ids = Enum.map(sites, & &1.id)
 
   user =
     case Accounts.get_user_by_email(email) do
@@ -222,7 +280,7 @@ ensure_account = fn email, name, role, site ->
           Accounts.invite_user(organization_id, primary_admin.id, %{
             email: email,
             name: name,
-            role: role,
+            roles: roles,
             site_ids: site_ids
           })
 
@@ -236,12 +294,17 @@ ensure_account = fn email, name, role, site ->
 
       %User{} = existing ->
         {:ok, updated} =
-          Accounts.update_user(organization_id, existing.id, %{role: role, site_ids: site_ids})
+          Accounts.update_user(organization_id, existing.id, %{roles: roles, site_ids: site_ids})
 
         updated
         |> Ecto.Changeset.cast(%{name: name, is_active: true}, [:name, :is_active])
         |> Repo.update!()
     end
+
+  user =
+    user
+    |> Ecto.Changeset.change(hashed_password: Bcrypt.hash_pwd_salt(password))
+    |> Repo.update!()
 
   if is_nil(user.hashed_pin) do
     {:ok, user} = Accounts.set_user_pin(user, %{pin: pin})
@@ -252,16 +315,17 @@ ensure_account = fn email, name, role, site ->
 end
 
 account_specs = [
-  {"admin@gmail.com", "Amina Kamau", :admin, nil},
-  {"pharmacist@gmail.com", "Grace Njeri", :pharmacist, pharmacy_site},
-  {"lab@gmail.com", "Laban Omondi", :lab_technician, lab_site},
-  {"pharmalab@gmail.com", "Zawadi Muthoni", :pharma_lab, combined_site},
-  {"distributor@gmail.com", "David Mwangi", :distributor, warehouse_site}
+  {"admin@gmail.com", "Amina Kamau", [:admin, :pharmacist, :lab_technician, :distributor],
+   [pharmacy_site, lab_site, combined_site, warehouse_site]},
+  {"pharmacist@gmail.com", "Grace Njeri", [:pharmacist], [pharmacy_site]},
+  {"lab@gmail.com", "Laban Omondi", [:lab_technician], [lab_site]},
+  {"pharmalab@gmail.com", "Zawadi Muthoni", [:pharmacist, :lab_technician], [combined_site]},
+  {"distributor@gmail.com", "David Mwangi", [:distributor], [warehouse_site]}
 ]
 
 accounts =
-  Map.new(account_specs, fn {email, name, role, site} ->
-    {email, ensure_account.(email, name, role, site)}
+  Map.new(account_specs, fn {email, name, roles, sites} ->
+    {email, ensure_account.(email, name, roles, sites)}
   end)
 
 primary_admin = Map.fetch!(accounts, "admin@gmail.com")
@@ -282,20 +346,29 @@ supplier_specs = [
 ]
 
 suppliers =
-  Enum.map(supplier_specs, fn {name, contact, phone, email, gln_code, location} ->
-    insert_or_get.(
-      Supplier,
-      %{organization_id: organization_id, name: name},
-      %{
-        contact: contact,
-        phone: phone,
-        email: email,
-        gln: gln_code,
-        location: location,
-        is_active: true
-      },
-      fn attrs -> Suppliers.create_supplier(organization_id, attrs) end
+  Enum.map(supplier_specs, fn {name, contact, phone, email, gln_payload, location} ->
+    supplier =
+      insert_or_get.(
+        Supplier,
+        %{organization_id: organization_id, name: name},
+        %{
+          contact: contact,
+          phone: phone,
+          email: email,
+          location: location,
+          is_active: true
+        },
+        fn attrs -> Suppliers.create_supplier(organization_id, attrs) end
+      )
+
+    supplier
+    |> Ecto.Changeset.change(
+      gln: gln.(String.slice(gln_payload, 0, 12)),
+      gln_verified_at: verified_at,
+      gln_verification_source: "Demo seed",
+      is_active: true
     )
+    |> Repo.update!()
   end)
 
 product_specs = [
@@ -354,30 +427,41 @@ drug_products = for {:drug, product} <- products, do: product
 lab_products = for {:lab_consumable, product} <- products, do: product
 
 create_batch = fn product, site, batch_no, quantity, remaining, expiry_days, supplier, approver ->
-  insert_or_get.(
-    Batch,
-    %{
-      organization_id: organization_id,
-      product_id: product.id,
-      site_id: site.id,
-      batch_no: batch_no
-    },
-    %{
-      gtin: product.gtin,
-      manufacturer: supplier.name,
-      manufacture_date: Date.add(today, -120),
-      expiry_date: Date.add(today, expiry_days),
-      quantity: quantity,
-      remaining_quantity: remaining,
-      cost_per_unit: Decimal.new("20.00"),
-      supplier_id: supplier.id
-    },
-    fn attrs ->
-      with {:ok, batch} <- Batches.create_batch(organization_id, attrs) do
-        if approver, do: Batches.receive_batch(batch, approver.id), else: {:ok, batch}
+  batch =
+    insert_or_get.(
+      Batch,
+      %{
+        organization_id: organization_id,
+        product_id: product.id,
+        site_id: site.id,
+        batch_no: batch_no
+      },
+      %{
+        gtin: product.gtin,
+        manufacturer: supplier.name,
+        manufacture_date: Date.add(today, -120),
+        expiry_date: Date.add(today, expiry_days),
+        quantity: quantity,
+        remaining_quantity: remaining,
+        cost_per_unit: Decimal.new("20.00"),
+        supplier_id: supplier.id
+      },
+      fn attrs ->
+        with {:ok, batch} <- Batches.create_batch(organization_id, attrs) do
+          if approver, do: Batches.receive_batch(batch, approver.id), else: {:ok, batch}
+        end
       end
-    end
+    )
+
+  # Rerunning seeds restores generous demo stock without reducing stock that is
+  # already above the baseline after manual receiving/requisition testing.
+  batch
+  |> Ecto.Changeset.change(
+    quantity: max(batch.quantity, quantity),
+    remaining_quantity: max(batch.remaining_quantity, remaining),
+    expiry_date: Date.add(today, expiry_days)
   )
+  |> Repo.update!()
 end
 
 pharmacy_batches =
@@ -388,8 +472,8 @@ pharmacy_batches =
       {product, index} <- Enum.with_index(drug_products) do
     supplier = Enum.at(suppliers, rem(index, length(suppliers)))
     expiry_days = Enum.at([18, 75, 180, 365], rem(index, 4))
-    quantity = 160 + index * 10
-    remaining = if rem(index, 5) == 0, do: max(product.reorder_level - 5, 1), else: quantity
+    quantity = 1_000 + index * 25
+    remaining = quantity
 
     create_batch.(
       product,
@@ -415,8 +499,8 @@ lab_batches =
       product,
       site,
       "#{site_code}-REAG-#{index + 1}",
-      80 + index * 10,
-      70 + index * 8,
+      500 + index * 25,
+      500 + index * 25,
       Enum.at([25, 120, 240, 400], rem(index, 4)),
       supplier,
       approver
@@ -455,23 +539,32 @@ ensure_org_batch = fn product, batch_no, quantity, expiry_days, supplier ->
         where: is_nil(b.site_id)
     )
 
-  existing ||
-    (
-      {:ok, created} =
-        Batches.receive_into_org_stock(organization_id, %{
-          product_id: product.id,
-          batch_no: batch_no,
-          gtin: product.gtin,
-          manufacturer: supplier.name,
-          manufacture_date: Date.add(today, -60),
-          expiry_date: Date.add(today, expiry_days),
-          quantity: quantity,
-          cost_per_unit: Decimal.new("20.00"),
-          supplier_id: supplier.id
-        })
+  batch =
+    existing ||
+      (
+        {:ok, created} =
+          Batches.receive_into_org_stock(organization_id, %{
+            product_id: product.id,
+            batch_no: batch_no,
+            gtin: product.gtin,
+            manufacturer: supplier.name,
+            manufacture_date: Date.add(today, -60),
+            expiry_date: Date.add(today, expiry_days),
+            quantity: quantity,
+            cost_per_unit: Decimal.new("20.00"),
+            supplier_id: supplier.id
+          })
 
-      created
-    )
+        created
+      )
+
+  batch
+  |> Ecto.Changeset.change(
+    quantity: max(batch.quantity, quantity),
+    remaining_quantity: max(batch.remaining_quantity, quantity),
+    expiry_date: Date.add(today, expiry_days)
+  )
+  |> Repo.update!()
 end
 
 warehouse_batches =
@@ -481,7 +574,7 @@ warehouse_batches =
     ensure_org_batch.(
       product,
       "WH-#{index + 1}-A",
-      500 + index * 20,
+      5_000 + index * 100,
       Enum.at([90, 150, 270, 400], rem(index, 4)),
       supplier
     )
@@ -597,17 +690,26 @@ patients =
   end)
 
 ensure_visit = fn patient, site, user, type ->
-  insert_or_get.(
-    PatientVisit,
-    %{
-      organization_id: organization_id,
-      patient_id: patient.id,
-      site_id: site.id,
-      visit_type: type
-    },
-    %{user_id: user.id},
-    fn attrs -> PatientVisits.create_patient_visit(organization_id, attrs) end
-  )
+  Repo.one(
+    from v in PatientVisit,
+      where: v.organization_id == ^organization_id,
+      where: v.patient_id == ^patient.id and v.site_id == ^site.id,
+      where: v.visit_type == ^type,
+      order_by: [asc: v.id],
+      limit: 1
+  ) ||
+    (
+      {:ok, visit} =
+        PatientVisits.create_patient_visit(organization_id, %{
+          organization_id: organization_id,
+          patient_id: patient.id,
+          site_id: site.id,
+          visit_type: type,
+          user_id: user.id
+        })
+
+      visit
+    )
 end
 
 prescription_statuses = [
@@ -1083,19 +1185,29 @@ end)
   })
 
 distributor_customers =
-  Enum.map(
+  Enum.with_index(
     [
       {"Kisumu County Referral Hospital", "Jomo Kenyatta Highway, Kisumu", "P.O. Box 1450-40100"},
       {"Eldoret Family Pharmacy", "Uganda Road, Eldoret", "P.O. Box 2210-30100"},
       {"Nyeri Medical Centre", "Kimathi Way, Nyeri", "P.O. Box 330-10100"}
     ],
-    fn {name, address, po_box} ->
-      insert_or_get.(
-        Customer,
-        %{organization_id: organization_id, name: name},
-        %{address: address, po_box: po_box, contact_name: "Stores Manager", is_active: true},
-        fn attrs -> DistributorCustomers.create_customer(organization_id, attrs) end
+    fn {name, address, po_box}, index ->
+      customer =
+        insert_or_get.(
+          Customer,
+          %{organization_id: organization_id, name: name},
+          %{address: address, po_box: po_box, contact_name: "Stores Manager", is_active: true},
+          fn attrs -> DistributorCustomers.create_customer(organization_id, attrs) end
+        )
+
+      customer
+      |> Ecto.Changeset.change(
+        gln: gln.("6160003" <> String.pad_leading(Integer.to_string(index), 5, "0")),
+        gln_verified_at: verified_at,
+        gln_verification_source: "Demo seed",
+        is_active: true
       )
+      |> Repo.update!()
     end
   )
 
@@ -1260,27 +1372,16 @@ unless Repo.exists?(
   {:ok, _} = Distributor.submit_shipment(mobile_user, approval_test.id)
 end
 
-role_counts =
-  User
-  |> where([u], u.organization_id == ^organization_id)
-  |> group_by([u], u.role)
-  |> select([u], {u.role, count(u.id)})
-  |> Repo.all()
-  |> Map.new()
+expected_account_roles =
+  Map.new(account_specs, fn {email, _name, roles, _sites} -> {email, roles} end)
 
-expected_role_counts = %{
-  admin: 1,
-  distributor: 1,
-  pharmacist: 1,
-  lab_technician: 1,
-  pharma_lab: 1
-}
+actual_account_roles = Map.new(accounts, fn {email, user} -> {email, user.roles} end)
 
-if role_counts != expected_role_counts do
+if actual_account_roles != expected_account_roles do
   raise """
-  Demo account count is not balanced.
-  Expected exactly one account per role: #{inspect(expected_role_counts)}
-  Found: #{inspect(role_counts)}
+  Demo account roles are not configured as expected.
+  Expected: #{inspect(expected_account_roles)}
+  Found: #{inspect(actual_account_roles)}
   """
 end
 
@@ -1294,10 +1395,12 @@ Data: #{length(products)} products, #{length(pharmacy_batches) + length(lab_batc
       #{length(suppliers)} suppliers, #{length(patients)} patients,
       12 prescriptions, #{length(lab_tests)} lab tests, and 12 lab orders.
 
-All accounts use password #{password} and PIN #{pin}.
+All organization accounts use password #{password} and PIN #{pin}.
 
 Admin account:
   admin@gmail.com
+  Roles: admin, pharmacist, lab technician, distributor
+  Assigned to all four Demo Care sites
 
 Pharmacist account:
   pharmacist@gmail.com

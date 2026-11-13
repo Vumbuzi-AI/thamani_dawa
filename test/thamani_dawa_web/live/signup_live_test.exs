@@ -27,7 +27,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       assert has_element?(view, "#site-setup-form")
 
       view
-      |> complete_site_step(%{name: "Acme Main", address: "Nairobi", gln: "0614141000789"})
+      |> complete_site_step(%{name: "Acme Main", address: "Nairobi", gln: "0614141000784"})
 
       assert has_element?(view, "#signup-form")
       assert has_element?(view, "#signup-submit", "Complete setup")
@@ -57,7 +57,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       assert site.name == "Acme Main"
       assert site.activities == [:pharmacy]
       assert site.address == "Nairobi"
-      assert site.gln == "0614141000789"
+      assert site.gln == "0614141000784"
     end
 
     test "shows the error on the admin form when the email is already taken", %{conn: conn} do

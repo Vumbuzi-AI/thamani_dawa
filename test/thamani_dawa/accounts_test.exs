@@ -56,7 +56,7 @@ defmodule ThamaniDawa.AccountsTest do
       assert {:ok, user} =
                Accounts.create_platform_superadmin(valid_user_attributes())
 
-      assert user.role == :superadmin
+      assert user.roles == [:superadmin]
       assert is_nil(user.organization_id)
       assert User.active?(user)
     end
@@ -70,10 +70,10 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "Not a platform operator",
                  email: valid_user_email(),
-                 role: :superadmin
+                 roles: [:superadmin]
                })
 
-      assert %{role: ["is invalid"]} = errors_on(changeset)
+      assert %{roles: ["is invalid"]} = errors_on(changeset)
     end
 
     test "creates an unconfirmed user with no password, tied to the inviting organization" do
