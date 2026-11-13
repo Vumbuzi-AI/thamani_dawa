@@ -273,7 +273,8 @@ defmodule ThamaniDawa.AssociationsTest do
           batch.id,
           technician.id,
           5,
-          lab_order_id: lab_order.id
+          lab_order_id: lab_order.id,
+          site_id: site.id
         )
 
       loaded_batch =

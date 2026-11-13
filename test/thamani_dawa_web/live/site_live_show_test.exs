@@ -25,8 +25,8 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
          %{conn: conn} do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
-      site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy})
-      other_site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy})
+      site = site_fixture(%{organization_id: organization.id, activities: [:pharmacy]})
+      other_site = site_fixture(%{organization_id: organization.id, activities: [:pharmacy]})
       product = product_fixture(%{organization_id: organization.id})
 
       near_batch =
@@ -69,7 +69,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
     test "shows a product at or below its reorder level in the low-stock table", %{conn: conn} do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
-      site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy})
+      site = site_fixture(%{organization_id: organization.id, activities: [:pharmacy]})
 
       product =
         product_fixture(%{
@@ -95,7 +95,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
     test "?tab=lab on a pharmacy-only site falls back to the pharmacy tab", %{conn: conn} do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
-      site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy})
+      site = site_fixture(%{organization_id: organization.id, activities: [:pharmacy]})
 
       {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}?tab=lab")
 
@@ -108,7 +108,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
     test "shows pending lab orders scoped to this site, no tab toggle", %{conn: conn} do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
-      site = site_fixture(%{organization_id: organization.id, site_type: :lab})
+      site = site_fixture(%{organization_id: organization.id, activities: [:laboratory]})
 
       lab_order = lab_order_fixture(%{organization_id: organization.id, site_id: site.id})
 
@@ -122,7 +122,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
     test "?tab=pharmacy on a lab-only site falls back to the lab tab", %{conn: conn} do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
-      site = site_fixture(%{organization_id: organization.id, site_type: :lab})
+      site = site_fixture(%{organization_id: organization.id, activities: [:laboratory]})
 
       {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}?tab=pharmacy")
 
@@ -135,7 +135,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
     test "shows neither pharmacy nor lab operations, and does not crash", %{conn: conn} do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
-      site = site_fixture(%{organization_id: organization.id, site_type: :warehouse})
+      site = site_fixture(%{organization_id: organization.id, activities: [:distribution]})
 
       {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
 
@@ -151,7 +151,9 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
     } do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
-      site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy_lab})
+
+      site =
+        site_fixture(%{organization_id: organization.id, activities: [:pharmacy, :laboratory]})
 
       {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
 
@@ -169,8 +171,12 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
     } do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
-      site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy_lab})
-      other_site = site_fixture(%{organization_id: organization.id, site_type: :pharmacy_lab})
+
+      site =
+        site_fixture(%{organization_id: organization.id, activities: [:pharmacy, :laboratory]})
+
+      other_site =
+        site_fixture(%{organization_id: organization.id, activities: [:pharmacy, :laboratory]})
 
       visit = patient_visit_fixture(%{organization_id: organization.id, site_id: site.id})
       prescription_fixture(%{organization_id: organization.id, patient_visit_id: visit.id})

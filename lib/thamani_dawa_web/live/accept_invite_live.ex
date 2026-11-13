@@ -2,6 +2,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Accounts
+  alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Organizations
 
   def mount(%{"token" => token}, _session, socket) do
@@ -74,7 +75,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
             Join {@organization.name} on Thamani Dawa.
           </h2>
           <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
-            Set your password to activate your account as a {Phoenix.Naming.humanize(@user.role)} and get straight into stock, prescriptions, and lab orders.
+            Set your password to activate your account as a {User.humanize_roles(@user)} and get straight into stock, prescriptions, and lab orders.
           </p>
         </div>
 

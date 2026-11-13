@@ -2,7 +2,10 @@ defmodule ThamaniDawaWeb.SessionController do
   use ThamaniDawaWeb, :controller
 
   alias ThamaniDawa.Accounts
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Accounts.User
+  alias ThamaniDawa.LoginRateLimiter
+  alias ThamaniDawaWeb.Portals
 
   import Phoenix.Component, only: [to_form: 2]
   import ThamaniDawaWeb.UserAuth, only: [log_in_user: 2, log_out_user: 1]
@@ -42,20 +45,37 @@ defmodule ThamaniDawaWeb.SessionController do
   end
 
   defp authenticate(conn, email, password, start_tour?) do
-    case Accounts.get_user_by_email_and_password(email, password) do
-      %User{} = user ->
-        first_staff_login? = user.role != :admin and is_nil(user.last_logged_in_at)
+    rate_keys = ["ip:" <> remote_ip(conn), "email:" <> String.downcase(String.trim(email))]
 
-        conn
-        |> log_in_user(user)
-        |> redirect(to: login_redirect_path(user, start_tour? or first_staff_login?))
+    case LoginRateLimiter.allow?(rate_keys) do
+      :ok ->
+        case Accounts.get_user_by_email_and_password(email, password) do
+          %User{} = user ->
+            LoginRateLimiter.reset(rate_keys)
+            first_staff_login? = :admin not in user.roles and is_nil(user.last_logged_in_at)
 
-      nil ->
+            conn
+            |> log_in_user(user)
+            |> redirect(to: login_redirect_path(user, start_tour? or first_staff_login?))
+
+          nil ->
+            invalid_login(conn, email)
+        end
+
+      {:error, :rate_limited} ->
         conn
-        |> put_flash(:error, "Invalid email or password")
+        |> put_flash(:error, "Too many login attempts. Please wait before trying again.")
         |> render_login(%{"email" => email, "password" => ""})
     end
   end
+
+  defp invalid_login(conn, email) do
+    conn
+    |> put_flash(:error, "Invalid email or password")
+    |> render_login(%{"email" => email, "password" => ""})
+  end
+
+  defp remote_ip(conn), do: conn.remote_ip |> :inet.ntoa() |> to_string()
 
   def delete(conn, _params) do
     conn
@@ -63,23 +83,18 @@ defmodule ThamaniDawaWeb.SessionController do
     |> redirect(to: ~p"/")
   end
 
-  defp redirect_path_for(%User{role: :admin}), do: ~p"/org/dashboard"
-  defp redirect_path_for(%User{role: :pharmacist}), do: ~p"/pharmacy"
-  defp redirect_path_for(%User{role: :lab_technician}), do: ~p"/lab"
-
-  defp redirect_path_for(%User{role: :pharma_lab, current_site_id: nil}), do: ~p"/pharmacy"
-
-  defp redirect_path_for(%User{role: :pharma_lab} = user) do
-    site = ThamaniDawa.Sites.get_site!(user.organization_id, user.current_site_id)
-
-    if ThamaniDawa.Sites.Site.lab?(site) and not ThamaniDawa.Sites.Site.pharmacy?(site) do
-      ~p"/lab"
-    else
-      ~p"/pharmacy"
+  defp redirect_path_for(%User{roles: roles} = user) do
+    cond do
+      :admin in roles -> ~p"/org/dashboard"
+      :distributor in roles -> ~p"/distributor"
+      :pharmacist in roles and :lab_technician in roles -> combined_portal_path(user)
+      :pharmacist in roles -> ~p"/pharmacy"
+      :lab_technician in roles -> ~p"/lab"
+      true -> ~p"/"
     end
-  rescue
-    Ecto.NoResultsError -> ~p"/pharmacy"
   end
+
+  defp combined_portal_path(user), do: Portals.combined_path(Scope.for_user(user))
 
   defp login_redirect_path(user, true), do: redirect_path_for(user) <> "?tour=1"
   defp login_redirect_path(user, false), do: redirect_path_for(user)

@@ -1,6 +1,7 @@
 defmodule ThamaniDawaWeb.LabOrderLive.Show do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
   alias ThamaniDawa.LabOrders
   alias ThamaniDawa.LabOrders.LabSpecimen
@@ -38,7 +39,14 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
   defp apply_action(socket, :edit_result, %{"result_id" => result_id}) do
     organization_id = socket.assigns.current_scope.organization_id
-    result = LabOrders.get_lab_order_result!(organization_id, String.to_integer(result_id))
+
+    result =
+      LabOrders.get_lab_order_result_for_order!(
+        organization_id,
+        socket.assigns.lab_order.id,
+        String.to_integer(result_id)
+      )
+
     lab_test = LabTests.get_lab_test!(organization_id, result.lab_test_id)
 
     socket
@@ -82,7 +90,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
   defp load_lab_order(socket, id) do
     organization_id = socket.assigns.current_scope.organization_id
-    lab_order = LabOrders.get_lab_order!(organization_id, id)
+    lab_order = authorized_lab_order!(socket.assigns.current_scope, id)
     visit = PatientVisits.get_patient_visit!(organization_id, lab_order.patient_visit_id)
     patient = Patients.get_patient!(organization_id, visit.patient_id)
     results = LabOrders.list_lab_order_results_for_order(organization_id, lab_order.id)
@@ -109,6 +117,14 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
       :active_batches,
       Batches.list_active_lab_consumable_batches_for_site(organization_id, lab_order.site_id)
     )
+  end
+
+  defp authorized_lab_order!(%{organization_id: organization_id} = scope, id) do
+    if Scope.admin?(scope) do
+      LabOrders.get_lab_order!(organization_id, id)
+    else
+      LabOrders.get_lab_order_for_site!(organization_id, id, scope.current_site_id)
+    end
   end
 
   def handle_event("switch_tab", %{"tab" => tab}, socket)
@@ -198,6 +214,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
            batch_available_for_product?(socket.assigns.active_batches, batch_id, product_id),
          {:ok, _usage} <-
            LabOrders.record_consumable_usage(organization_id, batch_id, user_id, qty,
+             site_id: socket.assigns.lab_order.site_id,
              lab_order_id: lab_order_id,
              lab_order_result_id: result_id
            ) do
@@ -218,6 +235,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     changeset =
       attrs
       |> Map.put("lab_order_id", lab_order.id)
+      |> Map.put("amount", lab_order.total_amount)
       |> then(&Payment.changeset(%Payment{}, &1))
       |> Map.put(:action, :validate)
 
@@ -228,7 +246,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
     organization_id = socket.assigns.current_scope.organization_id
     lab_order = socket.assigns.lab_order
 
-    attrs = Map.put(attrs, "lab_order_id", lab_order.id)
+    attrs =
+      attrs
+      |> Map.put("lab_order_id", lab_order.id)
+      |> Map.put("amount", lab_order.total_amount)
 
     with {:ok, payment} <- Payments.create_payment(organization_id, attrs),
          {:ok, _completed} <- Payments.complete_payment(payment) do
@@ -610,6 +631,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             label="Amount (KES)"
             step="0.01"
             min="0.01"
+            readonly
             required
           />
           <.input field={@payment_form[:provider_reference]} label="Reference / receipt no." />

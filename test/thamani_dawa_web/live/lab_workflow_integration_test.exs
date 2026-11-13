@@ -13,14 +13,16 @@ defmodule ThamaniDawaWeb.LabWorkflowIntegrationTest do
     admin = user_fixture()
     organization_id = admin.organization_id
 
+    site = site_fixture(%{organization_id: organization_id, activities: [:laboratory]})
+
     performer =
       staff_fixture(%{
         organization_id: organization_id,
         invited_by_id: admin.id,
-        role: :lab_technician
+        role: :lab_technician,
+        site_id: site.id
       })
 
-    site = site_fixture(%{organization_id: organization_id, site_type: :lab})
     lab_test = lab_test_fixture(%{organization_id: organization_id})
 
     # Step 1: Create an order with one test result (creation UI is covered in lab_order_live_test)
@@ -53,6 +55,9 @@ defmodule ThamaniDawaWeb.LabWorkflowIntegrationTest do
     result = LabOrders.get_lab_order_result!(organization_id, result.id)
     assert result.status == :collected
     assert LabOrders.get_lab_order!(organization_id, lab_order.id).status == :in_progress
+
+    [specimen] = LabOrders.list_specimens_for_order(organization_id, lab_order.id)
+    {:ok, _} = LabOrders.receive_specimen(organization_id, specimen.id, performer.id)
 
     # Step 3: Performer enters results via ResultEntryLive
     {:ok, result_view, _html} =

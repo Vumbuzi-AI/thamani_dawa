@@ -1,6 +1,7 @@
 defmodule ThamaniDawaWeb.ReceiveStockLive do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
@@ -48,7 +49,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
 
   defp apply_action(socket, :receive, batch_id) do
     scope = socket.assigns.current_scope
-    batch = Batches.get_batch!(scope.organization_id, String.to_integer(batch_id))
+    batch = authorized_batch!(scope, String.to_integer(batch_id))
 
     {:noreply,
      socket
@@ -103,6 +104,14 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
     case Map.get(sites_by_id, batch.site_id) do
       nil -> false
       site -> Site.pharmacy?(site)
+    end
+  end
+
+  defp authorized_batch!(%{organization_id: organization_id} = scope, batch_id) do
+    if Scope.admin?(scope) do
+      Batches.get_batch!(organization_id, batch_id)
+    else
+      Batches.get_batch_for_site!(organization_id, batch_id, scope.current_site_id)
     end
   end
 

@@ -37,25 +37,29 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       refute html =~ "Mombasa Branch"
     end
 
-    test "filters by type", %{conn: conn, admin: admin} do
+    test "filters by activity", %{conn: conn, admin: admin} do
       site_fixture(%{
         organization_id: admin.organization_id,
         name: "Pharmacy One",
-        site_type: :pharmacy
+        activities: [:pharmacy]
       })
 
-      site_fixture(%{organization_id: admin.organization_id, name: "Lab One", site_type: :lab})
+      site_fixture(%{
+        organization_id: admin.organization_id,
+        name: "Lab One",
+        activities: [:laboratory]
+      })
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
       lv
-      |> form("#sites-filters-form", filters: %{site_type: "lab"})
+      |> form("#sites-filters-form", filters: %{activities: "laboratory"})
       |> render_submit()
 
       html = render(lv)
       assert html =~ "Lab One"
       refute html =~ "Pharmacy One"
-      assert html =~ "Type: Lab"
+      assert html =~ "Activity: Laboratory"
     end
 
     test "filters by active status", %{conn: conn, admin: admin} do
@@ -97,9 +101,8 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       assert has_element?(lv, "#site-address")
       assert has_element?(lv, "#site-capability")
       assert has_element?(lv, "#site-capability-pharmacy")
-      assert has_element?(lv, "#site-capability-lab")
-      assert has_element?(lv, "#site-capability-pharmacy_lab")
-      assert has_element?(lv, "#site-capability-warehouse")
+      assert has_element?(lv, "#site-capability-laboratory")
+      assert has_element?(lv, "#site-capability-distribution")
     end
 
     test "creates a pharmacy site", %{conn: conn, admin: admin} do
@@ -109,7 +112,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       |> form("#site-form",
         site: %{
           name: "Pharmacy Branch",
-          site_type: :pharmacy,
+          activities: [:pharmacy],
           address: "1 Test St"
         }
       )
@@ -125,7 +128,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       |> form("#site-form",
         site: %{
           name: "Lab Branch",
-          site_type: :lab,
+          activities: [:laboratory],
           address: "2 Test St"
         }
       )
@@ -141,7 +144,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       |> form("#site-form",
         site: %{
           name: "Combined Branch",
-          site_type: :pharmacy_lab,
+          activities: [:pharmacy, :laboratory],
           address: "3 Test St"
         }
       )
@@ -157,8 +160,9 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       |> form("#site-form",
         site: %{
           name: "Warehouse Branch",
-          site_type: :warehouse,
-          address: "4 Test St"
+          activities: [:distribution],
+          address: "4 Test St",
+          gln: "0614141000123"
         }
       )
       |> render_submit()
@@ -166,15 +170,15 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       assert render(lv) =~ "Warehouse Branch"
 
       site = ThamaniDawa.Repo.get_by!(ThamaniDawa.Sites.Site, name: "Warehouse Branch")
-      assert site.site_type == :warehouse
-      assert site.gln
+      assert site.activities == [:distribution]
+      assert site.gln == "0614141000123"
     end
 
     test "shows validation error when name is blank", %{conn: conn, admin: admin} do
       {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
 
       lv
-      |> form("#site-form", site: %{name: "", site_type: :pharmacy})
+      |> form("#site-form", site: %{name: "", activities: [:pharmacy]})
       |> render_change()
 
       assert render(lv) =~ "can&#39;t be blank"
@@ -197,7 +201,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       lv
       |> form("#site-form",
-        site: %{name: "Primary Site", address: "12 Market Street", site_type: :pharmacy}
+        site: %{name: "Primary Site", address: "12 Market Street", activities: [:pharmacy]}
       )
       |> render_submit()
 
@@ -209,7 +213,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
         site_fixture(%{
           organization_id: admin.organization_id,
           name: "Old Name",
-          site_type: :pharmacy
+          activities: [:pharmacy]
         })
 
       {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}/edit")
@@ -219,7 +223,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
         site: %{
           name: "New Name",
           address: "Updated St",
-          site_type: :lab
+          activities: [:laboratory]
         }
       )
       |> render_submit()
@@ -234,14 +238,14 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
         site_fixture(%{
           organization_id: admin.organization_id,
           name: "Keep This Name",
-          site_type: :pharmacy
+          activities: [:pharmacy]
         })
 
       {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}/edit")
 
       html =
         lv
-        |> form("#site-form", site: %{name: "", site_type: :pharmacy})
+        |> form("#site-form", site: %{name: "", activities: [:pharmacy]})
         |> render_submit()
 
       assert html =~ "can&#39;t be blank"

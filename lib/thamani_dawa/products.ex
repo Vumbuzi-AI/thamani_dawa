@@ -16,6 +16,11 @@ defmodule ThamaniDawa.Products do
     )
   end
 
+  @doc "Gets an organization's product by normalized GTIN, or nil."
+  def get_product_by_gtin(organization_id, gtin) when is_binary(gtin) do
+    Repo.get_by(Product, organization_id: organization_id, gtin: gtin)
+  end
+
   @doc """
   Lists products that have any batch — dispatched or still awaiting
   dispatch — with pagination and optional search filter. `site_ids: nil`
@@ -154,8 +159,10 @@ defmodule ThamaniDawa.Products do
         on: b.product_id == p.id,
         where: p.organization_id == ^organization_id,
         where: p.is_active == true,
+        where: p.is_otc == true and p.is_dangerous_drug == false,
         where: b.site_id == ^site_id,
         where: not is_nil(b.received_at) and not is_nil(b.approver_id),
+        where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
         group_by: p.id,
         order_by: [asc: p.generic_name],
         select: %{
@@ -190,8 +197,10 @@ defmodule ThamaniDawa.Products do
         where: p.organization_id == ^organization_id,
         where: p.id == ^product_id,
         where: p.is_active == true,
+        where: p.is_otc == true and p.is_dangerous_drug == false,
         where: b.site_id == ^site_id,
         where: not is_nil(b.received_at) and not is_nil(b.approver_id),
+        where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
         group_by: p.id,
         select: %{
           id: p.id,
@@ -212,8 +221,10 @@ defmodule ThamaniDawa.Products do
       on: b.product_id == p.id,
       where: p.organization_id == ^organization_id,
       where: p.is_active == true,
+      where: p.is_otc == true and p.is_dangerous_drug == false,
       where: b.site_id == ^site_id,
       where: not is_nil(b.received_at) and not is_nil(b.approver_id),
+      where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
       where: b.remaining_quantity > 0,
       where: not is_nil(p.category) and p.category != "",
       select: p.category,

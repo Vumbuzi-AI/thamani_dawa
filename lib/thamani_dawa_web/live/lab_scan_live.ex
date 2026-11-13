@@ -48,6 +48,10 @@ defmodule ThamaniDawaWeb.LabScanLive do
   defp product_name(nil), do: nil
   defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
 
+  defp activity_labels(site) do
+    Enum.map_join(site.activities, ", ", &Phoenix.Naming.humanize/1)
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/scan"}>
@@ -109,7 +113,7 @@ defmodule ThamaniDawaWeb.LabScanLive do
           <h2 class="mb-3 text-base font-semibold text-thamani-forest">Matching site</h2>
           <.list>
             <:item title="Name">{@site.name}</:item>
-            <:item title="Type">{Phoenix.Naming.humanize(@site.site_type)}</:item>
+            <:item title="Activities">{activity_labels(@site)}</:item>
           </.list>
         </section>
 

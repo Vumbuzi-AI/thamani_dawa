@@ -23,14 +23,14 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
       Accounts.invite_user(organization.id, nil, %{
         name: "New Hire",
         email: email,
-        role: :pharmacist
+        roles: [:pharmacist]
       })
 
     %{organization: organization, invited: invited, encoded_token: encoded_token}
   end
 
   describe "GET /invites/:token" do
-    test "a valid token lets the invited user set a six-character password", %{conn: conn} do
+    test "a valid token lets the invited user set a twelve-character password", %{conn: conn} do
       %{organization: organization, invited: invited, encoded_token: encoded_token} =
         invite_fixture("valid@example.com")
 
@@ -49,7 +49,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
       assert {:error, {:live_redirect, %{to: "/login"}}} =
                view
                |> form("#accept-invite-form",
-                 user: %{password: "secret", accepted_legal_terms: "true"}
+                 user: %{password: "secretpass12", accepted_legal_terms: "true"}
                )
                |> render_submit()
 
@@ -107,7 +107,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
         )
         |> render_submit()
 
-      assert html =~ "Must be at least 6 characters"
+      assert html =~ "Must be at least 8 characters"
 
       assert %{hashed_password: nil} = Accounts.get_user!(organization.id, invited.id)
     end
@@ -139,7 +139,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
         Accounts.invite_user(admin.organization_id, admin.id, %{
           name: "Session Handoff",
           email: "session-handoff@example.com",
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       authenticated_conn = log_in_user(conn, admin)
@@ -148,7 +148,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
       {:ok, login_conn} =
         view
         |> form("#accept-invite-form",
-          user: %{password: "secret", accepted_legal_terms: "true"}
+          user: %{password: "secretpass12", accepted_legal_terms: "true"}
         )
         |> render_submit()
         |> follow_redirect(authenticated_conn, ~p"/login")

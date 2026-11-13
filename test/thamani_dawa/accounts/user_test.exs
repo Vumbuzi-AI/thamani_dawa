@@ -25,16 +25,16 @@ defmodule ThamaniDawa.Accounts.UserTest do
         )
 
       refute changeset.valid?
-      assert "Must be at least 6 characters" in errors_on(changeset).password
+      assert "Must be at least 8 characters" in errors_on(changeset).password
     end
   end
 
-  test "registration_changeset/2 accepts and hashes a six-character password" do
+  test "registration_changeset/2 accepts and hashes a twelve-character password" do
     changeset =
       User.registration_changeset(%User{}, %{
         name: "Jane",
         email: "jane@example.com",
-        password: "secret"
+        password: "secretpass12"
       })
 
     assert changeset.valid?
@@ -47,7 +47,7 @@ defmodule ThamaniDawa.Accounts.UserTest do
       User.registration_changeset(%User{}, %{
         name: "  Jane Admin  ",
         email: "  jane@example.com  ",
-        password: " secret "
+        password: " secretword "
       })
 
     assert changeset.valid?
@@ -56,7 +56,7 @@ defmodule ThamaniDawa.Accounts.UserTest do
 
     assert User.valid_password?(
              %User{hashed_password: Ecto.Changeset.get_change(changeset, :hashed_password)},
-             " secret "
+             " secretword "
            )
   end
 
@@ -67,7 +67,7 @@ defmodule ThamaniDawa.Accounts.UserTest do
         %{
           name: "Jane",
           email: "jane@example.com",
-          password: "secret",
+          password: "secretpass12",
           accepted_legal_terms: true
         },
         require_legal_consent: true
