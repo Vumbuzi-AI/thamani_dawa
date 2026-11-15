@@ -322,12 +322,8 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           </:col>
           <:col :let={{_id, row}} label="Category">{row.product.category || "—"}</:col>
           <:col :let={{_id, row}} label="Brand">{row.product.brand_name || "—"}</:col>
-          <:col :let={{_id, row}} label="Manufacturer">{row.product.manufacturer || "—"}</:col>
           <:col :let={{_id, row}} label="Price">{money(row.product.price)}</:col>
           <:col :let={{_id, row}} label="Batches">{row.batch_count}</:col>
-          <:col :let={{_id, row}} label="On hand">
-            {quantity_with_unit(row.remaining, row.product)}
-          </:col>
           <:col :let={{_id, row}} label="Status">
             <.status_badge status={if row.product.is_active, do: :active, else: :inactive} />
           </:col>

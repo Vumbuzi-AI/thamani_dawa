@@ -4,10 +4,15 @@ defmodule ThamaniDawa.Gs1RegistryStub do
 
   `ThamaniDawa.Grp` posts a JSON array holding the identifier to look up and
   expects a JSON array of licence records back. This stub answers with one
-  licence for every identifier it is asked about, except for the identifiers
-  listed under the `:unknown_identifiers` key of the
-  `:thamani_dawa` application environment — those come back as an empty list,
-  which is how the registry answers for an identifier it does not know.
+  `"licenceStatus" => "ACTIVE"` licence for every identifier it is asked
+  about, except for two sentinel prefixes tests use to exercise the other
+  paths: identifiers starting with a run of zeros (`"000..."`) come back as
+  an empty list — how the registry answers for an identifier it doesn't know
+  — and identifiers starting with a run of nines (`"999..."`) come back with
+  a licence record whose `licenceStatus` is `"WITHDRAWN"`, to exercise the
+  found-but-not-active path. Also configurable via the `:gs1_unknown_identifiers`
+  application-env key for identifiers that don't fit the sentinel-prefix
+  convention.
   """
 
   @behaviour Plug
@@ -41,10 +46,29 @@ defmodule ThamaniDawa.Gs1RegistryStub do
   end
 
   defp licences_for(identifier) do
-    if unknown?(identifier) do
-      []
-    else
-      [%{"licenseeName" => "Test Licensee", "licenseeGLN" => identifier}]
+    cond do
+      unknown?(identifier) ->
+        []
+
+      inactive?(identifier) ->
+        [
+          %{
+            "licenseeName" => "Test Licensee",
+            "licenseeGLN" => identifier,
+            "licenceStatus" => "WITHDRAWN",
+            "address" => %{"addressLocality" => %{"value" => "Nairobi, Kenya"}}
+          }
+        ]
+
+      true ->
+        [
+          %{
+            "licenseeName" => "Test Licensee",
+            "licenseeGLN" => identifier,
+            "licenceStatus" => "ACTIVE",
+            "address" => %{"addressLocality" => %{"value" => "Nairobi, Kenya"}}
+          }
+        ]
     end
   end
 
@@ -54,6 +78,11 @@ defmodule ThamaniDawa.Gs1RegistryStub do
   defp unknown?(identifier) do
     String.starts_with?(identifier, "000") or identifier in unknown_identifiers()
   end
+
+  # Identifiers starting with a run of nines stand for identifiers the
+  # registry knows about but whose licence is no longer active; tests use
+  # them to exercise the found-but-inactive path.
+  defp inactive?(identifier), do: String.starts_with?(identifier, "999")
 
   defp unknown_identifiers do
     Application.get_env(:thamani_dawa, :gs1_unknown_identifiers, [])

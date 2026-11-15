@@ -9,9 +9,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
 
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Batches
   alias ThamaniDawa.Distributor
   alias ThamaniDawa.Distributor.{Billing, SerialUsage}
   alias ThamaniDawa.Distributor.Reports
+  alias ThamaniDawa.Products
 
   on_mount {ThamaniDawaWeb.DistributorAccess, :require_serialisation_plan}
 
@@ -27,12 +29,19 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
      |> assign(:approval_confirming?, false)
      |> assign(:rejecting?, false)
      |> assign(:reject_form, to_form(%{"reason" => ""}, as: :reject))
+     |> assign(:products, Products.list_products(organization_id))
+     |> assign(
+       :line_item_form,
+       to_form(%{"product_id" => "", "quantity" => ""}, as: :line_item)
+     )
+     |> assign(:editing_line_items?, true)
      |> load(id)}
   end
 
   defp load(socket, id) do
-    shipment = Distributor.get_shipment!(socket.assigns.current_scope.organization_id, id)
-    usage = Billing.active_usage(socket.assigns.current_scope.organization_id)
+    organization_id = socket.assigns.current_scope.organization_id
+    shipment = Distributor.get_shipment!(organization_id, id)
+    usage = Billing.active_usage(organization_id)
     shipper_count = length(shipment.shippers)
     remaining_allowance = SerialUsage.serials_left(usage)
 
@@ -50,6 +59,26 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
       :insufficient_allowance?,
       is_integer(remaining_allowance) and shipper_count > remaining_allowance
     )
+    |> assign(
+      :reserved_batches,
+      Batches.list_reserved_batches_for_shipment(organization_id, shipment.id)
+    )
+    |> assign(:available_by_product_id, available_by_product_id(organization_id, shipment))
+  end
+
+  defp available_by_product_id(_organization_id, %{origin_site_id: nil}), do: %{}
+
+  defp available_by_product_id(organization_id, shipment) do
+    Map.new(shipment.line_items, fn line ->
+      {line.product_id,
+       Batches.available_to_pick(organization_id, shipment.origin_site_id, line.product_id)}
+    end)
+  end
+
+  defp insufficient_stock?(line_items, available_by_product_id) do
+    Enum.any?(line_items, fn line ->
+      Map.get(available_by_product_id, line.product_id, 0) < line.quantity
+    end)
   end
 
   def handle_info({:distributor_shipment, _event, shipment_id}, socket) do
@@ -142,6 +171,81 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
     end
   end
 
+  def handle_event("validate_line_item", %{"line_item" => attrs}, socket) do
+    {:noreply, assign(socket, :line_item_form, to_form(attrs, as: :line_item))}
+  end
+
+  def handle_event("add_line_item", %{"line_item" => attrs}, socket) do
+    %{current_scope: scope, shipment: shipment} = socket.assigns
+
+    case Distributor.add_line_item(scope.organization_id, shipment.id, attrs) do
+      {:ok, _line_item} ->
+        {:noreply,
+         socket
+         |> assign(
+           :line_item_form,
+           to_form(%{"product_id" => "", "quantity" => ""}, as: :line_item)
+         )
+         |> load(shipment.id)}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, :line_item_form, to_form(changeset, as: :line_item))}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, error_message(reason))}
+    end
+  end
+
+  def handle_event("remove_line_item", %{"id" => id}, socket) do
+    %{current_scope: scope, shipment: shipment} = socket.assigns
+
+    case Distributor.remove_line_item(scope.organization_id, id) do
+      {:ok, _} -> {:noreply, load(socket, shipment.id)}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, error_message(reason))}
+    end
+  end
+
+  def handle_event("generate_pick_list", _params, socket) do
+    %{current_scope: scope, shipment: shipment} = socket.assigns
+
+    case Distributor.generate_pick_list(scope.organization_id, shipment.id) do
+      {:ok, _shipment} ->
+        socket = load(socket, shipment.id)
+
+        if socket.assigns.reserved_batches == [] do
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "No available stock found at this site for these products — nothing was reserved."
+           )}
+        else
+          {:noreply,
+           socket
+           |> put_flash(:info, "Pick list generated.")
+           |> assign(:editing_line_items?, false)}
+        end
+
+      {:error, _reason} ->
+        {:noreply,
+         put_flash(socket, :error, "Couldn't generate a pick list. Check stock availability.")}
+    end
+  end
+
+  def handle_event("edit_line_items", _params, socket) do
+    {:noreply, assign(socket, :editing_line_items?, true)}
+  end
+
+  def handle_event("confirm_pick_list", _params, socket) do
+    %{current_scope: scope, shipment: shipment} = socket.assigns
+    :ok = Distributor.confirm_pick_list(scope.organization_id, shipment.id)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Pick confirmed — stock staged for dispatch.")
+     |> load(shipment.id)}
+  end
+
   def handle_async(:approve_shipment, result, socket) do
     socket = assign(socket, :approving?, false)
     shipment_id = socket.assigns.shipment.id
@@ -162,7 +266,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
         {:noreply,
          socket
          |> assign(:problems, problems)
-         |> put_flash(:error, "This shipment can't be approved yet — see the problems below.")
+         |> put_flash(:error, "This shipment can't be approved yet. See the problems below.")
          |> load(shipment_id)}
 
       {:ok, {:error, reason}} ->
@@ -175,7 +279,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
 
   @doc false
   def error_message(:missing_gs1_company_prefix),
-    do: "Set your GS1 Company Prefix in Settings before approving — it's needed to issue SSCCs."
+    do: "Set your GS1 Company Prefix in Settings before approving. It's needed to issue SSCCs."
 
   def error_message({:billing, :no_active_plan}),
     do:
@@ -219,7 +323,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
   defp event_label("selected"), do: "Claimed on the mobile app"
   defp event_label("released"), do: "Released on the mobile app"
   defp event_label("submitted"), do: "Submitted for approval"
-  defp event_label("approved"), do: "Approved — SSCCs issued"
+  defp event_label("approved"), do: "Approved · SSCCs issued"
   defp event_label("rejected"), do: "Rejected"
   defp event_label("reopened"), do: "Reopened as a draft"
   defp event_label("item_removed"), do: "Unit removed"
@@ -391,6 +495,213 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
             <span><span class="font-semibold">{warning.count}</span> {warning.message}</span>
           </div>
         </div>
+
+        <section :if={@shipment.status == "draft"} class="mt-6" id="distributor-pick-list">
+          <div class="rounded-2xl ff-surface-card">
+            <header class="flex flex-wrap items-start justify-between gap-3 border-b border-thamani-stone px-5 py-4 sm:px-6">
+              <div>
+                <h2 class="text-base font-semibold text-thamani-forest">Products to pick</h2>
+                <p class="mt-1 text-xs leading-5 text-thamani-pewter">
+                  Add the products and quantities required for this shipment.
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="inline-flex min-h-7 items-center rounded-full bg-thamani-canvas px-3 text-xs font-semibold text-thamani-forest">
+                  {length(@shipment.line_items)} {if length(@shipment.line_items) == 1,
+                    do: "line",
+                    else: "lines"}
+                </span>
+                <.button
+                  :if={not @editing_line_items? and @shipment.line_items != []}
+                  id="edit-shipment-line-items"
+                  variant="ghost"
+                  phx-click="edit_line_items"
+                >
+                  <.icon name="hero-pencil-square" class="size-4" /> Edit
+                </.button>
+              </div>
+            </header>
+
+            <div
+              :if={not @editing_line_items? and @shipment.line_items != []}
+              class="overflow-x-auto"
+            >
+              <table class="w-full text-left text-sm">
+                <thead class="bg-thamani-canvas/70 text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+                  <tr>
+                    <th class="px-5 py-3 sm:px-6">Product</th>
+                    <th class="w-40 px-5 py-3">Quantity</th>
+                    <th class="w-40 px-5 py-3">Available</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-thamani-stone">
+                  <tr :for={line <- @shipment.line_items} id={"shipment-line-item-#{line.id}"}>
+                    <td class="px-5 py-4 font-medium text-thamani-forest sm:px-6">
+                      {line.product && (line.product.generic_name || line.product.brand_name)}
+                    </td>
+                    <td class="px-5 py-4 tabular-nums text-thamani-ink">{line.quantity}</td>
+                    <td class="px-5 py-4 tabular-nums">
+                      <span class={
+                        if Map.get(@available_by_product_id, line.product_id, 0) < line.quantity,
+                          do: "font-semibold text-red-600",
+                          else: "text-thamani-pewter"
+                      }>
+                        {Map.get(@available_by_product_id, line.product_id, 0)}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div :if={@editing_line_items?}>
+              <div :if={@shipment.line_items == []} class="px-5 py-8 text-center sm:px-6">
+                <span class="mx-auto flex size-11 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest">
+                  <.icon name="hero-clipboard-document-list" class="size-5" />
+                </span>
+                <p class="mt-3 text-sm font-semibold text-thamani-forest">No products added yet</p>
+                <p class="mt-1 text-xs text-thamani-pewter">
+                  Add the first product below to start building the pick list.
+                </p>
+              </div>
+
+              <div :if={@shipment.line_items != []} class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                  <thead class="bg-thamani-canvas/70 text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+                    <tr>
+                      <th class="px-5 py-3 sm:px-6">Product</th>
+                      <th class="w-40 px-5 py-3">Quantity</th>
+                      <th class="w-40 px-5 py-3">Available</th>
+                      <th class="w-20 px-5 py-3 text-right"><span class="sr-only">Actions</span></th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-thamani-stone">
+                    <tr :for={line <- @shipment.line_items} id={"shipment-line-item-#{line.id}"}>
+                      <td class="px-5 py-4 font-medium text-thamani-forest sm:px-6">
+                        {line.product && (line.product.generic_name || line.product.brand_name)}
+                      </td>
+                      <td class="px-5 py-4 tabular-nums text-thamani-ink">{line.quantity}</td>
+                      <td class="px-5 py-4 tabular-nums">
+                        <span class={
+                          if Map.get(@available_by_product_id, line.product_id, 0) < line.quantity,
+                            do: "font-semibold text-red-600",
+                            else: "text-thamani-pewter"
+                        }>
+                          {Map.get(@available_by_product_id, line.product_id, 0)}
+                        </span>
+                      </td>
+                      <td class="px-5 py-4 text-right">
+                        <button
+                          id={"remove-shipment-line-item-#{line.id}"}
+                          type="button"
+                          phx-click="remove_line_item"
+                          phx-value-id={line.id}
+                          aria-label={"Remove #{line.product && (line.product.generic_name || line.product.brand_name)}"}
+                          class="inline-flex size-9 items-center justify-center rounded-lg text-thamani-error transition-colors hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                        >
+                          <.icon name="hero-trash" class="size-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="border-t border-thamani-stone bg-thamani-canvas/40 px-5 py-5 sm:px-6">
+                <h3 class="text-sm font-semibold text-thamani-forest">Add a product</h3>
+                <.form
+                  for={@line_item_form}
+                  id="distributor-add-line-item-form"
+                  phx-change="validate_line_item"
+                  phx-submit="add_line_item"
+                  class="mt-3 grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_10rem_auto]"
+                >
+                  <.input
+                    field={@line_item_form[:product_id]}
+                    type="select"
+                    label="Product"
+                    prompt="Select product"
+                    options={Enum.map(@products, &{&1.generic_name || &1.brand_name, &1.id})}
+                  />
+                  <.input
+                    field={@line_item_form[:quantity]}
+                    type="number"
+                    label="Quantity"
+                    min="1"
+                    placeholder="0"
+                  />
+                  <.button id="add-shipment-line-item" variant="ghost" class="min-h-12 px-5">
+                    <.icon name="hero-plus" class="size-4" /> Add product
+                  </.button>
+                </.form>
+              </div>
+            </div>
+
+            <div
+              :if={@shipment.line_items != []}
+              class="flex flex-col gap-3 border-t border-thamani-stone px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+            >
+              <p
+                :if={insufficient_stock?(@shipment.line_items, @available_by_product_id)}
+                class="inline-flex items-center gap-1.5 text-xs font-semibold leading-5 text-red-600"
+              >
+                <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" />
+                Not enough stock at this site for one or more products — picking will reserve less than requested.
+              </p>
+              <p
+                :if={not insufficient_stock?(@shipment.line_items, @available_by_product_id)}
+                class="text-xs leading-5 text-thamani-pewter"
+              >
+                Reserve available batches using first-expiry-first-out allocation.
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <.button
+                  id="generate-shipment-pick-list"
+                  variant="primary"
+                  phx-click="generate_pick_list"
+                >
+                  <.icon name="hero-clipboard-document-check" class="size-4" /> Generate pick list
+                </.button>
+                <.button
+                  :if={Enum.any?(@reserved_batches, &(&1.zone == :picking))}
+                  id="confirm-shipment-pick-list"
+                  variant="primary"
+                  phx-click="confirm_pick_list"
+                >
+                  <.icon name="hero-check" class="size-4" /> Confirm pick
+                </.button>
+              </div>
+            </div>
+
+            <div :if={@reserved_batches != []} class="border-t border-thamani-stone">
+              <div class="px-5 py-3 sm:px-6">
+                <h3 class="text-sm font-semibold text-thamani-forest">Reserved stock</h3>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                  <thead class="bg-thamani-canvas text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+                    <tr>
+                      <th class="px-5 py-3 sm:px-6">Product</th>
+                      <th class="px-5 py-3">Batch</th>
+                      <th class="px-5 py-3">Qty</th>
+                      <th class="px-5 py-3">Zone</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-thamani-stone">
+                    <tr :for={batch <- @reserved_batches}>
+                      <td class="px-5 py-3 sm:px-6">
+                        {batch.product && (batch.product.generic_name || batch.product.brand_name)}
+                      </td>
+                      <td class="px-5 py-3 font-mono text-xs">{batch.batch_no}</td>
+                      <td class="px-5 py-3 tabular-nums">{batch.remaining_quantity}</td>
+                      <td class="px-5 py-3 capitalize">{batch.zone}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section class="mt-6 space-y-4" id="distributor-shippers">
           <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">Shippers</h2>
@@ -574,12 +885,12 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
               <%= if label.mixed do %>
                 <div class="col-span-2">
                   <p class="font-semibold uppercase">Contents</p>
-                  <p>Mixed — {label.unit_count} unit(s)</p>
+                  <p>Mixed · {label.unit_count} unit(s)</p>
                 </div>
               <% else %>
                 <div class="col-span-2">
                   <p class="font-semibold uppercase">Contents</p>
-                  <p>{label.product_name || "Product"} — {label.unit_count} unit(s)</p>
+                  <p>{label.product_name || "Product"} · {label.unit_count} unit(s)</p>
                   <p class="font-mono">(02) {label.gtin}</p>
                 </div>
                 <div>
@@ -623,7 +934,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
             field={@reject_form[:reason]}
             type="textarea"
             label="Reason"
-            placeholder="e.g. Shipper 2 contains expired units — repack without them."
+            placeholder="e.g. Shipper 2 contains expired units, repack without them."
             required
           />
           <.button id="confirm-reject-shipment" variant="destructive" class="mt-2 w-full">

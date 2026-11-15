@@ -37,7 +37,7 @@ defmodule ThamaniDawa.Epcis.SubmissionWorker do
   end
 
   defp submit(event, rest) do
-    case Client.submit(event.payload) do
+    case Client.submit(event.payload, event.participant_tier) do
       {:accepted, status, body} ->
         Outbox.mark_accepted(event, status, body)
         drain(rest)

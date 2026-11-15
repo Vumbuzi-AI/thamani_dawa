@@ -4,6 +4,20 @@ defmodule ThamaniDawa.Batches.Batch do
 
   alias ThamaniDawa.GS1.Sscc
 
+  @zones [:receiving, :storage, :quarantine, :picking, :staging, :dispatch]
+  @statuses [
+    :active,
+    :quarantined,
+    :damaged,
+    :expired,
+    :recalled,
+    :stolen,
+    :inactive,
+    :non_sellable_other,
+    :destroyed,
+    :returned
+  ]
+
   schema "batches" do
     field :gtin, :string
     field :batch_no, :string
@@ -16,6 +30,9 @@ defmodule ThamaniDawa.Batches.Batch do
     field :remaining_quantity, :integer
     field :cost_per_unit, :decimal
     field :received_at, :utc_datetime
+    field :zone, Ecto.Enum, values: @zones, default: :receiving
+    field :bin, :string
+    field :status, Ecto.Enum, values: @statuses, default: :active
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
     belongs_to :product, ThamaniDawa.Products.Product
@@ -25,12 +42,16 @@ defmodule ThamaniDawa.Batches.Batch do
     belongs_to :approver, ThamaniDawa.Accounts.User, foreign_key: :approver_id
     belongs_to :source_batch, __MODULE__
     belongs_to :requisition, ThamaniDawa.Requisitions.Requisition
+    belongs_to :reserved_for_shipment, ThamaniDawa.Distributor.Shipment
 
     has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage
     has_many :prescription_batch_dispenses, ThamaniDawa.Prescriptions.BatchDispense
 
     timestamps(type: :utc_datetime)
   end
+
+  def zones, do: @zones
+  def statuses, do: @statuses
 
   @doc """
   Changeset for dispatching a batch to a site. Approval fields are not set
@@ -54,7 +75,8 @@ defmodule ThamaniDawa.Batches.Batch do
       :cost_per_unit,
       :supplier_id,
       :source_batch_id,
-      :goods_receipt_id
+      :goods_receipt_id,
+      :status
     ])
     |> validate_required([
       :product_id,
@@ -101,7 +123,8 @@ defmodule ThamaniDawa.Batches.Batch do
       :remaining_quantity,
       :cost_per_unit,
       :supplier_id,
-      :goods_receipt_id
+      :goods_receipt_id,
+      :status
     ])
     |> validate_required([
       :product_id,
@@ -155,7 +178,7 @@ defmodule ThamaniDawa.Batches.Batch do
 
           Sscc.mod10_check_digit(String.slice(digits, 0..-2//1)) !=
               String.to_integer(String.slice(digits, -1..-1//1)) ->
-            add_error(changeset, :sscc, "check digit does not match — rescan the case label")
+            add_error(changeset, :sscc, "check digit does not match, rescan the case label")
 
           true ->
             put_change(changeset, :sscc, digits)
@@ -195,4 +218,55 @@ defmodule ThamaniDawa.Batches.Batch do
       quantity -> put_change(changeset, :remaining_quantity, quantity)
     end
   end
+
+  @doc """
+  Changeset for an intra-warehouse location move (putaway, bin-to-bin
+  relocation) — zone + bin only, never EPCIS-reportable
+  (docs/PPB_TNT_INTEGRATION.md: "do not report intra-warehouse OBSERVE
+  movements").
+  """
+  def location_changeset(batch, attrs) do
+    batch
+    |> cast(attrs, [:zone, :bin])
+    |> validate_required([:zone])
+  end
+
+  @doc """
+  Changeset for a batch status transition (damaged/expired/stolen/lost/
+  exported/recalled/destroyed — docs/PPB_TNT_INTEGRATION.md §4.3/§4.4).
+  Enforces the spec's own transition rules rather than trusting the caller:
+  `:damaged` may start from `:active` or `:quarantined`; `:expired`,
+  `:stolen`, `:inactive`, and `:non_sellable_other` only from `:active`;
+  `:recalled` overrides any state except `:destroyed`; `:destroyed` only
+  from `:damaged`, `:expired`, or `:recalled`.
+  """
+  def status_changeset(batch, new_status) when new_status in @statuses do
+    batch
+    |> change(status: new_status)
+    |> validate_status_transition()
+  end
+
+  defp validate_status_transition(changeset) do
+    current = changeset.data.status
+
+    if valid_status_transition?(current, get_change(changeset, :status)) do
+      changeset
+    else
+      add_error(changeset, :status, "cannot move from #{current} to this status")
+    end
+  end
+
+  defp valid_status_transition?(_current, nil), do: true
+  defp valid_status_transition?(current, :damaged), do: current in [:active, :quarantined]
+
+  defp valid_status_transition?(current, status)
+       when status in [:expired, :stolen, :inactive, :non_sellable_other],
+       do: current == :active
+
+  defp valid_status_transition?(current, :recalled), do: current != :destroyed
+
+  defp valid_status_transition?(current, :destroyed),
+    do: current in [:damaged, :expired, :recalled]
+
+  defp valid_status_transition?(_current, _status), do: false
 end

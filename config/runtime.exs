@@ -62,7 +62,12 @@ config :thamani_dawa, ThamaniDawa.Epcis.Client,
   base_url: System.get_env("PPB_TNT_BASE_URL"),
   capture_path: System.get_env("PPB_TNT_CAPTURE_PATH", "/epcis/v2/capture"),
   api_key: System.get_env("PPB_TNT_API_KEY"),
-  enabled: System.get_env("PPB_TNT_ENABLED", "false") == "true"
+  distributor_capture_path: System.get_env("PPB_TNT_DISTRIBUTOR_CAPTURE_PATH"),
+  distributor_api_key: System.get_env("PPB_TNT_DISTRIBUTOR_API_KEY"),
+  # Always disabled under `mix test`, regardless of a developer's local
+  # `.env` — the test suite must stay deterministic and never depend on
+  # live credentials meant for manual `mix run` verification.
+  enabled: config_env() != :test and System.get_env("PPB_TNT_ENABLED", "false") == "true"
 
 company_prefix = System.get_env("GS1_COMPANY_PREFIX")
 

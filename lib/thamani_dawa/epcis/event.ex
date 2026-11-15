@@ -37,7 +37,7 @@ defmodule ThamaniDawa.Epcis.Event do
         "epcList" => epcs,
         "action" => "OBSERVE",
         "bizStep" => "receiving",
-        "disposition" => "active",
+        "disposition" => Map.get(args, :disposition, "active"),
         "readPoint" => %{"id" => biz_location},
         "bizLocation" => %{"id" => biz_location},
         "bizTransactionList" => [
@@ -96,7 +96,7 @@ defmodule ThamaniDawa.Epcis.Event do
          "epcList" => epcs,
          "action" => "OBSERVE",
          "bizStep" => "shipping",
-         "disposition" => "in_transit",
+         "disposition" => Map.get(args, :disposition, "in_transit"),
          "readPoint" => %{"id" => biz_location},
          "bizLocation" => %{"id" => biz_location},
          "bizTransactionList" => [
@@ -143,6 +143,49 @@ defmodule ThamaniDawa.Epcis.Event do
       {:ok, event}
     end
   end
+
+  @doc """
+  Batch status-transition events (docs/PPB_TNT_INTEGRATION.md §4.3/§4.4):
+  damaged, expired, stolen, lost, exported, recalled, destroyed. Always
+  lot-level (`quantityList`) — this platform does not track per-unit
+  serials at the distributor tier. `reference`/`reference_type` are
+  optional (omitted for expiry, which needs no incident/recall reference)
+  and become a `bizTransactionList` entry when present.
+  """
+  def status_change(args) do
+    with {:ok, biz_location} <- sgln(args, :biz_location_gln),
+         {:ok, quantity_list} <- quantity_elements(args),
+         :ok <- require_content([], quantity_list) do
+      event =
+        %{
+          "type" => "ObjectEvent",
+          "eventID" => event_id(args),
+          "eventTime" => event_time(args),
+          "eventTimeZoneOffset" => @time_zone_offset,
+          "quantityList" => quantity_list,
+          "action" => "OBSERVE",
+          "bizStep" => args.biz_step,
+          "disposition" => args.disposition,
+          "readPoint" => %{"id" => biz_location},
+          "bizLocation" => %{"id" => biz_location}
+        }
+        |> maybe_put_biz_transaction(args)
+
+      {:ok, event}
+    end
+  end
+
+  defp maybe_put_biz_transaction(
+         event,
+         %{reference: reference, reference_type: reference_type} = args
+       )
+       when is_binary(reference) and reference != "" and is_binary(reference_type) do
+    Map.put(event, "bizTransactionList", [
+      biz_transaction(reference_type, args.org_prefix, reference)
+    ])
+  end
+
+  defp maybe_put_biz_transaction(event, _args), do: event
 
   defp event_id(%{event_id: uuid}), do: "urn:uuid:" <> uuid
 

@@ -27,27 +27,42 @@ defmodule ThamaniDawa.Epcis do
   @facility "facility"
 
   @doc """
-  Records D1 Receiving events for a freshly posted goods receipt — one event
-  per (site, supplier) group of posted lines. Lines received into org-level
-  stock (no site) report against the organization's own GLN (`organizations.gln`)
-  as `bizLocation`/`destinationList`, since there is no site to resolve one
-  from yet. A supplier missing a GLN, or no inbound SSCC scanned (the Hub
-  spec has no class-level fallback for Receiving), still produce `blocked`
-  events.
+  Records D1 Receiving events for a freshly posted goods receipt. A
+  distributor-portal receipt (`origin_gln` set — one live-resolved party for
+  the whole receipt, see `ThamaniDawa.GoodsReceipts.receive_delivery/5`)
+  produces one event per site among its posted lines, using the receipt's
+  own `origin_gln`/`origin_company` as the source party. Every other
+  receipt (pharmacy/lab org portal, still per-line `Suppliers.Supplier`)
+  groups by `(site, supplier)` exactly as before. Lines received into
+  org-level stock (no site) report against the organization's own GLN
+  (`organizations.gln`) as `bizLocation`/`destinationList`, since there is
+  no site to resolve one from yet. A supplier missing a GLN, or no inbound
+  SSCC scanned (the Hub spec has no class-level fallback for Receiving),
+  still produce `blocked` events.
   """
   def record_goods_receipt(%GoodsReceipt{} = receipt) do
     receipt = Repo.preload(receipt, items: [:site, :supplier])
 
     case org_prefix(receipt.organization_id) do
-      {:ok, prefix} ->
-        receipt.items
-        |> Enum.group_by(fn item -> {item.site_id, item.supplier_id} end)
-        |> Enum.sort_by(fn {key, _items} -> key end)
-        |> Enum.map(fn {_key, items} -> enqueue_receiving(receipt, prefix, items) end)
-
-      {:error, reason} ->
-        [block_event(receipt.organization_id, "receiving", receipt, reason)]
+      {:ok, prefix} -> group_receipt_items(receipt, prefix)
+      {:error, reason} -> [block_event(receipt.organization_id, "receiving", receipt, reason)]
     end
+  end
+
+  defp group_receipt_items(%GoodsReceipt{origin_gln: nil} = receipt, prefix) do
+    receipt.items
+    |> Enum.group_by(fn item -> {item.site_id, item.supplier_id} end)
+    |> Enum.sort_by(fn {key, _items} -> key end)
+    |> Enum.map(fn {_key, items} -> enqueue_receiving(receipt, prefix, items) end)
+  end
+
+  defp group_receipt_items(%GoodsReceipt{} = receipt, prefix) do
+    receipt.items
+    |> Enum.group_by(& &1.site_id)
+    |> Enum.sort_by(fn {site_id, _items} -> site_id end)
+    |> Enum.map(fn {_site_id, items} ->
+      enqueue_receiving(receipt, prefix, items, receipt.origin_gln)
+    end)
   end
 
   @doc """
@@ -202,6 +217,98 @@ defmodule ThamaniDawa.Epcis do
   end
 
   @doc """
+  Records a batch status-transition event (§4.3/§4.4) — damaged, expired,
+  stolen, lost, exported, recalled, or destroyed. `reference`/
+  `reference_type` are the incident/recall/destruction-certificate
+  reference (`nil` for expiry, which needs none). The biz location is the
+  batch's site GLN, or the organization's own GLN for org-level stock with
+  no site yet.
+  """
+  def record_batch_status(
+        %ThamaniDawa.Batches.Batch{} = batch,
+        event_type,
+        biz_step,
+        disposition,
+        reference,
+        reference_type
+      ) do
+    site = batch.site_id && Repo.get(Site, batch.site_id)
+    biz_location_gln = location_gln(site, batch.organization_id)
+
+    case org_prefix(batch.organization_id) do
+      {:ok, prefix} ->
+        build_and_enqueue_status(
+          batch,
+          prefix,
+          biz_location_gln,
+          event_type,
+          biz_step,
+          disposition,
+          reference,
+          reference_type
+        )
+
+      {:error, reason} ->
+        block_event(batch.organization_id, event_type, batch, reason)
+    end
+  end
+
+  defp build_and_enqueue_status(
+         batch,
+         _prefix,
+         biz_location_gln,
+         event_type,
+         _biz_step,
+         _disposition,
+         _reference,
+         _reference_type
+       )
+       when biz_location_gln in [nil, ""] do
+    block_event(batch.organization_id, event_type, batch, {:biz_location_gln, :missing})
+  end
+
+  defp build_and_enqueue_status(
+         batch,
+         prefix,
+         biz_location_gln,
+         event_type,
+         biz_step,
+         disposition,
+         reference,
+         reference_type
+       ) do
+    args = %{
+      event_id: Ecto.UUID.generate(),
+      event_time: now(),
+      org_prefix: prefix,
+      biz_location_gln: biz_location_gln,
+      biz_step: biz_step,
+      disposition: disposition,
+      reference: reference,
+      reference_type: reference_type,
+      quantities: [
+        %{gtin: batch.gtin, lot: batch.batch_no, quantity: batch.remaining_quantity, uom: "EA"}
+      ]
+    }
+
+    case Event.status_change(args) do
+      {:ok, payload} ->
+        Outbox.enqueue(%{
+          organization_id: batch.organization_id,
+          event_type: event_type,
+          participant_tier: @distributor,
+          payload: payload,
+          occurred_at: args.event_time,
+          source_type: "batch",
+          source_id: batch.id
+        })
+
+      {:error, reason} ->
+        block_event(batch.organization_id, event_type, batch, reason)
+    end
+  end
+
+  @doc """
   Voids or corrects an already-stored EPCIS event (docs/PPB_TNT_INTEGRATION.md
   §7): clones the stored payload, injects an `errorDeclaration`, and enqueues
   a fresh outbox row reusing the original `event_id` — the only legal
@@ -296,36 +403,54 @@ defmodule ThamaniDawa.Epcis do
   defp enqueue_receiving(receipt, prefix, [first | _rest] = items) do
     case supplier_check(first) do
       :ok ->
-        args = %{
-          event_id: Ecto.UUID.generate(),
-          event_time: receipt.received_at,
-          org_prefix: prefix,
-          biz_location_gln: location_gln(first.site, receipt.organization_id),
-          source_party_gln: first.supplier && first.supplier.gln,
-          destination_party_gln: location_gln(first.site, receipt.organization_id),
-          grn_number: receipt.number,
-          ssccs:
-            items
-            |> Enum.map(& &1.sscc)
-            |> Enum.reject(&is_nil/1)
-            |> Enum.uniq()
-        }
+        build_and_enqueue_receiving(
+          receipt,
+          prefix,
+          first.site,
+          items,
+          first.supplier && first.supplier.gln
+        )
 
-        case Event.receiving(args) do
-          {:ok, payload} ->
-            Outbox.enqueue(%{
-              organization_id: receipt.organization_id,
-              event_type: "receiving",
-              participant_tier: @distributor,
-              payload: payload,
-              occurred_at: receipt.received_at,
-              source_type: "goods_receipt",
-              source_id: receipt.id
-            })
+      {:error, reason} ->
+        block_event(receipt.organization_id, "receiving", receipt, reason)
+    end
+  end
 
-          {:error, reason} ->
-            block_event(receipt.organization_id, "receiving", receipt, reason)
-        end
+  # Distributor-portal path: the source party's GLN was already resolved
+  # and verified at receive time (`Distributor.GlnLookup.resolve_party/1`),
+  # so there's no per-line supplier to check here.
+  defp enqueue_receiving(receipt, prefix, [first | _rest] = items, origin_gln) do
+    build_and_enqueue_receiving(receipt, prefix, first.site, items, origin_gln)
+  end
+
+  defp build_and_enqueue_receiving(receipt, prefix, site, items, source_party_gln) do
+    args = %{
+      event_id: Ecto.UUID.generate(),
+      event_time: receipt.received_at,
+      org_prefix: prefix,
+      biz_location_gln: location_gln(site, receipt.organization_id),
+      source_party_gln: source_party_gln,
+      destination_party_gln: location_gln(site, receipt.organization_id),
+      disposition: if(receipt.is_return, do: "returned", else: "active"),
+      grn_number: receipt.number,
+      ssccs:
+        items
+        |> Enum.map(& &1.sscc)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.uniq()
+    }
+
+    case Event.receiving(args) do
+      {:ok, payload} ->
+        Outbox.enqueue(%{
+          organization_id: receipt.organization_id,
+          event_type: "receiving",
+          participant_tier: @distributor,
+          payload: payload,
+          occurred_at: receipt.received_at,
+          source_type: "goods_receipt",
+          source_id: receipt.id
+        })
 
       {:error, reason} ->
         block_event(receipt.organization_id, "receiving", receipt, reason)
@@ -379,6 +504,7 @@ defmodule ThamaniDawa.Epcis do
       biz_location_gln: shipment.origin_gln,
       destination_gln: shipment.destination_gln,
       order_number: shipment.order_number,
+      disposition: if(shipment.is_return, do: "returned", else: "in_transit"),
       ssccs: shipment.shippers |> Enum.map(& &1.sscc) |> Enum.reject(&is_nil/1)
     }
 
@@ -458,10 +584,10 @@ defmodule ThamaniDawa.Epcis do
     do: "Supplier has no GLN on record."
 
   defp blocked_reason(:no_supplier),
-    do: "No supplier recorded for this receipt — attach a supplier to report this event."
+    do: "No supplier recorded for this receipt. Attach a supplier to report this event."
 
   defp blocked_reason(:empty_event),
-    do: "No inbound SSCC captured — Receiving requires at least one scanned case/pallet SSCC."
+    do: "No inbound SSCC captured. Receiving requires at least one scanned case/pallet SSCC."
 
   defp blocked_reason({:destination_gln, :missing}),
     do: "Destination customer has no GLN on record."

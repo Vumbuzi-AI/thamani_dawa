@@ -8,10 +8,12 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Distributor
+  alias ThamaniDawaWeb.SiteScoping
 
   on_mount {ThamaniDawaWeb.DistributorAccess, :require_serialisation_plan}
 
   @tabs [
+    {"", "All"},
     {"submitted", "Awaiting review"},
     {"draft", "Drafts"},
     {"approved", "Approved"},
@@ -51,17 +53,23 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
   end
 
   def handle_event("apply_filters", %{"filters" => filters}, socket) do
-    changes = Map.take(filters, ["mobile_user_id", "date_from", "date_to"])
+    changes = Map.take(filters, ["status", "mobile_user_id", "date_from", "date_to"])
     {:noreply, push_patch(socket, to: filter_path(socket, changes))}
   end
 
   def handle_event("clear_filters", _params, socket) do
-    changes = %{"mobile_user_id" => "", "date_from" => "", "date_to" => ""}
+    changes = %{
+      "status" => "",
+      "mobile_user_id" => "",
+      "date_from" => "",
+      "date_to" => ""
+    }
+
     {:noreply, push_patch(socket, to: filter_path(socket, changes))}
   end
 
   def handle_event("clear_filter", %{"filter" => filter}, socket)
-      when filter in ["mobile_user_id", "date_from", "date_to"] do
+      when filter in ["status", "mobile_user_id", "date_from", "date_to"] do
     {:noreply, push_patch(socket, to: filter_path(socket, %{filter => ""}))}
   end
 
@@ -78,6 +86,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
         status: filters["status"],
         search: filters["search"],
         mobile_user_id: parse_id(filters["mobile_user_id"]),
+        origin_site_id: SiteScoping.default_site_id(socket.assigns.current_scope),
         date_from: parse_date(filters["date_from"]),
         date_to: parse_date(filters["date_to"]),
         page: socket.assigns.page
@@ -85,7 +94,6 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
 
     socket
     |> assign(:page_info, Map.delete(result, :entries))
-    |> assign(:status_counts, Distributor.status_counts(organization_id))
     |> stream(:shipments, result.entries, reset: true)
   end
 
@@ -93,16 +101,6 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
     query =
       socket.assigns.filters
       |> Map.merge(changes)
-      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
-      |> Map.new()
-
-    ~p"/distributor/shipments?#{query}"
-  end
-
-  defp tab_path(filters, status) do
-    query =
-      filters
-      |> Map.put("status", status)
       |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
       |> Map.new()
 
@@ -121,7 +119,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
   defp valid_status(status) when status in ["draft", "submitted", "approved", "rejected"],
     do: status
 
-  defp valid_status(_status), do: "submitted"
+  defp valid_status(_status), do: ""
 
   defp page_number(params) do
     case Integer.parse(params["page"] || "1") do
@@ -145,7 +143,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
   end
 
   defp active_filter_count(filters),
-    do: Enum.count(["mobile_user_id", "date_from", "date_to"], &(filters[&1] not in [nil, ""]))
+    do:
+      Enum.count(
+        ["status", "mobile_user_id", "date_from", "date_to"],
+        &(filters[&1] not in [nil, ""])
+      )
 
   defp mobile_user_name(mobile_users, id) do
     case Enum.find(mobile_users, &(Integer.to_string(&1.id) == id)) do
@@ -199,6 +201,15 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
               apply_event="apply_filters"
               active_count={active_filter_count(@filters)}
             >
+              <:group label="Status">
+                <.input
+                  type="select"
+                  id="filter-status"
+                  name="filters[status]"
+                  value={@filters["status"]}
+                  options={Enum.map(@tabs, fn {value, label} -> {label, value} end)}
+                />
+              </:group>
               <:group label="Mobile user">
                 <.input
                   type="select"
@@ -209,6 +220,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
                   options={Enum.map(@mobile_users, &{&1.name, &1.id})}
                 />
               </:group>
+              <:chip
+                :if={@filters["status"] != ""}
+                label={"Status: #{Phoenix.Naming.humanize(@filters["status"])}"}
+                clear={JS.push("clear_filter", value: %{filter: "status"})}
+              />
               <:group label="Created between">
                 <div class="grid grid-cols-2 gap-2">
                   <.input
@@ -244,37 +260,6 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
           </div>
         </:toolbar>
       </.header>
-
-      <nav
-        id="distributor-shipment-tabs"
-        class="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-thamani-stone bg-white p-1"
-        aria-label="Shipment status"
-      >
-        <.link
-          :for={{status, label} <- @tabs}
-          id={"shipment-tab-#{status}"}
-          patch={tab_path(@filters, status)}
-          class={[
-            "flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
-            if(@filters["status"] == status,
-              do: "bg-thamani-forest text-white shadow-sm",
-              else: "text-thamani-pewter hover:bg-thamani-canvas hover:text-thamani-forest"
-            )
-          ]}
-          aria-current={@filters["status"] == status && "page"}
-        >
-          {label}
-          <span class={[
-            "rounded-full px-2 py-0.5 text-xs font-semibold",
-            if(@filters["status"] == status,
-              do: "bg-white/20 text-white",
-              else: "bg-thamani-stone text-thamani-forest"
-            )
-          ]}>
-            {@status_counts[status]}
-          </span>
-        </.link>
-      </nav>
 
       <.table
         id="distributor-shipments"

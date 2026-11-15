@@ -954,7 +954,7 @@ defmodule ThamaniDawa.BatchesTest do
       assert {:error, changeset} =
                Batches.create_batch(org.id, Map.put(attrs, "sscc", "006141411234567894"))
 
-      assert %{sscc: ["check digit does not match — rescan the case label"]} =
+      assert %{sscc: ["check digit does not match, rescan the case label"]} =
                errors_on(changeset)
     end
 

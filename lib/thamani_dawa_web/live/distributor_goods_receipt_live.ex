@@ -1,14 +1,15 @@
 defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   use ThamaniDawaWeb, :live_view
 
-  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.GoodsReceipts
 
   def mount(%{"id" => id}, _session, socket) do
     receipt = GoodsReceipts.get_receipt!(socket.assigns.current_scope.organization_id, id)
 
     portal =
-      if Scope.admin?(socket.assigns.current_scope), do: :organization, else: :distributor
+      if socket.assigns.live_action == :distributor_show,
+        do: :distributor,
+        else: :organization
 
     index_path =
       if portal == :organization, do: ~p"/org/receiving", else: ~p"/distributor/receiving"
@@ -26,7 +27,13 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   defp unit_label("C62"), do: "unit(s)"
   defp unit_label(nil), do: "unit(s)"
   defp unit_label(unit), do: if(String.ends_with?(unit, "(s)"), do: unit, else: "#{unit}(s)")
-  defp supplier_summary(items), do: summary(items, :supplier_id, :supplier, "Multiple suppliers")
+
+  defp supplier_summary(%{origin_gln: origin_gln} = receipt) when is_binary(origin_gln),
+    do: receipt.origin_company || "—"
+
+  defp supplier_summary(receipt),
+    do: summary(receipt.items, :supplier_id, :supplier, "Multiple suppliers")
+
   defp warehouse_summary(items), do: summary(items, :site_id, :site, "Multiple warehouses")
 
   defp summary(items, id_field, association, multiple) do
@@ -65,7 +72,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           </div>
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Supplier</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {supplier_summary(@receipt.items)}
+              {supplier_summary(@receipt)}
             </dd>
           </div>
           <div>
@@ -103,9 +110,93 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           </:col>
         </.table>
       </section>
+
+      <section :if={@receipt.attachments != []} class="mt-6">
+        <.header variant="plain">
+          <span>Documents</span>
+          <:subtitle>GRN, invoice, and any other documents attached to this delivery.</:subtitle>
+        </.header>
+        <ul id="goods-receipt-documents" class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <li
+            :for={attachment <- @receipt.attachments}
+            id={"goods-receipt-document-#{attachment.id}"}
+            class="group flex min-w-0 flex-col rounded-2xl border border-thamani-stone bg-white p-4 shadow-[0_1px_2px_rgba(23,48,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--thamani-forest)_28%,white)] hover:shadow-md"
+          >
+            <div class="flex min-w-0 items-start gap-3">
+              <span class={[
+                "flex size-11 shrink-0 items-center justify-center rounded-xl",
+                document_icon_class(attachment)
+              ]}>
+                <.icon name={document_icon(attachment)} class="size-5" />
+              </span>
+              <div class="min-w-0 flex-1">
+                <span class="inline-flex rounded-full bg-thamani-canvas px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-thamani-pewter">
+                  {doc_type_label(attachment.doc_type)}
+                </span>
+                <p
+                  class="mt-2 truncate text-sm font-semibold text-thamani-forest"
+                  title={attachment.filename}
+                >
+                  {attachment.filename}
+                </p>
+                <p class="mt-1 text-xs text-thamani-subtle">
+                  {document_kind(attachment)} · {format_file_size(attachment.byte_size)}
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-2 gap-2 border-t border-thamani-stone pt-3">
+              <a
+                href={attachment.path}
+                target="_blank"
+                rel="noopener"
+                aria-label={"Preview #{attachment.filename}"}
+                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-lime"
+              >
+                <.icon name="hero-eye" class="size-4" /> Preview
+              </a>
+              <a
+                href={attachment.path}
+                download={attachment.filename}
+                aria-label={"Download #{attachment.filename}"}
+                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-thamani-forest px-3 text-xs font-semibold text-white transition-all hover:-translate-y-px hover:bg-[#10221e] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-lime focus-visible:ring-offset-2"
+              >
+                <.icon name="hero-arrow-down-tray" class="size-4" /> Download
+              </a>
+            </div>
+          </li>
+        </ul>
+      </section>
     </.receipt_shell>
     """
   end
+
+  defp doc_type_label(:grn), do: "GRN"
+  defp doc_type_label(:invoice), do: "Invoice"
+  defp doc_type_label(:other), do: "Other document"
+
+  defp document_icon(%{content_type: "application/pdf"}), do: "hero-document-text"
+  defp document_icon(%{content_type: "image/" <> _}), do: "hero-photo"
+  defp document_icon(_attachment), do: "hero-document"
+
+  defp document_icon_class(%{content_type: "application/pdf"}),
+    do: "bg-red-50 text-red-700"
+
+  defp document_icon_class(%{content_type: "image/" <> _}),
+    do: "bg-sky-50 text-sky-700"
+
+  defp document_icon_class(_attachment), do: "bg-thamani-canvas text-thamani-forest"
+
+  defp document_kind(%{content_type: "application/pdf"}), do: "PDF"
+  defp document_kind(%{content_type: "image/jpeg"}), do: "JPEG image"
+  defp document_kind(%{content_type: "image/png"}), do: "PNG image"
+  defp document_kind(%{content_type: "image/" <> _}), do: "Image"
+  defp document_kind(_attachment), do: "Document"
+
+  defp format_file_size(nil), do: "Size unavailable"
+  defp format_file_size(bytes) when bytes < 1_000, do: "#{bytes} B"
+  defp format_file_size(bytes) when bytes < 1_000_000, do: "#{Float.round(bytes / 1_000, 1)} KB"
+  defp format_file_size(bytes), do: "#{Float.round(bytes / 1_000_000, 1)} MB"
 
   attr :portal, :atom, required: true
   attr :flash, :map, required: true

@@ -43,6 +43,23 @@ config :thamani_dawa, ThamaniDawa.Grp,
   plug: ThamaniDawa.Gs1RegistryStub,
   retry: false
 
+# The PPB facilities register is stubbed out the same way — see
+# `ThamaniDawa.PpbRegistryStub` for the canned dataset.
+config :thamani_dawa, ThamaniDawa.Ppb,
+  plug: ThamaniDawa.PpbRegistryStub,
+  retry: false
+
+# The KMLTTB lab facilities register is stubbed out the same way — see
+# `ThamaniDawa.KmlttbRegistryStub` for the canned dataset.
+config :thamani_dawa, ThamaniDawa.Kmlttb,
+  plug: ThamaniDawa.KmlttbRegistryStub,
+  retry: false
+
+# Disabled in tests — otherwise a result cached by one test (behind the
+# shared, globally-named cache process) could shadow a different stub
+# response expected by another test using the same identifier.
+config :thamani_dawa, ThamaniDawa.RegistryCache, enabled: false
+
 config :thamani_dawa, ThamaniDawa.Daraja,
   base_url: "https://daraja.test",
   consumer_key: "test-consumer-key",

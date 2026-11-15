@@ -4,8 +4,7 @@ alias ThamaniDawa.Batches
 alias ThamaniDawa.Batches.Batch
 alias ThamaniDawa.Distributor
 alias ThamaniDawa.Distributor.{Billing, MobileUser, Shipment}
-alias ThamaniDawa.DistributorCustomers
-alias ThamaniDawa.DistributorCustomers.Customer
+alias ThamaniDawa.GoodsReceipts
 alias ThamaniDawa.Gtin
 alias ThamaniDawa.LabOrders
 alias ThamaniDawa.LabOrders.{LabConsumableUsage, LabOrder, LabOrderResult}
@@ -1175,41 +1174,78 @@ lab_orders_for_payment
   end
 end)
 
-# Distributor shipment workflow: GS1 prefix, customers (destination GLNs), a
-# mobile app user, a prepay serialisation bundle, serialised units received
-# at the warehouse, and shipments at each stage so the review flow can be
-# exercised without the mobile app.
+# Distributor shipment workflow: GS1 prefix, a second (counterpart)
+# organization whose own sites act as real destination GLNs, a mobile app
+# user, a prepay serialisation bundle, serialised units received at the
+# warehouse, and shipments at each stage so the review flow can be
+# exercised without the mobile app. Shipments resolve destinations live
+# (local sites first, then the GS1 registry) — there is no stored
+# "customer" entity — so the destinations here are real `Site` rows on
+# another organization, exactly like a real cross-pharmacy shipment.
 {:ok, organization} =
   Organizations.update_organization_gs1_settings(organization, %{
     gs1_company_prefix: organization.gs1_company_prefix || "6160001"
   })
 
-distributor_customers =
-  Enum.with_index(
-    [
-      {"Kisumu County Referral Hospital", "Jomo Kenyatta Highway, Kisumu", "P.O. Box 1450-40100"},
-      {"Eldoret Family Pharmacy", "Uganda Road, Eldoret", "P.O. Box 2210-30100"},
-      {"Nyeri Medical Centre", "Kimathi Way, Nyeri", "P.O. Box 330-10100"}
-    ],
-    fn {name, address, po_box}, index ->
-      customer =
-        insert_or_get.(
-          Customer,
-          %{organization_id: organization_id, name: name},
-          %{address: address, po_box: po_box, contact_name: "Stores Manager", is_active: true},
-          fn attrs -> DistributorCustomers.create_customer(organization_id, attrs) end
+counterpart_org =
+  case Repo.get_by(Organization, slug: "riverside-health-network") do
+    nil ->
+      {:ok, result} =
+        Organizations.signup(
+          %{
+            name: "Riverside Health Network",
+            slug: "riverside-health-network",
+            operating_models: [:pharmacy, :laboratory],
+            gs1_company_prefix: "6160003",
+            ppb_facility_name: "Riverside Health Network",
+            license_number: "RIVERSIDE-PPB-001",
+            kmlttb_facility_name: "Riverside Health Network",
+            kmlttb_license_number: "RIVERSIDE-KMLTTB-001"
+          },
+          %{
+            name: "Riverside Admin",
+            email: "riverside.admin@gmail.com",
+            password: password,
+            accepted_legal_terms: true
+          }
         )
 
-      customer
-      |> Ecto.Changeset.change(
-        gln: gln.("6160003" <> String.pad_leading(Integer.to_string(index), 5, "0")),
-        gln_verified_at: verified_at,
-        gln_verification_source: "Demo seed",
-        is_active: true
+      result.organization
+
+    existing ->
+      existing
+  end
+
+destination_sites =
+  [
+    {"Kisumu County Referral Hospital", "Jomo Kenyatta Highway, Kisumu", [:pharmacy]},
+    {"Eldoret Family Pharmacy", "Uganda Road, Eldoret", [:pharmacy, :laboratory]}
+  ]
+  |> Enum.with_index()
+  |> Enum.map(fn {{name, address, activities}, index} ->
+    site_gln = gln.("6160003" <> String.pad_leading(Integer.to_string(index), 5, "0"))
+
+    site =
+      insert_or_get.(
+        Site,
+        %{organization_id: counterpart_org.id, name: name},
+        %{activities: activities, address: address, gln: site_gln},
+        fn attrs -> Sites.create_site(counterpart_org.id, attrs) end
       )
-      |> Repo.update!()
-    end
-  )
+
+    site
+    |> Ecto.Changeset.change(
+      gln: site_gln,
+      gln_verified_at: verified_at,
+      gln_verification_source: "Demo seed",
+      activities: activities,
+      address: address,
+      is_active: true
+    )
+    |> Repo.update!()
+  end)
+
+[destination_a, destination_b] = destination_sites
 
 mobile_pin = "4321"
 
@@ -1291,13 +1327,11 @@ if not Repo.exists?(
      from s in Shipment,
        where: s.organization_id == ^organization_id and s.order_number == "PO-2026-0101"
    ) do
-  [_first_customer, second_customer | _] = distributor_customers
-
   {:ok, _draft} =
     Distributor.create_shipment(organization_id, primary_distributor, %{
       "order_number" => "PO-2026-0101",
       "origin_gln" => warehouse_site.gln,
-      "destination_gln" => second_customer.gln
+      "destination_gln" => destination_b.gln
     })
 end
 
@@ -1305,13 +1339,11 @@ if not Repo.exists?(
      from s in Shipment,
        where: s.organization_id == ^organization_id and s.order_number == "PO-2026-0100"
    ) do
-  [first_customer | _] = distributor_customers
-
   {:ok, submitted} =
     Distributor.create_shipment(organization_id, primary_distributor, %{
       "order_number" => "PO-2026-0100",
       "origin_gln" => warehouse_site.gln,
-      "destination_gln" => first_customer.gln
+      "destination_gln" => destination_a.gln
     })
 
   {:ok, _} = Distributor.select_shipment(mobile_user, submitted.id)
@@ -1336,7 +1368,6 @@ unless Repo.exists?(
              s.organization_id == ^organization_id and
                (s.status == "submitted" or s.order_number == "PO-2026-APPROVAL-TEST")
        ) do
-  [first_customer | _] = distributor_customers
   product = Enum.at(drug_products, 0)
 
   approval_test_units =
@@ -1358,7 +1389,7 @@ unless Repo.exists?(
     Distributor.create_shipment(organization_id, primary_distributor, %{
       "order_number" => "PO-2026-APPROVAL-TEST",
       "origin_gln" => warehouse_site.gln,
-      "destination_gln" => first_customer.gln
+      "destination_gln" => destination_a.gln
     })
 
   {:ok, _} = Distributor.select_shipment(mobile_user, approval_test.id)
@@ -1370,6 +1401,118 @@ unless Repo.exists?(
   end)
 
   {:ok, _} = Distributor.submit_shipment(mobile_user, approval_test.id)
+end
+
+# Warehouse management: a bulk batch put away into storage with a bin (for
+# the Stock view and picking), a damaged batch and an expired batch (status
+# lifecycle), a draft shipment with line items and matching storage stock
+# left ungenerated (so "Generate pick list" can be exercised live), and one
+# return receipt — so every Part F feature has something to look at without
+# manual setup first.
+pickable_product = Enum.at(drug_products, 2) || Enum.at(drug_products, 0)
+secondary_product = Enum.at(drug_products, 1) || pickable_product
+
+ensure_warehouse_batch = fn batch_no, product, quantity, expiry_offset ->
+  case Repo.get_by(Batch,
+         organization_id: organization_id,
+         site_id: warehouse_site.id,
+         batch_no: batch_no
+       ) do
+    nil ->
+      {:ok, batch} =
+        Batches.create_batch(organization_id, %{
+          "product_id" => product.id,
+          "site_id" => warehouse_site.id,
+          "gtin" => product.gtin,
+          "batch_no" => batch_no,
+          "manufacturer" => product.manufacturer,
+          "manufacture_date" => Date.add(today, -90),
+          "expiry_date" => Date.add(today, expiry_offset),
+          "quantity" => quantity,
+          "remaining_quantity" => quantity,
+          "cost_per_unit" => "20.00"
+        })
+
+      {:ok, batch} = Batches.receive_batch(batch, primary_distributor.id)
+      batch
+
+    batch ->
+      batch
+  end
+end
+
+bulk_storage_batch =
+  ensure_warehouse_batch.("BULK-STORAGE-001", pickable_product, 1000, 365)
+
+if bulk_storage_batch.zone == :receiving do
+  {:ok, _} = Batches.putaway(bulk_storage_batch, %{"zone" => "storage", "bin" => "A-01-1"})
+end
+
+damaged_batch = ensure_warehouse_batch.("DAMAGED-DEMO-001", pickable_product, 40, 200)
+
+if damaged_batch.status == :active do
+  {:ok, _} = Batches.mark_damaged(damaged_batch, "DEMO-INCIDENT-001", primary_distributor)
+end
+
+expired_demo_batch = ensure_warehouse_batch.("EXPIRED-DEMO-001", secondary_product, 25, 300)
+
+if expired_demo_batch.status == :active do
+  {:ok, _} = Batches.mark_expired(expired_demo_batch, primary_distributor)
+end
+
+unless Repo.exists?(
+         from s in Shipment,
+           where: s.organization_id == ^organization_id and s.order_number == "PO-2026-PICK-DEMO"
+       ) do
+  {:ok, pick_demo_shipment} =
+    Distributor.create_shipment(organization_id, primary_distributor, %{
+      "order_number" => "PO-2026-PICK-DEMO",
+      "origin_gln" => warehouse_site.gln,
+      "destination_gln" => destination_b.gln
+    })
+
+  {:ok, _line_item} =
+    Distributor.add_line_item(organization_id, pick_demo_shipment.id, %{
+      "product_id" => pickable_product.id,
+      "quantity" => 200
+    })
+end
+
+unless Repo.exists?(
+         from r in GoodsReceipts.GoodsReceipt,
+           where: r.organization_id == ^organization_id and r.is_return == true
+       ) do
+  return_item = %{
+    attrs: %{
+      "site_id" => warehouse_site.id,
+      "product_id" => pickable_product.id,
+      "gtin" => pickable_product.gtin,
+      "batch_no" => "RETURN-DEMO-001",
+      "quantity" => 15,
+      "remaining_quantity" => 15,
+      "expiry_date" => Date.add(today, 180),
+      "cost_per_unit" => "20.00",
+      "sscc" => "006141411234567890"
+    }
+  }
+
+  origin = %{
+    gln: destination_a.gln,
+    company: destination_a.name,
+    address: destination_a.address,
+    po_box: nil,
+    site_id: destination_a.id
+  }
+
+  {:ok, _return_receipt} =
+    GoodsReceipts.receive_delivery(
+      organization_id,
+      primary_distributor.id,
+      [return_item],
+      Ecto.UUID.generate(),
+      origin,
+      %{is_return: true, status: "returned"}
+    )
 end
 
 expected_account_roles =
@@ -1417,7 +1560,10 @@ Platform superadmin account:
 
 Distributor account:
   distributor@gmail.com
-  #{length(distributor_customers)} customers, a prepay bundle, one draft, and an awaiting-approval shipment.
+  #{length(destination_sites)} destination sites (on #{counterpart_org.name}), a prepay bundle,
+  one draft, one awaiting-approval shipment, a pickable draft with line items,
+  warehouse stock across receiving/storage/quarantine zones with damaged/expired
+  examples, and one return receipt.
 
 Distributor mobile app user:
   username packer.demo, PIN #{mobile_pin}

@@ -252,11 +252,25 @@ backoff and dashboard for free.
 
 ```elixir
 config :thamani_dawa, ThamaniDawa.Epcis.Client,
-  base_url: System.get_env("PPB_TNT_BASE_URL"),          # provided later — not a blocker
-  capture_path: System.get_env("PPB_TNT_CAPTURE_PATH", "/epcis/v2/capture"), # confirm when URL arrives
+  base_url: System.get_env("PPB_TNT_BASE_URL"),
+  capture_path: System.get_env("PPB_TNT_CAPTURE_PATH", "/epcis/v2/capture"),
   api_key: System.get_env("PPB_TNT_API_KEY"),
+  distributor_capture_path: System.get_env("PPB_TNT_DISTRIBUTOR_CAPTURE_PATH"),
+  distributor_api_key: System.get_env("PPB_TNT_DISTRIBUTOR_API_KEY"),
   enabled: System.get_env("PPB_TNT_ENABLED", "false") == "true"
 ```
+
+**Key model (revised 2026-11-13, supersedes the 2026-11-10 single-key decision below):**
+the 403 `PARTNER_TYPE_BIZSTEP_MISMATCH` found live against the sandbox (§10) confirmed the
+Hub enforces tier at the credential level, and PPB has since issued a genuinely separate
+distributor-tier key and capture path alongside the facility-tier one — the single
+service-provider key model never materialized. `Epcis.Client.credentials/1` now selects
+`PPB_TNT_DISTRIBUTOR_API_KEY`/`PPB_TNT_DISTRIBUTOR_CAPTURE_PATH` for
+`participant_tier == "distributor"` and falls back to the facility credential/path if
+those are unset, matching §1's original per-(org, tier) design.
+
+<details>
+<summary>Superseded 2026-11-10 decision (kept for history)</summary>
 
 **Key model (decided 2026-11-10): one platform-level key.** This system is operated by
 GS1 (Kenya); events for all tenant orgs are submitted under **GS1's own API key(s)** —
@@ -268,6 +282,8 @@ arrives: that a GS1 service-provider key is accepted for events whose identifier
 under the *tenant orgs'* GLN prefixes (the spec says keys are "scoped to a specific GLN
 Prefix" — verify the scoping accommodates submission-on-behalf before bulk go-live;
 T0/T2 in §8 will surface it immediately if not).
+
+</details>
 
 The capture URL arriving later is **not** an implementation blocker: everything through
 §6 step 9 is buildable and testable offline (builders are pure; the client is stubbed in

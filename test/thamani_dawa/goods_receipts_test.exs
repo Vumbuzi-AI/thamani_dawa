@@ -108,6 +108,35 @@ defmodule ThamaniDawa.GoodsReceiptsTest do
     assert Batches.list_batches(ctx.organization.id) == []
   end
 
+  test "snapshots a live-resolved origin onto the receipt header when given one", ctx do
+    item = delivery_item(ctx, "LOT-ORIGIN", 8)
+    item = update_in(item.attrs, &Map.delete(&1, "supplier_id"))
+
+    origin = %{
+      gln: "6109876543210",
+      company: "Acme Pharma Imports",
+      address: "Industrial Area, Nairobi",
+      po_box: "P.O. Box 500-00100",
+      site_id: nil
+    }
+
+    assert {:ok, receipt} =
+             GoodsReceipts.receive_delivery(
+               ctx.organization.id,
+               ctx.user.id,
+               [item],
+               Ecto.UUID.generate(),
+               origin
+             )
+
+    assert receipt.origin_gln == origin.gln
+    assert receipt.origin_company == origin.company
+    assert receipt.origin_address == origin.address
+    assert receipt.origin_po_box == origin.po_box
+    assert [batch] = receipt.items
+    assert is_nil(batch.supplier_id)
+  end
+
   defp delivery_item(ctx, batch_no, quantity) do
     %{
       attrs: %{

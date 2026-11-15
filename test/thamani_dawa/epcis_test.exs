@@ -93,6 +93,35 @@ defmodule ThamaniDawa.EpcisTest do
       assert event.payload["epcList"] == ["urn:epc:id:sscc:0614141.0123456789"]
     end
 
+    test "a distributor-portal receipt with a resolved origin reports it as the source party, grouped by site only",
+         ctx do
+      origin = %{
+        gln: "6109876543216",
+        company: "Acme Pharma Imports",
+        address: "Industrial Area, Nairobi",
+        po_box: nil,
+        site_id: nil
+      }
+
+      item = delivery_item(ctx, "LOT-ORIGIN-EPCIS", 6, sscc: "006141411234567890")
+      item = update_in(item.attrs, &Map.delete(&1, "supplier_id"))
+
+      assert {:ok, _receipt} =
+               GoodsReceipts.receive_delivery(
+                 ctx.organization.id,
+                 ctx.user.id,
+                 [item],
+                 Ecto.UUID.generate(),
+                 origin
+               )
+
+      assert [%OutboxEvent{} = event] = Outbox.pending_for_organization(ctx.organization.id)
+
+      assert event.payload["sourceList"] == [
+               %{"type" => "owning_party", "source" => "urn:epc:id:sgln:6109876.54321.0"}
+             ]
+    end
+
     test "replaying the posting key does not enqueue a second event", ctx do
       key = Ecto.UUID.generate()
       items = [delivery_item(ctx, "LOT-EPCIS-2", 5, sscc: "006141411234567890")]
