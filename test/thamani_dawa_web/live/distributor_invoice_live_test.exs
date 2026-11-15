@@ -12,7 +12,7 @@ defmodule ThamaniDawaWeb.DistributorInvoiceLiveTest do
   defp log_in(conn, user), do: conn |> init_test_session(%{}) |> UserAuth.log_in_user(user)
 
   setup %{conn: conn} do
-    distributor = distributor_user_fixture()
+    distributor = distributor_user_fixture(%{roles: [:admin, :distributor]})
     %{conn: log_in(conn, distributor), distributor: distributor}
   end
 

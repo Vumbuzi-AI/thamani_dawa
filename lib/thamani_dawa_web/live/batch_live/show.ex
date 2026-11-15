@@ -46,7 +46,7 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
           at: dispense.dispensed_at,
           label: "Dispensed #{dispense.quantity} units",
           detail:
-            "Rx ##{prescription.id} — #{patient_name(prescription)} · by #{user_display(dispense.dispensed_by)}"
+            "Rx ##{prescription.id}: #{patient_name(prescription)} · by #{user_display(dispense.dispensed_by)}"
         }
       end)
 
@@ -56,7 +56,7 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
           at: usage.used_at,
           label: "Used #{usage.quantity} units (lab)",
           detail:
-            "Lab order ##{usage.lab_order_id} — #{patient_name(usage.lab_order)} · by #{user_display(usage.used_by)}"
+            "Lab order ##{usage.lab_order_id}: #{patient_name(usage.lab_order)} · by #{user_display(usage.used_by)}"
         }
       end)
 

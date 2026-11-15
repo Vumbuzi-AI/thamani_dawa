@@ -117,7 +117,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
 
   defp paid(socket) do
     socket
-    |> put_flash(:info, "Payment received — your serialisation allowance has been updated.")
+    |> put_flash(:info, "Payment received. Your serialisation allowance has been updated.")
     |> push_navigate(to: ~p"/distributor/billing")
   end
 

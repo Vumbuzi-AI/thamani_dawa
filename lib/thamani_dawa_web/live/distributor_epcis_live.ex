@@ -17,7 +17,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
      socket
      |> assign(:epcis_portal, epcis_portal)
      |> assign(:epcis_path, epcis_path)
-     |> assign(:page_title, "PPB reporting")
+     |> assign(:page_title, "TNT reporting")
      |> assign(:inspecting_event, nil)
      |> assign(:selected_status, "all")
      |> stream_configure(:events, dom_id: fn event -> "epcis-events-#{event.id}" end)
@@ -57,7 +57,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
          put_flash(
            socket,
            :info,
-           "Event #{short_id(event.event_id)} requeued — it will be resubmitted with the same eventID."
+           "Event #{short_id(event.event_id)} requeued. It will be resubmitted with the same eventID."
          )}
 
       _ ->
@@ -107,6 +107,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
   defp status_label("blocked"), do: "Blocked"
   defp status_label("rejected"), do: "Rejected"
   defp status_label("dead"), do: "Dead"
+  defp status_label(status), do: String.capitalize(status)
 
   defp status_class("accepted"), do: "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
   defp status_class("warning"), do: "bg-amber-100 text-amber-800 ring-amber-600/30"
@@ -114,6 +115,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
   defp status_class("blocked"), do: "bg-amber-100 text-amber-800 ring-amber-600/30"
   defp status_class("rejected"), do: "bg-red-100 text-red-800 ring-red-600/30"
   defp status_class("dead"), do: "bg-red-100 text-red-800 ring-red-600/30"
+  defp status_class(_status), do: "bg-slate-100 text-slate-600 ring-slate-500/20"
 
   defp event_detail(%OutboxEvent{status: "blocked", blocked_reason: reason})
        when is_binary(reason),
@@ -121,7 +123,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
 
   defp event_detail(%OutboxEvent{status: "warning", response: %{"warnings" => warnings}})
        when is_list(warnings),
-       do: Enum.join(warnings, " · ")
+       do: warnings |> Enum.map(&warning_message/1) |> Enum.join(" · ")
 
   defp event_detail(%OutboxEvent{status: status, response: response})
        when status in ["rejected", "dead"] and is_map(response) do
@@ -133,6 +135,10 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
   end
 
   defp event_detail(_event), do: nil
+
+  defp warning_message(%{"message" => message}) when is_binary(message), do: message
+  defp warning_message(message) when is_binary(message), do: message
+  defp warning_message(warning), do: inspect(warning)
 
   defp short_id(event_id), do: String.slice(event_id, -8, 8)
 
@@ -160,7 +166,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
     ~H"""
     <div>
       <.header icon="hero-globe-alt">
-        PPB reporting
+        TNT reporting
         <:subtitle>
           Every reportable supply-chain event queued for the PPB National Track &amp; Trace Hub.
         </:subtitle>
@@ -178,7 +184,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
       >
         <.icon name="hero-information-circle" class="mt-0.5 size-5 flex-none text-slate-400" />
         <p>
-          Hub submission is currently disabled — events are recorded here but not sent.
+          Hub submission is currently disabled. Events are recorded here but not sent.
           Set <code class="font-mono text-xs">PPB_TNT_ENABLED=true</code> with the capture URL and
           API key to go live.
         </p>
@@ -262,7 +268,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
         >
           <:col :let={{_id, event}} label="Event">
             <span class="font-medium capitalize text-thamani-forest">{event.event_type}</span>
-            <span class="block font-mono text-xs text-thamani-pewter">
+            <span class="mt-0.5 block text-xs text-thamani-pewter">
               {Calendar.strftime(event.occurred_at, "%d %b %Y, %H:%M UTC")}
             </span>
           </:col>
@@ -270,15 +276,19 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
             <span class={"inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset #{status_class(event.status)}"}>
               {status_label(event.status)}
             </span>
-            <span :if={event.http_status} class="block text-xs text-thamani-pewter">
+            <span
+              :if={event.http_status}
+              class="mt-1 block whitespace-nowrap text-xs text-thamani-pewter"
+            >
               HTTP {event.http_status} · attempt {event.attempts}
             </span>
           </:col>
           <:col :let={{_id, event}} label="Detail" mobile="hidden">
             <p
               :if={detail = event_detail(event)}
+              title={detail}
               class={[
-                "max-w-md text-xs leading-5",
+                "text-xs leading-5 sm:line-clamp-2",
                 event.status in ["rejected", "dead", "warning", "blocked"] && "font-medium"
               ]}
             >
@@ -286,9 +296,9 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
             </p>
             <p :if={detail == nil} class="text-xs text-thamani-pewter">—</p>
           </:col>
-          <:col :let={{_id, event}} label="EventID" tablet="hidden">
-            <span class="font-mono text-xs text-thamani-pewter" title={event.event_id}>
-              …{short_id(event.event_id)}
+          <:col :let={{_id, event}} label="Event ID" tablet="hidden">
+            <span class="text-xs text-thamani-pewter" title={event.event_id}>
+              {short_id(event.event_id)}
             </span>
           </:col>
           <:action :let={{_id, event}}>
@@ -296,6 +306,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
               id={"inspect-epcis-event-#{event.id}"}
               phx-click="inspect_payload"
               phx-value-id={event.id}
+              class="px-3 py-2 text-xs"
             >
               View payload
             </.button>
@@ -306,6 +317,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
               phx-click="resubmit"
               phx-value-id={event.id}
               data-confirm="Resubmit this event to the PPB Hub with its original eventID?"
+              class="px-3 py-2 text-xs"
             >
               Resubmit
             </.button>

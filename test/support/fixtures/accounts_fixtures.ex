@@ -5,6 +5,7 @@ defmodule ThamaniDawa.AccountsFixtures do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.OrganizationsFixtures
+  alias ThamaniDawa.Repo
 
   def valid_user_email, do: "user#{System.unique_integer([:positive])}@example.com"
   def valid_user_password, do: "hello world!"
@@ -19,8 +20,17 @@ defmodule ThamaniDawa.AccountsFixtures do
     })
   end
 
-  @doc "Creates an admin user under a fresh organization unless `organization_id` is given."
+  @doc """
+  Creates an admin user under a fresh organization unless `organization_id`
+  is given. Confirmed by default — this represents an already-set-up
+  account for testing everything *other* than the signup/email-confirmation
+  flow itself, which exercises `Accounts.register_user/3` directly instead.
+  Pass `confirmed: false` to get the real, freshly-registered (unconfirmed)
+  shape.
+  """
   def user_fixture(attrs \\ %{}) do
+    {confirmed?, attrs} = Map.pop(attrs, :confirmed, true)
+
     {organization_id, attrs} =
       Map.pop_lazy(attrs, :organization_id, fn ->
         OrganizationsFixtures.organization_fixture().id
@@ -31,7 +41,13 @@ defmodule ThamaniDawa.AccountsFixtures do
       |> valid_user_attributes()
       |> then(&Accounts.register_user(organization_id, &1))
 
+    if confirmed?, do: confirm_user(user), else: user
+  end
+
+  defp confirm_user(user) do
     user
+    |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second))
+    |> Repo.update!()
   end
 
   def superadmin_fixture(attrs \\ %{}) do

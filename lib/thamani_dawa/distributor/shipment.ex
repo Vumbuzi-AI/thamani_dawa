@@ -1,8 +1,9 @@
 defmodule ThamaniDawa.Distributor.Shipment do
   @moduledoc """
   A distributor shipment: an order moving from one of the organization's own
-  sites (origin GLN) to a customer (destination GLN). Its state machine is
-  owned entirely by `ThamaniDawa.Distributor`:
+  sites (origin GLN) to a destination GLN resolved live — another
+  organization's site on this platform, or any GS1-registered company. Its
+  state machine is owned entirely by `ThamaniDawa.Distributor`:
 
       draft --submit--> submitted --approve--> approved
                             |
@@ -11,8 +12,8 @@ defmodule ThamaniDawa.Distributor.Shipment do
                          rejected --reopen--> draft
 
   Origin/destination company, address and P.O. box are snapshotted onto the
-  row when the shipment is saved, so it keeps its own copy even if the site
-  or customer record changes later.
+  row when the shipment is saved, so it keeps its own copy even if the
+  resolved site or registry record changes later.
   """
 
   use Ecto.Schema
@@ -35,6 +36,8 @@ defmodule ThamaniDawa.Distributor.Shipment do
     field :destination_address, :string
     field :destination_po_box, :string
 
+    field :is_return, :boolean, default: false
+
     field :submitted_at, :utc_datetime
     field :approved_at, :utc_datetime
     field :rejected_at, :utc_datetime
@@ -42,7 +45,8 @@ defmodule ThamaniDawa.Distributor.Shipment do
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
     belongs_to :origin_site, ThamaniDawa.Sites.Site
-    belongs_to :destination_customer, ThamaniDawa.DistributorCustomers.Customer
+    belongs_to :destination_site, ThamaniDawa.Sites.Site
+    belongs_to :reference_shipment, __MODULE__
     belongs_to :created_by, ThamaniDawa.Accounts.User
     belongs_to :approved_by, ThamaniDawa.Accounts.User
     belongs_to :rejected_by, ThamaniDawa.Accounts.User
@@ -56,6 +60,7 @@ defmodule ThamaniDawa.Distributor.Shipment do
     has_many :shippers, ThamaniDawa.Distributor.Shipper, preload_order: [asc: :sequence]
     has_many :items, ThamaniDawa.Distributor.ShipmentItem
     has_many :events, ThamaniDawa.Distributor.ShipmentEvent, preload_order: [desc: :inserted_at]
+    has_many :line_items, ThamaniDawa.Distributor.ShipmentLineItem
 
     timestamps(type: :utc_datetime)
   end
@@ -65,7 +70,13 @@ defmodule ThamaniDawa.Distributor.Shipment do
   @doc "Changeset for the fields a portal administrator enters on a draft."
   def changeset(shipment, attrs) do
     shipment
-    |> cast(attrs, [:order_number, :origin_gln, :destination_gln])
+    |> cast(attrs, [
+      :order_number,
+      :origin_gln,
+      :destination_gln,
+      :is_return,
+      :reference_shipment_id
+    ])
     |> update_change(:order_number, &trim/1)
     |> update_change(:origin_gln, &trim/1)
     |> update_change(:destination_gln, &trim/1)

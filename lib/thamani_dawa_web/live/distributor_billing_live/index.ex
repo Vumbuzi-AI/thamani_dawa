@@ -110,7 +110,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
             sublabel={
               if @usage,
                 do: "of #{number(@usage.quantity_limit)} in this bundle",
-                else: "No bundle yet — buy one to start approving"
+                else: "No bundle yet. Buy one to start approving"
             }
           />
           <.stat_tile
@@ -158,7 +158,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
             value={number(Pricing.buffer_limit())}
             sublabel={
               if @overdue?,
-                do: "#{number((@usage && @usage.running_buffer) || 0)} used — settle to lift the cap",
+                do: "#{number((@usage && @usage.running_buffer) || 0)} used. Settle to lift the cap",
                 else: "Serials allowed once a cycle is overdue"
             }
           />

@@ -340,7 +340,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
   defp product_name(product) do
     case {product.generic_name, product.brand_name} do
       {generic_name, brand_name} when is_binary(generic_name) and is_binary(brand_name) ->
-        "#{generic_name} — #{brand_name}"
+        "#{generic_name} · #{brand_name}"
 
       {generic_name, _brand_name} when is_binary(generic_name) ->
         generic_name

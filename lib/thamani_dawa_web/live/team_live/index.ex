@@ -16,6 +16,9 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      |> assign(:filters, @default_filters)
      |> assign(:editing_user, nil)
      |> assign(:selected_roles, [])
+     |> assign(:onboarding_invited, [])
+     |> assign(:onboarding_progress, {0, 0})
+     |> assign(:show_onboarding_invite_form?, false)
      |> assign(:page, 1)
      |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> assign_lists()}
@@ -30,6 +33,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       |> assign(:page, page)
       |> assign(:search, search)
       |> assign_lists()
+      |> maybe_restore_onboarding_invites(params)
 
     {form, user, checked_site_ids, selected_roles} =
       case socket.assigns.live_action do
@@ -54,33 +58,26 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      |> assign(:editing_user, user)
      |> assign(:checked_site_ids, checked_site_ids)
      |> assign(:selected_roles, selected_roles)
+     |> assign(:replay_next, params["replay_next"])
      |> assign(:back_path, back_path(params))}
   end
 
   def handle_event("save", %{"user" => attrs}, socket) do
     %{organization_id: organization_id, user: admin} = socket.assigns.current_scope
+    attrs = maybe_assign_onboarding_site(attrs, socket)
 
-    case Accounts.invite_user(organization_id, admin.id, attrs) do
-      {:ok, user, encoded_token} ->
-        Accounts.deliver_user_invite(
-          user,
-          socket.assigns.organization.name,
-          admin.name,
-          encoded_token,
-          fn token ->
-            url(~p"/invites/#{token}")
-          end
-        )
+    if missing_onboarding_site_selection?(attrs, socket) do
+      changeset =
+        %User{}
+        |> User.invite_changeset(attrs)
+        |> Ecto.Changeset.add_error(:sites, "select at least one branch")
 
-        socket =
-          socket
-          |> put_flash(:info, "Invite sent to #{user.email}.")
-          |> assign_lists()
-
-        {:noreply, return_after_invite(socket)}
-
-      {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset, as: :user))}
+      {:noreply,
+       socket
+       |> assign(:form, to_form(changeset, as: :user))
+       |> put_flash(:error, "Select at least one branch.")}
+    else
+      invite_user(socket, organization_id, admin, attrs)
     end
   end
 
@@ -103,7 +100,39 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
   def handle_event("form_change", %{"user" => attrs}, socket) do
     selected_roles = attrs |> Map.get("roles", []) |> Enum.reject(&(&1 == ""))
-    {:noreply, assign(socket, :selected_roles, selected_roles)}
+
+    checked_site_ids =
+      attrs
+      |> Map.get("site_ids", [])
+      |> List.wrap()
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.map(&String.to_integer/1)
+
+    {:noreply,
+     socket
+     |> assign(:selected_roles, selected_roles)
+     |> assign(:checked_site_ids, checked_site_ids)}
+  end
+
+  def handle_event("continue_onboarding", _params, socket) do
+    destination =
+      if socket.assigns.replay_next == "first_product",
+        do: ~p"/onboarding?replay=first_product",
+        else: ~p"/onboarding?complete=1"
+
+    {:noreply, push_navigate(socket, to: destination)}
+  end
+
+  def handle_event("open_onboarding_invite", _params, socket) do
+    {:noreply, assign(socket, :show_onboarding_invite_form?, true)}
+  end
+
+  def handle_event("close_onboarding_invite", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_onboarding_invite_form?, false)
+     |> assign(:form, to_form(User.invite_changeset(%User{}, %{}), as: :user))
+     |> assign(:selected_roles, [])}
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -163,16 +192,86 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
     end
   end
 
+  defp invite_user(socket, organization_id, admin, attrs) do
+    case Accounts.invite_user(organization_id, admin.id, attrs) do
+      {:ok, user, encoded_token} ->
+        Accounts.deliver_user_invite(
+          user,
+          socket.assigns.organization.name,
+          admin.name,
+          encoded_token,
+          fn token ->
+            url(~p"/invites/#{token}")
+          end
+        )
+
+        socket =
+          socket
+          |> put_flash(:info, "Invite sent to #{user.email}.")
+          |> assign_lists()
+
+        if socket.assigns.back_path == ~p"/onboarding" do
+          {:noreply,
+           socket
+           |> update(:onboarding_invited, &(&1 ++ [user]))
+           |> assign(:form, to_form(User.invite_changeset(%User{}, %{}), as: :user))
+           |> assign(:selected_roles, [])
+           |> assign(:checked_site_ids, [])
+           |> assign(:show_onboarding_invite_form?, false)}
+        else
+          {:noreply, return_after_invite(socket)}
+        end
+
+      {:error, changeset} ->
+        {:noreply, assign(socket, :form, to_form(changeset, as: :user))}
+    end
+  end
+
+  defp missing_onboarding_site_selection?(attrs, socket) do
+    roles = attrs |> Map.get("roles", []) |> Enum.reject(&(&1 == ""))
+    site_ids = attrs |> Map.get("site_ids", []) |> List.wrap() |> Enum.reject(&(&1 == ""))
+
+    socket.assigns.back_path == ~p"/onboarding" and length(socket.assigns.sites) > 1 and
+      "admin" not in roles and site_ids == []
+  end
+
+  defp onboarding_progress_pct({current, total}) when total > 0, do: current / total * 100
+  defp onboarding_progress_pct(_progress), do: 0
+
+  defp back_path(%{"return_to" => "onboarding"}), do: ~p"/onboarding"
   defp back_path(%{"return_to" => "dashboard"}), do: ~p"/org/dashboard"
   defp back_path(_params), do: ~p"/org/team"
 
   defp return_after_invite(socket) do
-    if socket.assigns.back_path == ~p"/org/dashboard" do
+    if socket.assigns.back_path in [~p"/org/dashboard", ~p"/onboarding"] do
       push_navigate(socket, to: socket.assigns.back_path)
     else
       push_patch(socket, to: socket.assigns.back_path)
     end
   end
+
+  defp maybe_assign_onboarding_site(attrs, socket) do
+    roles = attrs |> Map.get("roles", []) |> Enum.reject(&(&1 == ""))
+
+    if socket.assigns.back_path == ~p"/onboarding" and "admin" not in roles and
+         match?([_], socket.assigns.sites) do
+      [site] = socket.assigns.sites
+      Map.put(attrs, "site_ids", [to_string(site.id)])
+    else
+      attrs
+    end
+  end
+
+  defp maybe_restore_onboarding_invites(socket, %{"return_to" => "onboarding"}) do
+    organization_id = socket.assigns.current_scope.organization_id
+    organization = Organizations.get_organization!(organization_id)
+
+    socket
+    |> assign(:onboarding_invited, Accounts.list_invited_users(organization_id))
+    |> assign(:onboarding_progress, Organizations.onboarding_progress(organization))
+  end
+
+  defp maybe_restore_onboarding_invites(socket, _params), do: socket
 
   defp assign_lists(socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -274,6 +373,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
   defp site_matches_role?(site, "pharmacist"), do: Site.pharmacy?(site)
   defp site_matches_role?(site, "lab_technician"), do: Site.lab?(site)
+  defp site_matches_role?(site, "distributor"), do: Site.distribution?(site)
   defp site_matches_role?(_site, _role), do: true
 
   attr :selected_roles, :list, required: true
@@ -311,6 +411,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   attr :all_sites, :list, default: []
   attr :checked_site_ids, :list, required: true
   attr :selected_roles, :list, default: []
+  attr :errors, :list, default: []
 
   defp site_checkboxes(assigns) do
     assigns = assign_new(assigns, :selected_roles, fn -> [] end)
@@ -398,6 +499,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           </div>
         </div>
       </div>
+      <p :for={error <- @errors} class="mt-2 text-xs text-red-700">{translate_error(error)}</p>
     </div>
     """
   end
@@ -408,121 +510,319 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/team"}>
-      <.header icon="hero-users">
-        Team
-        <:subtitle>Search, filter, and manage your team.</:subtitle>
-        <:actions>
-          <.button variant="primary" patch={~p"/org/team/new"}>
-            <.icon name="hero-plus" class="size-4" /> Invite staff
-          </.button>
-        </:actions>
-        <:toolbar>
-          <form phx-change="search" class="flex-1" id="search-form">
-            <.search_input name="search" value={@search} placeholder="Search by name or email" />
-          </form>
+    <%= if @live_action == :new and @back_path == ~p"/onboarding" do %>
+      <Layouts.app flash={@flash} current_scope={@current_scope} navigation={false}>
+        <div id="onboarding-invite-shell" class="flex min-h-svh flex-col bg-[var(--thamani-snow)]">
+          <header class="border-b border-[color-mix(in_srgb,var(--thamani-stone)_70%,transparent)]">
+            <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-5 sm:px-8 lg:px-12">
+              <.link
+                navigate={~p"/onboarding"}
+                aria-label="Back to onboarding"
+                class="w-36 sm:w-[148px]"
+              >
+                <img src="/images/logo-transparent.png" alt="" class="h-auto w-full" />
+              </.link>
 
-          <.filter_drawer
-            id="team-filters"
-            title="Filter team"
-            apply_event="apply_filters"
-            active_count={active_filter_count(@filters)}
-          >
-            <:group label="Role">
-              <.input
-                type="select"
-                name="filters[role]"
-                value={@filters.role}
-                options={Enum.map(User.assignable_roles(), &{Phoenix.Naming.humanize(&1), &1})}
-                prompt="All roles"
-              />
-            </:group>
-            <:group label="Home site">
-              <.input
-                type="select"
-                name="filters[site_id]"
-                value={@filters.site_id}
-                options={Enum.map(@sites, &{&1.name, &1.id})}
-                prompt="All sites"
-              />
-            </:group>
-            <:group label="Status">
-              <.input
-                type="select"
-                name="filters[status]"
-                value={@filters.status}
-                options={[{"Active", "active"}, {"Invited", "invited"}, {"Inactive", "inactive"}]}
-                prompt="All statuses"
-              />
-            </:group>
-            <:chip
-              :for={chip <- filter_chips(@filters, @sites_by_id)}
-              label={chip.label}
-              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-            />
-          </.filter_drawer>
-        </:toolbar>
-      </.header>
-
-      <.modal
-        :if={@live_action == :new}
-        id="invite-modal"
-        show
-        on_cancel={
-          if @back_path == ~p"/org/dashboard",
-            do: JS.navigate(@back_path),
-            else: JS.patch(@back_path)
-        }
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Invite a staff member
-        </h2>
-        <form id="invite-form" phx-submit="save" phx-change="form_change">
-          <.input field={@form[:name]} label="Name" required />
-          <.input field={@form[:email]} type="email" label="Email" required />
-          <.role_checkboxes
-            selected_roles={@selected_roles}
-            errors={@form[:roles].errors}
-            organization={@organization}
-          />
-          <.site_checkboxes
-            :if={@selected_roles != ["admin"]}
-            sites={compatible_sites(@sites, @selected_roles)}
-            all_sites={@sites}
-            checked_site_ids={@checked_site_ids}
-            selected_roles={@selected_roles}
-          />
-          <div
-            :if={"admin" in @selected_roles}
-            class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
-          >
-            <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
-            <span>Admins automatically have organization-wide access across all sites.</span>
-          </div>
-          <div class="mt-4">
-            <.button variant="primary" class="w-full">Send invite</.button>
-          </div>
-        </form>
-      </.modal>
-
-      <.modal :if={@live_action == :edit} id="edit-modal" show on_cancel={JS.patch(~p"/org/team")}>
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">Edit team member</h2>
-        <form id="edit-form" phx-submit="save_edit" phx-change="form_change">
-          <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle mb-1">
-                  Name
-                </p>
-                <p class="text-sm font-semibold text-thamani-forest">{@editing_user.name}</p>
-              </div>
-              <div>
-                <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle mb-1">
-                  Email
-                </p>
-                <p class="text-sm font-semibold text-thamani-forest">{@editing_user.email}</p>
+              <div id="onboarding-invite-user" class="flex min-w-0 items-center gap-3">
+                <span
+                  class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-snow)] shadow-sm"
+                  aria-hidden="true"
+                >
+                  {String.first(@current_scope.user.name || "U")}
+                </span>
+                <span class="max-w-44 truncate text-sm font-medium text-[var(--thamani-forest)]">
+                  {@current_scope.user.name}
+                </span>
               </div>
             </div>
+          </header>
+
+          <div
+            class="h-1 w-full overflow-hidden bg-[var(--thamani-stone)]"
+            aria-label="Setup progress"
+          >
+            <div
+              class="h-full bg-[var(--thamani-forest)] transition-[width] duration-300 ease-out"
+              style={"width: #{onboarding_progress_pct(@onboarding_progress)}%"}
+            />
+          </div>
+
+          <main class="mx-auto grid w-full max-w-6xl flex-1 items-start gap-10 px-5 pb-16 pt-10 sm:px-8 sm:pt-12 md:grid-cols-[0.7fr_1.3fr] md:gap-10 md:pt-16 lg:gap-16 lg:pt-20">
+            <section class="thamani-step-enter">
+              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
+                <.icon name="hero-user-group" class="size-6" />
+              </div>
+              <h1 class="max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
+                Invite your team
+              </h1>
+              <p class="mt-6 max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
+                Bring in the staff who will help run day-to-day operations at your locations.
+              </p>
+
+              <ul class="mt-9 space-y-4 text-sm text-[var(--thamani-pewter)] sm:text-[15px]">
+                <li class="flex items-center gap-3">
+                  <.icon
+                    name="hero-check-circle"
+                    class="size-5 shrink-0 text-[var(--thamani-forest)]"
+                  /> Give the right access for each role
+                </li>
+                <li class="flex items-center gap-3">
+                  <.icon
+                    name="hero-check-circle"
+                    class="size-5 shrink-0 text-[var(--thamani-forest)]"
+                  /> Keep workflows and records consistent
+                </li>
+                <li class="flex items-center gap-3">
+                  <.icon
+                    name="hero-check-circle"
+                    class="size-5 shrink-0 text-[var(--thamani-forest)]"
+                  /> Add more teammates at any time
+                </li>
+              </ul>
+            </section>
+
+            <section class="thamani-step-enter rounded-3xl border border-[var(--thamani-stone)] bg-[var(--thamani-canvas)]/50 p-6 sm:p-8">
+              <div class="flex items-start justify-between gap-5">
+                <div>
+                  <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
+                    Invited teammates
+                  </h2>
+                  <p class="mt-2 text-sm leading-6 text-thamani-pewter">
+                    Review invitations sent during setup.
+                  </p>
+                </div>
+                <button
+                  id="onboarding-open-invite"
+                  type="button"
+                  phx-click="open_onboarding_invite"
+                  class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-md"
+                >
+                  <.icon name="hero-plus" class="mr-2 size-4" /> Invite teammate
+                </button>
+              </div>
+
+              <div
+                :if={@onboarding_invited == []}
+                id="onboarding-invited-empty"
+                class="mt-8 flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--thamani-stone)] bg-transparent px-6 text-center"
+              >
+                <span class="flex size-12 items-center justify-center rounded-2xl bg-white text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
+                  <.icon name="hero-envelope" class="size-6" />
+                </span>
+                <h3 class="mt-4 text-base font-semibold text-thamani-forest">No invitations yet</h3>
+                <p class="mt-1 max-w-xs text-sm leading-6 text-thamani-pewter">
+                  Invite the first teammate who will help operate your locations.
+                </p>
+              </div>
+
+              <div :if={@onboarding_invited != []} id="onboarding-invited-list" class="mt-8">
+                <h3 class="mb-3 text-sm font-semibold text-thamani-forest">
+                  Invited ({length(@onboarding_invited)})
+                </h3>
+
+                <div class="overflow-hidden rounded-2xl border border-[var(--thamani-stone)]">
+                  <div class="grid grid-cols-[1fr_1fr_auto] gap-4 bg-[var(--thamani-stone)]/60 px-4 py-2.5 text-xs font-medium text-thamani-pewter">
+                    <span>Email</span>
+                    <span>Role</span>
+                    <span class="w-24 text-right">Status</span>
+                  </div>
+
+                  <div class="divide-y divide-[var(--thamani-stone)]">
+                    <div
+                      :for={user <- @onboarding_invited}
+                      id={"onboarding-invited-#{user.id}"}
+                      class="grid grid-cols-[1fr_1fr_auto] items-center gap-4 px-4 py-3"
+                    >
+                      <span class="min-w-0 truncate text-sm text-thamani-forest">
+                        {user.email}
+                      </span>
+                      <span class="min-w-0 truncate text-sm text-thamani-pewter">
+                        {User.humanize_roles(user)}
+                      </span>
+                      <span class="flex w-24 justify-end">
+                        <span
+                          :if={status(user) == :invited}
+                          class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900"
+                        >
+                          <.icon name="hero-clock" class="size-3.5" /> Pending
+                        </span>
+                        <span
+                          :if={status(user) == :active}
+                          class="inline-flex items-center gap-1 rounded-full bg-thamani-lime px-2.5 py-1 text-xs font-semibold text-thamani-forest"
+                        >
+                          <.icon name="hero-check-circle" class="size-3.5" /> Accepted
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div class="flex items-center justify-between gap-4 md:col-span-2">
+              <div class="flex items-center gap-4">
+                <.link
+                  id="onboarding-invite-back"
+                  navigate={~p"/onboarding"}
+                  class="inline-flex min-h-11 items-center rounded-full px-2 text-sm font-medium text-[var(--thamani-pewter)] transition-colors hover:text-[var(--thamani-forest)]"
+                >
+                  <.icon name="hero-arrow-left" class="mr-2 size-4" /> Back
+                </.link>
+                <.link
+                  id="onboarding-invite-skip"
+                  navigate={
+                    if @replay_next == "first_product",
+                      do: ~p"/onboarding?replay=first_product",
+                      else: ~p"/onboarding?skip=invite_team"
+                  }
+                  class="inline-flex min-h-11 items-center rounded-full px-2 text-sm font-medium text-[var(--thamani-pewter)] underline decoration-[color-mix(in_srgb,var(--thamani-pewter)_45%,transparent)] underline-offset-4 transition-colors hover:text-[var(--thamani-forest)]"
+                >
+                  Skip this step
+                </.link>
+              </div>
+              <button
+                id="onboarding-invite-continue"
+                type="button"
+                phx-click="continue_onboarding"
+                disabled={@onboarding_invited == []}
+                class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg disabled:pointer-events-none disabled:opacity-40"
+              >
+                Continue <.icon name="hero-arrow-right" class="ml-3 size-4" />
+              </button>
+            </div>
+          </main>
+
+          <.modal
+            :if={@show_onboarding_invite_form?}
+            id="onboarding-invite-modal"
+            show
+            on_cancel={JS.push("close_onboarding_invite")}
+          >
+            <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
+              Invite a teammate
+            </h2>
+            <p class="mt-2 text-sm leading-6 text-thamani-pewter">
+              We will email them a secure invitation to join your workspace.
+            </p>
+
+            <form
+              id="onboarding-invite-form"
+              phx-submit="save"
+              phx-change="form_change"
+              class="mt-6"
+            >
+              <div class="grid gap-x-4 sm:grid-cols-2">
+                <.input field={@form[:name]} label="Name" required />
+                <.input field={@form[:email]} type="email" label="Email" required />
+              </div>
+              <.role_checkboxes
+                selected_roles={@selected_roles}
+                errors={@form[:roles].errors}
+                organization={@organization}
+              />
+              <.site_checkboxes
+                :if={@selected_roles != ["admin"]}
+                sites={compatible_sites(@sites, @selected_roles)}
+                all_sites={@sites}
+                checked_site_ids={@checked_site_ids}
+                selected_roles={@selected_roles}
+                errors={@form[:sites].errors}
+              />
+              <div
+                :if={"admin" in @selected_roles}
+                class="mt-3 flex items-center gap-2.5 rounded-xl border border-thamani-stone bg-thamani-stone/40 p-3 text-xs text-thamani-pewter"
+              >
+                <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
+                Admins can access every branch in the organization.
+              </div>
+              <div class="mt-5 flex justify-end gap-3">
+                <button
+                  id="onboarding-invite-cancel"
+                  type="button"
+                  phx-click="close_onboarding_invite"
+                  class="inline-flex min-h-11 items-center justify-center rounded-full px-5 text-sm font-medium text-thamani-pewter transition-colors hover:bg-thamani-canvas hover:text-thamani-forest"
+                >
+                  Cancel
+                </button>
+                <.button variant="primary" class="min-w-40">Send invite</.button>
+              </div>
+            </form>
+          </.modal>
+        </div>
+      </Layouts.app>
+    <% else %>
+      <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/team"}>
+        <.header icon="hero-users">
+          Team
+          <:subtitle>Search, filter, and manage your team.</:subtitle>
+          <:actions>
+            <.button variant="primary" patch={~p"/org/team/new"}>
+              <.icon name="hero-plus" class="size-4" /> Invite staff
+            </.button>
+          </:actions>
+          <:toolbar>
+            <form phx-change="search" class="flex-1" id="search-form">
+              <.search_input name="search" value={@search} placeholder="Search by name or email" />
+            </form>
+
+            <.filter_drawer
+              id="team-filters"
+              title="Filter team"
+              apply_event="apply_filters"
+              active_count={active_filter_count(@filters)}
+            >
+              <:group label="Role">
+                <.input
+                  type="select"
+                  name="filters[role]"
+                  value={@filters.role}
+                  options={Enum.map(User.assignable_roles(), &{Phoenix.Naming.humanize(&1), &1})}
+                  prompt="All roles"
+                />
+              </:group>
+              <:group label="Home site">
+                <.input
+                  type="select"
+                  name="filters[site_id]"
+                  value={@filters.site_id}
+                  options={Enum.map(@sites, &{&1.name, &1.id})}
+                  prompt="All sites"
+                />
+              </:group>
+              <:group label="Status">
+                <.input
+                  type="select"
+                  name="filters[status]"
+                  value={@filters.status}
+                  options={[{"Active", "active"}, {"Invited", "invited"}, {"Inactive", "inactive"}]}
+                  prompt="All statuses"
+                />
+              </:group>
+              <:chip
+                :for={chip <- filter_chips(@filters, @sites_by_id)}
+                label={chip.label}
+                clear={JS.push("clear_chip", value: %{"field" => chip.field})}
+              />
+            </.filter_drawer>
+          </:toolbar>
+        </.header>
+
+        <.modal
+          :if={@live_action == :new}
+          id="invite-modal"
+          show
+          on_cancel={
+            if @back_path in [~p"/org/dashboard", ~p"/onboarding"],
+              do: JS.navigate(@back_path),
+              else: JS.patch(@back_path)
+          }
+        >
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            Invite a staff member
+          </h2>
+          <form id="invite-form" phx-submit="save" phx-change="form_change">
+            <.input field={@form[:name]} label="Name" required />
+            <.input field={@form[:email]} type="email" label="Email" required />
             <.role_checkboxes
               selected_roles={@selected_roles}
               errors={@form[:roles].errors}
@@ -542,67 +842,121 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
               <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
               <span>Admins automatically have organization-wide access across all sites.</span>
             </div>
-          </div>
-          <div class="mt-4">
-            <.button variant="primary" class="w-full">Save changes</.button>
-          </div>
-        </form>
-      </.modal>
+            <div class="mt-4">
+              <.button variant="primary" class="w-full">Send invite</.button>
+            </div>
+          </form>
+        </.modal>
 
-      <.table id="users" rows={@users}>
-        <:col :let={user} label="Name">{user.name}</:col>
-        <:col :let={user} label="Email">{user.email}</:col>
-        <:col :let={user} label="Role">{User.humanize_roles(user)}</:col>
-        <:col :let={user} label="Sites">{sites_summary(user.sites)}</:col>
-        <:col :let={user} label="Status">
-          <.status_badge status={status(user)} />
-        </:col>
-        <:action :let={user}>
-          <.button
-            variant="ghost-edit"
-            patch={~p"/org/team/#{user.id}/edit"}
-            class="px-3 py-1.5 text-xs"
-            id={"btn-edit-user-#{user.id}"}
-          >
-            Edit
-          </.button>
-        </:action>
-        <:action :let={user}>
-          <.button
-            :if={user.id != @current_scope.user.id}
-            type="button"
-            variant={if user.is_active, do: "ghost-delete", else: "ghost"}
-            phx-click="toggle_active"
-            phx-value-id={user.id}
-            data-confirm={
-              if user.is_active,
-                do: "Deactivate #{user.name}? They will immediately lose access.",
-                else: nil
-            }
-            id={"btn-toggle-active-user-#{user.id}"}
-            class="px-3 py-1.5 text-xs"
-          >
-            {if user.is_active, do: "Deactivate", else: "Reactivate"}
-          </.button>
-        </:action>
-        <:empty_state>
-          <.blank_state
-            icon="hero-users"
-            title={
-              if @search != "" or active_filter_count(@filters) > 0,
-                do: "No team members match your search or filters",
-                else: "No team members yet"
-            }
-          >
-            {if @search != "" or active_filter_count(@filters) > 0,
-              do: "Try a different search term, or clear the applied filters.",
-              else: "Invite teammates to get them access to your organization."}
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        <.modal :if={@live_action == :edit} id="edit-modal" show on_cancel={JS.patch(~p"/org/team")}>
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            Edit team member
+          </h2>
+          <form id="edit-form" phx-submit="save_edit" phx-change="form_change">
+            <div class="space-y-4">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle mb-1">
+                    Name
+                  </p>
+                  <p class="text-sm font-semibold text-thamani-forest">{@editing_user.name}</p>
+                </div>
+                <div>
+                  <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle mb-1">
+                    Email
+                  </p>
+                  <p class="text-sm font-semibold text-thamani-forest">{@editing_user.email}</p>
+                </div>
+              </div>
+              <.role_checkboxes
+                selected_roles={@selected_roles}
+                errors={@form[:roles].errors}
+                organization={@organization}
+              />
+              <.site_checkboxes
+                :if={@selected_roles != ["admin"]}
+                sites={compatible_sites(@sites, @selected_roles)}
+                all_sites={@sites}
+                checked_site_ids={@checked_site_ids}
+                selected_roles={@selected_roles}
+              />
+              <div
+                :if={"admin" in @selected_roles}
+                class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
+              >
+                <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
+                <span>Admins automatically have organization-wide access across all sites.</span>
+              </div>
+            </div>
+            <div class="mt-4">
+              <.button variant="primary" class="w-full">Save changes</.button>
+            </div>
+          </form>
+        </.modal>
 
-      <.pagination page={@page_info} path={~p"/org/team"} />
-    </Layouts.org_shell>
+        <.table id="users" rows={@users}>
+          <:col :let={user} label="Name">{user.name}</:col>
+          <:col :let={user} label="Email">{user.email}</:col>
+          <:col :let={user} label="Role">
+            <span class="sm:line-clamp-2" title={User.humanize_roles(user)}>
+              {User.humanize_roles(user)}
+            </span>
+          </:col>
+          <:col :let={user} label="Sites">
+            <span class="sm:line-clamp-2" title={sites_summary(user.sites)}>
+              {sites_summary(user.sites)}
+            </span>
+          </:col>
+          <:col :let={user} label="Status">
+            <.status_badge status={status(user)} />
+          </:col>
+          <:action :let={user}>
+            <.button
+              variant="ghost-edit"
+              patch={~p"/org/team/#{user.id}/edit"}
+              class="px-3 py-1.5 text-xs"
+              id={"btn-edit-user-#{user.id}"}
+            >
+              Edit
+            </.button>
+          </:action>
+          <:action :let={user}>
+            <.button
+              :if={user.id != @current_scope.user.id}
+              type="button"
+              variant={if user.is_active, do: "ghost-delete", else: "ghost"}
+              phx-click="toggle_active"
+              phx-value-id={user.id}
+              data-confirm={
+                if user.is_active,
+                  do: "Deactivate #{user.name}? They will immediately lose access.",
+                  else: nil
+              }
+              id={"btn-toggle-active-user-#{user.id}"}
+              class="px-3 py-1.5 text-xs"
+            >
+              {if user.is_active, do: "Deactivate", else: "Reactivate"}
+            </.button>
+          </:action>
+          <:empty_state>
+            <.blank_state
+              icon="hero-users"
+              title={
+                if @search != "" or active_filter_count(@filters) > 0,
+                  do: "No team members match your search or filters",
+                  else: "No team members yet"
+              }
+            >
+              {if @search != "" or active_filter_count(@filters) > 0,
+                do: "Try a different search term, or clear the applied filters.",
+                else: "Invite teammates to get them access to your organization."}
+            </.blank_state>
+          </:empty_state>
+        </.table>
+
+        <.pagination page={@page_info} path={~p"/org/team"} />
+      </Layouts.org_shell>
+    <% end %>
     """
   end
 end

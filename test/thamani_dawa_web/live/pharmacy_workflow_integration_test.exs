@@ -83,7 +83,7 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
     {:ok, show_live, _html} = live(conn, prescription_path)
 
     show_live
-    |> form("form", %{
+    |> form("form[phx-submit=dispense]", %{
       "item_id" => item.id,
       "quantity" => "5",
       "barcode" => gtin,

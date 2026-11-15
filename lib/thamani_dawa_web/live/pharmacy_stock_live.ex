@@ -305,8 +305,8 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
   defp supplier_name(nil), do: "—"
   defp supplier_name(supplier), do: supplier.name
 
-  defp stock_subtitle(nil), do: "Every batch across every site in your organization — read-only."
-  defp stock_subtitle(_site_ids), do: "Every batch across your assigned sites — read-only."
+  defp stock_subtitle(nil), do: "Every batch across every site in your organization, read-only."
+  defp stock_subtitle(_site_ids), do: "Every batch across your assigned sites, read-only."
 
   defp money(amount) do
     grouped =

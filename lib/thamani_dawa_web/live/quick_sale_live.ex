@@ -449,7 +449,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       {:error,
        socket
        |> assign(:cart, Enum.reject(adjusted_cart, &is_nil/1))
-       |> put_flash(:error, "Stock changed since you added these items — #{message}.")}
+       |> put_flash(:error, "Stock changed since you added these items: #{message}.")}
     end
   end
 
@@ -642,7 +642,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       <.header icon="hero-bolt">
         Quick sale
         <:subtitle>
-          Pick products and take payment — stock is dispensed and the sale is marked paid
+          Pick products and take payment. Stock is dispensed and the sale is marked paid
           immediately.
         </:subtitle>
       </.header>

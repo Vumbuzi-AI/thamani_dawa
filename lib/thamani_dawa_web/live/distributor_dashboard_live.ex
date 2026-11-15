@@ -135,19 +135,9 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
         description: "Register the GTINs you distribute, with reorder levels for each product."
       },
       %{
-        selector: ~s([data-tour-target="/distributor/suppliers"]),
-        title: "Track your suppliers",
-        description: "Keep the suppliers you receive stock from up to date."
-      },
-      %{
-        selector: ~s([data-tour-target="/distributor/warehouses"]),
+        selector: ~s([data-tour-target="/org/sites"]),
         title: "Set up your warehouses",
         description: "Register the sites stock is received into and shipped from."
-      },
-      %{
-        selector: ~s([data-tour-target="/distributor/customers"]),
-        title: "Manage your customers",
-        description: "Keep the GLNs and details of who you ship to up to date."
       },
       %{
         selector: ~s([data-tour-target="/distributor/billing"]),

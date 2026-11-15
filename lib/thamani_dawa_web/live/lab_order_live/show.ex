@@ -466,18 +466,18 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
   defp format_date(other), do: to_string(other)
 
   defp status_meta(:result, :pending), do: {"Not started", "#F1F2F5", "#687083"}
-  defp status_meta(:result, :collected), do: {"Sample collected", "#d3fa99", "#1c3a13"}
-  defp status_meta(:result, :completed), do: {"Completed", "#1c3a13", "#fcfcf7"}
-  defp status_meta(:order, :pending), do: {"Pending", "#eeeee9", "#666666"}
-  defp status_meta(:order, :in_progress), do: {"In progress", "#d3fa99", "#1c3a13"}
-  defp status_meta(:order, :completed), do: {"Completed", "#1c3a13", "#fcfcf7"}
+  defp status_meta(:result, :collected), do: {"Sample collected", "#aff0d3", "#17302a"}
+  defp status_meta(:result, :completed), do: {"Completed", "#17302a", "#ffffff"}
+  defp status_meta(:order, :pending), do: {"Pending", "#eeece5", "#707371"}
+  defp status_meta(:order, :in_progress), do: {"In progress", "#aff0d3", "#17302a"}
+  defp status_meta(:order, :completed), do: {"Completed", "#17302a", "#ffffff"}
   defp status_meta(:order, :cancelled), do: {"Cancelled", "#FBEAE9", "#C21F17"}
 
   defp status_meta(:specimen, :pending_collection),
     do: {"Awaiting collection", "#F1F2F5", "#687083"}
 
-  defp status_meta(:specimen, :collected), do: {"Collected", "#d3fa99", "#1c3a13"}
-  defp status_meta(:specimen, :received), do: {"Received at lab", "#1c3a13", "#fcfcf7"}
+  defp status_meta(:specimen, :collected), do: {"Collected", "#aff0d3", "#17302a"}
+  defp status_meta(:specimen, :received), do: {"Received at lab", "#17302a", "#ffffff"}
   defp status_meta(:specimen, :rejected), do: {"Rejected", "#FBEAE9", "#C21F17"}
   defp status_meta(_kind, other), do: {Phoenix.Naming.humanize(other), "#F1F2F5", "#687083"}
 
@@ -502,7 +502,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         _ -> "Batch"
       end
 
-    "#{product_name} — #{batch.batch_no || "##{batch.id}"} (#{batch.remaining_quantity} left)"
+    "#{product_name} · #{batch.batch_no || "##{batch.id}"} (#{batch.remaining_quantity} left)"
   end
 
   defp batch_available_for_product?(batches, batch_id, product_id) do
@@ -657,7 +657,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             name="lab_test_id"
             label="Test"
             value={nil}
-            options={Enum.map(@lab_tests, &{"#{&1.name} — KES #{&1.price}", &1.id})}
+            options={Enum.map(@lab_tests, &{"#{&1.name} · KES #{&1.price}", &1.id})}
             prompt="Choose a test"
           />
           <div class="pt-4">
@@ -677,7 +677,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
           Collect specimen
         </h2>
         <p class="mb-5 text-sm text-thamani-pewter">
-          One specimen can serve several tests — tick each test this sample is for.
+          One specimen can serve several tests. Tick each test this sample is for.
         </p>
         <.form for={%{}} id="collect-specimen-form" phx-submit="collect_specimen">
           <.input
@@ -848,7 +848,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               name="lab_order_result_id"
               label="For test (optional)"
               value=""
-              options={[{"— none —", ""} | Enum.map(@results, &{test_name(&1), &1.id})]}
+              options={[{"None", ""} | Enum.map(@results, &{test_name(&1), &1.id})]}
             />
             <div class="mt-5">
               <.button type="submit" variant="primary" phx-disable-with="Saving…" class="w-full">
@@ -1172,7 +1172,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
                   <span style="color: #9AA3B5;">
                     {Calendar.strftime(amendment.inserted_at, "%d %b %Y %H:%M")} · {user_name(
                       amendment.amended_by
-                    )} —
+                    )}:
                   </span>
                   {amendment.reason}
                 </li>

@@ -13,8 +13,12 @@ defmodule ThamaniDawaWeb.UserAuth do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.Accounts.Scope
-  alias ThamaniDawa.Sites
-  alias ThamaniDawa.Sites.Site
+  alias ThamaniDawaWeb.Portals
+
+  # The router imports this module, dragging it into the first wave of
+  # compilation — ahead of `Portals`, which every guard below delegates to.
+  # Make that ordering explicit so no xref warning can fire for the calls.
+  Code.ensure_compiled!(Portals)
 
   @user_token_key "user_token"
 
@@ -81,7 +85,7 @@ defmodule ThamaniDawaWeb.UserAuth do
   def require_distributor_user(conn, _opts) do
     scope = conn.assigns[:current_scope]
 
-    if scope && Scope.distributor_access?(scope) && distributor_organization?(scope) do
+    if scope && Portals.portal_access?(scope, :distributor) do
       conn
     else
       conn
@@ -97,17 +101,19 @@ defmodule ThamaniDawaWeb.UserAuth do
   Also supports `:require_authenticated` (halts unless a user is signed in),
   `:require_admin` (halts unless the signed-in user is an org admin, §7),
   `:require_superadmin` (halts unless the signed-in user is a platform superadmin),
-  `:require_pharmacy_access`, `:require_lab_access`, and
-  `:require_distributor_access`.
+  `:require_pharmacy_access`, `:require_lab_access`, `:require_distributor_access`,
+  `:require_distributor_admin_access` (distributor access, plus org admin —
+  gates Billing/Mobile users/Org settings/PPB reporting within the
+  distributor portal), and `:require_confirmed_email` (halts unless the
+  signed-in admin has confirmed their email — see its doc below).
 
-  The pharmacy/lab guards check two things: role (per §7 — admin, or the
-  matching staff role, or `pharma_lab`) AND, for every non-admin, that the
-  user's *current site* actually offers that portal's operations
-  (`Site.pharmacy?/1` / `Site.lab?/1`). Admins are exempt from the site
-  check — they operate org-wide and their `current_site_id` is `nil` by
-  design. A denied request is redirected to the other portal when the
-  user's role+current-site combination supports it, and to `/` otherwise
-  (e.g. a warehouse-only site, or no current site at all).
+  The portal guards delegate to `ThamaniDawaWeb.Portals.portal_access?/2`:
+  role grants (§7 — admins pass every role check) AND the current site
+  actually offering that portal's operations, so a user can only reach the
+  panel their *stationed site* offers. A denied request is redirected to
+  the scope's default portal (`Portals.default_path/1`) — the other side
+  of a combined site when the role+site combination supports it, and `/`
+  otherwise (e.g. a warehouse-only site, or no accessible portal at all).
   """
   def on_mount(:mount_current_scope, _params, session, socket) do
     socket =
@@ -116,6 +122,17 @@ defmodule ThamaniDawaWeb.UserAuth do
     set_audit_actor(socket)
 
     {:cont, socket}
+  end
+
+  def on_mount(:redirect_if_authenticated, _params, session, socket) do
+    socket =
+      Phoenix.Component.assign_new(socket, :current_scope, fn -> scope_for_session(session) end)
+
+    if socket.assigns.current_scope && socket.assigns.current_scope.user do
+      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/login")}
+    else
+      {:cont, socket}
+    end
   end
 
   def on_mount(:require_authenticated, _params, session, socket) do
@@ -154,6 +171,22 @@ defmodule ThamaniDawaWeb.UserAuth do
     end
   end
 
+  # Blocks a self-signed-up admin whose email isn't confirmed yet from every
+  # other `:organization` route, redirecting to `/confirm-email`. Must be
+  # listed *after* `:require_admin` in a live_session's `on_mount` so
+  # `current_scope.user` is already populated — see `ConfirmEmailLive`
+  # (exempt from this hook itself, to avoid a redirect loop) and
+  # `ConfirmationController` for the token-link that sets `confirmed_at`.
+  # Invited staff are auto-confirmed on accepting their invite
+  # (`Accounts.accept_invite/2`), so they never hit this gate.
+  def on_mount(:require_confirmed_email, _params, _session, socket) do
+    if socket.assigns.current_scope.user.confirmed_at do
+      {:cont, socket}
+    else
+      {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/confirm-email")}
+    end
+  end
+
   def on_mount(:require_superadmin, params, session, socket) do
     case on_mount(:require_authenticated, params, session, socket) do
       {:cont, socket} ->
@@ -181,7 +214,7 @@ defmodule ThamaniDawaWeb.UserAuth do
       {:cont, socket} ->
         scope = socket.assigns.current_scope
 
-        if portal_access?(scope, :pharmacy) do
+        if Portals.portal_access?(scope, :pharmacy) do
           {:cont, socket}
         else
           {:halt, deny_portal(socket, scope, :pharmacy)}
@@ -197,7 +230,7 @@ defmodule ThamaniDawaWeb.UserAuth do
       {:cont, socket} ->
         scope = socket.assigns.current_scope
 
-        if portal_access?(scope, :lab) do
+        if Portals.portal_access?(scope, :lab) do
           {:cont, socket}
         else
           {:halt, deny_portal(socket, scope, :lab)}
@@ -213,16 +246,32 @@ defmodule ThamaniDawaWeb.UserAuth do
       {:cont, socket} ->
         scope = socket.assigns.current_scope
 
-        if Scope.distributor_access?(scope) and distributor_organization?(scope) do
+        if Portals.portal_access?(scope, :distributor) do
+          {:cont, socket}
+        else
+          {:halt, deny_portal(socket, scope, :distributor)}
+        end
+
+      {:halt, socket} ->
+        {:halt, socket}
+    end
+  end
+
+  # Admin-only pages within the distributor portal — Billing, Mobile users,
+  # Org settings, PPB reporting — gated on top of `:require_distributor_access`'s
+  # checks, same composition `:require_confirmed_email` uses on top of
+  # `:require_admin` for the organization portal. Denied staff land back in
+  # their own portal (`/distributor`), not logged out of it entirely.
+  def on_mount(:require_distributor_admin_access, params, session, socket) do
+    case on_mount(:require_distributor_access, params, session, socket) do
+      {:cont, socket} ->
+        if Scope.admin?(socket.assigns.current_scope) do
           {:cont, socket}
         else
           socket =
             socket
-            |> Phoenix.LiveView.put_flash(
-              :error,
-              "You don't have access to the distributor portal."
-            )
-            |> Phoenix.LiveView.redirect(to: ~p"/")
+            |> Phoenix.LiveView.put_flash(:error, "You must be an admin to access this page.")
+            |> Phoenix.LiveView.redirect(to: ~p"/distributor")
 
           {:halt, socket}
         end
@@ -236,66 +285,21 @@ defmodule ThamaniDawaWeb.UserAuth do
   Whether the scope's organization operates as a distributor — the
   equivalent of ErpLive's "Healthcare Distributor" sector check. Demoting an
   organization out of the distributor model locks its users (and its mobile
-  app users) out of the distributor workflow.
+  app users) out of the distributor workflow. Delegates to
+  `ThamaniDawaWeb.Portals`, the single source of truth for portal access.
   """
-  def distributor_organization?(%Scope{organization_id: organization_id})
-      when is_integer(organization_id) do
-    organization_id
-    |> ThamaniDawa.Organizations.get_organization!()
-    |> ThamaniDawa.Organizations.Organization.distributor?()
-  end
+  def distributor_organization?(scope), do: Portals.distributor_organization?(scope)
 
-  def distributor_organization?(_scope), do: false
-
-  defp portal_access?(scope, :pharmacy),
-    do:
-      Scope.pharmacy_access?(scope) and
-        (Scope.admin?(scope) or current_site_offers?(scope, :pharmacy))
-
-  defp portal_access?(scope, :lab),
-    do: Scope.lab_access?(scope) and (Scope.admin?(scope) or current_site_offers?(scope, :lab))
-
-  # No home site picked yet is an existing, intentional state (e.g. a
-  # pharmacist invited without a site) — those pages handle it themselves
-  # with an inline site picker/flash, so the router guard lets them through
-  # rather than blocking entry. Only an *actual* site of the wrong type
-  # should deny access.
-  defp current_site_offers?(%Scope{current_site_id: nil}, _portal), do: true
-
-  defp current_site_offers?(
-         %Scope{current_site_id: site_id, organization_id: organization_id},
-         portal
-       ) do
-    case portal do
-      :pharmacy -> Site.pharmacy?(Sites.get_site!(organization_id, site_id))
-      :lab -> Site.lab?(Sites.get_site!(organization_id, site_id))
-    end
-  rescue
-    Ecto.NoResultsError -> true
-  end
-
+  # Denied portal access lands the user on the portal their scope *can*
+  # reach (the other side of a combined site, their own site's panel, or
+  # the org dashboard) — never logged out for a wrong-portal URL.
   defp deny_portal(socket, scope, denied_portal) do
-    other = if denied_portal == :pharmacy, do: :lab, else: :pharmacy
+    denied_label = denied_portal |> Portals.portal_label() |> String.downcase()
 
-    if portal_access?(scope, other) do
-      socket
-      |> Phoenix.LiveView.put_flash(
-        :info,
-        "Your current site doesn't offer #{denied_portal} services — redirected you to the #{other} portal."
-      )
-      |> Phoenix.LiveView.redirect(to: portal_path(other))
-    else
-      socket
-      |> Phoenix.LiveView.put_flash(
-        :error,
-        "You don't have access to the #{denied_portal} portal."
-      )
-      |> Phoenix.LiveView.redirect(to: ~p"/")
-    end
+    socket
+    |> Phoenix.LiveView.put_flash(:error, "You don't have access to the #{denied_label} portal.")
+    |> Phoenix.LiveView.redirect(to: Portals.default_path(scope))
   end
-
-  defp portal_path(:pharmacy), do: ~p"/pharmacy"
-  defp portal_path(:lab), do: ~p"/lab"
 
   defp scope_for_session(session) do
     token = session[@user_token_key]

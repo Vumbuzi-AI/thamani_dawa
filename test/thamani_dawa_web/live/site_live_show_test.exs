@@ -311,7 +311,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
   end
 
   describe "SiteLive.Index" do
-    test "clicking a site's View action navigates to its show page", %{conn: conn} do
+    test "clicking a site's row navigates to its show page", %{conn: conn} do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
       site = site_fixture(%{organization_id: organization.id})
@@ -319,7 +319,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
       assert {:error, {:live_redirect, %{to: to}}} =
-               lv |> element("#btn-view-site-#{site.id}") |> render_click()
+               lv |> element("#site-row-#{site.id} td", site.name) |> render_click()
 
       assert to == ~p"/org/sites/#{site.id}"
     end

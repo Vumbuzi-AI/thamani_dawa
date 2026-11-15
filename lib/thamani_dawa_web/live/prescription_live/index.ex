@@ -568,7 +568,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                           options={
                             Enum.map(
                               @products,
-                              &{"#{&1.generic_name}#{if &1.brand_name, do: " (" <> &1.brand_name <> ")"} — KES #{&1.price} — #{&1.stock} in stock",
+                              &{"#{&1.generic_name}#{if &1.brand_name, do: " (" <> &1.brand_name <> ")"} · KES #{&1.price} · #{&1.stock} in stock",
                                &1.id}
                             )
                           }

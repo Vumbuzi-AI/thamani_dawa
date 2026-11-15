@@ -11,7 +11,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
   defp log_in(conn, user), do: conn |> init_test_session(%{}) |> UserAuth.log_in_user(user)
 
   setup %{conn: conn} do
-    distributor = distributor_user_fixture()
+    distributor = distributor_user_fixture(%{roles: [:admin, :distributor]})
     %{conn: log_in(conn, distributor), distributor: distributor}
   end
 
@@ -25,7 +25,11 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
 
     test "an admin is redirected away" do
       conn = log_in(build_conn(), user_fixture())
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/distributor")
+
+      assert {:error, {:redirect, %{to: "/org/dashboard", flash: flash}}} =
+               live(conn, ~p"/distributor")
+
+      assert flash["error"] == "You don't have access to the distributor portal."
     end
 
     test "a distributor-role user outside a distributor organization is redirected away" do
@@ -43,21 +47,59 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
     end
   end
 
+  describe "admin/distributor role separation" do
+    setup %{conn: conn, distributor: admin} do
+      staff =
+        distributor_user_fixture(%{organization_id: admin.organization_id, roles: [:distributor]})
+
+      prepay_allowance_fixture(admin.organization_id, admin, 100)
+
+      %{conn: log_in(conn, staff), staff: staff}
+    end
+
+    test "non-admin staff can still reach day-to-day operations", %{conn: conn} do
+      for path <- [~p"/distributor", ~p"/distributor/shipments", ~p"/distributor/products"] do
+        assert {:ok, _view, _html} = live(conn, path)
+      end
+    end
+
+    test "non-admin staff are bounced back to the portal from admin-only pages", %{conn: conn} do
+      for path <- [
+            ~p"/distributor/mobile-users",
+            ~p"/distributor/settings",
+            ~p"/distributor/epcis"
+          ] do
+        assert {:error, {:redirect, %{to: "/distributor"}}} = live(conn, path)
+      end
+    end
+  end
+
   describe "portal basics" do
-    test "customers, warehouses, products, suppliers, receiving and settings render", %{
+    test "products, receiving and settings render", %{
       conn: conn
     } do
       for {path, selector} <- [
-            {~p"/distributor/customers", "#distributor-customers"},
-            {~p"/distributor/warehouses", "#distributor-warehouses"},
             {~p"/distributor/products", "#distributor-products"},
-            {~p"/distributor/suppliers", "#distributor-suppliers"},
             {~p"/distributor/receiving", "#distributor-receipts"},
             {~p"/distributor/settings", "#distributor-gs1-settings-form"}
           ] do
         assert {:ok, view, _html} = live(conn, path)
         assert has_element?(view, selector)
+
+        if path == ~p"/distributor/receiving" do
+          assert has_element?(view, ~s(a[href="/distributor/receiving"][aria-current="page"]))
+        end
       end
+    end
+
+    test "opens the receive-stock form without a browser refresh", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/distributor/receiving")
+
+      view |> element("#receive-distributor-stock") |> render_click()
+
+      assert_patch(view, ~p"/distributor/receiving/new")
+      assert has_element?(view, "#open-add-item-empty")
+      refute has_element?(view, "#distributor-receipts")
     end
 
     test "product tabs and search share the responsive toolbar row", %{conn: conn} do
@@ -72,17 +114,6 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
                view,
                "#distributor-product-toolbar #distributor-product-search"
              )
-    end
-
-    test "a new customer gets a GLN", %{conn: conn, distributor: distributor} do
-      {:ok, view, _html} = live(conn, ~p"/distributor/customers/new")
-
-      view
-      |> form("#distributor-customer-form", customer: %{name: "Kisumu Clinic"})
-      |> render_submit()
-
-      [customer] = ThamaniDawa.DistributorCustomers.list_customers(distributor.organization_id)
-      assert customer.gln =~ ~r/^\d{13}$/
     end
   end
 
@@ -138,12 +169,28 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       organization_id = distributor.organization_id
       prepay_allowance_fixture(organization_id, distributor, 100)
       warehouse = warehouse_fixture(organization_id)
-      customer = customer_fixture(organization_id)
-      %{warehouse: warehouse, customer: customer}
+      destination = destination_fixture(organization_id)
+      %{warehouse: warehouse, destination: destination}
     end
 
-    test "creating a draft shipment", %{conn: conn, warehouse: warehouse, customer: customer} do
+    test "creating a draft shipment", %{
+      conn: conn,
+      warehouse: warehouse,
+      destination: destination
+    } do
       {:ok, view, _html} = live(conn, ~p"/distributor/shipments/new")
+
+      view
+      |> form("#distributor-shipment-form",
+        shipment: %{
+          order_number: "PO-7781",
+          origin_gln: warehouse.gln,
+          destination_gln: destination.gln
+        }
+      )
+      |> render_change(%{"_target" => ["shipment", "destination_gln"]})
+
+      render_async(view, 5_000)
 
       assert {:error, {:live_redirect, %{to: "/distributor/shipments/" <> _id}}} =
                view
@@ -151,7 +198,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
                  shipment: %{
                    order_number: "PO-7781",
                    origin_gln: warehouse.gln,
-                   destination_gln: customer.gln
+                   destination_gln: destination.gln
                  }
                )
                |> render_submit()
@@ -161,14 +208,14 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       conn: conn,
       distributor: distributor,
       warehouse: warehouse,
-      customer: customer
+      destination: destination
     } do
       batch = received_unit_fixture(distributor.organization_id, warehouse.id, distributor.id)
 
       shipment =
         submitted_shipment_fixture(distributor.organization_id, distributor, [batch], %{
           warehouse: warehouse,
-          customer: customer
+          destination: destination
         })
 
       usage = ThamaniDawa.Distributor.Billing.active_usage(distributor.organization_id)
@@ -177,7 +224,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
 
       {:ok, index, _html} = live(conn, ~p"/distributor/shipments")
       assert has_element?(index, "#distributor-shipments")
-      assert has_element?(index, "#shipment-tab-submitted")
+      assert has_element?(index, "#filter-status")
 
       {:ok, view, _html} = live(conn, ~p"/distributor/shipments/#{shipment.id}")
       assert has_element?(view, "#approve-distributor-shipment")
@@ -204,14 +251,14 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       conn: conn,
       distributor: distributor,
       warehouse: warehouse,
-      customer: customer
+      destination: destination
     } do
       batch = received_unit_fixture(distributor.organization_id, warehouse.id, distributor.id)
 
       shipment =
         submitted_shipment_fixture(distributor.organization_id, distributor, [batch], %{
           warehouse: warehouse,
-          customer: customer
+          destination: destination
         })
 
       {:ok, view, _html} = live(conn, ~p"/distributor/shipments/#{shipment.id}")
@@ -226,7 +273,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       conn: conn,
       distributor: distributor,
       warehouse: warehouse,
-      customer: customer
+      destination: destination
     } do
       usage = ThamaniDawa.Distributor.Billing.active_usage(distributor.organization_id)
 
@@ -239,7 +286,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       shipment =
         submitted_shipment_fixture(distributor.organization_id, distributor, [batch], %{
           warehouse: warehouse,
-          customer: customer
+          destination: destination
         })
 
       {:ok, view, _html} = live(conn, ~p"/distributor/shipments/#{shipment.id}")
@@ -260,35 +307,37 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
     test "non-distributor users cannot access a shipment approval screen", %{
       distributor: distributor,
       warehouse: warehouse,
-      customer: customer
+      destination: destination
     } do
       batch = received_unit_fixture(distributor.organization_id, warehouse.id, distributor.id)
 
       shipment =
         submitted_shipment_fixture(distributor.organization_id, distributor, [batch], %{
           warehouse: warehouse,
-          customer: customer
+          destination: destination
         })
 
       unauthorized =
         staff_fixture(%{organization_id: distributor.organization_id, role: :pharmacist})
 
-      assert {:error, {:redirect, %{to: "/"}}} =
+      assert {:error, {:redirect, %{to: "/pharmacy", flash: flash}}} =
                live(log_in(build_conn(), unauthorized), ~p"/distributor/shipments/#{shipment.id}")
+
+      assert flash["error"] == "You don't have access to the distributor portal."
     end
 
     test "rejecting requires a reason", %{
       conn: conn,
       distributor: distributor,
       warehouse: warehouse,
-      customer: customer
+      destination: destination
     } do
       batch = received_unit_fixture(distributor.organization_id, warehouse.id, distributor.id)
 
       shipment =
         submitted_shipment_fixture(distributor.organization_id, distributor, [batch], %{
           warehouse: warehouse,
-          customer: customer
+          destination: destination
         })
 
       {:ok, view, _html} = live(conn, ~p"/distributor/shipments/#{shipment.id}")
@@ -305,14 +354,14 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       conn: conn,
       distributor: distributor,
       warehouse: warehouse,
-      customer: customer
+      destination: destination
     } do
       batch = received_unit_fixture(distributor.organization_id, warehouse.id, distributor.id)
 
       shipment =
         submitted_shipment_fixture(distributor.organization_id, distributor, [batch], %{
           warehouse: warehouse,
-          customer: customer
+          destination: destination
         })
 
       conn = get(conn, ~p"/distributor/shipments/#{shipment.id}/export")
@@ -356,7 +405,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
 
       assert {:ok, view, _html} = live(conn, ~p"/distributor/receiving/new")
 
-      view |> element("#open-add-item") |> render_click()
+      view |> element("#open-add-item-empty") |> render_click()
 
       view
       |> form("#distributor-scan-gtin-form", scan: %{gtin: product.gtin <> " "})

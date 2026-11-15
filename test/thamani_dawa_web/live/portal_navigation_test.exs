@@ -1,137 +1,195 @@
 defmodule ThamaniDawaWeb.PortalNavigationTest do
   @moduledoc """
-  Exercises the shared sidebar shells' cross-portal navigation. Combined
-  pharmacy/lab staff only get a cross-portal switch link while their
-  *current site* actually offers both operations — a pharma_lab user
-  stationed at a lab-only (or pharmacy-only) site sees just that one side,
-  same as single-role staff.
+  Exercises the flattened sidebar nav. There is no cross-portal switcher:
+  the current site's activities decide which operations panels exist in the
+  nav, the user's roles decide which of those panels they can work, and a
+  combined pharmacy+lab site simply shows both panels stacked in one nav.
+  Admins see org management (Sites/Products/Suppliers/Team) only in the
+  "Manage organization" context (no site selected) — not while drilled
+  into a specific site's operations.
   """
 
   use ThamaniDawaWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.OrganizationsFixtures
   import ThamaniDawa.SitesFixtures
 
-  describe "combined pharmacy/lab staff at a combined site" do
-    setup %{conn: conn} do
-      admin = user_fixture()
+  alias ThamaniDawa.Accounts
+  alias ThamaniDawa.Accounts.Scope
 
-      site =
-        site_fixture(%{
-          organization_id: admin.organization_id,
-          activities: [:pharmacy, :laboratory]
-        })
+  describe "combined pharmacy/lab staff" do
+    test "at a combined site, both panels are stacked in one nav", %{conn: conn} do
+      %{conn: conn} = combined_staff_at(conn, [:pharmacy, :laboratory])
 
-      pharma_lab =
-        staff_fixture(%{
-          organization_id: admin.organization_id,
-          invited_by_id: admin.id,
-          role: :pharma_lab,
-          site_id: site.id
-        })
-
-      %{conn: log_in_user(conn, pharma_lab)}
-    end
-
-    test "see a link to the lab portal from the pharmacy shell", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/pharmacy")
 
-      assert has_element?(view, "#sidebar-portal-switch")
-      assert has_element?(view, "#portal-link-lab")
-      refute has_element?(view, "#portal-link-pharmacy")
+      assert has_element?(view, "span[id='nav-label-/pharmacy']")
+      assert has_element?(view, "span[id='nav-label-/lab']")
     end
 
-    test "see a link to the pharmacy portal from the lab shell", %{conn: conn} do
+    test "at a combined site, both panels are also stacked in the lab shell", %{conn: conn} do
+      %{conn: conn} = combined_staff_at(conn, [:pharmacy, :laboratory])
+
       {:ok, view, _html} = live(conn, ~p"/lab")
 
-      assert has_element?(view, "#sidebar-portal-switch")
-      assert has_element?(view, "#portal-link-pharmacy")
-      refute has_element?(view, "#portal-link-lab")
-    end
-  end
-
-  describe "combined pharmacy/lab staff at a single-purpose site" do
-    test "at a lab-only site, gets no cross-portal switch from the lab shell", %{conn: conn} do
-      admin = user_fixture()
-
-      lab_site =
-        site_fixture(%{organization_id: admin.organization_id, activities: [:laboratory]})
-
-      pharma_lab =
-        staff_fixture(%{
-          organization_id: admin.organization_id,
-          invited_by_id: admin.id,
-          role: :pharma_lab,
-          site_id: lab_site.id
-        })
-
-      {:ok, view, _html} = live(log_in_user(conn, pharma_lab), ~p"/lab")
-
-      refute has_element?(view, "#sidebar-portal-switch")
-      refute has_element?(view, "#portal-link-pharmacy")
+      assert has_element?(view, "span[id='nav-label-/lab']")
+      assert has_element?(view, "span[id='nav-label-/pharmacy']")
     end
 
-    test "at a pharmacy-only site, gets no cross-portal switch from the pharmacy shell", %{
-      conn: conn
-    } do
-      admin = user_fixture()
+    test "at a lab-only site, only the lab panel appears", %{conn: conn} do
+      %{conn: conn} = combined_staff_at(conn, [:laboratory])
 
-      pharmacy_site =
-        site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy]})
+      {:ok, view, _html} = live(conn, ~p"/lab")
 
-      pharma_lab =
-        staff_fixture(%{
-          organization_id: admin.organization_id,
-          invited_by_id: admin.id,
-          role: :pharma_lab,
-          site_id: pharmacy_site.id
-        })
+      assert has_element?(view, "span[id='nav-label-/lab']")
+      refute has_element?(view, "span[id='nav-label-/pharmacy']")
+    end
 
-      {:ok, view, _html} = live(log_in_user(conn, pharma_lab), ~p"/pharmacy")
+    test "at a pharmacy-only site, only the pharmacy panel appears", %{conn: conn} do
+      %{conn: conn} = combined_staff_at(conn, [:pharmacy])
 
-      refute has_element?(view, "#sidebar-portal-switch")
-      refute has_element?(view, "#portal-link-lab")
+      {:ok, view, _html} = live(conn, ~p"/pharmacy")
+
+      assert has_element?(view, "span[id='nav-label-/pharmacy']")
+      refute has_element?(view, "span[id='nav-label-/lab']")
     end
   end
 
   describe "single-role staff" do
-    setup %{conn: conn} do
-      %{admin: user_fixture(), conn: conn}
+    test "a pharmacist sees only the pharmacy panel", %{conn: conn} do
+      %{conn: conn} = staff_at(conn, [:pharmacist], [:pharmacy])
+
+      {:ok, view, _html} = live(conn, ~p"/pharmacy")
+
+      assert has_element?(view, "span[id='nav-label-/pharmacy']")
+      refute has_element?(view, "span[id='nav-label-/lab']")
     end
 
-    test "a pharmacist gets no cross-portal link", %{admin: admin, conn: conn} do
-      site = site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy]})
+    test "a lab technician sees only the lab panel", %{conn: conn} do
+      %{conn: conn} = staff_at(conn, [:lab_technician], [:laboratory])
 
-      pharmacist =
-        staff_fixture(%{
-          organization_id: admin.organization_id,
-          invited_by_id: admin.id,
-          role: :pharmacist,
-          site_id: site.id
-        })
+      {:ok, view, _html} = live(conn, ~p"/lab")
 
-      {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
+      assert has_element?(view, "span[id='nav-label-/lab']")
+      refute has_element?(view, "span[id='nav-label-/pharmacy']")
+    end
+  end
 
-      refute has_element?(view, "#sidebar-portal-switch")
-      refute has_element?(view, "#portal-link-lab")
+  describe "admins carry org management into site context" do
+    test "an admin at a pharmacy site sees only that site's panel, not org management", %{
+      conn: conn
+    } do
+      admin = user_fixture()
+
+      site =
+        site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy]})
+
+      admin = switch_site(admin, site.id)
+
+      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/pharmacy")
+
+      assert has_element?(view, "span[id='nav-label-/pharmacy']")
+      refute has_element?(view, "span[id='nav-label-/org/sites']")
+      refute has_element?(view, "span[id='nav-label-/org/team']")
+      refute has_element?(view, "span[id='nav-label-/lab']")
     end
 
-    test "a lab technician gets no cross-portal link", %{admin: admin, conn: conn} do
-      site = site_fixture(%{organization_id: admin.organization_id, activities: [:laboratory]})
+    test "an admin in org context sees org operations plus org management", %{conn: conn} do
+      admin = user_fixture()
 
-      lab_technician =
-        staff_fixture(%{
-          organization_id: admin.organization_id,
-          invited_by_id: admin.id,
-          role: :lab_technician,
-          site_id: site.id
-        })
+      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
 
-      {:ok, view, _html} = live(log_in_user(conn, lab_technician), ~p"/lab")
-
-      refute has_element?(view, "#sidebar-portal-switch")
-      refute has_element?(view, "#portal-link-pharmacy")
+      assert has_element?(view, "span[id='nav-label-/org/dashboard']")
+      assert has_element?(view, "span[id='nav-label-/org/sites']")
+      assert has_element?(view, "span[id='nav-label-/org/settings']")
+      refute has_element?(view, "span[id='nav-label-/pharmacy']")
     end
+  end
+
+  describe "distributor staff" do
+    test "see distribution operations and nothing org-management-shaped", %{conn: conn} do
+      %{conn: conn} = distributor_staff_at(conn, [:distributor])
+
+      {:ok, view, _html} = live(conn, ~p"/distributor")
+
+      assert has_element?(view, "span[id='nav-label-/distributor']")
+      assert has_element?(view, "span[id='nav-label-/distributor/shipments']")
+      refute has_element?(view, "span[id='nav-label-/org/sites']")
+      refute has_element?(view, "span[id='nav-label-/distributor/billing']")
+    end
+
+    test "an admin at a distribution site does not see the distributor admin pages", %{
+      conn: conn
+    } do
+      org = organization_fixture(%{operating_models: [:distributor]})
+      admin = user_fixture(%{organization_id: org.id})
+
+      site = site_fixture(%{organization_id: org.id, activities: [:distribution]})
+      admin = switch_site(admin, site.id)
+
+      {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/distributor")
+
+      assert has_element?(view, "span[id='nav-label-/distributor']")
+      refute has_element?(view, "span[id='nav-label-/distributor/billing']")
+      refute has_element?(view, "span[id='nav-label-/distributor/mobile-users']")
+      refute has_element?(view, "span[id='nav-label-/pharmacy']")
+    end
+  end
+
+  defp combined_staff_at(conn, activities) do
+    admin = user_fixture()
+
+    site = site_fixture(%{organization_id: admin.organization_id, activities: activities})
+
+    staff =
+      staff_fixture(%{
+        organization_id: admin.organization_id,
+        invited_by_id: admin.id,
+        role: :pharma_lab,
+        site_id: site.id
+      })
+
+    %{conn: log_in_user(conn, staff)}
+  end
+
+  defp staff_at(conn, roles, activities) do
+    admin = user_fixture()
+
+    site = site_fixture(%{organization_id: admin.organization_id, activities: activities})
+
+    staff =
+      staff_fixture(%{
+        organization_id: admin.organization_id,
+        invited_by_id: admin.id,
+        roles: roles,
+        site_id: site.id
+      })
+
+    %{conn: log_in_user(conn, staff)}
+  end
+
+  defp distributor_staff_at(conn, roles) do
+    org = organization_fixture(%{operating_models: [:distributor]})
+    admin = user_fixture(%{organization_id: org.id})
+
+    site = site_fixture(%{organization_id: org.id, activities: [:distribution]})
+
+    staff =
+      staff_fixture(%{
+        organization_id: org.id,
+        invited_by_id: admin.id,
+        roles: roles,
+        site_id: site.id
+      })
+
+    %{conn: log_in_user(conn, staff)}
+  end
+
+  defp switch_site(admin, site_id) do
+    {:ok, admin} = Accounts.switch_current_site(Scope.for_user(admin), site_id)
+
+    admin
   end
 end

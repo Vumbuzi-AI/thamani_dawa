@@ -65,6 +65,11 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
     {:noreply, assign(socket, :gln_check, matched)}
   end
 
+  def handle_async(:gln_lookup, {:ok, {:ok, :inactive, licence}}, socket) do
+    inactive = {:inactive, socket.assigns.gln_check_value, licensee_name(licence)}
+    {:noreply, assign(socket, :gln_check, inactive)}
+  end
+
   def handle_async(:gln_lookup, {:ok, {:ok, :not_verified}}, socket) do
     {:noreply, assign(socket, :gln_check, :not_found)}
   end
@@ -147,6 +152,7 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
 
   defp gln_status(_organization, :checking), do: :checking
   defp gln_status(_organization, {:matched, _value, _name}), do: :verified
+  defp gln_status(_organization, {:inactive, _value, _name}), do: :inactive
   defp gln_status(_organization, :not_found), do: :not_found
   defp gln_status(_organization, :invalid_check_digit), do: :invalid_check_digit
   defp gln_status(_organization, :unavailable), do: :unavailable
@@ -158,10 +164,12 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
   defp gln_status(_organization, _check), do: :pending
 
   defp matched_name({:matched, _value, name}), do: name
+  defp matched_name({:inactive, _value, name}), do: name
   defp matched_name(_check), do: nil
 
   defp status_label(:checking), do: "Checking with GS1…"
   defp status_label(:verified), do: "Verified with GS1"
+  defp status_label(:inactive), do: "Found, but not active in the registry"
   defp status_label(:not_found), do: "Not found in registry"
   defp status_label(:invalid_check_digit), do: "Invalid check digit"
   defp status_label(:unavailable), do: "Couldn't reach the GS1 registry"
@@ -170,8 +178,9 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
 
   defp status_class(status) when status in [:verified], do: "text-green-700"
 
-  defp status_class(status) when status in [:not_found, :unavailable, :invalid_check_digit],
-    do: "text-amber-700"
+  defp status_class(status)
+       when status in [:not_found, :unavailable, :invalid_check_digit, :inactive],
+       do: "text-amber-700"
 
   defp status_class(_status), do: "text-thamani-pewter"
 
@@ -322,7 +331,7 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
                   {status_label(gln_status(@organization, @gln_check))}
                 </span>
                 <span :if={matched_name(@gln_check)} class="text-thamani-pewter">
-                  — matches {matched_name(@gln_check)}
+                  · matches {matched_name(@gln_check)}
                 </span>
               </p>
             </div>

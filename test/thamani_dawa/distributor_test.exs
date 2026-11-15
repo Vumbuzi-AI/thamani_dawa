@@ -10,9 +10,9 @@ defmodule ThamaniDawa.DistributorTest do
     organization = distributor_organization_fixture()
     user = distributor_user_fixture(%{organization_id: organization.id})
     warehouse = warehouse_fixture(organization.id)
-    customer = customer_fixture(organization.id)
+    destination = destination_fixture(organization.id)
 
-    %{organization: organization, user: user, warehouse: warehouse, customer: customer}
+    %{organization: organization, user: user, warehouse: warehouse, destination: destination}
   end
 
   defp unit(ctx, attrs \\ %{}),
@@ -22,7 +22,7 @@ defmodule ThamaniDawa.DistributorTest do
     shipment_fixture(
       ctx.organization.id,
       ctx.user,
-      Map.merge(%{warehouse: ctx.warehouse, customer: ctx.customer}, attrs)
+      Map.merge(%{warehouse: ctx.warehouse, destination: ctx.destination}, attrs)
     )
   end
 
@@ -35,28 +35,39 @@ defmodule ThamaniDawa.DistributorTest do
   end
 
   describe "create_shipment/3" do
-    test "snapshots the origin site and destination customer", ctx do
+    test "snapshots the origin site and resolved destination", ctx do
       shipment = draft(ctx)
 
       assert shipment.status == "draft"
       assert shipment.origin_company == ctx.warehouse.name
-      assert shipment.destination_company == ctx.customer.name
-      assert shipment.destination_po_box == ctx.customer.po_box
+      assert shipment.destination_company == ctx.destination.name
+      assert shipment.destination_site_id == ctx.destination.id
       assert "SHP-" <> _ = shipment.reference
     end
 
-    test "rejects GLNs that aren't the organization's own site or customer", ctx do
+    test "resolves a destination belonging to a different organization's site", ctx do
       other = distributor_organization_fixture()
-      foreign_customer = customer_fixture(other.id)
+      foreign_destination = destination_fixture(other.id)
 
+      assert {:ok, shipment} =
+               Distributor.create_shipment(ctx.organization.id, ctx.user, %{
+                 "order_number" => "PO-1",
+                 "origin_gln" => ctx.warehouse.gln,
+                 "destination_gln" => foreign_destination.gln
+               })
+
+      assert shipment.destination_company == foreign_destination.name
+    end
+
+    test "rejects a destination GLN that cannot be verified", ctx do
       assert {:error, changeset} =
                Distributor.create_shipment(ctx.organization.id, ctx.user, %{
                  "order_number" => "PO-1",
                  "origin_gln" => ctx.warehouse.gln,
-                 "destination_gln" => foreign_customer.gln
+                 "destination_gln" => "0000000000000"
                })
 
-      assert "is not one of your active customers" in errors_on(changeset).destination_gln
+      assert "could not be verified — check the GLN" in errors_on(changeset).destination_gln
     end
 
     test "requires different origin and destination GLNs", ctx do
@@ -68,6 +79,34 @@ defmodule ThamaniDawa.DistributorTest do
                })
 
       assert "must be different from the origin GLN" in errors_on(changeset).destination_gln
+    end
+  end
+
+  describe "list_shipments/2 origin_site_id filter" do
+    test "narrows to shipments originating from the given warehouse", ctx do
+      other_warehouse = warehouse_fixture(ctx.organization.id)
+      from_default = draft(ctx)
+      from_other = draft(ctx, %{warehouse: other_warehouse})
+
+      result =
+        Distributor.list_shipments(ctx.organization.id, %{origin_site_id: ctx.warehouse.id})
+
+      ids = Enum.map(result.entries, & &1.id)
+
+      assert from_default.id in ids
+      refute from_other.id in ids
+    end
+
+    test "returns every shipment when no origin_site_id is given", ctx do
+      other_warehouse = warehouse_fixture(ctx.organization.id)
+      from_default = draft(ctx)
+      from_other = draft(ctx, %{warehouse: other_warehouse})
+
+      result = Distributor.list_shipments(ctx.organization.id, %{})
+      ids = Enum.map(result.entries, & &1.id)
+
+      assert from_default.id in ids
+      assert from_other.id in ids
     end
   end
 
@@ -168,7 +207,7 @@ defmodule ThamaniDawa.DistributorTest do
       shipment =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
           warehouse: ctx.warehouse,
-          customer: ctx.customer
+          destination: ctx.destination
         })
 
       assert shipment.status == "submitted"
@@ -190,7 +229,7 @@ defmodule ThamaniDawa.DistributorTest do
       _first =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
           warehouse: ctx.warehouse,
-          customer: ctx.customer
+          destination: ctx.destination
         })
 
       {_shipment, mobile_user, shipper} = claimed_draft_with_shipper(ctx)
@@ -214,7 +253,7 @@ defmodule ThamaniDawa.DistributorTest do
       shipment =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
           warehouse: ctx.warehouse,
-          customer: ctx.customer
+          destination: ctx.destination
         })
 
       assert {:ok, approved} =
@@ -235,7 +274,7 @@ defmodule ThamaniDawa.DistributorTest do
       shipment =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [unit(ctx)], %{
           warehouse: ctx.warehouse,
-          customer: ctx.customer
+          destination: ctx.destination
         })
 
       assert {:ok, _} = Distributor.approve_shipment(ctx.organization.id, ctx.user, shipment.id)
@@ -250,7 +289,7 @@ defmodule ThamaniDawa.DistributorTest do
       shipment =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [unit(ctx)], %{
           warehouse: ctx.warehouse,
-          customer: ctx.customer
+          destination: ctx.destination
         })
 
       ctx.organization
@@ -267,7 +306,7 @@ defmodule ThamaniDawa.DistributorTest do
       shipment =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [unit(ctx)], %{
           warehouse: ctx.warehouse,
-          customer: ctx.customer
+          destination: ctx.destination
         })
 
       assert {:error, {:billing, :no_active_plan}} =
@@ -283,7 +322,7 @@ defmodule ThamaniDawa.DistributorTest do
       shipment =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
           warehouse: ctx.warehouse,
-          customer: ctx.customer,
+          destination: ctx.destination,
           mobile_user: mobile_user
         })
 
@@ -308,7 +347,7 @@ defmodule ThamaniDawa.DistributorTest do
       shipment =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
           warehouse: ctx.warehouse,
-          customer: ctx.customer
+          destination: ctx.destination
         })
 
       item = Repo.get_by!(ShipmentItem, shipment_id: shipment.id)

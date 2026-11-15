@@ -102,7 +102,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
   end
 
   defp filter_by_portal(transactions, :pharmacy),
-    do: Enum.filter(transactions, &(&1.order_type == :prescription))
+    do: Enum.filter(transactions, &(&1.order_type in [:prescription, :sale]))
 
   defp filter_by_portal(transactions, :lab),
     do: Enum.filter(transactions, &(&1.order_type == :lab_order))
@@ -286,11 +286,17 @@ defmodule ThamaniDawaWeb.EarningsLive do
     end
   end
 
-  defp order_link(%Payment{order_type: :prescription, prescription_id: id}),
-    do: {"Prescription ##{id}", ~p"/pharmacy/prescriptions/#{id}"}
+  defp order_link(%Payment{order_type: :prescription, prescription_id: id})
+       when is_integer(id),
+       do: {"Prescription ##{id}", ~p"/pharmacy/prescriptions/#{id}"}
 
-  defp order_link(%Payment{order_type: :lab_order, lab_order_id: id}),
+  defp order_link(%Payment{order_type: :lab_order, lab_order_id: id}) when is_integer(id),
     do: {"Lab order ##{id}", ~p"/lab/orders/#{id}"}
+
+  defp order_link(%Payment{order_type: :sale, sale_id: id}) when is_integer(id),
+    do: {"Quick sale ##{id}", nil}
+
+  defp order_link(%Payment{id: id}), do: {"Payment ##{id}", nil}
 
   def render(assigns) do
     ~H"""
@@ -370,7 +376,11 @@ defmodule ThamaniDawaWeb.EarningsLive do
         </:col>
         <:col :let={{_id, payment}} label="Order">
           <% {label, path} = order_link(payment) %>
-          <.link navigate={path} class="link">{label}</.link>
+          <%= if path do %>
+            <.link navigate={path} class="link">{label}</.link>
+          <% else %>
+            <span>{label}</span>
+          <% end %>
         </:col>
         <:empty_state>
           <.blank_state

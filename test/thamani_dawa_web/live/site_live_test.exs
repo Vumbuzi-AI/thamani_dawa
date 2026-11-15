@@ -3,11 +3,17 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.OrganizationsFixtures
   import ThamaniDawa.SitesFixtures
 
   setup do
     admin = user_fixture()
     {:ok, admin: admin}
+  end
+
+  defp admin_with_operating_models(operating_models) do
+    organization = organization_fixture(%{operating_models: operating_models})
+    user_fixture(%{organization_id: organization.id})
   end
 
   describe "index" do
@@ -20,7 +26,6 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       assert html =~ "Own Branch"
       refute html =~ "Other Branch"
       assert has_element?(lv, "#site-card-#{own.id}")
-      assert has_element?(lv, "#btn-view-site-#{own.id}")
       assert has_element?(lv, "#btn-edit-site-#{own.id}")
     end
 
@@ -32,7 +37,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       lv |> form("form[phx-change='search']", search: "nairobi") |> render_change()
 
-      html = render(lv)
+      html = render(element(lv, "#sites-table"))
       assert html =~ "Nairobi Branch"
       refute html =~ "Mombasa Branch"
     end
@@ -57,8 +62,9 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       |> render_submit()
 
       html = render(lv)
-      assert html =~ "Lab One"
-      refute html =~ "Pharmacy One"
+      table_html = render(element(lv, "#sites-table"))
+      assert table_html =~ "Lab One"
+      refute table_html =~ "Pharmacy One"
       assert html =~ "Activity: Laboratory"
     end
 
@@ -79,8 +85,9 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       |> render_submit()
 
       html = render(lv)
-      assert html =~ inactive.name
-      refute html =~ active.name
+      table_html = render(element(lv, "#sites-table"))
+      assert table_html =~ inactive.name
+      refute table_html =~ active.name
       assert html =~ "Status: Inactive"
     end
 
@@ -94,98 +101,143 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
   end
 
   describe "new" do
-    test "renders form with stable input IDs", %{conn: conn, admin: admin} do
+    test "renders the GLN field first, gated on GS1 verification", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/new")
 
-      assert has_element?(lv, "#site-name")
-      assert has_element?(lv, "#site-address")
-      assert has_element?(lv, "#site-capability")
-      assert has_element?(lv, "#site-capability-pharmacy")
-      assert has_element?(lv, "#site-capability-laboratory")
-      assert has_element?(lv, "#site-capability-distribution")
+      assert has_element?(lv, "#site-gln[required]")
+      refute has_element?(lv, "#site-name")
+      refute has_element?(lv, "#site-capability")
+    end
+
+    test "verifying the GLN reveals activity choices gated by the org's operating models", %{
+      conn: conn
+    } do
+      admin = admin_with_operating_models([:pharmacy, :laboratory, :distributor])
+      {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
+
+      lv |> form("#site-form", site: %{gln: "0614141000128"}) |> render_submit()
+      render_async(lv, 5_000)
+
+      html = render(lv)
+      assert html =~ "Verified with GS1"
+      assert html =~ "Retail pharmacy"
+      assert html =~ "Diagnostic laboratory"
+      assert html =~ "Pharmaceutical wholesale"
+    end
+
+    test "offers only the single matching activity when the org has one operating model", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
+
+      lv |> form("#site-form", site: %{gln: "0614141000128"}) |> render_submit()
+      render_async(lv, 5_000)
+
+      html = render(lv)
+      assert html =~ "Activity at this location"
+      assert html =~ "Retail pharmacy"
+      refute html =~ "Diagnostic laboratory"
     end
 
     test "creates a pharmacy site", %{conn: conn, admin: admin} do
       {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
 
+      lv |> form("#site-form", site: %{gln: "0614141000128"}) |> render_submit()
+      render_async(lv, 5_000)
+
       lv
-      |> form("#site-form",
-        site: %{
-          name: "Pharmacy Branch",
-          activities: [:pharmacy],
-          address: "1 Test St"
-        }
-      )
+      |> form("#site-form", site: %{gln: "0614141000128", activity_choice: "pharmacy"})
       |> render_submit()
 
-      assert render(lv) =~ "Pharmacy Branch"
+      assert render(lv) =~ "Test Licensee"
+
+      site = ThamaniDawa.Repo.get_by!(ThamaniDawa.Sites.Site, gln: "0614141000128")
+      assert site.activities == [:pharmacy]
+      assert site.name == "Test Licensee"
     end
 
-    test "creates a lab site", %{conn: conn, admin: admin} do
+    test "creates a lab site", %{conn: conn} do
+      admin = admin_with_operating_models([:laboratory])
       {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
 
+      lv |> form("#site-form", site: %{gln: "6160001000004"}) |> render_submit()
+      render_async(lv, 5_000)
+
       lv
-      |> form("#site-form",
-        site: %{
-          name: "Lab Branch",
-          activities: [:laboratory],
-          address: "2 Test St"
-        }
-      )
+      |> form("#site-form", site: %{gln: "6160001000004", activity_choice: "laboratory"})
       |> render_submit()
 
-      assert render(lv) =~ "Lab Branch"
+      site = ThamaniDawa.Repo.get_by!(ThamaniDawa.Sites.Site, gln: "6160001000004")
+      assert site.activities == [:laboratory]
     end
 
-    test "creates a pharmacy_lab site", %{conn: conn, admin: admin} do
+    test "creates a pharmacy_lab site", %{conn: conn} do
+      admin = admin_with_operating_models([:pharmacy, :laboratory])
       {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
 
+      lv |> form("#site-form", site: %{gln: "6160001000011"}) |> render_submit()
+      render_async(lv, 5_000)
+
       lv
-      |> form("#site-form",
-        site: %{
-          name: "Combined Branch",
-          activities: [:pharmacy, :laboratory],
-          address: "3 Test St"
-        }
-      )
+      |> form("#site-form", site: %{gln: "6160001000011", activity_choice: "pharmacy_laboratory"})
       |> render_submit()
 
-      assert render(lv) =~ "Combined Branch"
+      site = ThamaniDawa.Repo.get_by!(ThamaniDawa.Sites.Site, gln: "6160001000011")
+      assert site.activities == [:pharmacy, :laboratory]
     end
 
-    test "creates a warehouse site", %{conn: conn, admin: admin} do
+    test "creates a warehouse site", %{conn: conn} do
+      admin = admin_with_operating_models([:distributor])
       {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
 
+      lv |> form("#site-form", site: %{gln: "0614141000128"}) |> render_submit()
+      render_async(lv, 5_000)
+
       lv
-      |> form("#site-form",
-        site: %{
-          name: "Warehouse Branch",
-          activities: [:distribution],
-          address: "4 Test St",
-          gln: "0614141000128"
-        }
-      )
+      |> form("#site-form", site: %{gln: "0614141000128", activity_choice: "distribution"})
       |> render_submit()
 
-      assert render(lv) =~ "Warehouse Branch"
-
-      site = ThamaniDawa.Repo.get_by!(ThamaniDawa.Sites.Site, name: "Warehouse Branch")
+      site = ThamaniDawa.Repo.get_by!(ThamaniDawa.Sites.Site, gln: "0614141000128")
       assert site.activities == [:distribution]
       assert site.gln == "0614141000128"
     end
 
-    test "shows validation error when name is blank", %{conn: conn, admin: admin} do
+    test "does not save while the GLN is still unverified", %{conn: conn, admin: admin} do
       {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
 
-      lv
-      |> form("#site-form", site: %{name: "", activities: [:pharmacy]})
-      |> render_change()
+      html = lv |> form("#site-form", site: %{gln: "0614141000128"}) |> render_submit()
 
-      assert render(lv) =~ "can&#39;t be blank"
+      assert html =~ "Checking the GLN with the GS1 registry"
+      refute ThamaniDawa.Repo.get_by(ThamaniDawa.Sites.Site, gln: "0614141000128")
     end
   end
 
   describe "edit" do
+    test "uses the onboarding site-type selector and marks the current type", %{conn: conn} do
+      admin = admin_with_operating_models([:pharmacy, :laboratory, :distributor])
+
+      site =
+        site_fixture(%{
+          organization_id: admin.organization_id,
+          activities: [:pharmacy, :laboratory]
+        })
+
+      {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}/edit")
+
+      assert has_element?(
+               lv,
+               ~s(input[type="radio"][name="site[activity_choice]"][value="pharmacy_laboratory"]:checked)
+             )
+
+      assert has_element?(
+               lv,
+               ~s(input[type="radio"][name="site[activity_choice]"][value="distribution"])
+             )
+
+      refute has_element?(lv, "#site-capability")
+    end
+
     test "completing the signup-created site opens the dashboard tour", %{
       conn: conn,
       admin: admin
@@ -201,14 +253,21 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       lv
       |> form("#site-form",
-        site: %{name: "Primary Site", address: "12 Market Street", activities: [:pharmacy]}
+        site: %{
+          name: "Primary Site",
+          address: "12 Market Street",
+          activity_choice: "pharmacy",
+          gln: "0614141000128"
+        }
       )
       |> render_submit()
 
       assert_redirect(lv, ~p"/org/dashboard?tour=1")
     end
 
-    test "persists name, address, and capability changes", %{conn: conn, admin: admin} do
+    test "persists name, address, and site type changes", %{conn: conn} do
+      admin = admin_with_operating_models([:pharmacy, :laboratory])
+
       site =
         site_fixture(%{
           organization_id: admin.organization_id,
@@ -223,7 +282,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
         site: %{
           name: "New Name",
           address: "Updated St",
-          activities: [:laboratory]
+          activity_choice: "laboratory"
         }
       )
       |> render_submit()
@@ -245,7 +304,7 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       html =
         lv
-        |> form("#site-form", site: %{name: "", activities: [:pharmacy]})
+        |> form("#site-form", site: %{name: "", activity_choice: "pharmacy"})
         |> render_submit()
 
       assert html =~ "can&#39;t be blank"

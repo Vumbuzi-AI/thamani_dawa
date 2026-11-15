@@ -8,7 +8,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
   alias ThamaniDawa.Epcis.OutboxEvent
 
   setup %{conn: conn} do
-    distributor = distributor_user_fixture()
+    distributor = distributor_user_fixture(%{roles: [:admin, :distributor]})
 
     conn =
       conn |> init_test_session(%{}) |> ThamaniDawaWeb.UserAuth.log_in_user(distributor)

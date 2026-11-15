@@ -256,7 +256,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         %{
           label: "KSh Collected",
           data: Enum.map(daily_revenue, fn {_date, amount} -> amount end),
-          borderColor: "#1c3a13",
+          borderColor: "#17302a",
           backgroundColor: "rgba(28, 58, 19, 0.14)",
           fill: true,
           tension: 0.3,
@@ -273,7 +273,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         %{
           label: "Revenue",
           data: Enum.map(monthly_revenue, fn {_date, n} -> n end),
-          backgroundColor: "#757c5d",
+          backgroundColor: "#707371",
           borderRadius: 4
         }
       ]

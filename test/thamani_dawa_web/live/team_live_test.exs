@@ -206,6 +206,91 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
   end
 
   describe "invite a staff member" do
+    test "onboarding sends one invite at a time and enables continue after success", %{
+      conn: conn
+    } do
+      admin = user_fixture()
+      site = site_fixture(%{organization_id: admin.organization_id})
+
+      {:ok, view, _html} =
+        live(log_in(conn, admin), ~p"/org/team/new?return_to=onboarding")
+
+      assert has_element?(view, "#onboarding-invite-shell")
+      assert has_element?(view, "#onboarding-invited-empty")
+      assert has_element?(view, "#onboarding-open-invite")
+      refute has_element?(view, "#onboarding-invite-form")
+      assert has_element?(view, "#onboarding-invite-skip[href='/onboarding?skip=invite_team']")
+      assert has_element?(view, "#onboarding-invite-continue[disabled]")
+      refute has_element?(view, "#onboarding-invited-list")
+
+      view |> element("#onboarding-open-invite") |> render_click()
+
+      assert has_element?(view, "#onboarding-invite-modal")
+      assert has_element?(view, "#onboarding-invite-form")
+      refute has_element?(view, "input[name='user[roles][]'][value='pharma_lab']")
+
+      view
+      |> form("#onboarding-invite-form", user: %{roles: ["pharmacist"]})
+      |> render_change()
+
+      assert has_element?(view, "#user_site_ids_#{site.id}[checked]")
+
+      view
+      |> form("#onboarding-invite-form",
+        user: %{
+          name: "New Hire",
+          email: "onboarding.hire@example.com",
+          roles: ["pharmacist"]
+        }
+      )
+      |> render_submit()
+
+      assert has_element?(view, "#onboarding-invited-list")
+      refute has_element?(view, "#onboarding-invite-modal")
+      assert has_element?(view, "#onboarding-invite-continue:not([disabled])")
+      invited = ThamaniDawa.Accounts.get_user_by_email("onboarding.hire@example.com")
+      invited = ThamaniDawa.Accounts.get_user!(admin.organization_id, invited.id)
+      assert site.id in Enum.map(invited.sites, & &1.id)
+      assert_email_sent(to: [{"", "onboarding.hire@example.com"}])
+
+      view |> element("#onboarding-invite-continue") |> render_click()
+      assert_redirect(view, ~p"/onboarding?complete=1")
+    end
+
+    test "onboarding requires deliberate branch choices when multiple sites exist", %{conn: conn} do
+      admin = user_fixture()
+      first = site_fixture(%{organization_id: admin.organization_id, name: "Branch A"})
+      second = site_fixture(%{organization_id: admin.organization_id, name: "Branch B"})
+
+      {:ok, view, _html} =
+        live(log_in(conn, admin), ~p"/org/team/new?return_to=onboarding")
+
+      view |> element("#onboarding-open-invite") |> render_click()
+
+      view
+      |> form("#onboarding-invite-form", user: %{roles: ["pharmacist"]})
+      |> render_change()
+
+      assert has_element?(view, "#site-checkbox-list")
+      refute has_element?(view, "#user_site_ids_#{first.id}[checked]")
+      refute has_element?(view, "#user_site_ids_#{second.id}[checked]")
+
+      html =
+        view
+        |> form("#onboarding-invite-form",
+          user: %{
+            name: "Unassigned Hire",
+            email: "unassigned@example.com",
+            roles: ["pharmacist"],
+            site_ids: []
+          }
+        )
+        |> render_submit()
+
+      assert html =~ "Select at least one branch."
+      assert is_nil(ThamaniDawa.Accounts.get_user_by_email("unassigned@example.com"))
+    end
+
     test "a single-site org shows the one compatible site without a search box", %{conn: conn} do
       admin = user_fixture()
       site = site_fixture(%{organization_id: admin.organization_id, name: "Only Branch"})

@@ -93,18 +93,12 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
     ~p"/org/requisitions?#{query}"
   end
 
-  defp tab_path(filters, status) do
-    query =
-      filters
-      |> Map.put("status", status)
-      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
-      |> Map.new()
-
-    ~p"/org/requisitions?#{query}"
-  end
-
   defp active_filter_count(filters),
-    do: Enum.count(["date_from", "date_to"], &(filters[&1] not in [nil, ""]))
+    do:
+      Enum.count(
+        [filters["status"] != "pending", filters["date_from"] != "", filters["date_to"] != ""],
+        & &1
+      )
 
   defp apply_action(socket, :review, id) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -169,8 +163,12 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
   end
 
   def handle_event("apply_filters", %{"filters" => filters}, socket) do
-    changes = Map.take(filters, ["date_from", "date_to"])
+    changes = Map.take(filters, ["status", "date_from", "date_to"])
     {:noreply, push_patch(socket, to: filter_path(socket, changes))}
+  end
+
+  def handle_event("clear_filter", %{"filter" => "status"}, socket) do
+    {:noreply, push_patch(socket, to: filter_path(socket, %{"status" => "pending"}))}
   end
 
   def handle_event("clear_filter", %{"filter" => filter}, socket)
@@ -258,7 +256,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
         {:ok, fulfilled} ->
           {:noreply,
            socket
-           |> put_flash(:info, "Stock dispatched — awaiting receipt at the site.")
+           |> put_flash(:info, "Stock dispatched. Awaiting receipt at the site.")
            |> stream_insert(:requisitions, reloaded(organization_id, fulfilled.id))
            |> push_patch(to: ~p"/org/requisitions")}
 
@@ -297,7 +295,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
 
       {:noreply,
        socket
-       |> put_flash(:info, "Stock dispatched — awaiting receipt at the site.")
+       |> put_flash(:info, "Stock dispatched. Awaiting receipt at the site.")
        |> stream_insert(:requisitions, updated)
        |> push_patch(to: ~p"/org/requisitions")}
     else
@@ -343,7 +341,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
 
           {:noreply,
            socket
-           |> put_flash(:info, "Stock dispatched — awaiting receipt at the site.")
+           |> put_flash(:info, "Stock dispatched. Awaiting receipt at the site.")
            |> stream_insert(:requisitions, requisition)
            |> assign_fulfill(organization_id, requisition)}
 
@@ -445,6 +443,18 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
             apply_event="apply_filters"
             active_count={active_filter_count(@filters)}
           >
+            <:group label="Status">
+              <.input
+                type="select"
+                name="filters[status]"
+                value={@filters["status"]}
+                options={
+                  Enum.map(@tabs, fn {status, label} ->
+                    {"#{label} (#{@tab_counts[status]})", status}
+                  end)
+                }
+              />
+            </:group>
             <:group label="Requested between">
               <div class="grid grid-cols-2 gap-2">
                 <.input
@@ -462,6 +472,11 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
               </div>
             </:group>
             <:chip
+              :if={@filters["status"] != "pending"}
+              label={"Status: #{Phoenix.Naming.humanize(@filters["status"])}"}
+              clear={JS.push("clear_filter", value: %{filter: "status"})}
+            />
+            <:chip
               :if={@filters["date_from"] != ""}
               label={"From #{@filters["date_from"]}"}
               clear={JS.push("clear_filter", value: %{filter: "date_from"})}
@@ -474,37 +489,6 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
           </.filter_drawer>
         </:toolbar>
       </.header>
-
-      <nav
-        id="requisition-tabs"
-        class="mb-4 mt-4 flex gap-1 overflow-x-auto rounded-xl border border-thamani-stone bg-white p-1"
-        aria-label="Requisition status"
-      >
-        <.link
-          :for={{status, label} <- @tabs}
-          id={"requisition-tab-#{status}"}
-          patch={tab_path(@filters, status)}
-          class={[
-            "flex flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
-            if(@filters["status"] == status,
-              do: "bg-thamani-forest text-white shadow-sm",
-              else: "text-thamani-pewter hover:bg-thamani-canvas hover:text-thamani-forest"
-            )
-          ]}
-          aria-current={@filters["status"] == status && "page"}
-        >
-          {label}
-          <span class={[
-            "rounded-full px-2 py-0.5 text-xs font-semibold",
-            if(@filters["status"] == status,
-              do: "bg-white/20 text-white",
-              else: "bg-thamani-stone text-thamani-forest"
-            )
-          ]}>
-            {@tab_counts[status]}
-          </span>
-        </.link>
-      </nav>
 
       <.modal
         :if={@live_action == :review and not is_nil(@review_requisition)}
@@ -521,7 +505,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
           )}
         </p>
         <p class="mb-4 text-xs text-thamani-pewter">
-          Set each line's approved quantity — leave it at what was requested to approve in full, lower it to approve partially, or set it to 0 to decline that item.
+          Set each line's approved quantity: leave it at what was requested to approve in full, lower it to approve partially, or set it to 0 to decline that item.
         </p>
         <form phx-submit="review_lines" class="flex flex-col gap-4">
           <div
@@ -601,7 +585,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
             label="Warehouse batch"
             options={
               Enum.map(@fulfill_org_batches, fn b ->
-                {"#{b.batch_no} — #{b.remaining_quantity} available — expires #{b.expiry_date}", b.id}
+                {"#{b.batch_no} · #{b.remaining_quantity} available · expires #{b.expiry_date}", b.id}
               end)
             }
             prompt="Choose a batch"
@@ -623,7 +607,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
           icon="hero-archive-box"
           title="No warehouse stock"
         >
-          There's no organization-level stock for this product — order more before fulfilling.
+          There's no organization-level stock for this product. Order more before fulfilling.
         </.blank_state>
       </.modal>
 
@@ -677,7 +661,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
                 label="Warehouse batch"
                 options={
                   Enum.map(Map.get(@fulfill_batches_by_product, line.product_id, []), fn b ->
-                    {"#{b.batch_no} — #{b.remaining_quantity} available — expires #{b.expiry_date}",
+                    {"#{b.batch_no} · #{b.remaining_quantity} available · expires #{b.expiry_date}",
                      b.id}
                   end)
                 }
@@ -725,7 +709,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
         row_click={fn {_id, r} -> JS.navigate(~p"/org/requisitions/#{r.id}") end}
       >
         <:col :let={{_id, r}} label="Reference">
-          <span class="font-mono font-semibold text-thamani-forest">{r.number}</span>
+          <span class="font-semibold text-thamani-forest">{r.number}</span>
         </:col>
         <:col :let={{_id, r}} label="Items">
           <%= if r.lines == [] do %>

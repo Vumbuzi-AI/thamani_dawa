@@ -110,7 +110,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Options do
             </span>
             <div>
               <h2 class="text-lg font-semibold text-thamani-forest">Flex pay-as-you-go</h2>
-              <p class="text-sm text-thamani-pewter">No upfront cost — pay for what you approve.</p>
+              <p class="text-sm text-thamani-pewter">No upfront cost. Pay for what you approve.</p>
             </div>
           </div>
           <p class="mt-5 text-3xl font-semibold tracking-tight text-thamani-forest">

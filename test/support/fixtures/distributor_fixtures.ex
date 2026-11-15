@@ -1,15 +1,14 @@
 defmodule ThamaniDawa.DistributorFixtures do
   @moduledoc """
   Test helpers for the distributor portal: distributor organizations and
-  users, warehouses, customers, mobile app users, received batches, and
-  shipments at each lifecycle stage.
+  users, warehouses, shipment destinations, mobile app users, received
+  batches, and shipments at each lifecycle stage.
   """
 
   alias ThamaniDawa.AccountsFixtures
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Distributor
   alias ThamaniDawa.Distributor.Billing
-  alias ThamaniDawa.DistributorCustomers
   alias ThamaniDawa.Gln
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.OrganizationsFixtures
@@ -80,25 +79,19 @@ defmodule ThamaniDawa.DistributorFixtures do
     site
   end
 
-  def customer_fixture(organization_id, attrs \\ %{}) do
-    phone_suffix =
-      String.pad_leading(
-        Integer.to_string(rem(System.unique_integer([:positive]), 1_000_000)),
-        6,
-        "0"
-      )
+  @doc """
+  A shipment destination — resolved live against this platform's own
+  sites, same as the real GLN-to-GLN flow — created in a *different*
+  organization by default, so it exercises the cross-org lookup path
+  instead of accidentally colliding with the shipping org's own sites.
+  """
+  def destination_fixture(_shipping_organization_id \\ nil, attrs \\ %{}) do
+    organization_id =
+      Map.get_lazy(attrs, :organization_id, fn ->
+        OrganizationsFixtures.organization_fixture().id
+      end)
 
-    customer_attrs =
-      Enum.into(attrs, %{
-        name: "Customer #{System.unique_integer([:positive])}",
-        phone: "+254700#{phone_suffix}",
-        address: "Moi Avenue, Nairobi",
-        po_box: "P.O. Box 100-00100",
-        is_active: true
-      })
-
-    {:ok, customer} = DistributorCustomers.create_customer(organization_id, customer_attrs)
-    customer
+    warehouse_fixture(organization_id, Map.delete(attrs, :organization_id))
   end
 
   def mobile_user_fixture(organization_id, attrs \\ %{}) do
@@ -155,17 +148,19 @@ defmodule ThamaniDawa.DistributorFixtures do
       "10" <> batch.batch_no <> <<29>> <> "21" <> batch.serial
   end
 
-  @doc "Creates a draft shipment from a warehouse to a customer."
+  @doc "Creates a draft shipment from a warehouse to a resolved destination GLN."
   def shipment_fixture(organization_id, user, attrs \\ %{}) do
     warehouse = Map.get_lazy(attrs, :warehouse, fn -> warehouse_fixture(organization_id) end)
-    customer = Map.get_lazy(attrs, :customer, fn -> customer_fixture(organization_id) end)
+
+    destination =
+      Map.get_lazy(attrs, :destination, fn -> destination_fixture(organization_id) end)
 
     {:ok, shipment} =
       Distributor.create_shipment(organization_id, user, %{
         "order_number" =>
           Map.get(attrs, :order_number, "PO-#{System.unique_integer([:positive])}"),
         "origin_gln" => warehouse.gln,
-        "destination_gln" => customer.gln
+        "destination_gln" => destination.gln
       })
 
     shipment

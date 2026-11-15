@@ -135,7 +135,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         %{
           label: "Units dispensed",
           data: Enum.map(dispensed_by_day, fn {_date, qty} -> qty end),
-          borderColor: "#1c3a13",
+          borderColor: "#17302a",
           backgroundColor: "rgba(28, 58, 19, 0.14)",
           fill: true,
           tension: 0.3,
@@ -152,7 +152,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         %{
           label: "Units dispensed",
           data: Enum.map(top_products, fn {_name, qty} -> qty end),
-          backgroundColor: "#757c5d",
+          backgroundColor: "#707371",
           borderRadius: 4
         }
       ]

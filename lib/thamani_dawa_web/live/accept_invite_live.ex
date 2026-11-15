@@ -41,35 +41,31 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
 
   def render(assigns) do
     ~H"""
-    <div style="min-height: 100vh; display: flex; flex-direction: row;">
-      <div
-        class="hidden lg:flex"
-        style="width: 46%; background: var(--thamani-forest); flex-direction: column; justify-content: space-between; padding: 48px 52px; position: relative; overflow: hidden;"
-      >
-        <div
-          aria-hidden="true"
-          style="position: absolute; top: -120px; right: -120px; width: 420px; height: 420px; border-radius: 50%; background: var(--thamani-lime); opacity: 0.08; pointer-events: none;"
-        >
-        </div>
-        <div
-          aria-hidden="true"
-          style="position: absolute; bottom: -80px; left: -80px; width: 280px; height: 280px; border-radius: 50%; background: var(--thamani-lime); opacity: 0.06; pointer-events: none;"
-        >
-        </div>
+    <div class="auth-shell lg:h-svh lg:overflow-hidden">
+      <div class="auth-aside hidden lg:flex lg:h-svh">
+        <a href="/" aria-label="Thamani Dawa home" style="width: 200px;">
+          <img
+            src="/images/logo-transparent.png"
+            alt=""
+            class="h-auto w-full brightness-0 invert"
+          />
+        </a>
 
-        <.link
-          navigate={~p"/"}
-          style="font-size: 17px; font-weight: 500; color: var(--thamani-snow); text-decoration: none; letter-spacing: -0.01em; position: relative;"
-        >
-          Thamani Dawa
-        </.link>
-
-        <div style="position: relative;">
+        <div>
           <span
             class="thamani-badge"
-            style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex;"
+            style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
           >
-            You've been invited
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              aria-hidden="true"
+              style="stroke: currentColor; stroke-width: 1.6; fill: none;"
+            >
+              <path d="M4 5v14M8 5v14M11 5v14M15 5v14M17 5v14M20 5v14" />
+            </svg>
+            GS1 Compliant · Built for Kenya
           </span>
           <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
             Join {@organization.name} on Thamani Dawa.
@@ -79,15 +75,15 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
           </p>
         </div>
 
-        <div style="position: relative; border-top: 1px solid rgba(252,252,247,0.1); padding-top: 28px;">
+        <div style="border-top: 1px solid rgba(252,252,247,0.1); padding-top: 28px;">
           <p style="font-size: 13px; font-weight: 500; color: rgba(252,252,247,0.45);">
             Invited to {@organization.name}
           </p>
         </div>
       </div>
 
-      <div style="flex: 1; background: var(--thamani-snow); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px;">
-        <div style="width: 100%; max-width: 380px;">
+      <div class="auth-form-panel lg:h-svh lg:overflow-y-auto" style="justify-content: center;">
+        <div class="auth-form-inner" style="max-width: 380px;">
           <Layouts.flash_group flash={@flash} />
 
           <h1 style="font-size: 32px; font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-forest); margin-bottom: 8px;">

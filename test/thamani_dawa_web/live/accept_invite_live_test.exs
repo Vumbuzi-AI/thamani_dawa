@@ -154,7 +154,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
         |> follow_redirect(authenticated_conn, ~p"/login")
 
       assert html_response(login_conn, 200) =~
-               "Password set — log in with your new account below."
+               "Password set. Log in with your new account below."
 
       assert html_response(login_conn, 200) =~ "Welcome back"
       assert get_session(login_conn, :user_token) == nil

@@ -7,7 +7,8 @@ defmodule ThamaniDawa.Distributor do
 
     1. A portal administrator creates a **draft** shipment: order number,
        origin GLN (one of the organization's own sites) and destination GLN
-       (one of its customers).
+       (resolved live — another organization's site on this platform, or
+       any GS1-registered company).
     2. A **mobile app user** finds the draft by order number, claims it,
        groups physical units into **shippers** (cases) by scanning their GS1
        DataMatrix codes, and **submits** it — which reserves every scanned
@@ -34,6 +35,7 @@ defmodule ThamaniDawa.Distributor do
   import Ecto.Query, warn: false
 
   alias ThamaniDawa.Accounts.UserNotifier
+  alias ThamaniDawa.Batches
   alias ThamaniDawa.Batches.Batch
 
   alias ThamaniDawa.Distributor.{
@@ -46,6 +48,7 @@ defmodule ThamaniDawa.Distributor do
     Shipment,
     ShipmentEvent,
     ShipmentItem,
+    ShipmentLineItem,
     Shipper
   }
 
@@ -178,6 +181,7 @@ defmodule ThamaniDawa.Distributor do
       |> filter_status(opts[:status])
       |> search(opts[:search])
       |> filter_mobile_user(opts[:mobile_user_id])
+      |> filter_origin_site(opts[:origin_site_id])
       |> filter_date_from(opts[:date_from])
       |> filter_date_to(opts[:date_to])
 
@@ -275,6 +279,11 @@ defmodule ThamaniDawa.Distributor do
 
   defp filter_mobile_user(query, _id), do: query
 
+  defp filter_origin_site(query, site_id) when is_integer(site_id),
+    do: from(s in query, where: s.origin_site_id == ^site_id)
+
+  defp filter_origin_site(query, _site_id), do: query
+
   defp filter_date_from(query, %Date{} = date) do
     from_dt = DateTime.new!(date, ~T[00:00:00], "Etc/UTC")
     from(s in query, where: s.inserted_at >= ^from_dt)
@@ -306,7 +315,8 @@ defmodule ThamaniDawa.Distributor do
         :approved_by,
         :rejected_by,
         shippers: [items: :scanned_by],
-        events: [:user, :mobile_user]
+        events: [:user, :mobile_user],
+        line_items: :product
       ],
       force: true
     )
@@ -314,6 +324,113 @@ defmodule ThamaniDawa.Distributor do
 
   def change_shipment(%Shipment{} = shipment, attrs \\ %{}),
     do: Shipment.changeset(shipment, attrs)
+
+  @doc "Adds an intended product + quantity line to a draft shipment."
+  def add_line_item(organization_id, shipment_id, attrs) do
+    case Repo.get_by(Shipment, id: shipment_id, organization_id: organization_id) do
+      %Shipment{status: "draft"} = shipment ->
+        %ShipmentLineItem{shipment_id: shipment.id}
+        |> ShipmentLineItem.changeset(attrs)
+        |> Repo.insert()
+
+      %Shipment{} ->
+        {:error, :not_editable}
+
+      nil ->
+        {:error, :not_found}
+    end
+  end
+
+  @doc "Removes an intended line from a draft shipment."
+  def remove_line_item(organization_id, line_item_id) do
+    ShipmentLineItem
+    |> Repo.get(line_item_id)
+    |> Repo.preload(:shipment)
+    |> case do
+      nil ->
+        {:error, :not_found}
+
+      %ShipmentLineItem{shipment: %Shipment{organization_id: ^organization_id, status: "draft"}} =
+          line_item ->
+        Repo.delete(line_item)
+
+      %ShipmentLineItem{} ->
+        {:error, :not_editable}
+    end
+  end
+
+  @doc """
+  Generates a pick list for a draft shipment's intended line items — FEFO
+  allocates specific batches at the origin site, moving each into
+  `:picking` and reserving it against this shipment so no other shipment
+  can claim it. Purely internal bookkeeping; no EPCIS event (picking is
+  intra-warehouse).
+  """
+  def generate_pick_list(organization_id, shipment_id) do
+    shipment =
+      Shipment
+      |> Repo.get_by!(id: shipment_id, organization_id: organization_id)
+      |> Repo.preload(:line_items)
+
+    result =
+      Repo.transaction(fn ->
+        Enum.each(shipment.line_items, &allocate_pick(organization_id, shipment, &1))
+      end)
+
+    case result do
+      {:ok, _} -> {:ok, shipment}
+      error -> error
+    end
+  end
+
+  defp allocate_pick(organization_id, shipment, line_item) do
+    organization_id
+    |> Batches.list_pickable_batches(shipment.origin_site_id, line_item.product_id)
+    |> do_allocate(line_item.quantity, shipment.id)
+  end
+
+  defp do_allocate(_batches, needed, _shipment_id) when needed <= 0, do: :ok
+  defp do_allocate([], _needed, _shipment_id), do: :ok
+
+  defp do_allocate([batch | rest], needed, shipment_id) do
+    {:ok, updated} = Batches.reserve_for_picking(batch, shipment_id)
+    do_allocate(rest, needed - updated.remaining_quantity, shipment_id)
+  end
+
+  @doc "Confirms every picked batch reserved for a shipment — moves them from `:picking` to `:staging`."
+  def confirm_pick_list(organization_id, shipment_id) do
+    organization_id
+    |> Batches.list_reserved_batches_for_shipment(shipment_id)
+    |> Enum.filter(&(&1.zone == :picking))
+    |> Enum.each(&Batches.confirm_pick/1)
+
+    :ok
+  end
+
+  @doc "Lists an organization's approved shipments, for picking which one a return responds to."
+  def list_approved_shipments(organization_id) do
+    Repo.all(
+      from s in Shipment,
+        where: s.organization_id == ^organization_id,
+        where: s.status == "approved",
+        where: s.is_return == false,
+        order_by: [desc: s.approved_at]
+    )
+  end
+
+  @doc """
+  Looks up a shipper by its SSCC across all organizations, for the
+  distributor-receiving SSCC-prefill flow. Only resolves for cases that
+  were assigned an SSCC by another shipment on this platform (the SSCC
+  barcode itself encodes no contents) — a miss means manual entry, exactly
+  as today.
+  """
+  def lookup_shipper_by_sscc(sscc) when is_binary(sscc) do
+    case Repo.get_by(Shipper, sscc: sscc) do
+      nil -> {:error, :not_found}
+      shipper -> {:ok, Repo.preload(shipper, [:items, shipment: []])}
+    end
+  end
 
   @doc """
   Creates a draft shipment, snapshotting the resolved origin site and
@@ -381,7 +498,7 @@ defmodule ThamaniDawa.Distributor do
   defp resolve_glns(changeset, organization_id) do
     changeset
     |> resolve_gln(:origin, &GlnLookup.resolve_origin(organization_id, &1))
-    |> resolve_gln(:destination, &GlnLookup.resolve_destination(organization_id, &1))
+    |> resolve_gln(:destination, &GlnLookup.resolve_party/1)
   end
 
   defp resolve_gln(changeset, side, resolver) do
@@ -390,20 +507,24 @@ defmodule ThamaniDawa.Distributor do
 
     case gln && changeset.errors[gln_field] == nil && resolver.(gln) do
       {:ok, resolved} ->
-        record_field = if side == :origin, do: :origin_site_id, else: :destination_customer_id
-
-        Ecto.Changeset.change(changeset, %{
-          record_field => resolved.record.id,
+        attrs = %{
           :"#{side}_company" => resolved.company,
           :"#{side}_address" => resolved.address,
           :"#{side}_po_box" => resolved.po_box
-        })
+        }
+
+        attrs =
+          if side == :origin,
+            do: Map.put(attrs, :origin_site_id, resolved.site_id),
+            else: Map.put(attrs, :destination_site_id, resolved.site_id)
+
+        Ecto.Changeset.change(changeset, attrs)
 
       {:error, :not_found} ->
         message =
           if side == :origin,
             do: "is not one of your active sites",
-            else: "is not one of your active customers"
+            else: "could not be verified — check the GLN"
 
         Ecto.Changeset.add_error(changeset, gln_field, message)
 
@@ -989,7 +1110,7 @@ defmodule ThamaniDawa.Distributor do
       ),
       gln_problem(
         :destination_not_found,
-        GlnLookup.resolve_destination(organization_id, shipment.destination_gln)
+        GlnLookup.resolve_party(shipment.destination_gln)
       ),
       shipment.origin_gln == shipment.destination_gln &&
         problem(:same_gln, "Origin and destination GLNs must be different."),
@@ -1005,8 +1126,7 @@ defmodule ThamaniDawa.Distributor do
     do: problem(:origin_not_found, "The origin GLN is not one of your active sites.")
 
   defp gln_problem(:destination_not_found, {:error, :not_found}),
-    do:
-      problem(:destination_not_found, "The destination GLN is not one of your active customers.")
+    do: problem(:destination_not_found, "The destination GLN could not be verified.")
 
   defp gln_problem(_code, {:ok, _resolved}), do: nil
 

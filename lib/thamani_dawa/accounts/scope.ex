@@ -62,11 +62,13 @@ defmodule ThamaniDawa.Accounts.Scope do
 
   @doc """
   Whether the signed-in user can enter the distributor portal: an active
-  user holding the distributor role. The organization's operating model is
-  checked separately by `ThamaniDawaWeb.UserAuth` since it needs a database read.
+  user holding the distributor role — admins are exempt (they administer
+  every operation of the organization, §7). The organization's operating
+  model is checked separately by `ThamaniDawaWeb.Portals` since it needs a
+  database read.
   """
   def distributor_access?(%__MODULE__{user: %User{is_active: true}} = scope),
-    do: distributor?(scope)
+    do: distributor?(scope) or admin?(scope)
 
   def distributor_access?(_scope), do: false
 

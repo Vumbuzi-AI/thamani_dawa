@@ -8,7 +8,7 @@ defmodule ThamaniDawaWeb.DistributorMobileUserPhoneTest do
   alias ThamaniDawaWeb.UserAuth
 
   setup %{conn: conn} do
-    distributor = distributor_user_fixture()
+    distributor = distributor_user_fixture(%{roles: [:admin, :distributor]})
     prepay_allowance_fixture(distributor.organization_id, distributor, 100)
     conn = conn |> init_test_session(%{}) |> UserAuth.log_in_user(distributor)
     %{conn: conn, distributor: distributor}

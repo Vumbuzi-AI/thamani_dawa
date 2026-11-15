@@ -263,8 +263,8 @@ defmodule ThamaniDawaWeb.LabStockLive do
   defp supplier_name(nil), do: "—"
   defp supplier_name(supplier), do: supplier.name
 
-  defp stock_subtitle([]), do: "Every batch across lab sites in your organization — read-only."
-  defp stock_subtitle(_site_ids), do: "Every batch across your assigned lab sites — read-only."
+  defp stock_subtitle([]), do: "Every batch across lab sites in your organization, read-only."
+  defp stock_subtitle(_site_ids), do: "Every batch across your assigned lab sites, read-only."
 
   def render(assigns) do
     ~H"""

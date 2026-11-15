@@ -18,6 +18,9 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
   import ThamaniDawa.SitesFixtures
 
   alias ThamaniDawa.Payments
+  alias ThamaniDawa.Payments.Payment
+  alias ThamaniDawa.Repo
+  alias ThamaniDawa.Sales.Sale
 
   describe "totals" do
     test "shows the empty ledger and site filter for a multi-site organization with no payments",
@@ -162,6 +165,29 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
                "a[href='/pharmacy/prescriptions/#{prescription.id}']",
                "Prescription ##{prescription.id}"
              )
+    end
+
+    test "lists a quick-sale payment without requiring an unavailable detail route", %{conn: conn} do
+      admin = user_fixture()
+      site = site_fixture(%{organization_id: admin.organization_id})
+
+      sale =
+        %Sale{}
+        |> Sale.changeset(%{site_id: site.id, total_amount: Decimal.new("125")})
+        |> Ecto.Changeset.put_change(:organization_id, admin.organization_id)
+        |> Repo.insert!()
+
+      assert {:ok, %Payment{} = payment} =
+               Payments.create_payment(admin.organization_id, %{
+                 sale_id: sale.id,
+                 amount: sale.total_amount,
+                 payment_type: "Cash"
+               })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/earnings")
+
+      assert has_element?(lv, "#transactions-#{payment.id}", "Quick sale ##{sale.id}")
+      refute has_element?(lv, "#transactions-#{payment.id} a", "Quick sale ##{sale.id}")
     end
 
     test "shows the empty state when the organization has no payments", %{conn: conn} do
