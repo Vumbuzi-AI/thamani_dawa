@@ -48,6 +48,19 @@ defmodule ThamaniDawa.Accounts.UserNotifier do
     })
   end
 
+  @doc "Delivers a one-time email-confirmation link."
+  def deliver_confirmation_instructions(%User{} = user, url) do
+    deliver(user.email, "Confirm your Thamani Dawa account", %{
+      title: "Confirm your email",
+      intro: Template.rich(["Hi ", {:bold, user.name}, ","]),
+      body: [
+        "Confirm your email address to finish setting up your account.",
+        "This link expires in #{UserToken.confirm_validity_in_days()} days. If you didn't create this account, you can safely ignore this email."
+      ],
+      cta: %{label: "Confirm email", url: url}
+    })
+  end
+
   @doc "Delivers a one-time password-reset link."
   def deliver_password_reset(%User{} = user, url) do
     deliver(user.email, "Reset your Thamani Dawa password", %{

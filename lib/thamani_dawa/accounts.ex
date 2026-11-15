@@ -15,7 +15,12 @@ defmodule ThamaniDawa.Accounts do
 
   @doc "Gets a user by email, across the whole platform (email is globally unique)."
   def get_user_by_email(email) when is_binary(email) do
-    Repo.get_by(User, email: email)
+    normalized_email = email |> String.trim() |> String.downcase()
+
+    Repo.one(
+      from u in User,
+        where: fragment("lower(?)", u.email) == ^normalized_email
+    )
   end
 
   @doc """
@@ -39,6 +44,28 @@ defmodule ThamaniDawa.Accounts do
     Repo.all(
       from u in User,
         where: u.organization_id == ^organization_id,
+        preload: [sites: ^scoped_site_query(organization_id)]
+    )
+  end
+
+  @doc "Lists outstanding staff invitations for an organization, newest first."
+  def list_pending_invites(organization_id) do
+    Repo.all(
+      from u in User,
+        where:
+          u.organization_id == ^organization_id and is_nil(u.hashed_password) and
+            not is_nil(u.invited_by_id),
+        order_by: [desc: u.inserted_at],
+        preload: [sites: ^scoped_site_query(organization_id)]
+    )
+  end
+
+  @doc "Lists everyone invited into an organization, newest first, accepted or not."
+  def list_invited_users(organization_id) do
+    Repo.all(
+      from u in User,
+        where: u.organization_id == ^organization_id and not is_nil(u.invited_by_id),
+        order_by: [desc: u.inserted_at],
         preload: [sites: ^scoped_site_query(organization_id)]
     )
   end
@@ -75,16 +102,35 @@ defmodule ThamaniDawa.Accounts do
   @doc """
   Registers the first admin of a brand-new organization. `organization_id`
   is always taken as an explicit argument, never from `attrs`, and the role
-  is always `:admin` — a caller can never register a user into someone
-  else's organization or with a different role. Used by
-  `ThamaniDawa.Organizations.signup/2`.
+  is always `:admin` plus whichever operational roles the organization's
+  `operating_models` imply (see `operational_roles/1`) — a caller can never
+  register a user into someone else's organization or with an unrelated
+  role. Used by `ThamaniDawa.Organizations.signup/3`.
+
+  Granting the operational roles up front (rather than leaving the admin to
+  invite themselves separately) is what makes the sidebar's workspace
+  switcher and the distributor portal reachable immediately after signup —
+  both key off `:pharmacist`/`:lab_technician`/`:distributor` roles, not the
+  organization's `operating_models` directly.
   """
-  def register_user(organization_id, attrs) when is_integer(organization_id) do
+  def register_user(organization_id, attrs, operating_models \\ [])
+      when is_integer(organization_id) do
+    roles = Enum.uniq([:admin | operational_roles(operating_models)])
+
     %User{}
     |> User.registration_changeset(attrs, require_legal_consent: true)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
-    |> Ecto.Changeset.put_change(:roles, [:admin])
+    |> Ecto.Changeset.put_change(:roles, roles)
     |> Repo.insert()
+  end
+
+  defp operational_roles(models) do
+    Enum.flat_map(models, fn
+      :pharmacy -> [:pharmacist]
+      :laboratory -> [:lab_technician]
+      :distributor -> [:distributor]
+      _ -> []
+    end)
   end
 
   @doc """
@@ -97,6 +143,7 @@ defmodule ThamaniDawa.Accounts do
     %User{}
     |> User.registration_changeset(attrs, require_legal_consent: true)
     |> Ecto.Changeset.put_change(:roles, [:superadmin])
+    |> Ecto.Changeset.put_change(:confirmed_at, DateTime.utc_now() |> DateTime.truncate(:second))
     |> Repo.insert()
   end
 
@@ -124,6 +171,7 @@ defmodule ThamaniDawa.Accounts do
       |> Ecto.Changeset.put_change(:invited_by_id, invited_by_id)
       |> Ecto.Changeset.put_assoc(:sites, sites)
       |> validate_sites_resolved(site_ids, sites)
+      |> validate_sites_role_compatible()
       |> Ecto.Changeset.put_change(:current_site_id, default_current_site_id(sites))
 
     case Repo.insert(changeset) do
@@ -157,6 +205,7 @@ defmodule ThamaniDawa.Accounts do
       |> User.edit_changeset(attrs)
       |> Ecto.Changeset.put_assoc(:sites, sites)
       |> validate_sites_resolved(site_ids, sites)
+      |> validate_sites_role_compatible()
       |> maybe_reset_current_site(user, sites)
 
     Repo.audited_update(changeset)
@@ -266,11 +315,39 @@ defmodule ThamaniDawa.Accounts do
     end
   end
 
+  # A site a role can't operate (a pharmacist at a warehouse-only site)
+  # would strand that staff member at a location whose panel none of their
+  # roles can enter — the sidebar picker filters these out too, so they'd
+  # be stuck with no way to switch. Reject the assignment at the source.
+  defp validate_sites_role_compatible(changeset) do
+    roles = Ecto.Changeset.get_field(changeset, :roles) || []
+    sites = Ecto.Changeset.get_field(changeset, :sites) || []
+
+    incompatible = Enum.reject(sites, &Site.role_compatible?(roles, &1))
+
+    case incompatible do
+      [] ->
+        changeset
+
+      sites ->
+        names = Enum.map_join(sites, ", ", & &1.name)
+
+        Ecto.Changeset.add_error(
+          changeset,
+          :sites,
+          "can't include #{names} — this site's activities don't match the selected roles"
+        )
+    end
+  end
+
   defp default_current_site_id([]), do: nil
   defp default_current_site_id([site | _]), do: site.id
 
   defp maybe_reset_current_site(changeset, %User{current_site_id: current_site_id}, sites) do
-    if current_site_id && current_site_id in Enum.map(sites, & &1.id) do
+    roles = Ecto.Changeset.get_field(changeset, :roles) || []
+    current_site = Enum.find(sites, &(&1.id == current_site_id))
+
+    if current_site && Site.role_compatible?(roles, current_site) do
       changeset
     else
       Ecto.Changeset.put_change(changeset, :current_site_id, default_current_site_id(sites))
@@ -307,11 +384,19 @@ defmodule ThamaniDawa.Accounts do
 
   @doc """
   Switches the signed-in user to one of their assigned sites (or `nil`, for
-  an org-wide admin). Rejects a site the user isn't assigned to.
+  an org-wide admin). Rejects a site the user isn't assigned to — unless
+  they're an admin, who may switch to any of the organization's sites, not
+  just the ones they happen to hold a `UserSite` row for.
   """
-  def switch_current_site(%Scope{user: %User{} = user}, site_id) do
+  def switch_current_site(%Scope{user: %User{} = user} = scope, site_id) do
     user = Repo.preload(user, :sites)
-    allowed_ids = Enum.map(user.sites, & &1.id)
+
+    allowed_ids =
+      if Scope.admin?(scope) do
+        scope.organization_id |> Sites.list_sites() |> Enum.map(& &1.id)
+      else
+        Enum.map(user.sites, & &1.id)
+      end
 
     if is_nil(site_id) or site_id in allowed_ids do
       user
@@ -353,11 +438,22 @@ defmodule ThamaniDawa.Accounts do
 
   @doc """
   Accepts an invite: sets the invited user's password and invalidates every
-  outstanding invite token for them.
+  outstanding invite token for them. Setting a password from a one-time
+  emailed link already proves they own the address, so this also confirms
+  their email — invited staff never see the separate confirm-email gate
+  self-signed-up admins do.
   """
   def accept_invite(%User{} = user, attrs) do
     Repo.transaction(fn ->
-      case user |> User.accept_invite_changeset(attrs) |> Repo.update() do
+      changeset =
+        user
+        |> User.accept_invite_changeset(attrs)
+        |> Ecto.Changeset.put_change(
+          :confirmed_at,
+          DateTime.utc_now() |> DateTime.truncate(:second)
+        )
+
+      case Repo.update(changeset) do
         {:ok, user} ->
           Repo.delete_all(UserToken.by_user_and_context_query(user, "invite"))
           user
@@ -366,6 +462,63 @@ defmodule ThamaniDawa.Accounts do
           Repo.rollback(changeset)
       end
     end)
+  end
+
+  @doc """
+  Sends a one-time email-confirmation link, mirroring the invite/
+  reset-password token pattern. Replaces any outstanding confirm token for
+  this user first, so an old link in a previous email stops working once a
+  new one is sent.
+  """
+  def deliver_user_confirmation_instructions(%User{} = user, confirm_url_fun)
+      when is_function(confirm_url_fun, 1) do
+    Repo.transaction(fn ->
+      Repo.delete_all(UserToken.by_user_and_context_query(user, "confirm"))
+      {encoded_token, token} = UserToken.build_email_token(user, "confirm")
+      Repo.insert!(token)
+
+      case UserNotifier.deliver_confirmation_instructions(user, confirm_url_fun.(encoded_token)) do
+        {:ok, _email} -> :ok
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  @doc "Gets the user for a valid (unexpired) confirm token, or nil."
+  def get_user_by_confirm_token(token) do
+    with {:ok, query} <- UserToken.verify_email_token_query(token, "confirm"),
+         %User{} = user <- Repo.one(query) do
+      user
+    else
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Confirms a user's email from a confirm token, invalidating every
+  outstanding confirm token for them. Returns `{:error, :invalid_token}` for
+  an unknown/expired token rather than raising, since this is called from a
+  link a user clicked that could easily be stale.
+  """
+  def confirm_user(token) do
+    case get_user_by_confirm_token(token) do
+      nil ->
+        {:error, :invalid_token}
+
+      user ->
+        Repo.transaction(fn ->
+          now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+          case user |> Ecto.Changeset.change(confirmed_at: now) |> Repo.update() do
+            {:ok, user} ->
+              Repo.delete_all(UserToken.by_user_and_context_query(user, "confirm"))
+              user
+
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
+        end)
+    end
   end
 
   @doc "Sends a reset link when an active account exists; callers always receive :ok."

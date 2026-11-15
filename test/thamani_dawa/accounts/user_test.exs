@@ -90,4 +90,27 @@ defmodule ThamaniDawa.Accounts.UserTest do
 
     assert "You must accept the Terms of Service and Privacy Policy" in errors_on(changeset).accepted_legal_terms
   end
+
+  describe "assignable_roles/1" do
+    test "represents combined pharmacy and laboratory access with two base roles" do
+      roles = User.assignable_roles([:pharmacy, :laboratory])
+
+      assert :pharmacist in roles
+      assert :lab_technician in roles
+      refute :pharma_lab in roles
+      refute :distributor in roles
+    end
+
+    test "does not allow the legacy hybrid role on new invitations" do
+      changeset =
+        User.invite_changeset(%User{}, %{
+          name: "Combined User",
+          email: "combined@example.com",
+          roles: [:pharma_lab]
+        })
+
+      refute changeset.valid?
+      assert "is invalid" in errors_on(changeset).roles
+    end
+  end
 end

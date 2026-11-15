@@ -2,8 +2,8 @@ defmodule ThamaniDawa.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @staff_roles [:admin, :pharmacist, :lab_technician, :pharma_lab, :distributor]
-  @roles @staff_roles ++ [:superadmin]
+  @staff_roles [:admin, :pharmacist, :lab_technician, :distributor]
+  @roles @staff_roles ++ [:pharma_lab, :superadmin]
   @legal_policy_version "2026-10-29"
 
   schema "users" do
@@ -20,6 +20,7 @@ defmodule ThamaniDawa.Accounts.User do
     field :is_active, :boolean, default: true
     field :last_logged_in_at, :utc_datetime
     field :last_logged_out_at, :utc_datetime
+    field :confirmed_at, :utc_datetime
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
     belongs_to :current_site, ThamaniDawa.Sites.Site
@@ -246,7 +247,6 @@ defmodule ThamaniDawa.Accounts.User do
   defp role_compatible?(:admin, _models), do: true
   defp role_compatible?(:pharmacist, models), do: :pharmacy in models
   defp role_compatible?(:lab_technician, models), do: :laboratory in models
-  defp role_compatible?(:pharma_lab, models), do: :pharmacy in models and :laboratory in models
   defp role_compatible?(:distributor, models), do: :distributor in models
 
   @doc "Humanized, comma-joined display of a user's roles, e.g. \"Admin, Pharmacist\"."

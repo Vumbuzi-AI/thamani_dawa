@@ -56,6 +56,17 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
 
       assert redirected_to(conn) == ~p"/pharmacy"
     end
+
+    test "redirects an authenticated admin with unfinished setup to onboarding", %{conn: conn} do
+      admin = user_fixture()
+
+      conn =
+        conn
+        |> log_in_user(admin)
+        |> get(~p"/login")
+
+      assert redirected_to(conn) == ~p"/onboarding"
+    end
   end
 
   describe "DELETE /logout" do
@@ -69,6 +80,9 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
 
       assert redirected_to(conn) == ~p"/"
       assert get_session(conn, :user_token) == nil
+
+      conn = conn |> recycle() |> get(~p"/")
+      assert html_response(conn, 200)
     end
   end
 
@@ -81,8 +95,51 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       assert redirected_to(conn) == ~p"/platform"
     end
 
-    test "starts the organization tour after signup", %{conn: conn} do
+    test "sends a freshly-signed-up admin to the onboarding checklist when it's incomplete", %{
+      conn: conn
+    } do
       admin = user_fixture()
+
+      conn =
+        post(conn, ~p"/login", %{
+          "user" => %{"email" => admin.email, "password" => valid_user_password()},
+          "start_tour" => "true"
+        })
+
+      assert redirected_to(conn) == ~p"/onboarding"
+    end
+
+    test "starts the organization tour after signup once the checklist is already complete", %{
+      conn: conn
+    } do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      user_fixture(%{organization_id: organization.id})
+
+      site =
+        site_fixture(%{organization_id: organization.id, address: "12 Market Street"})
+
+      {:ok, _site} =
+        ThamaniDawa.Sites.update_site(site, %{
+          address: "12 Market Street",
+          activities: [:pharmacy]
+        })
+
+      site_fixture(%{organization_id: organization.id})
+
+      ThamaniDawa.Products.create_product(organization.id, %{
+        generic_name: "Paracetamol",
+        gtin: ThamaniDawa.BatchesFixtures.unique_gtin(),
+        category: "Analgesic",
+        uom: "U2",
+        price: 100
+      })
+
+      ThamaniDawa.Suppliers.create_supplier(organization.id, %{
+        name: "Acme Supplies",
+        phone: "0700000000",
+        email: "supplier@example.com"
+      })
 
       conn =
         post(conn, ~p"/login", %{
@@ -93,13 +150,13 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       assert redirected_to(conn) == ~p"/org/dashboard?tour=1"
     end
 
-    test "redirects an admin to /org/sites", %{conn: conn} do
+    test "resumes onboarding for an admin with incomplete setup", %{conn: conn} do
       admin = user_fixture()
 
       conn =
         post(conn, ~p"/login", %{"email" => admin.email, "password" => valid_user_password()})
 
-      assert redirected_to(conn) == ~p"/org/dashboard"
+      assert redirected_to(conn) == ~p"/onboarding"
     end
 
     test "redirects a pharmacist to /pharmacy", %{conn: conn} do

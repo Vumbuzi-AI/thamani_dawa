@@ -5,6 +5,8 @@ defmodule ThamaniDawaWeb.SessionController do
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.LoginRateLimiter
+  alias ThamaniDawa.Organizations
+  alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.Portals
 
   import Phoenix.Component, only: [to_form: 2]
@@ -16,11 +18,11 @@ defmodule ThamaniDawaWeb.SessionController do
     if Phoenix.Flash.get(conn.assigns.flash, :invite_accepted) do
       conn
       |> log_out_user()
-      |> put_flash(:info, "Password set — log in with your new account below.")
+      |> put_flash(:info, "Password set. Log in with your new account below.")
       |> render_login(%{"email" => "", "password" => ""})
     else
       if conn.assigns[:current_scope] && conn.assigns.current_scope.user do
-        redirect(conn, to: redirect_path_for(conn.assigns.current_scope.user))
+        redirect(conn, to: login_redirect_path(conn.assigns.current_scope.user, false, false))
       else
         render_login(conn, %{"email" => "", "password" => ""})
       end
@@ -59,7 +61,7 @@ defmodule ThamaniDawaWeb.SessionController do
 
             conn
             |> log_in_user(user)
-            |> redirect(to: login_redirect_path(user, start_tour? or first_staff_login?))
+            |> redirect(to: login_redirect_path(user, start_tour?, first_staff_login?))
 
           nil ->
             invalid_login(conn, email)
@@ -86,22 +88,44 @@ defmodule ThamaniDawaWeb.SessionController do
     |> redirect(to: ~p"/")
   end
 
-  defp redirect_path_for(%User{roles: roles} = user) do
-    cond do
-      :superadmin in roles -> ~p"/platform"
-      :admin in roles -> ~p"/org/dashboard"
-      :distributor in roles -> ~p"/distributor"
-      :pharmacist in roles and :lab_technician in roles -> combined_portal_path(user)
-      :pharmacist in roles -> ~p"/pharmacy"
-      :lab_technician in roles -> ~p"/lab"
-      true -> ~p"/"
+  # The portal a fresh sign-in lands in is inherited from context, not
+  # chosen: the account's current site decides which panel exists there
+  # and its roles decide which of the site's panels they can work. An
+  # admin in org context (no current site) lands on the org dashboard.
+  defp redirect_path_for(%User{} = user), do: Portals.default_path(Scope.for_user(user))
+
+  # A fresh self-signup starts the full-screen checklist and then the product
+  # tour. Returning admins also resume the checklist while database-backed
+  # setup tasks remain; invited staff continue to their own portal tour.
+  defp login_redirect_path(user, true, _first_staff_login?) do
+    if :admin in user.roles and onboarding_incomplete?(user) do
+      ~p"/onboarding"
+    else
+      redirect_path_for(user) <> "?tour=1"
     end
   end
 
-  defp combined_portal_path(user), do: Portals.combined_path(Scope.for_user(user))
+  defp login_redirect_path(user, false, first_staff_login?) do
+    cond do
+      :admin in user.roles and onboarding_incomplete?(user) ->
+        ~p"/onboarding"
 
-  defp login_redirect_path(user, true), do: redirect_path_for(user) <> "?tour=1"
-  defp login_redirect_path(user, false), do: redirect_path_for(user)
+      first_staff_login? ->
+        redirect_path_for(user) <> "?tour=1"
+
+      true ->
+        redirect_path_for(user)
+    end
+  end
+
+  defp onboarding_incomplete?(user) do
+    organization = Organizations.get_organization!(user.organization_id)
+    primary_site = user.organization_id |> Sites.list_sites() |> List.first()
+
+    organization
+    |> Organizations.onboarding_checklist(primary_site)
+    |> Enum.any?(&(not &1.done?))
+  end
 
   defp render_login(conn, params) do
     render(conn, :new,
@@ -114,11 +138,20 @@ defmodule ThamaniDawaWeb.SessionController do
     :thamani_dawa
     |> Application.get_env(:demo_login_accounts, [])
     |> Enum.map(fn account ->
-      Map.put(
-        account,
+      account
+      |> Map.put(
         :form,
         to_form(%{"email" => account.email, "password" => account.password}, as: nil)
       )
+      |> Map.put(:icon, demo_account_icon(account.id))
     end)
   end
+
+  defp demo_account_icon("superadmin"), do: "hero-shield-check"
+  defp demo_account_icon("admin"), do: "hero-cog-6-tooth"
+  defp demo_account_icon("pharmacist"), do: "hero-clipboard-document-check"
+  defp demo_account_icon("lab"), do: "hero-beaker"
+  defp demo_account_icon("pharma-lab"), do: "hero-user-group"
+  defp demo_account_icon("distributor"), do: "hero-cube"
+  defp demo_account_icon(_), do: "hero-user"
 end
