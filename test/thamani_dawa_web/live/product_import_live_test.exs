@@ -56,7 +56,7 @@ defmodule ThamaniDawaWeb.ProductImportLiveTest do
       )
       |> render_submit()
 
-    assert html =~ "Ready to import"
+    assert html =~ "Ready"
     assert html =~ "Paracetamol"
 
     html = view |> element("button", "Import 1 products") |> render_click()
@@ -97,7 +97,12 @@ defmodule ThamaniDawaWeb.ProductImportLiveTest do
       )
       |> render_submit()
 
-    assert html =~ "Needs fixing"
+    refute html =~ "Needs fixing"
+    assert html =~ "GTIN"
+    assert has_element?(view, "#import-summary")
+    assert has_element?(view, "#import-errors")
+    assert has_element?(view, "#import-issue-rows tr")
+    assert has_element?(view, "#import-issue-rows tr td:first-child", "2")
     assert has_element?(view, "button[disabled]", "Import 0 products")
 
     refute Products.get_product_by_gtin(admin.organization_id, "1234567890123")

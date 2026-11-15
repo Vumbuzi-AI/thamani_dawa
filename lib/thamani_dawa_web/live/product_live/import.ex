@@ -1,6 +1,8 @@
 defmodule ThamaniDawaWeb.ProductLive.Import do
   use ThamaniDawaWeb, :live_view
 
+  @preview_limit 10
+
   alias ThamaniDawa.Products.Importer
 
   def mount(_params, _session, socket) do
@@ -22,11 +24,15 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
   end
 
   def handle_event("upload", _params, socket) do
-    case socket.assigns.uploads.csv_file.entries do
-      [] ->
+    cond do
+      socket.assigns.uploads.csv_file.entries == [] ->
         {:noreply, assign(socket, :upload_error, "Choose a CSV file first.")}
 
-      [entry | _] ->
+      not upload_ready?(socket.assigns.uploads.csv_file) ->
+        {:noreply, assign(socket, :upload_error, "Choose a valid CSV file first.")}
+
+      true ->
+        [entry | _] = socket.assigns.uploads.csv_file.entries
         filename = entry.client_name
 
         [content] =
@@ -101,7 +107,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
          |> assign(:summary, %{created: count, total: length(socket.assigns.preview)})}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Import failed partway through — please retry.")}
+        {:noreply, put_flash(socket, :error, "Import failed partway through. Please retry.")}
     end
   end
 
@@ -123,13 +129,11 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
     {:noreply, assign(socket, :upload_error, "Couldn't read that file as CSV.")}
   end
 
-  defp status_label(:valid), do: "Ready to import"
-  defp status_label(:invalid), do: "Needs fixing"
+  defp status_label(:valid), do: "Ready"
   defp status_label(:duplicate_in_file), do: "Duplicate in file"
-  defp status_label(:exists_in_catalogue), do: "Already in catalogue — skipped"
+  defp status_label(:exists_in_catalogue), do: "Already in catalogue, skipped"
 
   defp status_classes(:valid), do: "bg-green-50 text-green-700 border-green-200"
-  defp status_classes(:invalid), do: "bg-red-50 text-red-700 border-red-200"
 
   defp status_classes(status) when status in [:duplicate_in_file, :exists_in_catalogue],
     do: "bg-amber-50 text-amber-700 border-amber-200"
@@ -143,7 +147,34 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
         String.replace(acc, "%{#{key}}", to_string(value))
       end)
     end)
-    |> Enum.map_join("; ", fn {field, messages} -> "#{field} #{Enum.join(messages, ", ")}" end)
+    |> Enum.map_join("; ", fn {field, messages} ->
+      "#{field_label(field)} #{Enum.join(messages, ", ")}"
+    end)
+  end
+
+  defp issue_count(preview), do: Enum.count(preview, &(&1.status == :invalid))
+  defp preview_limit, do: @preview_limit
+
+  defp skipped_count(preview) do
+    Enum.count(preview, &(&1.status in [:duplicate_in_file, :exists_in_catalogue]))
+  end
+
+  defp error_summary(preview) do
+    preview
+    |> Enum.filter(&(&1.status == :invalid))
+    |> Enum.map(&row_errors(&1.changeset))
+    |> Enum.frequencies()
+    |> Enum.sort_by(fn {message, count} -> {-count, message} end)
+  end
+
+  defp issue_rows(preview) do
+    preview |> Enum.filter(&(&1.status == :invalid)) |> Enum.take(preview_limit())
+  end
+
+  defp field_label(:gtin), do: "GTIN"
+
+  defp field_label(field) do
+    field |> Atom.to_string() |> String.replace("_", " ") |> String.capitalize()
   end
 
   defp valid_count(preview), do: Enum.count(preview, &(&1.status == :valid))
@@ -282,7 +313,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
               <p :if={@upload_error} class="text-sm text-red-700">{@upload_error}</p>
 
               <.button
-                :if={@uploads.csv_file.entries != []}
+                :if={upload_ready?(@uploads.csv_file)}
                 type="submit"
                 variant="primary"
               >
@@ -315,7 +346,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
                 Before you import
               </p>
               <p class="mt-1 text-xs text-thamani-pewter">
-                Your file's columns don't need to match these names — you'll map them on the next step. These are the fields we can bring in:
+                Your file's columns don't need to match these names. You'll map them on the next step. These are the fields we can bring in:
               </p>
               <ul class="mt-3 space-y-2">
                 <.import_checklist_item>Generic or brand name</.import_checklist_item>
@@ -336,7 +367,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
                 <.icon name="hero-light-bulb" class="size-4.5 text-thamani-forest/70" /> Tip
               </p>
               <p class="mt-1 text-xs text-thamani-forest">
-                This brings in your product catalogue only — not stock quantities or batches. Add opening stock afterwards from each product's page.
+                This brings in your product catalogue only, not stock quantities or batches. Add opening stock afterwards from each product's page.
               </p>
             </div>
           </div>
@@ -410,7 +441,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
                           required={field.required}
                         >
                           <option value="" selected={is_nil(Map.get(@mapping, field.key))}>
-                            — not in file —
+                            Not in file
                           </option>
                           <option
                             :for={header <- @headers}
@@ -435,11 +466,93 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
         </div>
 
         <div :if={@step == :preview} class="mt-6 space-y-4">
+          <div class="grid grid-cols-3 gap-3" id="import-summary">
+            <div class="rounded-xl border border-green-200 bg-green-50 px-4 py-3">
+              <p class="text-2xl font-semibold tabular-nums text-green-800">
+                {valid_count(@preview)}
+              </p>
+              <p class="text-xs font-medium text-green-700">Ready</p>
+            </div>
+            <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+              <p class="text-2xl font-semibold tabular-nums text-red-800">{issue_count(@preview)}</p>
+              <p class="text-xs font-medium text-red-700">Have issues</p>
+            </div>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <p class="text-2xl font-semibold tabular-nums text-amber-800">
+                {skipped_count(@preview)}
+              </p>
+              <p class="text-xs font-medium text-amber-700">Skipped</p>
+            </div>
+          </div>
+
+          <div
+            :if={issue_count(@preview) > 0}
+            id="import-errors"
+            class="rounded-xl border border-red-200 bg-red-50/60 p-4"
+          >
+            <p class="text-sm font-semibold text-red-800">Errors found</p>
+            <ul class="mt-2 space-y-1.5 text-sm text-red-700">
+              <li
+                :for={{message, count} <- error_summary(@preview)}
+                class="flex justify-between gap-4"
+              >
+                <span>{message}</span>
+                <span class="shrink-0 font-medium tabular-nums">
+                  {count} {if(count == 1, do: "row", else: "rows")}
+                </span>
+              </li>
+            </ul>
+          </div>
+
           <p class="text-sm text-thamani-pewter">
-            {valid_count(@preview)} of {length(@preview)} rows are ready to import.
-            Rows marked "Needs fixing" or already in your catalogue will be skipped —
-            re-upload a corrected file for those if needed.
+            Rows with errors or already in your catalogue will be skipped.
           </p>
+
+          <div :if={issue_count(@preview) > 0} class="space-y-2">
+            <div class="flex items-end justify-between gap-4">
+              <div>
+                <h3 class="text-sm font-semibold text-thamani-forest">Rows to fix</h3>
+                <p class="text-xs text-thamani-pewter">
+                  Use the original spreadsheet row number to locate and correct each product.
+                </p>
+              </div>
+              <span class="shrink-0 text-xs font-medium text-red-700">
+                Showing {min(issue_count(@preview), preview_limit())} of {issue_count(@preview)}
+              </span>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-red-200">
+              <table class="w-full text-sm">
+                <thead class="bg-red-50/70 text-left text-xs font-medium uppercase tracking-wide text-red-800">
+                  <tr>
+                    <th class="px-3 py-2">Row number</th>
+                    <th class="px-3 py-2">Product</th>
+                    <th class="px-3 py-2">GTIN</th>
+                    <th class="px-3 py-2">Issue</th>
+                  </tr>
+                </thead>
+                <tbody id="import-issue-rows" class="divide-y divide-red-100 bg-white">
+                  <tr :for={row <- issue_rows(@preview)}>
+                    <td class="px-3 py-2 tabular-nums text-thamani-pewter">{row.index + 1}</td>
+                    <td class="px-3 py-2 text-thamani-forest">{row_name(row.attrs)}</td>
+                    <td class="px-3 py-2 tabular-nums text-thamani-pewter">
+                      {row.attrs["gtin"] || "—"}
+                    </td>
+                    <td class="max-w-56 px-3 py-2 text-xs font-medium leading-5 text-red-700">
+                      {row_errors(row.changeset)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between gap-4">
+            <h3 class="text-sm font-semibold text-thamani-forest">File sample</h3>
+            <span class="text-xs text-thamani-pewter">
+              First {min(length(@preview), preview_limit())} of {length(@preview)} rows
+            </span>
+          </div>
 
           <div class="overflow-x-auto rounded-xl border border-thamani-stone">
             <table class="w-full text-sm">
@@ -451,21 +564,27 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
                   <th class="px-3 py-2">Status</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-thamani-stone">
-                <tr :for={row <- @preview}>
+              <tbody id="import-preview-rows" class="divide-y divide-thamani-stone">
+                <tr :for={row <- Enum.take(@preview, preview_limit())}>
                   <td class="px-3 py-2 tabular-nums text-thamani-pewter">{row.index}</td>
                   <td class="px-3 py-2 text-thamani-forest">{row_name(row.attrs)}</td>
                   <td class="px-3 py-2 tabular-nums text-thamani-forest">{row.attrs["gtin"]}</td>
                   <td class="px-3 py-2">
-                    <span class={[
-                      "inline-flex rounded-full border px-2 py-0.5 text-xs font-medium",
-                      status_classes(row.status)
-                    ]}>
-                      {status_label(row.status)}
-                    </span>
-                    <p :if={row.status == :invalid} class="mt-1 text-xs text-red-700">
+                    <p
+                      :if={row.status == :invalid}
+                      class="max-w-48 text-xs font-medium leading-5 text-red-700"
+                    >
                       {row_errors(row.changeset)}
                     </p>
+                    <span
+                      :if={row.status != :invalid}
+                      class={[
+                        "inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium",
+                        status_classes(row.status)
+                      ]}
+                    >
+                      {status_label(row.status)}
+                    </span>
                   </td>
                 </tr>
               </tbody>
@@ -502,4 +621,9 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
   defp error_to_string(:too_many_files), do: "Choose only one file."
   defp error_to_string(:not_accepted), do: "Must be a CSV file."
   defp error_to_string(_), do: "Couldn't accept this file."
+
+  defp upload_ready?(upload_config) do
+    upload_config.entries != [] and
+      Enum.all?(upload_config.entries, &(upload_errors(upload_config, &1) == []))
+  end
 end

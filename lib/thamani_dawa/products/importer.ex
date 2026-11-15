@@ -27,6 +27,19 @@ defmodule ThamaniDawa.Products.Importer do
     %{key: :is_dangerous_drug, label: "Dangerous drug (yes/no)", required: false}
   ]
 
+  @column_aliases %{
+    generic_name: ["medicine name", "product name", "medicine product"],
+    brand_name: ["trade name", "trade label"],
+    gtin: ["barcode"],
+    price: ["retail price", "selling price"],
+    uom: ["selling unit", "unit of sale"],
+    category: ["product group"],
+    manufacturer: ["made by"],
+    reorder_level: ["reorder threshold"],
+    is_otc: ["otc"],
+    is_dangerous_drug: ["controlled drug"]
+  }
+
   @doc "The importable fields, in template-column order."
   def fields, do: @fields
 
@@ -59,21 +72,78 @@ defmodule ThamaniDawa.Products.Importer do
 
   @doc """
   Best-effort mapping from the uploaded file's header row to our field
-  keys, matched case/whitespace-insensitively against each field's label
-  and key. Ambiguous or unmatched fields are left unmapped (`nil`) for the
-  user to fill in by hand on the mapping step.
+  keys. Exact label/key matches are preferred, followed by conservative
+  token matches and known spreadsheet synonyms. For example, `Barcode
+  (GTIN)` maps to `:gtin` and `Retail price (KES)` maps to `:price`.
+  Ambiguous or unmatched fields are left unmapped (`nil`) for the user to
+  review on the mapping step.
   """
   def auto_map_columns(headers) do
-    normalized = Enum.map(headers, &{&1, normalize(&1)})
+    header_matches =
+      Map.new(@fields, fn field ->
+        matches = Enum.map(headers, &{&1, match_strength(field, &1)})
+        strongest = matches |> Enum.map(&elem(&1, 1)) |> Enum.max(fn -> 0 end)
 
-    Map.new(@fields, fn field ->
-      match =
-        Enum.find(normalized, fn {_header, norm} ->
-          norm == normalize(field.label) or norm == normalize(to_string(field.key))
-        end)
+        candidates =
+          matches
+          |> Enum.filter(&(elem(&1, 1) == strongest and strongest > 0))
+          |> Enum.map(&elem(&1, 0))
 
-      {field.key, match && elem(match, 0)}
+        {field.key, candidates}
+      end)
+
+    proposed =
+      Map.new(header_matches, fn
+        {key, [header]} -> {key, header}
+        {key, _ambiguous_or_missing} -> {key, nil}
+      end)
+
+    duplicate_headers =
+      proposed
+      |> Map.values()
+      |> Enum.reject(&is_nil/1)
+      |> Enum.frequencies()
+      |> MapSet.new(fn {header, count} -> count > 1 && header end)
+      |> MapSet.delete(false)
+
+    Map.new(proposed, fn {key, header} ->
+      {key, if(header && MapSet.member?(duplicate_headers, header), do: nil, else: header)}
     end)
+  end
+
+  defp match_strength(field, header) do
+    normalized_header = normalize(header)
+
+    cond do
+      normalized_header in [normalize(field.label), normalize(to_string(field.key))] ->
+        2
+
+      Enum.any?(column_terms(field), &contains_term?(header, &1)) ->
+        1
+
+      true ->
+        0
+    end
+  end
+
+  defp column_terms(field) do
+    [field.label, to_string(field.key) | Map.get(@column_aliases, field.key, [])]
+  end
+
+  defp contains_term?(header, term) do
+    header_tokens = tokens(header)
+    term_tokens = tokens(term)
+    term_length = length(term_tokens)
+
+    term_tokens != [] and
+      Enum.any?(Enum.chunk_every(header_tokens, term_length, 1, :discard), &(&1 == term_tokens))
+  end
+
+  defp tokens(value) do
+    value
+    |> to_string()
+    |> String.downcase()
+    |> String.split(~r/[^a-z0-9]+/, trim: true)
   end
 
   defp normalize(value) do

@@ -1,20 +1,104 @@
-<div class="mx-auto mt-24 max-w-md px-6">
-  <Layouts.flash_group flash={@flash} />
-  <h1 class="text-2xl font-semibold text-thamani-forest">Choose a new password</h1>
-  <.form
-    for={@form}
-    id="password-reset-form"
-    action={~p"/reset-password/#{@token}"}
-    method="post"
-    class="mt-6 space-y-4"
-  >
-    <.input
-      field={@form[:password]}
-      type="password"
-      label="New password"
-      autocomplete="new-password"
-      required
-    />
-    <.button type="submit" variant="primary">Reset password</.button>
-  </.form>
+<%!-- ============================================================
+     RESET PASSWORD (choose new password) — Thamani Dawa
+     Same split shell as login/signup: Forest Depths left panel · Snow White form right
+     ============================================================ --%>
+<div class="auth-shell lg:h-svh lg:overflow-hidden">
+  <div class="auth-aside hidden lg:flex lg:h-svh">
+    <a href="/" aria-label="Thamani Dawa home" style="width: 200px;">
+      <img
+        src="/images/logo-transparent.png"
+        alt=""
+        class="h-auto w-full brightness-0 invert"
+      />
+    </a>
+
+    <div>
+      <span
+        class="thamani-badge"
+        style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="14"
+          height="14"
+          aria-hidden="true"
+          style="stroke: currentColor; stroke-width: 1.6; fill: none;"
+        >
+          <path d="M4 5v14M8 5v14M11 5v14M15 5v14M17 5v14M20 5v14" />
+        </svg>
+        GS1 Compliant · Built for Kenya
+      </span>
+      <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
+        Choose a new password.
+      </h2>
+      <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
+        Create a strong password to keep your account and your network secure.
+      </p>
+    </div>
+
+    <div style="border-top: 1px solid rgba(252,252,247,0.1); padding-top: 28px;">
+      <p style="font-size: 15px; font-weight: 350; color: rgba(252,252,247,0.75); line-height: 1.55; font-style: italic; margin-bottom: 16px;">
+        "Thamani Dawa keeps our operations organized and traceable."
+      </p>
+      <p style="font-size: 13px; font-weight: 500; color: rgba(252,252,247,0.45);">
+        Dr. Amina Kariuki · Head of Pharmacy, Nairobi General
+      </p>
+    </div>
+  </div>
+
+  <div class="auth-form-panel lg:h-svh lg:overflow-y-auto">
+    <div class="auth-form-inner">
+      <Layouts.flash_group flash={@flash} />
+
+      <h1 style="font-size: 32px; font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-forest); margin-bottom: 6px;">
+        Choose a new password
+      </h1>
+      <p style="font-size: 15px; color: var(--thamani-pewter); line-height: 1.5; margin-bottom: 24px;">
+        Make it something you haven't used before.
+      </p>
+
+      <.form
+        for={@form}
+        id="password-reset-form"
+        action={~p"/reset-password/#{@token}"}
+        method="post"
+      >
+        <.thamani_input
+          field={@form[:password]}
+          type="password"
+          label="New password"
+          placeholder="••••••••"
+          autocomplete="new-password"
+          icon="hero-lock-closed"
+          class="mb-7"
+          required
+        />
+
+        <.thamani_btn type="submit" variant="primary">
+          Reset password
+        </.thamani_btn>
+      </.form>
+
+      <p style="text-align: center; font-size: 14px; color: var(--thamani-pewter); margin-top: 20px;">
+        <.link
+          navigate={~p"/login"}
+          style="color: var(--thamani-forest); text-decoration: underline; text-underline-offset: 3px; font-weight: 500;"
+        >
+          Back to log in
+        </.link>
+      </p>
+
+      <div class="mt-10 flex items-center justify-center gap-5 lg:hidden">
+        <a
+          href="/privacy"
+          style="font-size: 12px; color: var(--thamani-subtle); text-decoration: none;"
+        >Privacy</a>
+        <span style="font-size: 12px; color: var(--thamani-stone);">·</span>
+        <a
+          href="/terms"
+          style="font-size: 12px; color: var(--thamani-subtle); text-decoration: none;"
+        >Terms</a>
+      </div>
+    </div>
+  </div>
 </div>

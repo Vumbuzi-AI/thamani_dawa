@@ -8,12 +8,13 @@
       name="google-maps-api-key"
       content={Application.get_env(:thamani_dawa, :google_maps)[:api_key]}
     />
-    <.live_title default="ThamaniDawa" suffix=" · Pharmacy OS" phx-no-format>{assigns[:page_title]}</.live_title>
+    <.live_title default="Thamani Dawa · Pharmacy, Lab & Distribution" suffix="" phx-no-format>{if assigns[:page_title], do: "#{assigns[:page_title]} · Thamani Dawa"}</.live_title>
+    <link rel="icon" type="image/png" href={~p"/favicon.png"} />
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Rethink+Sans:wght@400..600&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js">
@@ -22,7 +23,7 @@
     </script>
     <style>
       body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif !important;
+        font-family: 'Rethink Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif !important;
       }
     </style>
     <script>

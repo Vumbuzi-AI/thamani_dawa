@@ -8,6 +8,7 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Products
+  alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites
 
   test "admin configures a brand-new organization end to end: signup -> combined-capability site -> invite staff -> product -> initial stock",
@@ -17,34 +18,68 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     # Step 1: sign up the organization admin
     {:ok, signup_view, _html} = live(conn, ~p"/signup")
 
-    organization_attrs = %{
-      name: "Acme Pharmacy Co",
-      license_number: "PPB-ACME-001",
-      operating_models: ["pharmacy", "laboratory"],
-      gs1_company_prefix: "0614141"
-    }
-
-    # The GS1 company prefix is only revealed once an operating model is
-    # picked, and the wizard needs a second Continue once the registry has
-    # answered.
+    # Step 1: operating models alone.
     signup_view
     |> form("#organization-setup-form",
-      organization: %{operating_models: organization_attrs.operating_models}
+      organization: %{operating_models: ["pharmacy", "laboratory"]}
     )
-    |> render_change(%{"_target" => ["organization", "operating_models"]})
+    |> render_submit()
 
+    # Step 2: regulatory details — just the GS1 company prefix. The
+    # organization name itself is no longer typed in — it comes back from
+    # the GS1 registry lookup (the test stub always answers with
+    # "Test Licensee" for a known prefix). PPB/KMLTTB licensing moved to
+    # the site step below, since a license is a property of a specific
+    # premises, not the organization as a whole.
     signup_view
-    |> form("#organization-setup-form", organization: organization_attrs)
+    |> form("#regulatory-details-form", organization: %{gs1_company_prefix: "0614141"})
     |> render_submit()
 
     render_async(signup_view, 5_000)
 
     signup_view
-    |> form("#organization-setup-form", organization: organization_attrs)
+    |> form("#regulatory-details-form", organization: %{gs1_company_prefix: "0614141"})
     |> render_submit()
 
+    # The main-location GLN is mandatory and checked against the registry
+    # too, so it also needs a second Continue once the registry answers.
     signup_view
-    |> form("#site-setup-form", site: %{name: "Acme First Branch"})
+    |> form("#site-setup-form", site: %{gln: "0614141000784"})
+    |> render_submit()
+
+    render_async(signup_view, 5_000)
+
+    signup_view
+    |> form("#site-setup-form", site: %{gln: "0614141000784"})
+    |> render_submit()
+
+    # Both operating models were selected, so the default site activity is
+    # already the combined "pharmacy + diagnostic lab" choice — no radio
+    # selection needed, just the PPB and KMLTTB licenses in turn. "Unique
+    # Pharmacy"/"AB1XXXX9999" and "Unique Lab"/"L 01000/26" are recognized
+    # by the respective registry test stubs as unique matches.
+    site_attrs = %{
+      gln: "0614141000784",
+      ppb_facility_name: "Unique Pharmacy",
+      license_number: "AB1XXXX9999",
+      kmlttb_facility_name: "Unique Lab",
+      kmlttb_license_number: "L 01000/26"
+    }
+
+    signup_view
+    |> form("#site-setup-form", site: site_attrs)
+    |> render_submit()
+
+    render_async(signup_view, 5_000)
+
+    signup_view
+    |> form("#site-setup-form", site: site_attrs)
+    |> render_submit()
+
+    render_async(signup_view, 5_000)
+
+    signup_view
+    |> form("#site-setup-form", site: site_attrs)
     |> render_submit()
 
     signup_view
@@ -62,33 +97,38 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     assert has_element?(signup_view, "#signup-form[phx-trigger-action][action='/login']")
 
     admin = Accounts.get_user_by_email(admin_email)
-    assert admin.roles == [:admin]
+    assert admin.roles == [:admin, :pharmacist, :lab_technician]
+
+    # Not under test here — this exercises everything *after* signup, so
+    # skip straight past the email-confirmation gate rather than wiring up
+    # the full token/email round trip.
+    admin =
+      admin
+      |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second))
+      |> Repo.update!()
 
     organization = Organizations.get_organization!(admin.organization_id)
-    assert organization.name == "Acme Pharmacy Co"
+    assert organization.name == "Test Licensee"
 
     admin_conn = log_in_user(conn, admin)
 
     # Step 2: create a combined-capability (pharmacy + lab) site
     {:ok, site_view, _html} = live(admin_conn, ~p"/org/sites/new")
 
+    site_view |> form("#site-form", site: %{gln: "0614141000456"}) |> render_submit()
+    render_async(site_view, 5_000)
+
     site_view
-    |> form("#site-form",
-      site: %{
-        name: "Main Branch",
-        activities: [:pharmacy, :laboratory],
-        address: "1 Test Street",
-        gln: "0614141000456"
-      }
-    )
+    |> form("#site-form", site: %{gln: "0614141000456", activity_choice: "pharmacy_laboratory"})
     |> render_submit()
 
     assert_patch(site_view, ~p"/org/sites")
 
-    site = Enum.find(Sites.list_sites(organization.id), &(&1.name == "Main Branch"))
+    site = Enum.find(Sites.list_sites(organization.id), &(&1.gln == "0614141000456"))
     assert site
     assert site.activities == [:pharmacy, :laboratory]
-    # The GLN is the one GS1 issued to the location, entered by the admin.
+    # The GLN is the one GS1 issued to the location, resolved and verified
+    # against the registry rather than hand-typed alongside the name.
     assert site.gln == "0614141000456"
 
     # Step 3: invite staff to that site

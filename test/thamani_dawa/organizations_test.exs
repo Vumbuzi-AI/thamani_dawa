@@ -188,7 +188,13 @@ defmodule ThamaniDawa.OrganizationsTest do
 
   describe "signup/2" do
     test "creates an organization, a default site, and its first admin user in one transaction" do
-      org_attrs = %{name: "Acme Pharmacy", license_number: "LIC-1", gs1_company_prefix: "6160001"}
+      org_attrs = %{
+        name: "Acme Pharmacy",
+        license_number: "LIC-1",
+        gs1_company_prefix: "6160001",
+        ppb_facility_name: "Acme Pharmacy"
+      }
+
       admin_attrs = valid_user_attributes(%{name: "Jane Admin"})
 
       assert {:ok, %{organization: organization, site: site, user: user}} =
@@ -204,7 +210,7 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert site.activities == [:pharmacy]
       assert is_nil(site.gln)
       assert user.organization_id == organization.id
-      assert user.roles == [:admin]
+      assert user.roles == [:admin, :pharmacist]
       assert user.name == "Jane Admin"
     end
 
@@ -224,6 +230,9 @@ defmodule ThamaniDawa.OrganizationsTest do
         name: "Acme Health",
         license_number: "LIC-H",
         gs1_company_prefix: "6160001",
+        ppb_facility_name: "Acme Health",
+        kmlttb_facility_name: "Acme Health",
+        kmlttb_license_number: "L 01234/26",
         operating_models: [:pharmacy, :laboratory]
       }
 
@@ -294,13 +303,16 @@ defmodule ThamaniDawa.OrganizationsTest do
         name: "Acme Distribution",
         license_number: "LIC-D",
         gs1_company_prefix: "0614141",
+        ppb_facility_name: "Acme Distribution",
         operating_models: [:distributor]
       }
 
       site_attrs = %{
         name: "Central Warehouse",
         activities: [:distribution],
-        address: "Industrial Area"
+        address: "Industrial Area",
+        ppb_facility_name: "Acme Distribution",
+        license_number: "LIC-D"
       }
 
       assert {:ok, %{organization: organization, site: site}} =
@@ -367,7 +379,9 @@ defmodule ThamaniDawa.OrganizationsTest do
                  org_attrs,
                  %{
                    name: "Acme Labs Main",
-                   activities: [:laboratory]
+                   activities: [:laboratory],
+                   kmlttb_facility_name: "Acme Labs Main",
+                   kmlttb_license_number: "L 01234/26"
                  },
                  valid_user_attributes()
                )
@@ -402,13 +416,16 @@ defmodule ThamaniDawa.OrganizationsTest do
       org_attrs = %{
         name: "Acme Pharmacy",
         license_number: "LIC-1",
-        gs1_company_prefix: "6160001"
+        gs1_company_prefix: "6160001",
+        ppb_facility_name: "Acme Pharmacy"
       }
 
       site_attrs = %{
         name: "Acme Main",
         activities: [:pharmacy],
-        gln: "6160001000004"
+        gln: "6160001000004",
+        ppb_facility_name: "Acme Pharmacy",
+        license_number: "LIC-1"
       }
 
       assert {:ok, %{site: site}} =
@@ -419,7 +436,36 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert is_nil(site.gln_verification_source)
     end
 
-    test "enqueues prefix and GLN verification jobs when identifiers are entered" do
+    test "does not persist premises-level PPB details on the organization during signup" do
+      org_attrs = %{
+        name: "Acme Pharmacy",
+        license_number: "LIC-1",
+        gs1_company_prefix: "6160001",
+        ppb_facility_name: "Acme Pharmacy",
+        ppb_verification_status: "verified",
+        ppb_verified_at: ~U[2026-11-14 10:00:00Z],
+        ppb_license_valid_till: ~D[2026-12-31],
+        ppb_verification_source: "ppb_registry_scrape"
+      }
+
+      site_attrs = %{
+        name: "Acme Main",
+        activities: [:pharmacy],
+        ppb_facility_name: "Acme Pharmacy",
+        license_number: "LIC-1"
+      }
+
+      assert {:ok, %{organization: organization}} =
+               Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
+
+      assert is_nil(organization.ppb_facility_name)
+      assert organization.ppb_verification_status == :pending
+      assert is_nil(organization.ppb_verified_at)
+      assert is_nil(organization.ppb_license_valid_till)
+      assert is_nil(organization.ppb_verification_source)
+    end
+
+    test "does not require premises-level PPB details during organization signup" do
       org_attrs = %{
         name: "Acme Pharmacy",
         license_number: "LIC-1",
@@ -429,7 +475,53 @@ defmodule ThamaniDawa.OrganizationsTest do
       site_attrs = %{
         name: "Acme Main",
         activities: [:pharmacy],
-        gln: "6160001000004"
+        ppb_facility_name: "Acme Pharmacy",
+        license_number: "LIC-1"
+      }
+
+      assert {:ok, %{organization: organization}} =
+               Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
+
+      assert is_nil(organization.ppb_facility_name)
+      assert organization.ppb_verification_status == :pending
+    end
+
+    test "does not require a PPB facility name for a laboratory-only organization" do
+      org_attrs = %{
+        name: "Acme Labs",
+        license_number: "LIC-L",
+        gs1_company_prefix: "6160001",
+        operating_models: [:laboratory]
+      }
+
+      site_attrs = %{
+        name: "Acme Labs Main",
+        activities: [:laboratory],
+        kmlttb_facility_name: "Acme Labs Main",
+        kmlttb_license_number: "L 01234/26"
+      }
+
+      assert {:ok, %{organization: organization}} =
+               Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
+
+      assert is_nil(organization.ppb_facility_name)
+      assert organization.ppb_verification_status == :pending
+    end
+
+    test "enqueues prefix and GLN verification jobs when identifiers are entered" do
+      org_attrs = %{
+        name: "Acme Pharmacy",
+        license_number: "LIC-1",
+        gs1_company_prefix: "6160001",
+        ppb_facility_name: "Acme Pharmacy"
+      }
+
+      site_attrs = %{
+        name: "Acme Main",
+        activities: [:pharmacy],
+        gln: "6160001000004",
+        ppb_facility_name: "Acme Pharmacy",
+        license_number: "LIC-1"
       }
 
       assert {:ok, %{organization: organization, site: site}} =
@@ -446,16 +538,23 @@ defmodule ThamaniDawa.OrganizationsTest do
       org_attrs = %{
         name: "Acme Pharmacy",
         license_number: "LIC-1",
-        gs1_company_prefix: "6160001"
+        gs1_company_prefix: "6160001",
+        ppb_facility_name: "Acme Pharmacy"
       }
 
-      site_attrs = %{name: "Acme Main", activities: [:pharmacy]}
+      site_attrs = %{
+        name: "Acme Main",
+        activities: [:pharmacy],
+        ppb_facility_name: "Acme Pharmacy",
+        license_number: "LIC-1"
+      }
 
       assert {:ok, %{organization: organization}} =
                Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
 
       args = Enum.map(Repo.all(Oban.Job), & &1.args)
-      assert [%{"organization_id" => organization.id}] == args
+      assert %{"organization_id" => organization.id} in args
+      refute Enum.any?(args, &match?(%{"record" => _}, &1))
     end
   end
 end
