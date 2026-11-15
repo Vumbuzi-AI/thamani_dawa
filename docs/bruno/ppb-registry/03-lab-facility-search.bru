@@ -1,0 +1,39 @@
+meta {
+  name: Lab facility search — Cerba Lancet
+  type: http
+  seq: 3
+}
+
+get {
+  url: https://kmlttb.org/labsverification/licence_records.php?search=Cerba Lancet&filter=&value=&sort=Name&order=ASC&page=1
+  body: none
+  auth: none
+}
+
+params:query {
+  search: Cerba Lancet
+  filter:
+  value:
+  sort: Name
+  order: ASC
+  page: 1
+}
+
+docs {
+  KMLTTB (Kenya Medical Laboratory Technicians and Technologists Board) —
+  the body that licenses diagnostic labs, not PPB — runs a separate public
+  facilities register at a different host (`kmlttb.org`, not
+  `practice.pharmacyboardkenya.org`).
+
+  Change `search` to try another laboratory name.
+
+  Working sample: `Cerba Lancet` returns multiple branches (e.g. "CERBA
+  LANCET KENYA LIMITED BURUBURU", "CERBA LANCET KENYA LIMITED ELDORET") —
+  KMLTTB licenses per-branch, same as PPB does for retail/wholesale.
+
+  Each result row links to a detail page via `view_record.php?id=<id>`.
+  Unlike PPB, KMLTTB's detail page shows the **full, unmasked** Licence No
+  (e.g. `L 03871/25`), alongside a separate File No, Class, County, and
+  "Valid Until" date — so verification against it can be an exact match
+  rather than PPB's masked prefix/suffix comparison.
+}

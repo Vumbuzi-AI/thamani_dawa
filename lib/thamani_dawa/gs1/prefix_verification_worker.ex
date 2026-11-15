@@ -25,6 +25,9 @@ defmodule ThamaniDawa.Grp.PrefixVerificationWorker do
         {:ok, :verified, _licence} ->
           update_status(organization, :verified)
 
+        {:ok, :inactive, _licence} ->
+          update_status(organization, :failed)
+
         {:ok, :not_verified} ->
           update_status(organization, :failed)
 

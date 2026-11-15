@@ -29,6 +29,7 @@ defmodule ThamaniDawa.Grp.GlnVerificationWorker do
   defp verify(record, update) do
     case Grp.verify_gln(record.gln) do
       {:ok, :verified, _licence} -> update.(record)
+      {:ok, :inactive, _licence} -> :ok
       {:ok, :not_verified} -> :ok
       {:error, _reason} -> {:error, :grp_unavailable}
     end

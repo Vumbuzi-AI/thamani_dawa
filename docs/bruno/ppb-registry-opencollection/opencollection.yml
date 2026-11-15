@@ -1,0 +1,29 @@
+opencollection: 1.0.0
+
+info:
+  name: PPB Registry
+
+request:
+  variables:
+    - name: baseUrl
+      value: https://practice.pharmacyboardkenya.org
+    - name: facilityName
+      value: Curewave Pharmacy
+    - name: distributorName
+      value: Abacus Pharma
+    - name: labBaseUrl
+      value: https://kmlttb.org
+    - name: labFacilityName
+      value: Cerba Lancet
+
+docs:
+  content: Search the Pharmacy and Poisons Board public facilities register, and (separately) the KMLTTB public laboratory facilities register.
+  type: text/markdown
+
+bundled: false
+
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

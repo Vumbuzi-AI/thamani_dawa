@@ -11,6 +11,7 @@ defmodule ThamaniDawa.Application do
       ThamaniDawaWeb.Telemetry,
       ThamaniDawa.Repo,
       ThamaniDawa.LoginRateLimiter,
+      ThamaniDawa.RegistryCache,
       {DNSCluster, query: Application.get_env(:thamani_dawa, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: ThamaniDawa.PubSub},
       {Oban, Application.fetch_env!(:thamani_dawa, Oban)},

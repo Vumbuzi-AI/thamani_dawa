@@ -44,7 +44,8 @@ defmodule ThamaniDawa.SitesTest do
                Sites.create_site(organization.id, %{
                  name: "  Main Branch  ",
                  activities: [:pharmacy],
-                 address: "Kimathi Street"
+                 address: "Kimathi Street",
+                 gln: ThamaniDawa.Gln.generate!()
                })
 
       assert site.name == "Main Branch"
@@ -126,21 +127,24 @@ defmodule ThamaniDawa.SitesTest do
                Sites.create_site(organization.id, %{
                  name: "Joint Branch",
                  activities: [:pharmacy, :laboratory],
-                 address: "Valid Address"
+                 address: "Valid Address",
+                 gln: ThamaniDawa.Gln.generate!()
                })
 
       assert {:ok, _site} =
                Sites.create_site(organization.id, %{
                  name: "Pharmacy Branch",
                  activities: [:pharmacy],
-                 address: "Valid Address"
+                 address: "Valid Address",
+                 gln: ThamaniDawa.Gln.generate!()
                })
 
       assert {:ok, _site} =
                Sites.create_site(organization.id, %{
                  name: "Lab Branch",
                  activities: [:laboratory],
-                 address: "Valid Address"
+                 address: "Valid Address",
+                 gln: ThamaniDawa.Gln.generate!()
                })
 
       # invalid activity
@@ -152,6 +156,19 @@ defmodule ThamaniDawa.SitesTest do
                })
 
       assert %{activities: ["is invalid"]} = errors_on(changeset)
+    end
+
+    test "requires a GLN for an operational site" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Sites.create_site(organization.id, %{
+                 name: "HQ",
+                 activities: [:pharmacy],
+                 address: "Valid Address"
+               })
+
+      assert %{gln: ["can't be blank"]} = errors_on(changeset)
     end
 
     test "rejects a malformed site GLN" do

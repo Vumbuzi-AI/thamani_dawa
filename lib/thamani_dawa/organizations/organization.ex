@@ -30,6 +30,17 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :gln, :string
     field :gln_verified_at, :utc_datetime
     field :gln_verification_source, :string
+
+    field :ppb_facility_name, :string
+
+    field :ppb_verification_status, Ecto.Enum,
+      values: [:pending, :verified, :failed],
+      default: :pending
+
+    field :ppb_verified_at, :utc_datetime
+    field :ppb_license_valid_till, :date
+    field :ppb_verification_source, :string
+
     field :next_sscc_serial, :integer, default: 0
     field :next_goods_receipt_number, :integer, default: 0
     field :serialisation_type, :string
@@ -59,12 +70,17 @@ defmodule ThamaniDawa.Organizations.Organization do
   @doc false
   def changeset(organization, attrs) do
     organization
+    |> base_changeset(attrs)
+    |> validate_required([:license_number], message: "Please enter your license number")
+  end
+
+  defp base_changeset(organization, attrs) do
+    organization
     |> cast(attrs, [:name, :slug, :license_number, :operating_models, :gs1_company_prefix])
     |> trim_change(:name)
     |> trim_change(:license_number)
     |> trim_change(:gs1_company_prefix)
     |> validate_required([:name], message: "Please enter your organization name")
-    |> validate_required([:license_number], message: "Please enter your license number")
     |> validate_length(:operating_models,
       min: 1,
       message: "Select at least one operating model"
@@ -78,15 +94,16 @@ defmodule ThamaniDawa.Organizations.Organization do
   end
 
   @doc """
-  Changeset for onboarding: same rules as `changeset/2`, plus a GS1 company
-  prefix, always required. Dispensing (pharmacy) and distribution
+  Changeset for onboarding: organization identity plus a GS1 company prefix,
+  always required. Premises licenses are verified separately at site setup.
+  Dispensing (pharmacy) and distribution
   (distributor) events build org-prefixed identifiers directly, but even a
   laboratory-only organization needs it: goods receiving (`Epcis.record_goods_receipt/1`)
   requires the org's GS1 prefix regardless of operating model.
   """
   def signup_changeset(organization, attrs) do
     organization
-    |> changeset(attrs)
+    |> base_changeset(attrs)
     |> validate_gs1_company_prefix()
   end
 
@@ -145,7 +162,7 @@ defmodule ThamaniDawa.Organizations.Organization do
     case get_change(changeset, :gln) do
       gln when is_binary(gln) ->
         if Regex.match?(~r/^\d{13}$/, gln) and not gln_check_digit_valid?(gln) do
-          add_error(changeset, :gln, "check digit does not match — double-check the number")
+          add_error(changeset, :gln, "check digit does not match, double-check the number")
         else
           changeset
         end
@@ -197,6 +214,15 @@ defmodule ThamaniDawa.Organizations.Organization do
     do: add_error(changeset, :name, "must contain at least one letter or number")
 
   defp put_generated_slug(changeset, slug), do: put_change(changeset, :slug, slug)
+
+  @doc """
+  The normalized key `put_name_key/1` would derive for `name` — lowercased,
+  accents stripped, punctuation/whitespace removed — exposed so callers can
+  check for a name collision (e.g. right after a GS1 prefix resolves one)
+  without building a full changeset.
+  """
+  @spec name_key(String.t()) :: String.t()
+  def name_key(name), do: name |> slugify() |> normalize_name_key()
 
   defp put_name_key(changeset) do
     case get_field(changeset, :slug) do
