@@ -39,6 +39,96 @@ defmodule ThamaniDawaWeb.Router do
     post "/mpesa/callback/:token", DarajaCallbackController, :create
   end
 
+  scope "/api/v1", ThamaniDawaWeb.Api.V1, as: :api_v1 do
+    pipe_through :api
+
+    post "/login", SessionController, :login
+    post "/token/refresh", SessionController, :refresh
+    post "/signup", SessionController, :signup
+    post "/invites/:token", SessionController, :accept_invite
+  end
+
+  scope "/api/v1", ThamaniDawaWeb.Api.V1, as: :api_v1 do
+    pipe_through [:api, ThamaniDawaWeb.Plugs.ApiAuth]
+
+    post "/logout", SessionController, :logout
+    get "/me", SessionController, :me
+    get "/session/sites", SessionController, :sites
+    patch "/session/site", SessionController, :switch_site
+
+    get "/pharmacy/dashboard", PharmacyController, :dashboard
+    post "/pharmacy/scans", PharmacyController, :scan
+    get "/pharmacy/stock", PharmacyController, :stock
+    get "/pharmacy/stock/products/:id", PharmacyController, :stock_product
+    get "/pharmacy/stock/batches/:id", PharmacyController, :stock_batch
+    get "/pharmacy/catalog", PharmacyController, :catalog
+    post "/pharmacy/sales", PharmacyController, :create_sale
+    get "/pharmacy/receipts", PharmacyController, :receipts
+    post "/pharmacy/receipts/:id/receive", PharmacyController, :confirm_receipt
+    get "/pharmacy/transactions", PharmacyController, :transactions
+
+    get "/pharmacy/prescriptions", PrescriptionController, :index
+    post "/pharmacy/prescriptions", PrescriptionController, :create
+    get "/pharmacy/prescriptions/:id", PrescriptionController, :show
+    post "/pharmacy/prescriptions/:id/items/:item_id/dispense", PrescriptionController, :dispense
+    post "/pharmacy/prescriptions/:id/items/:item_id/verify", PrescriptionController, :verify
+    post "/pharmacy/prescriptions/:id/payments", PrescriptionController, :pay
+
+    get "/pharmacy/patients", PatientController, :index
+    post "/pharmacy/patients", PatientController, :create
+    get "/pharmacy/patients/:id", PatientController, :show
+
+    get "/pharmacy/requisitions", RequisitionController, :index
+    post "/pharmacy/requisitions", RequisitionController, :create
+    get "/pharmacy/requisitions/:id", RequisitionController, :show
+
+    get "/lab/dashboard", LabController, :dashboard
+    post "/lab/scans", LabController, :scan
+    get "/lab/orders", LabController, :orders
+    post "/lab/orders", LabController, :create_order
+    get "/lab/orders/:id", LabController, :show_order
+    post "/lab/orders/:id/specimens", LabController, :collect
+    put "/lab/results/:id", LabController, :save_result
+    post "/lab/orders/:id/consumables", LabController, :consume
+    post "/lab/orders/:id/payments", LabController, :pay
+    get "/lab/stock", LabController, :stock
+    get "/lab/receipts", LabController, :receipts
+    post "/lab/receipts", LabController, :create_receipt
+    post "/lab/receipts/:id/receive", LabController, :receive_batch
+    get "/lab/tests", LabController, :tests
+    post "/lab/tests", LabController, :create_test
+    patch "/lab/tests/:id", LabController, :update_test
+
+    get "/org/dashboard", OrgController, :dashboard
+    get "/org/earnings", OrgController, :earnings
+    get "/org/team", TeamController, :index
+    post "/org/team", TeamController, :create
+    patch "/org/team/:id", TeamController, :update
+
+    get "/org/requisitions", RequisitionController, :queue
+    get "/org/requisitions/:id", RequisitionController, :queue_show
+    post "/org/requisitions/:id/review", RequisitionController, :review
+    post "/org/requisitions/:id/reject", RequisitionController, :reject
+    post "/org/requisitions/:id/fulfill", RequisitionController, :fulfill
+
+    get "/products", CatalogController, :products
+    post "/products", CatalogController, :create_product
+    get "/products/:id", CatalogController, :show_product
+    patch "/products/:id", CatalogController, :update_product
+    post "/products/:product_id/batches", CatalogController, :create_batch
+    get "/batches/:id", CatalogController, :show_batch
+    post "/batches/:id/dispatch", CatalogController, :dispatch
+
+    get "/suppliers", CatalogController, :suppliers
+    post "/suppliers", CatalogController, :create_supplier
+    patch "/suppliers/:id", CatalogController, :update_supplier
+
+    get "/sites", CatalogController, :sites
+    post "/sites", CatalogController, :create_site
+    get "/sites/:id", CatalogController, :show_site
+    patch "/sites/:id", CatalogController, :update_site
+  end
+
   scope "/", ThamaniDawaWeb do
     pipe_through :browser
 

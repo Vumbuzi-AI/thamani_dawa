@@ -46,7 +46,7 @@ defmodule ThamaniDawa.Products do
     query
     |> filter_by_site_ids(site_ids)
     |> filter_search(search)
-    |> Repo.paginate(page: page)
+    |> Repo.paginate(page: page, page_size: page_size(opts))
   end
 
   defp filter_by_site_ids(query, nil), do: query
@@ -60,7 +60,7 @@ defmodule ThamaniDawa.Products do
     |> filter_category(Keyword.get(opts, :category))
     |> filter_flag(:is_otc, Keyword.get(opts, :is_otc))
     |> filter_flag(:is_dangerous_drug, Keyword.get(opts, :is_dangerous_drug))
-    |> Repo.paginate(page: page)
+    |> Repo.paginate(page: page, page_size: page_size(opts))
   end
 
   defp filter_search(query, search) when is_binary(search) do
@@ -96,6 +96,13 @@ defmodule ThamaniDawa.Products do
     do: from(p in query, where: p.is_dangerous_drug == true)
 
   defp filter_flag(query, _field, _val), do: query
+
+  defp page_size(opts) do
+    case Keyword.get(opts, :page_size, 8) do
+      size when is_integer(size) and size > 0 and size <= 100 -> size
+      _ -> 8
+    end
+  end
 
   @doc "Lists products that have active, approved batches at a site."
   def list_active_products_for_site(organization_id, site_id) do

@@ -37,7 +37,14 @@ defmodule ThamaniDawa.Patients do
         query
       end
 
-    Repo.paginate(query, page: page)
+    Repo.paginate(query, page: page, page_size: page_size(opts))
+  end
+
+  defp page_size(opts) do
+    case Keyword.get(opts, :page_size, 8) do
+      size when is_integer(size) and size > 0 and size <= 100 -> size
+      _ -> 8
+    end
   end
 
   @doc "Gets a single patient scoped to an organization. Raises if not found."
