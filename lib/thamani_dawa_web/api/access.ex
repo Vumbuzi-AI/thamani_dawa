@@ -23,9 +23,9 @@ defmodule ThamaniDawaWeb.Api.Access do
     Enum.filter([:org, :pharmacy, :lab], &portal?(scope, &1))
   end
 
-  def same_site?(%Scope{user: %{role: :admin}}, _site_id), do: true
-  def same_site?(%Scope{current_site_id: site_id}, site_id), do: true
-  def same_site?(_scope, _site_id), do: false
+  def same_site?(%Scope{} = scope, site_id) do
+    Scope.admin?(scope) or scope.current_site_id == site_id
+  end
 
   defp site_offers?(%Scope{current_site_id: nil}, _portal), do: true
 

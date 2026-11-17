@@ -17,6 +17,8 @@ defmodule ThamaniDawaWeb.Api.Serializer do
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Requisitions.Requisition
   alias ThamaniDawa.Requisitions.RequisitionLine
+  alias ThamaniDawa.Sales.Sale
+  alias ThamaniDawa.Sales.SaleItem
   alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.Suppliers.Supplier
   alias ThamaniDawaWeb.Api.Access
@@ -38,7 +40,7 @@ defmodule ThamaniDawaWeb.Api.Serializer do
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role,
+      roles: user.roles,
       organization: organization(user.organization),
       current_site: maybe(user.current_site, &site/1),
       portals: Enum.map(Access.portals(scope), &Atom.to_string/1)
@@ -59,7 +61,7 @@ defmodule ThamaniDawaWeb.Api.Serializer do
     json_safe(%{
       id: site.id,
       name: site.name,
-      site_type: site.site_type,
+      activities: site.activities,
       gln: site.gln,
       address: site.address,
       is_active: site.is_active
@@ -135,6 +137,29 @@ defmodule ThamaniDawaWeb.Api.Serializer do
       phone: patient.phone,
       national_id: patient.national_id,
       gsrn: patient.gsrn
+    })
+  end
+
+  def sale(%Sale{} = sale) do
+    json_safe(%{
+      id: sale.id,
+      status: sale.status,
+      has_paid: sale.has_paid,
+      total_amount: sale.total_amount,
+      site_id: sale.site_id,
+      user_id: sale.user_id,
+      inserted_at: sale.inserted_at,
+      items: loaded(sale.items, &sale_item/1)
+    })
+  end
+
+  def sale_item(%SaleItem{} = item) do
+    json_safe(%{
+      id: item.id,
+      product_id: item.product_id,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      is_verified: item.is_verified
     })
   end
 

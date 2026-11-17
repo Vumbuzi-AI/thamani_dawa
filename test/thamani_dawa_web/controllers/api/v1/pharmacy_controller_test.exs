@@ -7,8 +7,8 @@ defmodule ThamaniDawaWeb.Api.V1.PharmacyControllerTest do
 
   setup do
     admin = user_fixture()
-    pharmacy = site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy})
-    lab = site_fixture(%{organization_id: admin.organization_id, site_type: :lab})
+    pharmacy = site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy]})
+    lab = site_fixture(%{organization_id: admin.organization_id, activities: [:laboratory]})
 
     pharmacist =
       staff_fixture(%{

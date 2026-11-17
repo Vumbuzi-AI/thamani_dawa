@@ -5,8 +5,8 @@ defmodule ThamaniDawaWeb.Api.V1.PharmacyController do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Dashboards
   alias ThamaniDawa.Payments
-  alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Products
+  alias ThamaniDawa.Sales
   alias ThamaniDawaWeb.Api.FallbackController
   alias ThamaniDawaWeb.Api.Params
   alias ThamaniDawaWeb.Api.Response
@@ -116,10 +116,10 @@ defmodule ThamaniDawaWeb.Api.V1.PharmacyController do
         "items" => sale_items(params["items"])
       }
 
-      case Prescriptions.create_quick_sale(org_id(conn), site_id(conn), actor_id(conn), attrs) do
-        {:ok, prescription} ->
-          prescription = preload(prescription, :items)
-          {:ok, 201, %{data: Serializer.prescription(prescription)}}
+      case Sales.create_quick_sale(org_id(conn), site_id(conn), actor_id(conn), attrs) do
+        {:ok, sale} ->
+          sale = preload(sale, :items)
+          {:ok, 201, %{data: Serializer.sale(sale)}}
 
         {:error, reason} ->
           {:error, reason}
