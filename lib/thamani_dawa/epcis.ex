@@ -173,7 +173,7 @@ defmodule ThamaniDawa.Epcis do
   def record_facility_receipt(%ThamaniDawa.Batches.Batch{} = batch) do
     site = batch.site_id && Repo.get(Site, batch.site_id)
 
-    if is_nil(batch.goods_receipt_id) and site && Site.pharmacy?(site) do
+    if (is_nil(batch.goods_receipt_id) and site) && Site.pharmacy?(site) do
       received = Repo.preload(batch, :supplier)
 
       record_facility_event(

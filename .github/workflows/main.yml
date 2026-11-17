@@ -5,10 +5,10 @@ on:
   push:
     branches: [main]
 
-# Adjust these to match your .tool-versions / mix.exs requirements
+# Keep these aligned with .tool-versions. mix format is not stable across Elixir versions.
 env:
-  ELIXIR_VERSION: "1.17"
-  OTP_VERSION: "27.0"
+  ELIXIR_VERSION: "1.20.2"
+  OTP_VERSION: "29.0.2"
 
 jobs:
   test:
@@ -44,8 +44,8 @@ jobs:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-
+          key: ${{ runner.os }}-mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
 
       - name: Install dependencies
         run: mix deps.get

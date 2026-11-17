@@ -8,12 +8,15 @@ defmodule ThamaniDawa.EpcisTest do
   alias ThamaniDawa.Epcis
   alias ThamaniDawa.Epcis.Outbox
   alias ThamaniDawa.Epcis.OutboxEvent
+  alias ThamaniDawa.Epcis.Urn
   alias ThamaniDawa.GoodsReceipts
   alias ThamaniDawa.OrganizationsFixtures
   alias ThamaniDawa.PatientVisitsFixtures
   alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.PrescriptionsFixtures
   alias ThamaniDawa.ProductsFixtures
+  alias ThamaniDawa.Repo
+  alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.SitesFixtures
   alias ThamaniDawa.SuppliersFixtures
 
@@ -263,13 +266,13 @@ defmodule ThamaniDawa.EpcisTest do
 
       assert event.payload["bizStep"] == "receiving"
       assert event.payload["disposition"] == "active"
-      assert event.payload["bizLocation"]["id"] =~ "urn:epc:id:sgln:0614141."
+      assert event.payload["bizLocation"]["id"] == sgln!(ctx.pharmacy.gln, ctx.organization)
 
       assert [%{"bizTransaction" => recadv}] = event.payload["bizTransactionList"]
       assert recadv =~ "RECV-#{batch.id}"
 
       assert [%{"source" => source_party}] = event.payload["sourceList"]
-      assert source_party =~ "urn:epc:id:sgln:0614141."
+      assert source_party == sgln!(ctx.supplier.gln, ctx.organization)
 
       assert event.payload["epcList"] == ["urn:epc:id:sscc:0614141.0123456789"]
     end
@@ -405,7 +408,9 @@ defmodule ThamaniDawa.EpcisTest do
       assert event.payload["action"] == "OBSERVE"
       assert event.payload["bizStep"] == "dispensing"
       assert event.payload["disposition"] == "dispensed"
-      assert event.payload["bizLocation"]["id"] =~ "urn:epc:id:sgln:0614141."
+
+      site = Repo.get!(Site, ctx.batch.site_id)
+      assert event.payload["bizLocation"]["id"] == sgln!(site.gln, ctx.organization)
       refute event.payload["epcList"]
 
       assert [%{"epcClass" => lgtin, "quantity" => 5, "uom" => "EA"}] =
@@ -625,6 +630,11 @@ defmodule ThamaniDawa.EpcisTest do
       assert Enum.count(events, &(&1.event_type == "receiving")) == 2
       refute Enum.any?(events, &(&1.status == "pending" and &1.payload["errorDeclaration"]))
     end
+  end
+
+  defp sgln!(gln, organization) do
+    {:ok, urn} = Urn.sgln(gln, Urn.prefix_length_for(gln, organization.gs1_company_prefix))
+    urn
   end
 
   defp pending_batch(ctx, lot, quantity, opts \\ []) do

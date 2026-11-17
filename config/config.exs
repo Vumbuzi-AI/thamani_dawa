@@ -50,6 +50,12 @@ config :thamani_dawa, ThamaniDawa.Accounts.UserToken,
   reset_password_validity_in_days: 1,
   confirm_validity_in_days: 3
 
+# Phone sessions are separate from the browser cookie. The browser token
+# dies after 30 idle minutes; a dispenser's phone must not.
+config :thamani_dawa, ThamaniDawa.Accounts.MobileSession,
+  access_token_hours: 12,
+  refresh_token_days: 90
+
 config :thamani_dawa, ThamaniDawa.GtinLookup, base_url: "https://grp.gs1.org"
 
 config :thamani_dawa, Oban,

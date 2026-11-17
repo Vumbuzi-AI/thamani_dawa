@@ -280,7 +280,11 @@ defmodule ThamaniDawa.RequisitionsTest do
       reviewer = user_fixture(%{organization_id: organization.id})
 
       org_batch =
-        org_batch_fixture(%{organization_id: organization.id, product_id: product.id, quantity: 5})
+        org_batch_fixture(%{
+          organization_id: organization.id,
+          product_id: product.id,
+          quantity: 5
+        })
 
       requisition =
         requisition_fixture(%{
