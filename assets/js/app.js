@@ -27,6 +27,7 @@ import topbar from "../vendor/topbar"
 import {GoogleMaps} from "./hooks/google_maps"
 import {Chart} from "./hooks/chart_hook"
 import {DataMatrix} from "./hooks/datamatrix"
+import {SsccBarcode} from "./hooks/sscc_barcode"
 import {ScanCapture} from "./hooks/scan_capture"
 import {ProductTour} from "./hooks/product_tour"
 import {FlashAutoDismiss} from "./hooks/flash_auto_dismiss"
@@ -37,7 +38,7 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, ScanCapture, ProductTour, FlashAutoDismiss, QuickSaleReceiptPrint, ConditionalBatchField},
+  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, SsccBarcode, ScanCapture, ProductTour, FlashAutoDismiss, QuickSaleReceiptPrint, ConditionalBatchField},
 })
 
 // Show progress bar on live navigation and form submits
@@ -53,6 +54,196 @@ liveSocket.connect()
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
+
+// Public landing-page interactions. They are deliberately scoped so LiveViews
+// and other public pages do not inherit any of this page's behavior.
+const landingPage = document.querySelector("#landing-page")
+
+if (landingPage) {
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  const metricValues = landingPage.querySelectorAll(".metric-value")
+
+  if (metricValues.length && !reduceMotion) {
+    const metrics = landingPage.querySelector("dl")
+    const observer = new IntersectionObserver((entries, currentObserver) => {
+      if (!entries.some(entry => entry.isIntersecting)) return
+
+      const startedAt = performance.now()
+      const duration = 1200
+      const tick = now => {
+        const progress = Math.min((now - startedAt) / duration, 1)
+        const eased = 1 - Math.pow(1 - progress, 3)
+        metricValues.forEach(metric => {
+          metric.textContent = `${Math.round(Number(metric.dataset.target) * eased)}${metric.dataset.suffix || ""}`
+        })
+        if (progress < 1) requestAnimationFrame(tick)
+      }
+
+      requestAnimationFrame(tick)
+      currentObserver.disconnect()
+    }, {threshold: 0.55})
+
+    if (metrics) observer.observe(metrics)
+  }
+
+  const workflowTabs = [...landingPage.querySelectorAll(".workflow-tab")]
+  const activateWorkflow = tab => {
+    const workflow = tab.dataset.workflow
+
+    workflowTabs.forEach(item => {
+      const active = item === tab
+      item.classList.toggle("is-active", active)
+      item.classList.toggle("bg-[#cdf06d]", active)
+      item.classList.toggle("text-[#082a21]", active)
+      item.classList.toggle("text-white/60", !active)
+      item.setAttribute("aria-selected", String(active))
+      item.tabIndex = active ? 0 : -1
+    })
+
+    landingPage.querySelectorAll("[data-panel], [data-copy]").forEach(item => {
+      item.classList.toggle("hidden", item.dataset.panel !== workflow && item.dataset.copy !== workflow)
+    })
+  }
+
+  workflowTabs.forEach((tab, index) => {
+    tab.tabIndex = index === 0 ? 0 : -1
+    tab.addEventListener("click", () => activateWorkflow(tab))
+    tab.addEventListener("keydown", event => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return
+      event.preventDefault()
+      const nextIndex =
+        event.key === "Home" ? 0 :
+          event.key === "End" ? workflowTabs.length - 1 :
+            (index + (event.key === "ArrowRight" ? 1 : -1) + workflowTabs.length) % workflowTabs.length
+      workflowTabs[nextIndex].focus()
+      activateWorkflow(workflowTabs[nextIndex])
+    })
+  })
+
+  const resultButtons = [...landingPage.querySelectorAll(".result-button")]
+  resultButtons.forEach(button => {
+    button.addEventListener("click", () => {
+      const result = button.dataset.result
+      resultButtons.forEach(item => {
+        const active = item === button
+        item.classList.toggle("is-active", active)
+        item.classList.toggle("bg-white/60", active)
+        item.classList.toggle("px-3.5", active)
+        item.setAttribute("aria-pressed", String(active))
+      })
+      landingPage.querySelectorAll("[data-result-panel]").forEach(panel => {
+        panel.classList.toggle("hidden", panel.dataset.resultPanel !== result)
+      })
+    })
+  })
+}
+
+const exportedLanding = document.querySelector(".site-header")
+
+if (exportedLanding) {
+  const syncHeader = () => exportedLanding.classList.toggle("is-scrolled", window.scrollY > 24)
+  syncHeader()
+  window.addEventListener("scroll", syncHeader, {passive: true})
+
+  const revealObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return
+      entry.target.classList.add("is-visible")
+      observer.unobserve(entry.target)
+    })
+  }, {threshold: 0.12})
+
+  document.querySelectorAll(".reveal").forEach(node => revealObserver.observe(node))
+
+  const metricValues = document.querySelectorAll(".metric-value")
+  if (metricValues.length) {
+    const completeMetrics = () => metricValues.forEach(metric => {
+      metric.textContent = `${metric.dataset.target}${metric.dataset.suffix || ""}`
+    })
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      completeMetrics()
+    } else {
+      const metricsObserver = new IntersectionObserver((entries, observer) => {
+        if (!entries.some(entry => entry.isIntersecting)) return
+        const startedAt = performance.now()
+        const tick = now => {
+          const progress = Math.min((now - startedAt) / 1400, 1)
+          const eased = 1 - Math.pow(1 - progress, 3)
+          metricValues.forEach(metric => {
+            metric.textContent = `${Math.round(Number(metric.dataset.target) * eased)}${metric.dataset.suffix || ""}`
+          })
+          if (progress < 1) requestAnimationFrame(tick)
+        }
+        requestAnimationFrame(tick)
+        observer.disconnect()
+      }, {threshold: 0.55})
+      metricsObserver.observe(document.querySelector(".hero-metrics"))
+    }
+  }
+
+  const workflowTabs = [...document.querySelectorAll(".workflow-switcher [role='tab']")]
+  const activateWorkflow = tab => {
+    const workflow = tab.dataset.workflow
+    workflowTabs.forEach(item => {
+      const active = item === tab
+      item.classList.toggle("is-active", active)
+      item.setAttribute("aria-selected", String(active))
+      item.tabIndex = active ? 0 : -1
+    })
+    document.querySelectorAll("[data-panel]").forEach(panel => {
+      const active = panel.dataset.panel === workflow
+      panel.hidden = !active
+      panel.classList.toggle("is-active", active)
+    })
+    document.querySelectorAll("[data-copy]").forEach(copy => {
+      const active = copy.dataset.copy === workflow
+      copy.hidden = !active
+      copy.classList.toggle("is-active", active)
+    })
+  }
+
+  workflowTabs.forEach((tab, index) => {
+    tab.tabIndex = index === 0 ? 0 : -1
+    tab.addEventListener("click", () => activateWorkflow(tab))
+  })
+
+  const resultButtons = [...document.querySelectorAll("[data-result]")]
+  resultButtons.forEach(button => button.addEventListener("click", () => {
+    resultButtons.forEach(item => {
+      const active = item === button
+      item.classList.toggle("is-active", active)
+      item.setAttribute("aria-pressed", String(active))
+    })
+    document.querySelectorAll("[data-result-panel]").forEach(panel => {
+      const active = panel.dataset.resultPanel === button.dataset.result
+      panel.hidden = !active
+      panel.classList.toggle("is-active", active)
+    })
+  }))
+
+  const menu = document.querySelector("#mobile-menu")
+  const menuButton = document.querySelector(".menu-button")
+  const menuClose = document.querySelector(".menu-close")
+  if (menu && menuButton && menuClose) {
+    const closeMenu = () => {
+      menu.close()
+      menuButton.setAttribute("aria-expanded", "false")
+      menuButton.focus()
+    }
+    menuButton.addEventListener("click", () => {
+      menu.showModal()
+      menuButton.setAttribute("aria-expanded", "true")
+      menuClose.focus()
+    })
+    menuClose.addEventListener("click", closeMenu)
+    menu.addEventListener("click", event => event.target === menu && closeMenu())
+    menu.querySelectorAll("a").forEach(link => link.addEventListener("click", () => {
+      menu.close()
+      menuButton.setAttribute("aria-expanded", "false")
+    }))
+  }
+}
 
 // The lines below enable quality of life phoenix_live_reload
 // development features:

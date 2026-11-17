@@ -82,6 +82,7 @@ defmodule ThamaniDawa.Accounts.UserToken do
 
   defp validity_in_days("session"), do: config(:session_validity_in_days)
   defp validity_in_days("invite"), do: config(:invite_validity_in_days)
+  defp validity_in_days("confirm"), do: config(:confirm_validity_in_days)
   defp validity_in_days("reset_password"), do: config(:reset_password_validity_in_days)
 
   defp config(key), do: Application.get_env(:thamani_dawa, __MODULE__)[key]
@@ -89,6 +90,7 @@ defmodule ThamaniDawa.Accounts.UserToken do
   defp idle_timeout_in_minutes, do: config(:session_idle_timeout_in_minutes)
 
   def invite_validity_in_days, do: config(:invite_validity_in_days)
+  def confirm_validity_in_days, do: config(:confirm_validity_in_days)
 
   @doc "Returns the query for a given token and context, e.g. for deletion."
   def by_token_and_context_query(token, context) do

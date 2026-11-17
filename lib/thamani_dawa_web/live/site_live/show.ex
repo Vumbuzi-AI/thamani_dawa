@@ -230,7 +230,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           type: :staff,
           title: u.name,
           subtitle: u.email,
-          badge: String.capitalize(to_string(u.role)),
+          badge: Accounts.User.humanize_roles(u),
           icon: "hero-users"
         }
       end)
@@ -256,7 +256,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         %{
           label: "KSh Collected",
           data: Enum.map(daily_revenue, fn {_date, amount} -> amount end),
-          borderColor: "#1c3a13",
+          borderColor: "#17302a",
           backgroundColor: "rgba(28, 58, 19, 0.14)",
           fill: true,
           tension: 0.3,
@@ -273,7 +273,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         %{
           label: "Revenue",
           data: Enum.map(monthly_revenue, fn {_date, n} -> n end),
-          backgroundColor: "#757c5d",
+          backgroundColor: "#707371",
           borderRadius: 4
         }
       ]
@@ -425,6 +425,10 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp patient_name(_lab_order), do: "(unknown patient)"
 
+  defp activity_labels(site) do
+    Enum.map_join(site.activities, ", ", &Phoenix.Naming.humanize/1)
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.org_shell
@@ -442,7 +446,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
                 {@site.name}
               </h1>
               <span class="px-3 py-1 text-xs font-medium bg-thamani-lime text-thamani-forest rounded-full border border-thamani-forest/10 capitalize">
-                {Phoenix.Naming.humanize(@site.site_type)}
+                {activity_labels(@site)}
               </span>
             </div>
             <p class="text-xs sm:text-sm text-slate-500 font-normal mt-1.5">
@@ -771,7 +775,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         </.header>
         <.table id="site-staff" rows={@staff}>
           <:col :let={user} label="Name">{user.name}</:col>
-          <:col :let={user} label="Role">{Phoenix.Naming.humanize(user.role)}</:col>
+          <:col :let={user} label="Role">{Accounts.User.humanize_roles(user.roles)}</:col>
           <:empty_state>
             <.blank_state icon="hero-users" title="No staff assigned">
               Staff assigned to this site will appear here.

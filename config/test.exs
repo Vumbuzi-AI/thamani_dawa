@@ -35,6 +35,31 @@ config :thamani_dawa, ThamaniDawa.GtinLookup,
 
 config :thamani_dawa, ThamaniDawa.Gln, company_prefix: "0614141"
 
+# The GS1 registry is stubbed out so tests never reach the network.
+# `ThamaniDawa.Gs1RegistryStub` answers with a licence for every identifier
+# it is asked about, unless the identifier is listed under
+# `:gs1_unknown_identifiers`.
+config :thamani_dawa, ThamaniDawa.Grp,
+  plug: ThamaniDawa.Gs1RegistryStub,
+  retry: false
+
+# The PPB facilities register is stubbed out the same way — see
+# `ThamaniDawa.PpbRegistryStub` for the canned dataset.
+config :thamani_dawa, ThamaniDawa.Ppb,
+  plug: ThamaniDawa.PpbRegistryStub,
+  retry: false
+
+# The KMLTTB lab facilities register is stubbed out the same way — see
+# `ThamaniDawa.KmlttbRegistryStub` for the canned dataset.
+config :thamani_dawa, ThamaniDawa.Kmlttb,
+  plug: ThamaniDawa.KmlttbRegistryStub,
+  retry: false
+
+# Disabled in tests — otherwise a result cached by one test (behind the
+# shared, globally-named cache process) could shadow a different stub
+# response expected by another test using the same identifier.
+config :thamani_dawa, ThamaniDawa.RegistryCache, enabled: false
+
 config :thamani_dawa, ThamaniDawa.Daraja,
   base_url: "https://daraja.test",
   consumer_key: "test-consumer-key",
@@ -47,19 +72,47 @@ config :thamani_dawa, ThamaniDawa.Daraja,
   retry: false
 
 config :thamani_dawa, :demo_login_accounts, [
-  %{id: "admin", name: "Amina Kamau", role: "Admin", email: "admin@gmail.com"},
+  %{
+    id: "superadmin",
+    name: "Platform Superadmin",
+    role: "Superadmin",
+    email: "superadmin@gmail.com",
+    password: "password123"
+  },
+  %{
+    id: "admin",
+    name: "Amina Kamau",
+    role: "Admin",
+    email: "admin@gmail.com",
+    password: "password"
+  },
   %{
     id: "pharmacist",
     name: "Grace Njeri",
     role: "Pharmacist",
-    email: "pharmacist@gmail.com"
+    email: "pharmacist@gmail.com",
+    password: "password"
   },
-  %{id: "lab", name: "Laban Omondi", role: "Lab technician", email: "lab@gmail.com"},
+  %{
+    id: "lab",
+    name: "Laban Omondi",
+    role: "Lab technician",
+    email: "lab@gmail.com",
+    password: "password"
+  },
   %{
     id: "pharma-lab",
     name: "Zawadi Muthoni",
     role: "Pharmacy + lab",
-    email: "pharmalab@gmail.com"
+    email: "pharmalab@gmail.com",
+    password: "password"
+  },
+  %{
+    id: "distributor",
+    name: "David Mwangi",
+    role: "Distributor",
+    email: "distributor@gmail.com",
+    password: "password"
   }
 ]
 
@@ -76,3 +129,5 @@ config :phoenix_live_view,
 # Sort query params output of verified routes for robust url comparisons
 config :phoenix,
   sort_verified_routes_query_params: true
+
+config :thamani_dawa, Oban, testing: :manual

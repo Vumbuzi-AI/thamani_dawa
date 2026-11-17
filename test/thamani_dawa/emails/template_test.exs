@@ -118,7 +118,7 @@ defmodule ThamaniDawa.Emails.TemplateTest do
     test "ends with the Thamani Dawa sign-off" do
       text = Template.render_text(%{title: "Welcome"})
 
-      assert text =~ "— The Thamani Dawa Team"
+      assert text =~ "The Thamani Dawa Team"
     end
   end
 
@@ -176,13 +176,28 @@ defmodule ThamaniDawa.Emails.TemplateTest do
           cta: %{label: "Go", url: "https://thamanidawa.example"}
         })
 
-      assert html =~ "background-color:#1c3a13"
+      assert html =~ "background-color:#294636"
     end
 
     test "headings use brand forest" do
       html = Template.render(%{title: "Welcome"})
 
-      assert html =~ "color:#1c3a13"
+      assert html =~ "color:#294636"
+    end
+  end
+
+  describe "design system" do
+    test "uses the current snow, warm-stone, and typography tokens" do
+      html =
+        Template.render(%{
+          title: "Welcome",
+          cta: %{label: "Continue", url: "https://thamanidawa.example"}
+        })
+
+      assert html =~ "background-color:#fffefa"
+      assert html =~ "background-color:#f0efea"
+      assert html =~ "'Rethink Sans','Inter',Arial,sans-serif"
+      assert html =~ "border-radius:12px"
     end
   end
 end

@@ -46,6 +46,7 @@ defmodule ThamaniDawa.PaymentsTest do
     test "creates a payment against a prescription, deriving order_type and site_id from its patient_visit" do
       organization = organization_fixture()
       prescription = prescription_fixture(%{organization_id: organization.id})
+      ensure_prescription_payable(organization.id, prescription.id, Decimal.new("100"))
 
       patient_visit =
         Repo.get!(ThamaniDawa.PatientVisits.PatientVisit, prescription.patient_visit_id)
@@ -99,7 +100,7 @@ defmodule ThamaniDawa.PaymentsTest do
                  payment_type: "Cash"
                })
 
-      assert %{order_type: ["must reference exactly one of prescription_id or lab_order_id"]} =
+      assert %{order_type: ["must reference exactly one order"]} =
                errors_on(changeset)
     end
 
@@ -116,7 +117,7 @@ defmodule ThamaniDawa.PaymentsTest do
                  payment_type: "Cash"
                })
 
-      assert %{order_type: ["must reference exactly one of prescription_id or lab_order_id"]} =
+      assert %{order_type: ["must reference exactly one order"]} =
                errors_on(changeset)
     end
 
@@ -168,7 +169,9 @@ defmodule ThamaniDawa.PaymentsTest do
     test "rejects a duplicate provider_reference" do
       organization = organization_fixture()
       lab_order_a = lab_order_fixture(%{organization_id: organization.id})
-      lab_order_b = lab_order_fixture(%{organization_id: organization.id})
+
+      lab_order_b =
+        lab_order_fixture(%{organization_id: organization.id, total_amount: Decimal.new("50")})
 
       assert {:ok, _payment} =
                Payments.create_payment(organization.id, %{

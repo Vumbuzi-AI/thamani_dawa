@@ -51,6 +51,25 @@ defmodule ThamaniDawaWeb.UserAuthTest do
     end
   end
 
+  describe "on_mount :redirect_if_authenticated" do
+    test "halts and redirects a signed-in user away from unauthenticated flows" do
+      user = user_fixture()
+      session = %{"user_token" => Accounts.generate_user_session_token(user)}
+
+      assert {:halt, socket} =
+               UserAuth.on_mount(:redirect_if_authenticated, %{}, session, live_socket())
+
+      assert socket.redirected == {:redirect, %{status: 302, to: "/login"}}
+    end
+
+    test "continues when there is no signed-in user" do
+      assert {:cont, socket} =
+               UserAuth.on_mount(:redirect_if_authenticated, %{}, %{}, live_socket())
+
+      assert socket.assigns.current_scope == nil
+    end
+  end
+
   describe "on_mount :require_authenticated" do
     test "continues when a user is present" do
       user = user_fixture()
@@ -113,6 +132,26 @@ defmodule ThamaniDawaWeb.UserAuthTest do
     end
   end
 
+  describe "on_mount :require_superadmin" do
+    test "continues only for a platform superadmin" do
+      superadmin = superadmin_fixture()
+      session = %{"user_token" => Accounts.generate_user_session_token(superadmin)}
+
+      assert {:cont, socket} =
+               UserAuth.on_mount(:require_superadmin, %{}, session, live_socket())
+
+      assert socket.assigns.current_scope.user.id == superadmin.id
+    end
+
+    test "halts for an organization admin" do
+      admin = user_fixture()
+      session = %{"user_token" => Accounts.generate_user_session_token(admin)}
+
+      assert {:halt, socket} = UserAuth.on_mount(:require_superadmin, %{}, session, live_socket())
+      assert socket.redirected
+    end
+  end
+
   describe "on_mount :require_pharmacy_access" do
     test "continues for an admin" do
       user = user_fixture()
@@ -126,7 +165,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for a pharmacist" do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :pharmacy})
+      site = site_fixture(%{organization_id: org.id, activities: [:pharmacy]})
       staff = staff_fixture(%{role: :pharmacist, organization_id: org.id, site_id: site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -138,7 +177,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for combined pharmacy/lab staff" do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :pharmacy_lab})
+      site = site_fixture(%{organization_id: org.id, activities: [:pharmacy, :laboratory]})
       staff = staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -179,7 +218,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for a lab technician" do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
       staff = staff_fixture(%{role: :lab_technician, organization_id: org.id, site_id: site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -191,7 +230,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "continues for combined pharmacy/lab staff" do
       org = organization_fixture()
-      site = site_fixture(%{organization_id: org.id, site_type: :pharmacy_lab})
+      site = site_fixture(%{organization_id: org.id, activities: [:pharmacy, :laboratory]})
       staff = staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -222,7 +261,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
   describe "on_mount site-capability checks for combined pharmacy/lab staff" do
     test "denied :require_pharmacy_access at a lab-only site, redirected to /lab" do
       org = organization_fixture()
-      lab_site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      lab_site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
       staff = staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: lab_site.id})
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -234,7 +273,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
 
     test "denied :require_lab_access at a pharmacy-only site, redirected to /pharmacy" do
       org = organization_fixture()
-      pharmacy_site = site_fixture(%{organization_id: org.id, site_type: :pharmacy})
+      pharmacy_site = site_fixture(%{organization_id: org.id, activities: [:pharmacy]})
 
       staff =
         staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: pharmacy_site.id})
@@ -247,12 +286,19 @@ defmodule ThamaniDawaWeb.UserAuthTest do
       assert {:redirect, %{to: "/pharmacy"}} = socket.redirected
     end
 
+    # Can't arise through the invite flow anymore — Accounts rejects role-
+    # incompatible site assignments — but the guard still defends against
+    # a stranded user (e.g. a site's activities changed after assignment).
     test "denied both portals at a warehouse-only site, redirected to /" do
       org = organization_fixture()
-      warehouse_site = site_fixture(%{organization_id: org.id, site_type: :warehouse})
+      warehouse_site = site_fixture(%{organization_id: org.id, activities: [:distribution]})
+
+      staff = staff_fixture(%{role: :pharma_lab, organization_id: org.id})
 
       staff =
-        staff_fixture(%{role: :pharma_lab, organization_id: org.id, site_id: warehouse_site.id})
+        staff
+        |> Ecto.Changeset.change(current_site_id: warehouse_site.id)
+        |> ThamaniDawa.Repo.update!()
 
       session = %{"user_token" => Accounts.generate_user_session_token(staff)}
 
@@ -272,7 +318,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
       assert socket.assigns.current_scope.user.id == staff.id
     end
 
-    test "an admin passes :require_pharmacy_access regardless of current_site_id" do
+    test "an admin passes :require_pharmacy_access with no current site" do
       user = user_fixture()
       session = %{"user_token" => Accounts.generate_user_session_token(user)}
 
@@ -282,7 +328,7 @@ defmodule ThamaniDawaWeb.UserAuthTest do
       assert socket.assigns.current_scope.user.id == user.id
     end
 
-    test "an admin passes :require_lab_access regardless of current_site_id" do
+    test "an admin passes :require_lab_access with no current site" do
       user = user_fixture()
       session = %{"user_token" => Accounts.generate_user_session_token(user)}
 
@@ -290,6 +336,27 @@ defmodule ThamaniDawaWeb.UserAuthTest do
                UserAuth.on_mount(:require_lab_access, %{}, session, live_socket())
 
       assert socket.assigns.current_scope.user.id == user.id
+    end
+
+    test "an admin stationed at a distribution site is denied the pharmacy portal" do
+      org = organization_fixture()
+      warehouse_site = site_fixture(%{organization_id: org.id, activities: [:distribution]})
+
+      admin = user_fixture(%{organization_id: org.id})
+
+      admin =
+        admin
+        |> Ecto.Changeset.change(current_site_id: warehouse_site.id)
+        |> ThamaniDawa.Repo.update!()
+
+      session = %{"user_token" => Accounts.generate_user_session_token(admin)}
+
+      assert {:halt, socket} =
+               UserAuth.on_mount(:require_pharmacy_access, %{}, session, live_socket())
+
+      # Falls back to the org dashboard — the only panel a distribution site
+      # offers an admin in a pharmacy-model organization.
+      assert {:redirect, %{to: "/org/dashboard"}} = socket.redirected
     end
   end
 end

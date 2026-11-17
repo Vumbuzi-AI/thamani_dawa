@@ -2,7 +2,7 @@ defmodule ThamaniDawa.Payments.Payment do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @order_types [:prescription, :lab_order]
+  @order_types [:prescription, :lab_order, :sale]
   @statuses [:pending, :completed, :failed]
 
   schema "payments" do
@@ -18,6 +18,7 @@ defmodule ThamaniDawa.Payments.Payment do
     belongs_to :site, ThamaniDawa.Sites.Site
     belongs_to :prescription, ThamaniDawa.Prescriptions.Prescription
     belongs_to :lab_order, ThamaniDawa.LabOrders.LabOrder
+    belongs_to :sale, ThamaniDawa.Sales.Sale
 
     has_many :wallet_entries, ThamaniDawa.Payments.WalletEntry
 
@@ -32,7 +33,14 @@ defmodule ThamaniDawa.Payments.Payment do
   """
   def changeset(payment, attrs) do
     payment
-    |> cast(attrs, [:prescription_id, :lab_order_id, :amount, :payment_type, :provider_reference])
+    |> cast(attrs, [
+      :prescription_id,
+      :lab_order_id,
+      :sale_id,
+      :amount,
+      :payment_type,
+      :provider_reference
+    ])
     |> validate_required([:amount, :payment_type])
     |> put_order_type()
     |> validate_number(:amount, greater_than: 0)
@@ -41,6 +49,7 @@ defmodule ThamaniDawa.Payments.Payment do
     )
     |> foreign_key_constraint(:prescription_id)
     |> foreign_key_constraint(:lab_order_id)
+    |> foreign_key_constraint(:sale_id)
     |> unique_constraint(:provider_reference,
       name: :payments_provider_reference_index,
       message: "has already been used for a payment"
@@ -48,25 +57,29 @@ defmodule ThamaniDawa.Payments.Payment do
   end
 
   defp put_order_type(changeset) do
-    case {get_field(changeset, :prescription_id), get_field(changeset, :lab_order_id)} do
-      {nil, nil} ->
+    case {get_field(changeset, :prescription_id), get_field(changeset, :lab_order_id),
+          get_field(changeset, :sale_id)} do
+      {nil, nil, nil} ->
         add_error(
           changeset,
           :order_type,
-          "must reference exactly one of prescription_id or lab_order_id"
+          "must reference exactly one order"
         )
 
-      {_prescription_id, nil} ->
+      {_prescription_id, nil, nil} ->
         put_change(changeset, :order_type, :prescription)
 
-      {nil, _lab_order_id} ->
+      {nil, _lab_order_id, nil} ->
         put_change(changeset, :order_type, :lab_order)
 
-      {_prescription_id, _lab_order_id} ->
+      {nil, nil, _sale_id} ->
+        put_change(changeset, :order_type, :sale)
+
+      _ ->
         add_error(
           changeset,
           :order_type,
-          "must reference exactly one of prescription_id or lab_order_id"
+          "must reference exactly one order"
         )
     end
   end
@@ -83,6 +96,10 @@ defmodule ThamaniDawa.Payments.Payment do
     )
     |> unique_constraint(:lab_order_id,
       name: :payments_one_completed_per_lab_order_index,
+      message: "already has a completed payment"
+    )
+    |> unique_constraint(:sale_id,
+      name: :payments_one_completed_per_sale_index,
       message: "already has a completed payment"
     )
   end

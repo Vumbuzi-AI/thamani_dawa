@@ -3,6 +3,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
 
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.OrganizationsFixtures
   import ThamaniDawa.SitesFixtures
 
   alias ThamaniDawa.Sites
@@ -23,7 +24,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
     refute has_element?(view, "input[name='search']")
   end
 
-  test "site completion unlocks the dashboard without an activation checklist", %{
+  test "site completion unlocks the dashboard while other checklist items remain", %{
     conn: conn
   } do
     admin = user_fixture()
@@ -34,52 +35,61 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
     assert {:ok, _site} =
              Sites.update_site(primary_site, %{
                address: "12 Market Street",
-               site_type: :pharmacy
+               activities: [:pharmacy]
              })
 
     {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
 
-    refute has_element?(view, "#organization-onboarding")
+    refute has_element?(view, "#organization-onboarding-welcome")
     assert has_element?(view, "#admin-dashboard-stats")
     assert has_element?(view, "#admin-dashboard-charts")
     assert has_element?(view, "input[name='search']")
+
+    # The primary site is done, but the admin hasn't invited anyone, added
+    # a branch, or added a product yet, so the checklist stays
+    # visible for those.
+    assert has_element?(view, "#organization-onboarding")
+    refute has_element?(view, "#complete-primary-site")
+    assert has_element?(view, "#onboarding-item-invite_team a", "Invite a teammate")
+    assert has_element?(view, "#onboarding-item-add_branch a", "Add a branch")
+    assert has_element?(view, "#onboarding-item-first_product a", "Add a product")
+    refute has_element?(view, "#onboarding-item-first_supplier")
     refute has_element?(view, "#activation-checklist")
   end
 
-  test "a pharmacy-only organization does not see laboratory metrics", %{conn: conn} do
-    admin = user_fixture()
-    site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy})
+  test "the checklist disappears once every applicable item is done", %{conn: conn} do
+    organization = organization_fixture(%{operating_models: [:laboratory]})
+    admin = user_fixture(%{organization_id: organization.id})
+    user_fixture(%{organization_id: organization.id})
+
+    primary_site =
+      site_fixture(%{organization_id: organization.id, address: "12 Market Street"})
+
+    assert {:ok, _site} =
+             Sites.update_site(primary_site, %{
+               address: "12 Market Street",
+               activities: [:laboratory]
+             })
+
+    site_fixture(%{organization_id: organization.id, activities: [:laboratory]})
 
     {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
 
-    assert has_element?(view, "#prescriptions-stat")
-    assert has_element?(view, "#pending-prescriptions-stat")
+    # A lab-only org has no product checklist item (that belongs to
+    # pharmacy/distributor); the primary site is done, a teammate has
+    # been invited, and a second site makes "Add a branch" done too, so
+    # every applicable item is complete.
+    refute has_element?(view, "#organization-onboarding")
+  end
+
+  test "the dashboard does not show laboratory metric cards", %{conn: conn} do
+    admin = user_fixture()
+    site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy, :laboratory]})
+
+    {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
+
     refute has_element?(view, "#lab-tests-done-stat")
     refute has_element?(view, "#pending-lab-orders-stat")
-  end
-
-  test "a lab-only organization does not see pharmacy metrics", %{conn: conn} do
-    admin = user_fixture()
-    site_fixture(%{organization_id: admin.organization_id, site_type: :lab})
-
-    {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
-
-    refute has_element?(view, "#prescriptions-stat")
-    refute has_element?(view, "#pending-prescriptions-stat")
-    assert has_element?(view, "#lab-tests-done-stat")
-    assert has_element?(view, "#pending-lab-orders-stat")
-  end
-
-  test "a combined organization sees both pharmacy and laboratory metrics", %{conn: conn} do
-    admin = user_fixture()
-    site_fixture(%{organization_id: admin.organization_id, site_type: :pharmacy_lab})
-
-    {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
-
-    assert has_element?(view, "#prescriptions-stat")
-    assert has_element?(view, "#pending-prescriptions-stat")
-    assert has_element?(view, "#lab-tests-done-stat")
-    assert has_element?(view, "#pending-lab-orders-stat")
   end
 
   test "existing users can replay the product tour without it starting automatically", %{
@@ -93,7 +103,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
     assert {:ok, _site} =
              Sites.update_site(primary_site, %{
                address: "12 Market Street",
-               site_type: :pharmacy_lab
+               activities: [:pharmacy, :laboratory]
              })
 
     {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")

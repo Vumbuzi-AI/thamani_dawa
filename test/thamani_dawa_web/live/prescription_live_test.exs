@@ -9,6 +9,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
   import ThamaniDawa.PatientVisitsFixtures
+  import ThamaniDawa.PaymentsFixtures
   import ThamaniDawa.PrescriptionsFixtures
 
   defp pharmacist_at_site(organization, site) do
@@ -668,7 +669,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert has_element?(show_live, "button[phx-disable-with='Checking batch...']")
 
       assert show_live
-             |> form("form", %{
+             |> form("form[phx-submit=dispense]", %{
                "item_id" => item.id,
                "quantity" => "4",
                "barcode" => product.gtin,
@@ -705,7 +706,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       refute html =~ "bg-emerald-100"
 
       show_live
-      |> form("form", %{
+      |> form("form[phx-submit=dispense]", %{
         "item_id" => item.id,
         "quantity" => "10",
         "barcode" => product.gtin,
@@ -741,7 +742,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{
+             |> form("form[phx-submit=dispense]", %{
                "item_id" => item.id,
                "quantity" => "4",
                "barcode" => product.gtin,
@@ -771,7 +772,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{"item_id" => item.id, "quantity" => "abc"})
+             |> form("form[phx-submit=dispense]", %{"item_id" => item.id, "quantity" => "abc"})
              |> render_submit()
 
       assert render(show_live) =~ "Enter a valid quantity."
@@ -796,7 +797,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{"item_id" => item.id, "quantity" => "-5"})
+             |> form("form[phx-submit=dispense]", %{"item_id" => item.id, "quantity" => "-5"})
              |> render_submit()
 
       assert render(show_live) =~ "Enter a valid quantity."
@@ -809,7 +810,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> element("form")
+             |> element("form[phx-submit=dispense]")
              |> render_submit(%{"item_id" => "not-an-id", "quantity" => "4"})
 
       assert render(show_live) =~ "Enter a valid quantity."
@@ -836,7 +837,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       assert show_live
              # Prescribed is 10
-             |> form("form", %{
+             |> form("form[phx-submit=dispense]", %{
                "item_id" => item.id,
                "quantity" => "11",
                "barcode" => product.gtin,
@@ -870,7 +871,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{
+             |> form("form[phx-submit=dispense]", %{
                "item_id" => item.id,
                "quantity" => "10",
                "barcode" => product.gtin,
@@ -902,7 +903,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{
+             |> form("form[phx-submit=dispense]", %{
                "item_id" => item.id,
                "quantity" => "4",
                "barcode" => "12345678901248",
@@ -933,7 +934,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{
+             |> form("form[phx-submit=dispense]", %{
                "item_id" => item.id,
                "quantity" => "4",
                "barcode" => "not-a-gtin",
@@ -965,7 +966,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, show_live, _html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert show_live
-             |> form("form", %{
+             |> form("form[phx-submit=dispense]", %{
                "item_id" => item.id,
                "quantity" => "4",
                "barcode" => "123",
@@ -1016,6 +1017,8 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       prescription =
         prescription_fixture(%{organization_id: organization.id, patient_visit_id: visit.id})
+
+      ensure_prescription_payable(organization.id, prescription.id, Decimal.new("500"))
 
       %{
         conn: log_in_user(build_conn(), pharmacist),

@@ -373,6 +373,8 @@ defmodule ThamaniDawa.LabOrdersTest do
           lab_order_id: lab_order.id
         })
 
+      receive_specimen_for_result(ctx.organization.id, result.id, ctx.technician.id)
+
       assert {:ok, updated} =
                LabOrders.mark_sample_collected(ctx.organization.id, result.id, ctx.technician.id)
 
@@ -455,8 +457,19 @@ defmodule ThamaniDawa.LabOrdersTest do
       %{organization: organization, technician: technician}
     end
 
+    defp receive_specimen_for_result(organization_id, result_id, technician_id) do
+      assert {:ok, _result} =
+               LabOrders.mark_sample_collected(organization_id, result_id, technician_id)
+
+      specimen = Repo.get_by!(LabSpecimen, lab_order_result_id: result_id)
+
+      assert {:ok, _specimen} =
+               LabOrders.receive_specimen(organization_id, specimen.id, technician_id)
+    end
+
     test "stores raw values with no flag", ctx do
       lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+      receive_specimen_for_result(ctx.organization.id, lab_order_result.id, ctx.technician.id)
 
       assert {:ok, %LabOrderResult{results: results}} =
                LabOrders.record_result(
@@ -471,6 +484,7 @@ defmodule ThamaniDawa.LabOrdersTest do
 
     test "marks the result completed and attributes it to the performer", ctx do
       lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+      receive_specimen_for_result(ctx.organization.id, lab_order_result.id, ctx.technician.id)
 
       assert {:ok, %LabOrderResult{} = updated} =
                LabOrders.record_result(
@@ -501,6 +515,8 @@ defmodule ThamaniDawa.LabOrdersTest do
           lab_order_id: lab_order.id
         })
 
+      receive_specimen_for_result(ctx.organization.id, result_1.id, ctx.technician.id)
+
       assert {:ok, _updated} =
                LabOrders.record_result(ctx.organization.id, result_1.id, ctx.technician.id, %{
                  "note" => "ok"
@@ -518,6 +534,8 @@ defmodule ThamaniDawa.LabOrdersTest do
           organization_id: ctx.organization.id,
           lab_order_id: lab_order.id
         })
+
+      receive_specimen_for_result(ctx.organization.id, result_1.id, ctx.technician.id)
 
       assert {:ok, _updated} =
                LabOrders.record_result(ctx.organization.id, result_1.id, ctx.technician.id, %{
@@ -538,6 +556,8 @@ defmodule ThamaniDawa.LabOrdersTest do
           lab_order_id: lab_order.id
         })
 
+      receive_specimen_for_result(ctx.organization.id, result.id, ctx.technician.id)
+
       assert {:ok, updated} =
                LabOrders.record_result(ctx.organization.id, result.id, ctx.technician.id, %{
                  "note" => "ok"
@@ -551,6 +571,7 @@ defmodule ThamaniDawa.LabOrdersTest do
 
     test "amending an already-completed result requires a reason", ctx do
       lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+      receive_specimen_for_result(ctx.organization.id, lab_order_result.id, ctx.technician.id)
 
       {:ok, _} =
         LabOrders.record_result(ctx.organization.id, lab_order_result.id, ctx.technician.id, %{
@@ -571,6 +592,7 @@ defmodule ThamaniDawa.LabOrdersTest do
 
     test "amending snapshots the previous results into an amendment row", ctx do
       lab_order_result = lab_order_result_fixture(%{organization_id: ctx.organization.id})
+      receive_specimen_for_result(ctx.organization.id, lab_order_result.id, ctx.technician.id)
 
       {:ok, _} =
         LabOrders.record_result(ctx.organization.id, lab_order_result.id, ctx.technician.id, %{
@@ -615,7 +637,8 @@ defmodule ThamaniDawa.LabOrdersTest do
                  ctx.batch.id,
                  ctx.technician.id,
                  10,
-                 purpose: "reagent draw"
+                 purpose: "reagent draw",
+                 site_id: ctx.batch.site_id
                )
 
       assert usage.batch_id == ctx.batch.id
@@ -646,7 +669,8 @@ defmodule ThamaniDawa.LabOrdersTest do
                  ctx.organization.id,
                  ctx.batch.id,
                  ctx.technician.id,
-                 10
+                 10,
+                 site_id: ctx.batch.site_id
                )
 
       assert %ScanEvent{} = scan_event = Repo.get_by!(ScanEvent, reference_id: usage.id)
@@ -675,7 +699,8 @@ defmodule ThamaniDawa.LabOrdersTest do
                  ctx.batch.id,
                  ctx.technician.id,
                  5,
-                 specimen_id: specimen.id
+                 specimen_id: specimen.id,
+                 site_id: ctx.batch.site_id
                )
 
       assert usage.specimen_id == specimen.id

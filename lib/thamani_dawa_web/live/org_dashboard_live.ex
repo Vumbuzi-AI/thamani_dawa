@@ -16,24 +16,32 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     organization = Organizations.get_organization!(organization_id)
     sites = Sites.list_sites(organization_id)
     primary_site = List.first(sites)
-    active_sites = Enum.filter(sites, & &1.is_active)
-
-    setup_required? = not site_ready?(primary_site)
+    checklist_items = Organizations.onboarding_checklist(organization, primary_site)
 
     socket
     |> assign(:organization, organization)
     |> assign(:primary_site, primary_site)
-    |> assign(:setup_required?, setup_required?)
-    |> assign(:pharmacy_metrics?, Enum.any?(active_sites, &Sites.Site.pharmacy?/1))
-    |> assign(:lab_metrics?, Enum.any?(active_sites, &Sites.Site.lab?/1))
+    |> assign(:checklist_items, checklist_items)
+    |> assign(:setup_required?, not site_ready?(primary_site))
+    |> assign(:show_checklist?, Enum.any?(checklist_items, &(not &1.done?)))
     |> assign(:site_profitability, Reports.site_profitability(organization_id))
+    |> assign(:multi_site?, Sites.multi_site?(organization_id))
   end
+
+  defp primary_site_path(nil), do: ~p"/org/sites/new"
+  defp primary_site_path(%{id: id}), do: ~p"/org/sites/#{id}/edit"
 
   defp site_ready?(nil), do: false
 
   defp site_ready?(site) do
-    is_binary(site.address) and String.trim(site.address) != "" and not is_nil(site.site_type)
+    is_binary(site.address) and String.trim(site.address) != "" and site.activities != []
   end
+
+  defp format_activities(activities), do: Enum.map_join(activities, ", ", &humanize_activity/1)
+
+  defp humanize_activity(:pharmacy), do: "Pharmacy"
+  defp humanize_activity(:laboratory), do: "Laboratory"
+  defp humanize_activity(:distribution), do: "Distribution"
 
   def handle_event("set_range", %{"range" => range}, socket) do
     {:noreply, assign_range(socket, range)}
@@ -300,7 +308,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
         %{
           type: :site,
           title: s.name,
-          subtitle: "#{s.address || "No address"} • Type: #{s.site_type}",
+          subtitle: "#{s.address || "No address"} • #{format_activities(s.activities)}",
           badge: "GLN: #{s.gln || "N/A"}",
           icon: "hero-building-office-2"
         }
@@ -312,7 +320,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           type: :staff,
           title: u.name,
           subtitle: u.email,
-          badge: String.capitalize(to_string(u.role)),
+          badge: ThamaniDawa.Accounts.User.humanize_roles(u),
           icon: "hero-users"
         }
       end)
@@ -560,39 +568,73 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           Welcome to {@organization.name}
         </h1>
         <p class="mt-3 max-w-2xl text-base leading-7 text-thamani-pewter">
-          Add the location and services for your primary site. This is the only required setup
-          before you can start using your dashboard.
+          A few quick steps before you're fully up and running.
         </p>
+        <.link
+          id="complete-primary-site"
+          navigate={primary_site_path(@primary_site)}
+          class="mt-5 inline-flex items-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
+        >
+          Complete your primary site
+        </.link>
       </section>
 
       <section
-        :if={@setup_required?}
+        :if={@show_checklist?}
         id="organization-onboarding"
         class="rounded-2xl border border-thamani-lime/70 bg-thamani-lime/15 p-5 shadow-sm"
       >
-        <div class="flex items-start gap-3">
-          <div class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-thamani-forest text-thamani-snow">
-            <.icon name="hero-rocket-launch" class="size-5" />
-          </div>
-          <div class="min-w-0 flex-1">
-            <h2 class="text-lg font-semibold text-thamani-forest">Complete your primary site</h2>
-            <p class="mt-1 text-sm text-thamani-pewter">
-              Confirm its address and whether it provides pharmacy, lab, combined, or warehouse
-              services.
-            </p>
-          </div>
+        <div class="mb-4 flex items-center justify-between gap-3">
+          <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-forest">
+            Getting started
+          </h2>
+          <span
+            id="onboarding-checklist-progress"
+            class="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-thamani-forest"
+          >
+            {Enum.count(@checklist_items, & &1.done?)} of {length(@checklist_items)} complete
+          </span>
         </div>
-        <.link
-          id="complete-primary-site"
-          navigate={
-            if @primary_site,
-              do: ~p"/org/sites/#{@primary_site.id}/edit?return_to=dashboard",
-              else: ~p"/org/sites/new?return_to=dashboard"
-          }
-          class="mt-5 inline-flex items-center gap-2 rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
-        >
-          Complete site details <.icon name="hero-arrow-right" class="size-4" />
-        </.link>
+        <ul class="flex flex-col gap-2">
+          <li
+            :for={item <- @checklist_items}
+            id={"onboarding-item-#{item.key}"}
+            class="flex items-start justify-between gap-3 rounded-xl bg-white p-4 shadow-sm"
+          >
+            <div class="flex min-w-0 items-start gap-3">
+              <div class={[
+                "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg",
+                item.done? && "bg-thamani-lime/30 text-thamani-forest",
+                !item.done? && "bg-thamani-forest text-thamani-snow"
+              ]}>
+                <.icon
+                  name={if item.done?, do: "hero-check", else: "hero-rocket-launch"}
+                  class="size-4"
+                />
+              </div>
+              <div class="min-w-0">
+                <h3 class={[
+                  "text-sm font-semibold",
+                  item.done? && "text-thamani-pewter line-through",
+                  !item.done? && "text-thamani-forest"
+                ]}>
+                  {item.label}
+                </h3>
+                <p :if={!item.done?} class="mt-0.5 text-xs text-thamani-pewter">
+                  {item.description}
+                </p>
+              </div>
+            </div>
+            <.link
+              :if={!item.done?}
+              id={"onboarding-item-#{item.key}-cta"}
+              navigate={item.path}
+              class="shrink-0 rounded-full bg-thamani-forest px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
+            >
+              {item.cta}
+            </.link>
+          </li>
+        </ul>
       </section>
 
       <div :if={not @setup_required?} id="admin-dashboard-stats" class="dashboard-stat-grid mt-6">
@@ -619,38 +661,6 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           label="Active staff"
           value={@stats.active_staff}
           sublabel="Enabled system accounts"
-        />
-        <.stat_tile
-          :if={@pharmacy_metrics?}
-          id="prescriptions-stat"
-          icon="hero-document-text"
-          label="Prescriptions"
-          value={@stats.prescriptions}
-          sublabel="Prescriptions in selected window"
-        />
-        <.stat_tile
-          :if={@lab_metrics?}
-          id="lab-tests-done-stat"
-          icon="hero-beaker"
-          label="Lab tests done"
-          value={@stats.lab_tests_done}
-          sublabel="Completed lab orders in selected window"
-        />
-        <.stat_tile
-          :if={@pharmacy_metrics?}
-          id="pending-prescriptions-stat"
-          icon="hero-clock"
-          label="Pending prescriptions"
-          value={@stats.pending_prescriptions}
-          sublabel="Awaiting dispensing, network-wide"
-        />
-        <.stat_tile
-          :if={@lab_metrics?}
-          id="pending-lab-orders-stat"
-          icon="hero-clipboard-document-list"
-          label="Pending lab orders"
-          value={@stats.pending_lab_orders}
-          sublabel="Awaiting results, network-wide"
         />
       </div>
 
@@ -699,6 +709,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
         phx-update="ignore"
         data-tour-key={"thamani-org-tour-v1-#{@current_scope.user.id}"}
         data-auto-start={to_string(@auto_start_tour?)}
+        data-multi-site={to_string(@multi_site?)}
         class="hidden"
       >
         <button
@@ -788,6 +799,11 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
                 description: "Create your shared catalog, then receive stock and distribute it to the sites that need it."
               },
               {
+                selector: '[data-tour-target="/org/receiving"]',
+                title: "Receive stock into your sites",
+                description: "Log incoming deliveries against purchase orders and get them into the right site's inventory."
+              },
+              {
                 selector: '[data-tour-target="/org/team"]',
                 title: "Give your staff the right access",
                 description: "Invite staff and assign site access so each person sees only the work relevant to them."
@@ -800,14 +816,15 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               {
                 selector: '[data-tour-target="/org/requisitions"]',
                 title: "Coordinate stock requests between sites",
-                description: "Review and track site stock requests from submission through approval and fulfilment."
+                description: "Review and track site stock requests from submission through approval and fulfilment.",
+                multiSiteOnly: true
               },
               {
                 selector: '[data-tour-target="/org/earnings"]',
                 title: "Follow the money",
                 description: "Trace payments and site earnings here; view performance charts and site comparisons on the dashboard."
               }
-            ]
+            ].filter(step => !step.multiSiteOnly || this.el.dataset.multiSite === "true")
             this.index = 0
             this.activeTarget = null
             this.dismiss = () => this.finish()

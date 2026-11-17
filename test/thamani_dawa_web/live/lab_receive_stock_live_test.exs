@@ -12,8 +12,8 @@ defmodule ThamaniDawaWeb.LabReceiveStockLiveTest do
     admin = user_fixture()
     org_id = admin.organization_id
 
-    lab_site = site_fixture(%{organization_id: org_id, site_type: :lab})
-    pharmacy_site = site_fixture(%{organization_id: org_id, site_type: :pharmacy})
+    lab_site = site_fixture(%{organization_id: org_id, activities: [:laboratory]})
+    pharmacy_site = site_fixture(%{organization_id: org_id, activities: [:pharmacy]})
 
     lab_tech =
       staff_fixture(%{

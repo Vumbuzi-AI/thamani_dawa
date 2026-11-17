@@ -7,8 +7,10 @@ defmodule ThamaniDawaWeb.Layouts do
 
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
+  alias ThamaniDawa.Organizations
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
+  alias ThamaniDawaWeb.Portals
   alias ThamaniDawaWeb.SiteScoping
 
   # Embed all files in layouts/* within this module.
@@ -98,13 +100,6 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :inner_block, required: true
 
   def lab_shell(assigns) do
-    assigns =
-      assigns
-      |> assign(:nav_badges, %{
-        ~p"/lab/receive-stock" => pending_batches_count(assigns.current_scope, :lab)
-      })
-      |> assign(:multi_site?, Sites.multi_site?(assigns.current_scope.organization_id))
-
     ~H"""
     <.sidebar_shell
       flash={@flash}
@@ -115,21 +110,6 @@ defmodule ThamaniDawaWeb.Layouts do
       title="Thamani Dawa"
       section_label="Lab"
       base_path="/lab"
-      nav_badges={@nav_badges}
-      nav_items={
-        [
-          {"Dashboard", "hero-squares-2x2", ~p"/lab"},
-          {"Patients", "hero-user-group", ~p"/lab/patients"},
-          {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
-          {"Tests", "hero-beaker", ~p"/lab/tests"},
-          {"Stock", "hero-cube", ~p"/lab/stock"},
-          {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
-          {"Requisitions", "hero-clipboard-document-list", ~p"/lab/requisitions"},
-          {"Scan", "hero-qr-code", ~p"/lab/scan"},
-          {"Transactions", "hero-banknotes", ~p"/lab/transactions"}
-        ]
-        |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
-      }
     >
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -148,13 +128,6 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :inner_block, required: true
 
   def pharmacy_shell(assigns) do
-    assigns =
-      assigns
-      |> assign(:nav_badges, %{
-        ~p"/pharmacy/receive-stock" => pending_batches_count(assigns.current_scope, :pharmacy)
-      })
-      |> assign(:multi_site?, Sites.multi_site?(assigns.current_scope.organization_id))
-
     ~H"""
     <.sidebar_shell
       flash={@flash}
@@ -165,21 +138,6 @@ defmodule ThamaniDawaWeb.Layouts do
       title="Thamani Dawa"
       section_label="Pharmacy"
       base_path="/pharmacy"
-      nav_badges={@nav_badges}
-      nav_items={
-        [
-          {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
-          {"Quick sale", "hero-bolt", ~p"/pharmacy/quick-sale"},
-          {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
-          {"Patients", "hero-user-group", ~p"/pharmacy/patients"},
-          {"Stock", "hero-cube", ~p"/pharmacy/stock"},
-          {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
-          {"Requisitions", "hero-clipboard-document-list", ~p"/pharmacy/requisitions"},
-          {"Scan", "hero-qr-code", ~p"/pharmacy/scan"},
-          {"Transactions", "hero-banknotes", ~p"/pharmacy/transactions"}
-        ]
-        |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
-      }
     >
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -233,14 +191,6 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :inner_block, required: true
 
   def org_shell(assigns) do
-    assigns =
-      assigns
-      |> assign(:nav_badges, %{
-        ~p"/org/requisitions" =>
-          ThamaniDawa.Requisitions.count_pending(assigns.current_scope.organization_id)
-      })
-      |> assign(:multi_site?, Sites.multi_site?(assigns.current_scope.organization_id))
-
     ~H"""
     <.sidebar_shell
       flash={@flash}
@@ -251,19 +201,66 @@ defmodule ThamaniDawaWeb.Layouts do
       title="Thamani Dawa"
       section_label="Organization"
       base_path="/org"
-      nav_badges={@nav_badges}
-      nav_items={
-        [
-          {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
-          {"Sites", "hero-building-office-2", ~p"/org/sites"},
-          {"Products", "hero-cube", ~p"/org/products"},
-          {"Team", "hero-user-group", ~p"/org/team"},
-          {"Suppliers", "hero-truck", ~p"/org/suppliers"},
-          {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"},
-          {"Transactions", "hero-banknotes", ~p"/org/earnings"}
-        ]
-        |> Enum.reject(fn {label, _, _} -> label == "Requisitions" and not @multi_site? end)
-      }
+    >
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
+  @doc "Renders the authenticated platform shell for tenant-less superadmins."
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, default: ""
+
+  slot :inner_block, required: true
+
+  def platform_shell(assigns) do
+    ~H"""
+    <.sidebar_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      title="Thamani Dawa"
+      section_label="Platform"
+      base_path="/platform"
+      show_product_tour={false}
+      nav_groups={[
+        {nil,
+         [
+           {"Dashboard", "hero-squares-2x2", ~p"/platform"},
+           {"Audit activity", "hero-clipboard-document-list", ~p"/platform/audit"}
+         ]}
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
+  @doc """
+  Renders the authenticated distributor shell: the shared sidebar with links to
+  the shipment workflow, mobile app users, serialisation billing, and the
+  distributor's inventory and trading-partner records.
+  """
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, default: ""
+  attr :back, :any, default: nil
+  attr :back_label, :string, default: nil
+
+  slot :inner_block, required: true
+
+  def distributor_shell(assigns) do
+    ~H"""
+    <.sidebar_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      back={@back}
+      back_label={@back_label}
+      title="Thamani Dawa"
+      section_label="Distributor"
+      base_path="/distributor"
     >
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -276,21 +273,43 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :title, :string, required: true
   attr :section_label, :string, required: true
   attr :base_path, :string, required: true
-  attr :nav_items, :list, required: true
-  attr :nav_badges, :map, default: %{}
+
+  attr :nav_groups, :list,
+    default: nil,
+    doc: """
+    optional `{group_label | nil, [{label, icon, path}]}` override — used by
+    the platform shell. Every organization sidebar derives its groups from
+    the current site's activities × the user's roles instead.
+    """
+
+  attr :nav_badges, :map, default: nil
+  attr :show_product_tour, :boolean, default: true
   attr :back, :any, default: nil
   attr :back_label, :string, default: nil
 
   slot :inner_block, required: true
 
   defp sidebar_shell(assigns) do
-    assigns = assign(assigns, :back_label, back_label(assigns))
+    scope = assigns.current_scope
+    multi_site? = multi_site?(scope)
+
+    nav_groups = assigns.nav_groups || unified_nav_groups(scope, multi_site?)
+
+    site_picker_options = site_picker_options(scope)
+
+    assigns =
+      assigns
+      |> assign(:nav_groups, nav_groups)
+      |> then(&assign(&1, :back_label, back_label(&1)))
+      |> assign(:nav_badges, assigns.nav_badges || unified_nav_badges(scope, nav_groups))
+      |> assign(:site_picker_options, site_picker_options)
+      |> assign(:current_picker_option, current_picker_option(scope, site_picker_options))
 
     ~H"""
     <div
       id="sidebar-shell"
       class="internal-app flex min-h-screen overflow-x-hidden lg:h-screen lg:overflow-hidden"
-      style="background: var(--surface-1); font-family: var(--font-thamani-sans, sans-serif);"
+      style="background: var(--thamani-paper); font-family: var(--font-thamani-sans-display, sans-serif);"
       phx-hook=".Sidebar"
     >
       <button
@@ -303,260 +322,274 @@ defmodule ThamaniDawaWeb.Layouts do
       <aside
         id="sidebar-aside"
         class="fixed inset-y-0 left-0 z-[90] flex w-72 -translate-x-full shrink-0 flex-col border-r transition-[transform,width] duration-200 ease-in-out lg:relative lg:z-50 lg:translate-x-0"
-        style="background: var(--thamani-sidenav, #EFEFF0); border-color: var(--thamani-border-nav); width: 288px; padding: 24px 20px;"
+        style="background: var(--thamani-sidenav, #F0EFEA); border-color: var(--thamani-border-nav); width: 288px; padding: 20px 16px;"
         aria-label={"#{@section_label} navigation"}
       >
         <%!-- Brand row --%>
-        <div id="sidebar-brand-row" class="flex items-center gap-3 mb-6">
-          <a
-            href={~p"/"}
-            class="flex items-center justify-center shrink-0 rounded-lg overflow-hidden hover:opacity-80 transition-opacity"
-          >
-            <img
-              src="/images/logo.png"
-              alt="Thamani Dawa"
-              class="w-11 h-11 object-cover"
-            />
-          </a>
-          <div
-            id="sidebar-brand-text"
-            class="flex flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
-          >
+        <div id="sidebar-brand-row" class="mb-5 flex items-center justify-between gap-3">
+          <div id="sidebar-brand" class="flex min-w-0 items-center gap-3">
             <a
+              id="sidebar-brand-link"
               href={~p"/"}
-              class="font-semibold text-[17px] leading-tight truncate block"
-              style="color: var(--thamani-forest);"
+              class="flex h-14 w-40 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-thamani-frosted bg-white px-3 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition-all duration-150 hover:bg-white/90"
+              aria-label="Thamani Dawa home"
             >
-              {@title}
+              <img
+                id="sidebar-brand-logo"
+                src="/images/logo-transparent.png"
+                alt=""
+                class="h-full w-full shrink-0 object-contain"
+              />
             </a>
-            <span class="text-[13px] truncate block" style="color: var(--thamani-pewter);">
-              {@section_label}
-            </span>
-          </div>
-        </div>
-
-        <%!-- Primary navigation --%>
-        <nav class="flex flex-col gap-1">
-          <%= for {label, icon, path} <- @nav_items do %>
-            <% active =
-              if path == @base_path,
-                do: @current_path == @base_path,
-                else: @current_path == path or String.starts_with?(@current_path, path <> "/") %>
-            <.link
-              navigate={path}
-              data-tour-target={path}
-              data-tooltip={label}
-              aria-current={active && "page"}
-              class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-[background-color,color,scale] whitespace-nowrap active:scale-[0.96]"
-              style={
-                if active,
-                  do:
-                    "background: var(--thamani-forest); color: var(--thamani-snow); padding: 12px; min-height: 48px;",
-                  else: "color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
-              }
+            <div
+              id="sidebar-brand-text"
+              class="hidden flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
             >
-              <.icon name={icon} class="size-5 shrink-0" />
-              <span id={"nav-label-#{path}"} class="nav-label transition-opacity duration-150">
-                {label}
-              </span>
-              <span
-                :if={Map.get(@nav_badges, path, 0) > 0}
-                class="nav-badge bg-warning ml-auto inline-flex items-center justify-center rounded-full text-[11px] font-semibold leading-none"
-                style="min-width: 20px; height: 20px; padding: 0 6px; background: var(--thamani-lime); color: var(--thamani-forest);"
+              <a
+                href={~p"/"}
+                class="font-semibold text-[17px] leading-tight truncate block"
+                style="color: var(--thamani-forest);"
               >
-                {Map.get(@nav_badges, path)}
-              </span>
-            </.link>
-          <% end %>
-        </nav>
-
-        <%!-- Cross-portal switch: only combined pharmacy/lab staff currently
-             stationed at a combined pharmacy+lab site can hop portals. A
-             pharma_lab user sent to a lab-only (or pharmacy-only) site only
-             ever sees that one side, matching what the site actually offers. --%>
-        <div
-          :if={Scope.pharma_lab?(@current_scope) and combined_site?(@current_scope)}
-          id="sidebar-portal-switch"
-          class="flex flex-col gap-1 mt-4 pt-4"
-          style="border-top: 1px solid var(--thamani-border-nav);"
-        >
-          <span
-            id="nav-label-portal-switch-heading"
-            class="px-3 text-[11px] font-medium uppercase tracking-wide transition-opacity duration-150"
-            style="color: var(--thamani-subtle);"
-          >
-            Switch portal
-          </span>
-          <.link
-            :if={@base_path != "/pharmacy"}
-            id="portal-link-pharmacy"
-            navigate={~p"/pharmacy"}
-            class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-[background-color,color,scale] whitespace-nowrap overflow-hidden active:scale-[0.96]"
-            style="color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
-          >
-            <.icon name="hero-building-storefront" class="size-5 shrink-0" />
-            <span id="nav-label-/pharmacy" class="transition-opacity duration-150">Pharmacy</span>
-          </.link>
-          <.link
-            :if={@base_path != "/lab"}
-            id="portal-link-lab"
-            navigate={~p"/lab"}
-            class="flex items-center gap-3 rounded-xl text-[15px] font-medium transition-[background-color,color,scale] whitespace-nowrap overflow-hidden active:scale-[0.96]"
-            style="color: var(--thamani-pewter); padding: 12px; min-height: 48px;"
-          >
-            <.icon name="hero-beaker" class="size-5 shrink-0" />
-            <span id="nav-label-/lab" class="transition-opacity duration-150">Lab</span>
-          </.link>
-        </div>
-
-        <%!-- Account card + utilities --%>
-        <div
-          class="mt-auto pt-4 flex flex-col gap-3"
-          style="border-top: 1px solid var(--thamani-border-nav);"
-        >
-          <.link
-            id="start-product-tour"
-            navigate={product_tour_path(@base_path)}
-            data-tooltip="Product tour"
-            class="flex items-center gap-3 w-full rounded-xl text-xs font-medium transition-all duration-150 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40 hover:bg-thamani-lime/30"
-            style="background: color-mix(in srgb, var(--thamani-lime) 18%, transparent); border: 1px solid color-mix(in srgb, var(--thamani-lime) 65%, var(--thamani-border-nav)); color: var(--thamani-forest); padding: 10px 14px; min-height: 42px;"
-          >
-            <.icon name="hero-map" class="size-4 shrink-0" />
-            <span class="nav-label text-[13px] font-medium transition-opacity duration-150 truncate">
-              Product tour
-            </span>
-          </.link>
-
-          <%!-- Collapse sidebar toggle --%>
+                {@title}
+              </a>
+            </div>
+          </div>
           <button
             id="sidebar-toggle"
             type="button"
             aria-label="Collapse sidebar"
             data-tooltip="Collapse sidebar"
-            class="hidden items-center gap-3 w-full rounded-xl text-xs font-medium transition-all duration-150 cursor-pointer active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40 hover:bg-slate-100/80 lg:flex"
-            style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav); color: var(--thamani-pewter); padding: 10px 14px; min-height: 42px;"
+            aria-expanded="true"
+            aria-controls="sidebar-aside"
+            class="hidden size-11 shrink-0 cursor-pointer items-center justify-center rounded-xl text-thamani-snow shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-md active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/60 focus-visible:ring-offset-2 lg:flex"
+            style="background: var(--thamani-forest);"
           >
-            <span id="sidebar-toggle-icon" class="inline-flex transition-transform duration-200">
-              <.icon name="hero-chevron-left" class="size-4 shrink-0" />
+            <span id="sidebar-toggle-collapse-icon" class="inline-flex" aria-hidden="true">
+              <.icon name="hero-arrow-left-end-on-rectangle" class="size-5 shrink-0" />
             </span>
-            <span class="nav-label text-[13px] font-medium transition-opacity duration-150 text-thamani-pewter truncate">
-              Collapse sidebar
+            <span id="sidebar-toggle-expand-icon" class="hidden" aria-hidden="true">
+              <.icon name="hero-arrow-right-end-on-rectangle" class="size-5 shrink-0" />
             </span>
           </button>
-          <form
-            :if={length(@current_scope.user.sites) > 1}
-            id="site-switch-form"
-            action={~p"/switch-site"}
-            method="post"
-            class="relative flex flex-col gap-1"
-          >
-            <input type="hidden" name="_method" value="patch" />
-            <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
-            <input type="hidden" name="return_to" value={@current_path} />
-            <input
-              type="hidden"
-              id="site-switch-input"
-              name="site_id"
-              value={@current_scope.current_site_id}
-            />
+        </div>
 
-            <span
-              class="px-1 text-[11px] font-medium uppercase tracking-wide"
-              style="color: var(--thamani-subtle);"
-            >
-              Current site
-            </span>
+        <%!-- Site picker: the single context switch. The organization is
+             one option (admins only, org-wide management), real sites the
+             others — picking one lands the user in the panel that site
+             offers, so no separate portal or role picker exists. --%>
+        <form
+          :if={length(@site_picker_options) > 1}
+          id="site-switch-form"
+          action={~p"/switch-site"}
+          method="post"
+          class="relative mb-4 flex flex-col"
+        >
+          <input type="hidden" name="_method" value="patch" />
+          <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+          <input type="hidden" name="return_to" value={@current_path} />
+          <input
+            type="hidden"
+            id="site-switch-input"
+            name="site_id"
+            value={@current_scope.current_site_id || ""}
+          />
 
+          <div class="relative">
             <button
               type="button"
               id="site-switch-trigger"
               phx-click={JS.toggle(to: "#site-switch-dropdown")}
               phx-click-away={JS.hide(to: "#site-switch-dropdown")}
-              class="flex items-center justify-between gap-2 w-full rounded-xl px-3 py-2.5 text-sm font-medium text-thamani-forest transition-colors cursor-pointer"
-              style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav);"
+              class="group flex min-h-12 w-full cursor-pointer items-center justify-between gap-2.5 rounded-xl px-3 py-2 text-left text-thamani-forest transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:bg-white/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40"
+              style="background: color-mix(in srgb, var(--thamani-stone) 72%, white); border: 1px solid color-mix(in srgb, var(--thamani-forest) 25%, var(--thamani-border-nav));"
             >
-              <div class="flex items-center gap-2 min-w-0 truncate">
-                <.icon name="hero-building-office-2" class="size-4 shrink-0 text-thamani-forest/70" />
-                <span class="truncate">{current_site_name(@current_scope)}</span>
-              </div>
-              <.icon name="hero-chevron-down" class="size-4 shrink-0 text-thamani-pewter" />
+              <span class="flex min-w-0 items-center gap-2.5">
+                <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/70 text-thamani-forest shadow-sm ring-1 ring-thamani-border-nav/70">
+                  <.icon name={@current_picker_option.icon} class="size-4" />
+                </span>
+                <span class="flex min-w-0 flex-col">
+                  <span class="truncate text-sm font-semibold leading-5">
+                    {@current_picker_option.name}
+                  </span>
+                  <span class="truncate text-[11px] font-normal leading-4 text-thamani-pewter">
+                    {@current_picker_option.subtitle}
+                  </span>
+                </span>
+              </span>
+              <.icon
+                name="hero-chevron-down"
+                class="size-4 shrink-0 text-thamani-forest transition-transform group-hover:translate-y-0.5"
+              />
             </button>
 
             <div
               id="site-switch-dropdown"
-              class="absolute bottom-full left-0 mb-1.5 w-full z-50 hidden rounded-xl bg-white shadow-xl border border-thamani-stone p-1.5 ff-surface-popover"
+              class="absolute left-0 top-full z-50 mt-1.5 hidden w-full rounded-xl border border-thamani-stone bg-white p-1 shadow-xl ff-surface-popover"
             >
               <button
-                :for={site <- @current_scope.user.sites}
+                :for={option <- @site_picker_options}
+                id={option.id}
                 type="button"
-                onclick={"
-                  document.getElementById('site-switch-input').value = '#{site.id}';
-                  document.getElementById('site-switch-form').requestSubmit();
-                "}
+                onclick={
+                  "document.getElementById('site-switch-input').value = '" <>
+                    option.value <>
+                    "'; document.getElementById('site-switch-form').requestSubmit();"
+                }
                 class={[
-                  "flex items-center justify-between w-full rounded-lg px-3 py-2 text-xs font-medium text-left transition-colors cursor-pointer",
-                  site.id == @current_scope.current_site_id &&
-                    "bg-thamani-forest/10 text-thamani-forest font-semibold",
-                  site.id != @current_scope.current_site_id &&
+                  "flex min-h-11 w-full cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
+                  option.active? && "bg-thamani-forest/10 text-thamani-forest",
+                  not option.active? &&
                     "text-slate-700 hover:bg-thamani-stone/60 hover:text-thamani-forest"
                 ]}
               >
-                <div class="flex items-center gap-2 truncate min-w-0">
-                  <.icon name="hero-building-office-2" class="size-3.5 shrink-0 opacity-60" />
-                  <span class="truncate">{site.name}</span>
-                </div>
+                <span class="flex min-w-0 items-center gap-2.5">
+                  <span class={[
+                    "flex size-7 shrink-0 items-center justify-center rounded-md",
+                    option.active? && "bg-white/70",
+                    not option.active? && "bg-thamani-stone/60 group-hover:bg-white"
+                  ]}>
+                    <.icon name={option.icon} class="size-3.5" />
+                  </span>
+                  <span class="flex min-w-0 flex-col">
+                    <span class="truncate text-[13px] font-semibold leading-4">{option.name}</span>
+                    <span class="truncate text-[11px] font-normal leading-4 text-thamani-pewter">
+                      {option.subtitle}
+                    </span>
+                  </span>
+                </span>
                 <.icon
-                  :if={site.id == @current_scope.current_site_id}
+                  :if={option.active?}
                   name="hero-check"
                   class="size-4 shrink-0 text-thamani-forest"
                 />
               </button>
             </div>
-          </form>
+          </div>
+        </form>
 
+        <%!-- Nav list lives in its own scroll region so a short viewport
+             scrolls the links instead of pushing the footer (account card,
+             log out) off screen. --%>
+        <div id="sidebar-scroll-frame" class="relative flex min-h-0 flex-1">
           <div
-            id="sidebar-account-card"
-            data-tooltip={@current_scope.user.name}
-            class="flex items-center gap-3 transition-opacity duration-150"
-            style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav); border-radius: 16px; padding: 14px 16px;"
+            id="sidebar-scroll"
+            class="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
           >
-            <div
-              class="rounded-full flex items-center justify-center shrink-0 aspect-square font-semibold text-[15px]"
-              style="width: 44px; height: 44px; min-width: 44px; min-height: 44px; border-radius: 9999px; background: var(--thamani-forest); color: var(--thamani-snow);"
+            <%!-- Primary navigation --%>
+            <nav class="flex flex-col gap-0.5">
+              <%= for {{group_label, items}, index} <- Enum.with_index(@nav_groups) do %>
+                <div
+                  :if={group_label}
+                  class={[
+                    "sidebar-group-label nav-label px-3 pb-1 text-[11px] font-medium uppercase tracking-wide transition-opacity duration-150",
+                    index > 0 && "mt-3 border-t border-thamani-border-nav pt-3"
+                  ]}
+                  style="color: var(--thamani-subtle);"
+                >
+                  {group_label}
+                </div>
+                <%= for {label, icon, path} <- items do %>
+                  <% active =
+                    if path == @base_path,
+                      do: @current_path == @base_path,
+                      else: @current_path == path or String.starts_with?(@current_path, path <> "/") %>
+                  <.link
+                    navigate={path}
+                    data-tour-target={path}
+                    data-tooltip={label}
+                    aria-current={active && "page"}
+                    class="flex items-center gap-3 rounded-xl text-[14px] font-medium transition-[background-color,color,scale] whitespace-nowrap active:scale-[0.96]"
+                    style={
+                      if active,
+                        do:
+                          "background: var(--thamani-forest); color: var(--thamani-snow); padding: 9px 12px; min-height: 40px;",
+                        else: "color: var(--thamani-pewter); padding: 9px 12px; min-height: 40px;"
+                    }
+                  >
+                    <.icon name={icon} class="size-5 shrink-0" />
+                    <span id={"nav-label-#{path}"} class="nav-label transition-opacity duration-150">
+                      {label}
+                    </span>
+                    <span
+                      :if={Map.get(@nav_badges, path, 0) > 0}
+                      class="nav-badge bg-warning ml-auto inline-flex items-center justify-center rounded-full text-[11px] font-semibold leading-none"
+                      style="min-width: 20px; height: 20px; padding: 0 6px; background: var(--thamani-lime); color: var(--thamani-forest);"
+                    >
+                      {Map.get(@nav_badges, path)}
+                    </span>
+                  </.link>
+                <% end %>
+              <% end %>
+            </nav>
+          </div>
+        </div>
+
+        <%!-- Account card + utilities --%>
+        <div
+          id="sidebar-footer"
+          class="shrink-0 mt-3 pt-3 flex flex-col gap-2"
+          style="border-top: 1px solid var(--thamani-border-nav);"
+        >
+          <div id="sidebar-account-menu" class="relative">
+            <button
+              id="sidebar-account-card"
+              type="button"
+              aria-label="Open account menu"
+              data-tooltip={@current_scope.user.name}
+              phx-click={JS.toggle(to: "#sidebar-account-dropdown")}
+              phx-click-away={JS.hide(to: "#sidebar-account-dropdown")}
+              class="flex w-full cursor-pointer items-center gap-2.5 text-left transition-colors hover:bg-white/70"
+              style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav); border-radius: 14px; padding: 8px 10px;"
             >
-              {String.at(@current_scope.user.name || "U", 0)}
-            </div>
+              <span
+                class="flex size-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold"
+                style="background: var(--thamani-forest); color: var(--thamani-snow);"
+              >
+                {String.at(@current_scope.user.name || "U", 0)}
+              </span>
+              <span
+                id="sidebar-profile"
+                class="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap transition-opacity duration-150"
+              >
+                <span class="truncate text-[13px] font-semibold" style="color: #1F2433;">
+                  {@current_scope.user.name}
+                </span>
+              </span>
+              <.icon
+                name="hero-ellipsis-vertical"
+                class="nav-label size-4 shrink-0 text-thamani-pewter"
+              />
+            </button>
             <div
-              id="sidebar-profile"
-              class="flex flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
+              id="sidebar-account-dropdown"
+              class="absolute bottom-full left-0 z-50 mb-1.5 hidden w-full rounded-xl border border-thamani-stone bg-white p-1.5 shadow-xl ff-surface-popover"
             >
-              <span class="text-[15px] font-semibold truncate" style="color: #1F2433;">
-                {@current_scope.user.name}
-              </span>
-              <span class="text-[13px]" style="color: var(--thamani-pewter);">
-                {current_site_name(@current_scope)}
-              </span>
+              <.link
+                :if={@show_product_tour}
+                id="start-product-tour"
+                navigate={product_tour_path(@base_path)}
+                class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-thamani-forest transition-colors hover:bg-thamani-stone/60"
+              >
+                <.icon name="hero-map" class="size-4 shrink-0" /> Product tour
+              </.link>
+              <.link
+                id="sidebar-logout"
+                href={~p"/logout"}
+                method="delete"
+                class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+              >
+                <.icon name="hero-arrow-right-start-on-rectangle" class="size-4 shrink-0" /> Log out
+              </.link>
             </div>
           </div>
-
-          <.link
-            id="sidebar-logout"
-            data-tooltip="Log out"
-            href={~p"/logout"}
-            method="delete"
-            class="px-3 py-2 rounded-xl text-sm font-medium transition-[background-color,scale] flex items-center gap-3 group hover:bg-red-50 active:scale-[0.96]"
-            style="color: var(--thamani-error);"
-          >
-            <.icon name="hero-arrow-right-start-on-rectangle" class="size-4 shrink-0" />
-            <span id="nav-label-logout" class="nav-label transition-opacity duration-150">
-              Log out
-            </span>
-          </.link>
         </div>
       </aside>
 
       <%!-- Main content --%>
-      <main class="min-w-0 flex-1 lg:overflow-y-auto">
+      <main
+        class="min-w-0 flex-1 lg:overflow-y-auto"
+        style="background: var(--thamani-paper);"
+      >
         <header
           id="mobile-app-bar"
           class="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-thamani-border-nav bg-thamani-snow/95 px-4 backdrop-blur lg:hidden"
@@ -571,9 +604,6 @@ defmodule ThamaniDawaWeb.Layouts do
           >
             <.icon name="hero-bars-3" class="size-5" />
           </button>
-          <div class="min-w-0">
-            <p class="truncate text-sm font-semibold text-thamani-forest">{@title}</p>
-          </div>
         </header>
         <div class="mx-auto space-y-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-8" style="max-width: 1600px;">
           <%!-- Page-level back affordance. Lives outside the page's header card
@@ -603,15 +633,63 @@ defmodule ThamaniDawaWeb.Layouts do
           const getSidebar = () => document.getElementById("sidebar-aside");
           const getMobileToggle = () => document.getElementById("mobile-sidebar-toggle");
 
+          this.updateScrollAffordance = () => {
+            const scroll = document.getElementById("sidebar-scroll");
+            const frame = document.getElementById("sidebar-scroll-frame");
+            if (!scroll || !frame) return;
+
+            const remaining = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop;
+            frame.classList.toggle("can-scroll-up", scroll.scrollTop > 2);
+            frame.classList.toggle("can-scroll-down", remaining > 2);
+          };
+
+          this.sidebarScroll = document.getElementById("sidebar-scroll");
+          this.sidebarScroll?.addEventListener("scroll", this.updateScrollAffordance, {passive: true});
+          this.sidebarResizeObserver = new ResizeObserver(this.updateScrollAffordance);
+          if (this.sidebarScroll) this.sidebarResizeObserver.observe(this.sidebarScroll);
+
+          const hideTooltip = () => {
+            document.getElementById("sidebar-floating-tooltip")?.remove();
+          };
+
+          const showTooltip = (target) => {
+            const sidebar = getSidebar();
+            const label = target?.dataset.tooltip;
+            if (!sidebar?.classList.contains("sidebar-collapsed") || !label) return;
+
+            hideTooltip();
+            const rect = target.getBoundingClientRect();
+            const tooltip = document.createElement("div");
+            tooltip.id = "sidebar-floating-tooltip";
+            tooltip.setAttribute("role", "tooltip");
+            tooltip.textContent = label;
+            tooltip.style.left = `${rect.right + 12}px`;
+            tooltip.style.top = `${rect.top + rect.height / 2}px`;
+            document.body.appendChild(tooltip);
+          };
+
           const apply = () => {
             const sidebar = getSidebar();
             if (sidebar) {
               const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
               sidebar.classList.toggle("sidebar-collapsed", collapsed);
+              if (!collapsed) hideTooltip();
+              const toggle = document.getElementById("sidebar-toggle");
+              toggle?.setAttribute("aria-expanded", String(!collapsed));
+              toggle?.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+              toggle?.setAttribute("data-tooltip", collapsed ? "Expand sidebar" : "Collapse sidebar");
             }
           };
 
           apply();
+          requestAnimationFrame(this.updateScrollAffordance);
+
+          this.handleTooltipOver = (e) => showTooltip(e.target.closest("#sidebar-aside [data-tooltip]"));
+          this.handleTooltipOut = (e) => {
+            if (e.target.closest("#sidebar-aside [data-tooltip]")) hideTooltip();
+          };
+          this.handleTooltipFocus = (e) => showTooltip(e.target.closest("#sidebar-aside [data-tooltip]"));
+          this.handleTooltipBlur = hideTooltip;
 
           this.handleGlobalClick = (e) => {
             const toggleBtn = e.target.closest("#sidebar-toggle");
@@ -648,6 +726,10 @@ defmodule ThamaniDawaWeb.Layouts do
           };
 
           document.addEventListener("click", this.handleGlobalClick);
+          document.addEventListener("mouseover", this.handleTooltipOver);
+          document.addEventListener("mouseout", this.handleTooltipOut);
+          document.addEventListener("focusin", this.handleTooltipFocus);
+          document.addEventListener("focusout", this.handleTooltipBlur);
         },
         updated() {
           const sidebar = document.getElementById("sidebar-aside");
@@ -655,32 +737,305 @@ defmodule ThamaniDawaWeb.Layouts do
             const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
             sidebar.classList.toggle("sidebar-collapsed", collapsed);
           }
+          requestAnimationFrame(this.updateScrollAffordance);
         },
         destroyed() {
           if (this.handleGlobalClick) {
             document.removeEventListener("click", this.handleGlobalClick);
           }
+          document.removeEventListener("mouseover", this.handleTooltipOver);
+          document.removeEventListener("mouseout", this.handleTooltipOut);
+          document.removeEventListener("focusin", this.handleTooltipFocus);
+          document.removeEventListener("focusout", this.handleTooltipBlur);
+          this.sidebarScroll?.removeEventListener("scroll", this.updateScrollAffordance);
+          this.sidebarResizeObserver?.disconnect();
+          document.getElementById("sidebar-floating-tooltip")?.remove();
         }
       }
     </script>
     """
   end
 
-  defp current_site_name(%Scope{current_site_id: nil}), do: "All sites"
+  # ------------------------------------------------------------------
+  # Unified sidebar content. One nav, derived from context: the current
+  # site's activities decide which operations panels exist, the user's
+  # roles decide which of those panels they can work, and admins layer
+  # org management on top. No portal or role picker — the site picker
+  # above is the only context switch.
+  # ------------------------------------------------------------------
+
+  defp multi_site?(%Scope{organization_id: nil}), do: false
+
+  defp multi_site?(%Scope{organization_id: organization_id}) do
+    Sites.multi_site?(organization_id)
+  end
+
+  defp unified_nav_groups(%Scope{organization_id: nil}, _multi_site?), do: []
+
+  defp unified_nav_groups(%Scope{} = scope, multi_site?) do
+    site = Portals.current_site(scope)
+    ops_groups = operations_groups(scope, site, multi_site?)
+
+    labeled_ops =
+      case ops_groups do
+        [{_portal, items}] ->
+          [{"Operations", items}]
+
+        ops_groups ->
+          Enum.map(ops_groups, fn {portal, items} ->
+            {Portals.portal_label(portal), items}
+          end)
+      end
+
+    labeled_ops ++ management_groups(scope, ops_groups, site)
+  end
+
+  # Operations panels, in stable display order. Each appears when the
+  # context offers it AND the user's roles grant it.
+  defp operations_groups(%Scope{} = scope, site, multi_site?) do
+    []
+    |> put_ops_group(:pharmacy, ops_visible?(scope, :pharmacy, site), pharmacy_items(multi_site?))
+    |> put_ops_group(:lab, ops_visible?(scope, :lab, site), lab_items(multi_site?))
+    |> put_ops_group(
+      :distributor,
+      ops_visible?(scope, :distributor, site),
+      distributor_items()
+    )
+    |> put_ops_group(:org, org_ops_visible?(scope, site), org_items(multi_site?))
+  end
+
+  defp put_ops_group(groups, _portal, false, _items), do: groups
+  defp put_ops_group(groups, portal, true, items), do: groups ++ [{portal, items}]
+
+  defp ops_visible?(scope, :distributor, site) do
+    Portals.portal_role?(scope, :distributor) and Portals.distributor_organization?(scope) and
+      in_context?(scope, :distributor, site)
+  end
+
+  defp ops_visible?(scope, portal, site) do
+    Portals.portal_role?(scope, portal) and in_context?(scope, portal, site)
+  end
+
+  # No site picked: staff fall back to their role grants (they may not have
+  # been assigned a site yet), while an admin is in the org context whose
+  # operations come from the org group instead.
+  defp in_context?(%Scope{} = scope, _portal, nil), do: not Scope.admin?(scope)
+
+  defp in_context?(_scope, portal, site), do: Portals.site_offers_portal?(site, portal)
+
+  defp org_ops_visible?(%Scope{} = scope, site), do: Scope.admin?(scope) and is_nil(site)
+
+  defp pharmacy_items(multi_site?) do
+    [
+      {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
+      {"Quick sale", "hero-bolt", ~p"/pharmacy/quick-sale"},
+      {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
+      {"Patients", "hero-user-group", ~p"/pharmacy/patients"},
+      {"Stock", "hero-cube", ~p"/pharmacy/stock"},
+      {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
+      {"Requisitions", "hero-clipboard-document-list", ~p"/pharmacy/requisitions"},
+      {"Scan", "hero-qr-code", ~p"/pharmacy/scan"},
+      {"Transactions", "hero-banknotes", ~p"/pharmacy/transactions"}
+    ]
+    |> reject_single_site_requisitions(multi_site?)
+  end
+
+  defp lab_items(multi_site?) do
+    [
+      {"Dashboard", "hero-squares-2x2", ~p"/lab"},
+      {"Patients", "hero-user-group", ~p"/lab/patients"},
+      {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
+      {"Tests", "hero-beaker", ~p"/lab/tests"},
+      {"Stock", "hero-cube", ~p"/lab/stock"},
+      {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
+      {"Requisitions", "hero-clipboard-document-list", ~p"/lab/requisitions"},
+      {"Scan", "hero-qr-code", ~p"/lab/scan"},
+      {"Transactions", "hero-banknotes", ~p"/lab/transactions"}
+    ]
+    |> reject_single_site_requisitions(multi_site?)
+  end
+
+  defp distributor_items do
+    [
+      {"Dashboard", "hero-squares-2x2", ~p"/distributor"},
+      {"Shipments", "hero-truck", ~p"/distributor/shipments"},
+      {"Receiving", "hero-arrow-down-tray", ~p"/distributor/receiving"},
+      {"Stock", "hero-cube", ~p"/distributor/stock"},
+      {"Products", "hero-cube", ~p"/distributor/products"}
+    ]
+  end
+
+  defp org_items(multi_site?) do
+    [
+      {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
+      {"Receiving", "hero-arrow-down-tray", ~p"/org/receiving"},
+      {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"},
+      {"Transactions", "hero-banknotes", ~p"/org/earnings"}
+    ]
+    |> reject_single_site_requisitions(multi_site?)
+  end
+
+  defp reject_single_site_requisitions(items, true), do: items
+
+  defp reject_single_site_requisitions(items, false) do
+    Enum.reject(items, fn {_label, _icon, path} -> String.ends_with?(path, "/requisitions") end)
+  end
+
+  # Org management (sites, products, team, billing, reporting) is
+  # org-wide, not this-site's business — only offered when the admin is in
+  # the "Manage organization" context (no specific site picked), not while
+  # drilled into one site's operations.
+  defp management_groups(%Scope{} = scope, ops_groups, site) do
+    cond do
+      not Scope.admin?(scope) or not is_nil(site) -> []
+      Enum.any?(ops_groups, &match?({:distributor, _}, &1)) -> distributor_admin_groups()
+      true -> org_management_groups()
+    end
+  end
+
+  defp distributor_admin_groups do
+    [
+      {"Reference data",
+       [
+         {"Mobile users", "hero-device-phone-mobile", ~p"/distributor/mobile-users"},
+         {"Sites", "hero-building-office-2", ~p"/org/sites"}
+       ]},
+      {"Account",
+       [
+         {"Billing", "hero-credit-card", ~p"/distributor/billing"},
+         {"TNT reporting", "hero-globe-alt", ~p"/distributor/epcis"},
+         {"Org settings", "hero-cog-6-tooth", ~p"/distributor/settings"}
+       ]}
+    ]
+  end
+
+  defp org_management_groups do
+    [
+      {"Organization",
+       [
+         {"Sites", "hero-building-office-2", ~p"/org/sites"},
+         {"Products", "hero-cube", ~p"/org/products"},
+         {"Suppliers", "hero-truck", ~p"/org/suppliers"},
+         {"Team", "hero-user-group", ~p"/org/team"}
+       ]},
+      {"Account",
+       [
+         {"TNT reporting", "hero-globe-alt", ~p"/org/epcis"},
+         {"Org settings", "hero-cog-6-tooth", ~p"/org/settings"}
+       ]}
+    ]
+  end
+
+  defp unified_nav_badges(%Scope{} = scope, nav_groups) do
+    paths = nav_paths(nav_groups)
+
+    %{}
+    |> maybe_badge(paths, ~p"/pharmacy/receive-stock", fn ->
+      pending_batches_count(scope, :pharmacy)
+    end)
+    |> maybe_badge(paths, ~p"/lab/receive-stock", fn ->
+      pending_batches_count(scope, :lab)
+    end)
+    |> maybe_badge(paths, ~p"/org/requisitions", fn ->
+      ThamaniDawa.Requisitions.count_pending(scope.organization_id)
+    end)
+  end
+
+  defp nav_paths(nav_groups) do
+    nav_groups
+    |> Enum.flat_map(fn {_label, items} ->
+      Enum.map(items, fn {_label, _icon, path} -> path end)
+    end)
+  end
+
+  defp maybe_badge(badges, paths, path, fun) do
+    if path in paths, do: Map.put(badges, path, fun.()), else: badges
+  end
+
+  # Site picker options: the organization (admins only) plus the sites
+  # this scope is allowed to be stationed at — assigned sites whose
+  # activities their roles support.
+  defp site_picker_options(%Scope{organization_id: nil}), do: []
+
+  defp site_picker_options(%Scope{} = scope) do
+    org_option(scope) ++ site_options(scope)
+  end
+
+  defp org_option(%Scope{} = scope) do
+    if Scope.admin?(scope) do
+      [
+        %{
+          id: "site-switch-org",
+          name: Organizations.get_organization!(scope.organization_id).name,
+          subtitle: "Manage organization",
+          icon: "hero-squares-2x2",
+          active?: is_nil(scope.current_site_id),
+          value: ""
+        }
+      ]
+    else
+      []
+    end
+  end
+
+  # An admin administers every site in the org, not just whichever ones
+  # they happen to have a `UserSite` row for (that assignment model is for
+  # operational staff). Staff see their assigned sites, filtered down to
+  # the ones their roles can actually work — nobody is offered a site
+  # they'd land in with an empty nav.
+  defp site_options(%Scope{} = scope) do
+    sites =
+      if Scope.admin?(scope) do
+        Sites.list_sites(scope.organization_id)
+      else
+        scope.user.sites
+      end
+
+    sites
+    |> Enum.filter(&Portals.site_usable?(scope, &1))
+    |> Enum.map(fn site ->
+      %{
+        id: "site-switch-option-#{site.id}",
+        name: site.name,
+        subtitle: site_activity_summary(site),
+        icon: "hero-building-office-2",
+        active?: site.id == scope.current_site_id,
+        value: to_string(site.id)
+      }
+    end)
+  end
+
+  defp site_activity_summary(%Site{activities: activities}) do
+    labels =
+      Enum.flat_map(activities || [], fn
+        :pharmacy -> ["Pharmacy"]
+        :laboratory -> ["Lab"]
+        :distribution -> ["Distribution"]
+        _ -> []
+      end)
+
+    case labels do
+      [] -> "Site"
+      [only] -> only
+      many -> Enum.join(many, " + ")
+    end
+  end
+
+  defp current_picker_option(%Scope{} = scope, options) do
+    Enum.find(options, & &1.active?) ||
+      %{
+        name: current_site_name(scope),
+        subtitle: "",
+        icon: "hero-building-office-2"
+      }
+  end
+
+  defp current_site_name(%Scope{current_site_id: nil}), do: "Organization"
 
   defp current_site_name(%Scope{current_site_id: site_id, organization_id: organization_id}) do
     ThamaniDawa.Sites.get_site!(organization_id, site_id).name
   rescue
     Ecto.NoResultsError -> "Unknown site"
-  end
-
-  defp combined_site?(%Scope{current_site_id: nil}), do: false
-
-  defp combined_site?(%Scope{current_site_id: site_id, organization_id: organization_id}) do
-    site = ThamaniDawa.Sites.get_site!(organization_id, site_id)
-    Site.pharmacy?(site) and Site.lab?(site)
-  rescue
-    Ecto.NoResultsError -> false
   end
 
   @doc """
@@ -729,18 +1084,99 @@ defmodule ThamaniDawaWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://phoenix.hexdocs.pm/scopes.html)"
 
+  attr :navigation, :boolean,
+    default: true,
+    doc: "whether to render the standard application navigation"
+
   attr :inner_content, :any, default: nil
   slot :inner_block, required: false
 
   def app(assigns) do
     ~H"""
-    <.page_navbar current_scope={@current_scope} />
+    <.page_navbar :if={@navigation} current_scope={@current_scope} />
 
     <main class="w-full">
       {@inner_content || render_slot(@inner_block)}
     </main>
 
     <.flash_group flash={@flash} />
+    """
+  end
+
+  @doc false
+  attr :inner_content, :any, default: nil
+  slot :inner_block, required: false
+
+  def landing(assigns) do
+    ~H"""
+    {@inner_content || render_slot(@inner_block)}
+    """
+  end
+
+  @doc false
+  attr :flash, :map, required: true
+  attr :current_scope, :map, default: nil
+  attr :inner_content, :any, default: nil
+  slot :inner_block, required: false
+
+  def contact(assigns) do
+    ~H"""
+    <div class="contact-page">
+      <.marketing_nav />
+      <main class="w-full">
+        {@inner_content || render_slot(@inner_block)}
+      </main>
+      <.flash_group flash={@flash} />
+    </div>
+    """
+  end
+
+  defp marketing_nav(assigns) do
+    ~H"""
+    <header class="site-header">
+      <div class="nav-shell">
+        <a class="brand" href="/" aria-label="Thamani Dawa home">
+          <img src="/images/logo-transparent.png" alt="" width="56" height="56" />
+        </a>
+        <nav class="desktop-nav" aria-label="Primary navigation">
+          <a href="/#features">Features</a>
+          <a href="/#results">Why Thamani</a>
+          <a href="/contact" aria-current="page">Contact</a>
+        </nav>
+        <div class="desktop-actions">
+          <a class="button button-small button-light login-cta" href="/login">Log in</a>
+          <a class="button button-small button-dark" href="/signup">Get started</a>
+        </div>
+        <button
+          class="menu-button"
+          type="button"
+          aria-label="Open menu"
+          aria-controls="mobile-menu"
+          aria-expanded="false"
+        >
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </header>
+    <dialog class="mobile-menu" id="mobile-menu" aria-label="Site menu">
+      <div class="menu-top">
+        <a class="brand" href="/" aria-label="Thamani Dawa home">
+          <img src="/images/logo-transparent.png" alt="" width="56" height="56" />
+        </a>
+        <button class="menu-close" type="button" aria-label="Close menu"><span></span><span></span></button>
+      </div>
+      <div class="menu-groups">
+        <div>
+          <p>Product</p><a href="/#features">Features</a><a href="/login">Log in</a><a href="/signup">Create account</a>
+        </div>
+        <div>
+          <p>Company</p><a href="/#results">Why Thamani</a><a href="/contact">Contact</a>
+        </div>
+        <div>
+          <p>Legal</p><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a>
+        </div>
+      </div>
+    </dialog>
     """
   end
 
@@ -873,8 +1309,15 @@ defmodule ThamaniDawaWeb.Layouts do
   # reads "Back to Sites" without every page restating it.
   defp back_label(%{back_label: label}) when is_binary(label), do: label
 
-  defp back_label(%{back: back, nav_items: nav_items}) when is_binary(back) do
-    case Enum.find(nav_items, fn {_label, _icon, path} -> path == back end) do
+  # Destination matched against the sidebar's nav items so `/org/sites`
+  # reads "Back to Sites" without every page restating it.
+  defp back_label(%{back: back, nav_groups: nav_groups}) when is_binary(back) do
+    item =
+      nav_groups
+      |> Enum.flat_map(fn {_label, items} -> items end)
+      |> Enum.find(fn {_label, _icon, path} -> path == back end)
+
+    case item do
       {label, _icon, _path} -> "Back to #{label}"
       nil -> "Back"
     end
@@ -885,6 +1328,7 @@ defmodule ThamaniDawaWeb.Layouts do
   defp product_tour_path("/org"), do: ~p"/org/dashboard?tour=1"
   defp product_tour_path("/pharmacy"), do: ~p"/pharmacy?tour=1"
   defp product_tour_path("/lab"), do: ~p"/lab?tour=1"
+  defp product_tour_path("/distributor"), do: ~p"/distributor?tour=1"
 
   @doc """
   Provides dark vs light theme toggle based on themes defined in app.css.

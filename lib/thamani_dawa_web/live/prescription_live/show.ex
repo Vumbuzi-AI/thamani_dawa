@@ -1,6 +1,7 @@
 defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Patients
   alias ThamaniDawa.Patients.Patient
   alias ThamaniDawa.PaymentMethods
@@ -19,10 +20,16 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   defp apply_action(socket, :new_payment, _params) do
     prescription = socket.assigns.prescription
 
+    amount_due =
+      Payments.prescription_amount_due(
+        socket.assigns.current_scope.organization_id,
+        prescription.id
+      )
+
     changeset =
       Payment.changeset(%Payment{}, %{
         "prescription_id" => prescription.id,
-        "amount" => prescription.total_amount
+        "amount" => amount_due
       })
 
     assign(socket, payment_form: to_form(changeset, as: :payment))
@@ -34,7 +41,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
 
   defp load_prescription(socket, id) do
     organization_id = socket.assigns.current_scope.organization_id
-    prescription = Prescriptions.get_prescription!(organization_id, id)
+    prescription = authorized_prescription!(socket.assigns.current_scope, id)
 
     visit =
       ThamaniDawa.PatientVisits.get_patient_visit!(organization_id, prescription.patient_visit_id)
@@ -70,12 +77,27 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
     |> assign(:dispenses_by_item, dispenses_by_item)
   end
 
+  defp authorized_prescription!(%{organization_id: organization_id} = scope, id) do
+    if Scope.admin?(scope) do
+      Prescriptions.get_prescription!(organization_id, id)
+    else
+      Prescriptions.get_prescription_for_site!(organization_id, id, scope.current_site_id)
+    end
+  end
+
   def handle_event("validate_payment", %{"payment" => attrs}, socket) do
     prescription = socket.assigns.prescription
+
+    amount_due =
+      Payments.prescription_amount_due(
+        socket.assigns.current_scope.organization_id,
+        prescription.id
+      )
 
     changeset =
       attrs
       |> Map.put("prescription_id", prescription.id)
+      |> Map.put("amount", amount_due)
       |> then(&Payment.changeset(%Payment{}, &1))
       |> Map.put(:action, :validate)
 
@@ -85,8 +107,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   def handle_event("save_payment", %{"payment" => attrs}, socket) do
     organization_id = socket.assigns.current_scope.organization_id
     prescription = socket.assigns.prescription
+    amount_due = Payments.prescription_amount_due(organization_id, prescription.id)
 
-    attrs = Map.put(attrs, "prescription_id", prescription.id)
+    attrs =
+      attrs
+      |> Map.put("prescription_id", prescription.id)
+      |> Map.put("amount", amount_due)
 
     with {:ok, payment} <- Payments.create_payment(organization_id, attrs),
          {:ok, _completed} <- Payments.complete_payment(payment) do
@@ -109,23 +135,34 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         %{"item_id" => item_id, "quantity" => quantity, "barcode" => barcode} = params,
         socket
       ) do
-    organization_id = socket.assigns.current_scope.organization_id
-    pharmacist_id = socket.assigns.current_scope.user.id
+    scope = socket.assigns.current_scope
 
-    with {item_id, ""} <- Integer.parse(item_id),
-         {quantity, ""} <- Integer.parse(quantity),
-         true <- quantity > 0 do
-      do_scan_dispense(
-        socket,
-        organization_id,
-        item_id,
-        pharmacist_id,
-        quantity,
-        barcode,
-        Map.get(params, "batch_no", "")
-      )
+    if dispense_authorized?(scope) do
+      organization_id = scope.organization_id
+      pharmacist_id = scope.user.id
+
+      with {item_id, ""} <- Integer.parse(item_id),
+           {quantity, ""} <- Integer.parse(quantity),
+           true <- quantity > 0 do
+        do_scan_dispense(
+          socket,
+          organization_id,
+          item_id,
+          pharmacist_id,
+          quantity,
+          barcode,
+          Map.get(params, "batch_no", "")
+        )
+      else
+        _ -> {:noreply, put_flash(socket, :error, "Enter a valid quantity.")}
+      end
     else
-      _ -> {:noreply, put_flash(socket, :error, "Enter a valid quantity.")}
+      {:noreply,
+       put_flash(
+         socket,
+         :error,
+         "Only a registered pharmacist or lab technician can dispense medicines."
+       )}
     end
   end
 
@@ -182,6 +219,8 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         {:noreply, put_flash(socket, :error, "Couldn't dispense that item.")}
     end
   end
+
+  defp dispense_authorized?(scope), do: Scope.pharmacist?(scope) or Scope.lab_technician?(scope)
 
   defp do_verify(socket, organization_id, item_id, gtin) do
     case Prescriptions.verify_dispensed_item(organization_id, item_id, gtin) do
@@ -428,6 +467,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
             label="Amount (KES)"
             step="0.01"
             min="0.01"
+            readonly
             required
           />
           <.input field={@payment_form[:provider_reference]} label="Reference / receipt no." />
@@ -692,7 +732,10 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                 </div>
 
                 <div
-                  :if={item.quantity_dispensed < item.quantity_prescribed}
+                  :if={
+                    item.quantity_dispensed < item.quantity_prescribed and
+                      dispense_authorized?(@current_scope)
+                  }
                   class="border-t border-thamani-stone bg-thamani-canvas/50 px-5 py-4 sm:px-6"
                 >
                   <form
@@ -756,6 +799,16 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                     </p>
                   </form>
                 </div>
+
+                <p
+                  :if={
+                    item.quantity_dispensed < item.quantity_prescribed and
+                      not dispense_authorized?(@current_scope)
+                  }
+                  class="border-t border-thamani-stone bg-thamani-canvas/50 px-5 py-4 text-sm text-thamani-pewter sm:px-6"
+                >
+                  Only a registered pharmacist or lab technician can dispense this item.
+                </p>
 
                 <div
                   :if={(dispenses = Map.get(@dispenses_by_item, item.id, [])) != []}

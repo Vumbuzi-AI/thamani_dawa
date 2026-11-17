@@ -2,6 +2,8 @@ defmodule ThamaniDawaWeb.SiteSwitchController do
   use ThamaniDawaWeb, :controller
 
   alias ThamaniDawa.Accounts
+  alias ThamaniDawa.Accounts.Scope
+  alias ThamaniDawaWeb.Portals
 
   def update(conn, params) do
     scope = conn.assigns.current_scope
@@ -11,8 +13,12 @@ defmodule ThamaniDawaWeb.SiteSwitchController do
       site_id = to_site_id(params["site_id"])
 
       case Accounts.switch_current_site(scope, site_id) do
-        {:ok, _user} ->
-          redirect(conn, to: return_to)
+        {:ok, user} ->
+          # The portal is inherited from the site just picked: a distributor
+          # site lands in distribution operations, a pharmacy site in the
+          # pharmacy, a lab-only site in the lab, an org-wide admin in the
+          # organization dashboard — never the page they happened to be on.
+          redirect(conn, to: Portals.default_path(Scope.for_user(user)))
 
         {:error, :not_assigned} ->
           conn

@@ -15,6 +15,7 @@ defmodule ThamaniDawa.GS1DecoderTest do
       assert {:ok, result} = GS1Decoder.parse(data)
 
       assert result == %{
+               sscc: nil,
                gtin: "00614141000012",
                batch_no: "LOT123A",
                production_date: ~D[2024-01-15],
@@ -48,6 +49,25 @@ defmodule ThamaniDawa.GS1DecoderTest do
       assert {:ok, result} = GS1Decoder.parse("414" <> "0614141000005")
       assert result.gln == "0614141000005"
       assert result.gtin == nil
+    end
+
+    test "decodes an SSCC from AI 00" do
+      assert {:ok, result} = GS1Decoder.parse("00" <> "006141411234567890")
+      assert result.sscc == "006141411234567890"
+      assert result.gtin == nil
+    end
+
+    test "parses an SSCC (AI 00) followed by another AI" do
+      data = "00" <> "006141411234567890" <> "01" <> "00614141000012"
+
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.sscc == "006141411234567890"
+      assert result.gtin == "00614141000012"
+    end
+
+    test "errors when an SSCC (AI 00) is truncated or non-numeric" do
+      assert {:error, {:invalid_length, "00"}} = GS1Decoder.parse("00" <> "123")
+      assert {:error, {:invalid_digits, _}} = GS1Decoder.parse("00" <> "00614141123456789A")
     end
 
     test "parses a GLN (AI 414) followed by another fixed-length AI" do
@@ -129,6 +149,7 @@ defmodule ThamaniDawa.GS1DecoderTest do
       assert {:ok, result} = GS1Decoder.parse("")
 
       assert result == %{
+               sscc: nil,
                gtin: nil,
                batch_no: nil,
                production_date: nil,
@@ -139,6 +160,7 @@ defmodule ThamaniDawa.GS1DecoderTest do
 
       assert MapSet.new(Map.keys(result)) ==
                MapSet.new([
+                 :sscc,
                  :gtin,
                  :batch_no,
                  :production_date,

@@ -47,7 +47,8 @@ config :thamani_dawa, ThamaniDawa.Accounts.UserToken,
   session_validity_in_days: 60,
   session_idle_timeout_in_minutes: 30,
   invite_validity_in_days: 7,
-  reset_password_validity_in_days: 1
+  reset_password_validity_in_days: 1,
+  confirm_validity_in_days: 3
 
 # Phone sessions are separate from the browser cookie. The browser token
 # dies after 30 idle minutes; a dispenser's phone must not.
@@ -56,6 +57,19 @@ config :thamani_dawa, ThamaniDawa.Accounts.MobileSession,
   refresh_token_days: 90
 
 config :thamani_dawa, ThamaniDawa.GtinLookup, base_url: "https://grp.gs1.org"
+
+config :thamani_dawa, Oban,
+  repo: ThamaniDawa.Repo,
+  queues: [epcis: 1, gs1: 1, ppb: 1, kmlttb: 1],
+  plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 30}]
+
+config :thamani_dawa, ThamaniDawa.Epcis.Client,
+  capture_path: "/epcis/v2/capture",
+  distributor_capture_path: nil,
+  distributor_api_key: nil,
+  enabled: false
+
+config :thamani_dawa, ThamaniDawa.Epcis.Urn, default_prefix_length: 7
 
 # Configure esbuild (the version is required)
 config :esbuild,
@@ -86,6 +100,31 @@ config :logger, :default_formatter,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+
+# Distributor shipment workflow. The mobile scanning app download link is
+# shown on the mobile users page.
+config :thamani_dawa,
+       :distributor_app_download_url,
+       "https://apks.uzskicorp.agency/Thamani-Dawa-App.apk"
+
+# Serialisation pricing and invoice issuer details are PLACEHOLDERS pending
+# confirmation — see ThamaniDawa.Distributor.Pricing for every setting.
+config :thamani_dawa, ThamaniDawa.Distributor.Pricing,
+  prepay_tiers: [{1, "2.00"}, {10_000, "1.50"}, {100_000, "1.00"}],
+  flex_rate: "2.50",
+  vat_rate: "0.16",
+  minimum_prepay_quantity: 100,
+  flex_cycle_days: 30,
+  buffer_limit: 500
+
+config :thamani_dawa, :distributor_invoice_issuer, %{
+  name: "Thamani Dawa",
+  address: "Nairobi, Kenya",
+  email: "billing@thamanidawa.example",
+  pin: "P000000000X",
+  paybill: "000000",
+  bank: "Bank details to be confirmed"
+}
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

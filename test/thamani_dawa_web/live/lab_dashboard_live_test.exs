@@ -10,7 +10,7 @@ defmodule ThamaniDawaWeb.LabDashboardLiveTest do
 
   test "offers a replayable lab tour and auto-starts it when requested", %{conn: conn} do
     organization = organization_fixture()
-    site = site_fixture(%{organization_id: organization.id, site_type: :lab})
+    site = site_fixture(%{organization_id: organization.id, activities: [:laboratory]})
 
     lab_tech =
       staff_fixture(%{
@@ -31,7 +31,7 @@ defmodule ThamaniDawaWeb.LabDashboardLiveTest do
     test "shows a count badge on Receive stock when batches are awaiting receipt at this lab site",
          %{conn: conn} do
       organization = organization_fixture()
-      site = site_fixture(%{organization_id: organization.id, site_type: :lab})
+      site = site_fixture(%{organization_id: organization.id, activities: [:laboratory]})
 
       lab_tech =
         staff_fixture(%{
@@ -57,7 +57,7 @@ defmodule ThamaniDawaWeb.LabDashboardLiveTest do
 
     test "shows no badge when there are no pending batches", %{conn: conn} do
       organization = organization_fixture()
-      site = site_fixture(%{organization_id: organization.id, site_type: :lab})
+      site = site_fixture(%{organization_id: organization.id, activities: [:laboratory]})
 
       lab_tech =
         staff_fixture(%{

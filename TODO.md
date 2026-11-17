@@ -1,5 +1,20 @@
 # TODO
 
+## Product backlog
+
+- Gate the requisition queue (`Requisitions`, `RequisitionQueueLive`) behind `Sites.multi_site?/1`.
+  Single-site orgs currently have to create a requisition, wait for org approval, then dispatch
+  stock to the one site they already own — no stock actually moves, so the whole
+  approve→dispatch→receive cycle is pure overhead. Stock received by a single-site org should
+  land directly on that site.
+- Add the ability to add (not remove) operating models from the org settings screen
+  (`organization_settings_live.ex`). Backend already supports it — `Organization.changeset/2`
+  casts/validates `:operating_models` and `update_organization_settings/2` already routes
+  through it — the settings LiveView just renders `operating_models_label/1` as a read-only
+  string (no form control). Add a multi-select wired to the existing "save" event; keep it
+  additive only. Activities/operating_models must never be removable once set — once a site has
+  done lab work (tests, patients, results tied to it), the lab operating model stays even if the
+  org stops staffing lab work, because historical records are tied to it.
 
 Thamani Dawa is better at symbol generation, but its implementation is not a perfect drop-in:
 

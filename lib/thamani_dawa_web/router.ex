@@ -29,6 +29,12 @@ defmodule ThamaniDawaWeb.Router do
     get "/login", SessionController, :new
     post "/login", SessionController, :create
     delete "/logout", SessionController, :delete
+    get "/reset-password", PasswordResetController, :new
+    post "/reset-password", PasswordResetController, :create
+    get "/reset-password/:token", PasswordResetController, :edit
+    post "/reset-password/:token", PasswordResetController, :update
+
+    get "/confirm/:token", ConfirmationController, :confirm
 
     patch "/switch-site", SiteSwitchController, :update
   end
@@ -132,12 +138,31 @@ defmodule ThamaniDawaWeb.Router do
   scope "/", ThamaniDawaWeb do
     pipe_through :browser
 
-    live_session :unauthenticated, on_mount: [{ThamaniDawaWeb.UserAuth, :mount_current_scope}] do
+    live_session :unauthenticated,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :redirect_if_authenticated}] do
       live "/signup", SignupLive, :new
+    end
+
+    # Not gated by :redirect_if_authenticated — accepting an invite must work
+    # even when the browser already holds another user's session; the old
+    # session is only ended once the invite is actually accepted (see
+    # AcceptInviteLive's hard redirect to /login on save).
+    live_session :accept_invite,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :mount_current_scope}] do
       live "/invites/:token", AcceptInviteLive, :edit
     end
 
-    live_session :organization, on_mount: [{ThamaniDawaWeb.UserAuth, :require_admin}] do
+    live_session :confirm_email, on_mount: [{ThamaniDawaWeb.UserAuth, :require_admin}] do
+      live "/confirm-email", ConfirmEmailLive, :index
+    end
+
+    live_session :organization,
+      on_mount: [
+        {ThamaniDawaWeb.UserAuth, :require_admin},
+        {ThamaniDawaWeb.UserAuth, :require_confirmed_email}
+      ] do
+      live "/onboarding", OnboardingLive, :index
+
       live "/org/dashboard", OrgDashboardLive, :index
       live "/org/earnings", EarningsLive, :index
 
@@ -152,6 +177,7 @@ defmodule ThamaniDawaWeb.Router do
 
       live "/org/products", ProductLive.Index, :index
       live "/org/products/new", ProductLive.Index, :new
+      live "/org/products/import", ProductLive.Import, :new
       live "/org/products/:id", ProductLive.Show, :show
       live "/org/products/:id/batches/new", ProductLive.Show, :new_batch
       live "/org/products/:id/batches/:batch_id/dispatch", ProductLive.Show, :dispatch_batch
@@ -168,6 +194,16 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/requisitions/:id/reject", RequisitionQueueLive.Index, :reject
       live "/org/requisitions/:id/fulfill", RequisitionQueueLive.Index, :fulfill
       live "/org/requisitions/:id", RequisitionQueueLive.Show, :show
+      live "/org/receiving", DistributorReceivingLive, :org_index
+      live "/org/receiving/new", DistributorReceivingLive, :org_new
+      live "/org/receiving/:id", DistributorGoodsReceiptLive, :org_show
+      live "/org/epcis", DistributorEpcisLive, :index
+      live "/org/settings", OrganizationSettingsLive, :index
+    end
+
+    live_session :platform, on_mount: [{ThamaniDawaWeb.UserAuth, :require_superadmin}] do
+      live "/platform", PlatformDashboardLive, :index
+      live "/platform/audit", PlatformAuditLive, :index
     end
 
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
@@ -235,6 +271,58 @@ defmodule ThamaniDawaWeb.Router do
       live "/lab/tests/new", LabTestLive.Index, :new
       live "/lab/tests/:id/edit", LabTestLive.Index, :edit
     end
+
+    live_session :distributor,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :require_distributor_access}] do
+      live "/distributor", DistributorDashboardLive, :index
+
+      live "/distributor/shipments", DistributorShipmentLive.Index, :index
+      live "/distributor/shipments/new", DistributorShipmentLive.Form, :new
+      live "/distributor/shipments/:id/edit", DistributorShipmentLive.Form, :edit
+      live "/distributor/shipments/:id", DistributorShipmentLive.Show, :show
+
+      live "/distributor/products", DistributorProductLive.Index, :index
+      live "/distributor/products/new", DistributorProductLive.Index, :new
+      live "/distributor/products/:id", DistributorProductLive.Show, :show
+      live "/distributor/batches/:id", DistributorBatchLive, :show
+      live "/distributor/stock", DistributorStockLive.Index, :index
+      live "/distributor/receiving", DistributorReceivingLive, :distributor_index
+      live "/distributor/receiving/new", DistributorReceivingLive, :distributor_new
+      live "/distributor/receiving/:id", DistributorGoodsReceiptLive, :distributor_show
+    end
+
+    # Admin-only within the distributor portal — "admin manages, distributor
+    # staff only do specific things" (§ role separation). A non-admin
+    # distributor user is bounced back to `/distributor`, not logged out.
+    live_session :distributor_admin,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :require_distributor_admin_access}] do
+      # Serialisation billing — a plan must be chosen before the shipment
+      # workflow is reachable (see ThamaniDawaWeb.DistributorAccess).
+      live "/distributor/billing", DistributorBillingLive.Index, :index
+      live "/distributor/billing/options", DistributorBillingLive.Options, :index
+      live "/distributor/billing/payment", DistributorBillingLive.Payment, :prepay
+      live "/distributor/billing/postpay-payment", DistributorBillingLive.Payment, :postpay
+      live "/distributor/billing/invoices/:id", DistributorBillingLive.Invoice, :show
+
+      live "/distributor/mobile-users", DistributorMobileUserLive.Index, :index
+      live "/distributor/mobile-users/new", DistributorMobileUserLive.Index, :new
+      live "/distributor/mobile-users/:id/edit", DistributorMobileUserLive.Index, :edit
+
+      live "/distributor/settings", OrganizationSettingsLive, :index
+      live "/distributor/epcis", DistributorEpcisLive, :index
+    end
+  end
+
+  scope "/", ThamaniDawaWeb do
+    pipe_through [:browser, :require_distributor_user]
+
+    get "/distributor/shipments/:id/export", DistributorShipmentExportController, :show
+  end
+
+  scope "/", ThamaniDawaWeb do
+    pipe_through :browser
+
+    get "/org/products/import/template", ProductImportTemplateController, :show
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development

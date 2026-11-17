@@ -4,10 +4,9 @@ defmodule ThamaniDawa.Emails.Template do
   `ThamaniDawa.Accounts.UserNotifier`.
 
   Follows Thamani Dawa's product design system (`assets/css/app.css`):
-    * Forest (`#1c3a13`) for headings, brand anchors, and the primary button —
-      the same color the app's own `.thamani-btn-primary` uses.
-    * Snow (`#fcfcf7`) canvas with a white card and a subtle stone border.
-    * Inter typography, matching `--font-thamani-sans`.
+    * Forest (`#294636`) for headings, brand anchors, and the primary button.
+    * Snow (`#fffefa`) canvas with a white card and a warm-mineral border.
+    * Rethink Sans with email-safe Inter/Arial fallbacks.
 
   `render/1` accepts:
 
@@ -22,11 +21,14 @@ defmodule ThamaniDawa.Emails.Template do
   building HTML at the call site.
   """
 
-  @forest "#1c3a13"
-  @body_color "#2f2f2a"
-  @muted "#666666"
-  @bg "#fcfcf7"
-  @border "#eeeee9"
+  @forest "#294636"
+  @evergreen "#203826"
+  @body_color "#33453c"
+  @muted "#647269"
+  @bg "#fffefa"
+  @stone "#f0efea"
+  @border "#e5e5df"
+  @font "'Rethink Sans','Inter',Arial,sans-serif"
 
   @doc "Renders the full HTML document for an email."
   def render(assigns) do
@@ -38,26 +40,26 @@ defmodule ThamaniDawa.Emails.Template do
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Rethink+Sans:wght@400;500;600&display=swap" rel="stylesheet">
       </head>
-      <body style="margin:0;padding:0;background-color:#{@bg};font-family:'Inter',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
-        <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #{@border};box-shadow:0 4px 20px -2px rgba(28,58,19,0.08);">
+      <body style="margin:0;padding:0;background-color:#{@bg};font-family:#{@font};-webkit-font-smoothing:antialiased;">
+        <div style="max-width:560px;margin:0 auto;padding:48px 20px 32px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #{@border};box-shadow:0 10px 30px rgba(41,70,54,0.06);">
             <tr>
-              <td style="padding:32px 36px 8px;">#{logo()}</td>
+              <td style="padding:36px 40px 10px;">#{logo()}</td>
             </tr>
             <tr>
-              <td style="padding:12px 36px 36px;">
-                <h1 style="margin:0 0 20px;color:#{@forest};font-size:24px;font-weight:700;line-height:1.3;letter-spacing:-0.3px;font-family:'Inter',Helvetica,Arial,sans-serif;">#{esc(assigns[:title])}</h1>
+              <td style="padding:14px 40px 40px;">
+                <h1 style="margin:0 0 24px;color:#{@forest};font-size:24px;font-weight:600;line-height:1.2;letter-spacing:-0.4px;font-family:#{@font};">#{esc(assigns[:title])}</h1>
                 #{paragraphs(assigns)}
                 #{cta_button(assigns[:cta])}
                 #{fallback_link(assigns[:cta])}
               </td>
             </tr>
           </table>
-          <div style="margin-top:28px;text-align:center;font-size:12px;color:#{@muted};line-height:1.6;font-family:'Inter',Helvetica,Arial,sans-serif;">
-            <p style="margin:0;color:#999999;">
-              #{esc(assigns[:footer_note] || "If you did not request this email, you can safely ignore it.")}
+          <div style="margin-top:24px;text-align:center;font-size:12px;color:#{@muted};line-height:1.6;font-family:#{@font};">
+            <p style="margin:0;color:#{@muted};">
+              #{esc(assigns[:footer_note] || "Thamani Dawa · Trusted healthcare operations")}
             </p>
           </div>
         </div>
@@ -110,7 +112,7 @@ defmodule ThamaniDawa.Emails.Template do
     [assigns[:title], "", intro]
     |> Kernel.++(body)
     |> Kernel.++(cta_lines)
-    |> Kernel.++(["", "— The Thamani Dawa Team"])
+    |> Kernel.++(["", "The Thamani Dawa Team"])
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n\n")
   end
@@ -129,7 +131,7 @@ defmodule ThamaniDawa.Emails.Template do
     [assigns[:intro] | List.wrap(assigns[:body])]
     |> Enum.reject(&is_nil/1)
     |> Enum.map_join("\n", fn paragraph ->
-      ~s(<p style="margin:0 0 16px;color:#{@body_color};font-size:15px;line-height:1.65;font-weight:400;font-family:'Inter',Helvetica,Arial,sans-serif;">#{paragraph_html(paragraph)}</p>)
+      ~s(<p style="margin:0 0 16px;color:#{@body_color};font-size:15px;line-height:1.65;font-weight:400;font-family:#{@font};">#{paragraph_html(paragraph)}</p>)
     end)
   end
 
@@ -147,8 +149,8 @@ defmodule ThamaniDawa.Emails.Template do
 
     if safe_url?(url) do
       """
-      <div style="margin:28px 0 12px;">
-        <a href="#{esc(url)}" style="display:inline-block;padding:14px 32px;border-radius:9999px;background-color:#{@forest};color:#{@bg};font-size:15px;font-weight:600;text-decoration:none;text-align:center;box-shadow:0 4px 14px rgba(28,58,19,0.24);font-family:'Inter',Helvetica,Arial,sans-serif;">
+      <div style="margin:28px 0 8px;">
+        <a href="#{esc(url)}" style="display:inline-block;padding:13px 28px;border-radius:12px;background-color:#{@forest};color:#{@bg};font-size:15px;font-weight:600;line-height:1.4;text-decoration:none;text-align:center;border:1px solid #{@evergreen};font-family:#{@font};">
           #{esc(label)}
         </a>
       </div>
@@ -165,9 +167,10 @@ defmodule ThamaniDawa.Emails.Template do
 
     if safe_url?(url) do
       """
-      <div style="margin-top:28px;padding-top:20px;border-top:1px solid #{@border};font-size:12px;color:#{@muted};line-height:1.5;font-family:'Inter',Helvetica,Arial,sans-serif;">
-        <p style="margin:0 0 6px;">Button not working? Copy and paste this link into your browser:</p>
-        <p style="margin:0;word-break:break-all;"><a href="#{esc(url)}" style="color:#{@forest};text-decoration:underline;">#{esc(url)}</a></p>
+      <div style="margin-top:28px;padding:18px 20px;border:1px solid #{@border};border-radius:12px;background-color:#{@stone};font-size:12px;color:#{@muted};line-height:1.5;font-family:#{@font};">
+        <p style="margin:0 0 8px;font-weight:500;color:#{@body_color};">Button not working?</p>
+        <p style="margin:0 0 8px;">Copy and paste this secure link into your browser:</p>
+        <p style="margin:0;word-break:break-all;"><a href="#{esc(url)}" style="color:#{@forest};font-weight:500;text-decoration:underline;">#{esc(url)}</a></p>
       </div>
       """
     else

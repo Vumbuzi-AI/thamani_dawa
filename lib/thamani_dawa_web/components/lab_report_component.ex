@@ -23,7 +23,7 @@ defmodule ThamaniDawaWeb.LabReportComponent do
       <div class="no-print mb-4">
         <h2 class="text-lg font-semibold text-base-content">Laboratory Report</h2>
         <p class="text-xs text-base-content/60">
-          Ready to print for {@patient.full_name} — lab order #{@lab_order.id}
+          Ready to print for {@patient.full_name} · lab order #{@lab_order.id}
         </p>
       </div>
 

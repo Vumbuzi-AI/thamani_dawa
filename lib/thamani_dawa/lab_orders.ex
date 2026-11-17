@@ -60,6 +60,24 @@ defmodule ThamaniDawa.LabOrders do
     Repo.get_by!(LabOrder, id: id, organization_id: organization_id)
   end
 
+  @doc "Gets a lab order only when it belongs to the supplied site."
+  def get_lab_order_for_site!(organization_id, id, site_id) when is_integer(site_id) do
+    Repo.get_by!(LabOrder, id: id, organization_id: organization_id, site_id: site_id)
+  end
+
+  def get_lab_order_for_site!(organization_id, _id, nil) do
+    Repo.one!(from o in LabOrder, where: o.organization_id == ^organization_id and false)
+  end
+
+  @doc "Gets a result only when it belongs to the supplied lab order."
+  def get_lab_order_result_for_order!(organization_id, lab_order_id, result_id) do
+    Repo.get_by!(LabOrderResult,
+      id: result_id,
+      lab_order_id: lab_order_id,
+      organization_id: organization_id
+    )
+  end
+
   @doc "Creates a lab order header under the given organization."
   def create_lab_order(organization_id, attrs) when is_integer(organization_id) do
     %LabOrder{}
@@ -421,11 +439,11 @@ defmodule ThamaniDawa.LabOrders do
   defp parse_collection_date(date_str) when is_binary(date_str) and date_str != "" do
     case Date.from_iso8601(date_str) do
       {:ok, date} -> date
-      _ -> Date.utc_today()
+      _ -> ThamaniDawa.BusinessDate.today()
     end
   end
 
-  defp parse_collection_date(_), do: Date.utc_today()
+  defp parse_collection_date(_), do: ThamaniDawa.BusinessDate.today()
 
   ## Result entry (§9 "Lab order → completed result", step 2)
 
@@ -451,7 +469,8 @@ defmodule ThamaniDawa.LabOrders do
       lab_order_result = get_lab_order_result!(organization_id, lab_order_result_id)
       results = compute_results(raw_values)
 
-      with :ok <- ensure_amendment_reason(lab_order_result, reason),
+      with :ok <- ensure_collected_specimen(lab_order_result),
+           :ok <- ensure_amendment_reason(lab_order_result, reason),
            {:ok, _amendment} <-
              maybe_record_amendment(organization_id, lab_order_result, performer_id, reason),
            {:ok, updated} <- save_results(lab_order_result, performer_id, results),
@@ -468,6 +487,28 @@ defmodule ThamaniDawa.LabOrders do
        do: {:error, :reason_required}
 
   defp ensure_amendment_reason(_lab_order_result, _reason), do: :ok
+
+  defp ensure_collected_specimen(%LabOrderResult{id: result_id}) do
+    directly_linked =
+      from s in LabSpecimen,
+        where:
+          s.lab_order_result_id == ^result_id and
+            s.status in [:collected, :received]
+
+    linked_via_join =
+      from s in LabSpecimen,
+        join: sr in LabSpecimenResult,
+        on: sr.lab_specimen_id == s.id,
+        where:
+          sr.lab_order_result_id == ^result_id and
+            s.status in [:collected, :received]
+
+    if Repo.exists?(directly_linked) or Repo.exists?(linked_via_join) do
+      :ok
+    else
+      {:error, :specimen_not_collected}
+    end
+  end
 
   defp maybe_record_amendment(
          organization_id,
@@ -514,7 +555,7 @@ defmodule ThamaniDawa.LabOrders do
       results: results,
       status: :completed,
       performed_by_id: performer_id,
-      test_performed_on: Date.utc_today()
+      test_performed_on: ThamaniDawa.BusinessDate.today()
     )
     |> Repo.audited_update()
   end
@@ -577,7 +618,10 @@ defmodule ThamaniDawa.LabOrders do
     Repo.transaction(fn ->
       batch = Batches.get_batch!(organization_id, batch_id)
 
-      with {:ok, _batch} <- Batches.decrement_remaining_quantity(batch, quantity),
+      with :ok <- validate_batch_available_for_lab_consumption(batch),
+           :ok <- validate_usage_site(batch, Keyword.get(opts, :site_id)),
+           :ok <- validate_usage_links(organization_id, opts),
+           {:ok, _batch} <- Batches.decrement_remaining_quantity(batch, quantity),
            {:ok, usage} <-
              insert_consumable_usage(organization_id, batch_id, used_by_id, quantity, opts),
            {:ok, _scan_event} <-
@@ -587,6 +631,61 @@ defmodule ThamaniDawa.LabOrders do
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
+  end
+
+  defp validate_batch_available_for_lab_consumption(batch) do
+    cond do
+      is_nil(batch.approver_id) ->
+        {:error, :batch_not_received}
+
+      batch.remaining_quantity <= 0 ->
+        {:error, :out_of_stock}
+
+      Date.compare(batch.expiry_date, ThamaniDawa.BusinessDate.today()) != :gt ->
+        {:error, :expired_batch}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_usage_site(_batch, nil), do: {:error, :site_required}
+  defp validate_usage_site(%{site_id: site_id}, site_id), do: :ok
+  defp validate_usage_site(_batch, _site_id), do: {:error, :invalid_batch_site}
+
+  defp validate_usage_links(organization_id, opts) do
+    lab_order_id = Keyword.get(opts, :lab_order_id)
+    result_id = Keyword.get(opts, :lab_order_result_id)
+
+    validate_usage_result_link(organization_id, lab_order_id, result_id)
+  end
+
+  defp validate_usage_result_link(_organization_id, nil, nil), do: :ok
+
+  defp validate_usage_result_link(_organization_id, nil, _result_id),
+    do: {:error, :result_requires_lab_order}
+
+  defp validate_usage_result_link(organization_id, lab_order_id, result_id) do
+    with %LabOrder{} <- Repo.get_by(LabOrder, id: lab_order_id, organization_id: organization_id),
+         :ok <- validate_result_belongs_to_order(organization_id, lab_order_id, result_id) do
+      :ok
+    else
+      nil -> {:error, :invalid_lab_order}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp validate_result_belongs_to_order(_organization_id, _lab_order_id, nil), do: :ok
+
+  defp validate_result_belongs_to_order(organization_id, lab_order_id, result_id) do
+    if Repo.exists?(
+         from r in LabOrderResult,
+           where:
+             r.id == ^result_id and r.lab_order_id == ^lab_order_id and
+               r.organization_id == ^organization_id
+       ),
+       do: :ok,
+       else: {:error, :invalid_lab_order_result}
   end
 
   defp insert_consumable_usage(organization_id, batch_id, used_by_id, quantity, opts) do

@@ -1,10 +1,13 @@
 defmodule ThamaniDawaWeb.SiteLive.Index do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Grp
+  alias ThamaniDawa.Grp.Licence
+  alias ThamaniDawa.Organizations
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
 
-  @default_filters %{site_type: "", status: ""}
+  @default_filters %{activities: "", status: ""}
 
   def mount(_params, _session, socket) do
     {:ok,
@@ -13,6 +16,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
      |> assign(:filters, @default_filters)
      |> assign(:page, 1)
      |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
+     |> assign(:show_onboarding_site_form?, false)
      |> assign_sites()}
   end
 
@@ -30,35 +34,95 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   end
 
   defp apply_action(socket, :new, params) do
+    organization_id = socket.assigns.current_scope.organization_id
+    organization = Organizations.get_organization!(organization_id)
+
     socket
     |> assign(form: to_form(Site.changeset(%Site{}, %{}), as: :site), site: nil)
     |> assign(:back_path, back_path(params, ~p"/org/sites"))
+    |> assign(:gln_check, :idle)
+    |> assign(:operating_models, organization.operating_models)
+    |> assign(:onboarding_progress, Organizations.onboarding_progress(organization))
   end
 
   defp apply_action(socket, :edit, %{"id" => id} = params) do
     organization_id = socket.assigns.current_scope.organization_id
+    organization = Organizations.get_organization!(organization_id)
     site = Sites.get_site!(organization_id, id)
 
     socket
     |> assign(form: to_form(Site.changeset(site, %{}), as: :site), site: site)
     |> assign(:back_path, back_path(params, ~p"/org/sites"))
+    |> assign(:gln_check, nil)
+    |> assign(:operating_models, organization.operating_models)
   end
 
   defp apply_action(socket, :index, _params) do
-    assign(socket, form: nil, site: nil, back_path: ~p"/org/sites")
+    socket
+    |> assign(form: nil, site: nil, back_path: ~p"/org/sites")
+    |> assign(:gln_check, nil)
+    |> assign(:operating_models, [])
   end
 
   def handle_event("validate", _, %{assigns: %{live_action: :index}} = socket) do
     {:noreply, socket}
   end
 
-  def handle_event("validate", %{"site" => attrs}, socket) do
+  def handle_event("validate", %{"site" => attrs} = params, socket) do
+    attrs = apply_activity_choice(attrs)
     changeset = Site.changeset(socket.assigns.site || %Site{}, attrs)
-    {:noreply, assign(socket, :form, to_form(changeset, as: :site, action: :validate))}
+
+    socket =
+      socket
+      |> assign(:form, to_form(changeset, as: :site, action: :validate))
+      |> maybe_check_gln(params, attrs)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("save", %{"site" => attrs}, %{assigns: %{live_action: :edit}} = socket) do
+    save_site(socket, :edit, apply_activity_choice(attrs))
   end
 
   def handle_event("save", %{"site" => attrs}, socket) do
-    save_site(socket, socket.assigns.live_action, attrs)
+    attrs = apply_activity_choice(attrs)
+
+    cond do
+      socket.assigns.gln_check == :checking ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Still checking the GLN with the GS1 registry. Press Save again in a moment."
+         )}
+
+      socket.assigns.gln_check == :idle ->
+        {:noreply,
+         socket
+         |> check_gln(attrs)
+         |> put_flash(
+           :error,
+           "Checking the GLN with the GS1 registry. Press Save again in a moment."
+         )}
+
+      match?({:inactive, _, _}, socket.assigns.gln_check) ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "This GLN was found in the registry but isn't currently active."
+         )}
+
+      match?({:taken, _, _}, socket.assigns.gln_check) ->
+        {:noreply,
+         put_flash(socket, :error, "This GLN is already registered to another location.")}
+
+      not match?({:matched, _, _}, socket.assigns.gln_check) ->
+        {:noreply, put_flash(socket, :error, "Enter a valid, GS1-verified GLN before saving.")}
+
+      true ->
+        save_site(socket, :new, attrs)
+    end
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -67,7 +131,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
     filters = %{
-      site_type: Map.get(filter_params, "site_type", ""),
+      activities: Map.get(filter_params, "activities", ""),
       status: Map.get(filter_params, "status", "")
     }
 
@@ -87,13 +151,83 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
      |> assign_sites()}
   end
 
+  def handle_event("toggle_active", %{"id" => id}, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+    site = Sites.get_site!(organization_id, id)
+
+    case Sites.update_site(site, %{is_active: !site.is_active}) do
+      {:ok, _updated} ->
+        {:noreply, assign_sites(socket)}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Could not update site.")}
+    end
+  end
+
+  def handle_event("open_onboarding_site", _params, socket) do
+    {:noreply, assign(socket, :show_onboarding_site_form?, true)}
+  end
+
+  def handle_event("close_onboarding_site", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_onboarding_site_form?, false)
+     |> assign(:gln_check, :idle)
+     |> assign(:form, to_form(Site.changeset(%Site{}, %{}), as: :site))}
+  end
+
+  def handle_event("continue_onboarding", _params, socket) do
+    {:noreply, push_navigate(socket, to: ~p"/onboarding?complete=1")}
+  end
+
+  def handle_async(:gln_lookup, {:ok, {:ok, :verified, licence}}, socket) do
+    name = Licence.name(licence)
+    address = Licence.address(licence)
+    gln = Map.get(licence, "gln")
+
+    if is_binary(gln) and gln != "" and Sites.gln_taken?(gln) do
+      {:noreply, assign(socket, :gln_check, {:taken, name, address})}
+    else
+      {:noreply,
+       socket
+       |> assign(:gln_check, {:matched, name, address})
+       |> autofill_site_fields(name, address)}
+    end
+  end
+
+  def handle_async(:gln_lookup, {:ok, {:ok, :inactive, licence}}, socket) do
+    {:noreply,
+     assign(socket, :gln_check, {:inactive, Licence.name(licence), Licence.address(licence)})}
+  end
+
+  def handle_async(:gln_lookup, {:ok, {:ok, :not_verified}}, socket) do
+    {:noreply, assign(socket, :gln_check, :not_found)}
+  end
+
+  def handle_async(:gln_lookup, {:ok, {:error, _reason}}, socket) do
+    {:noreply, assign(socket, :gln_check, :unavailable)}
+  end
+
+  def handle_async(:gln_lookup, {:exit, _reason}, socket) do
+    {:noreply, assign(socket, :gln_check, :unavailable)}
+  end
+
   defp save_site(socket, :new, attrs) do
     organization_id = socket.assigns.current_scope.organization_id
 
     case Sites.create_site(organization_id, attrs) do
       {:ok, _site} ->
         socket = socket |> put_flash(:info, "Site created.") |> assign_sites()
-        {:noreply, return_after_save(socket)}
+
+        if socket.assigns.back_path == ~p"/onboarding" do
+          {:noreply,
+           socket
+           |> assign(:show_onboarding_site_form?, false)
+           |> assign(:gln_check, :idle)
+           |> assign(:form, to_form(Site.changeset(%Site{}, %{}), as: :site))}
+        else
+          {:noreply, return_after_save(socket)}
+        end
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :site))}
@@ -111,14 +245,20 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     end
   end
 
+  defp back_path(%{"return_to" => "onboarding"}, _default), do: ~p"/onboarding"
   defp back_path(%{"return_to" => "dashboard"}, _default), do: ~p"/org/dashboard"
   defp back_path(_params, default), do: default
 
   defp return_after_save(socket) do
-    if socket.assigns.back_path == ~p"/org/dashboard" do
-      push_navigate(socket, to: ~p"/org/dashboard?tour=1")
-    else
-      push_patch(socket, to: socket.assigns.back_path)
+    cond do
+      socket.assigns.back_path == ~p"/org/dashboard" ->
+        push_navigate(socket, to: ~p"/org/dashboard?tour=1")
+
+      socket.assigns.back_path == ~p"/onboarding" ->
+        push_navigate(socket, to: ~p"/onboarding?complete=1")
+
+      true ->
+        push_patch(socket, to: socket.assigns.back_path)
     end
   end
 
@@ -132,7 +272,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     filtered =
       sites
       |> filter_by_search(socket.assigns.search)
-      |> filter_by_type(socket.assigns.filters.site_type)
+      |> filter_by_activity(socket.assigns.filters.activities)
       |> filter_by_status(socket.assigns.filters.status)
 
     socket
@@ -152,11 +292,11 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     end)
   end
 
-  defp filter_by_type(sites, ""), do: sites
+  defp filter_by_activity(sites, ""), do: sites
 
-  defp filter_by_type(sites, site_type) do
-    site_type = String.to_existing_atom(site_type)
-    Enum.filter(sites, &(&1.site_type == site_type))
+  defp filter_by_activity(sites, activity) do
+    activity = String.to_existing_atom(activity)
+    Enum.filter(sites, &(activity in &1.activities))
   end
 
   defp filter_by_status(sites, ""), do: sites
@@ -164,29 +304,478 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   defp filter_by_status(sites, "inactive"), do: Enum.filter(sites, &(!&1.is_active))
 
   defp active_filter_count(filters) do
-    Enum.count([filters.site_type != "", filters.status != ""], & &1)
+    Enum.count([filters.activities != "", filters.status != ""], & &1)
   end
 
   defp filter_chips(filters) do
     [
-      filters.site_type != "" &&
-        %{label: "Type: #{Phoenix.Naming.humanize(filters.site_type)}", field: "site_type"},
+      filters.activities != "" &&
+        %{label: "Activity: #{Phoenix.Naming.humanize(filters.activities)}", field: "activities"},
       filters.status != "" &&
         %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"}
     ]
     |> Enum.filter(& &1)
   end
 
-  defp capability_options do
+  defp activity_options do
     [
       {"Pharmacy", "Dispensing & stock", :pharmacy},
-      {"Lab", "Orders & results", :lab},
-      {"Pharmacy + Lab", "Both workflows", :pharmacy_lab},
-      {"Warehouse", "Stock holding only", :warehouse}
+      {"Laboratory", "Orders & results", :laboratory},
+      {"Distribution", "Stock holding & shipping", :distribution}
     ]
   end
 
+  defp activity_labels(site) do
+    Enum.map_join(site.activities, ", ", &Phoenix.Naming.humanize/1)
+  end
+
+  defp maybe_check_gln(socket, params, attrs) do
+    if socket.assigns.live_action == :new and Map.get(params, "_target") == ["site", "gln"] do
+      check_gln(socket, attrs)
+    else
+      socket
+    end
+  end
+
+  defp check_gln(socket, attrs) do
+    gln = attrs |> Map.get("gln", "") |> to_string() |> String.trim()
+
+    cond do
+      not Regex.match?(~r/^\d{13}$/, gln) ->
+        assign(socket, :gln_check, :idle)
+
+      not gln_check_digit_valid?(gln) ->
+        assign(socket, :gln_check, :invalid_check_digit)
+
+      true ->
+        socket
+        |> assign(:gln_check, :checking)
+        |> start_async(:gln_lookup, fn -> Grp.verify_gln(gln) end)
+    end
+  end
+
+  defp gln_check_digit_valid?(gln) do
+    {payload, check} = String.split_at(gln, -1)
+    Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(payload)) == check
+  end
+
+  defp autofill_site_fields(socket, name, address) do
+    changeset =
+      socket.assigns.form.source
+      |> maybe_put_blank(:name, name)
+      |> maybe_put_blank(:address, address)
+
+    assign(socket, :form, to_form(changeset, as: :site))
+  end
+
+  defp maybe_put_blank(changeset, field, value) when is_binary(value) and value != "" do
+    if blank?(Ecto.Changeset.get_field(changeset, field)) do
+      Ecto.Changeset.put_change(changeset, field, value)
+    else
+      changeset
+    end
+  end
+
+  defp maybe_put_blank(changeset, _field, _value), do: changeset
+
+  defp blank?(nil), do: true
+  defp blank?(value), do: value |> to_string() |> String.trim() == ""
+
+  defp apply_activity_choice(%{"activity_choice" => choice} = attrs) do
+    Map.put(attrs, "activities", activities_for_choice(choice))
+  end
+
+  defp apply_activity_choice(attrs), do: attrs
+
+  defp activities_for_choice("pharmacy"), do: ["pharmacy"]
+  defp activities_for_choice("laboratory"), do: ["laboratory"]
+  defp activities_for_choice("pharmacy_laboratory"), do: ["pharmacy", "laboratory"]
+  defp activities_for_choice("distribution"), do: ["distribution"]
+  defp activities_for_choice(_choice), do: []
+
+  # The four real-world premises types a site can actually be licensed as,
+  # filtered to whatever the organization's own operating models (chosen at
+  # signup) actually support — mirrors `SignupLive`'s `site_activity_choices/1`.
+  defp site_activity_choices(operating_models) do
+    allowed =
+      operating_models
+      |> Enum.flat_map(fn
+        :pharmacy -> ["pharmacy"]
+        :laboratory -> ["laboratory"]
+        :distributor -> ["distribution"]
+        _ -> []
+      end)
+      |> MapSet.new()
+
+    [
+      %{
+        key: "pharmacy",
+        label: "Retail pharmacy",
+        description: "Dispense medicines directly to patients",
+        icon: "hero-building-storefront",
+        activities: ["pharmacy"]
+      },
+      %{
+        key: "laboratory",
+        label: "Diagnostic laboratory",
+        description: "Collect specimens and perform diagnostic tests",
+        icon: "hero-beaker",
+        activities: ["laboratory"]
+      },
+      %{
+        key: "pharmacy_laboratory",
+        label: "Retail pharmacy + diagnostic lab",
+        description: "Dispense medicines and provide diagnostic testing at the same location",
+        icon: "hero-building-storefront",
+        activities: ["pharmacy", "laboratory"]
+      },
+      %{
+        key: "distribution",
+        label: "Pharmaceutical wholesale",
+        description: "Supply branches, pharmacies, hospitals and other licensed facilities",
+        icon: "hero-truck",
+        activities: ["distribution"]
+      }
+    ]
+    |> Enum.filter(fn choice -> Enum.all?(choice.activities, &(&1 in allowed)) end)
+  end
+
+  defp activity_choice_selected?(form, choice) do
+    current = form[:activities].value |> List.wrap() |> Enum.map(&to_string/1) |> MapSet.new()
+    MapSet.new(choice.activities) == current
+  end
+
+  attr :form, :map, required: true
+  attr :gln_check, :any, default: nil
+  attr :operating_models, :list, default: []
+
+  defp site_form(assigns) do
+    ~H"""
+    <form id="site-form" phx-submit="save" phx-change="validate">
+      <%= if @gln_check do %>
+        <.input
+          id="site-gln"
+          field={@form[:gln]}
+          label="GS1 Global Location Number (GLN)"
+          placeholder="13-digit GLN issued by GS1"
+          inputmode="numeric"
+          phx-debounce="500"
+          required
+        />
+
+        <%= case @gln_check do %>
+          <% :checking -> %>
+            <p class="mb-4 mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-thamani-pewter">
+              <.icon name="hero-arrow-path" class="size-3.5 motion-safe:animate-spin" />
+              Checking with the GS1 registry&hellip;
+            </p>
+          <% {:matched, _name, _address} -> %>
+            <div class="mb-4 mt-2 rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
+              <p class="inline-flex items-center gap-1.5">
+                <.icon name="hero-check-circle" class="size-4" /> Verified with GS1
+              </p>
+            </div>
+          <% {:inactive, name, address} when is_binary(name) -> %>
+            <div class="mb-4 mt-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-800">
+              <p class="inline-flex items-center gap-1.5">
+                <.icon name="hero-exclamation-triangle" class="size-4" />
+                Found · {name} · not currently active in the GS1 registry.
+              </p>
+              <p :if={address} class="mt-1 font-normal text-amber-700">{address}</p>
+            </div>
+          <% {:inactive, nil, _address} -> %>
+            <p class="mb-4 mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <.icon name="hero-exclamation-triangle" class="size-4" />
+              Found in the GS1 registry, but not currently active.
+            </p>
+          <% {:taken, _name, _address} -> %>
+            <p class="mb-4 mt-2 inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+              <.icon name="hero-exclamation-triangle" class="size-4" />
+              This GLN is already registered to another location. Double-check the number, or use a different GLN.
+            </p>
+          <% :not_found -> %>
+            <p class="mb-4 mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <.icon name="hero-exclamation-triangle" class="size-4" />
+              We couldn't find this GLN in the GS1 registry. Double-check the number before continuing.
+            </p>
+          <% :invalid_check_digit -> %>
+          <% :unavailable -> %>
+            <p class="mb-4 mt-2 text-xs text-thamani-pewter">
+              We couldn't reach the GS1 registry to verify this GLN. Try again in a moment.
+            </p>
+          <% _ -> %>
+            <p class="mb-4 mt-2 text-xs text-thamani-pewter">
+              We verify this with the GS1 registry as soon as you enter it.
+            </p>
+        <% end %>
+
+        <input type="hidden" name="site[address]" value={@form[:address].value} />
+
+        <%= if match?({:matched, _, _}, @gln_check) do %>
+          <%= case @gln_check do %>
+            <% {:matched, nil, _address} -> %>
+              <.input
+                id="site-name"
+                field={@form[:name]}
+                label="Site name"
+                placeholder="e.g. Afya CBD"
+                phx-debounce="blur"
+                required
+              />
+            <% {:matched, name, address} -> %>
+              <input type="hidden" name="site[name]" value={@form[:name].value} />
+              <div class="mb-4 rounded-xl border border-thamani-stone bg-slate-50/60 p-3">
+                <p class="text-sm font-medium text-thamani-forest">{name}</p>
+                <p :if={address} class="text-xs text-thamani-pewter">{address}</p>
+              </div>
+          <% end %>
+
+          <%= case site_activity_choices(@operating_models) do %>
+            <% [] -> %>
+              <p class="mb-4 text-xs text-red-700">
+                No site activities are available for this organization's operating models.
+              </p>
+            <% [only] -> %>
+              <input type="hidden" name="site[activity_choice]" value={only.key} />
+              <div class="mb-4 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_18%,white)] bg-[color-mix(in_srgb,var(--thamani-lime)_12%,white)] px-4 py-3">
+                <p class="text-xs font-medium text-thamani-pewter">Activity at this location</p>
+                <p class="mt-1 text-sm font-semibold text-thamani-forest">{only.label}</p>
+                <p class="mt-0.5 text-xs text-thamani-pewter">{only.description}</p>
+              </div>
+            <% choices -> %>
+              <fieldset class="mb-4">
+                <legend class="mb-2 text-sm font-medium text-thamani-forest">
+                  What happens at this location?<span class="text-error">&nbsp;*</span>
+                </legend>
+                <div class="grid grid-cols-1 gap-2">
+                  <.activity_card
+                    :for={choice <- choices}
+                    type="radio"
+                    name="site[activity_choice]"
+                    value={choice.key}
+                    label={choice.label}
+                    description={choice.description}
+                    icon={choice.icon}
+                    selected={activity_choice_selected?(@form, choice)}
+                    compact
+                  />
+                </div>
+                <p :for={error <- @form[:activities].errors} class="mt-2 text-xs text-red-700">
+                  {translate_error(error)}
+                </p>
+              </fieldset>
+          <% end %>
+
+          <div class="mt-5 flex justify-end border-t border-thamani-stone pt-4">
+            <.button variant="primary" class="sm:w-auto sm:min-w-32">Save site</.button>
+          </div>
+        <% end %>
+      <% else %>
+        <div class="grid gap-x-4 sm:grid-cols-2">
+          <.input id="site-name" field={@form[:name]} label="Name" required />
+          <.input
+            id="site-gln"
+            field={@form[:gln]}
+            label="GS1 Global Location Number (GLN)"
+            placeholder="13-digit GLN issued by GS1"
+            inputmode="numeric"
+            required
+          />
+        </div>
+        <%= case site_activity_choices(@operating_models) do %>
+          <% [] -> %>
+            <p class="mb-4 text-xs text-red-700">
+              No site activities are available for this organization's operating models.
+            </p>
+          <% [only] -> %>
+            <input type="hidden" name="site[activity_choice]" value={only.key} />
+            <div class="mb-4 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_18%,white)] bg-[color-mix(in_srgb,var(--thamani-lime)_12%,white)] px-4 py-3">
+              <p class="text-xs font-medium text-thamani-pewter">Activity at this location</p>
+              <p class="mt-1 text-sm font-semibold text-thamani-forest">{only.label}</p>
+              <p class="mt-0.5 text-xs text-thamani-pewter">{only.description}</p>
+            </div>
+          <% choices -> %>
+            <fieldset class="mb-4">
+              <legend class="mb-2 text-sm font-medium text-thamani-forest">
+                What happens at this location?<span class="text-error">&nbsp;*</span>
+              </legend>
+              <div class="grid grid-cols-1 gap-2">
+                <.activity_card
+                  :for={choice <- choices}
+                  type="radio"
+                  name="site[activity_choice]"
+                  value={choice.key}
+                  label={choice.label}
+                  description={choice.description}
+                  icon={choice.icon}
+                  selected={activity_choice_selected?(@form, choice)}
+                  compact
+                />
+              </div>
+              <p :for={error <- @form[:activities].errors} class="mt-2 text-xs text-red-700">
+                {translate_error(error)}
+              </p>
+            </fieldset>
+        <% end %>
+        <div class="mt-4">
+          <.input
+            id="site-address"
+            field={@form[:address]}
+            type="textarea"
+            label="Address"
+            rows="2"
+            required
+          />
+        </div>
+        <div class="mt-5 flex justify-end border-t border-thamani-stone pt-4">
+          <.button variant="primary" class="sm:w-auto sm:min-w-32">Save site</.button>
+        </div>
+      <% end %>
+    </form>
+    """
+  end
+
   def render(assigns) do
+    if assigns.live_action == :new and assigns.back_path == ~p"/onboarding" do
+      render_onboarding(assigns)
+    else
+      render_index(assigns)
+    end
+  end
+
+  defp render_onboarding(assigns) do
+    ~H"""
+    <.onboarding_task_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      icon="hero-building-office-2"
+      title="Manage your branches"
+      description="Register another location once you're ready to operate from more than one."
+      progress_current={elem(@onboarding_progress, 0)}
+      progress_total={elem(@onboarding_progress, 1)}
+    >
+      <:benefits>
+        <li class="flex items-center gap-3">
+          <.icon name="hero-check-circle" class="size-5 shrink-0 text-[var(--thamani-forest)]" />
+          Sell and dispense from more than one location
+        </li>
+        <li class="flex items-center gap-3">
+          <.icon name="hero-check-circle" class="size-5 shrink-0 text-[var(--thamani-forest)]" />
+          Each branch keeps its own GLN and stock
+        </li>
+        <li class="flex items-center gap-3">
+          <.icon name="hero-check-circle" class="size-5 shrink-0 text-[var(--thamani-forest)]" />
+          Add more branches at any time
+        </li>
+      </:benefits>
+
+      <:right>
+        <div class="flex items-start justify-between gap-5">
+          <div>
+            <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">Branches</h2>
+            <p class="mt-2 text-sm leading-6 text-thamani-pewter">
+              Locations registered for this organization so far.
+            </p>
+          </div>
+          <button
+            id="onboarding-open-site"
+            type="button"
+            phx-click="open_onboarding_site"
+            class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-md"
+          >
+            <.icon name="hero-plus" class="mr-2 size-4" /> Add a branch
+          </button>
+        </div>
+
+        <div
+          :if={@sites == []}
+          id="onboarding-sites-empty"
+          class="mt-8 flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--thamani-stone)] bg-transparent px-6 text-center"
+        >
+          <span class="flex size-12 items-center justify-center rounded-2xl bg-white text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
+            <.icon name="hero-building-office-2" class="size-6" />
+          </span>
+          <h3 class="mt-4 text-base font-semibold text-thamani-forest">No branches yet</h3>
+          <p class="mt-1 max-w-xs text-sm leading-6 text-thamani-pewter">
+            Your primary location is already set up — add another when you're ready.
+          </p>
+        </div>
+
+        <div :if={@sites != []} id="onboarding-sites-list" class="mt-8">
+          <h3 class="mb-3 text-sm font-semibold text-thamani-forest">
+            Branches ({length(@sites)})
+          </h3>
+
+          <div class="overflow-hidden rounded-2xl border border-[var(--thamani-stone)]">
+            <div class="grid grid-cols-[1fr_auto_auto] gap-4 bg-[color-mix(in_srgb,var(--thamani-stone)_35%,white)] px-4 py-2.5 text-xs font-medium text-thamani-pewter">
+              <span>Name</span>
+              <span class="w-40">Activities</span>
+              <span class="w-20 text-right">Status</span>
+            </div>
+
+            <div class="divide-y divide-[var(--thamani-stone)]">
+              <div
+                :for={site <- @sites}
+                id={"onboarding-site-#{site.id}"}
+                class="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-3"
+              >
+                <span class="min-w-0 truncate text-sm text-thamani-forest">{site.name}</span>
+                <span class="w-40 truncate text-sm text-thamani-pewter">
+                  {activity_labels(site)}
+                </span>
+                <span class="flex w-20 justify-end">
+                  <.status_badge status={if site.is_active, do: :active, else: :inactive} />
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </:right>
+
+      <:footer>
+        <div class="flex items-center gap-4">
+          <.link
+            id="onboarding-site-back"
+            navigate={~p"/onboarding"}
+            class="inline-flex min-h-11 items-center rounded-full px-2 text-sm font-medium text-[var(--thamani-pewter)] transition-colors hover:text-[var(--thamani-forest)]"
+          >
+            <.icon name="hero-arrow-left" class="mr-2 size-4" /> Back
+          </.link>
+          <.link
+            id="onboarding-site-skip"
+            navigate={~p"/onboarding?skip=add_branch"}
+            class="inline-flex min-h-11 items-center rounded-full px-2 text-sm font-medium text-[var(--thamani-pewter)] underline decoration-[color-mix(in_srgb,var(--thamani-pewter)_45%,transparent)] underline-offset-4 transition-colors hover:text-[var(--thamani-forest)]"
+          >
+            Skip this step
+          </.link>
+        </div>
+        <button
+          id="onboarding-site-continue"
+          type="button"
+          phx-click="continue_onboarding"
+          class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg"
+        >
+          Continue <.icon name="hero-arrow-right" class="ml-3 size-4" />
+        </button>
+      </:footer>
+    </.onboarding_task_shell>
+
+    <.modal
+      :if={@show_onboarding_site_form?}
+      id="onboarding-site-modal"
+      class="max-w-3xl"
+      show
+      on_cancel={JS.push("close_onboarding_site")}
+    >
+      <h2 class="pr-10 text-2xl font-medium tracking-tight text-thamani-forest">Add a branch</h2>
+      <div class="mt-6">
+        <.site_form form={@form} gln_check={@gln_check} operating_models={@operating_models} />
+      </div>
+    </.modal>
+    """
+  end
+
+  defp render_index(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/sites"}>
       <.header icon="hero-building-office-2">
@@ -208,15 +797,13 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             apply_event="apply_filters"
             active_count={active_filter_count(@filters)}
           >
-            <:group label="Type">
+            <:group label="Activity">
               <.input
                 type="select"
-                name="filters[site_type]"
-                value={@filters.site_type}
-                options={
-                  Enum.map(capability_options(), fn {label, _desc, value} -> {label, value} end)
-                }
-                prompt="All types"
+                name="filters[activities]"
+                value={@filters.activities}
+                options={Enum.map(activity_options(), fn {label, _desc, value} -> {label, value} end)}
+                prompt="All activities"
               />
             </:group>
             <:group label="Status">
@@ -240,56 +827,23 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
       <.modal
         :if={@live_action in [:new, :edit]}
         id="site-modal"
+        class="max-w-3xl"
         show
         on_cancel={
-          if @back_path == ~p"/org/dashboard",
+          if @back_path in [~p"/org/dashboard", ~p"/onboarding"],
             do: JS.navigate(@back_path),
             else: JS.patch(@back_path)
         }
       >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+        <h2 class="pr-10 text-2xl font-medium tracking-tight text-thamani-forest">
           {if @live_action == :new, do: "Add a site", else: "Edit site"}
         </h2>
-        <form id="site-form" phx-submit="save" phx-change="validate">
-          <p class="text-xs text-base-content/60 mb-3">
-            Fields marked <span class="text-error">*</span> are required.
-          </p>
-          <.input id="site-name" field={@form[:name]} label="Name" required />
-          <.capability_select field={@form[:site_type]} options={capability_options()} required />
-          <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3 mb-3">
-            <div>
-              <p class="text-sm font-medium text-thamani-forest">Active</p>
-              <p class="text-xs text-thamani-pewter">Enable this site</p>
-            </div>
-            <.input
-              id="site-active"
-              field={@form[:is_active]}
-              type="checkbox"
-              label=""
-              class="size-5 rounded accent-thamani-forest cursor-pointer"
-            />
-          </div>
-          <.input id="site-address" field={@form[:address]} label="Address" required />
-          <div class="grid grid-cols-2 gap-2">
-            <.input id="site-lat" field={@form[:lat]} label="Latitude" type="number" step="any" />
-            <.input id="site-long" field={@form[:long]} label="Longitude" type="number" step="any" />
-          </div>
-          <div
-            id="site-map"
-            phx-hook="GoogleMaps"
-            phx-update="ignore"
-            data-lat-input="site-lat"
-            data-lng-input="site-long"
-            data-address-input="site-address"
-            data-lat={@form[:lat].value}
-            data-lng={@form[:long].value}
-            class="w-full h-40 rounded-xl mt-1 overflow-hidden border border-thamani-stone bg-thamani-canvas"
-          >
-          </div>
-          <div class="mt-2">
-            <.button variant="primary" class="w-full">Save</.button>
-          </div>
-        </form>
+        <p class="mt-1 text-sm text-thamani-pewter">
+          Configure the location identity, activities, and map position.
+        </p>
+        <div class="mt-6">
+          <.site_form form={@form} gln_check={@gln_check} operating_models={@operating_models} />
+        </div>
       </.modal>
 
       <section id="sites" aria-label="Sites" class="space-y-3 sm:hidden">
@@ -308,7 +862,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
                   {site.name}
                 </h2>
                 <p class="mt-0.5 text-sm text-thamani-pewter">
-                  {Phoenix.Naming.humanize(site.site_type)}
+                  {activity_labels(site)}
                 </p>
               </div>
               <.status_badge
@@ -333,22 +887,24 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             </dl>
           </div>
 
-          <div class="grid grid-cols-2 gap-2 border-t border-thamani-stone bg-thamani-canvas/60 p-3">
-            <.button
-              variant="ghost"
-              navigate={~p"/org/sites/#{site.id}"}
-              class="min-h-10 gap-2 px-4 py-2 text-sm"
-              id={"btn-view-site-#{site.id}"}
-            >
-              <.icon name="hero-eye" class="size-4" /> View
-            </.button>
+          <div class="flex gap-2 border-t border-thamani-stone bg-thamani-canvas/60 p-3">
             <.button
               variant="ghost-edit"
               patch={~p"/org/sites/#{site.id}/edit"}
-              class="min-h-10 gap-2 px-4 py-2 text-sm"
+              class="min-h-10 flex-1 gap-2 px-4 py-2 text-sm"
               id={"btn-edit-site-#{site.id}"}
             >
               <.icon name="hero-pencil-square" class="size-4" /> Edit
+            </.button>
+            <.button
+              type="button"
+              phx-click="toggle_active"
+              phx-value-id={site.id}
+              class="min-h-10 flex-1 px-4 py-2 text-sm"
+              variant={if site.is_active, do: "destructive", else: "ghost"}
+              id={"btn-toggle-site-#{site.id}"}
+            >
+              {if site.is_active, do: "Deactivate", else: "Reactivate"}
             </.button>
           </div>
         </article>
@@ -377,22 +933,12 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           row_click={fn site -> JS.navigate(~p"/org/sites/#{site.id}") end}
         >
           <:col :let={site} label="Name">{site.name}</:col>
-          <:col :let={site} label="Type">{Phoenix.Naming.humanize(site.site_type)}</:col>
+          <:col :let={site} label="Activities">{activity_labels(site)}</:col>
           <:col :let={site} label="GLN"><span class="tabular-nums">{site.gln}</span></:col>
           <:col :let={site} label="Address">{site.address}</:col>
           <:col :let={site} label="Status" mobile="aside">
             <.status_badge status={if site.is_active, do: :active, else: :inactive} />
           </:col>
-          <:action :let={site}>
-            <.button
-              variant="ghost"
-              navigate={~p"/org/sites/#{site.id}"}
-              class="min-h-10 gap-2 px-4 py-2 text-sm"
-              id={"btn-view-site-desktop-#{site.id}"}
-            >
-              <.icon name="hero-eye" class="size-4" /> View
-            </.button>
-          </:action>
           <:action :let={site}>
             <.button
               variant="ghost-edit"
@@ -401,6 +947,18 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               id={"btn-edit-site-desktop-#{site.id}"}
             >
               <.icon name="hero-pencil-square" class="size-4" /> Edit
+            </.button>
+          </:action>
+          <:action :let={site}>
+            <.button
+              type="button"
+              phx-click="toggle_active"
+              phx-value-id={site.id}
+              class="px-3 py-1.5 text-xs"
+              variant={if site.is_active, do: "destructive", else: "ghost"}
+              id={"btn-toggle-site-desktop-#{site.id}"}
+            >
+              {if site.is_active, do: "Deactivate", else: "Reactivate"}
             </.button>
           </:action>
           <:empty_state>

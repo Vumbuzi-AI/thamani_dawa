@@ -1,0 +1,161 @@
+.auth-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: row;
+}
+
+.auth-aside {
+  width: 38%;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 48px 52px;
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(165deg, rgba(41, 70, 54, 0.95), rgba(32, 56, 38, 0.97)),
+    url("/images/auth-shelves.jpg") center/cover no-repeat;
+}
+.auth-aside::before {
+  content: "";
+  position: absolute;
+  left: -18%;
+  bottom: -22%;
+  width: 72%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(197, 222, 197, 0.12), transparent 70%);
+  pointer-events: none;
+}
+.auth-aside > * {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-form-panel {
+  flex: 1;
+  background: var(--thamani-snow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 56px 24px 40px;
+}
+.auth-form-inner {
+  width: 100%;
+  max-width: 560px;
+}
+@media (min-width: 640px) {
+  .auth-form-panel {
+    padding: 72px 48px 56px;
+  }
+}
+@media (min-width: 1024px) {
+  .auth-form-panel {
+    align-items: center;
+    padding: 72px 64px 48px 64px;
+  }
+}
+
+.auth-demo-card {
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--thamani-frosted);
+  background: rgba(255, 255, 255, 0.7);
+}
+.auth-demo-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.auth-demo-summary::-webkit-details-marker {
+  display: none;
+}
+.auth-demo-chevron {
+  flex-shrink: 0;
+  color: var(--thamani-pewter);
+  transition: transform 160ms ease;
+}
+.auth-demo-card[open] .auth-demo-summary .auth-demo-chevron {
+  transform: rotate(180deg);
+}
+.auth-demo-card:not([open]) .auth-role-grid {
+  display: none;
+}
+.auth-demo-card[open] .auth-role-grid {
+  margin-top: 12px;
+}
+.auth-role-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+@media (min-width: 901px) {
+  .auth-demo-summary {
+    cursor: default;
+    pointer-events: none;
+  }
+  .auth-demo-chevron {
+    display: none;
+  }
+  .auth-demo-card:not([open]) .auth-role-grid {
+    display: grid;
+    margin-top: 12px;
+  }
+}
+@media (min-width: 1024px) {
+  .auth-role-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.auth-role-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1.5px solid var(--thamani-stone);
+  background: var(--thamani-snow);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+.auth-role-btn:hover {
+  border-color: var(--thamani-forest);
+  background: #fff;
+  transform: translateY(-1px);
+}
+.auth-role-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--thamani-accent), 0 0 0 4px var(--thamani-snow);
+}
+.auth-role-btn:active {
+  transform: translateY(0);
+}
+.auth-role-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--thamani-forest);
+  color: var(--thamani-lime);
+}
+.auth-role-text {
+  min-width: 0;
+}
+.auth-role-text .auth-role-name {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--thamani-forest);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

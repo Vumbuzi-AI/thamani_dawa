@@ -591,7 +591,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
             value={@selected_preset}
             label="Preset template (optional)"
             options={FieldDefinitionPresets.options()}
-            prompt="No preset — enter everything manually"
+            prompt="No preset, enter everything manually"
           />
         </form>
 

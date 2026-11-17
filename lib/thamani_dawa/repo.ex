@@ -105,10 +105,15 @@ defmodule ThamaniDawa.Repo do
 
     struct
     |> Map.from_struct()
-    |> Map.drop([:__meta__ | @sensitive_fields])
+    |> Map.drop([:__meta__ | @sensitive_fields ++ sensitive_record_fields(struct)])
     |> Map.drop(associations)
     |> Map.new(fn {field, value} -> {Atom.to_string(field), sanitize_value(value)} end)
   end
+
+  defp sensitive_record_fields(%{__struct__: ThamaniDawa.Patients.Patient}),
+    do: [:full_name, :phone, :national_id, :date_of_birth, :gender, :gsrn]
+
+  defp sensitive_record_fields(_struct), do: []
 
   defp sanitize_value(%Decimal{} = value), do: Decimal.to_string(value)
   defp sanitize_value(%DateTime{} = value), do: DateTime.to_iso8601(value)

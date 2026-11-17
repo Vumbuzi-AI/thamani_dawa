@@ -17,7 +17,7 @@ defmodule ThamaniDawaWeb do
   those modules here.
   """
 
-  def static_paths, do: ~w(assets fonts images favicon.ico robots.txt)
+  def static_paths, do: ~w(assets fonts images uploads favicon.ico favicon.png robots.txt)
 
   def router do
     quote do
@@ -92,6 +92,8 @@ defmodule ThamaniDawaWeb do
       import ThamaniDawaWeb.PageComponents
       # Stat tiles, chart cards, and range filters for role dashboards
       import ThamaniDawaWeb.DashboardComponents
+      # Distributor shipment workflow badges and formatters
+      import ThamaniDawaWeb.DistributorComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

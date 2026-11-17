@@ -43,7 +43,7 @@ export const ProductTour = {
       this.activeTarget.scrollIntoView({block: "nearest"})
     }
 
-    this.el.querySelector("[data-tour-progress]").textContent = `Quick tour · ${this.index + 1} of ${this.steps.length}`
+    this.el.querySelector("[data-tour-progress]").textContent = `${this.index + 1} of ${this.steps.length}`
     this.el.querySelector("[data-tour-title]").textContent = step.title
     this.el.querySelector("[data-tour-description]").textContent = step.description
     this.el.querySelector("[data-tour-back]").disabled = this.index === 0

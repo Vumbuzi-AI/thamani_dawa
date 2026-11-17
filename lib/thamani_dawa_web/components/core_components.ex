@@ -28,8 +28,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
   """
   use Phoenix.Component
   use Gettext, backend: ThamaniDawaWeb.Gettext
+  use ThamaniDawaWeb, :verified_routes
 
   alias Phoenix.LiveView.JS
+  alias ThamaniDawaWeb.Layouts
 
   @doc """
   Renders flash notices.
@@ -356,11 +358,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
             "focus:outline-none",
             @errors != [] && (@error_class || "border-red-600"),
             @errors == [] &&
-              "border-[#b8c0af] hover:border-thamani-forest/50 focus:border-thamani-forest",
+              "border-[#bfceb7] hover:border-thamani-forest/50 focus:border-thamani-forest",
             @class
           ]}
         >
-          <span data-cs-display class="truncate" style="color: #666666;">{@prompt || "Select..."}</span>
+          <span data-cs-display class="truncate" style="color: #707371;">{@prompt || "Select..."}</span>
           <svg
             data-cs-chevron
             xmlns="http://www.w3.org/2000/svg"
@@ -458,12 +460,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
             b.tabIndex = 0
             b.style.cssText = "display:block;width:100%;text-align:left;padding:8px 12px;font-size:14px;cursor:pointer;background:transparent;border:0;transition:background 80ms;outline:none;"
             if (active) {
-              b.style.background = "#d3fa99"
-              b.style.color = "#1c3a13"
+              b.style.background = "#aff0d3"
+              b.style.color = "#17302a"
               b.style.fontWeight = "500"
             } else {
-              b.style.color = isPrompt ? "#666666" : "#1c3a13"
-              b.onmouseenter = () => { b.style.background = "#eeeee9" }
+              b.style.color = isPrompt ? "#707371" : "#17302a"
+              b.onmouseenter = () => { b.style.background = "#eeece5" }
               b.onmouseleave = () => { b.style.background = "transparent" }
             }
             b.addEventListener("mousedown", (e) => { e.preventDefault() })
@@ -494,10 +496,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
             const match = this.opts().find(([, v]) => String(v) === val)
             if (match) {
               this.display.textContent = match[0]
-              this.display.style.color = "#1c3a13"
+              this.display.style.color = "#17302a"
             } else {
               this.display.textContent = this.prompt() || "Select..."
-              this.display.style.color = "#666666"
+              this.display.style.color = "#707371"
             }
           },
           toggle() { this.dropdown.classList.contains("hidden") ? this.open() : this.close() },
@@ -606,7 +608,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             if (filtered.length === 0) {
               if (q !== "") {
                 const empty = document.createElement("div")
-                empty.textContent = "No matches — press Enter to add"
+                empty.textContent = "No matches. Press Enter to add"
                 empty.style.cssText = "padding:8px 12px;font-size:13px;color:#9ba89e;text-align:center;"
                 this.list.appendChild(empty)
                 this.open()
@@ -622,8 +624,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
               b.dataset.cbVal = val
               b.textContent = label
               b.tabIndex = 0
-              b.style.cssText = "display:block;width:100%;text-align:left;padding:8px 12px;font-size:14px;cursor:pointer;background:transparent;border:0;color:#1c3a13;transition:background 80ms;outline:none;"
-              b.onmouseenter = () => { b.style.background = "#eeeee9" }
+              b.style.cssText = "display:block;width:100%;text-align:left;padding:8px 12px;font-size:14px;cursor:pointer;background:transparent;border:0;color:#17302a;transition:background 80ms;outline:none;"
+              b.onmouseenter = () => { b.style.background = "#eeece5" }
               b.onmouseleave = () => { b.style.background = "transparent" }
               b.addEventListener("mousedown", (e) => { e.preventDefault() })
               b.addEventListener("click", () => {
@@ -1024,7 +1026,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             const isToday = cur.getTime() === this.today.getTime()
             const disabled = this.max && cur.getTime() > this.max.getTime()
             let style = "width:34px;height:34px;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:13px;margin:0 auto;border:none;color:var(--thamani-forest);cursor:pointer;"
-            if (disabled) style += "color:#b3b3b3;cursor:not-allowed;"
+            if (disabled) style += "color:#a9abaa;cursor:not-allowed;"
             else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:600;"
             else if (isToday) style += "border:1.5px solid var(--thamani-lime);"
             grid += `<button type="button" data-dp-day="${d}" ${disabled ? "disabled" : ""} style="${style}">${d}</button>`
@@ -1041,7 +1043,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             const isSel = i === this.viewMonth
             const disabled = i > maxMonth
             let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:var(--thamani-forest);cursor:pointer;text-align:center;"
-            if (disabled) style += "color:#b3b3b3;cursor:not-allowed;"
+            if (disabled) style += "color:#a9abaa;cursor:not-allowed;"
             else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:600;"
             grid += `<button type="button" data-dp-month="${i}" ${disabled ? "disabled" : ""} style="${style}">${name.slice(0,3)}</button>`
           })
@@ -1082,12 +1084,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
   defp display_date(_), do: nil
 
   @doc """
-  Renders a radio-card group for choosing a site capability.
+  Renders a checkbox-card group for choosing one or more site activities.
 
   ## Examples
 
       <.capability_select
-        field={@form[:site_type]}
+        field={@form[:activities]}
         options={[{"Pharmacy", "Dispensing & stock", :pharmacy}]}
       />
   """
@@ -1102,12 +1104,20 @@ defmodule ThamaniDawaWeb.CoreComponents do
         do: Enum.map(assigns.field.errors, &translate_error/1),
         else: []
 
-    assigns = assign(assigns, :errors, errors)
+    selected =
+      assigns.field.value
+      |> List.wrap()
+      |> Enum.map(&to_string/1)
+
+    assigns =
+      assigns
+      |> assign(:errors, errors)
+      |> assign(:selected, selected)
 
     ~H"""
     <fieldset id={@id} class="fieldset mb-4">
       <legend class="label mb-2">
-        Capability<span :if={@required} aria-hidden="true" class="text-error ml-0.5">*</span>
+        Activities<span :if={@required} aria-hidden="true" class="text-error ml-0.5">*</span>
       </legend>
       <div class="grid grid-cols-2 gap-2">
         <label
@@ -1117,12 +1127,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
         >
           <div class="flex items-center gap-2">
             <input
-              type="radio"
+              type="checkbox"
               id={"#{@id}-#{value}"}
-              name={@field.name}
+              name={"#{@field.name}[]"}
               value={value}
-              checked={to_string(@field.value || "") == to_string(value)}
-              class="radio radio-sm"
+              checked={to_string(value) in @selected}
+              class="checkbox checkbox-sm"
             />
             <div>
               <p class="font-medium text-sm">{label}</p>
@@ -1137,13 +1147,114 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   @doc """
+  Renders a single selectable "activity" card — a styled radio or checkbox
+  input with an icon, label, and description, used anywhere a premises's
+  licensed activities are picked (the signup wizard's operating-model and
+  site-activity steps, `SiteLive.Index`'s "Add a site" form).
+
+  ## Examples
+
+      <.activity_card
+        type="radio"
+        name="site[activity_choice]"
+        value="pharmacy"
+        label="Retail pharmacy"
+        description="Dispense medicines directly to patients"
+        icon="hero-building-storefront"
+        selected={true}
+        compact
+      />
+  """
+  attr :name, :string, required: true
+  attr :value, :string, required: true
+  attr :label, :string, required: true
+  attr :description, :string, required: true
+  attr :icon, :string, default: nil
+  attr :selected, :boolean, default: false
+  attr :compact, :boolean, default: false
+  attr :type, :string, default: "checkbox"
+
+  def activity_card(assigns) do
+    ~H"""
+    <label
+      :if={@compact}
+      class={[
+        "group block cursor-pointer rounded-xl border-2 px-3.5 py-3 transition-all hover:border-[var(--thamani-forest)] focus-within:ring-2 focus-within:ring-[var(--thamani-lime)] focus-within:ring-offset-2",
+        @selected &&
+          "border-[var(--thamani-forest)] bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)]",
+        !@selected && "border-[var(--thamani-stone)] bg-white"
+      ]}
+    >
+      <input type={@type} name={@name} value={@value} checked={@selected} class="peer sr-only" />
+      <div class="flex items-center gap-3">
+        <span
+          :if={@icon}
+          class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_20%,white)] text-[var(--thamani-forest)]"
+        >
+          <.icon name={@icon} class="size-5" />
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block text-[13px] font-semibold text-[var(--thamani-forest)]">
+            {@label}
+          </span>
+          <span class="mt-0.5 block text-[11px] leading-4 text-[var(--thamani-pewter)]">
+            {@description}
+          </span>
+        </span>
+        <span class={[
+          "flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+          @selected && "border-[var(--thamani-forest)] bg-[var(--thamani-forest)] text-white",
+          !@selected &&
+            "border-[var(--thamani-stone)] bg-white group-hover:border-[var(--thamani-forest)]"
+        ]}>
+          <.icon :if={@selected} name="hero-check" class="size-3.5" />
+        </span>
+      </div>
+    </label>
+
+    <label
+      :if={!@compact}
+      class={[
+        "group cursor-pointer rounded-xl border-2 p-4 transition-all hover:-translate-y-0.5 hover:border-[var(--thamani-forest)] focus-within:ring-2 focus-within:ring-[var(--thamani-lime)] focus-within:ring-offset-2",
+        @selected &&
+          "border-[var(--thamani-forest)] bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] shadow-md",
+        !@selected && "border-[var(--thamani-stone)] bg-white"
+      ]}
+    >
+      <input type="checkbox" name={@name} value={@value} checked={@selected} class="peer sr-only" />
+      <div class={[
+        "flex items-start",
+        @icon && "justify-between gap-2",
+        !@icon && "justify-end"
+      ]}>
+        <.icon :if={@icon} name={@icon} class="size-5 text-[var(--thamani-forest)]" />
+        <span class={[
+          "flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+          @selected && "border-[var(--thamani-forest)] bg-[var(--thamani-forest)] text-white",
+          !@selected &&
+            "border-[var(--thamani-stone)] bg-white group-hover:border-[var(--thamani-forest)]"
+        ]}>
+          <.icon :if={@selected} name="hero-check" class="size-3.5" />
+        </span>
+      </div>
+      <span class="mt-3 block text-sm font-semibold text-[var(--thamani-forest)]">
+        {@label}
+      </span>
+      <span class="mt-1 block text-[11px] leading-4 text-[var(--thamani-pewter)]">
+        {@description}
+      </span>
+    </label>
+    """
+  end
+
+  @doc """
   Renders a page header: title, optional subtitle and actions — every
   screen's title block should look like this. Pass `icon` for the leading
   tinted icon badge (e.g. a section's own hero icon); omit it for a plain
   title, same as before.
 
   Pass a `:toolbar` slot (a search box + `filter_drawer/1`, typically) to
-  render it inside the *same* card, below an internal divider, instead of
+  render it below the title and actions with an internal divider, instead of
   as a separate floating element — this is what every list page with
   search/filter should do, so the title and toolbar read as one unit.
 
@@ -1173,7 +1284,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
     values: ~w(card plain),
     default: "card",
     doc:
-      "\"card\" (default) renders the bordered/shadowed card shell; \"plain\" is a bare section divider with no card shell, for in-page section headings that aren't real page headers"
+      "\"card\" (default) provides page-header spacing; \"plain\" is a compact in-page section heading"
 
   slot :inner_block, required: true
   slot :subtitle
@@ -1189,7 +1300,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
   def header(assigns) do
     ~H"""
     <div class={[
-      @variant == "card" && "mb-5 rounded-2xl ff-surface-card",
+      @variant == "card" && "mb-5",
       @class
     ]}>
       <header class={[
@@ -1294,22 +1405,26 @@ defmodule ThamaniDawaWeb.CoreComponents do
       end
 
     ~H"""
-    <div class="responsive-table relative rounded-xl ff-surface-card sm:overflow-hidden">
+    <div class="responsive-table relative sm:overflow-hidden sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white">
       <div class="sm:overflow-x-auto sm:overscroll-x-contain">
         <table class="block w-full text-left sm:table sm:min-w-[42rem]">
-          <thead class="sr-only bg-thamani-canvas sm:not-sr-only sm:table-header-group">
+          <thead class="sr-only sm:not-sr-only sm:table-header-group sm:bg-thamani-table-head sm:text-left sm:text-thamani-forest">
             <tr>
               <th
                 :for={col <- @col}
                 scope="col"
                 class={[
-                  "whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600 sm:px-5",
+                  "whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600 sm:border-b sm:border-slate-200 sm:px-4 sm:py-3.5 sm:text-sm sm:font-semibold sm:leading-5 sm:text-thamani-forest",
                   col[:tablet] == "hidden" && "sm:max-lg:hidden"
                 ]}
               >
                 {col[:label]}
               </th>
-              <th :if={@action != []} scope="col" class="px-4 py-3 text-right sm:px-5">
+              <th
+                :if={@action != []}
+                scope="col"
+                class="px-4 py-3 text-right sm:border-b sm:border-slate-200 sm:py-3.5"
+              >
                 <span class="sr-only">{gettext("Actions")}</span>
               </th>
             </tr>
@@ -1317,7 +1432,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           <tbody
             id={@id}
             phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}
-            class="block space-y-2 sm:table-row-group sm:space-y-0 sm:divide-y sm:divide-thamani-stone"
+            class="block space-y-2 sm:table-row-group sm:space-y-0 sm:text-sm sm:leading-6 sm:text-zinc-700"
           >
             <tr
               :if={@empty_state != []}
@@ -1335,10 +1450,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
               :for={row <- @rows}
               id={@row_id && @row_id.(row)}
               class={[
-                "relative grid overflow-visible rounded-2xl border border-thamani-stone bg-thamani-snow shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200 sm:table-row sm:rounded-none sm:border-0 sm:bg-transparent sm:shadow-none",
+                "group relative grid overflow-visible rounded-2xl border border-thamani-stone bg-thamani-snow shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-colors duration-150 sm:table-row sm:rounded-none sm:border-0 sm:bg-white sm:shadow-none sm:even:bg-slate-50/40 sm:hover:bg-slate-50",
                 if(@mobile_columns == 3, do: "grid-cols-3", else: "grid-cols-2"),
                 @row_click &&
-                  "hover:border-thamani-forest/20 hover:shadow-[0_8px_24px_rgba(28,58,19,0.07)] focus-within:border-thamani-forest/20 cursor-pointer sm:hover:bg-thamani-stone/70 sm:focus-within:bg-thamani-stone/70 sm:hover:shadow-none"
+                  "hover:border-thamani-forest/20 hover:shadow-[0_8px_24px_rgba(28,58,19,0.07)] focus-within:border-thamani-forest/20 cursor-pointer sm:focus-within:bg-zinc-50 sm:hover:shadow-none"
               ]}
             >
               <td
@@ -1346,7 +1461,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
                 phx-click={@row_click && @row_click.(row)}
                 data-label={col[:label]}
                 class={[
-                  "flex min-w-0 flex-col items-start gap-1 border-b border-thamani-stone/60 px-4 py-3 text-left text-sm leading-5 text-slate-900 before:block before:text-sm before:font-normal before:text-thamani-pewter before:content-[attr(data-label)] first:col-span-full first:block first:bg-thamani-canvas/70 first:px-4 first:py-3.5 first:text-base first:font-semibold first:leading-6 first:text-thamani-forest first:before:hidden [&:nth-child(even)]:border-r [&:nth-child(even)]:border-thamani-stone/60 sm:table-cell sm:border-r-0 sm:border-b-0 sm:bg-transparent sm:px-5 sm:py-3.5 sm:text-left sm:text-sm sm:font-normal sm:leading-5 sm:text-slate-900 sm:before:hidden",
+                  "flex min-w-0 flex-col items-start gap-1 border-b border-thamani-stone/60 px-4 py-3 text-left text-sm leading-5 text-slate-900 before:block before:text-sm before:font-normal before:text-thamani-pewter before:content-[attr(data-label)] first:col-span-full first:block first:bg-thamani-canvas/70 first:px-4 first:py-3.5 first:text-base first:font-semibold first:leading-6 first:text-thamani-forest first:before:hidden [&:nth-child(even)]:border-r [&:nth-child(even)]:border-thamani-stone/60 sm:table-cell sm:h-[4.5rem] sm:align-middle sm:border-r-0 sm:border-b sm:border-slate-200 sm:bg-transparent sm:px-4 sm:py-3 sm:text-left sm:text-sm sm:font-normal sm:leading-5 sm:text-slate-700 sm:before:hidden sm:first:bg-transparent sm:first:text-sm sm:first:font-semibold sm:first:leading-5 sm:first:text-slate-950 sm:first:whitespace-nowrap sm:[&:nth-child(even)]:border-r-0",
                   @mobile_columns == 3 &&
                     "max-sm:[&:nth-child(3)]:border-r max-sm:[&:nth-child(3)]:border-thamani-stone/60",
                   col[:mobile] == "hidden" && "max-sm:hidden",
@@ -1361,9 +1476,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <td
                 :if={@action != []}
                 data-label={gettext("Actions")}
-                class="col-span-full flex items-center justify-end bg-thamani-canvas/60 px-3 py-3 text-right text-sm sm:table-cell sm:w-0 sm:whitespace-nowrap sm:border-t-0 sm:bg-transparent sm:px-5 sm:py-3.5"
+                class="col-span-full flex items-center justify-end bg-thamani-canvas/60 px-3 py-3 text-right text-sm sm:table-cell sm:h-[4.5rem] sm:w-px sm:whitespace-nowrap sm:align-middle sm:border-b sm:border-slate-200 sm:bg-transparent sm:px-4 sm:py-3"
               >
-                <div class="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 [&>*]:flex-1 sm:w-auto sm:flex-nowrap sm:gap-3 sm:[&>*]:flex-none">
+                <div class="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 [&>*]:flex-1 sm:w-max sm:flex-nowrap sm:gap-2 sm:[&>*]:flex-none sm:[&>*]:text-sm">
                   <%= for action <- @action do %>
                     {render_slot(action, @row_item.(row))}
                   <% end %>
@@ -1418,7 +1533,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
              :under_review,
              :pending_receipt,
              :invited,
-             :low_stock
+             :low_stock,
+             :unknown_serial
            ],
       do: :warning
 
@@ -1431,7 +1547,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
              :accepted,
              :finalised,
              :grn_confirmed,
-             :active
+             :active,
+             :paid,
+             :ok
            ],
       do: :success
 
@@ -1446,8 +1564,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
            ],
       do: :info
 
-  def status_semantic(status) when status in [:cancelled, :rejected, :flagged, :out_of_stock],
-    do: :danger
+  def status_semantic(status)
+      when status in [:cancelled, :rejected, :flagged, :out_of_stock, :failed, :data_mismatch],
+      do: :danger
 
   def status_semantic(_status), do: :neutral
 
@@ -1486,6 +1605,150 @@ defmodule ThamaniDawaWeb.CoreComponents do
       </p>
       <div :if={@actions != []} class="mt-4">{render_slot(@actions)}</div>
     </div>
+    """
+  end
+
+  @doc """
+  Renders a continuous animated progress bar for a multi-step flow (the
+  signup wizard, the post-login onboarding checklist) — a thin filled track
+  plus a "Step X of Y · label" caption underneath.
+
+  ## Examples
+
+      <.progress_bar current={2} total={4} label="Regulatory details" />
+  """
+  attr :current, :integer, required: true
+  attr :total, :integer, required: true
+  attr :label, :string, required: true
+
+  attr :prefix, :string,
+    default: nil,
+    doc:
+      "optional caption prefix (e.g. \"Getting started\") distinguishing this progress bar " <>
+        "from another one shown earlier in the same session (e.g. the signup wizard's)"
+
+  attr :class, :any, default: nil
+
+  def progress_bar(assigns) do
+    ~H"""
+    <div class={["w-full", @class]} aria-label="Progress">
+      <div class="h-1 w-full overflow-hidden rounded-full bg-[var(--thamani-stone)]">
+        <div
+          class="h-full rounded-full bg-[var(--thamani-forest)] transition-[width] duration-300 ease-out"
+          style={"width: #{progress_pct(@current, @total)}%"}
+        />
+      </div>
+      <p class="mt-2 text-[11px] font-medium text-[var(--thamani-pewter)]">
+        <span :if={@prefix}>{@prefix} · </span>Step {@current} of {@total} · {@label}
+      </p>
+    </div>
+    """
+  end
+
+  defp progress_pct(current, total) when total > 0, do: current / total * 100
+  defp progress_pct(_current, _total), do: 0
+
+  @doc """
+  Full-screen chrome for a single onboarding task page (e.g. "Add a branch",
+  "Add a product") reached from `OnboardingLive`'s checklist. Keeps the admin
+  inside the same navigation-free shell used by `/onboarding` itself, instead
+  of dropping them into the full org-shell platform page with its sidebar —
+  so a step's "manage" CRUD page and its onboarding entry point can share one
+  module, branching only on `return_to=onboarding`.
+
+  ## Examples
+
+      <.onboarding_task_shell
+        flash={@flash}
+        current_scope={@current_scope}
+        icon="hero-building-office-2"
+        title="Add a branch"
+        description="Register another location once you're ready to operate from more than one."
+      >
+        <:right>
+          ...task-specific list + add button...
+        </:right>
+        <:footer>
+          ...back / skip / continue row...
+        </:footer>
+      </.onboarding_task_shell>
+  """
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :icon, :string, required: true
+  attr :title, :string, required: true
+  attr :description, :string, required: true
+  attr :progress_current, :integer, default: 0
+  attr :progress_total, :integer, default: 0
+  slot :benefits, doc: "optional <li> items listed under the description"
+  slot :right, required: true, doc: "the task-specific panel (list + add action)"
+  slot :footer, required: true, doc: "the back / skip / continue row"
+
+  def onboarding_task_shell(assigns) do
+    ~H"""
+    <Layouts.app flash={@flash} current_scope={@current_scope} navigation={false}>
+      <div class="flex min-h-svh flex-col bg-[var(--thamani-snow)]">
+        <header class="border-b border-[color-mix(in_srgb,var(--thamani-stone)_70%,transparent)]">
+          <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-5 sm:px-8 lg:px-12">
+            <.link
+              navigate={~p"/onboarding"}
+              aria-label="Back to onboarding"
+              class="w-36 sm:w-[148px]"
+            >
+              <img src="/images/logo-transparent.png" alt="" class="h-auto w-full" />
+            </.link>
+
+            <div class="flex min-w-0 items-center gap-3">
+              <span
+                class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-snow)] shadow-sm"
+                aria-hidden="true"
+              >
+                {String.first(@current_scope.user.name || "U")}
+              </span>
+              <span class="max-w-44 truncate text-sm font-medium text-[var(--thamani-forest)]">
+                {@current_scope.user.name}
+              </span>
+            </div>
+          </div>
+        </header>
+
+        <div class="h-1 w-full overflow-hidden bg-[var(--thamani-stone)]" aria-label="Setup progress">
+          <div
+            class="h-full bg-[var(--thamani-forest)] transition-[width] duration-300 ease-out"
+            style={"width: #{progress_pct(@progress_current, @progress_total)}%"}
+          />
+        </div>
+
+        <main class="mx-auto grid w-full max-w-6xl flex-1 items-start gap-10 px-5 pb-16 pt-10 sm:px-8 sm:pt-12 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] md:gap-10 md:pt-16 lg:gap-16 lg:pt-20">
+          <section class="thamani-step-enter">
+            <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
+              <.icon name={@icon} class="size-6" />
+            </div>
+            <h1 class="max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
+              {@title}
+            </h1>
+            <p class="mt-6 max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
+              {@description}
+            </p>
+
+            <ul
+              :if={@benefits != []}
+              class="mt-9 space-y-4 text-sm text-[var(--thamani-pewter)] sm:text-[15px]"
+            >
+              {render_slot(@benefits)}
+            </ul>
+          </section>
+
+          <section class="thamani-step-enter min-w-0 rounded-3xl border border-[var(--thamani-stone)] bg-transparent p-6 sm:p-8">
+            {render_slot(@right)}
+          </section>
+
+          <div class="flex items-center justify-between gap-4 md:col-span-2">
+            {render_slot(@footer)}
+          </div>
+        </main>
+      </div>
+    </Layouts.app>
     """
   end
 
@@ -1674,7 +1937,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   defp thamani_btn_classes("primary"),
     do:
-      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-all duration-[160ms] ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#16362c] hover:scale-[1.01] hover:-translate-y-0.5 active:scale-[0.97] active:translate-y-0 w-full #{@btn_focus} #{@btn_loading}"
+      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-all duration-[160ms] ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#10221e] hover:scale-[1.01] hover:-translate-y-0.5 active:scale-[0.97] active:translate-y-0 w-full #{@btn_focus} #{@btn_loading}"
 
   defp thamani_btn_classes("ghost"),
     do:
@@ -1719,7 +1982,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :placeholder, :string, default: nil
   attr :autocomplete, :string, default: nil
   attr :class, :any, default: nil, doc: "extra classes on the wrapper div"
-  attr :rest, :global, include: ~w(required disabled readonly rows)
+  attr :required, :boolean, default: false, doc: "shows a required marker next to the label"
+  attr :icon, :string, default: nil, doc: "optional hero-* icon name shown leading the input"
+  attr :rest, :global, include: ~w(disabled readonly rows)
 
   def thamani_input(%{type: "textarea", field: field} = assigns) do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
@@ -1741,13 +2006,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
           for={@input_id}
           class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
         >
-          {@label}
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
         </label>
       </div>
       <textarea
         id={@input_id}
         name={@name}
         placeholder={@placeholder}
+        required={@required}
         class={[
           "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
           "border-[1.5px] rounded-lg outline-none",
@@ -1784,25 +2050,53 @@ defmodule ThamaniDawaWeb.CoreComponents do
           for={@input_id}
           class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
         >
-          {@label}
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
         </label>
       </div>
-      <input
-        id={@input_id}
-        type={@type}
-        name={@name}
-        value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
-        placeholder={@placeholder}
-        autocomplete={@autocomplete}
-        class={[
-          "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
-          "border-[1.5px] rounded-lg outline-none",
-          "transition-[border-color,box-shadow] duration-150 ease-in-out",
-          "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
-          (@errors != [] && "border-thamani-error") || "border-thamani-stone"
-        ]}
-        {@rest}
-      />
+      <div class="relative">
+        <span
+          :if={@icon}
+          class="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-thamani-pewter"
+        >
+          <.icon name={@icon} class="size-[18px]" />
+        </span>
+        <input
+          id={@input_id}
+          type={@type}
+          name={@name}
+          value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
+          placeholder={@placeholder}
+          autocomplete={@autocomplete}
+          required={@required}
+          class={[
+            "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
+            "border-[1.5px] rounded-lg outline-none",
+            "transition-[border-color,box-shadow] duration-150 ease-in-out",
+            "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
+            if(@icon, do: "pl-11!", else: "pl-4!"),
+            @type == "password" && "pr-11!",
+            (@errors != [] && "border-thamani-error") || "border-thamani-stone"
+          ]}
+          {@rest}
+        />
+        <button
+          :if={@type == "password"}
+          type="button"
+          id={"#{@input_id}-toggle"}
+          aria-label="Show password"
+          class="absolute inset-y-0 right-3 flex items-center text-thamani-pewter hover:text-thamani-forest"
+          phx-click={
+            JS.toggle_attribute({"type", "text", "password"}, to: "##{@input_id}")
+            |> JS.toggle(to: "##{@input_id}-eye")
+            |> JS.toggle(to: "##{@input_id}-eye-slash")
+          }
+        >
+          <span id={"#{@input_id}-eye"}><.icon name="hero-eye" class="size-5" /></span>
+          <span id={"#{@input_id}-eye-slash"} class="hidden">
+            <.icon name="hero-eye-slash" class="size-5" />
+          </span>
+        </button>
+      </div>
       <p :for={msg <- @errors} class="text-[13px] text-thamani-error mt-1.5">
         {msg}
       </p>
@@ -2255,10 +2549,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
       |> assign(:page_numbers, page_numbers)
 
     ~H"""
-    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-slate-200 pt-6">
-      <p class="text-sm text-slate-500 order-2 sm:order-1">
-        Showing <span class="font-medium text-slate-900">{@from_item}</span>–<span class="font-medium text-slate-900">{@to_item}</span>
-        of <span class="font-medium text-slate-900">{@total_entries}</span>
+    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-thamani-stone pt-6">
+      <p class="pagination-summary order-2 sm:order-1 text-sm">
+        Showing <span class="pagination-summary-value font-medium">{@from_item}</span>–<span class="pagination-summary-value font-medium">{@to_item}</span>
+        of <span class="pagination-summary-value font-medium">{@total_entries}</span>
         results
       </p>
 
@@ -2270,10 +2564,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page - 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
+            "pagination-link inline-flex items-center justify-center size-10 rounded-lg transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_prev,
-              do: "hover:bg-slate-100 hover:text-slate-900",
-              else: "pointer-events-none opacity-40"
+              do: "",
+              else: "pointer-events-none"
             )
           ]}
           aria-disabled={!@has_prev}
@@ -2289,16 +2583,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
               if page_num != :ellipsis, do: build_pagination_url(@path, page_num, @query_param)
             }
             class={[
-              "inline-flex items-center justify-center size-10 rounded-lg text-sm font-medium transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
+              "inline-flex items-center justify-center size-10 rounded-lg text-sm transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
               if(page_num == :ellipsis,
-                do: "text-slate-400 cursor-default",
-                else:
-                  if(page_num == @current_page,
-                    do: "bg-thamani-forest text-white",
-                    else: "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  )
+                do: "pagination-ellipsis cursor-default",
+                else: "pagination-link"
               )
             ]}
+            aria-current={page_num == @current_page && "page"}
           >
             {if page_num == :ellipsis, do: "…", else: page_num}
           </.link>
@@ -2307,10 +2598,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <.link
           navigate={build_pagination_url(@path, @current_page + 1, @query_param)}
           class={[
-            "inline-flex items-center justify-center size-10 rounded-lg text-slate-500 transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
+            "pagination-link inline-flex items-center justify-center size-10 rounded-lg transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
             if(@has_next,
-              do: "hover:bg-slate-100 hover:text-slate-900",
-              else: "pointer-events-none opacity-40"
+              do: "",
+              else: "pointer-events-none"
             )
           ]}
           aria-disabled={!@has_next}

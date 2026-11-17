@@ -15,6 +15,7 @@ defmodule ThamaniDawaWeb.DarajaCallbackController do
 
   require Logger
 
+  alias ThamaniDawa.Distributor.{Billing, SerialPayment}
   alias ThamaniDawa.Payments
 
   def create(conn, %{"token" => token} = params) do
@@ -34,7 +35,7 @@ defmodule ThamaniDawaWeb.DarajaCallbackController do
   defp handle_callback(%{"Body" => %{"stkCallback" => stk_callback}})
        when is_map(stk_callback) do
     with %{"CheckoutRequestID" => reference, "ResultCode" => result_code} <- stk_callback,
-         %Payments.Payment{} = payment <- Payments.get_payment_by_reference(reference) do
+         payment when not is_nil(payment) <- find_payment(reference) do
       apply_result(payment, result_code, stk_callback)
     else
       nil ->
@@ -49,6 +50,20 @@ defmodule ThamaniDawaWeb.DarajaCallbackController do
     Logger.warning("Daraja callback: malformed payload, ignoring")
   end
 
+  # STK pushes are initiated both for patient payments and for distributor
+  # serialisation billing; the CheckoutRequestID is unique across both.
+  defp find_payment(reference) when is_binary(reference) do
+    Payments.get_payment_by_reference(reference) || Billing.get_payment_by_reference(reference)
+  end
+
+  defp find_payment(_reference), do: nil
+
+  defp apply_result(%SerialPayment{} = payment, 0, _stk_callback),
+    do: Billing.confirm_paid(payment)
+
+  defp apply_result(%SerialPayment{} = payment, result_code, stk_callback),
+    do: Billing.fail_payment(payment, failure_reason(result_code, stk_callback))
+
   defp apply_result(payment, 0, _stk_callback), do: Payments.complete_payment(payment)
 
   defp apply_result(payment, 1032, _stk_callback),
@@ -60,6 +75,12 @@ defmodule ThamaniDawaWeb.DarajaCallbackController do
   defp apply_result(payment, result_code, stk_callback) do
     Payments.fail_payment(payment, "provider_error_#{result_code}: #{stk_callback["ResultDesc"]}")
   end
+
+  defp failure_reason(1032, _stk_callback), do: "cancelled_by_user"
+  defp failure_reason(1037, _stk_callback), do: "timeout"
+
+  defp failure_reason(result_code, stk_callback),
+    do: "provider_error_#{result_code}: #{stk_callback["ResultDesc"]}"
 
   defp ack(conn) do
     conn |> put_status(200) |> json(%{"ResultCode" => 0, "ResultDesc" => "Accepted"})

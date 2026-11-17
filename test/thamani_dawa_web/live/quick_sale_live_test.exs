@@ -298,6 +298,36 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
       assert has_element?(lv, "#cart-quantity-#{product.id}[value='2']")
     end
 
+    test "cash tender shortcuts stay visibly selected", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      product = product_fixture(%{organization_id: organization.id, price: 27})
+
+      batch_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 20
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/quick-sale")
+
+      lv |> element("#quick-add-#{product.id}") |> render_click()
+      assert has_element?(lv, "#cart-line-#{product.id}")
+      render_click(lv, "select_payment_type", %{"payment_type" => "Cash"})
+      render_click(lv, "complete_sale", %{})
+
+      assert has_element?(lv, "#quick-sale-payment-modal")
+      assert has_element?(lv, "#cash-tender-exact[aria-pressed='true']")
+      refute has_element?(lv, "#cash-tender-50[aria-pressed='true']")
+
+      lv |> element("#cash-tender-50") |> render_click()
+
+      assert has_element?(lv, "#cash-tender-50[aria-pressed='true'].bg-thamani-lime")
+      refute has_element?(lv, "#cash-tender-exact[aria-pressed='true']")
+    end
+
     test "payment confirmation completes a sale and shows its complete receipt", %{
       conn: conn
     } do

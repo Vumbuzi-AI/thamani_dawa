@@ -2,6 +2,9 @@
    https://tailwindcss.com/docs/configuration */
 
 @import "tailwindcss" source(none);
+@import "./landing.css" layer(base);
+@import "./contact.css";
+@import "./auth.css";
 @import "phoenix-colocated/thamani_dawa/colocated.css";
 @source "../css";
 @source "../js";
@@ -29,29 +32,29 @@
   default: false;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: #fcfcf7;
-  --color-base-200: #eeeee9;
-  --color-base-300: #c4c7c4;
-  --color-base-content: #1c3a13;
-  --color-primary: #1c3a13;
-  --color-primary-content: #fcfcf7;
-  --color-secondary: #757c5d;
-  --color-secondary-content: #fcfcf7;
-  --color-accent: #d3fa99;
-  --color-accent-content: #1c3a13;
-  --color-neutral: #1c3a13;
-  --color-neutral-content: #fcfcf7;
-  --color-info: #698e79;
-  --color-info-content: #fcfcf7;
-  --color-success: #1c3a13;
-  --color-success-content: #d3fa99;
+  --color-base-100: #ffffff;
+  --color-base-200: #eeece5;
+  --color-base-300: #e5e3da;
+  --color-base-content: #17302a;
+  --color-primary: #17302a;
+  --color-primary-content: #ffffff;
+  --color-secondary: #707371;
+  --color-secondary-content: #ffffff;
+  --color-accent: #aff0d3;
+  --color-accent-content: #17302a;
+  --color-neutral: #17302a;
+  --color-neutral-content: #ffffff;
+  --color-info: #aff0d3;
+  --color-info-content: #17302a;
+  --color-success: #17302a;
+  --color-success-content: #aff0d3;
   --color-warning: #9f995b;
-  --color-warning-content: #1c3a13;
+  --color-warning-content: #17302a;
   --color-error: #c21f17;
-  --color-error-content: #fcfcf7;
+  --color-error-content: #ffffff;
   --radius-selector: 1000px;
-  --radius-field: 8px;
-  --radius-box: 16px;
+  --radius-field: 10px;
+  --radius-box: 20px;
   --size-selector: 0.21875rem;
   --size-field: 0.21875rem;
   --border: 1.5px;
@@ -64,29 +67,29 @@
   default: true;
   prefersdark: false;
   color-scheme: "light";
-  --color-base-100: #fcfcf7;
-  --color-base-200: #eeeee9;
-  --color-base-300: #c4c7c4;
-  --color-base-content: #1c3a13;
-  --color-primary: #1c3a13;
-  --color-primary-content: #fcfcf7;
-  --color-secondary: #757c5d;
-  --color-secondary-content: #fcfcf7;
-  --color-accent: #d3fa99;
-  --color-accent-content: #1c3a13;
-  --color-neutral: #1c3a13;
-  --color-neutral-content: #fcfcf7;
-  --color-info: #698e79;
-  --color-info-content: #fcfcf7;
-  --color-success: #1c3a13;
-  --color-success-content: #d3fa99;
+  --color-base-100: #ffffff;
+  --color-base-200: #eeece5;
+  --color-base-300: #e5e3da;
+  --color-base-content: #17302a;
+  --color-primary: #17302a;
+  --color-primary-content: #ffffff;
+  --color-secondary: #707371;
+  --color-secondary-content: #ffffff;
+  --color-accent: #aff0d3;
+  --color-accent-content: #17302a;
+  --color-neutral: #17302a;
+  --color-neutral-content: #ffffff;
+  --color-info: #aff0d3;
+  --color-info-content: #17302a;
+  --color-success: #17302a;
+  --color-success-content: #aff0d3;
   --color-warning: #9f995b;
-  --color-warning-content: #1c3a13;
+  --color-warning-content: #17302a;
   --color-error: #c21f17;
-  --color-error-content: #fcfcf7;
+  --color-error-content: #ffffff;
   --radius-selector: 1000px;
-  --radius-field: 8px;
-  --radius-box: 16px;
+  --radius-field: 10px;
+  --radius-box: 20px;
   --size-selector: 0.21875rem;
   --size-field: 0.21875rem;
   --border: 1.5px;
@@ -127,6 +130,7 @@ body {
 }
 
 .internal-app {
+  font-family: var(--font-thamani-sans-display);
   font-synthesis: none;
   font-kerning: normal;
   font-optical-sizing: auto;
@@ -150,6 +154,27 @@ body {
   font-weight: 650;
 }
 
+/* Keep headings on the same Rethink Sans family as the operational UI,
+   with tighter tracking so hierarchy comes from scale and rhythm. */
+.internal-app :where(h1, h2, h3, h4, h5, h6),
+.internal-app .dashboard-chart-title,
+.internal-app .dashboard-stat-tile-value {
+  font-family: var(--font-thamani-sans-display);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.internal-app :where(h1, h2, h3, h4, h5, h6) {
+  font-weight: 400;
+}
+
+/* Operational tables use one consistent sans-serif rhythm. Machine-readable
+   identifiers remain selectable, but should not visually overpower names. */
+.internal-app .responsive-table .font-mono {
+  font-family: inherit;
+  letter-spacing: normal;
+}
+
 /* ============================================================
    App Shell — Sidebar collapse
    Single class toggled by the .Sidebar hook (layouts.ex); every
@@ -159,16 +184,124 @@ body {
 
 /* Override Tailwind's ease-in-out with a decisive iOS drawer curve */
 #sidebar-aside {
-  background: var(--thamani-sidenav, #EFEFF0) !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 34%), transparent 32%),
+    var(--thamani-sidenav, #F0EFEA) !important;
+  border-color: #d7dad2 !important;
   transition-property: translate, width, transform !important;
   transition-timing-function: cubic-bezier(0.32, 0.72, 0, 1) !important;
   transition-duration: 220ms !important;
   will-change: translate;
 }
 
-/* Sync toggle chevron to the same curve */
-#sidebar-toggle-icon {
-  transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1) !important;
+/* Sidebar-specific contrast: Soft Stone light navigation surface (variant 3 —
+   light sidebar, solid dark-green active item, outer frame border on the
+   app shell). Avoid the app's softer secondary text tokens here since this
+   is persistent navigation, not body copy. */
+#sidebar-aside nav a:not([aria-current="page"]) {
+  color: #4f5955 !important;
+  font-weight: 600;
+}
+
+#sidebar-aside nav a:not([aria-current="page"]):hover,
+#sidebar-aside nav a:not([aria-current="page"]):focus-visible {
+  background: rgb(255 255 255 / 58%);
+  color: var(--thamani-forest) !important;
+}
+
+#sidebar-aside nav a[aria-current="page"] {
+  background: linear-gradient(135deg, var(--thamani-forest), var(--thamani-evergreen)) !important;
+  color: var(--thamani-snow) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 12%),
+    0 5px 14px rgb(23 48 42 / 12%);
+}
+
+#sidebar-aside .sidebar-group-label,
+#portal-switch > span:first-child,
+#site-switch-form > span:first-of-type {
+  color: #626b67 !important;
+  font-weight: 650;
+}
+
+#sidebar-aside .text-thamani-pewter,
+#sidebar-profile > span:last-child {
+  color: #58625e !important;
+}
+
+#portal-switch-trigger,
+#site-switch-trigger,
+#sidebar-account-card {
+  border-color: #c7ccc2 !important;
+}
+
+#portal-switch-trigger {
+  background: rgb(255 255 255 / 44%) !important;
+  box-shadow: 0 1px 2px rgb(23 48 42 / 5%);
+}
+
+#site-switch-trigger,
+#sidebar-account-card {
+  background: rgb(255 255 255 / 30%) !important;
+}
+
+#sidebar-footer {
+  border-color: #cfd3c9 !important;
+}
+
+/* Keep the navigation natively scrollable without adding a heavy visual rail.
+   The frame fades are toggled by the sidebar hook only while more content is
+   available in that direction, so the footer still reads as deliberately
+   anchored instead of as the end of the navigation. */
+#sidebar-scroll-frame::before,
+#sidebar-scroll-frame::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  left: 0;
+  height: 30px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+#sidebar-scroll-frame::before {
+  top: 0;
+  background: linear-gradient(to bottom, var(--thamani-sidenav, #f0efea) 8%, transparent);
+}
+
+#sidebar-scroll-frame::after {
+  bottom: 0;
+  background: linear-gradient(to top, var(--thamani-sidenav, #f0efea) 8%, transparent);
+}
+
+#sidebar-scroll-frame.can-scroll-up::before,
+#sidebar-scroll-frame.can-scroll-down::after {
+  opacity: 1;
+}
+
+#sidebar-scroll {
+  scrollbar-width: none;
+}
+
+#sidebar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Variant 3's outer frame — a thin brand-accent border around the whole app
+   shell, inset so it reads as a deliberate frame rather than a stray edge. */
+#sidebar-shell {
+  border: 1.5px solid var(--thamani-lime);
+}
+
+@media (min-width: 1024px) {
+  #sidebar-shell {
+    margin: 6px;
+    height: calc(100vh - 12px) !important;
+    border-radius: 16px;
+    overflow: hidden;
+  }
 }
 
 /* The desktop collapse/expand state is irrelevant on mobile, where the
@@ -178,8 +311,8 @@ body {
    mobile drawer stuck icon-only when it opens. */
 @media (min-width: 1024px) {
   #sidebar-aside.sidebar-collapsed {
-    width: 80px !important;
-    padding: 24px 16px !important;
+    width: 96px !important;
+    padding: 16px 12px !important;
   }
 }
 
@@ -205,16 +338,6 @@ body {
   opacity: 1;
   pointer-events: auto;
   transition-delay: 0s;
-}
-
-/* Printing — hide the app chrome while leaving the current page's printable
-   content in the document. Hiding #sidebar-shell itself would also hide batch
-   labels nested within it. */
-@media print {
-  #sidebar-aside,
-  #mobile-app-bar {
-    display: none !important;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -244,6 +367,33 @@ body {
 }
 
 @media (min-width: 1024px) {
+  #sidebar-aside.sidebar-collapsed #sidebar-brand-row {
+    position: relative;
+    min-height: 92px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+
+  #sidebar-aside.sidebar-collapsed #sidebar-brand {
+    width: auto;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  #sidebar-aside.sidebar-collapsed #sidebar-brand-link,
+  #sidebar-aside.sidebar-collapsed #sidebar-brand-logo {
+    width: 80px;
+    min-width: 80px;
+    height: 32px;
+  }
+
+  #sidebar-aside.sidebar-collapsed #sidebar-toggle {
+    position: static;
+  }
+
   #sidebar-aside.sidebar-collapsed #sidebar-brand-text,
   #sidebar-aside.sidebar-collapsed #site-switch-form,
   #sidebar-aside.sidebar-collapsed #sidebar-portal-switch {
@@ -253,8 +403,29 @@ body {
     pointer-events: none;
   }
 
-  #sidebar-aside.sidebar-collapsed #sidebar-toggle-icon {
-    transform: rotate(180deg);
+  #sidebar-aside.sidebar-collapsed #sidebar-toggle-collapse-icon {
+    display: none;
+  }
+
+  #sidebar-aside.sidebar-collapsed #sidebar-toggle-expand-icon {
+    display: inline-flex;
+  }
+
+  #sidebar-aside.sidebar-collapsed #sidebar-toggle {
+    width: 40px;
+    height: 40px;
+  }
+
+  #sidebar-aside.sidebar-collapsed .sidebar-group-label {
+    display: none;
+  }
+
+  #sidebar-aside.sidebar-collapsed #sidebar-scroll {
+    padding-left: 6px;
+  }
+
+  #sidebar-aside.sidebar-collapsed #sidebar-scroll nav {
+    gap: 10px;
   }
 
   #sidebar-aside.sidebar-collapsed nav a,
@@ -305,28 +476,23 @@ body {
     overflow: hidden;
   }
 
-  #sidebar-aside.sidebar-collapsed [data-tooltip] {
-    position: relative;
-  }
+}
 
-  #sidebar-aside.sidebar-collapsed [data-tooltip]:hover::after,
-  #sidebar-aside.sidebar-collapsed [data-tooltip]:focus-visible::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    left: calc(100% + 12px);
-    top: 50%;
-    transform: translateY(-50%);
-    background: var(--thamani-forest);
-    color: var(--thamani-snow);
-    padding: 6px 12px;
-    border-radius: 10px;
-    font-size: 13px;
-    font-weight: 500;
-    white-space: nowrap;
-    z-index: 60;
-    pointer-events: none;
-    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.15);
-  }
+/* Appended to <body> by the sidebar hook so the scroll region cannot clip it. */
+#sidebar-floating-tooltip {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  transform: translateY(-50%);
+  border-radius: 10px;
+  background: var(--thamani-forest);
+  color: var(--thamani-snow);
+  padding: 6px 12px;
+  box-shadow: 0 8px 20px rgb(15 23 42 / 15%);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
 }
 
 /* ============================================================
@@ -335,48 +501,80 @@ body {
 
 :root {
   /* Botanical-Clinical Palette — design.md tokens */
-  --color-forest-depths: #1c3a13;
-  --color-lime-pulse: #d3fa99;
-  --color-sage-moss: #757c5d;
+  --color-forest-depths: #17302a;
+  --color-lime-pulse: #aff0d3;
+  --color-sage-moss: #707371;
   --color-olive-gold: #9f995b;
-  --color-eucalyptus: #698e79;
-  --color-snow-white: #fcfcf7;
-  --color-warm-stone: #eeeee9;
-  --color-frosted-glass: #c4c7c4;
-  --color-ash: #b3b3b3;
-  --color-pewter: #666666;
+  --color-eucalyptus: #6b7f71;
+  --color-snow-white: #ffffff;
+  --color-warm-stone: #e5e3da;
+  --color-frosted-glass: #e5e3da;
+  --color-ash: #a9abaa;
+  --color-pewter: #707371;
   --color-ink: #000000;
 
-  /* Thamani palette — single source of truth */
-  --thamani-forest: #1c3a13;
-  --thamani-lime: #d3fa99;
-  --thamani-snow: #fcfcf7;
-  --thamani-stone: #eeeee9;
-  --thamani-pewter: #666666;
-  --thamani-frosted: #c4c7c4;
-  --thamani-subtle: #b3b3b3;
+  /* Thamani palette — single source of truth (design-system.json/.md tokens)
+     Repointed to the approved "Warm Mineral" direction (design review v1.0).
+     --thamani-lime is deliberately no longer the vivid accent: status-success
+     now has its own wash (see badge_classes/1 in core_components.ex) so brand
+     green stops doing double duty as a semantic status color. */
+  --thamani-forest: #294636;
+  --thamani-evergreen: #203826;
+  --thamani-lime: #e5efe5;
+  --thamani-sage: #bfceb7;
+  --thamani-pale-sage: #e4ebdd;
+  --thamani-lavender: #dcd2ec;
+  --thamani-lilac: #e5ddf4;
+  --thamani-cream: #fff6e3;
+  --thamani-ivory: #f0efea;
+  --thamani-snow: #fffefa;
+  --thamani-stone: #f0efea;
+  --thamani-pewter: #647269;
+  --thamani-frosted: #e5e5df;
+  --thamani-subtle: #a9abaa;
   --thamani-error: #c21f17;
-  --thamani-canvas: #fcfcf7;
-  --thamani-accent: #d3fa99;
-  --thamani-border-nav: #eeeee9;
-  --thamani-sidenav: #EFEFF0;
-  --thamani-sidebar-bg: var(--thamani-sidenav);
+  --thamani-canvas: #f7f6f2;
+  --thamani-accent: #387f5d;
+  --thamani-border-nav: #e5e5df;
+  /* Generic warm-neutral surface — originally named for the app sidebar,
+     now reused for marketing-page sections too, so it's named for what
+     it is rather than where it was first used. */
+  --thamani-surface-warm: #f0efea;
+  --thamani-paper: #f7f8f3;
+  --thamani-sidenav: var(--thamani-surface-warm);
+  --thamani-sidebar-bg: var(--thamani-surface-warm);
+  --thamani-table-head: #f3f3ed;
 
   /* Dashboard chart series */
-  --thamani-chart-1: #1c3a13;
-  --thamani-chart-1-fill: rgba(28, 58, 19, 0.14);
-  --thamani-chart-2: #757c5d;
+  --thamani-chart-1: #17302a;
+  --thamani-chart-1-fill: rgba(23, 48, 42, 0.14);
+  --thamani-chart-2: #707371;
   --thamani-chart-3: #9f995b;
-  --thamani-chart-4: #698e79;
+  --thamani-chart-4: #6b7f71;
   --thamani-chart-5: #c21f17;
+
+  /* True-neutral ramp — no green tint. For internal-app structural text,
+     borders and backgrounds, kept separate from the brand ink
+     (--thamani-forest) so dense screens read with depth instead of one
+     hue doing double duty as both ink and brand. */
+  --thamani-neutral-50: #f8fafc;
+  --thamani-neutral-100: #f1f5f9;
+  --thamani-neutral-200: #e2e8f0;
+  --thamani-neutral-300: #cbd5e1;
+  --thamani-neutral-400: #94a3b8;
+  --thamani-neutral-500: #64748b;
+  --thamani-neutral-600: #475569;
+  --thamani-neutral-700: #334155;
+  --thamani-neutral-800: #1e293b;
+  --thamani-neutral-900: #0f172a;
 
   /* ---- Fluid Functionalism surface ladder (light mode, Thamani warm adaptation) ----
      surface-1  : page / app shell — warm parchment, clearly the ground level
      surface-2  : sidebar / secondary panels — one step lighter
      surface-3+ : all elevated content surfaces — pure white; shadow alone signals depth
   */
-  --surface-1: #F9F9FA;
-  --surface-2: #F8F7F2;
+  --surface-1: #F7F6F2;
+  --surface-2: #F0EFEA;
   --surface-3: #FFFFFF;
   --surface-4: #FFFFFF;
   --surface-5: #FFFFFF;
@@ -411,36 +609,56 @@ body {
    ============================================================ */
 
 @theme {
-  --color-forest-depths: #1c3a13;
-  --color-lime-pulse: #d3fa99;
-  --color-sage-moss: #757c5d;
+  --color-forest-depths: #17302a;
+  --color-lime-pulse: #aff0d3;
+  --color-sage-moss: #707371;
   --color-olive-gold: #9f995b;
-  --color-eucalyptus: #698e79;
-  --color-snow-white: #fcfcf7;
-  --color-warm-stone: #eeeee9;
-  --color-frosted-glass: #c4c7c4;
-  --color-ash: #b3b3b3;
-  --color-pewter: #666666;
+  --color-eucalyptus: #6b7f71;
+  --color-snow-white: #ffffff;
+  --color-warm-stone: #e5e3da;
+  --color-frosted-glass: #e5e3da;
+  --color-ash: #a9abaa;
+  --color-pewter: #707371;
   --color-ink: #000000;
 
-  --color-thamani-forest: #1c3a13;
-  --color-thamani-lime: #d3fa99;
-  --color-thamani-snow: #fcfcf7;
-  --color-thamani-stone: #eeeee9;
-  --color-thamani-pewter: #666666;
-  --color-thamani-frosted: #c4c7c4;
-  --color-thamani-subtle: #b3b3b3;
+  --color-thamani-forest: #294636;
+  --color-thamani-evergreen: #203826;
+  --color-thamani-lime: #e5efe5;
+  --color-thamani-sage: #bfceb7;
+  --color-thamani-pale-sage: #e4ebdd;
+  --color-thamani-lavender: #dcd2ec;
+  --color-thamani-lilac: #e5ddf4;
+  --color-thamani-cream: #fff6e3;
+  --color-thamani-ivory: #f0efea;
+  --color-thamani-snow: #fffefa;
+  --color-thamani-stone: #f0efea;
+  --color-thamani-pewter: #647269;
+  --color-thamani-frosted: #e5e5df;
+  --color-thamani-subtle: #a9abaa;
   --color-thamani-error: #c21f17;
-  --color-thamani-canvas: #fcfcf7;
-  --color-thamani-accent: #d3fa99;
-  --color-thamani-border-nav: #eeeee9;
+  --color-thamani-canvas: #f7f6f2;
+  --color-thamani-accent: #387f5d;
+  --color-thamani-border-nav: #e5e5df;
+  --color-thamani-table-head: #f3f3ed;
 
-  --font-thamani-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --color-thamani-neutral-50: #f8fafc;
+  --color-thamani-neutral-100: #f1f5f9;
+  --color-thamani-neutral-200: #e2e8f0;
+  --color-thamani-neutral-300: #cbd5e1;
+  --color-thamani-neutral-400: #94a3b8;
+  --color-thamani-neutral-500: #64748b;
+  --color-thamani-neutral-600: #475569;
+  --color-thamani-neutral-700: #334155;
+  --color-thamani-neutral-800: #1e293b;
+  --color-thamani-neutral-900: #0f172a;
+
+  --font-thamani-sans: 'Rethink Sans', 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-thamani-sans-display: 'Rethink Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-thamani-sans-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
 
   --radius-full: 1000px;
-  --radius-2xl: 16px;
-  --radius-3xl: 32px;
+  --radius-2xl: 20px;
+  --radius-3xl: 30px;
 }
 
 /* ============================================================
@@ -484,6 +702,43 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* Shared step-transition animation for multi-step flows (signup wizard,
+   post-login onboarding) — each step is a distinct conditionally-rendered
+   subtree, so this plays automatically whenever a fresh step panel mounts. */
+.thamani-step-enter {
+  animation: thamani-fade-up 320ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes onboarding-confetti-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.2) rotate(0deg);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1) rotate(var(--r));
+  }
+}
+
+.onboarding-confetti-piece {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 12px;
+  opacity: 0;
+  animation: onboarding-confetti-pop 1.45s cubic-bezier(0.2, 0.75, 0.25, 1) var(--d) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-confetti-piece {
+    display: none;
   }
 }
 
@@ -592,7 +847,7 @@ body {
 }
 
 .thamani-btn-primary:hover {
-  background: #16362c;
+  background: var(--thamani-evergreen);
   transform: translateY(-0.5px) scale(1.01);
   box-shadow: 0 3px 8px rgba(18, 38, 32, 0.16);
 }
@@ -742,7 +997,7 @@ body {
 }
 
 .thamani-btn-lime:hover {
-  background: #bcf06f;
+  background: #8fe0bb;
   transform: translateY(-0.5px) scale(1.01);
   box-shadow: 0 3px 8px rgba(163, 230, 53, 0.2);
 }
@@ -776,7 +1031,7 @@ textarea:not(.hidden):not([hidden]) {
   font-size: 14px;
   font-weight: 400;
   line-height: 1.5;
-  border: 2px solid #b8c0af !important;
+  border: 2px solid var(--thamani-neutral-200) !important;
   outline: none !important;
   box-shadow: none !important;
   transition: border-color 150ms ease;
@@ -792,8 +1047,8 @@ input[hidden] {
 .thamani-select::placeholder,
 input::placeholder,
 textarea::placeholder {
-  color: var(--thamani-pewter) !important;
-  opacity: 0.6 !important;
+  color: var(--thamani-neutral-400) !important;
+  opacity: 1 !important;
 }
 
 .thamani-input:focus,
@@ -808,15 +1063,6 @@ textarea:focus {
 
 #quick-sale-scan-form input.quick-sale-search-input {
   padding-left: 2.75rem;
-}
-
-@media print {
-  html, body { width: 80mm !important; height: auto !important; margin: 0 !important; overflow: hidden !important; }
-  body * { visibility: hidden !important; }
-  #quick-sale-receipt, #quick-sale-receipt * { visibility: visible !important; }
-  #quick-sale-receipt { position: fixed !important; left: 0 !important; top: 0 !important; width: 80mm !important; min-height: 0 !important; margin: 0 !important; padding: 6mm !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; color: #102b0d !important; font-size: 11px !important; line-height: 1.35 !important; }
-  #quick-sale-receipt img { display: block !important; }
-  @page { size: 80mm auto; margin: 0; }
 }
 
 /* Custom select chevron — replaces the stripped browser arrow */
@@ -835,7 +1081,7 @@ select:not(.hidden):not([hidden]) {
 /* Prompt/placeholder option — muted */
 .thamani-select option[value=""],
 select option[value=""] {
-  color: var(--thamani-pewter);
+  color: var(--thamani-neutral-400);
 }
 
 .thamani-label,
@@ -855,10 +1101,18 @@ label,
   color: var(--thamani-forest);
 }
 
+[data-tour-card] [data-tour-progress] {
+  color: var(--thamani-lime);
+}
+
+[data-tour-card] [data-tour-description] {
+  color: rgba(255, 255, 255, 0.85);
+}
+
 [role="dialog"] .text-gray-500,
 [role="dialog"] .text-gray-600,
 [role="dialog"] .opacity-60 {
-  color: var(--thamani-pewter) !important;
+  color: var(--thamani-neutral-500) !important;
 }
 
 [role="dialog"] .validation-error,
@@ -1135,19 +1389,17 @@ label,
   box-shadow: var(--shadow-6);
 }
 
-/* Responsive tables promote each row into its own record card on phones.
-   The outer desktop surface is removed there to avoid a visually noisy
-   card-inside-card treatment. */
-@media (max-width: 639px) {
-  .responsive-table {
-    background: transparent;
-    box-shadow: none;
-  }
-}
-
 /* ============================================================
    Dashboard components — stat tiles, chart cards, range filter
    ============================================================ */
+
+.dashboard-section-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--thamani-neutral-500);
+}
 
 .dashboard-stat-grid {
   display: grid;
@@ -1172,7 +1424,7 @@ label,
   flex-direction: column;
   gap: 10px;
   background: var(--surface-3);
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 18px 20px;
   box-shadow: var(--shadow-2);
 }
@@ -1199,20 +1451,18 @@ label,
 .dashboard-stat-tile-label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--thamani-pewter);
+  color: var(--thamani-neutral-500);
 }
 
 .dashboard-stat-tile-value {
   font-size: 28px;
   font-weight: 350;
-  letter-spacing: -0.48px;
   color: var(--thamani-forest);
-  line-height: 1.1;
 }
 
 .dashboard-stat-tile-sublabel {
   font-size: 13px;
-  color: var(--thamani-pewter);
+  color: var(--thamani-neutral-500);
 }
 
 .dashboard-chart-grid {
@@ -1229,7 +1479,7 @@ label,
 
 .dashboard-chart-card {
   background: var(--surface-3);
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 20px;
   box-shadow: var(--shadow-2);
 }
@@ -1242,7 +1492,7 @@ label,
 
 .dashboard-chart-subtitle {
   font-size: 13px;
-  color: var(--thamani-pewter);
+  color: var(--thamani-neutral-500);
   margin-top: 2px;
 }
 
@@ -1325,33 +1575,136 @@ label,
   }
 }
 
-/* Print styles for GS1 Data Matrix Batch Label */
+/* ============================================================
+   Pagination controls
+
+   These rules live outside Tailwind's utility layer on purpose:
+   the marketing stylesheet (`landing.css`) resets `a { color: inherit }`
+   globally, and because that reset is unlayered it outranks every
+   layered `text-*` utility — which left the current-page number
+   painted in the inherited body ink instead of the inverse snow.
+   Scoping the colors here (specificity over `a`) keeps them applied
+   and gives the pager the same Thamani palette as the rest of the app.
+   ============================================================ */
+
+.pagination-summary {
+  color: var(--thamani-neutral-500);
+}
+
+.pagination-summary .pagination-summary-value {
+  color: var(--thamani-forest);
+}
+
+.pagination-link {
+  color: var(--thamani-neutral-500);
+}
+
+.pagination-link:hover:not([aria-disabled="true"]) {
+  background-color: var(--thamani-stone);
+  color: var(--thamani-forest);
+}
+
+.pagination-link[aria-current="page"] {
+  background-color: var(--thamani-forest);
+  color: var(--thamani-snow);
+  font-weight: 600;
+}
+
+.pagination-link[aria-current="page"]:hover {
+  background-color: var(--thamani-forest);
+  color: var(--thamani-snow);
+}
+
+.pagination-link[aria-disabled="true"] {
+  color: var(--thamani-neutral-300);
+}
+
+.pagination-ellipsis {
+  color: var(--thamani-neutral-500);
+}
+
+/* Shared print foundation. Individual documents keep their own page geometry. */
+:root {
+  --print-page: #ffffff;
+  --print-brand: #17302a;
+  --print-ink: #172414;
+  --print-muted: #4e554b;
+  --print-line: #c9cec5;
+  --print-soft: #f4f6f1;
+  --print-font: Arial, Helvetica, sans-serif;
+}
+
+.print-document {
+  color: var(--print-ink);
+  font-family: var(--print-font);
+  background: var(--print-page);
+}
+
+/* Shared print reset with page geometry scoped to each document type. */
 @media print {
-  /* The authenticated shell has an off-white canvas for the on-screen app.
-     Print the receipt on white paper instead. */
-  body,
-  #sidebar-shell {
-    background: #fff !important;
+  @page {
+    size: auto;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background-color: var(--print-page) !important;
+  }
+
+  #sidebar-shell,
+  #sidebar-shell > main,
+  #sidebar-shell > main > div,
+  .internal-app {
+    display: block !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    background-color: var(--print-page) !important;
+  }
+
+  #sidebar-aside,
+  #mobile-app-bar,
+  #sidebar-backdrop,
+  .no-print,
+  [role="alert"] {
+    display: none !important;
   }
 
   body * {
     visibility: hidden !important;
   }
+
   .printable-batch-label,
   .printable-batch-label *,
   .printable-lab-report,
   .printable-lab-report *,
+  .printable-invoice,
+  .printable-invoice *,
+  .printable-sscc-labels,
+  .printable-sscc-labels *,
+  #distributor-sscc-labels,
   #prescription-receipt,
   #prescription-receipt * {
     visibility: visible !important;
   }
-  /* Strip the modal dialog's own chrome (background, padding, rounded
-     corners, positioning context) from every ancestor of the label so it
-     doesn't bleed through as an off-white box around the printed label. */
+
+  /* Ancestors remain in the layout tree, so make their canvas white too. */
   body *:has(.printable-batch-label),
-  body *:has(.printable-lab-report) {
+  body *:has(.printable-lab-report),
+  body *:has(.printable-invoice),
+  body *:has(.printable-sscc-labels),
+  body *:has(#prescription-receipt) {
     position: static !important;
-    background: transparent !important;
+    background-color: var(--print-page) !important;
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
@@ -1370,20 +1723,88 @@ label,
     background: #fff !important;
     color: #000 !important;
     box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   .printable-lab-report {
-    position: fixed !important;
-    left: 0 !important;
-    top: 0 !important;
+    position: static !important;
     width: 100% !important;
-    max-width: 210mm !important;
+    max-width: 186mm !important;
     margin: 0 !important;
-    padding: 10mm !important;
-    background: #fff !important;
+    padding: 0 !important;
+    background-color: var(--print-page) !important;
     color: #000 !important;
     box-shadow: none !important;
   }
-  .no-print {
-    display: none !important;
+  .printable-invoice {
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 186mm !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: var(--print-page) !important;
+    color: var(--print-ink) !important;
+    box-shadow: none !important;
+    outline: 0 !important;
+    font-family: var(--print-font) !important;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .printable-invoice img { print-color-adjust: exact; }
+  .printable-invoice th,
+  .printable-invoice td { padding-top: 3mm !important; padding-bottom: 3mm !important; }
+  .printable-invoice #invoice-header,
+  .printable-invoice #invoice-bill-to,
+  .printable-invoice #invoice-metadata,
+  .printable-invoice #invoice-line-items,
+  .printable-invoice #invoice-totals,
+  .printable-invoice #invoice-remittance { break-inside: avoid; page-break-inside: avoid; }
+  .printable-sscc-labels,
+  .printable-sscc-labels * {
+    visibility: visible !important;
+  }
+  .printable-sscc-labels {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .printable-sscc-label {
+    page: sscc-label;
+    width: 4in !important;
+    max-width: none !important;
+    height: 6in !important;
+    min-height: 6in !important;
+    margin: 0 !important;
+    padding: 0.2in !important;
+    border: 2px solid #000 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: page;
+    page-break-after: always;
+  }
+  .printable-sscc-label:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  .printable-sscc-label canvas {
+    width: 100% !important;
+    height: auto !important;
+  }
+  @page sscc-label {
+    size: 4in 6in;
+    margin: 0;
   }
 }

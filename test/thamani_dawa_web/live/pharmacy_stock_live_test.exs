@@ -372,6 +372,123 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
     end
   end
 
+  describe "stock alert tiles" do
+    test "summarises out-of-stock, low-stock, and near-expiry stock", %{conn: conn} do
+      {org_id, pharmacist, [site]} = pharmacist_assigned_to(["Site A"])
+
+      out_of_stock_product =
+        product_fixture(%{
+          organization_id: org_id,
+          generic_name: "Zero Stock Drug",
+          reorder_level: 10
+        })
+
+      low_stock_product =
+        product_fixture(%{
+          organization_id: org_id,
+          generic_name: "Low Stock Drug",
+          reorder_level: 10
+        })
+
+      healthy_product =
+        product_fixture(%{
+          organization_id: org_id,
+          generic_name: "Healthy Stock Drug",
+          reorder_level: 10
+        })
+
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: site.id,
+        product_id: out_of_stock_product.id,
+        quantity: 5,
+        remaining_quantity: 0
+      })
+
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: site.id,
+        product_id: low_stock_product.id,
+        quantity: 5,
+        remaining_quantity: 5
+      })
+
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: site.id,
+        product_id: healthy_product.id,
+        quantity: 100,
+        remaining_quantity: 100,
+        expiry_date: Date.add(Date.utc_today(), 10)
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+
+      assert has_element?(lv, "#out-of-stock-card", "1")
+      assert has_element?(lv, "#low-stock-card", "1")
+      assert has_element?(lv, "#near-expiry-card", "1")
+      assert has_element?(lv, "#low-stock-value-card", "KSh")
+    end
+
+    test "pending (unreceived) batches are excluded from the tiles", %{conn: conn} do
+      {org_id, pharmacist, [site]} = pharmacist_assigned_to(["Site A"])
+
+      product =
+        product_fixture(%{
+          organization_id: org_id,
+          generic_name: "Pending Only Drug",
+          reorder_level: 100
+        })
+
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: site.id,
+        product_id: product.id,
+        quantity: 5,
+        remaining_quantity: 5,
+        expiry_date: Date.add(Date.utc_today(), 10),
+        pending: true
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+
+      assert has_element?(lv, "#out-of-stock-card", "0")
+      assert has_element?(lv, "#low-stock-card", "0")
+      assert has_element?(lv, "#near-expiry-card", "0")
+    end
+
+    test "the tiles follow the site filter", %{conn: conn} do
+      admin = user_fixture()
+      org_id = admin.organization_id
+      site_a = site_fixture(%{organization_id: org_id, name: "Site A"})
+      site_b = site_fixture(%{organization_id: org_id, name: "Site B"})
+
+      product =
+        product_fixture(%{
+          organization_id: org_id,
+          generic_name: "Zero Stock Drug",
+          reorder_level: 10
+        })
+
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: site_a.id,
+        product_id: product.id,
+        quantity: 5,
+        remaining_quantity: 0
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
+      assert has_element?(lv, "#out-of-stock-card", "1")
+
+      {:ok, filtered, _html} =
+        live(log_in_user(conn, admin), ~p"/pharmacy/stock?site=#{site_b.id}")
+
+      refute has_element?(filtered, "#out-of-stock-card", "1")
+      assert has_element?(filtered, "#out-of-stock-card", "0")
+    end
+  end
+
   describe "read-only" do
     test "exposes no receive or dispense controls", %{conn: conn} do
       {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])

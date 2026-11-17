@@ -5,6 +5,7 @@ defmodule ThamaniDawa.AccountsFixtures do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.OrganizationsFixtures
+  alias ThamaniDawa.Repo
 
   def valid_user_email, do: "user#{System.unique_integer([:positive])}@example.com"
   def valid_user_password, do: "hello world!"
@@ -19,8 +20,17 @@ defmodule ThamaniDawa.AccountsFixtures do
     })
   end
 
-  @doc "Creates an admin user under a fresh organization unless `organization_id` is given."
+  @doc """
+  Creates an admin user under a fresh organization unless `organization_id`
+  is given. Confirmed by default — this represents an already-set-up
+  account for testing everything *other* than the signup/email-confirmation
+  flow itself, which exercises `Accounts.register_user/3` directly instead.
+  Pass `confirmed: false` to get the real, freshly-registered (unconfirmed)
+  shape.
+  """
   def user_fixture(attrs \\ %{}) do
+    {confirmed?, attrs} = Map.pop(attrs, :confirmed, true)
+
     {organization_id, attrs} =
       Map.pop_lazy(attrs, :organization_id, fn ->
         OrganizationsFixtures.organization_fixture().id
@@ -31,14 +41,26 @@ defmodule ThamaniDawa.AccountsFixtures do
       |> valid_user_attributes()
       |> then(&Accounts.register_user(organization_id, &1))
 
+    if confirmed?, do: confirm_user(user), else: user
+  end
+
+  defp confirm_user(user) do
+    user
+    |> Ecto.Changeset.change(confirmed_at: DateTime.utc_now() |> DateTime.truncate(:second))
+    |> Repo.update!()
+  end
+
+  def superadmin_fixture(attrs \\ %{}) do
+    {:ok, user} = attrs |> valid_user_attributes() |> Accounts.create_platform_superadmin()
     user
   end
 
   @doc """
   Creates a staff user via the invite/accept-invite flow, defaulting to the
-  `pharmacist` role. Pass `role:`, `organization_id:`, `invited_by_id:`,
-  `site_id:` (a single site, for convenience), or `site_ids:` (a list, for
-  multi-site staff) to override.
+  `pharmacist` role. Pass `role:` (a single legacy role atom, translated to
+  `roles:` — `:pharma_lab` becomes `[:pharmacist, :lab_technician]`),
+  `organization_id:`, `invited_by_id:`, `site_id:` (a single site, for
+  convenience), or `site_ids:` (a list, for multi-site staff) to override.
   """
   def staff_fixture(attrs \\ %{}) do
     {organization_id, attrs} =
@@ -48,10 +70,11 @@ defmodule ThamaniDawa.AccountsFixtures do
 
     {invited_by_id, attrs} = Map.pop(attrs, :invited_by_id, nil)
     {site_id, attrs} = Map.pop(attrs, :site_id, nil)
+    {role, attrs} = Map.pop(attrs, :role, :pharmacist)
 
     invite_attrs =
       attrs
-      |> Enum.into(%{name: valid_user_name(), email: valid_user_email(), role: :pharmacist})
+      |> Enum.into(%{name: valid_user_name(), email: valid_user_email(), roles: roles_for(role)})
       |> Map.put_new_lazy(:site_ids, fn -> if site_id, do: [site_id], else: [] end)
 
     {:ok, invited, _encoded_token} =
@@ -65,4 +88,7 @@ defmodule ThamaniDawa.AccountsFixtures do
 
     user
   end
+
+  defp roles_for(:pharma_lab), do: [:pharmacist, :lab_technician]
+  defp roles_for(role), do: [role]
 end

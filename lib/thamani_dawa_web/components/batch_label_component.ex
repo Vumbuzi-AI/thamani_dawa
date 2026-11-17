@@ -14,7 +14,11 @@ defmodule ThamaniDawaWeb.BatchLabelComponent do
   attr :class, :string, default: ""
 
   def batch_label_card(assigns) do
-    assigns = assign_new(assigns, :id, fn -> "batch-label-#{assigns.batch.id}" end)
+    assigns =
+      if is_nil(assigns.id),
+        do: assign(assigns, :id, "batch-label-#{assigns.batch.id}"),
+        else: assigns
+
     assigns = assign(assigns, :bwip_text, GS1Encoder.bwipjs_text(assigns.batch))
     assigns = assign(assigns, :human_text, GS1Encoder.human_readable(assigns.batch))
 

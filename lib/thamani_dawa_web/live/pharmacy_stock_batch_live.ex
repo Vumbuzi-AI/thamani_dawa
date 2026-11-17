@@ -9,10 +9,18 @@ defmodule ThamaniDawaWeb.PharmacyStockBatchLive do
 
   import ThamaniDawaWeb.BatchLabelComponent
 
+  alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
 
   def mount(%{"id" => id}, _session, socket) do
-    org_id = socket.assigns.current_scope.organization_id
+    scope = socket.assigns.current_scope
+    org_id = scope.organization_id
+
+    _ =
+      if Scope.admin?(scope),
+        do: :ok,
+        else: Batches.get_batch_for_site!(org_id, id, scope.current_site_id)
+
     batch = Batches.get_batch_with_details!(org_id, id)
 
     {:ok,

@@ -8,6 +8,8 @@ defmodule ThamaniDawa.Batches do
   import Ecto.Query, warn: false
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Batches.Batch
+  alias ThamaniDawa.Epcis
+  alias ThamaniDawa.GoodsReceipts.GoodsReceipt
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
@@ -442,6 +444,7 @@ defmodule ThamaniDawa.Batches do
              where: b.product_id == ^product_id,
              where: b.remaining_quantity > 0,
              where: not is_nil(b.approver_id),
+             where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
              select: sum(b.remaining_quantity)
          ) do
       nil -> 0
@@ -470,6 +473,15 @@ defmodule ThamaniDawa.Batches do
     Repo.get_by!(Batch, id: id, organization_id: organization_id)
   end
 
+  @doc "Gets a batch only when it belongs to the supplied site."
+  def get_batch_for_site!(organization_id, id, site_id) when is_integer(site_id) do
+    Repo.get_by!(Batch, id: id, organization_id: organization_id, site_id: site_id)
+  end
+
+  def get_batch_for_site!(organization_id, _id, nil) do
+    Repo.one!(from b in Batch, where: b.organization_id == ^organization_id and false)
+  end
+
   @doc """
   Gets a single batch scoped to an organization, preloaded with its identity
   (`product`, `site`, `supplier`, `approver`) and prescription and lab usage
@@ -487,6 +499,7 @@ defmodule ThamaniDawa.Batches do
       product: product_query,
       site: site_query,
       supplier: supplier_query,
+      goods_receipt: [],
       approver: user_query,
       prescription_batch_dispenses: [
         dispensed_by: user_query,
@@ -510,6 +523,7 @@ defmodule ThamaniDawa.Batches do
     |> validate_belongs_to_org(:site_id, Site, organization_id)
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
+    |> validate_belongs_to_org(:goods_receipt_id, GoodsReceipt, organization_id)
     |> Repo.audited_insert()
   end
 
@@ -535,6 +549,14 @@ defmodule ThamaniDawa.Batches do
     |> validate_belongs_to_org(:product_id, Product, organization_id)
     |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
     |> Repo.audited_insert()
+    |> case do
+      {:ok, batch} ->
+        Epcis.record_facility_receipt(batch)
+        {:ok, batch}
+
+      error ->
+        error
+    end
   end
 
   @doc """
@@ -667,15 +689,24 @@ defmodule ThamaniDawa.Batches do
   can't yet have anything dispensed from it.
   """
   def receive_batch(%Batch{} = batch, user_id, attrs \\ %{}) do
+    was_pending = is_nil(batch.received_at)
+
     attrs =
       Map.merge(attrs, %{
         "received_at" => DateTime.utc_now(),
         "approver_id" => user_id
       })
 
-    batch
-    |> Batch.receive_changeset(attrs)
-    |> Repo.audited_update()
+    case batch
+         |> Batch.receive_changeset(attrs)
+         |> Repo.audited_update() do
+      {:ok, received} ->
+        if was_pending, do: Epcis.record_facility_receipt(received)
+        {:ok, received}
+
+      error ->
+        error
+    end
   end
 
   defp validate_belongs_to_org(changeset, field, schema, organization_id) do
@@ -725,6 +756,7 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         where: b.remaining_quantity > 0,
         where: not is_nil(b.approver_id),
+        where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
         order_by: [asc: b.expiry_date, asc: b.id],
         lock: "FOR UPDATE"
 
@@ -753,6 +785,7 @@ defmodule ThamaniDawa.Batches do
         where: b.product_id == ^product_id,
         where: b.remaining_quantity > 0,
         where: not is_nil(b.approver_id),
+        where: b.expiry_date > ^ThamaniDawa.BusinessDate.today(),
         order_by: [asc: b.expiry_date, asc: b.id]
 
     query
@@ -790,5 +823,219 @@ defmodule ThamaniDawa.Batches do
     |> Ecto.Changeset.change(remaining_quantity: quantity)
     |> Ecto.Changeset.validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
     |> Repo.audited_update()
+  end
+
+  @doc """
+  Lists batches currently located at a site, newest-received batches first,
+  for the warehouse-contents view. Preloads `product`.
+  """
+  def list_batches_for_site(organization_id, site_id) do
+    product_query = from p in Product, where: p.organization_id == ^organization_id
+
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        order_by: [asc: b.zone, asc: b.bin, asc: b.expiry_date],
+        preload: [product: ^product_query]
+    )
+  end
+
+  @doc """
+  Puts away a batch into a zone (and optional bin) — an intra-warehouse
+  move, never EPCIS-reportable. Typically `:storage` or `:quarantine` from
+  `:receiving`, but any zone move is accepted (see also `relocate/3`, the
+  bin-to-bin shortcut used from the Stock view).
+  """
+  def putaway(%Batch{} = batch, attrs) do
+    batch
+    |> Batch.location_changeset(attrs)
+    |> Repo.audited_update()
+  end
+
+  @doc "Bin-to-bin (or zone-to-zone) relocation within a site. Alias of `putaway/2`."
+  def relocate(%Batch{} = batch, attrs), do: putaway(batch, attrs)
+
+  @doc """
+  Lists batches available to pick for a product at a site — active,
+  sitting in `:storage`, not already reserved by another shipment, FEFO
+  ordered. Locks rows `FOR UPDATE`; callers must run inside
+  `Repo.transaction/1` to safely allocate against this list.
+  """
+  def list_pickable_batches(organization_id, site_id, product_id) do
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id == ^site_id,
+        where: b.product_id == ^product_id,
+        where: b.status == :active,
+        where: b.zone == :storage,
+        where: is_nil(b.reserved_for_shipment_id),
+        where: b.remaining_quantity > 0,
+        order_by: [asc: b.expiry_date, asc: b.id],
+        lock: "FOR UPDATE"
+    )
+  end
+
+  @doc """
+  Read-only total of currently pickable stock (active, in `:storage`, not
+  already reserved) for a product at a site — for showing availability
+  before generating a pick list. Not locked; a display hint, not an
+  allocation guarantee (see `list_pickable_batches/3` for the locked,
+  allocation-safe version).
+  """
+  def available_to_pick(organization_id, site_id, product_id) do
+    case Repo.aggregate(
+           from(b in Batch,
+             where: b.organization_id == ^organization_id,
+             where: b.site_id == ^site_id,
+             where: b.product_id == ^product_id,
+             where: b.status == :active,
+             where: b.zone == :storage,
+             where: is_nil(b.reserved_for_shipment_id),
+             where: b.remaining_quantity > 0
+           ),
+           :sum,
+           :remaining_quantity
+         ) do
+      nil -> 0
+      %Decimal{} = d -> Decimal.to_integer(d)
+      n when is_integer(n) -> n
+    end
+  end
+
+  @doc "Batches currently reserved (picking or staged) for a shipment, preloaded with product."
+  def list_reserved_batches_for_shipment(organization_id, shipment_id) do
+    product_query = from p in Product, where: p.organization_id == ^organization_id
+
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.reserved_for_shipment_id == ^shipment_id,
+        preload: [product: ^product_query]
+    )
+  end
+
+  @doc "Reserves a batch for picking against a shipment — moves it to `:picking`."
+  def reserve_for_picking(%Batch{} = batch, shipment_id) when is_integer(shipment_id) do
+    batch
+    |> Ecto.Changeset.change(zone: :picking, reserved_for_shipment_id: shipment_id)
+    |> Repo.audited_update()
+  end
+
+  @doc "Confirms a picked batch — moves it to `:staging`, keeping its reservation."
+  def confirm_pick(%Batch{} = batch) do
+    batch
+    |> Ecto.Changeset.change(zone: :staging)
+    |> Repo.audited_update()
+  end
+
+  defp transition_status(%Batch{} = batch, new_status, build_event) do
+    batch
+    |> Batch.status_changeset(new_status)
+    |> Repo.audited_update()
+    |> case do
+      {:ok, updated} ->
+        build_event.(updated)
+        {:ok, updated}
+
+      error ->
+        error
+    end
+  end
+
+  @doc "Marks a batch damaged (§4.4.1). May start from `:active` or `:quarantined`."
+  def mark_damaged(%Batch{} = batch, reference, _user)
+      when is_binary(reference) and reference != "" do
+    transition_status(
+      batch,
+      :damaged,
+      &Epcis.record_batch_status(&1, "damaged", "inspecting", "damaged", reference, "incident")
+    )
+  end
+
+  @doc """
+  Marks a batch expired (§4.4.2.1). Manually triggered per batch — the
+  platform does not auto-create expiry events from the passage of time.
+  """
+  def mark_expired(%Batch{} = batch, _user) do
+    transition_status(
+      batch,
+      :expired,
+      &Epcis.record_batch_status(&1, "expired", "inspecting", "expired", nil, nil)
+    )
+  end
+
+  @doc "Marks a batch stolen (§4.4.2.2). Terminal."
+  def mark_stolen(%Batch{} = batch, reference, _user)
+      when is_binary(reference) and reference != "" do
+    transition_status(
+      batch,
+      :stolen,
+      &Epcis.record_batch_status(&1, "stolen", "decommissioning", "stolen", reference, "incident")
+    )
+  end
+
+  @doc "Marks a batch lost (§4.4.2.2)."
+  def mark_lost(%Batch{} = batch, reference, _user)
+      when is_binary(reference) and reference != "" do
+    transition_status(
+      batch,
+      :inactive,
+      &Epcis.record_batch_status(&1, "lost", "decommissioning", "inactive", reference, "incident")
+    )
+  end
+
+  @doc "Marks a batch exported out of the PPB-tracked supply chain (§4.4.4)."
+  def mark_exported(%Batch{} = batch, reference, _user)
+      when is_binary(reference) and reference != "" do
+    transition_status(
+      batch,
+      :non_sellable_other,
+      &Epcis.record_batch_status(
+        &1,
+        "exported",
+        "decommissioning",
+        "non_sellable_other",
+        reference,
+        "export"
+      )
+    )
+  end
+
+  @doc """
+  Marks a batch recalled (§4.3.1). Regulator-driven in principle — this
+  platform has no inbound PPB channel to learn of a recall automatically,
+  so this is necessarily an internal, admin-triggered action taken on a
+  recall notice received outside this system. Overrides any prior state
+  except `:destroyed`.
+  """
+  def mark_recalled(%Batch{} = batch, reference, _user)
+      when is_binary(reference) and reference != "" do
+    transition_status(
+      batch,
+      :recalled,
+      &Epcis.record_batch_status(&1, "recalled", "holding", "recalled", reference, "recall")
+    )
+  end
+
+  @doc """
+  Marks a batch destroyed (§4.3.2). Only legal from `:damaged`, `:expired`,
+  or `:recalled`. Terminal.
+  """
+  def mark_destroyed(%Batch{} = batch, reference, _user)
+      when is_binary(reference) and reference != "" do
+    transition_status(
+      batch,
+      :destroyed,
+      &Epcis.record_batch_status(
+        &1,
+        "destroyed",
+        "destroying",
+        "destroyed",
+        reference,
+        "destruction"
+      )
+    )
   end
 end

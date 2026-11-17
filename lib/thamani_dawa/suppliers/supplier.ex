@@ -8,6 +8,8 @@ defmodule ThamaniDawa.Suppliers.Supplier do
     field :phone, :string
     field :email, :string
     field :gln, :string
+    field :gln_verified_at, :utc_datetime
+    field :gln_verification_source, :string
     field :location, :string
     field :lat, :float
     field :long, :float

@@ -101,7 +101,7 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
       refute html =~ "border-b border-thamani-stone"
     end
 
-    test "renders the toolbar inside the same card, below a divider" do
+    test "renders the toolbar below a divider without a card background" do
       assigns = %{}
 
       html =
@@ -117,7 +117,8 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
       assert html =~ "Product catalog"
       assert html =~ "toolbar content"
       assert html =~ "border-b border-thamani-stone"
-      assert html =~ "ff-surface-card"
+      refute html =~ "ff-surface-card"
+      refute html =~ "rounded-2xl"
     end
 
     test "variant=\"plain\" renders no card shell, for bare section dividers" do
@@ -174,6 +175,18 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
       assert html =~ "first:col-span-full"
       assert html =~ "max-sm:hidden"
       assert html =~ "max-sm:absolute"
+      assert html =~ "sm:rounded-xl"
+      assert html =~ "sm:border-slate-200"
+      assert html =~ "sm:hover:bg-slate-50"
+      assert html =~ "sm:even:bg-slate-50/40"
+      assert html =~ "sm:first:bg-transparent"
+      assert html =~ "sm:first:text-sm"
+      assert html =~ "sm:first:text-slate-950"
+      assert html =~ "sm:h-[4.5rem]"
+      assert html =~ "sm:align-middle"
+      assert html =~ "sm:first:whitespace-nowrap"
+      assert html =~ "sm:[&amp;:nth-child(even)]:border-r-0"
+      refute html =~ "ff-surface-card"
       refute html =~ ~s(tabindex="0")
     end
   end

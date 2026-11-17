@@ -146,7 +146,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Batch recorded as stock — dispatch it to a site when ready.")
+         |> put_flash(:info, "Batch recorded as stock. Dispatch it to a site when ready.")
          |> stream_insert(:undispatched_batches, batch)
          |> push_patch(to: ~p"/org/products/#{product.id}")}
 
@@ -201,7 +201,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
     socket =
       socket
-      |> put_flash(:info, "Batch dispatched — awaiting receipt at site.")
+      |> put_flash(:info, "Batch dispatched. Awaiting receipt at site.")
       |> stream_insert(:batches, dispatched)
       |> assign(:selected_batch, dispatched)
       |> refresh_undispatched_batch(org_batch, product)

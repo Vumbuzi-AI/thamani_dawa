@@ -20,21 +20,30 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       assert html_response(conn, 200) =~ "Welcome back"
     end
 
-    test "renders one-click login forms for all four seeded roles", %{conn: conn} do
+    test "renders one-click login forms with the seeded credentials for all six roles", %{
+      conn: conn
+    } do
       document =
         conn
         |> get(~p"/login")
         |> html_response(200)
         |> LazyHTML.from_document()
 
-      assert Enum.count(LazyHTML.query(document, "#demo-login-accounts form")) == 4
+      assert Enum.count(LazyHTML.query(document, "#demo-login-accounts form")) == 6
 
-      for id <- ~w(admin pharmacist lab pharma-lab) do
+      for id <- ~w(superadmin admin pharmacist lab pharma-lab distributor) do
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id}")) == 1
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id} input[name=email]")) == 1
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id} input[name=password]")) == 1
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id}-submit")) == 1
       end
+
+      assert Enum.count(
+               LazyHTML.query(
+                 document,
+                 ~s(#demo-login-superadmin input[name=password][value="password123"])
+               )
+             ) == 1
     end
 
     test "redirects an authenticated user to their portal", %{conn: conn} do
@@ -46,6 +55,17 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
         |> get(~p"/login")
 
       assert redirected_to(conn) == ~p"/pharmacy"
+    end
+
+    test "redirects an authenticated admin with unfinished setup to onboarding", %{conn: conn} do
+      admin = user_fixture()
+
+      conn =
+        conn
+        |> log_in_user(admin)
+        |> get(~p"/login")
+
+      assert redirected_to(conn) == ~p"/onboarding"
     end
   end
 
@@ -60,12 +80,66 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
 
       assert redirected_to(conn) == ~p"/"
       assert get_session(conn, :user_token) == nil
+
+      conn = conn |> recycle() |> get(~p"/")
+      assert html_response(conn, 200)
     end
   end
 
   describe "POST /login" do
-    test "starts the organization tour after signup", %{conn: conn} do
+    test "redirects a platform superadmin to the platform console", %{conn: conn} do
+      superadmin = superadmin_fixture()
+
+      conn = post(conn, ~p"/login", %{email: superadmin.email, password: valid_user_password()})
+
+      assert redirected_to(conn) == ~p"/platform"
+    end
+
+    test "sends a freshly-signed-up admin to the onboarding checklist when it's incomplete", %{
+      conn: conn
+    } do
       admin = user_fixture()
+
+      conn =
+        post(conn, ~p"/login", %{
+          "user" => %{"email" => admin.email, "password" => valid_user_password()},
+          "start_tour" => "true"
+        })
+
+      assert redirected_to(conn) == ~p"/onboarding"
+    end
+
+    test "starts the organization tour after signup once the checklist is already complete", %{
+      conn: conn
+    } do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      user_fixture(%{organization_id: organization.id})
+
+      site =
+        site_fixture(%{organization_id: organization.id, address: "12 Market Street"})
+
+      {:ok, _site} =
+        ThamaniDawa.Sites.update_site(site, %{
+          address: "12 Market Street",
+          activities: [:pharmacy]
+        })
+
+      site_fixture(%{organization_id: organization.id})
+
+      ThamaniDawa.Products.create_product(organization.id, %{
+        generic_name: "Paracetamol",
+        gtin: ThamaniDawa.BatchesFixtures.unique_gtin(),
+        category: "Analgesic",
+        uom: "U2",
+        price: 100
+      })
+
+      ThamaniDawa.Suppliers.create_supplier(organization.id, %{
+        name: "Acme Supplies",
+        phone: "0700000000",
+        email: "supplier@example.com"
+      })
 
       conn =
         post(conn, ~p"/login", %{
@@ -76,13 +150,13 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       assert redirected_to(conn) == ~p"/org/dashboard?tour=1"
     end
 
-    test "redirects an admin to /org/sites", %{conn: conn} do
+    test "resumes onboarding for an admin with incomplete setup", %{conn: conn} do
       admin = user_fixture()
 
       conn =
         post(conn, ~p"/login", %{"email" => admin.email, "password" => valid_user_password()})
 
-      assert redirected_to(conn) == ~p"/org/dashboard"
+      assert redirected_to(conn) == ~p"/onboarding"
     end
 
     test "redirects a pharmacist to /pharmacy", %{conn: conn} do
@@ -125,7 +199,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       conn: conn
     } do
       org = organization_fixture()
-      lab_site = site_fixture(%{organization_id: org.id, site_type: :lab})
+      lab_site = site_fixture(%{organization_id: org.id, activities: [:laboratory]})
 
       pharma_lab =
         staff_fixture(%{organization_id: org.id, role: :pharma_lab, site_id: lab_site.id})
@@ -142,7 +216,9 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
     test "redirects combined pharmacy/lab staff to /pharmacy when their current site is a combined pharmacy+lab site",
          %{conn: conn} do
       org = organization_fixture()
-      combined_site = site_fixture(%{organization_id: org.id, site_type: :pharmacy_lab})
+
+      combined_site =
+        site_fixture(%{organization_id: org.id, activities: [:pharmacy, :laboratory]})
 
       pharma_lab =
         staff_fixture(%{organization_id: org.id, role: :pharma_lab, site_id: combined_site.id})
@@ -159,7 +235,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
     test "redirects combined pharmacy/lab staff to /pharmacy when their current site is pharmacy-only",
          %{conn: conn} do
       org = organization_fixture()
-      pharmacy_site = site_fixture(%{organization_id: org.id, site_type: :pharmacy})
+      pharmacy_site = site_fixture(%{organization_id: org.id, activities: [:pharmacy]})
 
       pharma_lab =
         staff_fixture(%{organization_id: org.id, role: :pharma_lab, site_id: pharmacy_site.id})

@@ -32,7 +32,7 @@ defmodule ThamaniDawa.Patients.Patient do
 
   defp validate_date_of_birth_not_in_future(changeset) do
     validate_change(changeset, :date_of_birth, fn :date_of_birth, date ->
-      if Date.compare(date, Date.utc_today()) == :gt do
+      if Date.compare(date, ThamaniDawa.BusinessDate.today()) == :gt do
         [date_of_birth: "can't be in the future"]
       else
         []
@@ -46,7 +46,7 @@ defmodule ThamaniDawa.Patients.Patient do
   `date_of_birth` is `nil`. Age is never persisted — this is the only
   source of truth, computed fresh wherever it's displayed.
   """
-  def age(patient, today \\ Date.utc_today())
+  def age(patient, today \\ ThamaniDawa.BusinessDate.today())
   def age(%__MODULE__{date_of_birth: nil}, _today), do: nil
 
   def age(%__MODULE__{date_of_birth: dob}, today) do
@@ -61,7 +61,7 @@ defmodule ThamaniDawa.Patients.Patient do
   `reference_date` (defaults to today) — an explicit placeholder date, not
   an attempt to guess the real one.
   """
-  def approximate_date_of_birth_from_age(age, reference_date \\ Date.utc_today())
+  def approximate_date_of_birth_from_age(age, reference_date \\ ThamaniDawa.BusinessDate.today())
       when is_integer(age) and age >= 0 do
     Date.new!(reference_date.year - age, 1, 1)
   end

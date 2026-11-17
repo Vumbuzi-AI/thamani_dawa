@@ -5,6 +5,7 @@ defmodule ThamaniDawa.AccountsTest do
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Accounts.UserToken
 
+  import Swoosh.TestAssertions
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.OrganizationsFixtures
   import ThamaniDawa.SitesFixtures
@@ -19,7 +20,7 @@ defmodule ThamaniDawa.AccountsTest do
 
       assert user.organization_id == organization.id
       assert user.email == email
-      assert user.role == :admin
+      assert user.roles == [:admin]
       assert is_binary(user.hashed_password)
     end
 
@@ -49,9 +50,55 @@ defmodule ThamaniDawa.AccountsTest do
 
       assert %{email: ["This email is already registered"]} = errors_on(changeset)
     end
+
+    test "grants the operational roles implied by the organization's operating models" do
+      organization = organization_fixture()
+
+      assert {:ok, %User{} = user} =
+               Accounts.register_user(
+                 organization.id,
+                 valid_user_attributes(),
+                 [:pharmacy, :laboratory, :distributor]
+               )
+
+      assert user.roles == [:admin, :pharmacist, :lab_technician, :distributor]
+    end
+
+    test "grants only :admin when the organization has no operating models" do
+      organization = organization_fixture()
+
+      assert {:ok, %User{} = user} =
+               Accounts.register_user(organization.id, valid_user_attributes(), [])
+
+      assert user.roles == [:admin]
+    end
+  end
+
+  describe "create_platform_superadmin/1" do
+    test "creates an active tenant-less platform account" do
+      assert {:ok, user} =
+               Accounts.create_platform_superadmin(valid_user_attributes())
+
+      assert user.roles == [:superadmin]
+      assert is_nil(user.organization_id)
+      assert User.active?(user)
+    end
   end
 
   describe "invite_user/3" do
+    test "does not allow an organization invite to create a platform superadmin" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Accounts.invite_user(organization.id, nil, %{
+                 name: "Not a platform operator",
+                 email: valid_user_email(),
+                 roles: [:superadmin]
+               })
+
+      assert %{roles: ["is invalid"]} = errors_on(changeset)
+    end
+
     test "creates an unconfirmed user with no password, tied to the inviting organization" do
       organization = organization_fixture()
       admin = user_fixture(%{organization_id: organization.id})
@@ -60,12 +107,12 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, admin.id, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist
+                 roles: [:pharmacist]
                })
 
       assert user.organization_id == organization.id
       assert user.invited_by_id == admin.id
-      assert user.role == :pharmacist
+      assert user.roles == [:pharmacist]
       assert is_nil(user.hashed_password)
       assert is_binary(encoded_token)
     end
@@ -78,7 +125,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site.id]
                })
 
@@ -96,7 +143,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_a.id, site_b.id]
                })
 
@@ -113,7 +160,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [other_org_site.id]
                })
 
@@ -127,7 +174,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [999_999]
                })
 
@@ -143,7 +190,7 @@ defmodule ThamaniDawa.AccountsTest do
                  email: valid_user_email()
                })
 
-      assert %{role: ["can't be blank"]} = errors_on(changeset)
+      assert %{roles: ["Choose at least one role"]} = errors_on(changeset)
     end
 
     test "rejects a role outside the known roles" do
@@ -153,24 +200,24 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: "owner"
+                 roles: ["owner"]
                })
 
-      assert %{role: ["is invalid"]} = errors_on(changeset)
+      assert %{roles: ["is invalid"]} = errors_on(changeset)
     end
 
-    for role <- [:admin, :pharmacist, :lab_technician, :pharma_lab] do
-      test "accepts the #{role} role" do
+    for roles <- [[:admin], [:pharmacist], [:lab_technician], [:pharmacist, :lab_technician]] do
+      test "accepts the #{inspect(roles)} roles" do
         organization = organization_fixture()
 
         assert {:ok, user, _encoded_token} =
                  Accounts.invite_user(organization.id, nil, %{
                    name: "New Hire",
                    email: valid_user_email(),
-                   role: unquote(role)
+                   roles: unquote(roles)
                  })
 
-        assert user.role == unquote(role)
+        assert user.roles == unquote(roles)
       end
     end
 
@@ -181,7 +228,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist
+                 roles: [:pharmacist]
                })
 
       assert {:ok, hashed_token} = UserToken.verify_email_token_query(encoded_token, "invite")
@@ -203,14 +250,14 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist
+                 roles: [:pharmacist]
                })
 
       assert user.current_site_id == nil
 
       assert {:ok, updated} =
                Accounts.update_user(organization.id, user.id, %{
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site.id]
                })
 
@@ -226,13 +273,13 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_a.id, site_b.id]
                })
 
       assert {:ok, updated} =
                Accounts.update_user(organization.id, user.id, %{
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_a.id, site_b.id]
                })
 
@@ -248,7 +295,7 @@ defmodule ThamaniDawa.AccountsTest do
                Accounts.invite_user(organization.id, nil, %{
                  name: "New Hire",
                  email: valid_user_email(),
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_a.id]
                })
 
@@ -256,7 +303,7 @@ defmodule ThamaniDawa.AccountsTest do
 
       assert {:ok, updated} =
                Accounts.update_user(organization.id, user.id, %{
-                 role: :pharmacist,
+                 roles: [:pharmacist],
                  site_ids: [site_b.id]
                })
 
@@ -273,7 +320,7 @@ defmodule ThamaniDawa.AccountsTest do
         Accounts.invite_user(organization.id, admin.id, %{
           name: "New Hire",
           email: valid_user_email(),
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       assert {:ok, email} =
@@ -291,6 +338,107 @@ defmodule ThamaniDawa.AccountsTest do
     end
   end
 
+  describe "deliver_user_confirmation_instructions/2" do
+    test "builds the confirm URL from the encoded token and delivers the email" do
+      user = user_fixture(%{confirmed: false})
+
+      assert {:ok, :ok} =
+               Accounts.deliver_user_confirmation_instructions(user, fn token ->
+                 "http://localhost:4000/confirm/#{token}"
+               end)
+
+      assert_email_sent(fn email ->
+        assert email.subject == "Confirm your Thamani Dawa account"
+        assert email.text_body =~ "http://localhost:4000/confirm/"
+      end)
+    end
+
+    test "replaces any outstanding confirm token, invalidating the previous link" do
+      user = user_fixture(%{confirmed: false})
+
+      {:ok, :ok} =
+        Accounts.deliver_user_confirmation_instructions(user, fn token ->
+          send(self(), {:first_token, token})
+          "http://localhost:4000/confirm/#{token}"
+        end)
+
+      assert_receive {:first_token, first_token}
+
+      {:ok, :ok} =
+        Accounts.deliver_user_confirmation_instructions(user, fn token ->
+          "http://localhost:4000/confirm/#{token}"
+        end)
+
+      refute Accounts.get_user_by_confirm_token(first_token)
+    end
+  end
+
+  describe "get_user_by_confirm_token/1 and confirm_user/1" do
+    test "confirms the user for a valid token and invalidates it" do
+      user = user_fixture(%{confirmed: false})
+      refute user.confirmed_at
+
+      {:ok, :ok} =
+        Accounts.deliver_user_confirmation_instructions(user, fn token ->
+          send(self(), {:token, token})
+          "http://localhost:4000/confirm/#{token}"
+        end)
+
+      assert_receive {:token, encoded_token}
+
+      assert %User{id: id} = Accounts.get_user_by_confirm_token(encoded_token)
+      assert id == user.id
+
+      assert {:ok, confirmed} = Accounts.confirm_user(encoded_token)
+      assert confirmed.confirmed_at
+
+      refute Accounts.get_user_by_confirm_token(encoded_token)
+    end
+
+    test "returns an error for a token that was already used" do
+      user = user_fixture(%{confirmed: false})
+
+      {:ok, :ok} =
+        Accounts.deliver_user_confirmation_instructions(user, fn token ->
+          send(self(), {:token, token})
+          "http://localhost:4000/confirm/#{token}"
+        end)
+
+      assert_receive {:token, encoded_token}
+
+      assert {:ok, _confirmed} = Accounts.confirm_user(encoded_token)
+      assert {:error, :invalid_token} = Accounts.confirm_user(encoded_token)
+    end
+
+    test "returns an error for an expired token" do
+      user = user_fixture(%{confirmed: false})
+
+      {:ok, :ok} =
+        Accounts.deliver_user_confirmation_instructions(user, fn token ->
+          send(self(), {:token, token})
+          "http://localhost:4000/confirm/#{token}"
+        end)
+
+      assert_receive {:token, encoded_token}
+
+      user
+      |> UserToken.by_user_and_context_query("confirm")
+      |> Repo.update_all(
+        set: [
+          inserted_at:
+            DateTime.add(DateTime.utc_now(), -(UserToken.confirm_validity_in_days() + 1), :day)
+        ]
+      )
+
+      refute Accounts.get_user_by_confirm_token(encoded_token)
+      assert {:error, :invalid_token} = Accounts.confirm_user(encoded_token)
+    end
+
+    test "returns an error for a bogus token" do
+      assert {:error, :invalid_token} = Accounts.confirm_user("bogus")
+    end
+  end
+
   describe "get_user_by_invite_token/1 and accept_invite/2" do
     test "resolves the invited user for a valid token, and lets them set a password" do
       organization = organization_fixture()
@@ -299,7 +447,7 @@ defmodule ThamaniDawa.AccountsTest do
         Accounts.invite_user(organization.id, nil, %{
           name: "New Hire",
           email: valid_user_email(),
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       assert %User{id: id} = Accounts.get_user_by_invite_token(encoded_token)
@@ -321,7 +469,7 @@ defmodule ThamaniDawa.AccountsTest do
         Accounts.invite_user(organization.id, nil, %{
           name: "New Hire",
           email: valid_user_email(),
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       assert {:ok, _accepted} =
@@ -340,7 +488,7 @@ defmodule ThamaniDawa.AccountsTest do
         Accounts.invite_user(organization.id, nil, %{
           name: "New Hire",
           email: valid_user_email(),
-          role: :pharmacist
+          roles: [:pharmacist]
         })
 
       invited
@@ -379,6 +527,14 @@ defmodule ThamaniDawa.AccountsTest do
       %{id: id} = user_fixture(%{email: email, password: password})
 
       assert %User{id: ^id} = Accounts.get_user_by_email_and_password(email, password)
+    end
+
+    test "normalizes email casing and surrounding whitespace" do
+      password = valid_user_password()
+      %{id: id} = user_fixture(%{email: "admin@demo.com", password: password})
+
+      assert %User{id: ^id} =
+               Accounts.get_user_by_email_and_password("  ADMIN@DEMO.COM  ", password)
     end
 
     test "returns nil for an invalid password" do

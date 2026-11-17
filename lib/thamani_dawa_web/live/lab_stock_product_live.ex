@@ -44,7 +44,7 @@ defmodule ThamaniDawaWeb.LabStockProductLive do
     >
       <.header icon="hero-cube">
         {product_name(@product)}
-        <:subtitle>Every batch of this product across lab sites — read-only.</:subtitle>
+        <:subtitle>Every batch of this product across lab sites, read-only.</:subtitle>
       </.header>
 
       <.table

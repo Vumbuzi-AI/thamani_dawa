@@ -4,6 +4,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Prescriptions
   alias ThamaniDawa.Prescriptions.{Prescription, PrescriptionItem}
+  alias ThamaniDawa.Sales
 
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.BatchesFixtures
@@ -184,9 +185,9 @@ defmodule ThamaniDawa.PrescriptionsTest do
     end
   end
 
-  describe "create_quick_sale/4" do
+  describe "Sales.create_quick_sale/4" do
     test "dispenses, verifies, and pays for every item atomically" do
-      organization = organization_fixture()
+      organization = organization_with_prefix_fixture(%{operating_models: [:pharmacy]})
       site = site_fixture(%{organization_id: organization.id})
       user = staff_fixture(%{organization_id: organization.id})
       product = product_fixture(%{organization_id: organization.id, price: 100})
@@ -198,8 +199,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
         quantity: 50
       })
 
-      assert {:ok, prescription} =
-               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+      assert {:ok, sale} =
+               Sales.create_quick_sale(organization.id, site.id, user.id, %{
                  "payment_type" => "Cash",
                  "items" => [
                    %{
@@ -210,21 +211,14 @@ defmodule ThamaniDawa.PrescriptionsTest do
                  ]
                })
 
-      assert prescription.has_paid
-      assert prescription.status == :completed
-      assert prescription.total_amount == Decimal.new(1000)
+      assert sale.has_paid
+      assert sale.status == :completed
+      assert sale.total_amount == Decimal.new(1000)
+      assert Prescriptions.list_prescriptions(organization.id) == []
 
-      [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
-      assert item.quantity_dispensed == 10
+      [item] = Sales.list_sale_items(organization.id, sale.id)
+      assert item.quantity == 10
       assert item.is_verified
-
-      visit =
-        ThamaniDawa.PatientVisits.get_patient_visit!(
-          organization.id,
-          prescription.patient_visit_id
-        )
-
-      assert is_nil(visit.patient_id)
 
       assert Batches.total_available_stock(organization.id, site.id, product.id) == 40
     end
@@ -259,8 +253,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
 
       barcode = ThamaniDawa.GS1Encoder.encode_raw(scanned_batch)
 
-      assert {:ok, prescription} =
-               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+      assert {:ok, sale} =
+               Sales.create_quick_sale(organization.id, site.id, user.id, %{
                  "payment_type" => "Cash",
                  "items" => [
                    %{
@@ -272,13 +266,13 @@ defmodule ThamaniDawa.PrescriptionsTest do
                  ]
                })
 
-      [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
+      [item] = Sales.list_sale_items(organization.id, sale.id)
       assert item.is_verified
       assert Batches.get_batch!(organization.id, earlier_batch.id).remaining_quantity == 10
       assert Batches.get_batch!(organization.id, scanned_batch.id).remaining_quantity == 7
     end
 
-    test "creates the visit for an existing patient when patient_id is given" do
+    test "does not create a patient visit when given an irrelevant patient_id" do
       organization = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})
       user = staff_fixture(%{organization_id: organization.id})
@@ -286,8 +280,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
       product = product_fixture(%{organization_id: organization.id})
       batch_fixture(%{organization_id: organization.id, site_id: site.id, product_id: product.id})
 
-      assert {:ok, prescription} =
-               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+      assert {:ok, _sale} =
+               Sales.create_quick_sale(organization.id, site.id, user.id, %{
                  "patient_id" => patient.id,
                  "payment_type" => "Cash",
                  "items" => [
@@ -299,13 +293,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
                  ]
                })
 
-      visit =
-        ThamaniDawa.PatientVisits.get_patient_visit!(
-          organization.id,
-          prescription.patient_visit_id
-        )
-
-      assert visit.patient_id == patient.id
+      assert patient.id
+      assert Prescriptions.list_prescriptions(organization.id) == []
     end
 
     test "rolls back everything when a scanned GTIN doesn't match the product" do
@@ -322,7 +311,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
       })
 
       assert {:error, {0, :gtin_mismatch}} =
-               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+               Sales.create_quick_sale(organization.id, site.id, user.id, %{
                  "payment_type" => "Cash",
                  "items" => [
                    %{
@@ -351,7 +340,7 @@ defmodule ThamaniDawa.PrescriptionsTest do
       })
 
       assert {:error, {0, :out_of_stock}} =
-               Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+               Sales.create_quick_sale(organization.id, site.id, user.id, %{
                  "payment_type" => "Cash",
                  "items" => [
                    %{
@@ -380,8 +369,8 @@ defmodule ThamaniDawa.PrescriptionsTest do
           quantity: 50
         })
 
-        assert {:ok, prescription} =
-                 Prescriptions.create_quick_sale(organization.id, site.id, user.id, %{
+        assert {:ok, sale} =
+                 Sales.create_quick_sale(organization.id, site.id, user.id, %{
                    "payment_type" => "Cash",
                    "items" => [
                      %{
@@ -392,11 +381,11 @@ defmodule ThamaniDawa.PrescriptionsTest do
                    ]
                  })
 
-        assert prescription.has_paid
-        assert prescription.status == :completed
+        assert sale.has_paid
+        assert sale.status == :completed
 
-        [item] = Prescriptions.list_prescription_items(organization.id, prescription.id)
-        assert item.quantity_dispensed == 10
+        [item] = Sales.list_sale_items(organization.id, sale.id)
+        assert item.quantity == 10
         refute item.is_verified
         assert Batches.total_available_stock(organization.id, site.id, product.id) == 40
       end
