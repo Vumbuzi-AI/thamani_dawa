@@ -227,6 +227,7 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
 
       assert has_element?(view, "#onboarding-invite-modal")
       assert has_element?(view, "#onboarding-invite-form")
+      refute has_element?(view, "#onboarding-invite-modal-container[phx-click-away]")
       refute has_element?(view, "input[name='user[roles][]'][value='pharma_lab']")
 
       view

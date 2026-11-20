@@ -14,8 +14,7 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
      |> assign(:filters, @default_filters)
      |> assign(:page, 1)
      |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
-     |> assign(:show_onboarding_supplier_form?, false)
-     |> reload_suppliers()}
+     |> assign(:show_onboarding_supplier_form?, false)}
   end
 
   def handle_params(params, _url, socket) do
@@ -265,21 +264,6 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
       progress_current={elem(@onboarding_progress, 0)}
       progress_total={elem(@onboarding_progress, 1)}
     >
-      <:benefits>
-        <li class="flex items-center gap-3">
-          <.icon name="hero-check-circle" class="size-5 shrink-0 text-[var(--thamani-forest)]" />
-          Reference suppliers when receiving stock
-        </li>
-        <li class="flex items-center gap-3">
-          <.icon name="hero-check-circle" class="size-5 shrink-0 text-[var(--thamani-forest)]" />
-          Keep contact details in one place
-        </li>
-        <li class="flex items-center gap-3">
-          <.icon name="hero-check-circle" class="size-5 shrink-0 text-[var(--thamani-forest)]" />
-          Add more suppliers from Suppliers at any time
-        </li>
-      </:benefits>
-
       <:right>
         <div class="flex items-start justify-between gap-5">
           <div>

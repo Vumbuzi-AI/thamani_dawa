@@ -2,31 +2,385 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.GoodsReceipts
+  alias ThamaniDawa.Products
 
   def mount(%{"id" => id}, _session, socket) do
     receipt = GoodsReceipts.get_receipt!(socket.assigns.current_scope.organization_id, id)
 
-    portal =
-      if socket.assigns.live_action == :distributor_show,
-        do: :distributor,
-        else: :organization
-
-    index_path =
-      if portal == :organization, do: ~p"/org/receiving", else: ~p"/distributor/receiving"
-
     {:ok,
      socket
      |> assign(:receipt, receipt)
-     |> assign(:receiving_portal, portal)
-     |> assign(:receiving_index_path, index_path)}
+     |> assign(:receiving_portal, :distributor)
+     |> assign(:receiving_index_path, ~p"/distributor/receiving")
+     |> assign(:resolving_id, nil)
+     |> assign(:resolving_status, nil)
+     |> assign(:resolution_reference, "")}
   end
 
+  def handle_event("open_resolve", %{"id" => id, "status" => status}, socket)
+      when status in ["found", "lost", "stolen"] do
+    {:noreply,
+     socket
+     |> assign(:resolving_id, String.to_integer(id))
+     |> assign(:resolving_status, status)
+     |> assign(:resolution_reference, "")}
+  end
+
+  def handle_event("close_resolve", _params, socket) do
+    {:noreply, assign(socket, :resolving_id, nil)}
+  end
+
+  def handle_event(
+        "confirm_resolve",
+        %{"resolution_reference" => reference},
+        %{assigns: %{resolving_id: id, resolving_status: status}} = socket
+      )
+      when not is_nil(id) and status in ["found", "lost", "stolen"] do
+    organization_id = socket.assigns.current_scope.organization_id
+    discrepancy = GoodsReceipts.get_discrepancy!(organization_id, id)
+
+    if discrepancy.goods_receipt_id == socket.assigns.receipt.id and discrepancy.status == :open do
+      case GoodsReceipts.resolve_discrepancy(discrepancy, socket.assigns.current_scope.user.id, %{
+             "status" => status,
+             "resolution_reference" => reference
+           }) do
+        {:ok, _discrepancy} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "Line closed as #{status}.")
+           |> assign(:resolving_id, nil)
+           |> reload_receipt()}
+
+        {:error, changeset} ->
+          {:noreply,
+           put_flash(socket, :error, "Could not close this line: #{format_errors(changeset)}")}
+      end
+    else
+      {:noreply,
+       put_flash(socket, :error, "That line is not an open discrepancy on this receipt.")}
+    end
+  end
+
+  defp reload_receipt(socket) do
+    receipt =
+      GoodsReceipts.get_receipt!(
+        socket.assigns.current_scope.organization_id,
+        socket.assigns.receipt.id
+      )
+
+    assign(socket, :receipt, receipt)
+  end
+
+  defp format_errors(changeset) do
+    changeset.errors
+    |> Enum.map_join(", ", fn {field, {message, _opts}} -> "#{field} #{message}" end)
+  end
+
+  defp product_name(nil), do: "Unknown product"
   defp product_name(product), do: product.generic_name || product.brand_name || "Unknown product"
-  defp unit_label("H87"), do: "piece(s)"
-  defp unit_label("U2"), do: "tablet(s)"
-  defp unit_label("C62"), do: "unit(s)"
-  defp unit_label(nil), do: "unit(s)"
-  defp unit_label(unit), do: if(String.ends_with?(unit, "(s)"), do: unit, else: "#{unit}(s)")
+
+  defp receipt_lines(receipt) do
+    received = Enum.map(receipt.items, &batch_line/1)
+    missing = Enum.map(receipt.discrepancies, &discrepancy_line/1)
+    received ++ missing
+  end
+
+  defp receipt_groups(receipt) do
+    receipt
+    |> receipt_lines()
+    |> Enum.group_by(& &1.sscc)
+    |> Enum.sort_by(fn {sscc, _lines} -> if(sscc, do: {0, sscc}, else: {1, ""}) end)
+    |> Enum.map(fn {sscc, lines} ->
+      batches =
+        lines
+        |> Enum.group_by(&{&1.product_name, &1.gtin, &1.batch_no, &1.expiry, &1.uom})
+        |> Enum.map(fn {{product_name, gtin, batch_no, expiry, uom}, batch_lines} ->
+          %{
+            product_name: product_name,
+            gtin: gtin,
+            batch_no: batch_no,
+            expiry: expiry,
+            uom: uom,
+            quantity: batch_lines |> Enum.map(&(&1.quantity || 0)) |> Enum.sum(),
+            lines: batch_lines
+          }
+        end)
+
+      %{sscc: sscc, batches: batches}
+    end)
+  end
+
+  defp batch_line(batch) do
+    %{
+      id: "batch-#{batch.id}",
+      product_name: product_name(batch.product),
+      gtin: batch.gtin,
+      batch_no: batch.batch_no,
+      serials: batch.serials || [],
+      expiry: batch.expiry_date,
+      quantity: batch.quantity,
+      uom: batch.product && batch.product.uom,
+      condition: batch_condition(batch.status),
+      sscc: batch.sscc,
+      discrepancy_id: nil,
+      resolvable: false,
+      resolution_reference: nil
+    }
+  end
+
+  defp discrepancy_line(discrepancy) do
+    %{
+      id: "discrepancy-#{discrepancy.id}",
+      product_name:
+        if(discrepancy.product, do: product_name(discrepancy.product), else: discrepancy.gtin),
+      gtin: discrepancy.gtin,
+      batch_no: discrepancy.batch_no,
+      serials: if(is_binary(discrepancy.serial), do: [discrepancy.serial], else: []),
+      expiry: discrepancy.expiry_date,
+      quantity: discrepancy.quantity,
+      uom: discrepancy.product && discrepancy.product.uom,
+      condition: discrepancy_condition(discrepancy),
+      sscc: discrepancy.sscc,
+      discrepancy_id: discrepancy.id,
+      resolvable: discrepancy.status == :open,
+      resolution_reference: discrepancy.resolution_reference
+    }
+  end
+
+  defp discrepancy_condition(%{status: :open}), do: :missing
+  defp discrepancy_condition(%{status: status}), do: status
+
+  defp batch_condition(:active), do: nil
+  defp batch_condition(:quarantined), do: :damaged
+  defp batch_condition(:damaged), do: :damaged
+  defp batch_condition(status), do: status
+
+  defp condition_label(:damaged), do: "Damaged"
+  defp condition_label(:missing), do: "Missing"
+  defp condition_label(:found), do: "Found"
+  defp condition_label(:lost), do: "Lost"
+  defp condition_label(:expired), do: "Expired"
+  defp condition_label(:recalled), do: "Recalled"
+  defp condition_label(:stolen), do: "Stolen"
+  defp condition_label(:inactive), do: "Inactive"
+  defp condition_label(:non_sellable_other), do: "Not sellable"
+  defp condition_label(:destroyed), do: "Destroyed"
+  defp condition_label(:returned), do: "Returned"
+  defp condition_label(status), do: Phoenix.Naming.humanize(status)
+
+  defp condition_classes(:damaged), do: "bg-amber-900 text-amber-50"
+  defp condition_classes(:missing), do: "bg-thamani-error text-white"
+  defp condition_classes(:found), do: "bg-emerald-100 text-emerald-800"
+  defp condition_classes(:lost), do: "bg-amber-100 text-amber-800"
+  defp condition_classes(:expired), do: "bg-amber-900 text-amber-50"
+
+  defp condition_classes(status) when status in [:stolen, :destroyed, :recalled],
+    do: "bg-thamani-error text-white"
+
+  defp condition_classes(_status), do: "bg-thamani-stone text-thamani-forest"
+
+  defp format_expiry(nil), do: "—"
+  defp format_expiry(%Date{} = date), do: Calendar.strftime(date, "%d %b %Y")
+
+  defp case_units(group) do
+    group.batches |> Enum.map(& &1.quantity) |> Enum.sum()
+  end
+
+  defp received_lines(lines), do: Enum.reject(lines, & &1.discrepancy_id)
+  defp follow_up_lines(lines), do: Enum.filter(lines, & &1.discrepancy_id)
+
+  defp receipt_ai_pairs(card) do
+    line = card.line
+
+    [
+      {"01", line.gtin},
+      {"17", match?(%Date{}, line.expiry) && Calendar.strftime(line.expiry, "%y%m%d")},
+      {"10", line.batch_no},
+      {"21", card.serial}
+    ]
+    |> Enum.filter(fn {_ai, value} -> value not in [nil, false, ""] end)
+  end
+
+  defp receipt_gs1_text(card) do
+    card |> receipt_ai_pairs() |> Enum.map_join(fn {ai, value} -> "(#{ai})#{value}" end)
+  end
+
+  defp serial_cards(lines) do
+    Enum.flat_map(lines, fn line ->
+      line.serials
+      |> Enum.with_index()
+      |> Enum.map(fn {serial, index} ->
+        %{
+          line: line,
+          serial: serial,
+          dom_id:
+            if(index == 0,
+              do: "goods-receipt-line-#{line.id}",
+              else: "goods-receipt-line-#{line.id}-#{index}"
+            )
+        }
+      end)
+    end)
+  end
+
+  attr :batch, :map, required: true
+
+  defp receipt_batch(assigns) do
+    received = received_lines(assigns.batch.lines)
+
+    assigns =
+      assigns
+      |> assign(:serial_cards, serial_cards(Enum.filter(received, &(&1.serials != []))))
+      |> assign(:quantity_lines, Enum.filter(received, &(&1.serials == [])))
+      |> assign(:follow_up, follow_up_lines(assigns.batch.lines))
+
+    ~H"""
+    <div class="border-b border-thamani-stone last:border-b-0">
+      <div class="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-3.5 sm:grid-cols-4 sm:px-5">
+        <div class="min-w-0">
+          <p class="truncate text-sm font-semibold text-thamani-evergreen" title={@batch.product_name}>
+            {@batch.product_name}
+          </p>
+          <p :if={@batch.gtin} class="mt-0.5 truncate text-xs tabular-nums tracking-tight text-thamani-pewter">
+            {@batch.gtin}
+          </p>
+        </div>
+        <div class="min-w-0">
+          <p class="text-xs font-medium text-thamani-pewter">Batch</p>
+          <p class="mt-0.5 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]">
+            {@batch.batch_no}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-thamani-pewter">Expiry</p>
+          <p class="mt-0.5 text-sm font-medium tabular-nums text-thamani-evergreen">
+            {format_expiry(@batch.expiry)}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-thamani-pewter">Units</p>
+          <p class="mt-0.5 text-sm font-medium tabular-nums text-thamani-evergreen">
+            {@batch.quantity} {Products.unit_label(@batch.uom)}
+          </p>
+        </div>
+      </div>
+
+      <ul
+        :if={@serial_cards != []}
+        class="flex flex-wrap items-start gap-2 border-t border-thamani-stone bg-thamani-canvas/60 px-4 py-3 sm:px-5"
+      >
+        <li
+          :for={card <- @serial_cards}
+          id={card.dom_id}
+          class="flex w-fit max-w-full items-start gap-2 rounded-xl border border-thamani-stone bg-white p-2"
+        >
+          <canvas
+            :if={card.line.gtin}
+            id={"receipt-unit-code-#{card.dom_id}"}
+            phx-hook="DataMatrix"
+            phx-update="ignore"
+            data-gs1-text={receipt_gs1_text(card)}
+            class="size-16 shrink-0"
+          >
+          </canvas>
+          <p class="text-xs leading-4 tabular-nums tracking-tight">
+            <span
+              :for={{ai, value} <- receipt_ai_pairs(card)}
+              class="block whitespace-nowrap"
+            >
+              <span class="text-thamani-pewter">({ai})</span>
+              <span class="font-medium text-thamani-evergreen">{value}</span>
+            </span>
+          </p>
+          <span
+            :if={card.line.condition}
+            class={[
+              "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium",
+              condition_classes(card.line.condition)
+            ]}
+          >
+            {condition_label(card.line.condition)}
+          </span>
+        </li>
+      </ul>
+
+      <ul :if={@quantity_lines != []} class="grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 xl:grid-cols-3">
+        <li
+          :for={line <- @quantity_lines}
+          id={"goods-receipt-line-#{line.id}"}
+          class="rounded-xl border border-thamani-stone bg-white p-3"
+        >
+          <p class="text-sm font-medium text-thamani-evergreen">
+            {line.quantity} {Products.unit_label(line.uom)}
+          </p>
+          <p class="mt-0.5 text-xs text-thamani-pewter">No serial recorded</p>
+          <span
+            :if={line.condition}
+            class={[
+              "mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+              condition_classes(line.condition)
+            ]}
+          >
+            {condition_label(line.condition)}
+          </span>
+        </li>
+      </ul>
+
+      <div :if={@follow_up != []} class="border-t border-thamani-stone px-4 py-4 sm:px-5">
+        <p class="text-xs font-medium text-thamani-pewter">Not confirmed</p>
+        <ul class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <li
+            :for={line <- @follow_up}
+            id={"goods-receipt-line-#{line.id}"}
+            class="rounded-xl border border-thamani-stone bg-white p-3"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <p class="min-w-0 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]">
+                {if line.serials == [],
+                  do: "#{line.quantity} #{Products.unit_label(line.uom)}, no serial",
+                  else: Enum.join(line.serials, ", ")}
+              </p>
+              <span
+                :if={line.condition}
+                class={[
+                  "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                  condition_classes(line.condition)
+                ]}
+              >
+                {condition_label(line.condition)}
+              </span>
+            </div>
+            <p :if={line.resolution_reference not in [nil, ""]} class="mt-2 text-xs text-thamani-pewter">
+              Reference
+              <span class="font-medium text-thamani-evergreen">{line.resolution_reference}</span>
+            </p>
+            <div
+              :if={line.resolvable}
+              id={"discrepancy-actions-#{line.discrepancy_id}"}
+              class="mt-3 flex flex-wrap gap-2"
+            >
+              <button
+                :for={status <- ["found", "lost", "stolen"]}
+                type="button"
+                id={"discrepancy-#{line.discrepancy_id}-#{status}"}
+                phx-click="open_resolve"
+                phx-value-id={line.discrepancy_id}
+                phx-value-status={status}
+                class={[
+                  "inline-flex h-8 items-center rounded-full border border-thamani-frosted bg-white px-3 text-xs font-semibold transition-colors hover:bg-thamani-canvas",
+                  status == "stolen" && "text-thamani-error",
+                  status != "stolen" && "text-thamani-evergreen"
+                ]}
+              >
+                {condition_label(String.to_existing_atom(status))}
+              </button>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+    """
+  end
 
   defp supplier_summary(%{origin_gln: origin_gln} = receipt) when is_binary(origin_gln),
     do: receipt.origin_company || "—"
@@ -45,6 +399,8 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   end
 
   def render(assigns) do
+    assigns = assign(assigns, :receipt_groups, receipt_groups(assigns.receipt))
+
     ~H"""
     <.receipt_shell
       portal={@receiving_portal}
@@ -91,24 +447,52 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
       </section>
 
       <section class="mt-6">
-        <.header variant="plain">
-          <span>Received items</span><:subtitle>
-            Each line was posted to inventory as part of this receipt.
-          </:subtitle>
-        </.header>
-        <.table id="goods-receipt-items" rows={@receipt.items}>
-          <:col :let={batch} label="Product">{product_name(batch.product)}</:col>
-          <:col :let={batch} label="Batch"><span class="font-mono">{batch.batch_no}</span></:col>
-          <:col :let={batch} label="Expiry">{Calendar.strftime(batch.expiry_date, "%b %Y")}</:col>
-          <:col :let={batch} label="Location">
-            {if batch.site, do: batch.site.name, else: "Organization stock"}
-          </:col>
-          <:col :let={batch} label="Quantity">
-            <span class="font-semibold text-thamani-forest">{batch.quantity} {unit_label(
-              batch.product.uom
-            )}</span>
-          </:col>
-        </.table>
+        <div class="mb-3">
+          <h2 class="text-base font-semibold text-thamani-evergreen">Received items</h2>
+          <p class="mt-1 text-sm text-thamani-pewter">
+            Confirmed units sit with their case. Anything still missing is listed under them.
+          </p>
+        </div>
+
+        <.blank_state
+          :if={@receipt_groups == []}
+          icon="hero-archive-box"
+          title="Nothing on this receipt"
+        >
+          Received batches and missing lines will show here.
+        </.blank_state>
+
+        <div id="goods-receipt-items" class="space-y-4">
+          <article
+            :for={{group, group_index} <- Enum.with_index(@receipt_groups)}
+            id={"goods-receipt-case-#{group_index}"}
+            class="overflow-hidden rounded-2xl ff-surface-card"
+          >
+            <header class="flex flex-wrap items-center justify-between gap-3 border-b border-thamani-stone px-4 py-3 sm:px-5">
+              <div class="flex items-center gap-3">
+                <span class="flex size-8 items-center justify-center rounded-lg bg-thamani-canvas text-sm font-semibold text-thamani-forest">
+                  {group_index + 1}
+                </span>
+                <div>
+                  <p class="font-medium text-thamani-evergreen">
+                    {if group.sscc, do: "Case", else: "No case label"}
+                  </p>
+                  <p class="text-xs tabular-nums text-thamani-pewter">
+                    {case_units(group)} {if case_units(group) == 1, do: "unit", else: "units"}
+                  </p>
+                </div>
+              </div>
+              <span
+                :if={group.sscc}
+                class="rounded-lg bg-thamani-lime px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
+              >
+                SSCC {group.sscc}
+              </span>
+            </header>
+
+            <.receipt_batch :for={batch <- group.batches} batch={batch} />
+          </article>
+        </div>
       </section>
 
       <section :if={@receipt.attachments != []} class="mt-6">
@@ -167,12 +551,44 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           </li>
         </ul>
       </section>
+
+      <.modal
+        :if={@resolving_id}
+        id="resolve-discrepancy-modal"
+        show
+        on_cancel={JS.push("close_resolve")}
+      >
+        <h2 class="mb-2 text-2xl font-medium tracking-tight text-thamani-forest">
+          Close this line as {condition_label(String.to_existing_atom(@resolving_status))}
+        </h2>
+        <p class="mb-4 text-sm text-thamani-pewter">
+          Found means the goods turned up. Lost and stolen are conclusions, and each needs an investigation reference before the line can close.
+        </p>
+        <.form for={%{}} as={:resolve} id="resolve-discrepancy-form" phx-submit="confirm_resolve">
+          <.input
+            :if={@resolving_status in ["lost", "stolen"]}
+            name="resolution_reference"
+            value={@resolution_reference}
+            label="Investigation reference"
+            placeholder="Incident report or case number"
+            required
+          />
+          <input
+            :if={@resolving_status == "found"}
+            type="hidden"
+            name="resolution_reference"
+            value=""
+          />
+          <.button variant="primary" class="mt-3 w-full">Confirm</.button>
+        </.form>
+      </.modal>
     </.receipt_shell>
     """
   end
 
-  defp doc_type_label(:grn), do: "GRN"
+  defp doc_type_label(:delivery_note), do: "Delivery note"
   defp doc_type_label(:invoice), do: "Invoice"
+  defp doc_type_label(:po), do: "Purchase order"
   defp doc_type_label(:other), do: "Other document"
 
   defp document_icon(%{content_type: "application/pdf"}), do: "hero-document-text"
@@ -203,14 +619,6 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   attr :current_scope, :map, required: true
   attr :current_path, :string, required: true
   slot :inner_block, required: true
-
-  defp receipt_shell(%{portal: :organization} = assigns) do
-    ~H"""
-    <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={@current_path}>
-      {render_slot(@inner_block)}
-    </Layouts.org_shell>
-    """
-  end
 
   defp receipt_shell(assigns) do
     ~H"""

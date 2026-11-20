@@ -3,6 +3,7 @@ defmodule ThamaniDawa.BatchesTest do
 
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Batches.Batch
+  alias ThamaniDawa.GS1.Sscc
 
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.BatchesFixtures
@@ -314,7 +315,31 @@ defmodule ThamaniDawa.BatchesTest do
       assert {:ok, _batch} = Batches.create_batch(organization.id, attrs)
       assert {:error, changeset} = Batches.create_batch(organization.id, attrs)
 
-      assert %{batch_no: ["has already been dispatched to this site"]} = errors_on(changeset)
+      assert %{batch_no: ["has already been dispatched to this site in this status"]} =
+               errors_on(changeset)
+    end
+
+    test "allows the same batch_no for the same product at the same site in a different status" do
+      organization = organization_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id})
+
+      attrs = %{
+        product_id: product.id,
+        site_id: site.id,
+        gtin: "00614141000012",
+        batch_no: "LOT-SPLIT",
+        expiry_date: ~D[2027-01-01],
+        quantity: 8
+      }
+
+      assert {:ok, _active} = Batches.create_batch(organization.id, attrs)
+
+      assert {:ok, _quarantined} =
+               Batches.create_batch(
+                 organization.id,
+                 Map.merge(attrs, %{quantity: 2, status: :quarantined})
+               )
     end
 
     test "allows the same batch_no for the same product across different sites" do
@@ -963,6 +988,392 @@ defmodule ThamaniDawa.BatchesTest do
       base_attrs: attrs
     } do
       assert {:ok, %Batch{sscc: nil}} = Batches.create_batch(org.id, Map.put(attrs, "sscc", "  "))
+    end
+  end
+
+  describe "break_into_mini_ssccs/3" do
+    test "fully disaggregates an unserialized batch, sweeping leftover into a remainder carton" do
+      %{batch: batch, user: user, organization: organization} =
+        splittable_batch(%{"quantity" => 60, "remaining_quantity" => 60, "serials" => []})
+
+      before = Repo.get!(ThamaniDawa.Organizations.Organization, organization.id).next_sscc_serial
+
+      assert {:ok, [first, second, remainder]} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [%{quantity: 25, serials: ["ignored"]}, %{quantity: 15, serials: []}],
+                 user.id
+               )
+
+      parent = Batches.get_batch!(organization.id, batch.id)
+      assert parent.remaining_quantity == 0
+      assert parent.quantity == 60
+      assert parent.serials == []
+      assert parent.status == :disaggregated
+
+      assert first.quantity == 25
+      assert first.remaining_quantity == 25
+      assert second.quantity == 15
+      assert remainder.quantity == 20
+      assert first.serials == []
+      assert second.serials == []
+      assert remainder.serials == []
+      assert first.quantity + second.quantity + remainder.quantity == 60
+      assert first.batch_no == "LOT123-S1"
+      assert second.batch_no == "LOT123-S2"
+      assert remainder.batch_no == "LOT123-S3"
+      assert first.source_batch_id == batch.id
+      assert remainder.source_batch_id == batch.id
+      assert first.zone == :storage
+      assert first.status == :active
+      assert first.received_at
+      assert first.approver_id == user.id
+      assert second.approver_id == user.id
+      assert first.product_id == batch.product_id
+      assert first.site_id == batch.site_id
+      assert first.gtin == batch.gtin
+      assert first.manufacturer == "Acme"
+      assert first.manufacture_date == ~D[2026-01-15]
+      assert first.expiry_date == batch.expiry_date
+      assert first.supplier_id == batch.supplier_id
+      assert first.goods_receipt_id == batch.goods_receipt_id
+      assert Decimal.equal?(first.cost_per_unit, Decimal.new("12.50"))
+
+      after_serial =
+        Repo.get!(ThamaniDawa.Organizations.Organization, organization.id).next_sscc_serial
+
+      assert after_serial == before
+
+      requests = ThamaniDawa.GS1.MemberApiStub.create_requests()
+      assert length(requests) == 3
+
+      assert Enum.all?(requests, fn request ->
+               request["batch_info"] == [
+                 %{
+                   "gtin" => batch.gtin,
+                   "batch" => "LOT123",
+                   "production_date" => "2026-01-15",
+                   "expiry_date" => "2027-06-01"
+                 }
+               ]
+             end)
+
+      ssccs = [first.sscc, second.sscc, remainder.sscc]
+      assert Enum.uniq(ssccs) == ssccs
+      assert Enum.all?(ssccs, &valid_sscc?/1)
+    end
+
+    test "distributes all of a serialized parent's serials across children and remainder" do
+      serials = ["SN1", "SN2", "SN3", "SN4"]
+
+      %{batch: batch, user: user, organization: organization} =
+        splittable_batch(%{"quantity" => 4, "remaining_quantity" => 4, "serials" => serials})
+
+      assert {:ok, [first, second, remainder]} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [
+                   %{quantity: 2, serials: ["SN1", "SN3"]},
+                   %{quantity: 1, serials: ["SN4"]}
+                 ],
+                 user.id
+               )
+
+      parent = Batches.get_batch!(organization.id, batch.id)
+      assert parent.remaining_quantity == 0
+      assert parent.serials == []
+      assert parent.status == :disaggregated
+      assert first.serials == ["SN1", "SN3"]
+      assert second.serials == ["SN4"]
+      assert remainder.serials == ["SN2"]
+
+      all = first.serials ++ second.serials ++ remainder.serials
+      assert Enum.sort(all) == Enum.sort(serials)
+      assert length(Enum.uniq(all)) == 4
+    end
+
+    test "rejects breaking an already-disaggregated or empty parent" do
+      %{batch: batch, user: user, organization: organization} = splittable_batch()
+
+      assert {:ok, _children} =
+               Batches.break_into_mini_ssccs(batch, [%{quantity: 10}], user.id)
+
+      parent = Batches.get_batch!(organization.id, batch.id)
+      assert parent.status == :disaggregated
+      assert parent.remaining_quantity == 0
+
+      assert {:error, :not_breakable} =
+               Batches.break_into_mini_ssccs(parent, [%{quantity: 5}], user.id)
+    end
+
+    test "rejects an empty split, a non-positive quantity, and too large a split" do
+      %{batch: batch, user: user, organization: organization} = splittable_batch()
+
+      assert {:error, :no_groups} = Batches.break_into_mini_ssccs(batch, [], user.id)
+
+      assert {:error, :invalid_group_quantity} =
+               Batches.break_into_mini_ssccs(batch, [%{quantity: 0}], user.id)
+
+      assert {:error, :invalid_group_quantity} =
+               Batches.break_into_mini_ssccs(batch, [%{quantity: -5}], user.id)
+
+      assert {:error, :insufficient_quantity} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [%{quantity: 50}, %{quantity: 20}],
+                 user.id
+               )
+
+      assert Batches.get_batch!(organization.id, batch.id).remaining_quantity == 60
+    end
+
+    test "rejects serials that do not match the group or the parent" do
+      %{batch: batch, user: user, organization: organization} =
+        splittable_batch(%{
+          "quantity" => 3,
+          "remaining_quantity" => 3,
+          "serials" => ["SN1", "SN2", "SN3"]
+        })
+
+      assert {:error, :invalid_serials} =
+               Batches.break_into_mini_ssccs(batch, [%{quantity: 2, serials: ["SN1"]}], user.id)
+
+      assert {:error, :invalid_serials} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [%{quantity: 1, serials: ["NOPE"]}],
+                 user.id
+               )
+
+      assert {:error, :invalid_serials} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [
+                   %{quantity: 1, serials: ["SN1"]},
+                   %{quantity: 1, serials: ["SN1"]}
+                 ],
+                 user.id
+               )
+
+      parent = Batches.get_batch!(organization.id, batch.id)
+      assert parent.remaining_quantity == 3
+      assert parent.serials == ["SN1", "SN2", "SN3"]
+    end
+
+    test "suffixes each carton in a single break, remainder last" do
+      %{batch: batch, user: user} = splittable_batch()
+
+      assert {:ok, [first, second, remainder]} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [%{quantity: 10}, %{quantity: 10}],
+                 user.id
+               )
+
+      assert first.batch_no == "LOT123-S1"
+      assert second.batch_no == "LOT123-S2"
+      assert remainder.batch_no == "LOT123-S3"
+      assert remainder.quantity == 40
+    end
+
+    test "splitting a mini-SSCC chains source_batch_id and suffixes" do
+      %{batch: batch, user: user, organization: organization} =
+        splittable_batch(%{
+          "quantity" => 4,
+          "remaining_quantity" => 4,
+          "serials" => ["SN1", "SN2", "SN3", "SN4"]
+        })
+
+      assert {:ok, [child, _parent_remainder]} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [%{quantity: 2, serials: ["SN1", "SN2"]}],
+                 user.id
+               )
+
+      assert child.batch_no == "LOT123-S1"
+      assert child.source_batch_id == batch.id
+
+      assert {:ok, [grandchild, child_remainder]} =
+               Batches.break_into_mini_ssccs(
+                 child,
+                 [%{quantity: 1, serials: ["SN1"]}],
+                 user.id
+               )
+
+      assert grandchild.batch_no == "LOT123-S1-S1"
+      assert grandchild.source_batch_id == child.id
+      assert grandchild.serials == ["SN1"]
+      assert grandchild.sscc != child.sscc
+      assert child_remainder.batch_no == "LOT123-S1-S2"
+      assert child_remainder.serials == ["SN2"]
+
+      reloaded_child = Batches.get_batch!(organization.id, child.id)
+      assert reloaded_child.remaining_quantity == 0
+      assert reloaded_child.serials == []
+      assert reloaded_child.status == :disaggregated
+    end
+
+    test "a missing parent rolls back as not_found" do
+      %{batch: batch, user: user} = splittable_batch()
+      Repo.delete!(batch)
+
+      assert {:error, :not_found} =
+               Batches.break_into_mini_ssccs(batch, [%{quantity: 1}], user.id)
+    end
+
+    defp splittable_batch(overrides \\ %{}) do
+      organization = organization_with_prefix_fixture()
+      product = product_fixture(%{organization_id: organization.id})
+
+      site =
+        site_fixture(%{organization_id: organization.id, activities: [:distribution]})
+
+      supplier = supplier_fixture(%{organization_id: organization.id})
+      user = user_fixture(%{organization_id: organization.id})
+
+      attrs =
+        Map.merge(
+          %{
+            "product_id" => product.id,
+            "site_id" => site.id,
+            "supplier_id" => supplier.id,
+            "gtin" => product.gtin,
+            "batch_no" => "LOT123",
+            "manufacturer" => "Acme",
+            "manufacture_date" => ~D[2026-01-15],
+            "expiry_date" => ~D[2027-06-01],
+            "quantity" => 60,
+            "remaining_quantity" => 60,
+            "cost_per_unit" => "12.50",
+            "serials" => [],
+            "sscc" => "006141411234567890"
+          },
+          overrides
+        )
+
+      {:ok, batch} = Batches.create_batch(organization.id, attrs)
+      {:ok, batch} = Batches.receive_batch(batch, user.id)
+
+      %{organization: organization, product: product, site: site, user: user, batch: batch}
+    end
+
+    defp valid_sscc?(sscc) do
+      String.match?(sscc, ~r/^\d{18}$/) and
+        Integer.to_string(Sscc.mod10_check_digit(String.slice(sscc, 0..-2//1))) ==
+          String.slice(sscc, -1, 1)
+    end
+  end
+
+  describe "break_logistic_unit/3" do
+    alias ThamaniDawa.Batches.LogisticUnit
+    import Ecto.Query
+
+    test "breaks a single-line case into child units and retires the unit" do
+      %{organization: org, user: user, batch: batch} = splittable_batch()
+      unit = link_case_unit(org.id, batch)
+
+      assert {:ok, [%{children: children}]} =
+               Batches.break_logistic_unit(
+                 unit,
+                 [%{batch_id: batch.id, groups: [%{quantity: 25}]}],
+                 user.id
+               )
+
+      assert length(children) == 2
+      assert Enum.all?(children, & &1.logistic_unit_id)
+
+      child_units =
+        ThamaniDawa.Repo.all(
+          from u in LogisticUnit, where: u.parent_logistic_unit_id == ^unit.id
+        )
+
+      assert length(child_units) == 2
+      assert Enum.all?(child_units, &(&1.source == :minted))
+
+      assert ThamaniDawa.Repo.get!(LogisticUnit, unit.id).status == :disaggregated
+
+      line = Batches.get_batch!(org.id, batch.id)
+      assert line.status == :disaggregated
+      assert line.remaining_quantity == 0
+    end
+
+    test "breaks a mixed case per line, one product per child" do
+      %{organization: org, user: user, batch: batch_a, site: site} = splittable_batch()
+      product_b = product_fixture(%{organization_id: org.id})
+
+      {:ok, batch_b} =
+        Batches.create_batch(org.id, %{
+          "product_id" => product_b.id,
+          "site_id" => site.id,
+          "gtin" => product_b.gtin,
+          "batch_no" => "LOTB",
+          "expiry_date" => ~D[2027-06-01],
+          "quantity" => 40,
+          "remaining_quantity" => 40,
+          "serials" => [],
+          "sscc" => batch_a.sscc
+        })
+
+      {:ok, batch_b} = Batches.receive_batch(batch_b, user.id)
+      unit = link_case_unit(org.id, batch_a, [batch_b])
+
+      assert {:ok, [result_a, result_b]} =
+               Batches.break_logistic_unit(
+                 unit,
+                 [
+                   %{batch_id: batch_a.id, groups: [%{quantity: 20}]},
+                   %{batch_id: batch_b.id, groups: [%{quantity: 10}]}
+                 ],
+                 user.id
+               )
+
+      assert Enum.all?(result_a.children, &(&1.product_id == batch_a.product_id))
+      assert Enum.all?(result_b.children, &(&1.product_id == product_b.id))
+      assert length(result_a.children) == 2
+      assert length(result_b.children) == 2
+
+      assert ThamaniDawa.Repo.get!(LogisticUnit, unit.id).status == :disaggregated
+      assert Batches.get_batch!(org.id, batch_a.id).status == :disaggregated
+      assert Batches.get_batch!(org.id, batch_b.id).status == :disaggregated
+    end
+
+    test "rejects breaking an already-disaggregated unit" do
+      %{organization: org, user: user, batch: batch} = splittable_batch()
+      unit = link_case_unit(org.id, batch)
+
+      assert {:ok, _} =
+               Batches.break_logistic_unit(
+                 unit,
+                 [%{batch_id: batch.id, groups: [%{quantity: 10}]}],
+                 user.id
+               )
+
+      assert {:error, :not_breakable} =
+               Batches.break_logistic_unit(
+                 unit,
+                 [%{batch_id: batch.id, groups: [%{quantity: 5}]}],
+                 user.id
+               )
+    end
+
+    defp link_case_unit(org_id, primary, others \\ []) do
+      {:ok, unit} =
+        %LogisticUnit{}
+        |> LogisticUnit.changeset(%{
+          organization_id: org_id,
+          sscc: primary.sscc,
+          kind: :case,
+          source: :inbound,
+          site_id: primary.site_id
+        })
+        |> ThamaniDawa.Repo.insert()
+
+      for b <- [primary | others] do
+        b |> Ecto.Changeset.change(logistic_unit_id: unit.id) |> ThamaniDawa.Repo.update!()
+      end
+
+      unit
     end
   end
 end

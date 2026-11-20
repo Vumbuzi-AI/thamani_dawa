@@ -2,7 +2,7 @@ defmodule ThamaniDawa.GoodsReceipts.Attachment do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @doc_types [:grn, :invoice, :other]
+  @doc_types [:delivery_note, :invoice, :po, :other]
 
   schema "goods_receipt_attachments" do
     field :doc_type, Ecto.Enum, values: @doc_types

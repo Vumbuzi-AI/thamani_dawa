@@ -632,6 +632,313 @@ defmodule ThamaniDawa.EpcisTest do
     end
   end
 
+  describe "record_mini_sscc_split/2 via Batches.break_into_mini_ssccs/3" do
+    setup do
+      organization = DistributorFixtures.distributor_organization_fixture()
+      user = AccountsFixtures.user_fixture(%{organization_id: organization.id})
+      warehouse = DistributorFixtures.warehouse_fixture(organization.id)
+      supplier = SuppliersFixtures.supplier_fixture(%{organization_id: organization.id})
+      product = ProductsFixtures.product_fixture(%{organization_id: organization.id})
+
+      %{
+        organization: organization,
+        user: user,
+        warehouse: warehouse,
+        supplier: supplier,
+        product: product
+      }
+    end
+
+    test "a cased batch enqueues a full unpack, a pack per mini-SSCC, and a decommission", ctx do
+      assert {:ok, receipt} =
+               GoodsReceipts.receive_delivery(
+                 ctx.organization.id,
+                 ctx.user.id,
+                 [delivery_item(ctx, "LOT-CASE", 60, sscc: "006141411234567890")],
+                 Ecto.UUID.generate()
+               )
+
+      batch =
+        ctx.organization.id
+        |> Batches.list_batches()
+        |> Enum.find(&(&1.batch_no == "LOT-CASE"))
+
+      assert batch.goods_receipt_id == receipt.id
+
+      assert {:ok, children} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [%{quantity: 25}, %{quantity: 15}],
+                 ctx.user.id
+               )
+
+      # Full disaggregation: the two groups plus an auto-remainder carton.
+      assert [_a, _b, remainder] = children
+      assert remainder.quantity == 20
+      assert Enum.all?(children, &(&1.goods_receipt_id == receipt.id))
+
+      events =
+        ctx.organization.id
+        |> Outbox.pending_for_organization()
+        |> Enum.filter(&(&1.event_type in ["unpacking", "packing"]))
+
+      assert [unpack, pack_a, pack_b, pack_c] = events
+      assert unpack.event_type == "unpacking"
+      assert unpack.source_type == "batch"
+      assert unpack.source_id == batch.id
+      assert unpack.payload["action"] == "DELETE"
+      assert unpack.payload["bizStep"] == "unpacking"
+      assert unpack.payload["parentID"] == "urn:epc:id:sscc:0614141.0123456789"
+      refute Map.has_key?(unpack.payload, "childEPCs")
+      # The unpack now covers the whole parent, not just the peeled-off units.
+      assert [%{"quantity" => 60}] = unpack.payload["quantityList"]
+
+      packs = [pack_a, pack_b, pack_c]
+      assert Enum.map(packs, & &1.source_id) == Enum.map(children, & &1.id)
+      assert packs |> Enum.map(& &1.payload["parentID"]) |> Enum.uniq() |> length() == 3
+
+      assert Enum.all?(packs, fn pack ->
+               pack.event_type == "packing" and
+                 pack.source_type == "batch" and
+                 pack.payload["action"] == "ADD" and
+                 pack.payload["bizStep"] == "packing" and
+                 is_nil(pack.payload["childEPCs"])
+             end)
+
+      assert Enum.map(packs, fn pack ->
+               hd(pack.payload["quantityList"])["quantity"]
+             end) == [25, 15, 20]
+
+      assert DateTime.compare(unpack.occurred_at, pack_a.occurred_at) == :lt
+
+      decommission =
+        ctx.organization.id
+        |> Outbox.pending_for_organization()
+        |> Enum.find(&(&1.event_type == "decommissioning"))
+
+      assert decommission
+      assert decommission.source_id == batch.id
+      assert decommission.payload["action"] == "DELETE"
+      assert decommission.payload["bizStep"] == "decommissioning"
+      assert decommission.payload["disposition"] == "inactive"
+      assert decommission.payload["epcList"] == ["urn:epc:id:sscc:0614141.0123456789"]
+      assert DateTime.compare(pack_a.occurred_at, decommission.occurred_at) == :lt
+    end
+
+    test "a serialized case unpacks every serial across the children" do
+      ctx = %{
+        organization: organization,
+        user: user
+      } = received_case_context()
+
+      batch =
+        received_case(ctx, %{
+          "batch_no" => "LOT-SER",
+          "quantity" => 3,
+          "remaining_quantity" => 3,
+          "sscc" => "006141411234567890",
+          "serials" => ["SN1", "SN2", "SN3"]
+        })
+
+      # The remainder carton (SN3) is auto-created, so the whole case is unpacked.
+      assert {:ok, [child, _remainder]} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [%{quantity: 2, serials: ["SN1", "SN2"]}],
+                 user.id
+               )
+
+      [unpack, pack, _remainder_pack] =
+        organization.id
+        |> Outbox.pending_for_organization()
+        |> Enum.filter(&(&1.event_type in ["unpacking", "packing"]))
+
+      assert length(unpack.payload["childEPCs"]) == 3
+      assert Enum.all?(unpack.payload["childEPCs"], &String.contains?(&1, "SN"))
+      assert length(pack.payload["childEPCs"]) == 2
+      assert pack.source_id == child.id
+      refute Map.has_key?(unpack.payload, "quantityList")
+      refute Map.has_key?(pack.payload, "quantityList")
+
+      decommission =
+        organization.id
+        |> Outbox.pending_for_organization()
+        |> Enum.find(&(&1.event_type == "decommissioning"))
+
+      assert decommission
+      assert decommission.payload["epcList"] == ["urn:epc:id:sscc:0614141.0123456789"]
+    end
+
+    test "loose stock with no SSCC enqueues packs only, no unpack or decommission" do
+      ctx = %{organization: organization, user: user} = received_case_context()
+
+      batch =
+        received_case(ctx, %{
+          "batch_no" => "LOT-LOOSE",
+          "quantity" => 30,
+          "remaining_quantity" => 30,
+          "sscc" => nil,
+          "serials" => []
+        })
+
+      assert {:ok, children} =
+               Batches.break_into_mini_ssccs(
+                 batch,
+                 [%{quantity: 10}, %{quantity: 5}],
+                 user.id
+               )
+
+      # Two groups plus the auto-remainder carton.
+      assert length(children) == 3
+
+      events = Outbox.pending_for_organization(organization.id)
+      assert Enum.count(events, &(&1.event_type == "unpacking")) == 0
+      assert Enum.count(events, &(&1.event_type == "decommissioning")) == 0
+      packs = Enum.filter(events, &(&1.event_type == "packing"))
+      assert length(packs) == 3
+      assert Enum.map(packs, & &1.source_id) == Enum.map(children, & &1.id)
+    end
+
+    test "outbox rows roll back with the batch rows" do
+      ctx = %{organization: organization, user: user} = received_case_context()
+
+      batch =
+        received_case(ctx, %{
+          "batch_no" => "LOT-ROLLBACK",
+          "quantity" => 60,
+          "remaining_quantity" => 60,
+          "sscc" => "006141411234567890",
+          "serials" => []
+        })
+
+      assert {:error, :aborted} =
+               Repo.transaction(fn ->
+                 assert {:ok, _children} =
+                          Batches.break_into_mini_ssccs(
+                            batch,
+                            [%{quantity: 10}, %{quantity: 5}],
+                            user.id
+                          )
+
+                 Repo.rollback(:aborted)
+               end)
+
+      assert Batches.get_batch!(organization.id, batch.id).remaining_quantity == 60
+
+      child_count =
+        Repo.aggregate(
+          from(b in ThamaniDawa.Batches.Batch, where: b.source_batch_id == ^batch.id),
+          :count
+        )
+
+      assert child_count == 0
+      assert Outbox.list_events(organization.id) == []
+    end
+
+    test "breaking a mixed logistic unit emits one unpack across products, packs, one decommission" do
+      ctx = %{organization: organization, user: user} = received_case_context()
+      product_b = ProductsFixtures.product_fixture(%{organization_id: organization.id})
+
+      batch_a =
+        received_case(ctx, %{
+          "batch_no" => "LOT-A",
+          "quantity" => 30,
+          "remaining_quantity" => 30,
+          "sscc" => "006141411234567890",
+          "serials" => []
+        })
+
+      batch_b =
+        received_case(ctx, %{
+          "product_id" => product_b.id,
+          "gtin" => product_b.gtin,
+          "batch_no" => "LOT-B",
+          "quantity" => 20,
+          "remaining_quantity" => 20,
+          "sscc" => "006141411234567890",
+          "serials" => []
+        })
+
+      {:ok, unit} =
+        %ThamaniDawa.Batches.LogisticUnit{}
+        |> ThamaniDawa.Batches.LogisticUnit.changeset(%{
+          organization_id: organization.id,
+          sscc: "006141411234567890",
+          kind: :case,
+          source: :inbound,
+          site_id: ctx.warehouse.id
+        })
+        |> Repo.insert()
+
+      for b <- [batch_a, batch_b] do
+        b |> Ecto.Changeset.change(logistic_unit_id: unit.id) |> Repo.update!()
+      end
+
+      assert {:ok, _results} =
+               Batches.break_logistic_unit(
+                 unit,
+                 [
+                   %{batch_id: batch_a.id, groups: [%{quantity: 10}]},
+                   %{batch_id: batch_b.id, groups: [%{quantity: 5}]}
+                 ],
+                 user.id
+               )
+
+      events = Outbox.pending_for_organization(organization.id)
+      unpacks = Enum.filter(events, &(&1.event_type == "unpacking"))
+      packs = Enum.filter(events, &(&1.event_type == "packing"))
+      decommissions = Enum.filter(events, &(&1.event_type == "decommissioning"))
+
+      assert length(unpacks) == 1
+      assert length(decommissions) == 1
+      # carton + remainder per line, two lines → 4 child units packed.
+      assert length(packs) == 4
+
+      # The single unpack covers both products in its quantityList.
+      assert length(hd(unpacks).payload["quantityList"]) == 2
+      assert hd(decommissions).payload["epcList"] == ["urn:epc:id:sscc:0614141.0123456789"]
+      assert hd(decommissions).source_type == "logistic_unit"
+      assert hd(decommissions).source_id == unit.id
+    end
+
+    defp received_case_context do
+      organization = DistributorFixtures.distributor_organization_fixture()
+      user = AccountsFixtures.user_fixture(%{organization_id: organization.id})
+      warehouse = DistributorFixtures.warehouse_fixture(organization.id)
+      supplier = SuppliersFixtures.supplier_fixture(%{organization_id: organization.id})
+      product = ProductsFixtures.product_fixture(%{organization_id: organization.id})
+
+      %{
+        organization: organization,
+        user: user,
+        warehouse: warehouse,
+        supplier: supplier,
+        product: product
+      }
+    end
+
+    defp received_case(ctx, attrs) do
+      attrs =
+        Map.merge(
+          %{
+            "product_id" => ctx.product.id,
+            "site_id" => ctx.warehouse.id,
+            "supplier_id" => ctx.supplier.id,
+            "gtin" => ctx.product.gtin,
+            "manufacturer" => "Acme",
+            "manufacture_date" => ~D[2026-01-15],
+            "expiry_date" => ~D[2027-06-01],
+            "cost_per_unit" => "10.00"
+          },
+          attrs
+        )
+
+      {:ok, batch} = Batches.create_batch(ctx.organization.id, attrs)
+      {:ok, batch} = Batches.receive_batch(batch, ctx.user.id)
+      batch
+    end
+  end
+
   defp sgln!(gln, organization) do
     {:ok, urn} = Urn.sgln(gln, Urn.prefix_length_for(gln, organization.gs1_company_prefix))
     urn

@@ -5,17 +5,17 @@ defmodule ThamaniDawa.Gs1RegistryStub do
   `ThamaniDawa.Grp` posts a JSON array holding the identifier to look up and
   expects a JSON array of licence records back. This stub answers with one
   `"licenceStatus" => "ACTIVE"` licence for every identifier it is asked
-  about, except for two sentinel prefixes tests use to exercise the other
-  paths: identifiers starting with a run of zeros (`"000..."`) come back as
-  an empty list — how the registry answers for an identifier it doesn't know
-  — and identifiers starting with a run of nines (`"999..."`) come back with
-  a licence record whose `licenceStatus` is `"WITHDRAWN"`, to exercise the
-  found-but-not-active path. Also configurable via the `:gs1_unknown_identifiers`
-  application-env key for identifiers that don't fit the sentinel-prefix
-  convention.
+  about, except for test sentinels that exercise the other paths: identifiers
+  starting with a run of zeros (`"000..."`) come back as an empty list — how
+  the registry answers for an identifier it doesn't know — and the dedicated
+  inactive GLN comes back with a licence record whose `licenceStatus` is
+  `"WITHDRAWN"`. Also configurable via the `:gs1_unknown_identifiers`
+  application-env key for identifiers that don't fit the sentinel convention.
   """
 
   @behaviour Plug
+
+  @inactive_gln "0614141000456"
 
   @impl Plug
   def init(opts), do: opts
@@ -79,10 +79,10 @@ defmodule ThamaniDawa.Gs1RegistryStub do
     String.starts_with?(identifier, "000") or identifier in unknown_identifiers()
   end
 
-  # Identifiers starting with a run of nines stand for identifiers the
-  # registry knows about but whose licence is no longer active; tests use
-  # them to exercise the found-but-inactive path.
-  defp inactive?(identifier), do: String.starts_with?(identifier, "999")
+  # The run-of-nines sentinel and a GLN under the default test organization
+  # prefix both represent registry licenses that are no longer active.
+  defp inactive?(identifier),
+    do: String.starts_with?(identifier, "999") or identifier == @inactive_gln
 
   defp unknown_identifiers do
     Application.get_env(:thamani_dawa, :gs1_unknown_identifiers, [])

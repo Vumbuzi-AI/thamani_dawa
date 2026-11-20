@@ -43,19 +43,21 @@ defmodule ThamaniDawaWeb.PortalSwitcherTest do
       }
     end
 
-    test "pick between the organization context and every site", %{conn: conn} do
+    test "groups the organization context separately from sites", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/org/sites")
 
       assert has_element?(view, "#site-switch-form")
       assert has_element?(view, "#site-switch-trigger")
-      assert has_element?(view, "#site-switch-org", "Manage organization")
+      assert has_element?(view, "#site-switch-organization-heading", "Organization")
+      assert has_element?(view, "#site-switch-sites-heading", "Sites")
+      assert has_element?(view, "#site-switch-org", "All sites")
       assert has_element?(view, "#site-switch-dropdown button", "Branch A")
       assert has_element?(view, "#site-switch-dropdown button", "Branch B")
       assert has_element?(view, "#site-switch-dropdown button", "Pharmacy")
       assert has_element?(view, "#site-switch-dropdown button", "Lab")
     end
 
-    test "the organization entry carries the org name, not a portal label", %{
+    test "the organization entry makes the all-sites scope explicit", %{
       conn: conn,
       admin: admin
     } do
@@ -63,8 +65,9 @@ defmodule ThamaniDawaWeb.PortalSwitcherTest do
 
       {:ok, view, _html} = live(conn, ~p"/org/sites")
 
+      assert has_element?(view, "#site-switch-org", "All sites")
       assert has_element?(view, "#site-switch-org", organization.name)
-      refute has_element?(view, "#site-switch-org", "All sites")
+      refute has_element?(view, "#site-switch-org", "Manage organization")
     end
 
     test "in org context, the organization entry is marked active", %{
@@ -117,6 +120,7 @@ defmodule ThamaniDawaWeb.PortalSwitcherTest do
       {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
 
       assert has_element?(view, "#site-switch-form")
+      assert has_element?(view, "#site-switch-sites-heading", "Your sites")
       assert has_element?(view, "#site-switch-dropdown button", "Chemist One")
       assert has_element?(view, "#site-switch-dropdown button", "Chemist Two")
       refute has_element?(view, "#site-switch-dropdown button", "Clinic")

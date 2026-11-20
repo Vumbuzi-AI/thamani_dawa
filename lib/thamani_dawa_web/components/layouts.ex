@@ -228,7 +228,8 @@ defmodule ThamaniDawaWeb.Layouts do
         {nil,
          [
            {"Dashboard", "hero-squares-2x2", ~p"/platform"},
-           {"Audit activity", "hero-clipboard-document-list", ~p"/platform/audit"}
+           {"Audit activity", "hero-clipboard-document-list", ~p"/platform/audit"},
+           {"Recalls", "hero-exclamation-triangle", ~p"/platform/recalls"}
          ]}
       ]}
     >
@@ -303,6 +304,8 @@ defmodule ThamaniDawaWeb.Layouts do
       |> then(&assign(&1, :back_label, back_label(&1)))
       |> assign(:nav_badges, assigns.nav_badges || unified_nav_badges(scope, nav_groups))
       |> assign(:site_picker_options, site_picker_options)
+      |> assign(:organization_picker_option, Enum.find(site_picker_options, &(&1.value == "")))
+      |> assign(:site_picker_options, Enum.reject(site_picker_options, &(&1.value == "")))
       |> assign(:current_picker_option, current_picker_option(scope, site_picker_options))
 
     ~H"""
@@ -373,12 +376,13 @@ defmodule ThamaniDawaWeb.Layouts do
           </button>
         </div>
 
-        <%!-- Site picker: the single context switch. The organization is
-             one option (admins only, org-wide management), real sites the
-             others — picking one lands the user in the panel that site
-             offers, so no separate portal or role picker exists. --%>
+        <%!-- Context picker: switch between organization-wide management and
+             a specific site. Picking a site lands the user in its operations. --%>
         <form
-          :if={length(@site_picker_options) > 1}
+          :if={
+            (not is_nil(@organization_picker_option) and @site_picker_options != []) or
+              length(@site_picker_options) > 1
+          }
           id="site-switch-form"
           action={~p"/switch-site"}
           method="post"
@@ -400,6 +404,9 @@ defmodule ThamaniDawaWeb.Layouts do
               id="site-switch-trigger"
               phx-click={JS.toggle(to: "#site-switch-dropdown")}
               phx-click-away={JS.hide(to: "#site-switch-dropdown")}
+              aria-label="Change working context"
+              aria-controls="site-switch-dropdown"
+              aria-haspopup="menu"
               class="group flex min-h-12 w-full cursor-pointer items-center justify-between gap-2.5 rounded-xl px-3 py-2 text-left text-thamani-forest transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:bg-white/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40"
               style="background: color-mix(in srgb, var(--thamani-stone) 72%, white); border: 1px solid color-mix(in srgb, var(--thamani-forest) 25%, var(--thamani-border-nav));"
             >
@@ -426,43 +433,33 @@ defmodule ThamaniDawaWeb.Layouts do
               id="site-switch-dropdown"
               class="absolute left-0 top-full z-50 mt-1.5 hidden w-full rounded-xl border border-thamani-stone bg-white p-1 shadow-xl ff-surface-popover"
             >
-              <button
-                :for={option <- @site_picker_options}
-                id={option.id}
-                type="button"
-                onclick={
-                  "document.getElementById('site-switch-input').value = '" <>
-                    option.value <>
-                    "'; document.getElementById('site-switch-form').requestSubmit();"
-                }
-                class={[
-                  "flex min-h-11 w-full cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
-                  option.active? && "bg-thamani-forest/10 text-thamani-forest",
-                  not option.active? &&
-                    "text-slate-700 hover:bg-thamani-stone/60 hover:text-thamani-forest"
-                ]}
+              <p
+                :if={@organization_picker_option}
+                id="site-switch-organization-heading"
+                class="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-thamani-pewter"
               >
-                <span class="flex min-w-0 items-center gap-2.5">
-                  <span class={[
-                    "flex size-7 shrink-0 items-center justify-center rounded-md",
-                    option.active? && "bg-white/70",
-                    not option.active? && "bg-thamani-stone/60 group-hover:bg-white"
-                  ]}>
-                    <.icon name={option.icon} class="size-3.5" />
-                  </span>
-                  <span class="flex min-w-0 flex-col">
-                    <span class="truncate text-[13px] font-semibold leading-4">{option.name}</span>
-                    <span class="truncate text-[11px] font-normal leading-4 text-thamani-pewter">
-                      {option.subtitle}
-                    </span>
-                  </span>
-                </span>
-                <.icon
-                  :if={option.active?}
-                  name="hero-check"
-                  class="size-4 shrink-0 text-thamani-forest"
-                />
-              </button>
+                Organization
+              </p>
+              <.site_picker_option
+                :if={@organization_picker_option}
+                option={@organization_picker_option}
+              />
+
+              <p
+                :if={@organization_picker_option && @site_picker_options != []}
+                id="site-switch-sites-heading"
+                class="mx-2.5 mt-1 border-t border-slate-100 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-thamani-pewter"
+              >
+                Sites
+              </p>
+              <p
+                :if={!@organization_picker_option && @site_picker_options != []}
+                id="site-switch-sites-heading"
+                class="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-thamani-pewter"
+              >
+                Your sites
+              </p>
+              <.site_picker_option :for={option <- @site_picker_options} option={option} />
             </div>
           </div>
         </form>
@@ -587,7 +584,7 @@ defmodule ThamaniDawaWeb.Layouts do
 
       <%!-- Main content --%>
       <main
-        class="min-w-0 flex-1 lg:overflow-y-auto"
+        class="min-w-0 flex-1 overscroll-contain lg:overflow-y-auto"
         style="background: var(--thamani-paper);"
       >
         <header
@@ -778,6 +775,9 @@ defmodule ThamaniDawaWeb.Layouts do
 
     labeled_ops =
       case ops_groups do
+        [{:distributor, _items}] ->
+          distributor_item_groups()
+
         [{_portal, items}] ->
           [{"Operations", items}]
 
@@ -856,19 +856,34 @@ defmodule ThamaniDawaWeb.Layouts do
   end
 
   defp distributor_items do
+    Enum.flat_map(distributor_item_groups(), fn {_label, items} -> items end)
+  end
+
+  defp distributor_item_groups do
     [
-      {"Dashboard", "hero-squares-2x2", ~p"/distributor"},
-      {"Shipments", "hero-truck", ~p"/distributor/shipments"},
-      {"Receiving", "hero-arrow-down-tray", ~p"/distributor/receiving"},
-      {"Stock", "hero-cube", ~p"/distributor/stock"},
-      {"Products", "hero-cube", ~p"/distributor/products"}
+      {"Overview",
+       [
+         {"Dashboard", "hero-squares-2x2", ~p"/distributor"}
+       ]},
+      {"Inventory",
+       [
+         {"Receiving", "hero-arrow-down-tray", ~p"/distributor/receiving"},
+         {"Inventory", "hero-archive-box", ~p"/distributor/products"},
+         {"Expiry write-off", "hero-calendar-days", ~p"/distributor/expiry-write-offs"},
+         {"Stock takes", "hero-clipboard-document-list", ~p"/distributor/stock-takes"}
+       ]},
+      {"Sales & distribution",
+       [
+         {"Shipments", "hero-truck", ~p"/distributor/shipments"},
+         {"Customers", "hero-user-group", ~p"/distributor/customers"},
+         {"Returns", "hero-arrow-uturn-left", ~p"/distributor/returns"}
+       ]}
     ]
   end
 
   defp org_items(multi_site?) do
     [
       {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
-      {"Receiving", "hero-arrow-down-tray", ~p"/org/receiving"},
       {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"},
       {"Transactions", "hero-banknotes", ~p"/org/earnings"}
     ]
@@ -903,6 +918,7 @@ defmodule ThamaniDawaWeb.Layouts do
       {"Account",
        [
          {"Billing", "hero-credit-card", ~p"/distributor/billing"},
+         {"API keys", "hero-key", ~p"/distributor/api-keys"},
          {"TNT reporting", "hero-globe-alt", ~p"/distributor/epcis"},
          {"Org settings", "hero-cog-6-tooth", ~p"/distributor/settings"}
        ]}
@@ -920,6 +936,7 @@ defmodule ThamaniDawaWeb.Layouts do
        ]},
       {"Account",
        [
+         {"API keys", "hero-key", ~p"/org/api-keys"},
          {"TNT reporting", "hero-globe-alt", ~p"/org/epcis"},
          {"Org settings", "hero-cog-6-tooth", ~p"/org/settings"}
        ]}
@@ -966,8 +983,8 @@ defmodule ThamaniDawaWeb.Layouts do
       [
         %{
           id: "site-switch-org",
-          name: Organizations.get_organization!(scope.organization_id).name,
-          subtitle: "Manage organization",
+          name: "All sites",
+          subtitle: Organizations.get_organization!(scope.organization_id).name,
           icon: "hero-squares-2x2",
           active?: is_nil(scope.current_site_id),
           value: ""
@@ -998,11 +1015,63 @@ defmodule ThamaniDawaWeb.Layouts do
         id: "site-switch-option-#{site.id}",
         name: site.name,
         subtitle: site_activity_summary(site),
-        icon: "hero-building-office-2",
+        icon: site_context_icon(site),
         active?: site.id == scope.current_site_id,
         value: to_string(site.id)
       }
     end)
+  end
+
+  defp site_context_icon(site) do
+    cond do
+      Site.distribution?(site) -> "hero-archive-box"
+      Site.pharmacy?(site) and Site.lab?(site) -> "hero-building-office-2"
+      Site.pharmacy?(site) -> "hero-building-storefront"
+      Site.lab?(site) -> "hero-beaker"
+      true -> "hero-building-office-2"
+    end
+  end
+
+  attr :option, :map, required: true
+
+  defp site_picker_option(assigns) do
+    ~H"""
+    <button
+      id={@option.id}
+      type="button"
+      onclick={
+        "document.getElementById('site-switch-input').value = '" <>
+          @option.value <>
+          "'; document.getElementById('site-switch-form').requestSubmit();"
+      }
+      class={[
+        "flex min-h-11 w-full cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
+        @option.active? && "bg-thamani-forest/10 text-thamani-forest",
+        not @option.active? && "text-slate-700 hover:bg-thamani-stone/60 hover:text-thamani-forest"
+      ]}
+    >
+      <span class="flex min-w-0 items-center gap-2.5">
+        <span class={[
+          "flex size-7 shrink-0 items-center justify-center rounded-md",
+          @option.active? && "bg-white/70",
+          not @option.active? && "bg-thamani-stone/60 group-hover:bg-white"
+        ]}>
+          <.icon name={@option.icon} class="size-3.5" />
+        </span>
+        <span class="flex min-w-0 flex-col">
+          <span class="truncate text-[13px] font-semibold leading-4">{@option.name}</span>
+          <span class="truncate text-[11px] font-normal leading-4 text-thamani-pewter">
+            {@option.subtitle}
+          </span>
+        </span>
+      </span>
+      <.icon
+        :if={@option.active?}
+        name="hero-check"
+        class="size-4 shrink-0 text-thamani-forest"
+      />
+    </button>
+    """
   end
 
   defp site_activity_summary(%Site{activities: activities}) do
@@ -1110,6 +1179,7 @@ defmodule ThamaniDawaWeb.Layouts do
   def landing(assigns) do
     ~H"""
     {@inner_content || render_slot(@inner_block)}
+    <.site_footer />
     """
   end
 
@@ -1126,6 +1196,7 @@ defmodule ThamaniDawaWeb.Layouts do
       <main class="w-full">
         {@inner_content || render_slot(@inner_block)}
       </main>
+      <.site_footer />
       <.flash_group flash={@flash} />
     </div>
     """

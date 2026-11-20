@@ -38,8 +38,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
        :show_site_filter?,
        multi_site? and is_nil(socket.assigns.current_scope.current_site_id)
      )
-     |> assign(:filters, @default_filters)
-     |> reload_transactions()}
+     |> assign(:filters, @default_filters)}
   end
 
   def handle_params(_params, _url, socket) do

@@ -35,9 +35,17 @@ defmodule ThamaniDawaWeb.DistributorComponents do
     """
   end
 
-  @doc "Badge for a scanned unit's validation status."
+  @doc """
+  Badge for a scanned unit's validation status. Renders nothing for `"ok"`
+  — the expected case for every normal scan — and only calls out units
+  that need attention.
+  """
   attr :status, :string, required: true
   attr :class, :any, default: nil
+
+  def validation_badge(%{status: "ok"} = assigns) do
+    ~H""
+  end
 
   def validation_badge(assigns) do
     assigns = assign(assigns, :atom, Map.get(@validation_statuses, assigns.status, :unknown))

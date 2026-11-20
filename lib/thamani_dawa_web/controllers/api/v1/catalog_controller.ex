@@ -48,12 +48,10 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogController do
     with {:ok, id} <- parse_id(id),
          {:ok, product} <- fetch(fn -> Products.get_product!(org_id(conn), id) end) do
       batches = Batches.list_batches_for_product(org_id(conn), product.id)
-      undispatched = Batches.list_undispatched_batches_for_product(org_id(conn), product.id)
 
       Response.data(conn, %{
         product: Serializer.product(product),
-        batches: Enum.map(batches, &Serializer.batch/1),
-        undispatched: Enum.map(undispatched, &Serializer.batch/1)
+        batches: Enum.map(batches, &Serializer.batch/1)
       })
     end
   end
@@ -84,9 +82,20 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogController do
         |> Params.drop_tenant()
         |> Map.put("product_id", product_id)
 
-      case Batches.receive_into_org_stock(org_id(conn), attrs) do
-        {:ok, batch} -> {:ok, 201, %{data: Serializer.batch(batch, label: true)}}
-        {:error, reason} -> {:error, reason}
+      # site_id is now mandatory — all batches must be site-bound from receipt
+      if attrs["site_id"] in [nil, ""] do
+        {:error, :site_id_required}
+      else
+        case Batches.receive_directly_at_site(
+               org_id(conn),
+               String.to_integer(attrs["site_id"]),
+               # API batches are auto-approved since there's no interactive receiving flow
+               conn.assigns.current_user.id,
+               attrs
+             ) do
+          {:ok, batch} -> {:ok, 201, %{data: Serializer.batch(batch, label: true)}}
+          {:error, reason} -> {:error, reason}
+        end
       end
     end)
   end

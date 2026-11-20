@@ -59,7 +59,6 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       assert organization.operating_models == [:pharmacy]
       assert organization.gs1_company_prefix == @gs1_prefix
       assert is_nil(organization.license_number)
-      assert is_nil(organization.ppb_facility_name)
 
       site = Repo.get_by!(Site, organization_id: organization.id)
       assert site.name == "Test Licensee"
@@ -72,6 +71,21 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       assert has_element?(view, "#signup-restoring[role='status']", "Restoring your progress…")
+    end
+
+    test "describes the distributor operating model clearly", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/signup")
+
+      distributor_card =
+        "label:has(input[name='organization[operating_models][]'][value='distributor'])"
+
+      assert has_element?(view, distributor_card, "Pharmaceutical distributor")
+
+      assert has_element?(
+               view,
+               distributor_card,
+               "Supply medicines to pharmacies, hospitals, and other authorized buyers"
+             )
     end
 
     test "shows the error on the admin form when the email is already taken", %{conn: conn} do
@@ -125,7 +139,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       assert has_element?(
                view,
-               "#gs1-prefix-registration-link[href='https://gs1kenya.org/'][target='_blank'][rel='noopener noreferrer']"
+               "#gs1-prefix-registration-link[href='https://gs1kenya.org/membership'][target='_blank'][rel='noopener noreferrer']"
              )
     end
 
@@ -263,8 +277,8 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       assert has_element?(view, "#site-setup-form")
 
-      # Sentinel GLN the test stub answers with a withdrawn licence for.
-      inactive_gln = "9996141000454"
+      # Valid GLN under the verified prefix that the test stub marks withdrawn.
+      inactive_gln = "0614141000456"
 
       view
       |> form("#site-setup-form", site: %{gln: inactive_gln})
@@ -310,6 +324,22 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       assert html =~ "Please enter a valid email"
     end
 
+    test "does not look up a location GLN outside the verified company prefix", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/signup")
+
+      view = complete_operating_model_step(view, ["pharmacy"])
+      complete_regulatory_details_step(view, ["pharmacy"])
+      submit_site(view, %{gln: "6160001000004"})
+
+      assert has_element?(
+               view,
+               "#site-gln-prefix-mismatch",
+               "This GLN does not belong to your verified GS1 company prefix."
+             )
+
+      refute has_element?(view, "#site-setup-form", "Checking GS1 registry")
+    end
+
     test "selecting a single operating model forces the matching site activity", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
@@ -330,6 +360,8 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       assert has_element?(view, "input[name='site[activity_choice]'][value='distribution']")
       refute has_element?(view, "input[name='site[activity_choice]'][value='pharmacy']")
+      assert has_element?(view, "#site_ppb_facility_name[value='Test Licensee']")
+      refute has_element?(view, "#single-site-activity")
     end
 
     test "offers the four real-world site types but not wholesale + lab", %{conn: conn} do

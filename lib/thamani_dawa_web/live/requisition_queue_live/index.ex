@@ -124,14 +124,15 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
   end
 
   defp assign_fulfill(socket, organization_id, %{lines: []} = requisition) do
-    org_batches =
-      Batches.list_undispatched_batches_for_product(organization_id, requisition.product_id)
+    # Warehouse batches are now site-bound batches at distribution sites
+    warehouse_batches =
+      list_warehouse_batches_for_product(organization_id, requisition.product_id)
 
     outstanding = requisition.quantity - Requisitions.fulfilled_quantity(requisition.id)
 
     socket
     |> assign(:fulfill_requisition, requisition)
-    |> assign(:fulfill_org_batches, org_batches)
+    |> assign(:fulfill_org_batches, warehouse_batches)
     |> assign(:fulfill_form, to_form(%{"quantity" => max(outstanding, 0)}, as: :fulfill))
   end
 
@@ -140,11 +141,20 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
       requisition.lines
       |> Enum.map(& &1.product_id)
       |> Enum.uniq()
-      |> Map.new(&{&1, Batches.list_undispatched_batches_for_product(organization_id, &1)})
+      |> Map.new(&{&1, list_warehouse_batches_for_product(organization_id, &1)})
 
     socket
     |> assign(:fulfill_requisition, requisition)
     |> assign(:fulfill_batches_by_product, batches_by_product)
+  end
+
+  # Lists batches at distribution (warehouse) sites for requisition fulfillment
+  defp list_warehouse_batches_for_product(organization_id, product_id) do
+    Batches.list_batches_for_product(organization_id, product_id)
+    |> Enum.filter(fn batch ->
+      batch.site && ThamaniDawa.Sites.Site.distribution?(batch.site) &&
+        batch.remaining_quantity > 0
+    end)
   end
 
   defp apply_index(socket) do
@@ -266,6 +276,14 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
         {:error, :not_approved} ->
           {:noreply, put_flash(socket, :error, "That requisition can no longer be fulfilled.")}
 
+        {:error, :fefo_violation} ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "An earlier-expiring batch of this product has enough stock — dispatch that one first."
+           )}
+
         {:error, _reason} ->
           {:noreply, put_flash(socket, :error, "Couldn't dispatch that batch.")}
       end
@@ -309,6 +327,14 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
         {:noreply,
          put_flash(socket, :error, "A quantity exceeds its outstanding approved amount.")}
 
+      {:error, :fefo_violation} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "An earlier-expiring batch of this product has enough stock — dispatch that one first."
+         )}
+
       {:error, _reason} ->
         {:noreply, put_flash(socket, :error, "Couldn't dispatch the selected batches.")}
     end
@@ -350,6 +376,14 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
 
         {:error, :exceeds_approved_quantity} ->
           {:noreply, put_flash(socket, :error, "That's more than what's still outstanding.")}
+
+        {:error, :fefo_violation} ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "An earlier-expiring batch of this product has enough stock — dispatch that one first."
+           )}
 
         {:error, _reason} ->
           {:noreply, put_flash(socket, :error, "Couldn't dispatch that batch.")}

@@ -7,23 +7,29 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
+  alias ThamaniDawaWeb.SiteScoping
 
   @near_expiry_days 90
 
   def mount(params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
+    site_id = SiteScoping.default_site_id(socket.assigns.current_scope)
     products = Products.list_products(organization_id)
     sites = Sites.list_sites(organization_id)
 
     warehouse_ids =
-      sites |> Enum.filter(&(Site.distribution?(&1) and &1.is_active)) |> Enum.map(& &1.id)
+      if site_id do
+        [site_id]
+      else
+        sites |> Enum.filter(&(Site.distribution?(&1) and &1.is_active)) |> Enum.map(& &1.id)
+      end
 
     batches =
       organization_id
       |> Batches.list_batches()
       |> Enum.filter(&(&1.site_id in warehouse_ids))
 
-    analytics = Reports.shipment_analytics(organization_id)
+    analytics = Reports.shipment_analytics(organization_id, site_id)
     usage = Billing.active_usage(organization_id)
     today = Date.utc_today()
     products_by_id = Map.new(products, &{&1.id, &1})
@@ -91,7 +97,9 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
   end
 
   def handle_info({:distributor_shipment, _event, _shipment_id}, socket) do
-    analytics = Reports.shipment_analytics(socket.assigns.current_scope.organization_id)
+    organization_id = socket.assigns.current_scope.organization_id
+    site_id = SiteScoping.default_site_id(socket.assigns.current_scope)
+    analytics = Reports.shipment_analytics(organization_id, site_id)
     {:noreply, socket |> assign(:analytics, analytics) |> assign_pipeline(analytics)}
   end
 
@@ -110,39 +118,49 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
     [
       %{
         selector: ~s([data-tour-target="/distributor"]),
-        title: "Start with your dashboard",
+        title: "See what needs attention",
         description:
-          "See shipments awaiting review, SSCC issuance, and inventory health at a glance."
+          "Start here for shipments awaiting review, serialisation activity, and warehouse stock health."
       },
       %{
         selector: ~s([data-tour-target="/distributor/shipments"]),
-        title: "Review shipments",
-        description: "Approve or reject submitted shipments and track drafts being packed."
+        title: "Approve ready shipments",
+        description:
+          "Review submitted shipments, return incomplete ones, and track packing drafts."
       },
       %{
         selector: ~s([data-tour-target="/distributor/mobile-users"]),
-        title: "Manage mobile users",
-        description: "Add the packers who scan and submit shipments from the mobile app."
+        title: "Set up mobile packers",
+        description: "Add the people who scan, pack, and submit shipments from the mobile app."
       },
       %{
         selector: ~s([data-tour-target="/distributor/receiving"]),
-        title: "Receive incoming stock",
-        description: "Post deliveries from suppliers into your warehouse inventory."
+        title: "Receive deliveries",
+        description:
+          "Record supplier deliveries before their stock becomes available in the warehouse."
       },
       %{
         selector: ~s([data-tour-target="/distributor/products"]),
-        title: "Maintain your catalog",
-        description: "Register the GTINs you distribute, with reorder levels for each product."
+        title: "Review inventory",
+        description:
+          "Register the GTINs you distribute, and see the batches, holds, and short-dated stock on hand."
       },
       %{
         selector: ~s([data-tour-target="/org/sites"]),
-        title: "Set up your warehouses",
-        description: "Register the sites stock is received into and shipped from."
+        title: "Manage warehouse locations",
+        description: "Set up the sites where stock is received, stored, and dispatched."
+      },
+      %{
+        selector: ~s([data-tour-target="/distributor/epcis"]),
+        title: "Monitor TNT reporting",
+        description:
+          "Check whether reportable events reached PPB and resolve anything that needs resubmission."
       },
       %{
         selector: ~s([data-tour-target="/distributor/billing"]),
-        title: "Keep serialisation funded",
-        description: "Buy prepay bundles or settle your flex cycle to keep shipments unlocked."
+        title: "Keep shipments funded",
+        description:
+          "Buy prepay bundles or settle your flex cycle to keep serialisation available."
       }
     ]
   end
@@ -157,11 +175,6 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
 
   defp product_name(nil), do: "Unknown product"
   defp product_name(product), do: product.generic_name || product.brand_name || "Unnamed product"
-  defp unit_label("H87"), do: "piece(s)"
-  defp unit_label("U2"), do: "tablet(s)"
-  defp unit_label("C62"), do: "unit(s)"
-  defp unit_label(nil), do: "unit(s)"
-  defp unit_label(unit), do: if(String.ends_with?(unit, "(s)"), do: unit, else: "#{unit}(s)")
 
   def render(assigns) do
     ~H"""
@@ -234,12 +247,18 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
           value={@analytics.status_counts["draft"]}
           sublabel="Being packed on the mobile app"
         />
-        <.stat_tile
-          icon="hero-exclamation-triangle"
-          label="Near-expiry batches"
-          value={length(@near_expiry_all)}
-          sublabel="Within the current 90-day review window"
-        />
+        <.link
+          id="stat-near-expiry-link"
+          navigate={~p"/distributor/products?#{%{view: "batches", expiry: "near"}}"}
+          class="block rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/60"
+        >
+          <.stat_tile
+            icon="hero-exclamation-triangle"
+            label="Near-expiry batches"
+            value={length(@near_expiry_all)}
+            sublabel="Within the current 90-day review window"
+          />
+        </.link>
         <.stat_tile
           icon="hero-arrow-down-circle"
           label="Below reorder"
@@ -299,7 +318,7 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
                   style={"width: #{if(@top_product_units > 0, do: round(units / @top_product_units * 100), else: 0)}%"}
                 ></span>
               </span>
-              <span class="whitespace-nowrap text-right text-xs font-semibold text-thamani-forest">{units} {unit_label(
+              <span class="whitespace-nowrap text-right text-xs font-semibold text-thamani-forest">{units} {Products.unit_label(
                 product.uom
               )}</span>
             </div>

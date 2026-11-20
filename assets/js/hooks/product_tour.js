@@ -1,6 +1,7 @@
 export const ProductTour = {
   mounted() {
-    this.steps = JSON.parse(this.el.dataset.tourSteps)
+    this.steps = JSON.parse(this.el.dataset.tourSteps).filter(step => document.querySelector(step.selector))
+    if (this.steps.length === 0) return
     this.index = 0
     this.activeTarget = null
     this.dismiss = () => this.finish()

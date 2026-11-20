@@ -72,6 +72,20 @@ defmodule ThamaniDawaWeb.OnboardingLiveTest do
       assert has_element?(view, "#onboarding-go-dashboard[href='/org/dashboard']")
     end
 
+    test "shows the completion choice when the final product step is skipped", %{conn: conn} do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      user_fixture(%{organization_id: organization.id})
+      site_fixture(%{organization_id: organization.id})
+      site_fixture(%{organization_id: organization.id})
+
+      {:ok, view, _html} =
+        live(log_in_user(conn, admin), ~p"/onboarding?skip=first_product&complete=1")
+
+      assert has_element?(view, "#onboarding-complete")
+      assert has_element?(view, "#onboarding-take-tour")
+    end
+
     test "welcomes a freshly signed-up admin before showing operational tasks", %{conn: conn} do
       admin = user_fixture()
 
@@ -119,9 +133,9 @@ defmodule ThamaniDawaWeb.OnboardingLiveTest do
 
       assert has_element?(view, "#onboarding-cta", "Continue setup")
 
-      html = view |> element("#onboarding-skip") |> render_click()
+      view |> element("#onboarding-skip") |> render_click()
 
-      assert html =~ "Add your inventory"
+      assert has_element?(view, "#onboarding-panel-first_product")
       assert has_element?(view, "#onboarding-back")
     end
 

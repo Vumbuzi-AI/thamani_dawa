@@ -41,7 +41,9 @@ defmodule ThamaniDawaWeb.LayoutsTest do
 
       assert has_element?(lv, "#site-switch-form")
       assert has_element?(lv, "#site-switch-trigger")
-      assert has_element?(lv, "#site-switch-org", "Manage organization")
+      assert has_element?(lv, "#site-switch-organization-heading", "Organization")
+      assert has_element?(lv, "#site-switch-sites-heading", "Sites")
+      assert has_element?(lv, "#site-switch-org", "All sites")
       assert has_element?(lv, "#site-switch-dropdown button", "Branch A")
       assert has_element?(lv, "#site-switch-dropdown button", "Branch B")
     end

@@ -8,6 +8,9 @@ defmodule ThamaniDawa.Distributor.ShipmentItem do
     * `"ok"` — a received batch carries this GTIN + serial with matching
       batch number and dates
     * `"unknown_serial"` — no received batch carries this GTIN + serial
+      (`batch_id` is nil). These can be recorded while packing so the
+      packer can remove them; submit and approval refuse them because
+      stock depletes from scanned units' batches.
     * `"data_mismatch"` — the serial is known, but its batch number or dates
       differ from the received record
 

@@ -12,11 +12,22 @@ defmodule ThamaniDawa.Distributor do
     2. A **mobile app user** finds the draft by order number, claims it,
        groups physical units into **shippers** (cases) by scanning their GS1
        DataMatrix codes, and **submits** it — which reserves every scanned
-       serial so no other shipment can claim it.
+       serial so no other shipment can claim it. Every scanned unit must
+       resolve to a received batch (`batch_id`); unknown serials can be
+       recorded while packing but cannot be submitted.
     3. The administrator reviews the shipment and either **approves** it —
-       charging the serialisation allowance and issuing one SSCC per shipper
-       — or **rejects** it with a reason, releasing the reserved units. A
+       charging the serialisation allowance, issuing one SSCC per shipper,
+       and depleting `remaining_quantity` on each scanned unit's batch —
+       or **rejects** it with a reason, releasing the reserved units. A
        rejected shipment can be **reopened** as a draft and resubmitted.
+       Approval asks the GS1 member API to mint one SSCC per shipper.
+
+  Stock depletes from scanned units at approval (truth-based): items are
+  grouped by `batch_id`, each batch is decremented by its scanned count, and
+  a batch whose remaining quantity hits zero moves to `:dispatch`. There is
+  no planned-vs-packed reconciliation and no picker-facing pick list.
+  Future work: if order/PO expected lines exist, surface a planned-vs-packed
+  variance, and/or expose a pick list on the mobile side to guide picking.
 
   The state machine is owned entirely by this module:
 
@@ -48,11 +59,10 @@ defmodule ThamaniDawa.Distributor do
     Shipment,
     ShipmentEvent,
     ShipmentItem,
-    ShipmentLineItem,
     Shipper
   }
 
-  alias ThamaniDawa.GS1.Sscc
+  alias ThamaniDawa.GS1.MemberApi
   alias ThamaniDawa.GS1Decoder
   alias ThamaniDawa.Organizations.Organization
   alias ThamaniDawa.Repo
@@ -104,7 +114,7 @@ defmodule ThamaniDawa.Distributor do
       |> MobileUser.changeset(attrs)
       |> Ecto.Changeset.put_change(:pin_hash, Bcrypt.hash_pwd_salt(pin))
 
-    with {:ok, mobile_user} <- Repo.insert(changeset) do
+    with {:ok, mobile_user} <- Repo.audited_insert(changeset) do
       deliver_pin(mobile_user, pin)
       {:ok, mobile_user}
     end
@@ -113,7 +123,7 @@ defmodule ThamaniDawa.Distributor do
   def update_mobile_user(%MobileUser{} = mobile_user, attrs) do
     mobile_user
     |> MobileUser.changeset(attrs)
-    |> Repo.update()
+    |> Repo.audited_update()
   end
 
   @doc """
@@ -123,7 +133,8 @@ defmodule ThamaniDawa.Distributor do
   def resend_mobile_user_pin(%MobileUser{} = mobile_user) do
     pin = MobileUser.generate_pin()
 
-    with {:ok, mobile_user} <- mobile_user |> MobileUser.pin_changeset(pin) |> Repo.update() do
+    with {:ok, mobile_user} <-
+           mobile_user |> MobileUser.pin_changeset(pin) |> Repo.audited_update() do
       MobileAuth.revoke_sessions(mobile_user)
       deliver_pin(mobile_user, pin)
       {:ok, mobile_user}
@@ -133,7 +144,7 @@ defmodule ThamaniDawa.Distributor do
   @doc "Activates or deactivates a mobile user. Deactivating revokes their sessions."
   def set_mobile_user_active(%MobileUser{} = mobile_user, active) when is_boolean(active) do
     with {:ok, mobile_user} <-
-           mobile_user |> Ecto.Changeset.change(active: active) |> Repo.update() do
+           mobile_user |> Ecto.Changeset.change(active: active) |> Repo.audited_update() do
       unless active, do: MobileAuth.revoke_sessions(mobile_user)
       {:ok, mobile_user}
     end
@@ -166,6 +177,16 @@ defmodule ThamaniDawa.Distributor do
     do: Application.get_env(:thamani_dawa, :distributor_pin_notifier, UserNotifier)
 
   ## Shipments — portal
+
+  @doc "Approved shipments this organization can reference, newest first."
+  def list_approved_shipments(organization_id) do
+    Repo.all(
+      from s in Shipment,
+        where: s.organization_id == ^organization_id and s.status == "approved",
+        order_by: [desc: s.updated_at, desc: s.id],
+        select: %{id: s.id, order_number: s.order_number}
+    )
+  end
 
   @doc """
   Lists an organization's shipments. Options: `status`, `search` (free text
@@ -230,10 +251,14 @@ defmodule ThamaniDawa.Distributor do
   def search(query, term) do
     pattern = "%" <> escape_like(String.trim(term)) <> "%"
 
-    from [shipment: s] in query,
-      where:
+    combined =
+      dynamic(
+        [shipment: s],
         ^shipment_field_match(pattern) or exists(mobile_user_match(pattern)) or
           exists(item_match(pattern)) or exists(shipper_match(pattern))
+      )
+
+    from [shipment: s] in query, where: ^combined
   end
 
   defp shipment_field_match(pattern) do
@@ -315,8 +340,7 @@ defmodule ThamaniDawa.Distributor do
         :approved_by,
         :rejected_by,
         shippers: [items: :scanned_by],
-        events: [:user, :mobile_user],
-        line_items: :product
+        events: [:user, :mobile_user]
       ],
       force: true
     )
@@ -325,110 +349,24 @@ defmodule ThamaniDawa.Distributor do
   def change_shipment(%Shipment{} = shipment, attrs \\ %{}),
     do: Shipment.changeset(shipment, attrs)
 
-  @doc "Adds an intended product + quantity line to a draft shipment."
-  def add_line_item(organization_id, shipment_id, attrs) do
-    case Repo.get_by(Shipment, id: shipment_id, organization_id: organization_id) do
-      %Shipment{status: "draft"} = shipment ->
-        %ShipmentLineItem{shipment_id: shipment.id}
-        |> ShipmentLineItem.changeset(attrs)
-        |> Repo.insert()
+  @doc """
+  Resolves a case for distributor receiving.
 
-      %Shipment{} ->
-        {:error, :not_editable}
+  Serials, products, and batches come from the GS1 member API
+  (`get_sscc_contents`). When this platform also issued the SSCC, the local
+  shipment is attached so origin and destination can still be prefilled —
+  the contents call does not return GLNs.
+  """
+  def lookup_shipper_by_sscc(sscc, opts \\ []) when is_binary(sscc) and is_list(opts) do
+    case MemberApi.sscc_contents(sscc, opts) do
+      {:ok, body} ->
+        {:ok, contents_to_shipper(sscc, body)}
 
-      nil ->
-        {:error, :not_found}
-    end
-  end
-
-  @doc "Removes an intended line from a draft shipment."
-  def remove_line_item(organization_id, line_item_id) do
-    ShipmentLineItem
-    |> Repo.get(line_item_id)
-    |> Repo.preload(:shipment)
-    |> case do
-      nil ->
+      {:error, :not_found} ->
         {:error, :not_found}
 
-      %ShipmentLineItem{shipment: %Shipment{organization_id: ^organization_id, status: "draft"}} =
-          line_item ->
-        Repo.delete(line_item)
-
-      %ShipmentLineItem{} ->
-        {:error, :not_editable}
-    end
-  end
-
-  @doc """
-  Generates a pick list for a draft shipment's intended line items — FEFO
-  allocates specific batches at the origin site, moving each into
-  `:picking` and reserving it against this shipment so no other shipment
-  can claim it. Purely internal bookkeeping; no EPCIS event (picking is
-  intra-warehouse).
-  """
-  def generate_pick_list(organization_id, shipment_id) do
-    shipment =
-      Shipment
-      |> Repo.get_by!(id: shipment_id, organization_id: organization_id)
-      |> Repo.preload(:line_items)
-
-    result =
-      Repo.transaction(fn ->
-        Enum.each(shipment.line_items, &allocate_pick(organization_id, shipment, &1))
-      end)
-
-    case result do
-      {:ok, _} -> {:ok, shipment}
-      error -> error
-    end
-  end
-
-  defp allocate_pick(organization_id, shipment, line_item) do
-    organization_id
-    |> Batches.list_pickable_batches(shipment.origin_site_id, line_item.product_id)
-    |> do_allocate(line_item.quantity, shipment.id)
-  end
-
-  defp do_allocate(_batches, needed, _shipment_id) when needed <= 0, do: :ok
-  defp do_allocate([], _needed, _shipment_id), do: :ok
-
-  defp do_allocate([batch | rest], needed, shipment_id) do
-    {:ok, updated} = Batches.reserve_for_picking(batch, shipment_id)
-    do_allocate(rest, needed - updated.remaining_quantity, shipment_id)
-  end
-
-  @doc "Confirms every picked batch reserved for a shipment — moves them from `:picking` to `:staging`."
-  def confirm_pick_list(organization_id, shipment_id) do
-    organization_id
-    |> Batches.list_reserved_batches_for_shipment(shipment_id)
-    |> Enum.filter(&(&1.zone == :picking))
-    |> Enum.each(&Batches.confirm_pick/1)
-
-    :ok
-  end
-
-  @doc "Lists an organization's approved shipments, for picking which one a return responds to."
-  def list_approved_shipments(organization_id) do
-    Repo.all(
-      from s in Shipment,
-        where: s.organization_id == ^organization_id,
-        where: s.status == "approved",
-        where: s.is_return == false,
-        order_by: [desc: s.approved_at]
-    )
-  end
-
-  @doc """
-  Looks up a shipper by its SSCC across all organizations, for the
-  distributor-receiving SSCC-prefill flow. Only resolves for cases that
-  were assigned an SSCC by another shipment on this platform (the SSCC
-  barcode itself encodes no contents) — a miss means manual entry, exactly
-  as today.
-  """
-  def lookup_shipper_by_sscc(sscc) when is_binary(sscc) do
-    case Repo.get_by(Shipper, sscc: sscc) do
-      nil -> {:error, :not_found}
-      shipper -> {:ok, Repo.preload(shipper, [:items, shipment: []])}
+      {:error, _reason} ->
+        {:error, :unavailable}
     end
   end
 
@@ -445,7 +383,7 @@ defmodule ThamaniDawa.Distributor do
 
     result =
       Repo.transaction(fn ->
-        case Repo.insert(changeset) do
+        case Repo.audited_insert(changeset) do
           {:ok, shipment} ->
             log_event!(shipment, "created", user: user)
             shipment
@@ -482,7 +420,7 @@ defmodule ThamaniDawa.Distributor do
           |> Shipment.changeset(attrs)
           |> resolve_glns(organization_id)
 
-        case Repo.update(changeset) do
+        case Repo.audited_update(changeset) do
           {:ok, shipment} ->
             log_event!(shipment, "updated", user: user)
             shipment
@@ -587,14 +525,17 @@ defmodule ThamaniDawa.Distributor do
       when is_binary(order_number) or is_nil(order_number) do
     order_number = String.trim(order_number || "")
 
-    Repo.all(
+    query =
       from s in Shipment,
         where: s.organization_id == ^mobile_user.organization_id and s.status == "draft",
         where: ilike(s.order_number, ^("%" <> escape_like(order_number) <> "%")),
         where: is_nil(s.assigned_mobile_user_id) or s.assigned_mobile_user_id == ^mobile_user.id,
         order_by: [asc: s.order_number],
         limit: 20
-    )
+
+    query
+    |> maybe_filter_by_mobile_site(mobile_user)
+    |> Repo.all()
   end
 
   def search_shipments_for_mobile_user(%MobileUser{} = mobile_user, opts) when is_map(opts) do
@@ -627,10 +568,19 @@ defmodule ThamaniDawa.Distributor do
   defp mobile_search_query(mobile_user, order_number) do
     order_number = String.trim(order_number || "")
 
-    from s in Shipment,
-      where: s.organization_id == ^mobile_user.organization_id and s.status == "draft",
-      where: ilike(s.order_number, ^("%" <> escape_like(order_number) <> "%")),
-      where: is_nil(s.assigned_mobile_user_id) or s.assigned_mobile_user_id == ^mobile_user.id
+    query =
+      from s in Shipment,
+        where: s.organization_id == ^mobile_user.organization_id and s.status == "draft",
+        where: ilike(s.order_number, ^("%" <> escape_like(order_number) <> "%")),
+        where: is_nil(s.assigned_mobile_user_id) or s.assigned_mobile_user_id == ^mobile_user.id
+
+    maybe_filter_by_mobile_site(query, mobile_user)
+  end
+
+  defp maybe_filter_by_mobile_site(query, %MobileUser{site_id: nil}), do: query
+
+  defp maybe_filter_by_mobile_site(query, %MobileUser{site_id: site_id}) do
+    where(query, [s], s.origin_site_id == ^site_id)
   end
 
   defp mobile_status_filter(status) when status in ~w(draft submitted approved rejected),
@@ -708,7 +658,7 @@ defmodule ThamaniDawa.Distributor do
             shipment =
               shipment
               |> Ecto.Changeset.change(assigned_mobile_user_id: mobile_user.id)
-              |> Repo.update!()
+              |> Repo.audited_update!()
 
             log_event!(shipment, "selected", mobile_user: mobile_user)
             shipment
@@ -728,7 +678,7 @@ defmodule ThamaniDawa.Distributor do
         shipment =
           shipment
           |> Ecto.Changeset.change(assigned_mobile_user_id: nil)
-          |> Repo.update!()
+          |> Repo.audited_update!()
 
         log_event!(shipment, "released", mobile_user: mobile_user)
         shipment
@@ -747,7 +697,7 @@ defmodule ThamaniDawa.Distributor do
             select: coalesce(max(sh.sequence), 0)
         ) + 1
 
-      Repo.insert!(%Shipper{
+      Repo.audited_insert!(%Shipper{
         organization_id: shipment.organization_id,
         shipment_id: shipment.id,
         sequence: sequence,
@@ -766,7 +716,7 @@ defmodule ThamaniDawa.Distributor do
           name: shipper_name(attrs, shipper.sequence),
           material_description: shipper_material_description(attrs, shipper.material_description)
         )
-        |> Repo.update!()
+        |> Repo.audited_update!()
       end)
     end
   end
@@ -920,7 +870,7 @@ defmodule ThamaniDawa.Distributor do
   defp insert_item!(mobile_user, shipment, shipper, parsed, product, raw) do
     {validation_status, batch} = known_unit_status(shipment.organization_id, parsed)
 
-    Repo.insert!(%ShipmentItem{
+    Repo.audited_insert!(%ShipmentItem{
       organization_id: shipment.organization_id,
       shipment_id: shipment.id,
       shipper_id: shipper.id,
@@ -951,7 +901,9 @@ defmodule ThamaniDawa.Distributor do
       Repo.all(
         from b in Batch,
           where: b.organization_id == ^organization_id,
-          where: b.gtin == ^parsed.gtin and b.serial == ^parsed.serial,
+          where:
+            b.gtin == ^parsed.gtin and
+              (b.serial == ^parsed.serial or ^parsed.serial in b.serials),
           where: not is_nil(b.received_at),
           order_by: [asc: b.id]
       )
@@ -996,7 +948,7 @@ defmodule ThamaniDawa.Distributor do
         Repo.rollback(:invalid_shipper)
 
       target ->
-        item |> Ecto.Changeset.change(shipper_id: target.id) |> Repo.update!()
+        item |> Ecto.Changeset.change(shipper_id: target.id) |> Repo.audited_update!()
     end
   end
 
@@ -1004,7 +956,8 @@ defmodule ThamaniDawa.Distributor do
   Submits a held draft for approval: validates it, reserves every scanned
   serial, and moves it to `"submitted"`. Fails with
   `{:error, {:invalid, problems}}` when validation fails, including a
-  `:serial_conflict` if another shipment won a race on any unit.
+  `:serial_conflict` if another shipment won a race on any unit, and
+  `:unknown_unit` if a scanned serial is not on a received batch.
   """
   def submit_shipment(%MobileUser{} = mobile_user, id) do
     result =
@@ -1028,7 +981,7 @@ defmodule ThamaniDawa.Distributor do
             rejected_at: nil,
             rejected_by_id: nil
           )
-          |> Repo.update!()
+          |> Repo.audited_update!()
 
         log_event!(shipment, "submitted", mobile_user: mobile_user)
         shipment
@@ -1084,7 +1037,7 @@ defmodule ThamaniDawa.Distributor do
         shipment =
           shipment
           |> Ecto.Changeset.change(status: "draft", assigned_mobile_user_id: mobile_user.id)
-          |> Repo.update!()
+          |> Repo.audited_update!()
 
         log_event!(shipment, "reopened", mobile_user: mobile_user)
         shipment
@@ -1118,6 +1071,7 @@ defmodule ThamaniDawa.Distributor do
       shipment.shippers == [] && problem(:no_shippers, "Add at least one shipper.")
     ]
     |> Enum.concat(empty_shipper_problems(shipment))
+    |> Enum.concat(unknown_unit_problems(shipment))
     |> Enum.concat(conflict_problems(shipment))
     |> Enum.filter(& &1)
   end
@@ -1134,6 +1088,18 @@ defmodule ThamaniDawa.Distributor do
     shipment.shippers
     |> Enum.filter(&(&1.items == []))
     |> Enum.map(&problem(:empty_shipper, "#{&1.name} has no scanned units."))
+  end
+
+  defp unknown_unit_problems(shipment) do
+    shipment.shippers
+    |> Enum.flat_map(& &1.items)
+    |> Enum.filter(&is_nil(&1.batch_id))
+    |> Enum.map(fn item ->
+      problem(
+        :unknown_unit,
+        "Unit #{item.gtin} / #{item.serial} is not on any received batch."
+      )
+    end)
   end
 
   defp conflict_problems(shipment) do
@@ -1161,13 +1127,13 @@ defmodule ThamaniDawa.Distributor do
   @doc """
   Approves a submitted shipment: re-validates it, confirms every unit still
   holds its reservation, charges the serialisation allowance (one serial per
-  shipper), issues one SSCC per shipper with a contents snapshot, and makes
-  the reservations permanent.
+  shipper), issues one SSCC per shipper with a contents snapshot, makes the
+  reservations permanent, and depletes stock from each scanned unit's batch.
 
   Idempotent: approving an already-approved shipment returns
   `{:already_approved, shipment}` and issues nothing. Errors:
   `{:invalid_state, status}`, `{:invalid, problems}`, `:reservation_missing`,
-  `:missing_gs1_company_prefix`, or `{:billing, reason}`.
+  `:insufficient_stock`, `{:gs1, reason}`, or `{:billing, reason}`.
   """
   def approve_shipment(organization_id, user, id) do
     result =
@@ -1190,6 +1156,7 @@ defmodule ThamaniDawa.Distributor do
         ensure_reserved!(shipment)
         issue_ssccs!(shipment)
         commit_reservations!(shipment)
+        dispatch_reserved_batches!(shipment)
 
         shipment =
           shipment
@@ -1198,7 +1165,7 @@ defmodule ThamaniDawa.Distributor do
             approved_at: now(),
             approved_by_id: user.id
           )
-          |> Repo.update!()
+          |> Repo.audited_update!()
 
         log_event!(shipment, "approved", user: user)
         ThamaniDawa.Epcis.record_shipment_approval(shipment)
@@ -1219,25 +1186,157 @@ defmodule ThamaniDawa.Distributor do
   defp issue_ssccs!(shipment) do
     shipper_count = length(shipment.shippers)
 
-    with {:ok, _prefix} <- Sscc.prefix_for_organization(shipment.organization_id),
-         {:ok, _usage} <- charge_allowance(shipment.organization_id, shipper_count),
-         {:ok, ssccs} <- Sscc.allocate(shipment.organization_id, shipper_count) do
+    with {:ok, _usage} <- charge_allowance(shipment.organization_id, shipper_count) do
       timestamp = now()
+      api_token = ThamaniDawa.Organizations.gs1_api_key(shipment.organization_id)
 
-      shipment.shippers
-      |> Enum.zip(ssccs)
-      |> Enum.each(fn {shipper, sscc} ->
-        shipper
-        |> Ecto.Changeset.change(
-          Map.merge(shipper_contents(shipper), %{sscc: sscc, sscc_assigned_at: timestamp})
-        )
-        |> Repo.update!()
+      Enum.each(shipment.shippers, fn shipper ->
+        case MemberApi.create_sscc(sscc_request(shipment, shipper), api_token: api_token) do
+          {:ok, sscc} ->
+            shipper
+            |> Ecto.Changeset.change(
+              Map.merge(shipper_contents(shipper), %{sscc: sscc, sscc_assigned_at: timestamp})
+            )
+            |> Repo.audited_update!()
+
+          {:error, reason} ->
+            Repo.rollback({:gs1, reason})
+        end
       end)
     else
-      {:error, :missing_gs1_company_prefix} -> Repo.rollback(:missing_gs1_company_prefix)
       {:error, {:billing, _reason} = error} -> Repo.rollback(error)
     end
   end
+
+  # The member API stores batch_info and later resolves serials from it.
+  # One row per GTIN/batch/dates so a mixed case does not repeat a batch.
+  defp sscc_request(shipment, %Shipper{items: items} = shipper) do
+    batch_info =
+      items
+      |> Enum.map(fn item ->
+        %{
+          "gtin" => item.gtin,
+          "batch" => item.batch,
+          "production_date" => iso_date(item.production_date),
+          "expiry_date" => iso_date(item.expiry_date)
+        }
+      end)
+      |> Enum.uniq()
+
+    %{
+      "batch_info" => batch_info,
+      "address" => %{
+        "from_address" => address_line(shipment.origin_address, shipment.origin_company),
+        "to_address" => address_line(shipment.destination_address, shipment.destination_company)
+      },
+      "facility_gln" => shipment.origin_gln,
+      "order_number" => shipment.order_number || shipment.reference,
+      "count_of_trade_items" => length(items),
+      "material_description" =>
+        shipper.material_description || Enum.find_value(items, & &1.product_name)
+    }
+    |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
+    |> Map.new()
+  end
+
+  defp contents_to_shipper(sscc, body) do
+    products = body["products"] || []
+    items = Enum.flat_map(products, &content_items/1)
+    local = sscc |> local_shipper() |> preload_local_shipment()
+
+    %{
+      sscc: sscc,
+      items: items,
+      shipment: local && local.shipment,
+      gtin: nil,
+      batch: nil,
+      production_date: nil,
+      expiry_date: nil,
+      product_name: nil,
+      unit_count: nil
+    }
+    |> maybe_prefill_unserialized(products, items)
+  end
+
+  defp local_shipper(sscc), do: Repo.get_by(Shipper, sscc: sscc)
+  defp preload_local_shipment(nil), do: nil
+  defp preload_local_shipment(shipper), do: Repo.preload(shipper, shipment: [])
+
+  defp maybe_prefill_unserialized(shipper, _products, items) when items != [], do: shipper
+
+  defp maybe_prefill_unserialized(shipper, products, []) do
+    case products do
+      [product] ->
+        case product["batches"] do
+          [batch] ->
+            %{
+              shipper
+              | gtin: product["gtin"],
+                batch: batch["batch"],
+                production_date: parse_date(batch["production_date"]),
+                expiry_date: parse_date(batch["expiry_date"]),
+                product_name: product["name"]
+            }
+
+          _ ->
+            shipper
+        end
+
+      _ ->
+        shipper
+    end
+  end
+
+  defp content_items(product) do
+    gtin = product["gtin"]
+    name = product["name"]
+
+    Enum.flat_map(product["batches"] || [], fn batch ->
+      production_date = parse_date(batch["production_date"])
+      expiry_date = parse_date(batch["expiry_date"])
+
+      Enum.flat_map(batch["serials"] || [], fn serial ->
+        case serial["serial"] do
+          value when is_binary(value) and value != "" ->
+            [
+              %{
+                gtin: gtin,
+                batch: batch["batch"],
+                production_date: production_date,
+                expiry_date: expiry_date,
+                serial: value,
+                product_name: name
+              }
+            ]
+
+          _ ->
+            []
+        end
+      end)
+    end)
+  end
+
+  defp address_line(address, company) do
+    cond do
+      is_binary(address) and String.trim(address) != "" -> String.trim(address)
+      is_binary(company) and String.trim(company) != "" -> String.trim(company)
+      true -> "N/A"
+    end
+  end
+
+  defp iso_date(%Date{} = date), do: Date.to_iso8601(date)
+  defp iso_date(_date), do: nil
+
+  defp parse_date(%Date{} = date), do: date
+
+  defp parse_date(value) when is_binary(value) do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> date
+      _ -> nil
+    end
+  end
+
+  defp parse_date(_value), do: nil
 
   defp charge_allowance(organization_id, count) do
     case Billing.authorize_generation(organization_id, count) do
@@ -1283,6 +1382,38 @@ defmodule ThamaniDawa.Distributor do
     )
   end
 
+  defp dispatch_reserved_batches!(shipment) do
+    items = Enum.flat_map(shipment.shippers, & &1.items)
+
+    if Enum.any?(items, &is_nil(&1.batch_id)), do: Repo.rollback(:unknown_unit)
+
+    items
+    |> Enum.group_by(& &1.batch_id)
+    |> Enum.sort_by(&elem(&1, 0))
+    |> Enum.each(fn {batch_id, grouped} ->
+      dispatch_scanned_batch!(batch_id, length(grouped))
+    end)
+  end
+
+  defp dispatch_scanned_batch!(batch_id, count) do
+    batch =
+      Repo.one(from b in Batch, where: b.id == ^batch_id, lock: "FOR UPDATE") ||
+        Repo.rollback(:unknown_unit)
+
+    case Batches.decrement_remaining_quantity(batch, count) do
+      {:ok, %{remaining_quantity: 0} = updated} ->
+        updated
+        |> Ecto.Changeset.change(zone: :dispatch)
+        |> Repo.audited_update!()
+
+      {:ok, updated} ->
+        updated
+
+      {:error, _changeset} ->
+        Repo.rollback(:insufficient_stock)
+    end
+  end
+
   @doc """
   Rejects a submitted shipment with a reason, releasing all of its serial
   reservations so the units can go into other shipments.
@@ -1312,7 +1443,7 @@ defmodule ThamaniDawa.Distributor do
         rejected_at: now(),
         rejected_by_id: user.id
       )
-      |> Repo.update!()
+      |> Repo.audited_update!()
 
     log_event!(shipment, "rejected", user: user, details: %{reason: reason})
     shipment
@@ -1367,7 +1498,7 @@ defmodule ThamaniDawa.Distributor do
 
       shipment
       |> Ecto.Changeset.change(updated_at: now())
-      |> Repo.update!()
+      |> Repo.audited_update!()
 
       result
     end)

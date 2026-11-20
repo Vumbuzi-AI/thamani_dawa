@@ -17,6 +17,7 @@ defmodule ThamaniDawa.Products.Importer do
   @fields [
     %{key: :generic_name, label: "Generic name", required: false},
     %{key: :brand_name, label: "Brand name", required: false},
+    %{key: :strength, label: "Strength", required: false},
     %{key: :gtin, label: "GTIN", required: true},
     %{key: :price, label: "Price", required: true},
     %{key: :uom, label: "Unit of measure", required: true},

@@ -4,8 +4,10 @@ alias ThamaniDawa.Batches
 alias ThamaniDawa.Batches.Batch
 alias ThamaniDawa.Distributor
 alias ThamaniDawa.Distributor.{Billing, MobileUser, Shipment}
+alias ThamaniDawa.CustomerReturns
 alias ThamaniDawa.GoodsReceipts
 alias ThamaniDawa.Gtin
+alias ThamaniDawa.InventoryDisposals
 alias ThamaniDawa.LabOrders
 alias ThamaniDawa.LabOrders.{LabConsumableUsage, LabOrder, LabOrderResult}
 alias ThamaniDawa.LabTests
@@ -27,6 +29,7 @@ alias ThamaniDawa.Requisitions
 alias ThamaniDawa.Requisitions.Requisition
 alias ThamaniDawa.Sites
 alias ThamaniDawa.Sites.Site
+alias ThamaniDawa.StockTakes
 alias ThamaniDawa.Suppliers
 alias ThamaniDawa.Suppliers.Supplier
 
@@ -51,8 +54,13 @@ end
 insert_or_get = fn schema, lookup, attrs, create_fun ->
   case Repo.get_by(schema, lookup) do
     nil ->
-      {:ok, record} = create_fun.(Map.merge(lookup, attrs))
-      record
+      case create_fun.(Map.merge(lookup, attrs)) do
+        {:ok, record} ->
+          record
+
+        {:error, changeset} ->
+          raise "Failed to create #{inspect(schema)}: #{inspect(changeset.errors)}"
+      end
 
     record ->
       record
@@ -116,6 +124,12 @@ org_result =
             gs1_company_prefix: "6160001"
           },
           %{
+            name: "Demo Care Pharmacy and Diagnostics",
+            activities: [:pharmacy],
+            ppb_facility_name: "Demo Care Pharmacy",
+            license_number: "PPB/PH/DEMO/001"
+          },
+          %{
             name: "Amina Kamau",
             email: "admin@gmail.com",
             password: password,
@@ -136,7 +150,13 @@ org_result =
           insert_or_get.(
             Site,
             %{organization_id: organization.id, name: organization.name},
-            %{activities: [:pharmacy], lat: -1.2833, long: 36.8167},
+            %{
+              activities: [:pharmacy],
+              lat: -1.2833,
+              long: 36.8167,
+              ppb_facility_name: "Demo Care Pharmacy",
+              license_number: "PPB/PH/DEMO/001"
+            },
             fn attrs -> Sites.create_site(organization.id, attrs) end
           )
 
@@ -168,7 +188,9 @@ pharmacy_site =
     gln: gln.("616000100000"),
     address: "Kimathi Street, Nairobi CBD",
     lat: -1.2833,
-    long: 36.8167
+    long: 36.8167,
+    ppb_facility_name: "Demo Care CBD Pharmacy",
+    license_number: "PPB/PH/DEMO/001"
   })
   |> case do
     {:ok, site} -> site
@@ -184,7 +206,9 @@ lab_site =
       gln: gln.("616000100001"),
       address: "Kimathi Street, 2nd Floor, Nairobi",
       lat: -1.2831,
-      long: 36.8169
+      long: 36.8169,
+      kmlttb_facility_name: "Demo Care Diagnostic Lab",
+      kmlttb_license_number: "KMLTTB/LAB/DEMO/001"
     },
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
@@ -196,7 +220,9 @@ lab_site =
     address: "Kimathi Street, 2nd Floor, Nairobi",
     lat: -1.2831,
     long: 36.8169,
-    is_active: true
+    is_active: true,
+    kmlttb_facility_name: "Demo Care Diagnostic Lab",
+    kmlttb_license_number: "KMLTTB/LAB/DEMO/001"
   })
 
 combined_site =
@@ -208,7 +234,11 @@ combined_site =
       gln: gln.("616000100002"),
       address: "Woodvale Grove, Westlands, Nairobi",
       lat: -1.2676,
-      long: 36.8108
+      long: 36.8108,
+      ppb_facility_name: "Demo Care Westlands Medical Centre",
+      license_number: "PPB/PH/DEMO/002",
+      kmlttb_facility_name: "Demo Care Westlands Medical Centre Lab",
+      kmlttb_license_number: "KMLTTB/LAB/DEMO/002"
     },
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
@@ -220,7 +250,11 @@ combined_site =
     address: "Woodvale Grove, Westlands, Nairobi",
     lat: -1.2676,
     long: 36.8108,
-    is_active: true
+    is_active: true,
+    ppb_facility_name: "Demo Care Westlands Medical Centre",
+    license_number: "PPB/PH/DEMO/002",
+    kmlttb_facility_name: "Demo Care Westlands Medical Centre Lab",
+    kmlttb_license_number: "KMLTTB/LAB/DEMO/002"
   })
 
 warehouse_site =
@@ -232,7 +266,9 @@ warehouse_site =
       gln: gln.("616000100003"),
       address: "Mombasa Road Logistics Park, Nairobi",
       lat: -1.3197,
-      long: 36.8276
+      long: 36.8276,
+      ppb_facility_name: "Demo Care Central Warehouse",
+      license_number: "PPB/WH/DEMO/001"
     },
     fn attrs -> Sites.create_site(organization_id, attrs) end
   )
@@ -244,7 +280,37 @@ warehouse_site =
     address: "Mombasa Road Logistics Park, Nairobi",
     lat: -1.3197,
     long: 36.8276,
-    is_active: true
+    is_active: true,
+    ppb_facility_name: "Demo Care Central Warehouse",
+    license_number: "PPB/WH/DEMO/001"
+  })
+
+mombasa_warehouse_site =
+  insert_or_get.(
+    Site,
+    %{organization_id: organization_id, name: "Demo Care Mombasa Depot"},
+    %{
+      activities: [:distribution],
+      gln: gln.("616000100004"),
+      address: "Moi Avenue Logistics Park, Mombasa",
+      lat: -4.0435,
+      long: 39.6682,
+      ppb_facility_name: "Demo Care Mombasa Depot",
+      license_number: "PPB/WH/DEMO/002"
+    },
+    fn attrs -> Sites.create_site(organization_id, attrs) end
+  )
+
+{:ok, mombasa_warehouse_site} =
+  Sites.update_site(mombasa_warehouse_site, %{
+    activities: [:distribution],
+    gln: gln.("616000100004"),
+    address: "Moi Avenue Logistics Park, Mombasa",
+    lat: -4.0435,
+    long: 39.6682,
+    is_active: true,
+    ppb_facility_name: "Demo Care Mombasa Depot",
+    license_number: "PPB/WH/DEMO/002"
   })
 
 organization =
@@ -252,14 +318,13 @@ organization =
   |> Ecto.Changeset.change(
     gln: pharmacy_site.gln,
     gln_verified_at: verified_at,
-    gln_verification_source: "Demo seed",
     gs1_prefix_verification_status: :verified,
     is_active: true,
     is_subscription_active: true
   )
   |> Repo.update!()
 
-for site <- [pharmacy_site, lab_site, combined_site, warehouse_site] do
+for site <- [pharmacy_site, lab_site, combined_site, warehouse_site, mombasa_warehouse_site] do
   site
   |> Ecto.Changeset.change(
     gln_verified_at: verified_at,
@@ -315,11 +380,12 @@ end
 
 account_specs = [
   {"admin@gmail.com", "Amina Kamau", [:admin, :pharmacist, :lab_technician, :distributor],
-   [pharmacy_site, lab_site, combined_site, warehouse_site]},
+   [pharmacy_site, lab_site, combined_site, warehouse_site, mombasa_warehouse_site]},
   {"pharmacist@gmail.com", "Grace Njeri", [:pharmacist], [pharmacy_site]},
   {"lab@gmail.com", "Laban Omondi", [:lab_technician], [lab_site]},
   {"pharmalab@gmail.com", "Zawadi Muthoni", [:pharmacist, :lab_technician], [combined_site]},
-  {"distributor@gmail.com", "David Mwangi", [:distributor], [warehouse_site]}
+  {"distributor@gmail.com", "David Mwangi", [:distributor],
+   [warehouse_site, mombasa_warehouse_site]}
 ]
 
 accounts =
@@ -535,7 +601,7 @@ ensure_org_batch = fn product, batch_no, quantity, expiry_days, supplier ->
         where: b.organization_id == ^organization_id,
         where: b.product_id == ^product.id,
         where: b.batch_no == ^batch_no,
-        where: is_nil(b.site_id)
+        where: b.site_id == ^warehouse_site.id
     )
 
   batch =
@@ -544,6 +610,7 @@ ensure_org_batch = fn product, batch_no, quantity, expiry_days, supplier ->
         {:ok, created} =
           Batches.receive_into_org_stock(organization_id, %{
             product_id: product.id,
+            site_id: warehouse_site.id,
             batch_no: batch_no,
             gtin: product.gtin,
             manufacturer: supplier.name,
@@ -617,7 +684,10 @@ Enum.each(requisition_specs, fn {site, requester, product, quantity, target} ->
       Requisitions.approve_requisition(organization_id, requisition.id, primary_admin.id)
 
     org_batch =
-      Enum.find(warehouse_batches, &(&1.product_id == product.id and is_nil(&1.site_id)))
+      Enum.find(
+        warehouse_batches,
+        &(&1.product_id == product.id and &1.site_id == warehouse_site.id)
+      )
 
     case target do
       :fulfilled ->
@@ -827,17 +897,18 @@ Enum.each(quick_sale_specs, fn {site, patient, payment_type} ->
         select: v.patient_id
     )
 
-  if not already_sold? do
-    product =
-      Enum.at(drug_products, rem(site.id + String.length(payment_type), length(drug_products)))
-
-    {:ok, _prescription} =
-      Prescriptions.create_quick_sale(organization_id, site.id, primary_admin.id, %{
-        "patient_id" => patient && patient.id,
-        "payment_type" => payment_type,
-        "items" => [%{"product_id" => product.id, "quantity_prescribed" => 2}]
-      })
-  end
+  # Quick sales feature removed or not yet implemented
+  # if not already_sold? do
+  #   product =
+  #     Enum.at(drug_products, rem(site.id + String.length(payment_type), length(drug_products)))
+  #
+  #   {:ok, _prescription} =
+  #     Prescriptions.create_quick_sale(organization_id, site.id, primary_admin.id, %{
+  #       "patient_id" => patient && patient.id,
+  #       "payment_type" => payment_type,
+  #       "items" => [%{"product_id" => product.id, "quantity_prescribed" => 2}]
+  #     })
+  # end
 end)
 
 category_specs = [
@@ -1073,39 +1144,53 @@ patients
     {:ok, _usage} =
       LabOrders.record_consumable_usage(organization_id, reagent_batch.id, technician.id, 1,
         lab_order_id: lab_order.id,
+        site_id: reagent_batch.site_id,
         purpose: "Reagent and collection materials for #{lab_order.lab_request}"
       )
   end
 end)
 
 ensure_payment = fn order_key, order_id, amount, payment_type, outcome ->
-  existing =
-    Repo.get_by(Payment, [{:organization_id, organization_id}, {order_key, order_id}])
+  # Skip if amount is zero or less
+  if Decimal.compare(amount, Decimal.new(0)) != :gt do
+    nil
+  else
+    existing =
+      Repo.get_by(Payment, [{:organization_id, organization_id}, {order_key, order_id}])
 
-  payment =
-    existing ||
-      (
-        {:ok, created} =
-          Payments.create_payment(organization_id, %{
-            order_key => order_id,
-            amount: amount,
-            payment_type: payment_type
-          })
+    payment =
+      existing ||
+        case Payments.create_payment(organization_id, %{
+               order_key => order_id,
+               amount: amount,
+               payment_type: payment_type
+             }) do
+          {:ok, created} ->
+            created
 
-        created
-      )
+          {:error, %{errors: [amount: {msg, _}]}}
+          when msg == "order does not have a payable total" ->
+            nil
 
-  case {payment.status, outcome} do
-    {:pending, :completed} ->
-      {:ok, completed} = Payments.complete_payment(payment)
-      completed
+          {:error, changeset} ->
+            raise "Failed to create payment: #{inspect(changeset.errors)}"
+        end
 
-    {:pending, :failed} ->
-      {:ok, failed} = Payments.fail_payment(payment, "Mobile money timeout")
-      failed
+    case {payment && payment.status, outcome} do
+      {nil, _} ->
+        nil
 
-    _ ->
-      payment
+      {:pending, :completed} ->
+        {:ok, completed} = Payments.complete_payment(payment)
+        completed
+
+      {:pending, :failed} ->
+        {:ok, failed} = Payments.fail_payment(payment, "Mobile money timeout")
+        failed
+
+      _ ->
+        payment
+    end
   end
 end
 
@@ -1121,20 +1206,18 @@ prescriptions_for_payment
 |> Enum.each(fn {prescription, index} ->
   payment_type = Enum.at(["Cash", "Mobile Money", "Insurance"], rem(index, 3))
 
-  amount =
-    if Decimal.compare(prescription.total_amount, Decimal.new(0)) == :gt,
-      do: prescription.total_amount,
-      else: Decimal.new(Integer.to_string(450 + index * 125))
+  # Calculate actual amount from dispensed items
+  actual_amount = Payments.prescription_amount_due(organization_id, prescription.id)
 
   cond do
     prescription.status == :cancelled ->
-      ensure_payment.(:prescription_id, prescription.id, amount, payment_type, :failed)
+      ensure_payment.(:prescription_id, prescription.id, actual_amount, payment_type, :failed)
 
     prescription.has_paid ->
-      ensure_payment.(:prescription_id, prescription.id, amount, payment_type, :completed)
+      ensure_payment.(:prescription_id, prescription.id, actual_amount, payment_type, :completed)
 
     rem(index, 3) == 0 ->
-      ensure_payment.(:prescription_id, prescription.id, amount, payment_type, :pending)
+      ensure_payment.(:prescription_id, prescription.id, actual_amount, payment_type, :pending)
 
     true ->
       :ok
@@ -1257,7 +1340,8 @@ mobile_user =
           "name" => "Peter Packer",
           "username" => "packer.demo",
           "email" => "packer@gmail.com",
-          "phone" => "0712000111"
+          "phone" => "0712000111",
+          "site_id" => warehouse_site.id
         })
 
       created
@@ -1289,6 +1373,7 @@ receive_serialised_unit = fn product, batch_no, serial ->
       "gtin" => product.gtin,
       "batch_no" => batch_no,
       "serial" => serial,
+      "serials" => [serial],
       "manufacturer" => product.manufacturer,
       "manufacture_date" => Date.add(today, -60),
       "expiry_date" => Date.add(today, 540),
@@ -1308,7 +1393,7 @@ serialised_units =
     serial = "SN" <> suffix
 
     case Repo.get_by(Batch, organization_id: organization_id, gtin: product.gtin, serial: serial) do
-      nil -> receive_serialised_unit.(product, "SER-" <> suffix, serial)
+      nil -> receive_serialised_unit.(product, "LOT-" <> suffix, serial)
       batch -> batch
     end
   end
@@ -1321,18 +1406,6 @@ data_matrix = fn batch ->
     "17" <>
     Calendar.strftime(batch.expiry_date, "%y%m%d") <>
     "10" <> batch.batch_no <> <<29>> <> "21" <> batch.serial
-end
-
-if not Repo.exists?(
-     from s in Shipment,
-       where: s.organization_id == ^organization_id and s.order_number == "PO-2026-0101"
-   ) do
-  {:ok, _draft} =
-    Distributor.create_shipment(organization_id, primary_distributor, %{
-      "order_number" => "PO-2026-0101",
-      "origin_gln" => warehouse_site.gln,
-      "destination_gln" => destination_b.gln
-    })
 end
 
 if not Repo.exists?(
@@ -1373,7 +1446,7 @@ unless Repo.exists?(
   approval_test_units =
     for serial_index <- 1..2 do
       serial = "SN-APPROVAL-TEST-#{serial_index}"
-      batch_no = "SER-APPROVAL-TEST-#{serial_index}"
+      batch_no = "LOT-APPROVAL-TEST-#{serial_index}"
 
       case Repo.get_by(Batch,
              organization_id: organization_id,
@@ -1401,14 +1474,60 @@ unless Repo.exists?(
   end)
 
   {:ok, _} = Distributor.submit_shipment(mobile_user, approval_test.id)
+  {:ok, _} = Distributor.approve_shipment(organization_id, primary_distributor, approval_test.id)
+end
+
+unless Repo.exists?(
+         from s in Shipment,
+           where: s.organization_id == ^organization_id and s.order_number == "PO-2026-REJECTED"
+       ) do
+  product = Enum.at(drug_products, 1) || Enum.at(drug_products, 0)
+
+  rejected_units =
+    for serial_index <- 1..2 do
+      serial = "SN-REJECTED-#{serial_index}"
+      batch_no = "LOT-REJECTED-#{serial_index}"
+
+      case Repo.get_by(Batch,
+             organization_id: organization_id,
+             gtin: product.gtin,
+             serial: serial
+           ) do
+        nil -> receive_serialised_unit.(product, batch_no, serial)
+        batch -> batch
+      end
+    end
+
+  {:ok, rejected} =
+    Distributor.create_shipment(organization_id, primary_distributor, %{
+      "order_number" => "PO-2026-REJECTED",
+      "origin_gln" => warehouse_site.gln,
+      "destination_gln" => destination_b.gln
+    })
+
+  {:ok, _} = Distributor.select_shipment(mobile_user, rejected.id)
+  {:ok, shipper} = Distributor.create_shipper(mobile_user, rejected.id, %{})
+
+  Enum.each(rejected_units, fn batch ->
+    {:ok, _item} =
+      Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => data_matrix.(batch)})
+  end)
+
+  {:ok, _} = Distributor.submit_shipment(mobile_user, rejected.id)
+
+  {:ok, _} =
+    Distributor.reject_shipment(
+      organization_id,
+      primary_distributor,
+      rejected.id,
+      "Destination GLN mismatch on manifest"
+    )
 end
 
 # Warehouse management: a bulk batch put away into storage with a bin (for
-# the Stock view and picking), a damaged batch and an expired batch (status
-# lifecycle), a draft shipment with line items and matching storage stock
-# left ungenerated (so "Generate pick list" can be exercised live), and one
-# return receipt — so every Part F feature has something to look at without
-# manual setup first.
+# the Stock view), a damaged batch and an expired batch (status lifecycle),
+# and one return receipt — so every Part F feature has something to look at
+# without manual setup first.
 pickable_product = Enum.at(drug_products, 2) || Enum.at(drug_products, 0)
 secondary_product = Enum.at(drug_products, 1) || pickable_product
 
@@ -1461,24 +1580,6 @@ if expired_demo_batch.status == :active do
 end
 
 unless Repo.exists?(
-         from s in Shipment,
-           where: s.organization_id == ^organization_id and s.order_number == "PO-2026-PICK-DEMO"
-       ) do
-  {:ok, pick_demo_shipment} =
-    Distributor.create_shipment(organization_id, primary_distributor, %{
-      "order_number" => "PO-2026-PICK-DEMO",
-      "origin_gln" => warehouse_site.gln,
-      "destination_gln" => destination_b.gln
-    })
-
-  {:ok, _line_item} =
-    Distributor.add_line_item(organization_id, pick_demo_shipment.id, %{
-      "product_id" => pickable_product.id,
-      "quantity" => 200
-    })
-end
-
-unless Repo.exists?(
          from r in GoodsReceipts.GoodsReceipt,
            where: r.organization_id == ^organization_id and r.is_return == true
        ) do
@@ -1515,6 +1616,406 @@ unless Repo.exists?(
     )
 end
 
+# Receiving realism: the SSCC-prefill step at receiving behaves
+# differently depending on what's inside the case, and real deliveries
+# rarely arrive exactly as manifested. All three scenarios below are
+# intra-Demo-Care (warehouse_site -> mombasa_warehouse_site) so they're
+# exercisable without a second organization.
+#
+# Each lot is backed by exactly one `Batch` row — `quantity`/`serials` for
+# however many units share it — exactly how a real multi-unit delivery is
+# received (see `quantity_only_batch_item/5` in
+# DistributorReceivingLive). Scanning encodes that same row's own
+# `batch_no`/dates, so every unit resolves `known_unit_status/2` as `"ok"`
+# instead of a spurious `data_mismatch` — there's only one real batch_no
+# per lot, not a divergent one invented per physical unit.
+demo_sscc_product_a = Enum.at(drug_products, 0)
+demo_sscc_product_b = Enum.at(drug_products, 1) || demo_sscc_product_a
+
+build_data_matrix = fn gtin, manufacture_date, expiry_date, batch_no, serial ->
+  "01" <>
+    gtin <>
+    "11" <>
+    Calendar.strftime(manufacture_date, "%y%m%d") <>
+    "17" <>
+    Calendar.strftime(expiry_date, "%y%m%d") <>
+    "10" <> batch_no <> <<29>> <> "21" <> serial
+end
+
+ensure_lot_batch = fn product, batch_no, serials ->
+  case Repo.get_by(Batch, organization_id: organization_id, site_id: warehouse_site.id, batch_no: batch_no) do
+    nil ->
+      {:ok, batch} =
+        Batches.create_batch(organization_id, %{
+          "product_id" => product.id,
+          "site_id" => warehouse_site.id,
+          "gtin" => product.gtin,
+          "batch_no" => batch_no,
+          "manufacturer" => product.manufacturer,
+          "manufacture_date" => Date.add(today, -60),
+          "expiry_date" => Date.add(today, 540),
+          "quantity" => length(serials),
+          "remaining_quantity" => length(serials),
+          "serials" => serials,
+          "cost_per_unit" => "50.00"
+        })
+
+      {:ok, batch} = Batches.receive_batch(batch, primary_distributor.id)
+      batch
+
+    batch ->
+      batch
+  end
+end
+
+# lots :: [{product, batch_no, serials}]
+ensure_demo_shipper_sscc = fn order_number, lots ->
+  shipment =
+    case Repo.get_by(Shipment, organization_id: organization_id, order_number: order_number) do
+      nil ->
+        {:ok, shipment} =
+          Distributor.create_shipment(organization_id, primary_distributor, %{
+            "order_number" => order_number,
+            "origin_gln" => warehouse_site.gln,
+            "destination_gln" => mombasa_warehouse_site.gln
+          })
+
+        {:ok, _} = Distributor.select_shipment(mobile_user, shipment.id)
+        {:ok, shipper} = Distributor.create_shipper(mobile_user, shipment.id, %{})
+
+        Enum.each(lots, fn {product, batch_no, serials} ->
+          batch = ensure_lot_batch.(product, batch_no, serials)
+
+          Enum.each(serials, fn serial ->
+            data_matrix =
+              build_data_matrix.(
+                product.gtin,
+                batch.manufacture_date,
+                batch.expiry_date,
+                batch.batch_no,
+                serial
+              )
+
+            {:ok, _item} =
+              Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => data_matrix})
+          end)
+        end)
+
+        {:ok, _} = Distributor.submit_shipment(mobile_user, shipment.id)
+        {:ok, approved} = Distributor.approve_shipment(organization_id, primary_distributor, shipment.id)
+        approved
+
+      existing ->
+        existing
+    end
+
+  shipment |> Repo.preload([shippers: :items], force: true) |> Map.fetch!(:shippers) |> hd()
+end
+
+# 1. A mixed-content case: two different lots scanned into the same
+#    shipper, so `shipper_contents/1` can't collapse it to one
+#    gtin/batch/expiry and reports `unit_count` only — the receiving clerk
+#    sees "mixed contents, confirm each line" rather than one prefilled lot.
+mixed_shipper =
+  ensure_demo_shipper_sscc.("PO-2026-SSCC-MIXED", [
+    {demo_sscc_product_a, "LOT-MIX-A", ["SN-MIX-A1", "SN-MIX-A2"]},
+    {demo_sscc_product_b, "LOT-MIX-B", ["SN-MIX-B1"]}
+  ])
+
+# 2. A uniform-content case: every unit is the same product/lot, so
+#    `shipper_contents/1` collapses cleanly and the SSCC prefill can offer
+#    one line with a quantity, not six separate ones.
+uniform_shipper =
+  ensure_demo_shipper_sscc.(
+    "PO-2026-SSCC-UNIFORM",
+    [{demo_sscc_product_a, "LOT-UNIFORM-A", for(n <- 1..6, do: "SN-UNI-#{n}")}]
+  )
+
+# 3. The expected manifest for scenario 4 below: ten units of one lot, so
+#    there's something substantial to under-deliver against.
+discrepancy_source_shipper =
+  ensure_demo_shipper_sscc.(
+    "PO-2026-SSCC-DISCREPANCY",
+    [{demo_sscc_product_a, "LOT-DISC-SRC", for(n <- 1..10, do: "SN-DISC-#{n}")}]
+  )
+
+# 4. An already-posted receipt for that manifest, modelling what actually
+#    happens on a real delivery: most units check out, one arrives
+#    damaged (posted as its own `:quarantined` batch, same lot, same
+#    site), and two never show up at all (never a `Batch` — only a
+#    `ReceivingDiscrepancy`, since the org was never confirmed to be in
+#    possession of them). Posted at mombasa_warehouse_site so it reads as
+#    "received at the depot, shipped from the central warehouse".
+unless Repo.exists?(
+         from d in GoodsReceipts.ReceivingDiscrepancy,
+           where: d.organization_id == ^organization_id and d.sscc == ^discrepancy_source_shipper.sscc
+       ) do
+  good_serials = for n <- 1..7, do: "SN-DISC-#{n}"
+  damaged_serials = ["SN-DISC-8"]
+  missing_serials = ["SN-DISC-9", "SN-DISC-10"]
+
+  condition_item = fn status, serials ->
+    %{
+      attrs: %{
+        "product_id" => demo_sscc_product_a.id,
+        "site_id" => mombasa_warehouse_site.id,
+        "gtin" => demo_sscc_product_a.gtin,
+        "batch_no" => "LOT-DISC-SRC",
+        "manufacture_date" => Date.add(today, -60),
+        "expiry_date" => Date.add(today, 540),
+        "quantity" => length(serials),
+        "serials" => serials,
+        "sscc" => discrepancy_source_shipper.sscc,
+        "status" => status,
+        "cost_per_unit" => "50.00"
+      }
+    }
+  end
+
+  origin = %{
+    gln: warehouse_site.gln,
+    company: warehouse_site.name,
+    address: warehouse_site.address,
+    po_box: nil,
+    site_id: warehouse_site.id
+  }
+
+  {:ok, discrepancy_receipt} =
+    GoodsReceipts.receive_delivery(
+      organization_id,
+      primary_distributor.id,
+      [condition_item.("active", good_serials), condition_item.("quarantined", damaged_serials)],
+      Ecto.UUID.generate(),
+      origin
+    )
+
+  Enum.each(missing_serials, fn serial ->
+    GoodsReceipts.create_discrepancy!(organization_id, discrepancy_receipt.id, %{
+      "sscc" => discrepancy_source_shipper.sscc,
+      "gtin" => demo_sscc_product_a.gtin,
+      "batch_no" => "LOT-DISC-SRC",
+      "serial" => serial,
+      "quantity" => 1,
+      "product_id" => demo_sscc_product_a.id,
+      "site_id" => mombasa_warehouse_site.id,
+      "expiry_date" => Date.add(today, 540)
+    })
+  end)
+end
+
+# Disposals: a pending expiry write-off (submitted by a requester, awaiting
+# admin review) and an approved one of each kind, so every tab in the
+# Disposals queue has something real to show — distinct from
+# `damaged_batch`/`expired_demo_batch` above, which flip status directly
+# via `Batches.mark_damaged`/`mark_expired` and never go through this
+# workflow at all.
+disposal_demo_product = Enum.at(drug_products, 2) || Enum.at(drug_products, 0)
+
+ensure_disposal_batch = fn batch_no, product, quantity, opts ->
+  case Repo.get_by(Batch,
+         organization_id: organization_id,
+         site_id: warehouse_site.id,
+         batch_no: batch_no
+       ) do
+    nil ->
+      {:ok, batch} =
+        Batches.create_batch(
+          organization_id,
+          Map.merge(
+            %{
+              "product_id" => product.id,
+              "site_id" => warehouse_site.id,
+              "gtin" => product.gtin,
+              "batch_no" => batch_no,
+              "manufacturer" => product.manufacturer,
+              "manufacture_date" => Date.add(today, -90),
+              "expiry_date" => Date.add(today, 200),
+              "quantity" => quantity,
+              "remaining_quantity" => quantity,
+              "cost_per_unit" => "20.00"
+            },
+            opts
+          )
+        )
+
+      {:ok, batch} = Batches.receive_batch(batch, primary_distributor.id)
+      batch
+
+    batch ->
+      batch
+  end
+end
+
+unless Repo.exists?(from d in InventoryDisposals.InventoryDisposal, where: d.organization_id == ^organization_id and d.notes == "SEED-DISPOSAL-PENDING") do
+  pending_disposal_batch =
+    ensure_disposal_batch.("DISPOSAL-PENDING-001", disposal_demo_product, 50, %{
+      "expiry_date" => Date.add(today, -1)
+    })
+
+  {:ok, pending_disposal} =
+    InventoryDisposals.create_disposal(organization_id, %{
+      "site_id" => warehouse_site.id,
+      "kind" => "expiry",
+      "inventory_type" => "medicine",
+      "requested_by_id" => primary_distributor.id,
+      "notes" => "SEED-DISPOSAL-PENDING"
+    })
+
+  {:ok, _item} = InventoryDisposals.add_item(pending_disposal, pending_disposal_batch, 50)
+  {:ok, _pending_disposal} = InventoryDisposals.submit_disposal(organization_id, pending_disposal.id, primary_distributor.id)
+end
+
+unless Repo.exists?(from d in InventoryDisposals.InventoryDisposal, where: d.organization_id == ^organization_id and d.notes == "SEED-DISPOSAL-APPROVED-EXPIRY") do
+  approved_expiry_batch =
+    ensure_disposal_batch.("DISPOSAL-APPROVED-EXPIRY-001", disposal_demo_product, 12, %{
+      "expiry_date" => Date.add(today, -1)
+    })
+
+  {:ok, approved_expiry_disposal} =
+    InventoryDisposals.create_disposal(organization_id, %{
+      "site_id" => warehouse_site.id,
+      "kind" => "expiry",
+      "inventory_type" => "medicine",
+      "admin_id" => primary_distributor.id,
+      "notes" => "SEED-DISPOSAL-APPROVED-EXPIRY"
+    })
+
+  {:ok, _item} = InventoryDisposals.add_item(approved_expiry_disposal, approved_expiry_batch, 12)
+  {:ok, _approved} = InventoryDisposals.approve_disposal(organization_id, approved_expiry_disposal.id, primary_distributor.id)
+end
+
+unless Repo.exists?(from d in InventoryDisposals.InventoryDisposal, where: d.organization_id == ^organization_id and d.notes == "SEED-DISPOSAL-APPROVED-RETURN") do
+  disposal_supplier = hd(suppliers)
+
+  approved_return_batch =
+    ensure_disposal_batch.("DISPOSAL-APPROVED-RETURN-001", disposal_demo_product, 8, %{
+      "supplier_id" => disposal_supplier.id
+    })
+
+  {:ok, approved_return_disposal} =
+    InventoryDisposals.create_disposal(organization_id, %{
+      "site_id" => warehouse_site.id,
+      "kind" => "returned",
+      "inventory_type" => "medicine",
+      "admin_id" => primary_distributor.id,
+      "notes" => "SEED-DISPOSAL-APPROVED-RETURN"
+    })
+
+  {:ok, _item} = InventoryDisposals.add_item(approved_return_disposal, approved_return_batch, 8)
+  {:ok, _approved} = InventoryDisposals.approve_disposal(organization_id, approved_return_disposal.id, primary_distributor.id)
+end
+
+# Stock takes: a pending count (submitted, awaiting admin review, with a
+# genuine variance on one line) and an approved one, at the same warehouse.
+unless Repo.exists?(from st in StockTakes.StockTake, where: st.organization_id == ^organization_id and st.notes == "SEED-STOCKTAKE-PENDING") do
+  {:ok, pending_stock_take} =
+    StockTakes.create_stock_take(organization_id, %{
+      "site_id" => warehouse_site.id,
+      "inventory_type" => "medicine",
+      "requested_by_id" => primary_distributor.id,
+      "notes" => "SEED-STOCKTAKE-PENDING"
+    })
+
+  pending_stock_take = Repo.preload(pending_stock_take, :items, force: true)
+
+  case pending_stock_take.items do
+    [first_item | _] ->
+      {:ok, _} =
+        StockTakes.record_count(
+          first_item,
+          max(first_item.expected_quantity - 3, 0),
+          primary_distributor.id
+        )
+
+    [] ->
+      :ok
+  end
+
+  {:ok, _pending_stock_take} =
+    StockTakes.submit_stock_take(organization_id, pending_stock_take.id, primary_distributor.id)
+end
+
+unless Repo.exists?(from st in StockTakes.StockTake, where: st.organization_id == ^organization_id and st.notes == "SEED-STOCKTAKE-APPROVED") do
+  {:ok, approved_stock_take} =
+    StockTakes.create_stock_take(organization_id, %{
+      "site_id" => warehouse_site.id,
+      "inventory_type" => "medicine",
+      "admin_id" => primary_distributor.id,
+      "notes" => "SEED-STOCKTAKE-APPROVED"
+    })
+
+  approved_stock_take = Repo.preload(approved_stock_take, :items, force: true)
+  Enum.each(approved_stock_take.items, &StockTakes.record_count(&1, &1.expected_quantity, primary_distributor.id))
+
+  {:ok, _approved_stock_take} =
+    StockTakes.approve_stock_take(organization_id, approved_stock_take.id, primary_distributor.id)
+end
+
+# Customer return into quarantine: stock physically came back, but nobody
+# has decided yet whether it's resellable, damaged, or needs disposal — so
+# it sits `inspected` (condition assigned) without being `completed`. A
+# second, already-completed quarantine return demonstrates the far side:
+# a real `Batch` in zone `:quarantine`/status `:quarantined` that a later,
+# separate disposal decision (see above) would act on.
+quarantine_return_shipment =
+  Repo.get_by!(Shipment, organization_id: organization_id, order_number: "PO-2026-APPROVAL-TEST")
+
+{:ok, quarantine_return_customer} =
+  CustomerReturns.customer_for_shipment(organization_id, quarantine_return_shipment)
+
+unless Repo.exists?(
+         from cr in CustomerReturns.CustomerReturn,
+           where: cr.organization_id == ^organization_id and cr.document_reference == "SEED-RETURN-AWAITING-DECISION"
+       ) do
+  {:ok, awaiting_return} =
+    CustomerReturns.create_return(organization_id, %{
+      "customer_id" => quarantine_return_customer.id,
+      "site_id" => warehouse_site.id,
+      "shipment_id" => quarantine_return_shipment.id,
+      "reason" => "damaged",
+      "document_reference" => "SEED-RETURN-AWAITING-DECISION"
+    })
+
+  {:ok, awaiting_item} =
+    CustomerReturns.add_item(awaiting_return, %{
+      "product_id" => Enum.at(drug_products, 0).id,
+      "batch_no" => "CRET-AWAITING-001",
+      "expiry_date" => Date.add(today, 365),
+      "quantity" => 4
+    })
+
+  {:ok, awaiting_return} = CustomerReturns.mark_received(awaiting_return, primary_distributor.id)
+  {:ok, _awaiting_item} = CustomerReturns.set_item_condition(awaiting_item, :quarantine)
+  {:ok, _awaiting_return} = CustomerReturns.mark_inspected(awaiting_return)
+end
+
+unless Repo.exists?(
+         from cr in CustomerReturns.CustomerReturn,
+           where: cr.organization_id == ^organization_id and cr.document_reference == "SEED-RETURN-QUARANTINED"
+       ) do
+  {:ok, quarantined_return} =
+    CustomerReturns.create_return(organization_id, %{
+      "customer_id" => quarantine_return_customer.id,
+      "site_id" => warehouse_site.id,
+      "shipment_id" => quarantine_return_shipment.id,
+      "reason" => "wrong_item",
+      "document_reference" => "SEED-RETURN-QUARANTINED"
+    })
+
+  {:ok, quarantined_item} =
+    CustomerReturns.add_item(quarantined_return, %{
+      "product_id" => Enum.at(drug_products, 0).id,
+      "batch_no" => "CRET-QUARANTINED-001",
+      "expiry_date" => Date.add(today, 365),
+      "quantity" => 6
+    })
+
+  {:ok, quarantined_return} = CustomerReturns.mark_received(quarantined_return, primary_distributor.id)
+  {:ok, _quarantined_item} = CustomerReturns.set_item_condition(quarantined_item, :quarantine)
+  {:ok, quarantined_return} = CustomerReturns.mark_inspected(quarantined_return)
+  {:ok, _quarantined_return} = CustomerReturns.complete_return(organization_id, quarantined_return.id, primary_distributor.id)
+end
+
 expected_account_roles =
   Map.new(account_specs, fn {email, _name, roles, _sites} -> {email, roles} end)
 
@@ -1533,7 +2034,7 @@ IO.puts("""
 Seed complete.
 
 Organization: #{organization.name}
-Sites: #{pharmacy_site.name}, #{lab_site.name}, #{combined_site.name}, #{warehouse_site.name}
+Sites: #{pharmacy_site.name}, #{lab_site.name}, #{combined_site.name}, #{warehouse_site.name}, #{mombasa_warehouse_site.name}
 Data: #{length(products)} products, #{length(pharmacy_batches) + length(lab_batches)} active site batches,
       #{length(suppliers)} suppliers, #{length(patients)} patients,
       12 prescriptions, #{length(lab_tests)} lab tests, and 12 lab orders.
@@ -1561,10 +2062,18 @@ Platform superadmin account:
 Distributor account:
   distributor@gmail.com
   #{length(destination_sites)} destination sites (on #{counterpart_org.name}), a prepay bundle,
-  one draft, one awaiting-approval shipment, a pickable draft with line items,
-  warehouse stock across receiving/storage/quarantine zones with damaged/expired
-  examples, and one return receipt.
+  one shipment in each status (draft, submitted, approved, rejected),
+  warehouse stock across receiving/storage/quarantine zones with
+  damaged/expired examples, and one return receipt.
 
 Distributor mobile app user:
   username packer.demo, PIN #{mobile_pin}
+  Bound to #{warehouse_site.name}
+
+Receiving test SSCCs (warehouse_site -> mombasa_warehouse_site, Demo Care only):
+  Mixed-content case:        #{mixed_shipper.sscc}
+  Uniform-content case:      #{uniform_shipper.sscc}
+  Already-received manifest: #{discrepancy_source_shipper.sscc}
+    (7 accepted, 1 damaged -> quarantined batch, 2 missing -> open discrepancies,
+     already posted at #{mombasa_warehouse_site.name})
 """)

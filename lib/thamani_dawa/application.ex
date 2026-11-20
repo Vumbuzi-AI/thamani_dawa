@@ -10,6 +10,7 @@ defmodule ThamaniDawa.Application do
     children = [
       ThamaniDawaWeb.Telemetry,
       ThamaniDawa.Repo,
+      ThamaniDawa.Vault,
       ThamaniDawa.LoginRateLimiter,
       ThamaniDawa.RegistryCache,
       {DNSCluster, query: Application.get_env(:thamani_dawa, :dns_cluster_query) || :ignore},

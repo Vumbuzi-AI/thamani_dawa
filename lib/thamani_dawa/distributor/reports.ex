@@ -91,8 +91,8 @@ defmodule ThamaniDawa.Distributor.Reports do
 
   @doc """
   One printable label per shipper of an approved shipment: SSCC, ship
-  from/to (company, address, GLN), order details, and contents (a single
-  GTIN/batch/dates combination, or mixed).
+  from/to (company, address, GLN), order details, contents (a single
+  GTIN/batch/dates combination, or mixed), and the serials packed inside.
   """
   def shipper_labels(%Shipment{status: "approved", shippers: shippers} = shipment) do
     total = length(shippers)
@@ -104,6 +104,7 @@ defmodule ThamaniDawa.Distributor.Reports do
         id: shipper.id,
         sscc: shipper.sscc,
         name: shipper.name,
+        material_description: shipper.material_description,
         position: "#{shipper.sequence} of #{total}",
         order_number: shipment.order_number,
         reference: shipment.reference,
@@ -115,7 +116,8 @@ defmodule ThamaniDawa.Distributor.Reports do
         production_date: shipper.production_date,
         expiry_date: shipper.expiry_date,
         product_name: shipper.product_name,
-        unit_count: shipper.unit_count || length(shipper.items)
+        unit_count: shipper.unit_count || length(shipper.items),
+        serials: shipper.items |> Enum.map(& &1.serial) |> Enum.sort()
       }
     end)
   end
@@ -211,19 +213,23 @@ defmodule ThamaniDawa.Distributor.Reports do
   @doc """
   Shipment analytics for the distributor dashboard: status counts, units
   and SSCCs issued, this month's activity, recent shipments, and top
-  shipped products.
+  shipped products. `site_id` scopes to shipments originating from that
+  site; `nil` (the "Manage organization" context) spans every site.
   """
-  def shipment_analytics(organization_id) do
+  def shipment_analytics(organization_id, site_id \\ nil) do
     today = Date.utc_today()
     month_start = DateTime.new!(Date.beginning_of_month(today), ~T[00:00:00], "Etc/UTC")
 
     %{
-      status_counts: status_counts(organization_id),
-      units_shipped: units_shipped(organization_id),
+      status_counts: status_counts(organization_id, site_id),
+      units_shipped: units_shipped(organization_id, site_id),
       ssccs_issued:
         Repo.aggregate(
           from(sh in Shipper,
-            where: sh.organization_id == ^organization_id and not is_nil(sh.sscc)
+            join: s in assoc(sh, :shipment),
+            as: :shipment,
+            where: sh.organization_id == ^organization_id and not is_nil(sh.sscc),
+            where: ^site_filter(site_id)
           ),
           :count,
           :id
@@ -231,22 +237,29 @@ defmodule ThamaniDawa.Distributor.Reports do
       approved_this_month:
         Repo.aggregate(
           from(s in Shipment,
+            as: :shipment,
             where: s.organization_id == ^organization_id and s.status == "approved",
-            where: s.approved_at >= ^month_start
+            where: s.approved_at >= ^month_start,
+            where: ^site_filter(site_id)
           ),
           :count,
           :id
         ),
-      recent_shipments: recent_shipments(organization_id),
-      top_products: top_products(organization_id)
+      recent_shipments: recent_shipments(organization_id, site_id),
+      top_products: top_products(organization_id, site_id)
     }
   end
 
-  defp status_counts(organization_id) do
+  defp site_filter(nil), do: dynamic(true)
+  defp site_filter(site_id), do: dynamic([shipment: s], s.origin_site_id == ^site_id)
+
+  defp status_counts(organization_id, site_id) do
     counts =
       Repo.all(
         from s in Shipment,
+          as: :shipment,
           where: s.organization_id == ^organization_id,
+          where: ^site_filter(site_id),
           group_by: s.status,
           select: {s.status, count(s.id)}
       )
@@ -255,31 +268,37 @@ defmodule ThamaniDawa.Distributor.Reports do
     Map.new(Shipment.statuses(), &{&1, Map.get(counts, &1, 0)})
   end
 
-  defp units_shipped(organization_id) do
+  defp units_shipped(organization_id, site_id) do
     Repo.aggregate(
       from(i in ShipmentItem,
         join: s in assoc(i, :shipment),
-        where: i.organization_id == ^organization_id and s.status == "approved"
+        as: :shipment,
+        where: i.organization_id == ^organization_id and s.status == "approved",
+        where: ^site_filter(site_id)
       ),
       :count,
       :id
     )
   end
 
-  defp recent_shipments(organization_id) do
+  defp recent_shipments(organization_id, site_id) do
     Repo.all(
       from s in Shipment,
+        as: :shipment,
         where: s.organization_id == ^organization_id,
+        where: ^site_filter(site_id),
         order_by: [desc: s.updated_at, desc: s.id],
         limit: 5
     )
   end
 
-  defp top_products(organization_id) do
+  defp top_products(organization_id, site_id) do
     Repo.all(
       from i in ShipmentItem,
         join: s in assoc(i, :shipment),
+        as: :shipment,
         where: i.organization_id == ^organization_id and s.status == "approved",
+        where: ^site_filter(site_id),
         group_by: [i.gtin, i.product_name],
         select: %{gtin: i.gtin, product_name: i.product_name, units: count(i.id)},
         order_by: [desc: count(i.id)],

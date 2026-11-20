@@ -6,6 +6,7 @@ defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
   alias ThamaniDawa.Epcis.Outbox
   alias ThamaniDawa.Epcis.SubmissionWorker
   alias ThamaniDawa.EpcisClientStub
+  alias ThamaniDawa.Organizations
   alias ThamaniDawa.Repo
 
   setup do
@@ -24,7 +25,15 @@ defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
 
     on_exit(fn -> Application.put_env(:thamani_dawa, Client, original) end)
 
-    organization = DistributorFixtures.distributor_organization_fixture()
+    # Submission mode defaults to "manual" (Organization schema), but most of
+    # these tests exercise drain mechanics (ordering, retry, backoff) that
+    # are orthogonal to mode gating — opt into "automatic" here so a plain,
+    # non-forced `perform/1` call still drains. Mode gating itself has its
+    # own tests below.
+    {:ok, organization} =
+      DistributorFixtures.distributor_organization_fixture()
+      |> Organizations.update_epcis_submission_mode("automatic")
+
     EpcisClientStub.expect([])
     %{organization: organization}
   end
@@ -134,6 +143,39 @@ defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
     assert final.event_id == event.event_id
   end
 
+  test "resubmitting a blocked event requeues it and clears the blocked reason", %{
+    organization: organization
+  } do
+    event =
+      Outbox.block(
+        %{
+          organization_id: organization.id,
+          event_type: "receiving",
+          participant_tier: "distributor",
+          payload: %{"eventID" => "urn:uuid:#{Ecto.UUID.generate()}"},
+          occurred_at: DateTime.utc_now() |> DateTime.truncate(:second)
+        },
+        "Missing partner GLN"
+      )
+
+    assert event.status == "blocked"
+    assert event.blocked_reason == "Missing partner GLN"
+
+    assert %{status: "pending", blocked_reason: nil} = Outbox.resubmit(event)
+
+    reloaded = Repo.reload!(event)
+    assert reloaded.status == "pending"
+    assert reloaded.blocked_reason == nil
+    assert reloaded.attempts == 0
+
+    EpcisClientStub.expect([{:ok, 202, %{"status" => "ACCEPTED"}}])
+    assert :ok = perform(organization)
+
+    final = Repo.reload!(event)
+    assert final.status == "accepted"
+    assert final.event_id == event.event_id
+  end
+
   test "transient failures snooze and schedule a retry", %{organization: organization} do
     event = enqueue(organization)
     EpcisClientStub.expect([{:error, %RuntimeError{message: "timeout"}}])
@@ -155,5 +197,36 @@ defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
     assert :ok = perform(organization)
     assert Repo.reload!(event).status == "pending"
     assert EpcisClientStub.submitted_documents() == []
+  end
+
+  test "manual mode leaves a non-forced job's events pending", %{organization: organization} do
+    {:ok, organization} = Organizations.update_epcis_submission_mode(organization, "manual")
+    event = enqueue(organization)
+
+    assert :ok = perform(organization)
+    assert Repo.reload!(event).status == "pending"
+    assert EpcisClientStub.submitted_documents() == []
+  end
+
+  test "enqueue_now drains a manual-mode org's pending events regardless of mode", %{
+    organization: organization
+  } do
+    {:ok, organization} = Organizations.update_epcis_submission_mode(organization, "manual")
+    event = enqueue(organization)
+    EpcisClientStub.expect([{:ok, 202, %{"status" => "ACCEPTED"}}])
+
+    SubmissionWorker.enqueue_now(organization.id)
+
+    assert :ok =
+             SubmissionWorker.perform(%Oban.Job{
+               args: %{"organization_id" => organization.id, "forced" => true}
+             })
+
+    assert Repo.reload!(event).status == "accepted"
+  end
+
+  test "a new organization defaults to manual submission mode" do
+    fresh = DistributorFixtures.distributor_organization_fixture()
+    assert fresh.epcis_submission_mode == :manual
   end
 end

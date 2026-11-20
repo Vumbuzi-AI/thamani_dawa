@@ -292,6 +292,14 @@ defmodule ThamaniDawaWeb.SignupLive do
            "Checking the site GLN with the GS1 registry. Press Continue again in a moment."
          )}
 
+      socket.assigns.gln_check == :prefix_mismatch ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "This GLN does not belong to your verified GS1 company prefix."
+         )}
+
       match?({:inactive, _, _}, socket.assigns.gln_check) ->
         {:noreply,
          put_flash(
@@ -604,7 +612,9 @@ defmodule ThamaniDawaWeb.SignupLive do
        socket
        |> clear_flash(:error)
        |> assign(:gln_check, {:matched, name, address})
-       |> maybe_autofill_site_fields(licence)}
+       |> maybe_autofill_site_fields(licence)
+       |> maybe_autofill_ppb_facility_name()
+       |> maybe_autofill_kmlttb_facility_name()}
     end
   end
 
@@ -920,7 +930,7 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   defp autofill_field(socket, _assign_key, _form_as, _field, _value), do: socket
 
-  defp gs1_gln_registration_url, do: "https://gs1kenya.org/"
+  defp gs1_gln_registration_url, do: "https://gs1kenya.org/membership"
 
   defp blank?(nil), do: true
   defp blank?(value), do: value |> to_string() |> String.trim() == ""
@@ -943,6 +953,9 @@ defmodule ThamaniDawaWeb.SignupLive do
       not gln_check_digit_valid?(gln) ->
         assign(socket, :gln_check, :invalid_check_digit)
 
+      not gln_matches_verified_prefix?(gln, socket.assigns.organization_params) ->
+        assign(socket, :gln_check, :prefix_mismatch)
+
       true ->
         socket
         |> assign(:gln_check, :checking)
@@ -953,6 +966,16 @@ defmodule ThamaniDawaWeb.SignupLive do
   defp gln_check_digit_valid?(gln) do
     {payload, check} = String.split_at(gln, -1)
     Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(payload)) == check
+  end
+
+  defp gln_matches_verified_prefix?(gln, organization_params) do
+    prefix =
+      organization_params
+      |> Map.get("gs1_company_prefix", "")
+      |> to_string()
+      |> String.trim()
+
+    prefix != "" and String.starts_with?(gln, prefix)
   end
 
   defp maybe_check_ppb(socket, params, site_params) do
@@ -1173,8 +1196,8 @@ defmodule ThamaniDawaWeb.SignupLive do
        "hero-building-storefront"},
       {"laboratory", "Diagnostic laboratory", "Collect specimens and perform diagnostic tests",
        "hero-beaker"},
-      {"distributor", "Pharmaceutical wholesale",
-       "Supply branches and licensed healthcare buyers", "hero-truck"}
+      {"distributor", "Pharmaceutical distributor",
+       "Supply medicines to pharmacies, hospitals, and other authorized buyers", "hero-truck"}
     ]
   end
 
@@ -1210,8 +1233,8 @@ defmodule ThamaniDawaWeb.SignupLive do
       },
       %{
         key: "distribution",
-        label: "Pharmaceutical wholesale",
-        description: "Supply branches, pharmacies, hospitals and other licensed facilities",
+        label: "Pharmaceutical distributor",
+        description: "Supply medicines to pharmacies, hospitals, and other authorized buyers",
         icon: "hero-truck",
         activities: ["distribution"]
       }
@@ -1399,32 +1422,34 @@ defmodule ThamaniDawaWeb.SignupLive do
       </div>
 
       <div class="auth-aside hidden lg:flex lg:h-svh">
-        <.link navigate={~p"/"} aria-label="Thamani Dawa home" style="width: 200px;">
-          <img src="/images/logo-transparent.png" alt="" class="h-auto w-full brightness-0 invert" />
-        </.link>
+        <div class="auth-aside-main">
+          <.link navigate={~p"/"} aria-label="Thamani Dawa home" class="auth-aside-logo">
+            <img src="/images/logo-transparent.png" alt="" class="h-auto w-full brightness-0 invert" />
+          </.link>
 
-        <div>
-          <span
-            class="thamani-badge"
-            style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="14"
-              height="14"
-              aria-hidden="true"
-              style="stroke: currentColor; stroke-width: 1.6; fill: none;"
+          <div>
+            <span
+              class="thamani-badge"
+              style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
             >
-              <path d="M4 5v14M8 5v14M11 5v14M15 5v14M17 5v14M20 5v14" />
-            </svg>
-            GS1 Compliant · Built for Kenya
-          </span>
-          <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
-            Start with clarity. Scale with confidence.
-          </h2>
-          <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
-            Configure a pharmacy, laboratory, distribution business, or a combination, then invite your team and start operating.
-          </p>
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                aria-hidden="true"
+                style="stroke: currentColor; stroke-width: 1.6; fill: none;"
+              >
+                <path d="M4 5v14M8 5v14M11 5v14M15 5v14M17 5v14M20 5v14" />
+              </svg>
+              GS1 Compliant · Built for Kenya
+            </span>
+            <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
+              Start with clarity. Scale with confidence.
+            </h2>
+            <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
+              Configure a pharmacy, laboratory, distribution business, or a combination, then invite your team and start operating.
+            </p>
+          </div>
         </div>
 
         <div style="border-top: 1px solid rgba(252,252,247,0.1); padding-top: 28px;">
@@ -1439,6 +1464,10 @@ defmodule ThamaniDawaWeb.SignupLive do
 
       <div class="auth-form-panel lg:h-svh lg:overflow-y-auto">
         <div class="auth-form-inner">
+          <.link navigate={~p"/"} class="auth-back-link">
+            <.icon name="hero-arrow-left" class="size-3.5" /> Back to website
+          </.link>
+
           <ThamaniDawaWeb.Layouts.flash_group flash={@flash} />
 
           <.progress_bar
@@ -1599,7 +1628,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                           </p>
                           <a
                             id="gs1-prefix-registration-link"
-                            href="https://gs1kenya.org/"
+                            href="https://gs1kenya.org/membership"
                             target="_blank"
                             rel="noopener noreferrer"
                             class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--thamani-forest)] underline decoration-[color-mix(in_srgb,var(--thamani-forest)_35%,transparent)] underline-offset-4 transition hover:decoration-[var(--thamani-forest)]"
@@ -1729,6 +1758,14 @@ defmodule ThamaniDawaWeb.SignupLive do
                           <.icon name="hero-exclamation-triangle" class="size-4" />
                           That doesn't look like a valid GLN. Double-check the digits.
                         </p>
+                      <% :prefix_mismatch -> %>
+                        <p
+                          id="site-gln-prefix-mismatch"
+                          class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
+                        >
+                          <.icon name="hero-exclamation-triangle" class="size-4" />
+                          This GLN does not belong to your verified GS1 company prefix.
+                        </p>
                       <% :unavailable -> %>
                         <p class="-mt-4 text-xs text-[var(--thamani-pewter)]">
                           We couldn't reach the GS1 registry to verify this GLN. Try again in a
@@ -1777,20 +1814,6 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <%= case site_activity_choices(@organization_params) do %>
                       <% [only] -> %>
                         <input type="hidden" name="site[activity_choice]" value={only.key} />
-                        <div
-                          id="single-site-activity"
-                          class="mb-7 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_18%,white)] bg-[color-mix(in_srgb,var(--thamani-lime)_12%,white)] px-4 py-3"
-                        >
-                          <p class="text-xs font-medium text-[var(--thamani-pewter)]">
-                            Activity at this location
-                          </p>
-                          <p class="mt-1 text-sm font-semibold text-[var(--thamani-forest)]">
-                            {only.label}
-                          </p>
-                          <p class="mt-0.5 text-xs text-[var(--thamani-pewter)]">
-                            {only.description}
-                          </p>
-                        </div>
                       <% choices -> %>
                         <fieldset class="mb-7">
                           <legend class="text-sm font-medium text-[var(--thamani-forest)]">

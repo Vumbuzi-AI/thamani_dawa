@@ -52,13 +52,13 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
     [
       %{
         selector: ~s([data-tour-target="/lab"]),
-        title: "Start with your dashboard",
+        title: "See today’s workload",
         description:
           "See pending work, completed reports, revenue, and lab activity at your current site."
       },
       %{
         selector: ~s([data-tour-target="/lab/orders"]),
-        title: "Work through lab orders",
+        title: "Process lab orders",
         description:
           "Collect specimens, enter results, and track every order from request to completion."
       },
@@ -70,12 +70,12 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
       },
       %{
         selector: ~s([data-tour-target="/lab/stock"]),
-        title: "Monitor lab stock",
+        title: "Check lab stock",
         description: "Review consumables, batches, quantities, and expiry risk for your site."
       },
       %{
         selector: ~s([data-tour-target="/lab/scan"]),
-        title: "Scan for faster workflows",
+        title: "Scan to find records faster",
         description:
           "Use scanning to identify supported records without manually searching for them."
       }

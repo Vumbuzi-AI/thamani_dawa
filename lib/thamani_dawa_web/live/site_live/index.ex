@@ -654,21 +654,6 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
       progress_current={elem(@onboarding_progress, 0)}
       progress_total={elem(@onboarding_progress, 1)}
     >
-      <:benefits>
-        <li class="flex items-center gap-3">
-          <.icon name="hero-check-circle" class="size-5 shrink-0 text-[var(--thamani-forest)]" />
-          Sell and dispense from more than one location
-        </li>
-        <li class="flex items-center gap-3">
-          <.icon name="hero-check-circle" class="size-5 shrink-0 text-[var(--thamani-forest)]" />
-          Each branch keeps its own GLN and stock
-        </li>
-        <li class="flex items-center gap-3">
-          <.icon name="hero-check-circle" class="size-5 shrink-0 text-[var(--thamani-forest)]" />
-          Add more branches at any time
-        </li>
-      </:benefits>
-
       <:right>
         <div class="flex items-start justify-between gap-5">
           <div>

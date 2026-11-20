@@ -8,6 +8,9 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
   alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.Suppliers
   alias ThamaniDawaWeb.DistributorPagination
+  alias ThamaniDawaWeb.SiteScoping
+
+  @inventory_zones [:receiving, :storage, :quarantine]
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -22,14 +25,16 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
      |> assign(:view, "products")
      |> assign(:search, "")
      |> assign(:page_number, 1)
+     |> assign(:expiry_filter, "all")
+     |> assign(:hold_filter, "all")
+     |> assign(:today, Date.utc_today())
      |> assign(:products_by_id, Map.new(Products.list_products(organization_id), &{&1.id, &1}))
      |> assign(:sites_by_id, Map.new(sites, &{&1.id, &1}))
      |> assign(:warehouse_ids, warehouse_ids)
      |> assign(
        :suppliers_by_id,
        Map.new(Suppliers.list_suppliers(organization_id), &{&1.id, &1})
-     )
-     |> reload_products()}
+     )}
   end
 
   def handle_params(params, _url, socket) do
@@ -37,7 +42,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
 
     form =
       if socket.assigns.live_action == :new do
-        to_form(Product.changeset(%Product{}, %{}), as: :product)
+        to_form(Product.changeset(%Product{}, %{"uom" => "C62"}), as: :product)
       else
         nil
       end
@@ -47,17 +52,25 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
      |> assign(:view, view)
      |> assign(:search, Map.get(params, "search", ""))
      |> assign(:page_number, DistributorPagination.page_number(params))
+     |> assign(:expiry_filter, expiry_param(params))
+     |> assign(:hold_filter, hold_param(params))
+     |> assign(:today, Date.utc_today())
      |> assign(:form, form)
      |> reload_view()}
   end
 
   def handle_event("validate", %{"product" => attrs}, socket) do
-    changeset = Map.put(Product.changeset(%Product{}, attrs), :action, :validate)
+    changeset =
+      Map.put(Product.changeset(%Product{}, stock_unit_attrs(attrs)), :action, :validate)
+
     {:noreply, assign(socket, :form, to_form(changeset, as: :product))}
   end
 
   def handle_event("save", %{"product" => attrs}, socket) do
-    case Products.create_product(socket.assigns.current_scope.organization_id, attrs) do
+    case Products.create_product(
+           socket.assigns.current_scope.organization_id,
+           stock_unit_attrs(attrs)
+         ) do
       {:ok, product} ->
         {:noreply,
          socket
@@ -72,11 +85,23 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
   end
 
   def handle_event("set_view", %{"view" => view}, socket) when view in ["products", "batches"] do
-    {:noreply, socket |> assign(:view, view) |> assign(:page_number, 1) |> reload_view()}
+    {:noreply, push_patch(socket, to: inventory_path(socket, %{view: view}))}
+  end
+
+  def handle_event("filter_expiry", %{"expiry" => expiry}, socket) do
+    {:noreply, push_patch(socket, to: inventory_path(socket, %{view: "batches", expiry: expiry}))}
+  end
+
+  def handle_event("filter_hold", %{"hold" => hold}, socket) do
+    {:noreply, push_patch(socket, to: inventory_path(socket, %{view: "batches", hold: hold}))}
   end
 
   def handle_event("search", %{"search" => search}, socket) do
     {:noreply, socket |> assign(:search, search) |> assign(:page_number, 1) |> reload_view()}
+  end
+
+  defp stock_unit_attrs(attrs) do
+    if attrs["uom"] in [nil, ""], do: Map.put(attrs, "uom", "C62"), else: attrs
   end
 
   defp reload_view(%{assigns: %{view: "batches"}} = socket), do: reload_batches(socket)
@@ -91,7 +116,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
       Batches.stock_summary_by_product(
         organization_id,
         Enum.map(products, & &1.id),
-        socket.assigns.warehouse_ids
+        stock_site_ids(socket)
       )
 
     rows =
@@ -119,13 +144,15 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
     organization_id = socket.assigns.current_scope.organization_id
     search = String.downcase(String.trim(socket.assigns.search))
 
+    site_ids = stock_site_ids(socket)
+
     batches =
       organization_id
       |> Batches.list_batches()
       |> Enum.filter(fn batch ->
         product = socket.assigns.products_by_id[batch.product_id]
 
-        batch.site_id in socket.assigns.warehouse_ids and
+        in_inventory?(batch, site_ids) and
           (search == "" or
              Enum.any?(
                [
@@ -137,6 +164,9 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
                &(is_binary(&1) and String.contains?(String.downcase(&1), search))
              ))
       end)
+      |> filter_hold(socket.assigns.hold_filter)
+      |> filter_expiry(socket.assigns.expiry_filter, socket.assigns.today)
+      |> Enum.sort_by(& &1.expiry_date, Date)
 
     page_info = DistributorPagination.page(batches, socket.assigns.page_number)
 
@@ -145,20 +175,108 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
     |> stream(:batches, page_info.entries, reset: true)
   end
 
-  defp pagination_path("products", search) do
-    params = if search == "", do: %{}, else: %{"search" => search}
-    ~p"/distributor/products?#{params}"
+  defp pagination_path(view, search, expiry, hold) do
+    inventory_query(view, search, expiry, hold)
   end
 
-  defp pagination_path("batches", search) do
+  defp inventory_path(socket, overrides) do
+    inventory_query(
+      Map.get(overrides, :view, socket.assigns.view),
+      Map.get(overrides, :search, socket.assigns.search),
+      Map.get(overrides, :expiry, socket.assigns.expiry_filter),
+      Map.get(overrides, :hold, socket.assigns.hold_filter)
+    )
+  end
+
+  defp inventory_query(view, search, expiry, hold) do
     params =
-      %{"view" => "batches"}
-      |> then(fn params ->
-        if search == "", do: params, else: Map.put(params, "search", search)
-      end)
+      %{}
+      |> maybe_put("view", "batches", view == "batches")
+      |> maybe_put("search", search, search not in [nil, ""])
+      |> maybe_put("expiry", expiry, view == "batches" and expiry not in [nil, "all"])
+      |> maybe_put("hold", hold, view == "batches" and hold not in [nil, "all"])
 
     ~p"/distributor/products?#{params}"
   end
+
+  defp maybe_put(params, _key, _value, false), do: params
+  defp maybe_put(params, key, value, true), do: Map.put(params, key, value)
+
+  defp stock_site_ids(socket) do
+    case SiteScoping.default_site_id(socket.assigns.current_scope) do
+      nil -> socket.assigns.warehouse_ids
+      site_id -> [site_id]
+    end
+  end
+
+  defp in_inventory?(batch, site_ids) do
+    batch.remaining_quantity > 0 and
+      batch.zone in @inventory_zones and
+      batch.site_id in site_ids
+  end
+
+  defp expiry_param(params) do
+    case Map.get(params, "expiry", "all") do
+      "critical" -> "critical"
+      "expired" -> "expired"
+      "near" -> "near"
+      window when window in ["warning", "watch"] -> "near"
+      _ -> "all"
+    end
+  end
+
+  defp hold_param(params) do
+    if Map.get(params, "hold") == "quarantine", do: "quarantine", else: "all"
+  end
+
+  defp filter_hold(batches, "quarantine") do
+    Enum.filter(batches, &(&1.zone == :quarantine or &1.status == :quarantined))
+  end
+
+  defp filter_hold(batches, _hold), do: batches
+
+  defp filter_expiry(batches, "all", _today), do: batches
+
+  defp filter_expiry(batches, "near", today) do
+    Enum.filter(batches, &(expiry_tier(&1, today) in [:critical, :warning, :watch]))
+  end
+
+  defp filter_expiry(batches, tier, today) do
+    Enum.filter(batches, &(expiry_tier(&1, today) == String.to_existing_atom(tier)))
+  end
+
+  defp expiry_tier(%{expiry_date: nil}, _today), do: nil
+
+  defp expiry_tier(%{status: :active, expiry_date: expiry}, today) do
+    days = Date.diff(expiry, today)
+
+    cond do
+      days < 0 -> :expired
+      days <= 30 -> :critical
+      days <= 60 -> :warning
+      days <= 90 -> :watch
+      true -> nil
+    end
+  end
+
+  defp expiry_tier(%{expiry_date: expiry}, today) do
+    if Date.diff(expiry, today) < 0, do: :expired, else: nil
+  end
+
+  defp expiry_filter_label("all"), do: "Any date"
+  defp expiry_filter_label("critical"), do: "Within 30 days"
+  defp expiry_filter_label("near"), do: "Within 90 days"
+  defp expiry_filter_label("expired"), do: "Expired"
+
+  defp expiry_badge_label(:critical), do: "30 days or less"
+  defp expiry_badge_label(:warning), do: "31–60 days"
+  defp expiry_badge_label(:watch), do: "61–90 days"
+  defp expiry_badge_label(:expired), do: "Expired"
+
+  defp expiry_badge_class(:critical), do: "bg-red-100 text-red-800"
+  defp expiry_badge_class(:warning), do: "bg-amber-100 text-amber-800"
+  defp expiry_badge_class(:watch), do: "bg-yellow-50 text-yellow-800"
+  defp expiry_badge_class(:expired), do: "bg-red-100 text-red-800"
 
   defp matches_product?(_product, ""), do: true
 
@@ -177,33 +295,12 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
 
   defp date_or_dash(nil), do: "—"
   defp date_or_dash(date), do: Calendar.strftime(date, "%d %b %Y")
-  defp unit_label("H87"), do: "piece(s)"
-  defp unit_label("U2"), do: "tablet(s)"
-  defp unit_label("C62"), do: "unit(s)"
-  defp unit_label("KGM"), do: "kilogram(s)"
-  defp unit_label(nil), do: "unit(s)"
-  defp unit_label(unit), do: if(String.ends_with?(unit, "(s)"), do: unit, else: "#{unit}(s)")
 
-  defp quantity_with_unit(quantity, product),
-    do: "#{quantity} #{unit_label(product && product.uom)}"
+  defp quantity_with_unit(quantity, _product), do: Products.format_unit_count(quantity)
 
-  defp batch_status(batch) do
-    days = Date.diff(batch.expiry_date, Date.utc_today())
-
-    cond do
-      days < 0 -> :expired
-      days <= 90 -> :near_expiry
-      batch.approver_id && batch.remaining_quantity > 0 -> :active
-      true -> :pending
-    end
-  end
-
-  defp available_quantity(batch),
-    do:
-      if(Date.compare(batch.expiry_date, Date.utc_today()) == :gt,
-        do: batch.remaining_quantity,
-        else: 0
-      )
+  defp batch_status_label(:inactive), do: "Lost"
+  defp batch_status_label(:non_sellable_other), do: "Exported"
+  defp batch_status_label(status), do: Phoenix.Naming.humanize(status)
 
   def render(assigns) do
     ~H"""
@@ -213,12 +310,11 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
       current_path={~p"/distributor/products"}
     >
       <.header icon={if @view == "products", do: "hero-cube", else: "hero-archive-box"}>
-        {if @view == "products", do: "Products", else: "All batches"}
+        Inventory
         <:subtitle>
           {if @view == "products",
-            do: "Maintain the GTIN-identified items your warehouses distribute.",
-            else:
-              "Review inventory batches across your warehouses, including expiry and remaining stock."}
+            do: "The products this warehouse distributes, and how much of each is on hand.",
+            else: "Batches still in this warehouse."}
         </:subtitle>
         <:actions>
           <.button
@@ -231,7 +327,10 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           </.button>
         </:actions>
         <:toolbar>
-          <div id="distributor-product-toolbar" class="flex min-w-0 items-center gap-3">
+          <div
+            id="distributor-product-toolbar"
+            class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2"
+          >
             <.tab_group>
               <:tab
                 id="distributor-products-tab"
@@ -247,13 +346,13 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
                 phx_click="set_view"
                 phx_value_view="batches"
               >
-                All batches
+                Batches
               </:tab>
             </.tab_group>
             <form
               phx-change="search"
               id="distributor-product-search"
-              class="min-w-0 flex-1"
+              class="min-w-48 flex-1"
             >
               <.search_input
                 name="search"
@@ -265,6 +364,62 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
                 }
               />
             </form>
+            <div :if={@view == "batches"} class="flex flex-wrap items-center gap-2">
+              <div>
+                <span id="hold-filters-label" class="sr-only">Stock</span>
+                <div
+                  id="hold-filters"
+                  role="radiogroup"
+                  aria-labelledby="hold-filters-label"
+                  class="inline-flex rounded-lg border border-thamani-stone bg-thamani-snow p-1"
+                >
+                  <button
+                    :for={hold <- ["all", "quarantine"]}
+                    type="button"
+                    id={"hold-filter-#{hold}"}
+                    role="radio"
+                    aria-checked={to_string(@hold_filter == hold)}
+                    phx-click="filter_hold"
+                    phx-value-hold={hold}
+                    class={[
+                      "cursor-pointer rounded-md px-3 py-2 text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
+                      @hold_filter == hold && "bg-thamani-lime text-thamani-forest",
+                      @hold_filter != hold &&
+                        "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+                    ]}
+                  >
+                    {if hold == "all", do: "All stock", else: "Quarantine"}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <span id="expiry-filters-label" class="sr-only">Expiry</span>
+                <div
+                  id="expiry-filters"
+                  role="radiogroup"
+                  aria-labelledby="expiry-filters-label"
+                  class="inline-flex max-w-full flex-wrap rounded-lg border border-thamani-stone bg-thamani-snow p-1"
+                >
+                  <button
+                    :for={expiry <- ["all", "critical", "near", "expired"]}
+                    type="button"
+                    id={"expiry-filter-#{expiry}"}
+                    role="radio"
+                    aria-checked={to_string(@expiry_filter == expiry)}
+                    phx-click="filter_expiry"
+                    phx-value-expiry={expiry}
+                    class={[
+                      "cursor-pointer rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
+                      @expiry_filter == expiry && "bg-thamani-lime text-thamani-forest",
+                      @expiry_filter != expiry &&
+                        "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+                    ]}
+                  >
+                    {expiry_filter_label(expiry)}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </:toolbar>
       </.header>
@@ -284,25 +439,32 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           class="mt-4"
         >
           <div class="grid gap-x-4 sm:grid-cols-2">
+            <input type="hidden" name="product[uom]" value="C62" />
             <.input field={@form[:generic_name]} label="Generic name" />
             <.input field={@form[:brand_name]} label="Brand name" />
             <.input field={@form[:gtin]} label="GTIN" required />
             <.input
-              field={@form[:uom]}
+              field={@form[:net_content_quantity]}
+              type="number"
+              label="Each pack contains (optional)"
+              placeholder="e.g. 20"
+              min="1"
+            />
+            <.input
+              field={@form[:net_content_uom]}
               type="select"
-              label="Base inventory unit"
-              prompt="Select unit"
+              label="What's inside"
+              prompt="Tablets, capsules, ml"
               options={[
-                {"Piece (H87)", "H87"},
-                {"Tablet (U2)", "U2"},
-                {"Unit (C62)", "C62"},
-                {"Kilogram (KGM)", "KGM"}
+                {"Tablets", "U2"},
+                {"Capsules", "AV"},
+                {"Millilitres", "MLT"},
+                {"Pieces", "H87"}
               ]}
-              required
             />
             <.input field={@form[:category]} label="Category" />
             <.input field={@form[:manufacturer]} label="Manufacturer" />
-            <.input field={@form[:price]} type="number" label="Unit price (KSh)" min="0" required />
+            <.input field={@form[:price]} type="number" label="Price (KSh)" min="0" required />
             <.input field={@form[:reorder_level]} type="number" label="Reorder level" min="0" />
           </div>
           <.button class="mt-2" variant="primary">Add product</.button>
@@ -322,6 +484,9 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           </:col>
           <:col :let={{_id, row}} label="Category">{row.product.category || "—"}</:col>
           <:col :let={{_id, row}} label="Brand">{row.product.brand_name || "—"}</:col>
+          <:col :let={{_id, row}} label="Strength" mobile="hidden" tablet="hidden">
+            {row.product.strength || "—"}
+          </:col>
           <:col :let={{_id, row}} label="Price">{money(row.product.price)}</:col>
           <:col :let={{_id, row}} label="Batches">{row.batch_count}</:col>
           <:col :let={{_id, row}} label="Status">
@@ -330,7 +495,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           <:col :let={{_id, row}} label="GTIN">
             <span class="font-mono">{row.product.gtin}</span>
           </:col>
-          <:col :let={{_id, row}} label="Unit">{unit_label(row.product.uom)}</:col>
+          <:col :let={{_id, row}} label="Unit">{Products.unit_label(row.product.uom)}</:col>
           <:col :let={{_id, row}} label="Reorder level">{row.product.reorder_level || "—"}</:col>
           <:empty_state>
             <.blank_state icon="hero-cube" title="No distributor products yet">
@@ -354,13 +519,30 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           <:col :let={{_id, batch}} label="Batch">
             <span class="font-mono">{batch.batch_no}</span>
           </:col>
-          <:col :let={{_id, batch}} label="Warehouse">{site_name(@sites_by_id[batch.site_id])}</:col>
-          <:col :let={{_id, batch}} label="Expiry">{date_or_dash(batch.expiry_date)}</:col>
-          <:col :let={{_id, batch}} label="Available">
-            {quantity_with_unit(available_quantity(batch), @products_by_id[batch.product_id])}
+          <:col
+            :let={{_id, batch}}
+            :if={is_nil(SiteScoping.default_site_id(@current_scope))}
+            label="Warehouse"
+          >
+            {site_name(@sites_by_id[batch.site_id])}
+          </:col>
+          <:col :let={{_id, batch}} label="Expiry">
+            <span class="text-thamani-pewter">{date_or_dash(batch.expiry_date)}</span>
+            <span
+              :if={tier = expiry_tier(batch, @today)}
+              class={[
+                "ml-1.5 rounded-full px-2 py-0.5 text-xs font-semibold",
+                expiry_badge_class(tier)
+              ]}
+            >
+              {expiry_badge_label(tier)}
+            </span>
+          </:col>
+          <:col :let={{_id, batch}} label="Qty">
+            {quantity_with_unit(batch.remaining_quantity, @products_by_id[batch.product_id])}
           </:col>
           <:col :let={{_id, batch}} label="Status">
-            <.status_badge status={batch_status(batch)} />
+            <.status_badge status={batch.status} label={batch_status_label(batch.status)} />
           </:col>
           <:empty_state>
             <.blank_state
@@ -376,7 +558,10 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           </:empty_state>
         </.table>
       </div>
-      <.pagination page={@page_info} path={pagination_path(@view, @search)} />
+      <.pagination
+        page={@page_info}
+        path={pagination_path(@view, @search, @expiry_filter, @hold_filter)}
+      />
     </Layouts.distributor_shell>
     """
   end

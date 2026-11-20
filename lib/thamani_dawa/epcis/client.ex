@@ -3,29 +3,34 @@ defmodule ThamaniDawa.Epcis.Client do
   HTTP client for the PPB Track & Trace Hub capture endpoint. One event per
   capture document (ordering is enforced by submission order), `X-API-Key`
   auth, JSON-LD body. The Hub issues separate credentials per partner tier
-  (facility vs distributor), so each submission picks the credential and
-  capture path matching the event's `participant_tier`. Responses are
-  classified for the submission worker:
+  (facility vs distributor), so each submission picks the capture path
+  matching the event's `participant_tier`. The API key is normally the
+  platform-wide one configured here, but an organization may supply its own
+  (`Organizations.set_epcis_api_key/3`) — when present, the caller passes it
+  as `api_key_override` and it wins over the platform key for that one
+  submission. Responses are classified for the submission worker:
 
     * `{:accepted, status, body}` — stored by the Hub (2xx)
     * `{:duplicate, status, body}` — 409; the event already made it
     * `{:rejected, status, body}` — 400-level; never auto-retried
     * `{:retry, reason}` — transient (429/5xx/transport); retried with backoff
 
-  The real HTTP call sits behind the `submit_document/2` callback so tests
+  The real HTTP call sits behind the `submit_document/3` callback so tests
   swap it via the `:client` application env.
   """
 
   alias ThamaniDawa.Epcis.Document
 
-  @callback submit_document(map(), String.t()) :: {:ok, integer(), map()} | {:error, term()}
+  @callback submit_document(map(), String.t(), String.t() | nil) ::
+              {:ok, integer(), map()} | {:error, term()}
 
   def enabled?, do: Keyword.get(config(), :enabled, false) && config()[:base_url] not in [nil, ""]
 
-  def submit(payload, tier) when is_map(payload) and is_binary(tier) do
+  def submit(payload, tier, api_key_override \\ nil)
+      when is_map(payload) and is_binary(tier) do
     document = Document.wrap(payload)
 
-    case impl().submit_document(document, tier) do
+    case impl().submit_document(document, tier, api_key_override) do
       {:ok, status, body} when status in 200..299 -> {:accepted, status, body}
       {:ok, 409, body} -> {:duplicate, 409, body}
       {:ok, status, body} when status in [408, 429] -> {:retry, {:http, status, body}}
@@ -38,15 +43,16 @@ defmodule ThamaniDawa.Epcis.Client do
   @behaviour __MODULE__
 
   @impl true
-  def submit_document(document, tier) do
+  def submit_document(document, tier, api_key_override) do
     creds = credentials(tier)
+    api_key = api_key_override || creds.api_key
 
     request =
       Req.new(
         base_url: Keyword.fetch!(config(), :base_url),
         url: creds.capture_path,
         headers: [
-          {"x-api-key", creds.api_key},
+          {"x-api-key", api_key},
           {"content-type", "application/ld+json"}
         ],
         body: Jason.encode!(document),
@@ -65,10 +71,11 @@ defmodule ThamaniDawa.Epcis.Client do
   defp normalize_body(body), do: %{"raw" => inspect(body)}
 
   @doc """
-  Capture path and API key for a partner tier. The Hub issues distinct
-  credentials per tier; `"distributor"` falls back to the facility
+  Capture path and platform-wide API key for a partner tier. The Hub issues
+  distinct credentials per tier; `"distributor"` falls back to the facility
   credential/path when a distributor-specific one isn't configured, so
-  single-tier deployments keep working unchanged.
+  single-tier deployments keep working unchanged. An organization's own key
+  (see `submit/3`) is applied on top of this, not inside it.
   """
   def credentials("distributor") do
     cfg = config()

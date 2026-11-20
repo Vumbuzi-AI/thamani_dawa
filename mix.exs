@@ -71,6 +71,8 @@ defmodule ThamaniDawa.MixProject do
       {:jason, "~> 1.2"},
       {:dns_cluster, "~> 0.2.0"},
       {:bandit, "~> 1.5"},
+      {:cloak, "~> 1.1"},
+      {:cloak_ecto, "~> 1.3"},
       {:scrivener_ecto, "~> 2.7"},
       {:scrivener, "~> 2.7"}
     ]

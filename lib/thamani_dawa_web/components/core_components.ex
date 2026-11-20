@@ -359,6 +359,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             @errors != [] && (@error_class || "border-red-600"),
             @errors == [] &&
               "border-[#bfceb7] hover:border-thamani-forest/50 focus:border-thamani-forest",
+            @rest[:disabled] && "cursor-not-allowed opacity-60",
             @class
           ]}
         >
@@ -412,7 +413,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
             this.chevron  = this.el.querySelector("[data-cs-chevron]")
             this.renderList("")
             this.syncDisplay()
-            this.onTrigger  = (e) => { e.preventDefault(); e.stopPropagation(); this.toggle() }
+            this.onTrigger  = (e) => {
+              if (this.trigger.disabled) return
+              e.preventDefault()
+              e.stopPropagation()
+              this.toggle()
+            }
             this.onDocClick = (e) => { if (!this.el.contains(e.target)) this.close() }
             this.onKey      = (e) => { if (e.key === "Escape") this.close() }
             this.trigger.addEventListener("click", this.onTrigger)
@@ -1304,7 +1310,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       @class
     ]}>
       <header class={[
-        "flex flex-col items-stretch gap-4 xl:flex-row xl:items-center xl:justify-between xl:gap-6",
+        "flex flex-col items-stretch gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-x-6 md:gap-y-4",
         @variant == "card" && "p-4 sm:p-5",
         @toolbar != [] && "border-b border-thamani-stone"
       ]}>
@@ -1343,7 +1349,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         </div>
         <div
           :if={@actions != []}
-          class="flex flex-col gap-2 xl:flex-none xl:flex-row xl:items-center [&>*]:w-full xl:[&>*]:w-auto"
+          class="flex flex-col gap-2 md:ml-auto md:w-auto md:flex-row md:flex-wrap md:items-center md:justify-end [&>*]:w-full md:[&>*]:w-auto"
         >
           {render_slot(@actions)}
         </div>
@@ -1414,7 +1420,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
                 :for={col <- @col}
                 scope="col"
                 class={[
-                  "whitespace-nowrap px-4 py-3 text-xs font-medium text-slate-600 sm:border-b sm:border-slate-200 sm:px-4 sm:py-3.5 sm:text-sm sm:font-semibold sm:leading-5 sm:text-thamani-forest",
+                  "whitespace-nowrap px-4 py-2 text-xs font-medium text-slate-600 sm:border-b sm:border-slate-200 sm:px-4 sm:py-2.5 sm:text-sm sm:font-semibold sm:leading-5 sm:text-thamani-forest",
                   col[:tablet] == "hidden" && "sm:max-lg:hidden"
                 ]}
               >
@@ -1423,7 +1429,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <th
                 :if={@action != []}
                 scope="col"
-                class="px-4 py-3 text-right sm:border-b sm:border-slate-200 sm:py-3.5"
+                class="px-4 py-2 text-right sm:border-b sm:border-slate-200 sm:py-2.5"
               >
                 <span class="sr-only">{gettext("Actions")}</span>
               </th>
@@ -1461,7 +1467,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
                 phx-click={@row_click && @row_click.(row)}
                 data-label={col[:label]}
                 class={[
-                  "flex min-w-0 flex-col items-start gap-1 border-b border-thamani-stone/60 px-4 py-3 text-left text-sm leading-5 text-slate-900 before:block before:text-sm before:font-normal before:text-thamani-pewter before:content-[attr(data-label)] first:col-span-full first:block first:bg-thamani-canvas/70 first:px-4 first:py-3.5 first:text-base first:font-semibold first:leading-6 first:text-thamani-forest first:before:hidden [&:nth-child(even)]:border-r [&:nth-child(even)]:border-thamani-stone/60 sm:table-cell sm:h-[4.5rem] sm:align-middle sm:border-r-0 sm:border-b sm:border-slate-200 sm:bg-transparent sm:px-4 sm:py-3 sm:text-left sm:text-sm sm:font-normal sm:leading-5 sm:text-slate-700 sm:before:hidden sm:first:bg-transparent sm:first:text-sm sm:first:font-semibold sm:first:leading-5 sm:first:text-slate-950 sm:first:whitespace-nowrap sm:[&:nth-child(even)]:border-r-0",
+                  "responsive-table-cell flex min-w-0 flex-col items-start gap-1 border-b border-thamani-stone/60 px-4 py-2 text-left text-sm leading-5 text-slate-900 before:block before:text-sm before:font-normal before:text-thamani-pewter before:content-[attr(data-label)] first:col-span-full first:block first:bg-thamani-canvas/70 first:px-4 first:py-2.5 first:text-base first:font-semibold first:leading-6 first:text-thamani-forest first:before:hidden [&:nth-child(even)]:border-r [&:nth-child(even)]:border-thamani-stone/60 sm:table-cell sm:align-middle sm:border-r-0 sm:border-b sm:border-slate-200 sm:bg-transparent sm:px-4 sm:py-2 sm:text-left sm:text-sm sm:font-normal sm:leading-5 sm:text-slate-700 sm:before:hidden sm:first:bg-transparent sm:first:text-sm sm:first:font-semibold sm:first:leading-5 sm:first:text-slate-950 sm:first:whitespace-nowrap sm:[&:nth-child(even)]:border-r-0",
                   @mobile_columns == 3 &&
                     "max-sm:[&:nth-child(3)]:border-r max-sm:[&:nth-child(3)]:border-thamani-stone/60",
                   col[:mobile] == "hidden" && "max-sm:hidden",
@@ -1476,7 +1482,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <td
                 :if={@action != []}
                 data-label={gettext("Actions")}
-                class="col-span-full flex items-center justify-end bg-thamani-canvas/60 px-3 py-3 text-right text-sm sm:table-cell sm:h-[4.5rem] sm:w-px sm:whitespace-nowrap sm:align-middle sm:border-b sm:border-slate-200 sm:bg-transparent sm:px-4 sm:py-3"
+                class="responsive-table-cell col-span-full flex items-center justify-end bg-thamani-canvas/60 px-3 py-3 text-right text-sm sm:table-cell sm:w-px sm:whitespace-nowrap sm:align-middle sm:border-b sm:border-slate-200 sm:bg-transparent sm:px-4 sm:py-2"
               >
                 <div class="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 [&>*]:flex-1 sm:w-max sm:flex-nowrap sm:gap-2 sm:[&>*]:flex-none sm:[&>*]:text-sm">
                   <%= for action <- @action do %>
@@ -1505,10 +1511,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <.status_badge status={:verified} />
   """
   attr :status, :atom, required: true
+  attr :label, :string, default: nil
   attr :class, :any, default: nil
 
   def status_badge(assigns) do
-    assigns = assign(assigns, :semantic, status_semantic(assigns.status))
+    assigns =
+      assigns
+      |> assign(:semantic, status_semantic(assigns.status))
+      |> assign(:label, assigns.label || Phoenix.Naming.humanize(assigns.status))
 
     ~H"""
     <span class={[
@@ -1516,7 +1526,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       badge_classes(@semantic),
       @class
     ]}>
-      {Phoenix.Naming.humanize(@status)}
+      {@label}
     </span>
     """
   end
@@ -1534,7 +1544,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
              :pending_receipt,
              :invited,
              :low_stock,
-             :unknown_serial
+             :unknown_serial,
+             :quarantined,
+             :expired,
+             :returned
            ],
       do: :warning
 
@@ -1565,7 +1578,19 @@ defmodule ThamaniDawaWeb.CoreComponents do
       do: :info
 
   def status_semantic(status)
-      when status in [:cancelled, :rejected, :flagged, :out_of_stock, :failed, :data_mismatch],
+      when status in [
+             :cancelled,
+             :rejected,
+             :flagged,
+             :out_of_stock,
+             :failed,
+             :data_mismatch,
+             :damaged,
+             :stolen,
+             :recalled,
+             :destroyed,
+             :non_sellable_other
+           ],
       do: :danger
 
   def status_semantic(_status), do: :neutral
@@ -1680,7 +1705,6 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :description, :string, required: true
   attr :progress_current, :integer, default: 0
   attr :progress_total, :integer, default: 0
-  slot :benefits, doc: "optional <li> items listed under the description"
   slot :right, required: true, doc: "the task-specific panel (list + add action)"
   slot :footer, required: true, doc: "the back / skip / continue row"
 
@@ -1720,23 +1744,16 @@ defmodule ThamaniDawaWeb.CoreComponents do
         </div>
 
         <main class="mx-auto grid w-full max-w-6xl flex-1 items-start gap-10 px-5 pb-16 pt-10 sm:px-8 sm:pt-12 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] md:gap-10 md:pt-16 lg:gap-16 lg:pt-20">
-          <section class="thamani-step-enter">
+          <section class="thamani-step-enter flex flex-col items-center text-center md:block md:text-left">
             <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
               <.icon name={@icon} class="size-6" />
             </div>
-            <h1 class="max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
+            <h1 class="w-full max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
               {@title}
             </h1>
-            <p class="mt-6 max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
+            <p class="mt-6 w-full max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
               {@description}
             </p>
-
-            <ul
-              :if={@benefits != []}
-              class="mt-9 space-y-4 text-sm text-[var(--thamani-pewter)] sm:text-[15px]"
-            >
-              {render_slot(@benefits)}
-            </ul>
           </section>
 
           <section class="thamani-step-enter min-w-0 rounded-3xl border border-[var(--thamani-stone)] bg-transparent p-6 sm:p-8">
@@ -1749,6 +1766,50 @@ defmodule ThamaniDawaWeb.CoreComponents do
         </main>
       </div>
     </Layouts.app>
+    """
+  end
+
+  @doc """
+  The two sides of Returns. Supplier returns and customer returns are
+  separate LiveViews, so the tabs navigate between them.
+  """
+  attr :active, :atom, required: true, values: [:supplier, :customer]
+
+  def returns_tabs(assigns) do
+    ~H"""
+    <div
+      role="tablist"
+      class="mb-5 inline-flex rounded-lg border border-thamani-stone bg-thamani-snow p-1"
+    >
+      <.link
+        id="returns-tab-supplier"
+        role="tab"
+        navigate={~p"/distributor/returns"}
+        aria-selected={to_string(@active == :supplier)}
+        class={[
+          "rounded-md px-3 py-2 text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
+          @active == :supplier && "bg-thamani-lime text-thamani-forest",
+          @active != :supplier &&
+            "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+        ]}
+      >
+        Supplier returns
+      </.link>
+      <.link
+        id="returns-tab-customer"
+        role="tab"
+        navigate={~p"/distributor/customer-returns"}
+        aria-selected={to_string(@active == :customer)}
+        class={[
+          "rounded-md px-3 py-2 text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
+          @active == :customer && "bg-thamani-lime text-thamani-forest",
+          @active != :customer &&
+            "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+        ]}
+      >
+        Customer returns
+      </.link>
+    </div>
     """
   end
 
@@ -2116,6 +2177,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :id, :string, required: true
   attr :show, :boolean, default: false
   attr :on_cancel, JS, default: %JS{}
+  attr :close_on_click_away, :boolean, default: true
   attr :class, :any, default: nil
   slot :inner_block, required: true
 
@@ -2143,7 +2205,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
               id={"#{@id}-container"}
               phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
               phx-key="escape"
-              phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
+              phx-click-away={
+                if @close_on_click_away,
+                  do: JS.exec("data-cancel", to: "##{@id}"),
+                  else: nil
+              }
               class="hidden relative rounded-2xl ff-surface-modal p-6 transition"
             >
               <div class="absolute top-4 right-4">

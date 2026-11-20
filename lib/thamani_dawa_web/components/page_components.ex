@@ -7,6 +7,7 @@ defmodule ThamaniDawaWeb.PageComponents do
 
   ## Components
 
+  - `site_footer/1`    — Shared marketing site footer (landing + contact pages)
   - `page_footer/1`    — Shared site footer with active-link pattern matching
   - `legal_hero/1`     — Dark hero band used by Privacy and Terms pages
   - `legal_toc/1`      — Numbered table of contents
@@ -18,6 +19,46 @@ defmodule ThamaniDawaWeb.PageComponents do
   import ThamaniDawaWeb.CoreComponents
 
   alias ThamaniDawa.Accounts.Scope
+
+  # ============================================================
+  # site_footer
+  # ============================================================
+
+  @doc """
+  Renders the shared marketing site footer.
+
+  Used by the landing page and the contact page so both render the exact
+  same footer. Styles come from the marketing stylesheet (`.site-footer`
+  and friends in `assets/css/landing.css`).
+
+  ## Examples
+
+      <.site_footer />
+  """
+  def site_footer(assigns) do
+    ~H"""
+    <footer class="site-footer">
+      <div class="container footer-lead">
+        <a class="footer-logo" href="/" aria-label="Thamani Dawa home"><img
+          src="/images/logo-transparent.png"
+          alt=""
+          width="156"
+          height="112"
+        /></a><p>Pharmacy, lab, distribution, and warehouse, finally in one place.</p>
+      </div><div class="container footer-grid">
+        <div>
+          <p class="footer-label">Product</p><a href="/#platform">Platform</a><a href="/#features">Features</a><a href="/login">Log in</a><a href="/signup">Create account</a>
+        </div><div>
+          <p class="footer-label">Company</p><a href="/#results">Why Thamani</a><a href="/contact">Contact</a>
+        </div><div>
+          <p class="footer-label">Legal</p><a href="/privacy">Privacy policy</a><a href="/terms">Terms of service</a>
+        </div>
+      </div><div class="container footer-bottom">
+        <p>© 2026 Thamani Dawa</p><p>Healthcare software for Kenya</p>
+      </div>
+    </footer>
+    """
+  end
 
   # ============================================================
   # page_footer

@@ -31,7 +31,7 @@ defmodule ThamaniDawa.Epcis.Outbox do
       })
 
     if event.status == "pending" do
-      %{organization_id: event.organization_id}
+      %{organization_id: event.organization_id, forced: false}
       |> SubmissionWorker.new()
       |> Oban.insert!()
     end
@@ -100,14 +100,18 @@ defmodule ThamaniDawa.Epcis.Outbox do
     end
   end
 
-  @doc "Returns a rejected or dead event to the pending queue, keeping its event_id."
-  def resubmit(%OutboxEvent{status: status} = event) when status in ["rejected", "dead"] do
-    event = update!(event, status: "pending", next_attempt_at: nil, attempts: 0)
+  @doc "Returns a rejected, dead, or blocked event to the pending queue, keeping its event_id."
+  def resubmit(%OutboxEvent{status: status} = event)
+      when status in ["rejected", "dead", "blocked"] do
+    event =
+      update!(event,
+        status: "pending",
+        blocked_reason: nil,
+        next_attempt_at: nil,
+        attempts: 0
+      )
 
-    %{organization_id: event.organization_id}
-    |> SubmissionWorker.new()
-    |> Oban.insert!()
-
+    SubmissionWorker.enqueue_now(event.organization_id)
     event
   end
 
@@ -137,6 +141,21 @@ defmodule ThamaniDawa.Epcis.Outbox do
         where: e.organization_id == ^organization_id,
         order_by: [desc: e.occurred_at, desc: e.id],
         limit: ^limit
+    )
+  end
+
+  @doc """
+  Events reported for one source record (e.g. a `Batch`'s status-change
+  history), oldest first — for the batch trail view.
+  """
+  def list_events_for_source(organization_id, source_type, source_id)
+      when is_binary(source_type) and is_integer(source_id) do
+    Repo.all(
+      from e in OutboxEvent,
+        where: e.organization_id == ^organization_id,
+        where: e.source_type == ^source_type,
+        where: e.source_id == ^source_id,
+        order_by: [asc: e.occurred_at, asc: e.id]
     )
   end
 

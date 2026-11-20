@@ -1,8 +1,8 @@
 defmodule ThamaniDawa.Epcis.Event do
   @moduledoc """
   Builders for the EPCIS 2.0 JSON-LD events v1 submits to the PPB Hub
-  (docs/PPB_TNT_INTEGRATION.md §5): distributor Receiving, Packing and
-  Shipping. Builders are pure — they take plain maps and return
+  (docs/PPB_TNT_INTEGRATION.md §5): distributor Receiving, Packing,
+  Unpacking and Shipping. Builders are pure — they take plain maps and return
   `{:ok, event_map}` or `{:error, {field, reason}}`; persistence and
   submission live in `ThamaniDawa.Epcis.Outbox` / `SubmissionWorker`.
 
@@ -55,23 +55,91 @@ defmodule ThamaniDawa.Epcis.Event do
 
   @doc """
   Distributor packing (D2) — one AggregationEvent per shipper, emitted when
-  the shipper's SSCC is assigned at approval.
+  the shipper's SSCC is assigned at approval. Also used when a storage split
+  packs a new mini-SSCC.
+
+  Serialized contents go in `childEPCs`. A quantity-only parent (no unit
+  serials) packs with `quantityList` instead. Passing neither is refused.
+  Omitting `:quantities` leaves the serialized payload unchanged.
   """
   def packing(args) do
     with {:ok, biz_location} <- sgln(args, :biz_location_gln),
          {:ok, parent} <- Urn.sscc(args.parent_sscc, String.length(args.org_prefix)),
-         {:ok, children} <- child_sgtins(args) do
+         {:ok, children} <- child_sgtins(args),
+         {:ok, quantity_list} <- quantity_elements(args),
+         :ok <- require_content(children, quantity_list) do
+      event =
+        %{
+          "type" => "AggregationEvent",
+          "eventID" => event_id(args),
+          "eventTime" => event_time(args),
+          "eventTimeZoneOffset" => @time_zone_offset,
+          "parentID" => parent,
+          "action" => "ADD",
+          "bizStep" => "packing",
+          "disposition" => "active",
+          "readPoint" => %{"id" => biz_location},
+          "bizLocation" => %{"id" => biz_location}
+        }
+        |> put_if_present("childEPCs", children)
+        |> put_if_present("quantityList", quantity_list)
+
+      {:ok, event}
+    end
+  end
+
+  @doc """
+  Distributor unpacking (D4) — AggregationEvent DELETE for units physically
+  removed from a received SSCC. Partial unpack is allowed: `children` /
+  `quantities` describe only what left the parent, not the whole case.
+  Serialized contents go in `childEPCs`; a quantity-only case uses
+  `quantityList`. At least one of the two must be non-empty.
+  """
+  def unpack(args) do
+    with {:ok, biz_location} <- sgln(args, :biz_location_gln),
+         {:ok, parent} <- Urn.sscc(args.parent_sscc, String.length(args.org_prefix)),
+         {:ok, children} <- child_sgtins(args),
+         {:ok, quantity_list} <- quantity_elements(args),
+         :ok <- require_content(children, quantity_list) do
+      event =
+        %{
+          "type" => "AggregationEvent",
+          "eventID" => event_id(args),
+          "eventTime" => event_time(args),
+          "eventTimeZoneOffset" => @time_zone_offset,
+          "parentID" => parent,
+          "action" => "DELETE",
+          "bizStep" => "unpacking",
+          "disposition" => "active",
+          "readPoint" => %{"id" => biz_location},
+          "bizLocation" => %{"id" => biz_location}
+        }
+        |> put_if_present("childEPCs", children)
+        |> put_if_present("quantityList", quantity_list)
+
+      {:ok, event}
+    end
+  end
+
+  @doc """
+  Decommissions a logistic unit's SSCC (CBV `decommissioning`/`inactive`).
+  The inbound case ceases to exist once it is broken into mini-SSCCs for
+  storage, so its SSCC is retired after the unpack. `epcList` carries only
+  the parent SSCC — never child SGTINs.
+  """
+  def decommission(args) do
+    with {:ok, biz_location} <- sgln(args, :biz_location_gln),
+         {:ok, sscc} <- Urn.sscc(args.sscc, String.length(args.org_prefix)) do
       {:ok,
        %{
-         "type" => "AggregationEvent",
+         "type" => "ObjectEvent",
          "eventID" => event_id(args),
          "eventTime" => event_time(args),
          "eventTimeZoneOffset" => @time_zone_offset,
-         "parentID" => parent,
-         "childEPCs" => children,
-         "action" => "ADD",
-         "bizStep" => "packing",
-         "disposition" => "active",
+         "epcList" => [sscc],
+         "action" => "DELETE",
+         "bizStep" => "decommissioning",
+         "disposition" => "inactive",
          "readPoint" => %{"id" => biz_location},
          "bizLocation" => %{"id" => biz_location}
        }}

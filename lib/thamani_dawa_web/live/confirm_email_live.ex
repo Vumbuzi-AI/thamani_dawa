@@ -70,24 +70,26 @@ defmodule ThamaniDawaWeb.ConfirmEmailLive do
     ~H"""
     <div class="auth-shell lg:h-svh lg:overflow-hidden">
       <div class="auth-aside hidden lg:flex lg:h-svh">
-        <.link navigate={~p"/"} aria-label="Thamani Dawa home" style="width: 200px;">
-          <img src="/images/logo-transparent.png" alt="" class="h-auto w-full brightness-0 invert" />
-        </.link>
+        <div class="auth-aside-main">
+          <.link navigate={~p"/"} aria-label="Thamani Dawa home" class="auth-aside-logo">
+            <img src="/images/logo-transparent.png" alt="" class="h-auto w-full brightness-0 invert" />
+          </.link>
 
-        <div>
-          <span
-            class="thamani-badge"
-            style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
-          >
-            Almost there
-          </span>
-          <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
-            One quick check before you get started.
-          </h2>
-          <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
-            Confirming your email protects your organization's account from
-            being set up by someone who isn't actually you.
-          </p>
+          <div>
+            <span
+              class="thamani-badge"
+              style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
+            >
+              Almost there
+            </span>
+            <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
+              One quick check before you get started.
+            </h2>
+            <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
+              Confirming your email protects your organization's account from
+              being set up by someone who isn't actually you.
+            </p>
+          </div>
         </div>
 
         <div style="border-top: 1px solid rgba(252,252,247,0.1); padding-top: 28px;">

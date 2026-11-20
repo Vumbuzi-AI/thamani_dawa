@@ -31,6 +31,21 @@
   z-index: 1;
 }
 
+/* Brand mark + copy travel together as one block, centred in the space
+   above the quote. The gap between the logo and the badge matches the gap
+   below the badge. */
+.auth-aside-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.auth-aside-logo {
+  display: block;
+  width: 200px;
+  margin-bottom: 48px;
+}
+
 .auth-form-panel {
   flex: 1;
   background: var(--thamani-snow);
@@ -42,6 +57,19 @@
 .auth-form-inner {
   width: 100%;
   max-width: 560px;
+}
+.auth-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 28px;
+  color: var(--thamani-pewter);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.auth-back-link:hover {
+  color: var(--thamani-forest);
 }
 @media (min-width: 640px) {
   .auth-form-panel {

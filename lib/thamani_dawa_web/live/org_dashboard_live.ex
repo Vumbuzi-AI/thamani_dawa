@@ -23,7 +23,11 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     |> assign(:primary_site, primary_site)
     |> assign(:checklist_items, checklist_items)
     |> assign(:setup_required?, not site_ready?(primary_site))
-    |> assign(:show_checklist?, Enum.any?(checklist_items, &(not &1.done?)))
+    |> assign(
+      :show_checklist?,
+      is_nil(organization.onboarding_checklist_dismissed_at) and
+        Enum.any?(checklist_items, &(not &1.done?))
+    )
     |> assign(:site_profitability, Reports.site_profitability(organization_id))
     |> assign(:multi_site?, Sites.multi_site?(organization_id))
   end
@@ -70,6 +74,15 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
 
   def handle_event("dismiss_search", _params, socket) do
     {:noreply, assign(socket, :search_active, false)}
+  end
+
+  def handle_event("dismiss_onboarding_checklist", _params, socket) do
+    {:ok, organization} = Organizations.dismiss_onboarding_checklist(socket.assigns.organization)
+
+    {:noreply,
+     socket
+     |> assign(:organization, organization)
+     |> assign(:show_checklist?, false)}
   end
 
   def handle_event("clear_search", _params, socket) do
@@ -588,12 +601,24 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-forest">
             Getting started
           </h2>
-          <span
-            id="onboarding-checklist-progress"
-            class="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-thamani-forest"
-          >
-            {Enum.count(@checklist_items, & &1.done?)} of {length(@checklist_items)} complete
-          </span>
+          <div class="flex items-center gap-2">
+            <span
+              id="onboarding-checklist-progress"
+              class="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-thamani-forest"
+            >
+              {Enum.count(@checklist_items, & &1.done?)} of {length(@checklist_items)} complete
+            </span>
+            <button
+              id="onboarding-checklist-dismiss"
+              type="button"
+              phx-click="dismiss_onboarding_checklist"
+              title="Dismiss"
+              aria-label="Dismiss getting started checklist"
+              class="flex size-6 items-center justify-center rounded-full text-thamani-pewter transition-colors hover:bg-white hover:text-thamani-forest"
+            >
+              <.icon name="hero-x-mark" class="size-4" />
+            </button>
+          </div>
         </div>
         <ul class="flex flex-col gap-2">
           <li
@@ -785,44 +810,44 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
             this.steps = [
               {
                 selector: '[data-tour-target="/org/dashboard"]',
-                title: "Start with your dashboard",
-                description: "See patient activity, revenue, and operational work across every site."
+                title: "See what needs attention",
+                description: "Start here for patient activity, revenue, and operational work across the organization."
               },
               {
                 selector: '[data-tour-target="/org/sites"]',
-                title: "Keep your locations up to date",
-                description: "Add branches and update each site’s address and services: pharmacy, lab, combined, or warehouse."
+                title: "Manage locations",
+                description: "Add sites and keep their address, services, and operating details up to date."
               },
               {
                 selector: '[data-tour-target="/org/products"]',
-                title: "Add the medicines and supplies you use",
-                description: "Create your shared catalog, then receive stock and distribute it to the sites that need it."
-              },
-              {
-                selector: '[data-tour-target="/org/receiving"]',
-                title: "Receive stock into your sites",
-                description: "Log incoming deliveries against purchase orders and get them into the right site's inventory."
+                title: "Build the shared catalog",
+                description: "Create the medicines and supplies used across your organization before receiving stock."
               },
               {
                 selector: '[data-tour-target="/org/team"]',
-                title: "Give your staff the right access",
-                description: "Invite staff and assign site access so each person sees only the work relevant to them."
+                title: "Give staff the right access",
+                description: "Invite staff and assign site access so each person sees the work relevant to them."
               },
               {
                 selector: '[data-tour-target="/org/suppliers"]',
-                title: "Record who supplies your stock",
-                description: "Store contacts and GLNs for businesses that supply your medicines and medical products."
+                title: "Manage suppliers",
+                description: "Store supplier contacts and GLNs for the businesses that provide your stock."
               },
               {
                 selector: '[data-tour-target="/org/requisitions"]',
-                title: "Coordinate stock requests between sites",
-                description: "Review and track site stock requests from submission through approval and fulfilment.",
+                title: "Coordinate stock requests",
+                description: "Review site replenishment requests from submission through approval and fulfilment.",
                 multiSiteOnly: true
               },
               {
                 selector: '[data-tour-target="/org/earnings"]',
-                title: "Follow the money",
-                description: "Trace payments and site earnings here; view performance charts and site comparisons on the dashboard."
+                title: "Review transactions",
+                description: "Find completed payments and transaction history across the organization."
+              },
+              {
+                selector: '[data-tour-target="/org/epcis"]',
+                title: "Monitor TNT reporting",
+                description: "Check whether reportable events reached PPB and resolve anything that needs resubmission."
               }
             ].filter(step => !step.multiSiteOnly || this.el.dataset.multiSite === "true")
             this.index = 0

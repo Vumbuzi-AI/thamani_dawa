@@ -10,14 +10,24 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
 
   alias ThamaniDawa.Distributor
   alias ThamaniDawa.Distributor.MobileUser
+  alias ThamaniDawa.Sites
+  alias ThamaniDawa.Sites.Site
 
   on_mount {ThamaniDawaWeb.DistributorAccess, :require_serialisation_plan}
 
   def mount(_params, _session, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+
+    sites =
+      organization_id
+      |> Sites.list_sites()
+      |> Enum.filter(&(Site.distribution?(&1) and &1.is_active))
+
     {:ok,
      socket
      |> assign(:page_title, "Mobile users")
      |> assign(:app_download_url, app_download_url())
+     |> assign(:sites, sites)
      |> load_users()}
   end
 
@@ -184,6 +194,13 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
               title="Use digits, spaces, hyphens, parentheses, and an optional leading +"
             />
           </div>
+          <.input
+            field={@form[:site_id]}
+            type="select"
+            label="Home site (optional)"
+            options={Enum.map(@sites, &{&1.name, &1.id})}
+            prompt="Leave blank to allow this account to see shipments from any of your warehouses."
+          />
           <.button id="save-distributor-mobile-user" class="mt-3 w-full" variant="primary">
             {if @live_action == :new, do: "Add and email PIN", else: "Save changes"}
           </.button>

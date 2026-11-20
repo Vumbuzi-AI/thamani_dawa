@@ -43,36 +43,38 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
     ~H"""
     <div class="auth-shell lg:h-svh lg:overflow-hidden">
       <div class="auth-aside hidden lg:flex lg:h-svh">
-        <a href="/" aria-label="Thamani Dawa home" style="width: 200px;">
-          <img
-            src="/images/logo-transparent.png"
-            alt=""
-            class="h-auto w-full brightness-0 invert"
-          />
-        </a>
+        <div class="auth-aside-main">
+          <a href="/" aria-label="Thamani Dawa home" class="auth-aside-logo">
+            <img
+              src="/images/logo-transparent.png"
+              alt=""
+              class="h-auto w-full brightness-0 invert"
+            />
+          </a>
 
-        <div>
-          <span
-            class="thamani-badge"
-            style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="14"
-              height="14"
-              aria-hidden="true"
-              style="stroke: currentColor; stroke-width: 1.6; fill: none;"
+          <div>
+            <span
+              class="thamani-badge"
+              style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
             >
-              <path d="M4 5v14M8 5v14M11 5v14M15 5v14M17 5v14M20 5v14" />
-            </svg>
-            GS1 Compliant · Built for Kenya
-          </span>
-          <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
-            Join {@organization.name} on Thamani Dawa.
-          </h2>
-          <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
-            Set your password to activate your account as a {User.humanize_roles(@user)} and get straight into stock, prescriptions, and lab orders.
-          </p>
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                aria-hidden="true"
+                style="stroke: currentColor; stroke-width: 1.6; fill: none;"
+              >
+                <path d="M4 5v14M8 5v14M11 5v14M15 5v14M17 5v14M20 5v14" />
+              </svg>
+              GS1 Compliant · Built for Kenya
+            </span>
+            <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
+              Join {@organization.name} on Thamani Dawa.
+            </h2>
+            <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
+              Set your password to activate your account as a {User.humanize_roles(@user)} and get straight into stock, prescriptions, and lab orders.
+            </p>
+          </div>
         </div>
 
         <div style="border-top: 1px solid rgba(252,252,247,0.1); padding-top: 28px;">

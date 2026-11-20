@@ -194,9 +194,17 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/requisitions/:id/reject", RequisitionQueueLive.Index, :reject
       live "/org/requisitions/:id/fulfill", RequisitionQueueLive.Index, :fulfill
       live "/org/requisitions/:id", RequisitionQueueLive.Show, :show
-      live "/org/receiving", DistributorReceivingLive, :org_index
-      live "/org/receiving/new", DistributorReceivingLive, :org_new
-      live "/org/receiving/:id", DistributorGoodsReceiptLive, :org_show
+
+      live "/org/stock-takes", StockTakeQueueLive.Index, :index
+      live "/org/stock-takes/:id/approve", StockTakeQueueLive.Index, :approve
+      live "/org/stock-takes/:id/reject", StockTakeQueueLive.Index, :reject
+      live "/org/stock-takes/:id", StockTakeQueueLive.Show, :show
+
+      live "/org/disposals", InventoryDisposalQueueLive.Index, :index
+      live "/org/disposals/:id/approve", InventoryDisposalQueueLive.Index, :approve
+      live "/org/disposals/:id/reject", InventoryDisposalQueueLive.Index, :reject
+      live "/org/disposals/:id", InventoryDisposalQueueLive.Show, :show
+      live "/org/api-keys", ApiKeysLive, :index
       live "/org/epcis", DistributorEpcisLive, :index
       live "/org/settings", OrganizationSettingsLive, :index
     end
@@ -204,6 +212,7 @@ defmodule ThamaniDawaWeb.Router do
     live_session :platform, on_mount: [{ThamaniDawaWeb.UserAuth, :require_superadmin}] do
       live "/platform", PlatformDashboardLive, :index
       live "/platform/audit", PlatformAuditLive, :index
+      live "/platform/recalls", PlatformRecallLive, :index
     end
 
     live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
@@ -220,6 +229,14 @@ defmodule ThamaniDawaWeb.Router do
       live "/pharmacy/requisitions", RequisitionLive.Index, :index
       live "/pharmacy/requisitions/new", RequisitionLive.Index, :new
       live "/pharmacy/requisitions/:id", RequisitionLive.Show, :show
+
+      live "/pharmacy/stock-takes", StockTakeLive.Index, :index
+      live "/pharmacy/stock-takes/new", StockTakeLive.Index, :new
+      live "/pharmacy/stock-takes/:id", StockTakeLive.Show, :show
+
+      live "/pharmacy/disposals", DisposalLive.Index, :index
+      live "/pharmacy/disposals/new", DisposalLive.Index, :new
+      live "/pharmacy/disposals/:id", DisposalLive.Show, :show
 
       live "/pharmacy/quick-sale", QuickSaleLive, :new
 
@@ -267,6 +284,14 @@ defmodule ThamaniDawaWeb.Router do
       live "/lab/stock/products/:id", LabStockProductLive, :show
       live "/lab/stock/batches/:id", LabStockBatchLive, :show
 
+      live "/lab/stock-takes", LabStockTakeLive.Index, :index
+      live "/lab/stock-takes/new", LabStockTakeLive.Index, :new
+      live "/lab/stock-takes/:id", LabStockTakeLive.Show, :show
+
+      live "/lab/disposals", LabDisposalLive.Index, :index
+      live "/lab/disposals/new", LabDisposalLive.Index, :new
+      live "/lab/disposals/:id", LabDisposalLive.Show, :show
+
       live "/lab/tests", LabTestLive.Index, :index
       live "/lab/tests/new", LabTestLive.Index, :new
       live "/lab/tests/:id/edit", LabTestLive.Index, :edit
@@ -279,6 +304,15 @@ defmodule ThamaniDawaWeb.Router do
       live "/distributor/shipments", DistributorShipmentLive.Index, :index
       live "/distributor/shipments/new", DistributorShipmentLive.Form, :new
       live "/distributor/shipments/:id/edit", DistributorShipmentLive.Form, :edit
+
+      live "/distributor/shipments/:id/delivery-note",
+           DistributorShipmentLive.Document,
+           :delivery_note
+
+      live "/distributor/shipments/:id/packing-list",
+           DistributorShipmentLive.Document,
+           :packing_list
+
       live "/distributor/shipments/:id", DistributorShipmentLive.Show, :show
 
       live "/distributor/products", DistributorProductLive.Index, :index
@@ -286,9 +320,30 @@ defmodule ThamaniDawaWeb.Router do
       live "/distributor/products/:id", DistributorProductLive.Show, :show
       live "/distributor/batches/:id", DistributorBatchLive, :show
       live "/distributor/stock", DistributorStockLive.Index, :index
+      live "/distributor/expiring", DistributorStockLive.Index, :expiry
       live "/distributor/receiving", DistributorReceivingLive, :distributor_index
       live "/distributor/receiving/new", DistributorReceivingLive, :distributor_new
       live "/distributor/receiving/:id", DistributorGoodsReceiptLive, :distributor_show
+
+      live "/distributor/stock-takes", DistributorStockTakeLive.Index, :index
+      live "/distributor/stock-takes/new", DistributorStockTakeLive.Index, :new
+      live "/distributor/stock-takes/:id", DistributorStockTakeLive.Show, :show
+
+      live "/distributor/expiry-write-offs", DistributorDisposalLive.Index, :index
+      live "/distributor/expiry-write-offs/new", DistributorDisposalLive.Index, :new
+      live "/distributor/expiry-write-offs/:id", DistributorDisposalLive.Show, :show
+
+      live "/distributor/returns", DistributorSupplierReturnLive.Index, :index
+      live "/distributor/returns/new", DistributorSupplierReturnLive.Index, :new
+      live "/distributor/returns/:id", DistributorDisposalLive.Show, :show
+
+      live "/distributor/customers", DistributorCustomerLive.Index, :index
+      live "/distributor/customers/new", DistributorCustomerLive.Index, :new
+      live "/distributor/customers/:id/edit", DistributorCustomerLive.Index, :edit
+
+      live "/distributor/customer-returns", DistributorCustomerReturnLive.Index, :index
+      live "/distributor/customer-returns/new", DistributorCustomerReturnLive.Index, :new
+      live "/distributor/customer-returns/:id", DistributorCustomerReturnLive.Index, :show
     end
 
     # Admin-only within the distributor portal — "admin manages, distributor
@@ -308,6 +363,7 @@ defmodule ThamaniDawaWeb.Router do
       live "/distributor/mobile-users/new", DistributorMobileUserLive.Index, :new
       live "/distributor/mobile-users/:id/edit", DistributorMobileUserLive.Index, :edit
 
+      live "/distributor/api-keys", ApiKeysLive, :index
       live "/distributor/settings", OrganizationSettingsLive, :index
       live "/distributor/epcis", DistributorEpcisLive, :index
     end

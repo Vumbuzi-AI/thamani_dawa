@@ -3,8 +3,9 @@ defmodule ThamaniDawa.Epcis do
   PPB Track & Trace event recording (docs/PPB_TNT_INTEGRATION.md).
 
   Called from inside the business transactions that produce reportable
-  supply-chain actions — goods receipt posting (Receiving) and shipment
-  approval (Packing + Shipping). Each call builds EPCIS 2.0 JSON-LD payloads
+  supply-chain actions — goods receipt posting (Receiving), shipment
+  approval (Packing + Shipping), and breaking a received case into
+  mini-SSCCs (Unpacking + Packing). Each call builds EPCIS 2.0 JSON-LD payloads
   and enqueues them on the transactional outbox; events that cannot be built
   (missing partner GLN, missing GS1 prefix, malformed identifier) are
   enqueued as `blocked` with a human-readable reason instead of being
@@ -25,6 +26,50 @@ defmodule ThamaniDawa.Epcis do
 
   @distributor "distributor"
   @facility "facility"
+
+  @doc """
+  Records a D1 Receiving event (distributor tier) for a completed customer
+  return — stock physically coming back into the warehouse from a
+  customer, the mirror image of a supplier goods receipt. One event per
+  site among the return's items, sourced from the customer's GLN.
+  """
+  def record_customer_return(%ThamaniDawa.CustomerReturns.CustomerReturn{} = return) do
+    return = Repo.preload(return, [:customer, :site, items: []])
+
+    case org_prefix(return.organization_id) do
+      {:ok, prefix} ->
+        args = %{
+          event_id: Ecto.UUID.generate(),
+          event_time: now(),
+          org_prefix: prefix,
+          biz_location_gln: location_gln(return.site, return.organization_id),
+          source_party_gln: return.customer.gln,
+          destination_party_gln: location_gln(return.site, return.organization_id),
+          disposition: "returned",
+          grn_number: "CRET-#{return.id}",
+          ssccs: []
+        }
+
+        case Event.receiving(args) do
+          {:ok, payload} ->
+            Outbox.enqueue(%{
+              organization_id: return.organization_id,
+              event_type: "receiving",
+              participant_tier: @distributor,
+              payload: payload,
+              occurred_at: args.event_time,
+              source_type: "customer_return",
+              source_id: return.id
+            })
+
+          {:error, reason} ->
+            block_event(return.organization_id, "receiving", return, reason)
+        end
+
+      {:error, reason} ->
+        block_event(return.organization_id, "receiving", return, reason)
+    end
+  end
 
   @doc """
   Records D1 Receiving events for a freshly posted goods receipt. A
@@ -81,6 +126,359 @@ defmodule ThamaniDawa.Epcis do
       {:error, reason} ->
         [block_event(shipment.organization_id, "shipping", shipment, reason)]
     end
+  end
+
+  @doc """
+  Records a D4 unpack of `source_batch` (only when that batch itself has an
+  SSCC — loose stock has nothing to disaggregate), one D2-shaped packing
+  event per newly minted mini-SSCC in `children`, and a decommission of the
+  parent SSCC — the inbound case is fully disaggregated and no longer exists.
+
+  Called inside the split transaction. The unpack covers the whole parent
+  (every unit is now in a child, remainder included); each pack covers that
+  child's own contents.
+  """
+  def record_mini_sscc_split(%ThamaniDawa.Batches.Batch{} = source_batch, children)
+      when is_list(children) do
+    source_batch = Repo.preload(source_batch, :site)
+
+    case org_prefix(source_batch.organization_id) do
+      {:ok, prefix} ->
+        maybe_enqueue_unpack(source_batch, children, prefix)
+        Enum.each(children, &enqueue_mini_pack(source_batch, &1, prefix))
+        maybe_enqueue_decommission(source_batch, prefix)
+
+      {:error, reason} ->
+        if source_batch.sscc not in [nil, ""] do
+          block_event(source_batch.organization_id, "unpacking", source_batch, reason)
+          block_event(source_batch.organization_id, "decommissioning", source_batch, reason)
+        end
+
+        Enum.each(children, fn child ->
+          block_event(child.organization_id, "packing", child, reason)
+        end)
+    end
+
+    :ok
+  end
+
+  @doc """
+  Records a unit-level break: one **Unpack** of the parent unit's SSCC (its
+  whole contents across every line), one **Packing** per minted child unit,
+  and a **Decommission** of the parent SSCC. `results` is a list of
+  `%{line: parent_line_batch, children: [child_batch]}`. Content is per-child
+  GTIN/lot, so a mixed case unpacks several products in one event. Called
+  inside the break transaction.
+  """
+  def record_logistic_unit_break(%ThamaniDawa.Batches.LogisticUnit{} = unit, results, emptied?)
+      when is_list(results) and is_boolean(emptied?) do
+    unit = Repo.preload(unit, :site)
+
+    case org_prefix(unit.organization_id) do
+      {:ok, prefix} ->
+        enqueue_unit_unpack(unit, results, prefix)
+
+        Enum.each(results, fn %{line: line, children: children} ->
+          Enum.each(children, &enqueue_unit_pack(unit, line, &1, prefix))
+        end)
+
+        # The SSCC is only retired once the case is fully emptied; a partial
+        # break leaves the parent active with its remaining lines.
+        if emptied?, do: enqueue_unit_decommission(unit, prefix)
+
+      {:error, reason} ->
+        block_event(unit.organization_id, "unpacking", "logistic_unit", unit.id, reason, @distributor)
+
+        if emptied? do
+          block_event(
+            unit.organization_id,
+            "decommissioning",
+            "logistic_unit",
+            unit.id,
+            reason,
+            @distributor
+          )
+        end
+
+        Enum.each(results, fn %{children: children} ->
+          Enum.each(children, fn child ->
+            block_event(child.organization_id, "packing", child, reason)
+          end)
+        end)
+    end
+
+    :ok
+  end
+
+  defp enqueue_unit_unpack(unit, results, prefix) do
+    gln = location_gln(unit.site, unit.organization_id)
+    content = unit_removed_content(results)
+    args = mini_sscc_event_args(nil, prefix, gln, unit.sscc, content, now())
+
+    case Event.unpack(args) do
+      {:ok, payload} ->
+        Outbox.enqueue(%{
+          organization_id: unit.organization_id,
+          event_type: "unpacking",
+          participant_tier: @distributor,
+          payload: payload,
+          occurred_at: args.event_time,
+          source_type: "logistic_unit",
+          source_id: unit.id
+        })
+
+      {:error, reason} ->
+        block_event(unit.organization_id, "unpacking", "logistic_unit", unit.id, reason, @distributor)
+    end
+  end
+
+  defp enqueue_unit_pack(unit, line, child, prefix) do
+    gln = location_gln(unit.site, unit.organization_id)
+    occurred_at = DateTime.add(now(), 1, :second)
+    content = unit_packed_content(line, child)
+    args = mini_sscc_event_args(nil, prefix, gln, child.sscc, content, occurred_at)
+
+    case Event.packing(args) do
+      {:ok, payload} ->
+        Outbox.enqueue(%{
+          organization_id: child.organization_id,
+          event_type: "packing",
+          participant_tier: @distributor,
+          payload: payload,
+          occurred_at: occurred_at,
+          source_type: "batch",
+          source_id: child.id
+        })
+
+      {:error, reason} ->
+        block_event(child.organization_id, "packing", child, reason)
+    end
+  end
+
+  defp enqueue_unit_decommission(unit, prefix) do
+    gln = location_gln(unit.site, unit.organization_id)
+    occurred_at = DateTime.add(now(), 2, :second)
+
+    args = %{
+      event_id: Ecto.UUID.generate(),
+      event_time: occurred_at,
+      org_prefix: prefix,
+      biz_location_gln: gln,
+      sscc: unit.sscc
+    }
+
+    case Event.decommission(args) do
+      {:ok, payload} ->
+        Outbox.enqueue(%{
+          organization_id: unit.organization_id,
+          event_type: "decommissioning",
+          participant_tier: @distributor,
+          payload: payload,
+          occurred_at: occurred_at,
+          source_type: "logistic_unit",
+          source_id: unit.id
+        })
+
+      {:error, reason} ->
+        block_event(
+          unit.organization_id,
+          "decommissioning",
+          "logistic_unit",
+          unit.id,
+          reason,
+          @distributor
+        )
+    end
+  end
+
+  # Whole-unit unpack content, keyed by each child's own product/lot so a mixed
+  # case lists several GTINs. Serialized children go in childEPCs; quantity-only
+  # children aggregate into a per-(gtin, lot) quantityList.
+  defp unit_removed_content(results) do
+    pairs =
+      Enum.flat_map(results, fn %{line: line, children: children} ->
+        Enum.map(children, &{line, &1})
+      end)
+
+    serialized = Enum.filter(pairs, fn {_line, child} -> child.serials != [] end)
+    quantity_only = Enum.reject(pairs, fn {_line, child} -> child.serials != [] end)
+
+    %{
+      children:
+        Enum.flat_map(serialized, fn {line, child} ->
+          Enum.map(child.serials, &%{gtin: line.gtin, serial: &1})
+        end),
+      quantities:
+        quantity_only
+        |> Enum.group_by(fn {line, _child} -> {line.gtin, line.batch_no} end)
+        |> Enum.map(fn {{gtin, lot}, group} ->
+          %{
+            gtin: gtin,
+            lot: lot,
+            quantity: Enum.reduce(group, 0, fn {_line, child}, sum -> sum + child.quantity end),
+            uom: "EA"
+          }
+        end)
+    }
+  end
+
+  defp unit_packed_content(line, %ThamaniDawa.Batches.Batch{serials: []} = child) do
+    %{
+      children: [],
+      quantities: [%{gtin: line.gtin, lot: line.batch_no, quantity: child.quantity, uom: "EA"}]
+    }
+  end
+
+  defp unit_packed_content(line, child) do
+    %{
+      children: Enum.map(child.serials, &%{gtin: line.gtin, serial: &1}),
+      quantities: []
+    }
+  end
+
+  defp maybe_enqueue_unpack(%ThamaniDawa.Batches.Batch{sscc: sscc}, _children, _prefix)
+       when sscc in [nil, ""],
+       do: :ok
+
+  defp maybe_enqueue_unpack(source_batch, children, prefix) do
+    gln = location_gln(source_batch.site, source_batch.organization_id)
+    content = removed_content(source_batch, children)
+    args = mini_sscc_event_args(source_batch, prefix, gln, source_batch.sscc, content, now())
+
+    case Event.unpack(args) do
+      {:ok, payload} ->
+        Outbox.enqueue(%{
+          organization_id: source_batch.organization_id,
+          event_type: "unpacking",
+          participant_tier: @distributor,
+          payload: payload,
+          occurred_at: args.event_time,
+          source_type: "batch",
+          source_id: source_batch.id
+        })
+
+      {:error, reason} ->
+        block_event(source_batch.organization_id, "unpacking", source_batch, reason)
+    end
+  end
+
+  defp enqueue_mini_pack(source_batch, child, prefix) do
+    gln = location_gln(source_batch.site, source_batch.organization_id)
+    # One second after the unpack so a hub that sorts by eventTime sees the
+    # case broken before the mini-SSCCs are packed.
+    occurred_at = DateTime.add(now(), 1, :second)
+    content = packed_content(source_batch, child)
+    args = mini_sscc_event_args(source_batch, prefix, gln, child.sscc, content, occurred_at)
+
+    case Event.packing(args) do
+      {:ok, payload} ->
+        Outbox.enqueue(%{
+          organization_id: child.organization_id,
+          event_type: "packing",
+          participant_tier: @distributor,
+          payload: payload,
+          occurred_at: occurred_at,
+          source_type: "batch",
+          source_id: child.id
+        })
+
+      {:error, reason} ->
+        block_event(child.organization_id, "packing", child, reason)
+    end
+  end
+
+  defp maybe_enqueue_decommission(%ThamaniDawa.Batches.Batch{sscc: sscc}, _prefix)
+       when sscc in [nil, ""],
+       do: :ok
+
+  defp maybe_enqueue_decommission(source_batch, prefix) do
+    gln = location_gln(source_batch.site, source_batch.organization_id)
+    # Two seconds after the unpack so a hub that sorts by eventTime sees the
+    # case unpacked and the mini-SSCCs packed before the parent is retired.
+    occurred_at = DateTime.add(now(), 2, :second)
+
+    args = %{
+      event_id: Ecto.UUID.generate(),
+      event_time: occurred_at,
+      org_prefix: prefix,
+      biz_location_gln: gln,
+      sscc: source_batch.sscc
+    }
+
+    case Event.decommission(args) do
+      {:ok, payload} ->
+        Outbox.enqueue(%{
+          organization_id: source_batch.organization_id,
+          event_type: "decommissioning",
+          participant_tier: @distributor,
+          payload: payload,
+          occurred_at: occurred_at,
+          source_type: "batch",
+          source_id: source_batch.id
+        })
+
+      {:error, reason} ->
+        block_event(source_batch.organization_id, "decommissioning", source_batch, reason)
+    end
+  end
+
+  defp removed_content(source_batch, children) do
+    if source_batch.serials == [] do
+      %{
+        children: [],
+        quantities: [
+          %{
+            gtin: source_batch.gtin,
+            lot: source_batch.batch_no,
+            quantity: Enum.reduce(children, 0, &(&1.quantity + &2)),
+            uom: "EA"
+          }
+        ]
+      }
+    else
+      %{
+        children:
+          children
+          |> Enum.flat_map(& &1.serials)
+          |> Enum.map(&%{gtin: source_batch.gtin, serial: &1}),
+        quantities: []
+      }
+    end
+  end
+
+  # Quantity-only packs keep the parent's manufacturer lot. The child's
+  # batch number is only a storage suffix (`LOT123-S1`), not a new lot.
+  defp packed_content(source_batch, %ThamaniDawa.Batches.Batch{serials: []} = child) do
+    %{
+      children: [],
+      quantities: [
+        %{
+          gtin: child.gtin,
+          lot: source_batch.batch_no,
+          quantity: child.quantity,
+          uom: "EA"
+        }
+      ]
+    }
+  end
+
+  defp packed_content(_source_batch, child) do
+    %{
+      children: Enum.map(child.serials, &%{gtin: child.gtin, serial: &1}),
+      quantities: []
+    }
+  end
+
+  defp mini_sscc_event_args(_source_batch, prefix, gln, parent_sscc, content, occurred_at) do
+    %{
+      event_id: Ecto.UUID.generate(),
+      event_time: occurred_at,
+      org_prefix: prefix,
+      biz_location_gln: gln,
+      parent_sscc: parent_sscc,
+      children: content.children,
+      quantities: content.quantities
+    }
   end
 
   @doc """
@@ -173,7 +571,7 @@ defmodule ThamaniDawa.Epcis do
   def record_facility_receipt(%ThamaniDawa.Batches.Batch{} = batch) do
     site = batch.site_id && Repo.get(Site, batch.site_id)
 
-    if (is_nil(batch.goods_receipt_id) and site) && Site.pharmacy?(site) do
+    if is_nil(batch.goods_receipt_id) and site && Site.pharmacy?(site) do
       received = Repo.preload(batch, :supplier)
 
       record_facility_event(

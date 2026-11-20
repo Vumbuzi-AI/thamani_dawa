@@ -19,7 +19,6 @@ defmodule ThamaniDawa.Organizations.Organization do
 
     field :is_active, :boolean, default: true
     field :is_subscription_active, :boolean, default: false
-    field :kyc_details, :map, default: %{}
     field :next_requisition_number, :integer, default: 0
     field :gs1_company_prefix, :string
 
@@ -29,23 +28,26 @@ defmodule ThamaniDawa.Organizations.Organization do
 
     field :gln, :string
     field :gln_verified_at, :utc_datetime
-    field :gln_verification_source, :string
-
-    field :ppb_facility_name, :string
-
-    field :ppb_verification_status, Ecto.Enum,
-      values: [:pending, :verified, :failed],
-      default: :pending
-
-    field :ppb_verified_at, :utc_datetime
-    field :ppb_license_valid_till, :date
-    field :ppb_verification_source, :string
 
     field :next_sscc_serial, :integer, default: 0
     field :next_goods_receipt_number, :integer, default: 0
     field :serialisation_type, :string
     field :vat_registered, :boolean, default: true
     field :next_serial_invoice_number, :integer, default: 0
+
+    field :epcis_submission_mode, Ecto.Enum,
+      values: [:automatic, :manual],
+      default: :manual
+
+    field :epcis_distributor_api_key, ThamaniDawa.Encrypted.Binary
+    field :epcis_distributor_api_key_last4, :string
+    field :epcis_facility_api_key, ThamaniDawa.Encrypted.Binary
+    field :epcis_facility_api_key_last4, :string
+
+    field :gs1_api_key, ThamaniDawa.Encrypted.Binary
+    field :gs1_api_key_last4, :string
+
+    field :onboarding_checklist_dismissed_at, :utc_datetime
 
     has_many :sites, ThamaniDawa.Sites.Site
     has_many :users, ThamaniDawa.Accounts.User
@@ -156,6 +158,70 @@ defmodule ThamaniDawa.Organizations.Organization do
     |> validate_required([:license_number], message: "Please enter your license number")
     |> validate_format(:gln, ~r/^\d{13}$/, message: "must be a 13-digit GLN")
     |> validate_gln_check_digit()
+  end
+
+  @doc "Changeset for whether this org's EPCIS events send automatically or wait for a manual trigger."
+  def epcis_submission_mode_changeset(organization, attrs) do
+    organization
+    |> cast(attrs, [:epcis_submission_mode])
+    |> validate_required([:epcis_submission_mode])
+  end
+
+  @doc """
+  Changeset for replacing an org's own PPB Track & Trace API key for one
+  tier (`"distributor"` or `"facility"`). Also stamps the last 4 characters
+  of the new key in a plaintext column so the settings page can display
+  "ending in ••1234" without ever decrypting/re-rendering the secret.
+  Blanking the key (empty string) clears both columns, which makes
+  `Epcis.Client` fall back to the platform-wide key for that tier.
+  """
+  def epcis_api_key_changeset(organization, tier, key) when tier in ["distributor", "facility"] do
+    key = if is_binary(key), do: String.trim(key), else: key
+    key_field = :"epcis_#{tier}_api_key"
+    last4_field = :"epcis_#{tier}_api_key_last4"
+
+    case key do
+      "" ->
+        change(organization, %{key_field => nil, last4_field => nil})
+
+      nil ->
+        change(organization, %{key_field => nil, last4_field => nil})
+
+      _present ->
+        change(organization, %{key_field => key, last4_field => String.slice(key, -4, 4)})
+    end
+  end
+
+  @doc """
+  Changeset for this organization's GS1 member API token. The token is the
+  bearer credential for creating an SSCC and for fetching the serials inside
+  a case. Blanking it clears both columns so those calls fall back to the
+  platform token.
+  """
+  def gs1_api_key_changeset(organization, key) do
+    key = if is_binary(key), do: String.trim(key), else: key
+
+    case key do
+      blank when blank in ["", nil] ->
+        change(organization, %{gs1_api_key: nil, gs1_api_key_last4: nil})
+
+      present ->
+        change(organization, %{
+          gs1_api_key: present,
+          gs1_api_key_last4: String.slice(present, -4, 4)
+        })
+    end
+  end
+
+  @doc """
+  Changeset that marks the dashboard "Getting started" checklist as
+  dismissed, regardless of how many items are still incomplete. Separate
+  from completion: an admin can decide the remaining items don't apply
+  (or will be done later) without the system silently re-showing the card
+  every time they load the dashboard.
+  """
+  def dismiss_onboarding_checklist_changeset(organization) do
+    change(organization, onboarding_checklist_dismissed_at: DateTime.utc_now(:second))
   end
 
   defp validate_gln_check_digit(changeset) do

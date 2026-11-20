@@ -14,6 +14,10 @@ defmodule ThamaniDawa.Distributor.Shipment do
   Origin/destination company, address and P.O. box are snapshotted onto the
   row when the shipment is saved, so it keeps its own copy even if the
   resolved site or registry record changes later.
+
+  There is no planned line-item / pick-list on the shipment. Packed contents
+  are the scanned `shippers`/`items`; stock depletes from those units at
+  approval.
   """
 
   use Ecto.Schema
@@ -60,7 +64,6 @@ defmodule ThamaniDawa.Distributor.Shipment do
     has_many :shippers, ThamaniDawa.Distributor.Shipper, preload_order: [asc: :sequence]
     has_many :items, ThamaniDawa.Distributor.ShipmentItem
     has_many :events, ThamaniDawa.Distributor.ShipmentEvent, preload_order: [desc: :inserted_at]
-    has_many :line_items, ThamaniDawa.Distributor.ShipmentLineItem
 
     timestamps(type: :utc_datetime)
   end

@@ -98,6 +98,28 @@ defmodule ThamaniDawa.Accounts.UserNotifier do
     })
   end
 
+  @doc """
+  Emails an org admin that a batch their organization holds has been
+  recalled network-wide, naming the GTIN/batch and the incident reference.
+  """
+  def deliver_recall_notice(%User{} = admin, gtin, batch_no, reference) do
+    deliver(admin.email, "Recall notice: batch #{batch_no}", %{
+      title: "Batch recalled",
+      intro: Template.rich(["Hi ", {:bold, admin.name}, ","]),
+      body: [
+        Template.rich([
+          "Batch ",
+          {:bold, batch_no},
+          " (GTIN ",
+          {:bold, gtin},
+          ") held by your organization has been recalled."
+        ]),
+        Template.rich(["Incident reference: ", {:bold, reference}]),
+        "Quarantine any remaining stock from this batch immediately and do not dispense or ship it onward."
+      ]
+    })
+  end
+
   defp sanitize_header_value(nil), do: ""
 
   defp sanitize_header_value(value) do

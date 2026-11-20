@@ -15,28 +15,21 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
     batches = Batches.list_batches_for_product(organization_id, product.id)
 
-    undispatched_batches =
-      Batches.list_undispatched_batches_for_product(organization_id, product.id)
-
     sites = Sites.list_sites(organization_id)
     sites_by_id = Map.new(sites, &{&1.id, &1})
 
     single_site = if length(sites) == 1, do: hd(sites)
-    show_warehouse_section? = is_nil(single_site) or undispatched_batches != []
 
     {:ok,
      socket
      |> assign(:product, product)
      |> assign(:sites_by_id, sites_by_id)
      |> assign(:single_site, single_site)
-     |> assign(:show_warehouse_section?, show_warehouse_section?)
      |> assign(:suppliers, Suppliers.list_active_suppliers(organization_id))
      |> assign(:selected_batch, nil)
      |> assign(:dispatch_batch, nil)
      |> assign(:dispatch_form, nil)
-     |> assign(:stock_tab, if(show_warehouse_section?, do: "warehouse", else: "sites"))
-     |> stream(:batches, batches)
-     |> stream(:undispatched_batches, undispatched_batches)}
+     |> stream(:batches, batches)}
   end
 
   def handle_params(params, _url, socket) do
@@ -48,7 +41,16 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
   end
 
   defp apply_action(socket, :new_batch, _params) do
-    changeset = Batch.org_intake_changeset(%Batch{}, %{gtin: socket.assigns.product.gtin})
+    # All batches must now be site-bound at creation. Use the org's only
+    # site if there's exactly one, otherwise require explicit site selection.
+    attrs =
+      if socket.assigns.single_site do
+        %{gtin: socket.assigns.product.gtin, site_id: socket.assigns.single_site.id}
+      else
+        %{gtin: socket.assigns.product.gtin}
+      end
+
+    changeset = Batch.changeset(%Batch{}, attrs)
     assign(socket, :form, to_form(changeset, as: :batch))
   end
 
@@ -64,17 +66,10 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
     )
   end
 
-  def handle_event("switch_stock_tab", %{"tab" => tab}, socket)
-      when tab in ~w(warehouse sites) do
-    {:noreply, assign(socket, :stock_tab, tab)}
-  end
-
-  def handle_event("switch_stock_tab", _params, socket), do: {:noreply, socket}
-
   def handle_event("validate", %{"batch" => attrs}, socket) do
     changeset =
       %Batch{}
-      |> Batch.org_intake_changeset(attrs)
+      |> Batch.changeset(attrs)
       |> Map.put(:action, :validate)
 
     {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
@@ -84,11 +79,9 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
     product = socket.assigns.product
     attrs = Map.put(attrs, "product_id", product.id)
 
-    if site = socket.assigns.single_site do
-      save_direct_to_site(socket, site, attrs)
-    else
-      save_to_org_stock(socket, attrs)
-    end
+    # All batches now go directly to a site — single-site orgs have their
+    # site pre-filled, multi-site orgs require explicit site selection.
+    save_batch_to_site(socket, attrs)
   end
 
   def handle_event("dispatch", %{"dispatch" => dispatch_params}, socket) do
@@ -132,36 +125,22 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
     end
   end
 
-  defp save_to_org_stock(socket, attrs) do
+  defp save_batch_to_site(socket, attrs) do
     scope = socket.assigns.current_scope
     product = socket.assigns.product
 
-    case Batches.receive_into_org_stock(scope.organization_id, attrs) do
-      {:ok, batch} ->
-        # A freshly-inserted batch has :product/:supplier as
-        # %Ecto.Association.NotLoaded{} — fill them in from what's already
-        # in memory rather than an extra query.
-        supplier = Enum.find(socket.assigns.suppliers, &(&1.id == batch.supplier_id))
-        batch = %{batch | product: product, supplier: supplier}
+    # Parse site_id and use receive_directly_at_site since we're creating
+    # site-bound stock directly
+    site_id =
+      case attrs["site_id"] do
+        id when is_integer(id) -> id
+        id when is_binary(id) -> String.to_integer(id)
+      end
 
-        {:noreply,
-         socket
-         |> put_flash(:info, "Batch recorded as stock. Dispatch it to a site when ready.")
-         |> stream_insert(:undispatched_batches, batch)
-         |> push_patch(to: ~p"/org/products/#{product.id}")}
-
-      {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset, as: :batch))}
-    end
-  end
-
-  defp save_direct_to_site(socket, site, attrs) do
-    scope = socket.assigns.current_scope
-    product = socket.assigns.product
-
-    case Batches.receive_directly_at_site(scope.organization_id, site.id, scope.user.id, attrs) do
+    case Batches.receive_directly_at_site(scope.organization_id, site_id, scope.user.id, attrs) do
       {:ok, batch} ->
         supplier = Enum.find(socket.assigns.suppliers, &(&1.id == batch.supplier_id))
+        site = socket.assigns.sites_by_id[site_id]
         batch = %{batch | product: product, site: site, approver: scope.user, supplier: supplier}
 
         {:noreply,
@@ -185,7 +164,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
     end
   end
 
-  defp dispatch_succeeded(socket, org_batch, product, dispatched) do
+  defp dispatch_succeeded(socket, _source_batch, product, dispatched) do
     # A freshly-inserted batch has :site/:approver/:supplier as
     # %Ecto.Association.NotLoaded{} — fill them in from what's already
     # in memory rather than an extra query.
@@ -204,26 +183,12 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
       |> put_flash(:info, "Batch dispatched. Awaiting receipt at site.")
       |> stream_insert(:batches, dispatched)
       |> assign(:selected_batch, dispatched)
-      |> refresh_undispatched_batch(org_batch, product)
 
     {:noreply, push_patch(socket, to: ~p"/org/products/#{product.id}")}
   end
 
-  defp refresh_undispatched_batch(socket, org_batch, product) do
-    remaining_batch =
-      socket.assigns.current_scope.organization_id
-      |> Batches.list_undispatched_batches_for_product(product.id)
-      |> Enum.find(&(&1.id == org_batch.id))
-
-    if remaining_batch do
-      stream_insert(socket, :undispatched_batches, remaining_batch)
-    else
-      stream_delete(socket, :undispatched_batches, org_batch)
-    end
-  end
-
-  defp dispatch_error_message(:already_dispatched),
-    do: "That batch has already been dispatched."
+  defp dispatch_error_message(:same_site),
+    do: "Cannot dispatch a batch to the same site it's already at."
 
   defp dispatch_error_message(:nothing_to_dispatch),
     do: "That batch has no remaining quantity to dispatch."
@@ -315,7 +280,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         </div>
         <div>
           <dt class="mb-1 text-sm text-thamani-pewter">Unit</dt>
-          <dd class="font-medium text-thamani-forest">{@product.uom || "—"}</dd>
+          <dd class="font-medium text-thamani-forest">{Products.unit_label(@product.uom)}</dd>
         </div>
         <div>
           <dt class="mb-1 text-sm text-thamani-pewter">GTIN</dt>

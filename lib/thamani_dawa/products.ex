@@ -294,4 +294,100 @@ defmodule ThamaniDawa.Products do
     |> Product.changeset(attrs)
     |> Repo.audited_update()
   end
+
+  @doc "Friendly label for a product's UN/CEFACT unit-of-measure code."
+  def unit_label(nil), do: "unit(s)"
+  def unit_label("H87"), do: "piece(s)"
+  def unit_label("U2"), do: "tablet(s)"
+  def unit_label("C62"), do: "unit(s)"
+  def unit_label("KGM"), do: "kilogram(s)"
+  def unit_label("GRM"), do: "gram(s)"
+  def unit_label("MGM"), do: "milligram(s)"
+  def unit_label("LTR"), do: "litre(s)"
+  def unit_label("MLT"), do: "millilitre(s)"
+  def unit_label("AV"), do: "capsule(s)"
+  def unit_label("PK"), do: "pack(s)"
+  def unit_label("PA"), do: "packet(s)"
+  def unit_label(unit), do: if(String.ends_with?(unit, "(s)"), do: unit, else: "#{unit}(s)")
+
+  @doc "A received or on-hand count of trade items. One serialized pack is one unit."
+  def format_unit_count(1), do: "1 unit"
+  def format_unit_count(quantity) when is_integer(quantity), do: "#{quantity} units"
+  def format_unit_count(_quantity), do: "—"
+
+  @doc "What one trade item contains, from the GTIN, for example \"20 tablet(s)\"."
+  def format_net_content(%{net_content_quantity: quantity, net_content_uom: uom})
+      when is_integer(quantity) and quantity > 0 and is_binary(uom) and uom != "" do
+    "#{quantity} #{unit_label(uom)}"
+  end
+
+  def format_net_content(_product), do: nil
+
+  @doc "Returns true if the product has pack packaging metadata configured."
+  def has_packaging?(nil), do: false
+
+  def has_packaging?(%{pack_uom: pack_uom, units_per_pack: units_per_pack})
+      when is_binary(pack_uom) and pack_uom != "" and is_integer(units_per_pack) and
+             units_per_pack > 0,
+      do: true
+
+  def has_packaging?(_), do: false
+
+  @doc "Formats a pack label considering pluralization."
+  def pack_label(pack_uom, 1) when is_binary(pack_uom), do: pack_uom
+
+  def pack_label(pack_uom, _count) when is_binary(pack_uom) do
+    if String.ends_with?(pack_uom, ["s", "x", "ch", "sh"]) do
+      "#{pack_uom}es"
+    else
+      "#{pack_uom}s"
+    end
+  end
+
+  def pack_label(pack_uom, _count), do: to_string(pack_uom)
+
+  @doc """
+  Formats a quantity with base unit and packaging conversion if configured.
+  E.g. 500 tablets -> "500 tablet(s) (5 cartons)"
+  If not divisible evenly: "520 tablet(s) (5 cartons + 20 tablet(s))"
+  """
+  def format_quantity_with_packaging(quantity, product) do
+    base_label = unit_label(product && product.uom)
+
+    if has_packaging?(product) and is_integer(quantity) and quantity > 0 do
+      "#{quantity} #{base_label}#{pack_conversion_suffix(quantity, product, base_label)}"
+    else
+      "#{quantity} #{base_label}"
+    end
+  end
+
+  defp pack_conversion_suffix(quantity, product, base_label) do
+    packs = div(quantity, product.units_per_pack)
+    remainder = rem(quantity, product.units_per_pack)
+    pack_str = pack_label(product.pack_uom, packs)
+
+    case {packs, remainder} do
+      {p, 0} when p > 0 -> " (#{p} #{pack_str})"
+      {p, r} when p > 0 and r > 0 -> " (#{p} #{pack_str} + #{r} #{base_label})"
+      _ -> ""
+    end
+  end
+
+  @doc "Returns a packaging summary string for a product, e.g. for badges or stats."
+  def format_packaging_summary(quantity, product) do
+    if has_packaging?(product) and is_integer(quantity) and quantity > 0 do
+      packs = div(quantity, product.units_per_pack)
+      remainder = rem(quantity, product.units_per_pack)
+      pack_str = pack_label(product.pack_uom, packs)
+      base_label = unit_label(product.uom)
+
+      case {packs, remainder} do
+        {p, 0} when p > 0 -> "#{p} #{pack_str}"
+        {p, r} when p > 0 -> "#{p} #{pack_str} + #{r} #{base_label}"
+        _ -> nil
+      end
+    else
+      nil
+    end
+  end
 end

@@ -127,6 +127,41 @@ defmodule ThamaniDawa.ProductsTest do
       assert product.generic_name == "Paracetamol"
     end
 
+    test "stores what one unit contains without a pack conversion" do
+      organization = organization_fixture()
+
+      assert {:ok, product} =
+               Products.create_product(organization.id, %{
+                 price: 100,
+                 generic_name: "Paracetamol",
+                 uom: "U2",
+                 gtin: "00614141000012",
+                 net_content_quantity: 20,
+                 net_content_uom: "U2"
+               })
+
+      assert product.net_content_quantity == 20
+      assert product.net_content_uom == "U2"
+      assert Products.format_net_content(product) == "20 tablet(s)"
+      assert Products.format_unit_count(1) == "1 unit"
+    end
+
+    test "requires both the contents quantity and its unit" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} =
+               Products.create_product(organization.id, %{
+                 price: 100,
+                 generic_name: "Paracetamol",
+                 uom: "U2",
+                 gtin: "00614141000012",
+                 net_content_quantity: 20
+               })
+
+      assert %{net_content_uom: ["must be set when contents are specified"]} =
+               errors_on(changeset)
+    end
+
     test "requires a gtin" do
       organization = organization_fixture()
 

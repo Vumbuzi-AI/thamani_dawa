@@ -3,6 +3,7 @@ defmodule ThamaniDawa.DistributorTest do
 
   import ThamaniDawa.DistributorFixtures
 
+  alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Distributor
   alias ThamaniDawa.Distributor.{Billing, SerialReservation, ShipmentItem, Shipper}
 
@@ -239,6 +240,23 @@ defmodule ThamaniDawa.DistributorTest do
                  "raw_data_matrix" => data_matrix_for(batch)
                })
     end
+
+    test "refuses unknown serials that have no received batch", ctx do
+      batch = unit(ctx)
+      {_shipment, mobile_user, shipper} = claimed_draft_with_shipper(ctx)
+      raw = data_matrix_for(%{batch | serial: "NEVER-RECEIVED"})
+
+      assert {:ok, item} =
+               Distributor.scan_item(mobile_user, shipper.id, %{"raw_data_matrix" => raw})
+
+      assert item.validation_status == "unknown_serial"
+      assert is_nil(item.batch_id)
+
+      assert {:error, {:invalid, problems}} =
+               Distributor.submit_shipment(mobile_user, item.shipment_id)
+
+      assert Enum.any?(problems, &(&1.code == :unknown_unit))
+    end
   end
 
   describe "approve_shipment/3" do
@@ -266,8 +284,81 @@ defmodule ThamaniDawa.DistributorTest do
       assert shipper.gtin == batch.gtin
       assert shipper.unit_count == 1
 
+      [request] = ThamaniDawa.GS1.MemberApiStub.create_requests()
+      assert hd(request["batch_info"])["gtin"] == batch.gtin
+      assert hd(request["batch_info"])["batch"] == batch.batch_no
+      assert request["address"]["from_address"]
+      assert request["address"]["to_address"]
+      assert request["count_of_trade_items"] == 1
+
       assert Repo.get_by!(SerialReservation, shipment_id: shipment.id).committed_at
       assert Billing.active_usage(ctx.organization.id).running_quantity == 1
+    end
+
+    test "depletes remaining stock from scanned units and moves an empty batch to dispatch",
+         ctx do
+      batch = unit(ctx) |> Ecto.Changeset.change(remaining_quantity: 1) |> Repo.update!()
+
+      shipment =
+        submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
+          warehouse: ctx.warehouse,
+          destination: ctx.destination
+        })
+
+      assert {:ok, _} = Distributor.approve_shipment(ctx.organization.id, ctx.user, shipment.id)
+
+      updated = Repo.get!(Batch, batch.id)
+      assert updated.remaining_quantity == 0
+      assert updated.zone == :dispatch
+    end
+
+    test "leaves remaining stock in place when a batch is only partly shipped", ctx do
+      batch = unit(ctx)
+      assert batch.remaining_quantity == 10
+
+      shipment =
+        submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
+          warehouse: ctx.warehouse,
+          destination: ctx.destination
+        })
+
+      assert {:ok, _} = Distributor.approve_shipment(ctx.organization.id, ctx.user, shipment.id)
+
+      updated = Repo.get!(Batch, batch.id)
+      assert updated.remaining_quantity == 9
+      assert updated.zone == :receiving
+    end
+
+    test "fails :reservation_missing when serial reservations are gone", ctx do
+      shipment =
+        submitted_shipment_fixture(ctx.organization.id, ctx.user, [unit(ctx)], %{
+          warehouse: ctx.warehouse,
+          destination: ctx.destination
+        })
+
+      Repo.delete_all(from r in SerialReservation, where: r.shipment_id == ^shipment.id)
+
+      assert {:error, :reservation_missing} =
+               Distributor.approve_shipment(ctx.organization.id, ctx.user, shipment.id)
+    end
+
+    test "refuses to re-ship a serial that was already approved", ctx do
+      batch = unit(ctx)
+
+      shipment =
+        submitted_shipment_fixture(ctx.organization.id, ctx.user, [batch], %{
+          warehouse: ctx.warehouse,
+          destination: ctx.destination
+        })
+
+      assert {:ok, _} = Distributor.approve_shipment(ctx.organization.id, ctx.user, shipment.id)
+
+      {_second, mobile_user, shipper} = claimed_draft_with_shipper(ctx)
+
+      assert {:error, :serial_already_shipped} =
+               Distributor.scan_item(mobile_user, shipper.id, %{
+                 "raw_data_matrix" => data_matrix_for(batch)
+               })
     end
 
     test "is idempotent", ctx do
@@ -285,19 +376,71 @@ defmodule ThamaniDawa.DistributorTest do
       assert Billing.active_usage(ctx.organization.id).running_quantity == 1
     end
 
-    test "fails without a GS1 Company Prefix", ctx do
+    test "issues an SSCC from GS1 without a local company prefix", ctx do
+      before = ctx.organization.next_sscc_serial
+
+      ctx.organization
+      |> Ecto.Changeset.change(gs1_company_prefix: nil)
+      |> Repo.update!()
+
       shipment =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [unit(ctx)], %{
           warehouse: ctx.warehouse,
           destination: ctx.destination
         })
 
-      ctx.organization
-      |> Ecto.Changeset.change(gs1_company_prefix: nil)
-      |> Repo.update!()
+      assert {:ok, _} = Distributor.approve_shipment(ctx.organization.id, ctx.user, shipment.id)
 
-      assert {:error, :missing_gs1_company_prefix} =
+      [shipper] = Repo.all(from s in Shipper, where: s.shipment_id == ^shipment.id)
+      assert shipper.sscc =~ ~r/^\d{18}$/
+
+      assert Repo.get!(ctx.organization.__struct__, ctx.organization.id).next_sscc_serial ==
+               before
+    end
+
+    test "rolls the approval back when GS1 cannot issue an SSCC", ctx do
+      ThamaniDawa.GS1.MemberApiStub.fail_next(:unavailable)
+
+      shipment =
+        submitted_shipment_fixture(ctx.organization.id, ctx.user, [unit(ctx)], %{
+          warehouse: ctx.warehouse,
+          destination: ctx.destination
+        })
+
+      assert {:error, {:gs1, :unavailable}} =
                Distributor.approve_shipment(ctx.organization.id, ctx.user, shipment.id)
+
+      [shipper] = Repo.all(from s in Shipper, where: s.shipment_id == ^shipment.id)
+      assert is_nil(shipper.sscc)
+      assert Billing.active_usage(ctx.organization.id).running_quantity == 0
+    end
+  end
+
+  describe "lookup_shipper_by_sscc/1" do
+    test "returns the serials GS1 has recorded for the case" do
+      sscc = "061600000000000018"
+
+      ThamaniDawa.GS1.MemberApiStub.put_contents(sscc, [
+        %{
+          "gtin" => "06141411234567",
+          "name" => "Amoxicillin",
+          "batches" => [
+            %{
+              "batch" => "LOT-1",
+              "production_date" => "2026-01-15",
+              "expiry_date" => "2027-06-01",
+              "serials" => [%{"serial" => "SN-1"}, %{"serial" => "SN-2"}]
+            }
+          ]
+        }
+      ])
+
+      assert {:ok, shipper} = Distributor.lookup_shipper_by_sscc(sscc)
+      assert Enum.map(shipper.items, & &1.serial) == ["SN-1", "SN-2"]
+      assert hd(shipper.items).gtin == "06141411234567"
+      assert hd(shipper.items).batch == "LOT-1"
+      assert hd(shipper.items).expiry_date == ~D[2027-06-01]
+      assert {:error, :not_found} = Distributor.lookup_shipper_by_sscc("000000000000000000")
     end
   end
 

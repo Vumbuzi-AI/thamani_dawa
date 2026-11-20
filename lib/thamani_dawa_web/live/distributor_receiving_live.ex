@@ -2,6 +2,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Accounts.Scope
+  alias ThamaniDawa.Batches
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Distributor
   alias ThamaniDawa.Distributor.GlnLookup
@@ -13,79 +14,87 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   alias ThamaniDawa.Suppliers
   alias ThamaniDawa.Suppliers.Supplier
   alias ThamaniDawaWeb.DistributorPagination
-  alias ThamaniDawaWeb.SiteScoping
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
-
-    receiving_portal =
-      if socket.assigns.live_action in [:distributor_index, :distributor_new],
-        do: :distributor,
-        else: :organization
-
     receiving_new? = receiving_new_action?(socket.assigns.live_action)
 
-    {receiving_index_path, receiving_new_path} =
-      if receiving_portal == :organization,
-        do: {~p"/org/receiving", ~p"/org/receiving/new"},
-        else: {~p"/distributor/receiving", ~p"/distributor/receiving/new"}
-
-    # `receiving_portal` above only tells us admin vs. non-admin (it controls
-    # the warehouse picker/shell, shared with the pharmacy/lab org portal).
-    # Whether this *organization* actually operates as a distributor — and
-    # therefore uses the live GLN-to-GLN origin flow instead of a stored
-    # `Suppliers.Supplier` — is a separate, org-type question, true for a
-    # distributor org's own admin on `/org/receiving` just as much as for
-    # their staff on `/distributor/receiving`.
     distributor_org? =
       ThamaniDawaWeb.UserAuth.distributor_organization?(socket.assigns.current_scope)
 
-    {:ok,
-     socket
-     |> assign(:receiving_portal, receiving_portal)
-     |> assign(:receiving_new?, receiving_new?)
-     |> assign(:distributor_org?, distributor_org?)
-     |> assign(:receiving_index_path, receiving_index_path)
-     |> assign(:receiving_new_path, receiving_new_path)
-     |> assign(:products, Products.list_products(organization_id))
-     |> assign(:suppliers, Suppliers.list_suppliers(organization_id))
-     |> assign(:warehouses, warehouse_sites(organization_id))
-     |> assign(:receipt_step, :product)
-     |> assign(:selected_product, nil)
-     |> assign(:scan_error, nil)
-     |> assign(:scan_form, to_form(%{"gtin" => ""}, as: :scan))
-     |> assign(:delivery_items, [])
-     |> assign(:receipt_posting_key, Ecto.UUID.generate())
-     |> assign(:editing_delivery_item_id, nil)
-     |> assign(:new_product_form, nil)
-     |> assign(:adding_supplier, false)
-     |> assign(:new_supplier_form, nil)
-     |> assign(:add_item_open, false)
-     |> assign(:page_number, 1)
-     |> assign(:checked_sscc, nil)
-     |> assign(:sscc_warning, nil)
-     |> assign(:is_return, false)
-     |> assign(:return_disposition, "active")
-     |> assign_origin_defaults()
-     |> allow_upload(:doc_grn,
-       accept: ~w(.pdf .jpg .jpeg .png),
-       max_entries: 1,
-       max_file_size: 5_000_000,
-       auto_upload: true
-     )
-     |> allow_upload(:doc_invoice,
-       accept: ~w(.pdf .jpg .jpeg .png),
-       max_entries: 1,
-       max_file_size: 5_000_000,
-       auto_upload: true
-     )
-     |> allow_upload(:doc_other,
-       accept: ~w(.pdf .jpg .jpeg .png),
-       max_entries: 5,
-       max_file_size: 5_000_000,
-       auto_upload: true
-     )
-     |> reload_receipts()}
+    case current_distribution_site(socket.assigns.current_scope) do
+      {:ok, receiving_site} ->
+        {:ok,
+         socket
+         |> assign(:receiving_portal, :distributor)
+         |> assign(:receiving_site, receiving_site)
+         |> assign(:receiving_new?, receiving_new?)
+         |> assign(:distributor_org?, distributor_org?)
+         |> assign(:receiving_index_path, ~p"/distributor/receiving")
+         |> assign(:receiving_new_path, ~p"/distributor/receiving/new")
+         |> assign(:products, Products.list_products(organization_id))
+         |> assign(:suppliers, Suppliers.list_suppliers(organization_id))
+         |> assign(:warehouses, warehouse_sites(organization_id))
+         |> assign(:receipt_step, :sscc)
+         |> assign(:selected_product, nil)
+         |> assign(:scan_error, nil)
+         |> assign(:scan_form, to_form(%{"gtin" => ""}, as: :scan))
+         |> assign(:entry_sscc_form, to_form(%{"sscc" => ""}, as: :sscc_entry))
+         |> assign(:entry_sscc_check, :idle)
+         |> assign(:carried_attrs, %{})
+         |> assign(:delivery_items, [])
+         |> assign(:pending_discrepancies, [])
+         |> assign(:pending_shipper, nil)
+         |> assign(:receipt_posting_key, Ecto.UUID.generate())
+         |> assign(:editing_delivery_item_id, nil)
+         |> assign(:new_product_form, nil)
+         |> assign(:adding_supplier, false)
+         |> assign(:new_supplier_form, nil)
+         |> assign(:add_item_open, false)
+         |> assign(:locked_unit_quantity, nil)
+         |> assign(:page_number, 1)
+         |> assign(:checked_sscc, nil)
+         |> assign(:sscc_warning, nil)
+         |> assign(:origin_gln, "")
+         |> assign(:receiving_draft, nil)
+         |> assign(:draft_attachments, [])
+         |> assign_origin_defaults()
+         |> assign_serial_confirm()
+         |> allow_upload(:doc_delivery_note,
+           accept: ~w(.pdf .jpg .jpeg .png),
+           max_entries: 1,
+           max_file_size: 5_000_000,
+           auto_upload: true,
+           progress: &handle_doc_upload_progress/3
+         )
+         |> allow_upload(:doc_invoice,
+           accept: ~w(.pdf .jpg .jpeg .png),
+           max_entries: 1,
+           max_file_size: 5_000_000,
+           auto_upload: true,
+           progress: &handle_doc_upload_progress/3
+         )
+         |> allow_upload(:doc_po,
+           accept: ~w(.pdf .jpg .jpeg .png),
+           max_entries: 1,
+           max_file_size: 5_000_000,
+           auto_upload: true,
+           progress: &handle_doc_upload_progress/3
+         )
+         |> allow_upload(:doc_other,
+           accept: ~w(.pdf .jpg .jpeg .png),
+           max_entries: 5,
+           max_file_size: 5_000_000,
+           auto_upload: true,
+           progress: &handle_doc_upload_progress/3
+         )}
+
+      :error ->
+        {:ok,
+         socket
+         |> put_flash(:error, "Select a distributor warehouse before receiving stock.")
+         |> push_navigate(to: ~p"/distributor")}
+    end
   end
 
   defp assign_origin_defaults(socket) do
@@ -108,41 +117,55 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     if socket.assigns.receiving_new? do
       {:noreply,
        socket
-       |> assign(:receipt_step, :product)
+       |> assign(:receipt_step, :sscc)
        |> assign(:selected_product, nil)
        |> assign(:scan_error, nil)
        |> assign(:scan_form, to_form(%{"gtin" => ""}, as: :scan))
+       |> assign(:entry_sscc_form, to_form(%{"sscc" => ""}, as: :sscc_entry))
+       |> assign(:entry_sscc_check, :idle)
+       |> assign(:carried_attrs, %{})
        |> assign(:delivery_items, [])
+       |> assign(:pending_discrepancies, [])
+       |> assign(:pending_shipper, nil)
        |> assign(:receipt_posting_key, Ecto.UUID.generate())
        |> assign(:editing_delivery_item_id, nil)
        |> assign(:new_product_form, nil)
        |> assign(:adding_supplier, false)
        |> assign(:new_supplier_form, nil)
        |> assign(:add_item_open, false)
+       |> assign(:locked_unit_quantity, nil)
        |> assign(:form, nil)
        |> assign(:checked_sscc, nil)
        |> assign(:sscc_warning, nil)
-       |> assign(:is_return, false)
-       |> assign(:return_disposition, "active")
-       |> assign_origin_defaults()}
+       |> assign(:origin_gln, "")
+       |> assign_origin_defaults()
+       |> assign_serial_confirm()
+       |> discard_receiving_draft()}
     else
       {:noreply,
-       assign(socket,
+       socket
+       |> assign(
          form: nil,
          selected_product: nil,
-         receipt_step: :product,
+         receipt_step: :sscc,
          delivery_items: [],
+         pending_discrepancies: [],
+         pending_shipper: nil,
          receipt_posting_key: Ecto.UUID.generate(),
          editing_delivery_item_id: nil,
          new_product_form: nil,
          adding_supplier: false,
          new_supplier_form: nil,
-         add_item_open: false
-       )}
+         add_item_open: false,
+         entry_sscc_form: to_form(%{"sscc" => ""}, as: :sscc_entry),
+         entry_sscc_check: :idle,
+         carried_attrs: %{}
+       )
+       |> assign_serial_confirm()}
     end
   end
 
-  defp receiving_new_action?(action), do: action in [:org_new, :distributor_new]
+  defp receiving_new_action?(action), do: action == :distributor_new
 
   def handle_event("open_add_item", _params, socket) do
     {:noreply, assign(socket, :add_item_open, true)}
@@ -152,15 +175,45 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     {:noreply,
      socket
      |> assign(:add_item_open, false)
-     |> assign(:receipt_step, :product)
+     |> assign(:pending_shipper, nil)
+     |> assign(:receipt_step, :sscc)
      |> assign(:selected_product, nil)
      |> assign(:scan_error, nil)
      |> assign(:scan_form, to_form(%{"gtin" => ""}, as: :scan))
+     |> assign(:entry_sscc_form, to_form(%{"sscc" => ""}, as: :sscc_entry))
+     |> assign(:entry_sscc_check, :idle)
+     |> assign(:carried_attrs, %{})
      |> assign(:editing_delivery_item_id, nil)
+     |> assign(:locked_unit_quantity, nil)
      |> assign(:new_product_form, nil)
      |> assign(:adding_supplier, false)
      |> assign(:new_supplier_form, nil)
-     |> assign(:form, nil)}
+     |> assign(:form, nil)
+     |> assign_serial_confirm()}
+  end
+
+  def handle_event("validate_entry_sscc", %{"sscc_entry" => %{"sscc" => raw}}, socket) do
+    sscc = raw |> extract_sscc() |> String.trim()
+    socket = assign(socket, :entry_sscc_form, to_form(%{"sscc" => raw}, as: :sscc_entry))
+
+    if Regex.match?(~r/^\d{18}$/, sscc) do
+      organization_id = socket.assigns.current_scope.organization_id
+      api_token = ThamaniDawa.Organizations.gs1_api_key(organization_id)
+
+      {:noreply,
+       socket
+       |> assign(:entry_sscc_check, :checking)
+       |> assign(:checked_sscc, sscc)
+       |> start_async(:entry_sscc_lookup, fn ->
+         Distributor.lookup_shipper_by_sscc(sscc, api_token: api_token)
+       end)}
+    else
+      {:noreply, assign(socket, :entry_sscc_check, :idle)}
+    end
+  end
+
+  def handle_event("skip_to_manual_entry", _params, socket) do
+    {:noreply, assign(socket, :receipt_step, :product)}
   end
 
   def handle_event("choose_product", %{"product_id" => ""}, socket) do
@@ -191,12 +244,15 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   end
 
   def handle_event("validate_new_product", %{"product" => attrs}, socket) do
-    changeset = Map.put(Product.changeset(%Product{}, attrs), :action, :validate)
+    changeset =
+      Map.put(Product.changeset(%Product{}, stock_unit_attrs(attrs)), :action, :validate)
+
     {:noreply, assign(socket, :new_product_form, to_form(changeset, as: :product))}
   end
 
   def handle_event("save_new_product", %{"product" => attrs}, socket) do
     organization_id = socket.assigns.current_scope.organization_id
+    attrs = stock_unit_attrs(attrs)
 
     case Products.create_product(organization_id, attrs) do
       {:ok, product} ->
@@ -271,24 +327,128 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
   def handle_event("edit_delivery_item", %{"id" => id}, socket) do
     id = String.to_integer(id)
-    item = Enum.find(socket.assigns.delivery_items, &(&1.id == id))
-    product = item && Enum.find(socket.assigns.products, &(&1.id == item.attrs["product_id"]))
 
-    if item && product do
+    case Enum.find(socket.assigns.delivery_items, &(&1.id == id)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "That staged receipt item could not be found.")}
+
+      item ->
+        product = Enum.find(socket.assigns.products, &(&1.id == item.attrs["product_id"]))
+
+        if product do
+          {:noreply,
+           socket
+           |> assign(:add_item_open, true)
+           |> assign(:editing_delivery_item_id, item.id)
+           |> assign(:selected_product, product)
+           |> assign(:receipt_step, :details)
+           |> assign_locked_quantity(item.attrs)
+           |> assign(:form, to_form(receipt_changeset(socket, item.attrs), as: :batch))}
+        else
+          # The SSCC-prefilled item's GTIN isn't in this org's catalog yet —
+          # send the user to create it, carrying the batch/quantity/sscc
+          # details forward so they land back on the details form once the
+          # product exists (see `select_product/2`).
+          {:noreply,
+           socket
+           |> assign(:add_item_open, true)
+           |> assign(:editing_delivery_item_id, item.id)
+           |> assign(:carried_attrs, Map.delete(item.attrs, "product_id"))
+           |> start_new_product(item.attrs["gtin"], item.product_name)}
+        end
+    end
+  end
+
+  def handle_event("set_group_received_quantity", %{"key" => key, "value" => value}, socket) do
+    quantity = parse_nonneg_integer(value)
+
+    {:noreply,
+     update_pending_group(socket, key, fn group ->
+       received = min(quantity, group.expected_quantity)
+
+       %{
+         group
+         | received_quantity: received,
+           damaged_quantity: min(group.damaged_quantity, received)
+       }
+     end)}
+  end
+
+  def handle_event("set_group_damaged_quantity", %{"key" => key, "value" => value}, socket) do
+    quantity = parse_nonneg_integer(value)
+
+    {:noreply,
+     update_pending_group(socket, key, fn group ->
+       %{group | damaged_quantity: min(quantity, group.received_quantity)}
+     end)}
+  end
+
+  def handle_event(
+        "set_serial_condition",
+        %{"key" => key, "serial" => serial, "condition" => condition},
+        socket
+      )
+      when condition in ["accepted", "damaged", "missing"] do
+    condition = String.to_existing_atom(condition)
+
+    {:noreply,
+     socket
+     |> update_pending_group(key, fn group ->
+       %{group | serial_conditions: Map.put(group.serial_conditions, serial, condition)}
+     end)
+     |> update(:pending_shipper, fn pending ->
+       %{pending | reviewed_serials: MapSet.put(reviewed_serials(pending), serial)}
+     end)}
+  end
+
+  def handle_event("validate_serial_confirm", %{"serial_confirm" => %{"serial" => raw}}, socket) do
+    raw = to_string(raw)
+
+    socket =
+      if String.trim(raw) == "" do
+        assign(socket, :serial_confirm_form, to_form(%{"serial" => raw}, as: :serial_confirm))
+      else
+        confirm_unit_serial(socket, raw)
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_event("confirm_serial", %{"serial_confirm" => params}, socket) do
+    {:noreply, confirm_unit_serial(socket, to_string(Map.get(params, "serial", "")))}
+  end
+
+  def handle_event("cancel_pending_shipper", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:pending_shipper, nil)
+     |> assign(:receipt_step, :sscc)
+     |> assign_serial_confirm()}
+  end
+
+  def handle_event("confirm_pending_shipper", _params, socket) do
+    pending = socket.assigns.pending_shipper
+
+    if unreviewed_serials(pending) == [] do
+      settle_pending_shipper(socket, pending)
+    else
       {:noreply,
        socket
-       |> assign(:add_item_open, true)
-       |> assign(:editing_delivery_item_id, item.id)
-       |> assign(:selected_product, product)
-       |> assign(:receipt_step, :details)
-       |> assign(:form, to_form(receipt_changeset(socket, item.attrs), as: :batch))}
-    else
-      {:noreply, put_flash(socket, :error, "That staged receipt item could not be found.")}
+       |> update(:pending_shipper, &%{&1 | review_unscanned?: true})
+       |> assign(:serial_confirm_notice, nil)}
     end
   end
 
   def handle_event("finish_delivery", _params, socket) do
     cond do
+      Enum.any?(socket.assigns.delivery_items, &is_nil(&1.attrs["product_id"])) ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "One or more items are not in your catalog yet. Add each one before finishing."
+         )}
+
       socket.assigns.distributor_org? and not match?({:matched, _}, socket.assigns.origin_check) ->
         {:noreply,
          put_flash(socket, :error, "Enter a valid, verified origin GLN before finishing.")}
@@ -303,15 +463,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   end
 
   def handle_event("validate_origin", %{"origin" => %{"gln" => gln}}, socket) do
-    {:noreply, check_origin_gln(socket, String.trim(to_string(gln)))}
-  end
-
-  def handle_event("toggle_return", _params, socket) do
-    {:noreply, update(socket, :is_return, &(!&1))}
-  end
-
-  def handle_event("set_return_disposition", %{"return_disposition" => disposition}, socket) do
-    {:noreply, assign(socket, :return_disposition, disposition)}
+    gln = String.trim(to_string(gln))
+    {:noreply, socket |> assign(:origin_gln, gln) |> check_origin_gln(gln)}
   end
 
   def handle_event("validate", %{"batch" => attrs}, socket) do
@@ -331,16 +484,56 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     {:noreply, cancel_upload(socket, String.to_existing_atom(upload), ref)}
   end
 
-  def handle_async(:origin_lookup, {:ok, {:ok, resolved}}, socket) do
-    {:noreply, assign(socket, :origin_check, {:matched, resolved})}
+  def handle_event("delete_draft_attachment", %{"id" => attachment_id}, socket) do
+    case socket.assigns.receiving_draft do
+      nil ->
+        {:noreply, socket}
+
+      draft ->
+        GoodsReceipts.delete_draft_attachment!(draft, attachment_id)
+
+        refreshed_draft =
+          GoodsReceipts.get_receiving_draft(
+            socket.assigns.current_scope.organization_id,
+            socket.assigns.current_scope.user.id
+          )
+
+        {:noreply,
+         socket
+         |> assign(:receiving_draft, refreshed_draft)
+         |> assign(:draft_attachments, refreshed_draft.attachments)}
+    end
   end
 
-  def handle_async(:origin_lookup, {:ok, {:error, :not_found}}, socket) do
+  def handle_async(
+        :origin_lookup,
+        {:ok, {:ok, resolved}},
+        %{assigns: %{origin_check: :checking}} = socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(:origin_check, {:matched, resolved})
+     |> save_receiving_draft_origin(resolved)}
+  end
+
+  def handle_async(
+        :origin_lookup,
+        {:ok, {:error, :not_found}},
+        %{assigns: %{origin_check: :checking}} = socket
+      ) do
     {:noreply, assign(socket, :origin_check, :not_found)}
   end
 
-  def handle_async(:origin_lookup, {:exit, _reason}, socket) do
+  def handle_async(
+        :origin_lookup,
+        {:exit, _reason},
+        %{assigns: %{origin_check: :checking}} = socket
+      ) do
     {:noreply, assign(socket, :origin_check, :unavailable)}
+  end
+
+  def handle_async(:origin_lookup, _result, socket) do
+    {:noreply, socket}
   end
 
   def handle_async(:sscc_lookup, {:ok, {:ok, shipper}}, socket) do
@@ -351,8 +544,36 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     {:noreply, socket}
   end
 
+  def handle_async(:sscc_lookup, {:ok, {:error, :unavailable}}, socket) do
+    {:noreply,
+     put_flash(
+       socket,
+       :error,
+       "GS1 could not be reached for this SSCC. Try again, or add the item manually."
+     )}
+  end
+
   def handle_async(:sscc_lookup, {:exit, _reason}, socket) do
     {:noreply, socket}
+  end
+
+  def handle_async(:entry_sscc_lookup, {:ok, {:ok, shipper}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:entry_sscc_check, {:matched, shipper})
+     |> apply_shipper_prefill(shipper)}
+  end
+
+  def handle_async(:entry_sscc_lookup, {:ok, {:error, :not_found}}, socket) do
+    {:noreply, assign(socket, :entry_sscc_check, :not_found)}
+  end
+
+  def handle_async(:entry_sscc_lookup, {:ok, {:error, :unavailable}}, socket) do
+    {:noreply, assign(socket, :entry_sscc_check, :unavailable)}
+  end
+
+  def handle_async(:entry_sscc_lookup, {:exit, _reason}, socket) do
+    {:noreply, assign(socket, :entry_sscc_check, :unavailable)}
   end
 
   defp post_delivery(socket) do
@@ -360,27 +581,25 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     user_id = socket.assigns.current_scope.user.id
     origin = origin_payload(socket)
 
-    return_opts =
-      if socket.assigns.is_return,
-        do: %{is_return: true, status: socket.assigns.return_disposition},
-        else: %{}
-
     case GoodsReceipts.receive_delivery(
            organization_id,
            user_id,
            socket.assigns.delivery_items,
            socket.assigns.receipt_posting_key,
            origin,
-           return_opts
+           %{}
          ) do
       {:ok, receipt} ->
         store_delivery_attachments(socket, receipt, user_id)
+        finalize_receiving_draft(socket, receipt, user_id)
+        persist_discrepancies(socket, receipt, organization_id)
+        escalate_flagged_items(socket, receipt)
 
         {:noreply,
          socket
          |> put_flash(
            :info,
-           "Delivery #{receipt.number} received: #{length(receipt.items)} item(s) posted to inventory."
+           receiving_flash_message(receipt, socket.assigns.pending_discrepancies)
          )
          |> push_patch(to: socket.assigns.receiving_index_path)}
 
@@ -389,21 +608,59 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
          put_flash(
            socket,
            :error,
-           "Delivery could not be posted: #{format_changeset_error(changeset)}"
+           delivery_error_flash(changeset)
          )}
     end
   end
 
+  defp receiving_flash_message(receipt, []) do
+    "Delivery #{receipt.number} received: #{length(receipt.items)} item(s) posted to inventory."
+  end
+
+  defp receiving_flash_message(receipt, discrepancies) do
+    flagged = Enum.sum(Enum.map(discrepancies, &Map.fetch!(&1, "quantity")))
+
+    "Delivery #{receipt.number} received: #{length(receipt.items)} item(s) posted to inventory, " <>
+      "#{flagged} flagged missing."
+  end
+
+  defp persist_discrepancies(socket, receipt, organization_id) do
+    Enum.each(socket.assigns.pending_discrepancies, fn attrs ->
+      GoodsReceipts.create_discrepancy!(organization_id, receipt.id, attrs)
+    end)
+  end
+
+  defp escalate_flagged_items(socket, receipt) do
+    flagged_batch_nos =
+      socket.assigns.delivery_items
+      |> Enum.filter(& &1[:flagged_damaged?])
+      |> Enum.map(& &1.batch_no)
+      |> MapSet.new()
+
+    receipt.items
+    |> Enum.filter(
+      &(&1.status == :quarantined and MapSet.member?(flagged_batch_nos, &1.batch_no))
+    )
+    |> Enum.each(
+      &Batches.mark_damaged(
+        &1,
+        "Flagged damaged at receiving — #{receipt.number}",
+        socket.assigns.current_scope.user
+      )
+    )
+  end
+
   defp uploads_in_progress?(socket) do
-    [:doc_grn, :doc_invoice, :doc_other]
+    [:doc_delivery_note, :doc_invoice, :doc_po, :doc_other]
     |> Enum.flat_map(&Map.get(socket.assigns.uploads, &1).entries)
     |> Enum.any?(&(not &1.done?))
   end
 
   defp store_delivery_attachments(socket, receipt, user_id) do
     for {upload_name, doc_type} <- [
-          {:doc_grn, :grn},
+          {:doc_delivery_note, :delivery_note},
           {:doc_invoice, :invoice},
+          {:doc_po, :po},
           {:doc_other, :other}
         ] do
       consume_uploaded_entries(socket, upload_name, fn %{path: tmp_path}, entry ->
@@ -413,18 +670,128 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
+  # Opening Receive stock starts a new delivery. The previous visit's origin
+  # and documents are stored so a posted receipt can keep its files, and
+  # must not reappear on the next delivery.
+  defp discard_receiving_draft(socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+    user_id = socket.assigns.current_scope.user.id
+
+    case GoodsReceipts.get_receiving_draft(organization_id, user_id) do
+      nil -> :ok
+      draft -> GoodsReceipts.delete_receiving_draft!(draft)
+    end
+
+    socket
+    |> assign(:receiving_draft, nil)
+    |> assign(:draft_attachments, [])
+  end
+
+  defp save_receiving_draft_origin(socket, resolved) do
+    organization_id = socket.assigns.current_scope.organization_id
+    user_id = socket.assigns.current_scope.user.id
+
+    draft =
+      socket.assigns.receiving_draft ||
+        GoodsReceipts.ensure_receiving_draft(organization_id, user_id)
+
+    draft =
+      GoodsReceipts.save_draft_origin!(
+        draft,
+        Map.new(resolved, fn {key, value} -> {to_string(key), value} end)
+      )
+
+    socket |> assign(:receiving_draft, draft) |> assign(:draft_attachments, draft.attachments)
+  end
+
+  defp handle_doc_upload_progress(upload_name, entry, socket) do
+    if entry.done? do
+      organization_id = socket.assigns.current_scope.organization_id
+      user_id = socket.assigns.current_scope.user.id
+
+      draft =
+        socket.assigns.receiving_draft ||
+          GoodsReceipts.ensure_receiving_draft(organization_id, user_id)
+
+      consume_uploaded_entry(socket, entry, fn %{path: tmp_path} ->
+        GoodsReceipts.store_draft_attachment!(
+          draft,
+          upload_doc_type(upload_name),
+          tmp_path,
+          entry
+        )
+
+        {:ok, :stored}
+      end)
+
+      draft = GoodsReceipts.get_receiving_draft(organization_id, user_id)
+
+      {:noreply,
+       socket |> assign(:receiving_draft, draft) |> assign(:draft_attachments, draft.attachments)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  defp upload_doc_type(:doc_delivery_note), do: :delivery_note
+  defp upload_doc_type(:doc_invoice), do: :invoice
+  defp upload_doc_type(:doc_po), do: :po
+  defp upload_doc_type(:doc_other), do: :other
+
+  defp finalize_receiving_draft(%{assigns: %{receiving_draft: nil}}, _receipt, _user_id), do: :ok
+
+  defp finalize_receiving_draft(socket, receipt, user_id) do
+    GoodsReceipts.attach_draft_attachments!(socket.assigns.receiving_draft, receipt, user_id)
+    GoodsReceipts.delete_receiving_draft!(socket.assigns.receiving_draft)
+  end
+
   defp origin_payload(%{assigns: %{origin_check: {:matched, resolved}}}), do: resolved
   defp origin_payload(_socket), do: nil
 
+  defp current_distribution_site(%Scope{current_site_id: nil}), do: :error
+
+  defp current_distribution_site(%Scope{} = scope) do
+    site = Sites.get_site!(scope.organization_id, scope.current_site_id)
+
+    if Site.distribution?(site), do: {:ok, site}, else: :error
+  rescue
+    Ecto.NoResultsError -> :error
+  end
+
   defp check_origin_gln(socket, gln) do
-    if Regex.match?(~r/^\d{13}$/, gln) do
-      socket
-      |> assign(:origin_check, :checking)
-      |> start_async(:origin_lookup, fn -> GlnLookup.resolve_party(gln) end)
-    else
-      assign(socket, :origin_check, :idle)
+    cond do
+      gln == "" or Regex.match?(~r/^\d{1,12}$/, gln) ->
+        socket
+        |> cancel_async(:origin_lookup)
+        |> assign(:origin_check, :idle)
+
+      Regex.match?(~r/^\d{18}$/, gln) ->
+        socket
+        |> cancel_async(:origin_lookup)
+        |> assign(
+          :origin_check,
+          {:invalid,
+           "This is an 18-digit SSCC. It belongs on the case. The sender's GLN is 13 digits."}
+        )
+
+      not Regex.match?(~r/^\d{13}$/, gln) ->
+        socket
+        |> cancel_async(:origin_lookup)
+        |> assign(:origin_check, {:invalid, "A GLN is 13 digits."})
+
+      gln == current_receiving_site_gln(socket) ->
+        socket
+        |> cancel_async(:origin_lookup)
+        |> assign(:origin_check, :same_receiving_site)
+
+      true ->
+        socket
+        |> assign(:origin_check, :checking)
+        |> start_async(:origin_lookup, fn -> GlnLookup.resolve_party(gln) end)
     end
   end
+
+  defp current_receiving_site_gln(socket), do: socket.assigns.receiving_site.gln
 
   defp maybe_lookup_sscc(socket, sscc) when is_binary(sscc) do
     sscc = String.trim(sscc)
@@ -440,9 +807,14 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         socket
 
       true ->
+        organization_id = socket.assigns.current_scope.organization_id
+        api_token = ThamaniDawa.Organizations.gs1_api_key(organization_id)
+
         socket
         |> assign(:checked_sscc, sscc)
-        |> start_async(:sscc_lookup, fn -> Distributor.lookup_shipper_by_sscc(sscc) end)
+        |> start_async(:sscc_lookup, fn ->
+          Distributor.lookup_shipper_by_sscc(sscc, api_token: api_token)
+        end)
     end
   end
 
@@ -491,19 +863,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
   defp maybe_warn_destination_mismatch(socket, _shipment), do: socket
 
-  defp current_receiving_site(socket) do
-    organization_id = socket.assigns.current_scope.organization_id
+  defp current_receiving_site(socket), do: socket.assigns.receiving_site
 
-    site_id =
-      (socket.assigns.form && socket.assigns.form.params["site_id"]) ||
-        SiteScoping.default_site_id(socket.assigns.current_scope)
-
-    site_id && Sites.get_site!(organization_id, site_id)
-  rescue
-    Ecto.NoResultsError -> nil
-  end
-
-  defp prefill_shipper_items(socket, %{gtin: gtin} = shipper) when is_binary(gtin) do
+  defp prefill_shipper_items(socket, %{gtin: gtin, items: []} = shipper) when is_binary(gtin) do
     product = Enum.find(socket.assigns.products, &(&1.gtin == gtin))
 
     attrs = %{
@@ -516,64 +878,353 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       "sscc" => shipper.sscc
     }
 
-    attrs =
-      case {socket.assigns.warehouses, SiteScoping.default_site_id(socket.assigns.current_scope)} do
-        {[warehouse], _site_id} -> Map.put(attrs, "site_id", warehouse.id)
-        {_warehouses, site_id} when not is_nil(site_id) -> Map.put(attrs, "site_id", site_id)
-        _ -> attrs
-      end
+    attrs = Map.put(attrs, "site_id", socket.assigns.receiving_site.id)
 
     if product do
       socket
       |> assign(:selected_product, product)
       |> assign(:receipt_step, :details)
+      |> assign_locked_quantity(attrs)
       |> assign(:form, to_form(receipt_changeset(socket, attrs), as: :batch))
     else
+      # The case resolved, but its product isn't in this org's catalog yet —
+      # carry the batch's details forward so they still land on the details
+      # form once the product is created, instead of losing everything the
+      # lookup already gave us.
       socket
+      |> assign(:carried_attrs, Map.delete(attrs, "product_id"))
+      |> start_new_product(gtin)
     end
   end
 
-  defp prefill_shipper_items(socket, %{items: items}) when items != [] do
-    site_id =
-      case {socket.assigns.warehouses, SiteScoping.default_site_id(socket.assigns.current_scope)} do
-        {[warehouse], _site_id} -> warehouse.id
-        {_warehouses, site_id} -> site_id
-      end
+  defp prefill_shipper_items(socket, %{items: items} = shipper) when items != [] do
+    if already_staged_sscc?(socket, shipper.sscc) do
+      assign(socket, :entry_sscc_check, {:duplicate, shipper.sscc})
+    else
+      prefill_new_shipper_items(socket, shipper, items)
+    end
+  end
 
-    grouped =
+  defp prefill_shipper_items(socket, _shipper), do: socket
+
+  defp already_staged_sscc?(socket, sscc) do
+    Enum.any?(socket.assigns.delivery_items, &(&1.attrs["sscc"] == sscc))
+  end
+
+  @small_serial_group_threshold 10
+
+  defp prefill_new_shipper_items(socket, shipper, items) do
+    site_id = socket.assigns.receiving_site.id
+
+    groups =
       items
       |> Enum.group_by(&{&1.gtin, &1.batch, &1.production_date, &1.expiry_date})
       |> Enum.map(fn {{gtin, batch, production_date, expiry_date}, group} ->
         product = Enum.find(socket.assigns.products, &(&1.gtin == gtin))
         first = hd(group)
-
-        attrs = %{
-          "product_id" => product && product.id,
-          "gtin" => gtin,
-          "batch_no" => batch,
-          "manufacture_date" => production_date,
-          "expiry_date" => expiry_date,
-          "quantity" => length(group),
-          "sscc" => socket.assigns.checked_sscc,
-          "site_id" => site_id
-        }
+        serials = Enum.map(group, & &1.serial)
+        small? = length(serials) <= @small_serial_group_threshold
 
         %{
-          id: System.unique_integer([:positive]),
-          attrs: attrs,
+          key: Enum.join([gtin, batch, production_date, expiry_date], "|"),
+          gtin: gtin,
+          batch_no: batch,
+          production_date: production_date,
+          expiry_date: expiry_date,
+          product: product,
           product_name:
             (product && (product.generic_name || product.brand_name)) || first.product_name ||
               "Unknown product",
-          quantity: length(group),
-          batch_no: batch,
-          uom: product && product.uom
+          serials: serials,
+          expected_quantity: length(serials),
+          small_group?: small?,
+          received_quantity: length(serials),
+          damaged_quantity: 0,
+          serial_conditions: Map.new(serials, &{&1, :accepted})
         }
       end)
 
-    update(socket, :delivery_items, &(&1 ++ grouped))
+    socket
+    |> assign(:pending_shipper, %{
+      sscc: shipper.sscc,
+      site_id: site_id,
+      groups: groups,
+      scanned_serials: MapSet.new(),
+      reviewed_serials: MapSet.new(),
+      review_unscanned?: false
+    })
+    |> assign(:receipt_step, :confirm_shipper)
+    |> assign(:entry_sscc_form, to_form(%{"sscc" => ""}, as: :sscc_entry))
+    |> assign(:entry_sscc_check, :idle)
+    |> assign_serial_confirm()
   end
 
-  defp prefill_shipper_items(socket, _shipper), do: socket
+  defp update_pending_group(socket, key, fun) do
+    update(socket, :pending_shipper, fn pending ->
+      %{pending | groups: Enum.map(pending.groups, &maybe_update_group(&1, key, fun))}
+    end)
+  end
+
+  defp maybe_update_group(%{key: key} = group, key, fun), do: fun.(group)
+  defp maybe_update_group(group, _key, _fun), do: group
+
+  defp assign_serial_confirm(socket) do
+    socket
+    |> assign(:serial_confirm_form, to_form(%{"serial" => ""}, as: :serial_confirm))
+    |> assign(:serial_confirm_notice, nil)
+    |> assign(:serial_confirm_tick, 0)
+    |> assign(:last_scanned_serial, nil)
+  end
+
+  defp settle_pending_shipper(socket, %{sscc: sscc, site_id: site_id, groups: groups}) do
+    {items, discrepancies} =
+      Enum.reduce(groups, {[], []}, fn group, {items_acc, discrepancies_acc} ->
+        {group_items, group_discrepancies} = settle_group(group, sscc, site_id)
+        {items_acc ++ group_items, discrepancies_acc ++ group_discrepancies}
+      end)
+
+    socket
+    |> update(:delivery_items, &(&1 ++ items))
+    |> update(:pending_discrepancies, &(&1 ++ discrepancies))
+    |> assign(:pending_shipper, nil)
+    |> assign(:add_item_open, false)
+    |> assign(:receipt_step, :sscc)
+    |> assign_serial_confirm()
+    |> then(&{:noreply, &1})
+  end
+
+  # A scan or a typed serial marks that unit present and accepted. The silent
+  # default of accepted does not count for units that were never scanned: each
+  # of those needs an explicit accepted, damaged, or missing choice.
+  defp confirm_unit_serial(socket, raw) do
+    trimmed = String.trim(raw)
+
+    if trimmed == "" or is_nil(socket.assigns.pending_shipper) do
+      assign_serial_confirm(socket)
+    else
+      case resolve_unit_serial(trimmed) do
+        {:error, message} ->
+          put_serial_notice(socket, raw, {:error, message})
+
+        {:ok, serial} ->
+          apply_scanned_serial(socket, serial)
+      end
+    end
+  end
+
+  defp resolve_unit_serial(trimmed) do
+    case ThamaniDawa.GS1Decoder.parse(trimmed) do
+      {:ok, %{serial: serial}} when is_binary(serial) and serial != "" ->
+        {:ok, serial}
+
+      {:ok, %{sscc: sscc}} when is_binary(sscc) ->
+        {:error, "That's the case SSCC. Scan a unit data matrix from inside the case."}
+
+      {:ok, _decoded} ->
+        {:error,
+         "That scan has no unit serial. Scan the unit data matrix, or enter its serial number."}
+
+      {:error, _} ->
+        {:ok, trimmed}
+    end
+  end
+
+  defp apply_scanned_serial(socket, serial) do
+    pending = socket.assigns.pending_shipper
+
+    cond do
+      match_case_serial(pending.groups, serial) == nil ->
+        put_serial_notice(socket, serial, {:error, "That serial isn't in this case."})
+
+      MapSet.member?(scanned_serials(pending), serial) ->
+        acknowledge_scanned_serial(socket, serial, {:ok, "#{serial} is already marked accepted."})
+
+      true ->
+        groups =
+          Enum.map(pending.groups, fn group ->
+            if serial in group.serials do
+              %{group | serial_conditions: Map.put(group.serial_conditions, serial, :accepted)}
+            else
+              group
+            end
+          end)
+
+        pending = %{
+          pending
+          | groups: groups,
+            scanned_serials: MapSet.put(scanned_serials(pending), serial),
+            reviewed_serials: MapSet.delete(reviewed_serials(pending), serial)
+        }
+
+        socket
+        |> assign(:pending_shipper, pending)
+        |> acknowledge_scanned_serial(serial, {:ok, "#{serial} marked accepted."})
+    end
+  end
+
+  defp put_serial_notice(socket, form_serial, notice) do
+    tick = Map.get(socket.assigns, :serial_confirm_tick, 0) + 1
+
+    socket
+    |> assign(:serial_confirm_form, to_form(%{"serial" => form_serial}, as: :serial_confirm))
+    |> assign(:serial_confirm_notice, notice)
+    |> assign(:serial_confirm_tick, tick)
+  end
+
+  defp acknowledge_scanned_serial(socket, serial, notice) do
+    socket
+    |> put_serial_notice("", notice)
+    |> assign(:last_scanned_serial, serial)
+  end
+
+  defp match_case_serial(groups, serial) do
+    Enum.find_value(groups, fn group ->
+      if serial in group.serials, do: serial
+    end)
+  end
+
+  defp scanned_serials(pending), do: Map.get(pending, :scanned_serials, MapSet.new())
+  defp reviewed_serials(pending), do: Map.get(pending, :reviewed_serials, MapSet.new())
+
+  defp unreviewed_serials(pending) do
+    scanned = scanned_serials(pending)
+    reviewed = reviewed_serials(pending)
+
+    pending.groups
+    |> Enum.filter(& &1.small_group?)
+    |> Enum.flat_map(& &1.serials)
+    |> Enum.filter(&is_binary/1)
+    |> Enum.uniq()
+    |> Enum.reject(&MapSet.member?(scanned, &1))
+    |> Enum.reject(&MapSet.member?(reviewed, &1))
+  end
+
+  defp serialized_case?(pending) do
+    Enum.any?(pending.groups, fn group ->
+      group.small_group? and Enum.any?(group.serials, &is_binary/1)
+    end)
+  end
+
+  defp serial_scanned?(pending, serial), do: MapSet.member?(scanned_serials(pending), serial)
+
+  defp serial_needs_review?(pending, serial) do
+    Map.get(pending, :review_unscanned?, false) and
+      not serial_scanned?(pending, serial) and
+      not MapSet.member?(reviewed_serials(pending), serial)
+  end
+
+  defp unscanned_confirm_message(1) do
+    "1 unit wasn't scanned. Confirm whether it is accepted, damaged, or missing."
+  end
+
+  defp unscanned_confirm_message(count) do
+    "#{count} units weren't scanned. Confirm each one: accepted, damaged, or missing."
+  end
+
+  defp serial_dom_id(serial) do
+    case String.replace(serial, ~r/[^A-Za-z0-9_-]/, "-") do
+      "" -> "blank"
+      id -> id
+    end
+  end
+
+  defp parse_nonneg_integer(value) do
+    case Integer.parse(to_string(value)) do
+      {int, _rest} when int >= 0 -> int
+      _ -> 0
+    end
+  end
+
+  # Small serialized groups: identity is known per unit, so accepted/damaged/
+  # missing map directly onto specific serials. Large groups: only a
+  # quantity was confirmed, never which specific serials — the resulting
+  # batches carry no serials at all rather than fabricating an attribution
+  # we can't back up.
+  defp settle_group(%{small_group?: true} = group, sscc, site_id) do
+    by_condition = Enum.group_by(group.serials, &Map.fetch!(group.serial_conditions, &1))
+
+    good_item = batch_item(group, sscc, site_id, :active, Map.get(by_condition, :accepted, []))
+
+    damaged_item =
+      batch_item(group, sscc, site_id, :quarantined, Map.get(by_condition, :damaged, []))
+
+    items = Enum.filter([good_item, damaged_item], & &1)
+
+    discrepancies =
+      Map.get(by_condition, :missing, [])
+      |> Enum.map(&missing_discrepancy(group, sscc, site_id, 1, &1))
+
+    {items, discrepancies}
+  end
+
+  defp settle_group(group, sscc, site_id) do
+    good_quantity = group.received_quantity - group.damaged_quantity
+    missing_quantity = group.expected_quantity - group.received_quantity
+
+    good_item =
+      if good_quantity > 0,
+        do: quantity_only_batch_item(group, sscc, site_id, :active, good_quantity),
+        else: nil
+
+    damaged_item =
+      if group.damaged_quantity > 0,
+        do: quantity_only_batch_item(group, sscc, site_id, :quarantined, group.damaged_quantity),
+        else: nil
+
+    items = Enum.filter([good_item, damaged_item], & &1)
+
+    discrepancies =
+      if missing_quantity > 0,
+        do: [missing_discrepancy(group, sscc, site_id, missing_quantity, nil)],
+        else: []
+
+    {items, discrepancies}
+  end
+
+  defp batch_item(_group, _sscc, _site_id, _status, []), do: nil
+
+  defp batch_item(group, sscc, site_id, status, serials) do
+    quantity_only_batch_item(group, sscc, site_id, status, length(serials), serials)
+  end
+
+  defp quantity_only_batch_item(group, sscc, site_id, status, quantity, serials \\ []) do
+    attrs = %{
+      "product_id" => group.product && group.product.id,
+      "gtin" => group.gtin,
+      "batch_no" => group.batch_no,
+      "manufacture_date" => group.production_date,
+      "expiry_date" => group.expiry_date,
+      "quantity" => quantity,
+      "sscc" => sscc,
+      "serials" => serials,
+      "site_id" => site_id,
+      "status" => Atom.to_string(status)
+    }
+
+    %{
+      id: System.unique_integer([:positive]),
+      attrs: attrs,
+      product_name: group.product_name,
+      quantity: quantity,
+      batch_no: group.batch_no,
+      serials: serials,
+      uom: group.product && group.product.uom,
+      flagged_damaged?: status == :quarantined
+    }
+  end
+
+  defp missing_discrepancy(group, sscc, site_id, quantity, serial) do
+    %{
+      "sscc" => sscc,
+      "gtin" => group.gtin,
+      "batch_no" => group.batch_no,
+      "serial" => serial,
+      "quantity" => quantity,
+      "product_id" => group.product && group.product.id,
+      "site_id" => site_id,
+      "expiry_date" => group.expiry_date
+    }
+  end
 
   defp resolve_scanned_product(raw_code, products) do
     trimmed = String.trim(raw_code)
@@ -595,13 +1246,27 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
-  defp start_new_product(socket, gtin) do
+  # Stock is counted in packs. A product added during receiving is stored as one pack.
+  defp stock_unit_attrs(attrs) do
+    if attrs["uom"] in [nil, ""], do: Map.put(attrs, "uom", "C62"), else: attrs
+  end
+
+  defp start_new_product(socket, gtin, name \\ nil) do
+    attrs = %{"gtin" => gtin, "uom" => "C62"}
+
+    attrs =
+      if is_binary(name) and String.trim(name) not in ["", "Unknown product"] do
+        Map.put(attrs, "generic_name", String.trim(name))
+      else
+        attrs
+      end
+
     socket
     |> assign(:receipt_step, :new_product)
     |> assign(:scan_error, nil)
     |> assign(
       :new_product_form,
-      to_form(Product.changeset(%Product{}, %{"gtin" => gtin}), as: :product)
+      to_form(Product.changeset(%Product{}, attrs), as: :product)
     )
   end
 
@@ -612,6 +1277,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       attrs
       |> Map.put("product_id", product && product.id)
       |> Map.put("gtin", product && product.gtin)
+      |> put_existing_serials(socket)
+      |> put_serial_quantity()
 
     changeset = receipt_changeset(socket, attrs)
     quantity = Ecto.Changeset.get_field(changeset, :quantity)
@@ -623,6 +1290,55 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
+  # The batch form has no field for `serials` — editing an item's batch
+  # details (via the form) must not lose the serials the SSCC lookup
+  # originally attached to it.
+  defp put_existing_serials(attrs, %{assigns: %{editing_delivery_item_id: id}} = socket)
+       when not is_nil(id) do
+    case Enum.find(socket.assigns.delivery_items, &(&1.id == id)) do
+      %{attrs: %{"serials" => serials}} -> Map.put(attrs, "serials", serials)
+      _ -> attrs
+    end
+  end
+
+  defp put_existing_serials(attrs, _socket), do: attrs
+
+  # A serial is one trade item. The quantity is the number of serials, and a
+  # typed pack size must not replace it.
+  defp put_serial_quantity(attrs) do
+    case item_serials(attrs) do
+      [] -> attrs
+      serials -> Map.put(attrs, "quantity", length(serials))
+    end
+  end
+
+  defp assign_locked_quantity(socket, attrs) do
+    serials =
+      case item_serials(attrs) do
+        [] -> editing_serials(socket)
+        serials -> serials
+      end
+
+    case serials do
+      [] -> assign(socket, :locked_unit_quantity, nil)
+      serials -> assign(socket, :locked_unit_quantity, length(serials))
+    end
+  end
+
+  defp editing_serials(%{assigns: %{editing_delivery_item_id: id, delivery_items: items}})
+       when not is_nil(id) do
+    case Enum.find(items, &(&1.id == id)) do
+      %{attrs: attrs} -> item_serials(attrs)
+      _ -> []
+    end
+  end
+
+  defp editing_serials(_socket), do: []
+
+  defp item_serials(%{"serials" => serials}) when is_list(serials), do: serials
+  defp item_serials(%{serials: serials}) when is_list(serials), do: serials
+  defp item_serials(_attrs), do: []
+
   defp stage_delivery_item(socket, product, attrs, quantity) do
     item = %{
       id: socket.assigns.editing_delivery_item_id || System.unique_integer([:positive]),
@@ -630,6 +1346,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       product_name: product_name(socket.assigns.products, product.id),
       quantity: quantity,
       batch_no: Map.get(attrs, "batch_no"),
+      serials: Map.get(attrs, "serials", []),
       uom: product.uom
     }
 
@@ -639,14 +1356,24 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         editing_id -> replace_delivery_item(socket.assigns.delivery_items, editing_id, item)
       end
 
+    # A single SSCC can contain several batches of the same GTIN. Once that GTIN
+    # is added to the receiving catalog, all of its staged lines are valid—not
+    # just the row the user happened to edit.
+    delivery_items =
+      associate_staged_items_with_product(delivery_items, product, socket.assigns.products)
+
     socket
     |> assign(:delivery_items, delivery_items)
-    |> assign(:receipt_step, :product)
+    |> assign(:receipt_step, :sscc)
     |> assign(:selected_product, nil)
     |> assign(:editing_delivery_item_id, nil)
+    |> assign(:locked_unit_quantity, nil)
     |> assign(:form, nil)
     |> assign(:scan_error, nil)
     |> assign(:scan_form, to_form(%{"gtin" => ""}, as: :scan))
+    |> assign(:entry_sscc_form, to_form(%{"sscc" => ""}, as: :sscc_entry))
+    |> assign(:entry_sscc_check, :idle)
+    |> assign(:carried_attrs, %{})
     |> assign(:add_item_open, false)
   end
 
@@ -654,6 +1381,222 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     Enum.map(items, fn existing ->
       if existing.id == editing_id, do: item, else: existing
     end)
+  end
+
+  defp associate_staged_items_with_product(items, product, products) do
+    display_name = product_name(products, product.id)
+
+    Enum.map(items, fn item ->
+      if item.attrs["gtin"] == product.gtin do
+        %{
+          item
+          | attrs: Map.put(item.attrs, "product_id", product.id),
+            product_name: display_name,
+            uom: product.uom
+        }
+      else
+        item
+      end
+    end)
+  end
+
+  defp delivery_item_groups(items) do
+    {order, grouped_items} =
+      Enum.reduce(items, {[], %{}}, fn item, {order, groups} ->
+        sscc = Map.get(item.attrs, "sscc") || "manual"
+
+        if Map.has_key?(groups, sscc) do
+          {order, Map.update!(groups, sscc, &(&1 ++ [item]))}
+        else
+          {order ++ [sscc], Map.put(groups, sscc, [item])}
+        end
+      end)
+
+    Enum.map(order, &%{sscc: &1, items: Map.fetch!(grouped_items, &1)})
+  end
+
+  defp delivery_batch_groups(items) do
+    items
+    |> Enum.group_by(
+      &{&1.product_name, &1.attrs["gtin"], &1.batch_no, &1.attrs["expiry_date"], &1.uom}
+    )
+    |> Enum.map(fn {{product_name, gtin, batch_no, expiry, uom}, batch_items} ->
+      %{
+        product_name: product_name,
+        gtin: gtin,
+        batch_no: batch_no,
+        expiry: expiry,
+        uom: uom,
+        quantity: batch_items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum(),
+        items: batch_items
+      }
+    end)
+  end
+
+  defp delivery_serial_cards(items) do
+    Enum.flat_map(items, fn item ->
+      case item_serials(item) do
+        [] ->
+          [%{item: item, serial: nil, dom_id: "delivery-item-#{item.id}", actions?: true}]
+
+        serials ->
+          Enum.with_index(serials, fn serial, index ->
+            %{
+              item: item,
+              serial: serial,
+              dom_id:
+                if(index == 0,
+                  do: "delivery-item-#{item.id}",
+                  else: "delivery-item-#{item.id}-#{index}"
+                ),
+              actions?: index == 0
+            }
+          end)
+      end
+    end)
+  end
+
+  defp delivery_expiry_yymmdd(%Date{} = date), do: Calendar.strftime(date, "%y%m%d")
+  defp delivery_expiry_yymmdd(nil), do: nil
+
+  defp delivery_expiry_yymmdd(other) do
+    case Date.from_iso8601(to_string(other)) do
+      {:ok, date} -> Calendar.strftime(date, "%y%m%d")
+      _ -> nil
+    end
+  end
+
+  defp delivery_ai_pairs(card) do
+    item = card.item
+
+    [
+      {"01", item.attrs["gtin"]},
+      {"17", delivery_expiry_yymmdd(item.attrs["expiry_date"])},
+      {"10", item.batch_no},
+      {"21", card.serial}
+    ]
+    |> Enum.filter(fn {_ai, value} -> is_binary(value) and value != "" end)
+  end
+
+  defp delivery_gs1_text(card) do
+    card |> delivery_ai_pairs() |> Enum.map_join(fn {ai, value} -> "(#{ai})#{value}" end)
+  end
+
+  defp shipper_units(items), do: items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()
+
+  attr :batch, :map, required: true
+
+  defp delivery_batch(assigns) do
+    assigns =
+      assigns
+      |> assign(:cards, delivery_serial_cards(assigns.batch.items))
+      |> assign(
+        :missing_catalog_item,
+        Enum.find(assigns.batch.items, &is_nil(&1.attrs["product_id"]))
+      )
+
+    ~H"""
+    <div class="border-b border-thamani-stone last:border-b-0">
+      <div class="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-3.5 sm:grid-cols-4 sm:px-5">
+        <div class="min-w-0">
+          <p class="truncate text-sm font-semibold text-thamani-evergreen" title={@batch.product_name}>
+            {@batch.product_name}
+          </p>
+          <p
+            :if={@batch.gtin}
+            class="mt-0.5 truncate text-xs tabular-nums tracking-tight text-thamani-pewter"
+          >
+            {@batch.gtin}
+          </p>
+          <button
+            :if={@missing_catalog_item}
+            type="button"
+            id={"add-to-catalog-#{@missing_catalog_item.id}"}
+            phx-click="edit_delivery_item"
+            phx-value-id={@missing_catalog_item.id}
+            class="mt-1 text-left text-xs font-semibold text-amber-900 underline decoration-amber-900/40 underline-offset-2 hover:decoration-amber-900"
+          >
+            Not in your catalog. Add it.
+          </button>
+        </div>
+        <div class="min-w-0">
+          <p class="text-xs font-medium text-thamani-pewter">Batch</p>
+          <p class="mt-0.5 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]">
+            {@batch.batch_no}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-thamani-pewter">Expiry</p>
+          <p class="mt-0.5 text-sm font-medium tabular-nums text-thamani-evergreen">
+            {format_group_expiry(@batch.expiry)}
+          </p>
+        </div>
+        <div>
+          <p class="text-xs font-medium text-thamani-pewter">Units</p>
+          <p class="mt-0.5 text-sm font-medium tabular-nums text-thamani-evergreen">
+            {Products.format_unit_count(@batch.quantity)}
+          </p>
+        </div>
+      </div>
+
+      <ul class="flex flex-wrap items-start gap-2 border-t border-thamani-stone bg-thamani-canvas/60 px-4 py-3 sm:px-5">
+        <li
+          :for={card <- @cards}
+          id={card.dom_id}
+          class="flex w-fit max-w-full items-start gap-2 rounded-xl border border-thamani-stone bg-white p-2"
+        >
+          <canvas
+            :if={card.serial && card.item.attrs["gtin"]}
+            id={"delivery-unit-code-#{card.dom_id}"}
+            phx-hook="DataMatrix"
+            phx-update="ignore"
+            data-gs1-text={delivery_gs1_text(card)}
+            class="size-16 shrink-0"
+          ></canvas>
+          <p :if={card.serial} class="text-xs leading-4 tabular-nums tracking-tight">
+            <span :for={{ai, value} <- delivery_ai_pairs(card)} class="block whitespace-nowrap">
+              <span class="text-thamani-pewter">({ai})</span>
+              <span class="font-medium text-thamani-evergreen">{value}</span>
+            </span>
+          </p>
+          <p :if={is_nil(card.serial)} class="text-sm font-medium text-thamani-evergreen">
+            {Products.format_unit_count(card.item.quantity)}
+            <span class="mt-0.5 block text-xs font-normal text-thamani-pewter">No serial recorded</span>
+          </p>
+          <div class="flex shrink-0 items-center">
+            <span
+              :if={card.item[:flagged_damaged?]}
+              class="mr-1 inline-flex items-center rounded-full bg-amber-900 px-2 py-0.5 text-xs font-medium text-amber-50"
+            >
+              Damaged
+            </span>
+            <button
+              :if={card.actions?}
+              type="button"
+              phx-click="edit_delivery_item"
+              phx-value-id={card.item.id}
+              aria-label={"Edit #{card.item.batch_no}"}
+              title="Edit"
+              class="inline-flex size-8 items-center justify-center rounded-full text-thamani-pewter transition-colors hover:bg-thamani-canvas hover:text-thamani-evergreen focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+            >
+              <.icon name="hero-pencil-square" class="size-4" />
+            </button>
+            <button
+              :if={card.actions?}
+              type="button"
+              phx-click="remove_delivery_item"
+              phx-value-id={card.item.id}
+              aria-label={"Remove #{card.item.batch_no}"}
+              title="Remove"
+              class="inline-flex size-8 items-center justify-center rounded-full text-thamani-pewter transition-colors hover:bg-rose-50 hover:text-thamani-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+            >
+              <.icon name="hero-trash" class="size-4" />
+            </button>
+          </div>
+        </li>
+      </ul>
+    </div>
+    """
   end
 
   defp show_delivery_item_errors(socket, changeset, quantity) do
@@ -679,18 +1622,16 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         "manufacturer" => product.manufacturer
       }
 
-      attrs =
-        case {socket.assigns.warehouses,
-              SiteScoping.default_site_id(socket.assigns.current_scope)} do
-          {[warehouse], _site_id} -> Map.put(attrs, "site_id", warehouse.id)
-          {_warehouses, site_id} when not is_nil(site_id) -> Map.put(attrs, "site_id", site_id)
-          _ -> attrs
-        end
+      attrs = Map.put(attrs, "site_id", socket.assigns.receiving_site.id)
+
+      attrs = Map.merge(attrs, socket.assigns.carried_attrs)
 
       socket
       |> assign(:selected_product, product)
       |> assign(:receipt_step, :details)
       |> assign(:scan_error, nil)
+      |> assign(:carried_attrs, %{})
+      |> assign_locked_quantity(attrs)
       |> assign(:form, to_form(receipt_changeset(socket, attrs), as: :batch))
     else
       assign(socket, :scan_error, "Choose a valid catalog product.")
@@ -731,12 +1672,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   # selected — "Manage organization") does stock land in the org-level
   # pool, awaiting an explicit dispatch to a site later.
   defp receipt_changeset(socket, attrs) do
-    changeset =
-      if is_nil(SiteScoping.default_site_id(socket.assigns.current_scope)) do
-        Batch.org_intake_changeset(%Batch{}, Map.delete(attrs, "site_id"))
-      else
-        Batch.changeset(%Batch{}, attrs)
-      end
+    # site_id is now always required for all batches — even single-site orgs
+    # and warehouse-only orgs must explicitly assign a destination site
+    changeset = Batch.changeset(%Batch{}, attrs)
 
     # A distributor org's origin party is resolved once for the whole
     # receipt (see `origin_check`/`origin_payload`), not picked per line —
@@ -749,9 +1687,20 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     )
   end
 
-  defp format_changeset_error(changeset) do
-    changeset.errors
-    |> Enum.map_join(", ", fn {field, {message, _opts}} -> "#{field} #{message}" end)
+  defp delivery_error_flash(changeset) do
+    case List.keyfind(changeset.errors, :batch_no, 0) do
+      {:batch_no, {"has already been dispatched to this site in this status", _opts}} ->
+        batch_no = Ecto.Changeset.get_field(changeset, :batch_no)
+        "#{batch_no} is already at this site. Remove the duplicate line."
+
+      _ ->
+        detail =
+          Enum.map_join(changeset.errors, ", ", fn {field, {message, _opts}} ->
+            "#{field} #{message}"
+          end)
+
+        "Delivery could not be posted: " <> detail
+    end
   end
 
   defp reload_receipts(socket) do
@@ -770,7 +1719,14 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   defp filter_current_warehouse(receipts, %Scope{current_site_id: nil}), do: receipts
 
   defp filter_current_warehouse(receipts, %Scope{current_site_id: site_id}) do
-    Enum.filter(receipts, &Enum.any?(&1.items, fn item -> item.site_id == site_id end))
+    Enum.filter(receipts, fn receipt ->
+      Enum.any?(receipt.items, &(&1.site_id == site_id)) or
+        Enum.any?(receipt.discrepancies, &(&1.site_id == site_id))
+    end)
+  end
+
+  defp open_discrepancy_count(receipt) do
+    Enum.count(receipt.discrepancies, &(&1.status == :open))
   end
 
   defp warehouse_sites(organization_id) do
@@ -786,11 +1742,118 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
-  defp unit_label(nil), do: "unit(s)"
-  defp unit_label("H87"), do: "piece(s)"
-  defp unit_label("U2"), do: "tablet(s)"
-  defp unit_label("C62"), do: "unit(s)"
-  defp unit_label(unit), do: if(String.ends_with?(unit, "(s)"), do: unit, else: "#{unit}(s)")
+  # Selected segment of the per-serial condition control. "Accepted" stays quiet
+  # (it is the default on every row); damaged and missing take a solid fill
+  # so exceptions are the only thing that shouts.
+  defp serial_condition_classes("accepted"), do: "bg-white text-thamani-forest"
+  defp serial_condition_classes("damaged"), do: "bg-amber-900 text-amber-50"
+  defp serial_condition_classes("missing"), do: "bg-thamani-error text-white"
+
+  defp product_sections(groups) do
+    groups
+    |> Enum.group_by(& &1.gtin)
+    |> Enum.map(fn {_gtin, product_groups} ->
+      shared_expiry =
+        case product_groups |> Enum.map(& &1.expiry_date) |> Enum.uniq() do
+          [expiry] when not is_nil(expiry) -> expiry
+          _ -> nil
+        end
+
+      %{
+        product_name: hd(product_groups).product_name,
+        shared_expiry: shared_expiry,
+        groups: product_groups
+      }
+    end)
+  end
+
+  defp format_group_expiry(%Date{} = date), do: Calendar.strftime(date, "%d %b %Y")
+  defp format_group_expiry(nil), do: "—"
+
+  defp format_group_expiry(other) do
+    case Date.from_iso8601(to_string(other)) do
+      {:ok, date} -> Calendar.strftime(date, "%d %b %Y")
+      _ -> to_string(other)
+    end
+  end
+
+  attr :serial, :string, required: true
+  attr :last_serial, :string, default: nil
+  attr :tick, :integer, required: true
+
+  defp serial_row_flash(assigns) do
+    ~H"""
+    <span
+      :if={@last_serial == @serial and @tick > 0}
+      id={"serial-row-flash-#{serial_dom_id(@serial)}-#{@tick}"}
+      class="serial-row-flash"
+      aria-hidden="true"
+    />
+    """
+  end
+
+  attr :pending, :map, required: true
+  attr :serial, :string, required: true
+
+  defp serial_status(assigns) do
+    ~H"""
+    <span
+      :if={serial_scanned?(@pending, @serial)}
+      id={"serial-scanned-#{serial_dom_id(@serial)}"}
+      class="serial-scanned-pill ml-2 inline-flex items-center gap-1 rounded-full bg-thamani-lime px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-thamani-forest"
+    >
+      <.icon name="hero-check" class="size-3" /> Scanned
+    </span>
+    <span
+      :if={serial_needs_review?(@pending, @serial)}
+      id={"serial-unscanned-#{serial_dom_id(@serial)}"}
+      class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-amber-950"
+    >
+      Confirm
+    </span>
+    """
+  end
+
+  attr :group, :map, required: true
+  attr :serial, :string, required: true
+
+  defp condition_control(assigns) do
+    ~H"""
+    <div
+      role="radiogroup"
+      aria-label={"Condition for #{@serial}"}
+      class="relative z-[1] grid w-full shrink-0 grid-cols-3 gap-0.5 rounded-full bg-thamani-stone p-0.5 sm:w-64"
+    >
+      <button
+        :for={
+          {condition, label} <- [
+            {"accepted", "Accepted"},
+            {"damaged", "Damaged"},
+            {"missing", "Missing"}
+          ]
+        }
+        type="button"
+        role="radio"
+        aria-checked={
+          to_string(Map.get(@group.serial_conditions, @serial) == String.to_atom(condition))
+        }
+        phx-click="set_serial_condition"
+        phx-value-key={@group.key}
+        phx-value-serial={@serial}
+        phx-value-condition={condition}
+        class={[
+          "inline-flex h-8 items-center justify-center rounded-full text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-1",
+          Map.get(@group.serial_conditions, @serial) == String.to_atom(condition) &&
+            serial_condition_classes(condition),
+          Map.get(@group.serial_conditions, @serial) != String.to_atom(condition) &&
+            "text-thamani-pewter hover:text-thamani-forest"
+        ]}
+      >
+        {label}
+      </button>
+    </div>
+    """
+  end
 
   defp receipt_supplier(%{origin_gln: origin_gln} = receipt) when is_binary(origin_gln) do
     receipt.origin_company || "—"
@@ -825,36 +1888,58 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
-  defp origin_gln_value({:matched, resolved}), do: resolved.gln
-  defp origin_gln_value(_origin_check), do: nil
-
   defp doc_upload_error_to_string(:too_large), do: "File is too large (max 5MB)."
   defp doc_upload_error_to_string(:too_many_files), do: "Choose fewer files."
   defp doc_upload_error_to_string(:not_accepted), do: "Must be a PDF or image file."
   defp doc_upload_error_to_string(_), do: "Couldn't accept this file."
 
+  defp draft_attachments(attachments, doc_type) do
+    Enum.filter(attachments || [], &(&1.doc_type == doc_type))
+  end
+
   attr :label, :string, required: true
   attr :name, :string, required: true
   attr :upload, :map, required: true
+  attr :saved_attachments, :list, default: []
 
   defp doc_upload_slot(assigns) do
     ~H"""
-    <div>
-      <p class="text-xs font-semibold uppercase tracking-wide text-thamani-subtle">{@label}</p>
-      <div
-        class="mt-1 flex flex-col gap-2 rounded-lg border border-dashed border-thamani-stone bg-thamani-canvas p-3"
-        phx-drop-target={@upload.ref}
-      >
-        <label class="cursor-pointer text-xs font-semibold text-thamani-forest hover:underline">
-          Choose file(s) <.live_file_input upload={@upload} class="sr-only" />
+    <section
+      id={"#{@name}-upload"}
+      class="py-3 transition-colors first:pt-1 last:pb-1 hover:bg-thamani-canvas/70 sm:px-3"
+      phx-drop-target={@upload.ref}
+    >
+      <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex min-w-0 items-center gap-3">
+          <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#edf1e5] text-thamani-forest">
+            <.icon name="hero-document" class="size-5" />
+          </span>
+          <div class="min-w-0 border-l border-[#dfe3d6] pl-3">
+            <h4 class="text-xs font-bold uppercase tracking-wide text-thamani-forest">{@label}</h4>
+            <p class="mt-1 text-[11px] leading-4 text-thamani-pewter">
+              PDF, JPG, or PNG · up to 5MB{if @upload.max_entries > 1,
+                do: " each, up to #{@upload.max_entries} files"}
+            </p>
+          </div>
+        </div>
+        <label class="group inline-flex w-fit shrink-0 cursor-pointer items-center rounded-full border border-thamani-forest bg-white px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-thamani-forest focus-within:ring-2 focus-within:ring-thamani-accent focus-within:ring-offset-2">
+          <span class="text-thamani-forest group-hover:text-white">
+            {if @upload.max_entries == 1 and @saved_attachments != [],
+              do: "Replace file",
+              else: "Choose file#{if @upload.max_entries > 1, do: "s"}"}
+          </span>
+          <.live_file_input upload={@upload} class="sr-only" />
         </label>
-        <p class="text-[11px] text-thamani-subtle">
-          PDF, JPG, or PNG · up to 5MB{if @upload.max_entries > 1,
-            do: " each, up to #{@upload.max_entries} files"}
-        </p>
-        <div :for={entry <- @upload.entries}>
+      </div>
+
+      <div :if={@upload.entries != []} class="mt-3 space-y-2 sm:ml-12" aria-live="polite">
+        <div
+          :for={entry <- @upload.entries}
+          id={"#{@name}-upload-#{entry.ref}"}
+          class="rounded-lg border border-thamani-stone bg-white px-3 py-2"
+        >
           <div class="flex items-center justify-between gap-2">
-            <span class="truncate text-xs text-thamani-pewter" title={entry.client_name}>
+            <span class="truncate text-xs font-medium text-thamani-forest" title={entry.client_name}>
               {entry.client_name}
             </span>
             <button
@@ -862,17 +1947,64 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               phx-click="cancel_doc_upload"
               phx-value-ref={entry.ref}
               phx-value-upload={@name}
-              class="shrink-0 text-xs font-medium text-thamani-error"
+              class="shrink-0 text-xs font-medium text-thamani-error hover:underline"
             >
               Remove
             </button>
           </div>
-          <p :for={err <- upload_errors(@upload, entry)} class="mt-1 text-xs text-red-700">
+
+          <div :if={entry.progress < 100} class="mt-2">
+            <div class="flex justify-between text-[11px] text-thamani-pewter">
+              <span>Uploading</span><span>{entry.progress}%</span>
+            </div>
+            <div class="mt-1 h-1.5 overflow-hidden rounded-full bg-thamani-stone">
+              <div
+                class="h-full rounded-full bg-thamani-forest transition-all"
+                style={"width: #{entry.progress}%"}
+              >
+              </div>
+            </div>
+          </div>
+
+          <p
+            :if={entry.progress == 100 and upload_errors(@upload, entry) == []}
+            class="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700"
+          >
+            <.icon name="hero-check-circle" class="size-3.5" /> Upload complete.
+          </p>
+          <p
+            :for={err <- upload_errors(@upload, entry)}
+            class="mt-1 text-[11px] font-medium text-red-700"
+          >
             {doc_upload_error_to_string(err)}
           </p>
         </div>
       </div>
-    </div>
+      <div :if={@saved_attachments != []} class="mt-3 space-y-2 sm:ml-12" aria-live="polite">
+        <div
+          :for={attachment <- @saved_attachments}
+          class="flex min-w-0 items-center gap-2 text-[11px] font-medium text-emerald-700"
+        >
+          <.icon name="hero-check-circle" class="size-3.5 shrink-0" />
+          <span class="truncate" title={attachment.filename}>{attachment.filename} saved</span>
+          <button
+            type="button"
+            phx-click="delete_draft_attachment"
+            phx-value-id={attachment.id}
+            class="shrink-0 text-thamani-error hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+            aria-label={"Remove #{attachment.filename}"}
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+      <p
+        :for={err <- upload_errors(@upload)}
+        class="mt-2 text-[11px] font-medium text-red-700 sm:ml-12"
+      >
+        {doc_upload_error_to_string(err)}
+      </p>
+    </section>
     """
   end
 
@@ -920,7 +2052,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           <.input
             id="origin-gln"
             name="origin[gln]"
-            value={origin_gln_value(@origin_check)}
+            value={@origin_gln}
             label="Origin GLN"
             placeholder="13-digit GLN of the sender"
             inputmode="numeric"
@@ -942,6 +2074,20 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               </p>
               <p :if={resolved.address} class="mt-1 font-normal">{resolved.address}</p>
             </div>
+          <% {:invalid, message} -> %>
+            <p
+              id="origin-gln-error"
+              class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800"
+            >
+              <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" />
+              {message}
+            </p>
+          <% :same_receiving_site -> %>
+            <p class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+              <.icon name="hero-exclamation-triangle" class="size-4" />
+              This is the GLN for the site receiving this delivery. Enter the GLN of the sending
+              site or supplier instead.
+            </p>
           <% :not_found -> %>
             <p class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
               <.icon name="hero-exclamation-triangle" class="size-4" />
@@ -952,50 +2098,49 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               We couldn't verify this GLN right now. Try again in a moment.
             </p>
           <% _ -> %>
-            <p class="text-xs text-thamani-pewter">
-              We verify this as soon as you enter it — against your own sites and the GS1 registry.
-            </p>
         <% end %>
-
-        <label class="mt-3 inline-flex items-center gap-2 text-xs font-medium text-thamani-pewter">
-          <input
-            type="checkbox"
-            checked={@is_return}
-            phx-click="toggle_return"
-            class="rounded border-thamani-stone"
-          /> This is a return
-        </label>
-
-        <form :if={@is_return} phx-change="set_return_disposition" class="mt-2">
-          <.input
-            type="select"
-            name="return_disposition"
-            value={@return_disposition}
-            label="Accept as"
-            options={[{"Active (saleable)", "active"}, {"Returned (pending QA)", "returned"}]}
-          />
-        </form>
       </div>
 
-      <div :if={@receiving_new?} class="mb-4 rounded-2xl ff-surface-card p-5 sm:p-6">
-        <h3 class="text-sm font-semibold text-thamani-forest">Delivery documents</h3>
-        <p class="mt-1 text-xs text-thamani-pewter">
-          Attach the GRN and invoice for this delivery, plus any other supporting documents.
+      <section
+        :if={@receiving_new?}
+        id="delivery-documents"
+        class="mb-4 rounded-2xl ff-surface-card p-5 sm:p-6"
+      >
+        <h3 class="text-lg font-semibold text-thamani-forest">Delivery documents</h3>
+        <p class="mt-1 text-sm text-thamani-pewter">
+          Attach the delivery note, invoice, and purchase order for this delivery, plus any other supporting documents.
         </p>
         <form
           id="distributor-document-uploads-form"
           phx-change="validate_uploads"
-          class="mt-3 grid gap-4 sm:grid-cols-3"
+          class="mt-4 divide-y divide-[#e5e8df]"
         >
-          <.doc_upload_slot label="GRN" name="doc_grn" upload={@uploads.doc_grn} />
-          <.doc_upload_slot label="Invoice" name="doc_invoice" upload={@uploads.doc_invoice} />
+          <.doc_upload_slot
+            label="Delivery note"
+            name="doc_delivery_note"
+            upload={@uploads.doc_delivery_note}
+            saved_attachments={draft_attachments(@draft_attachments, :delivery_note)}
+          />
+          <.doc_upload_slot
+            label="Invoice"
+            name="doc_invoice"
+            upload={@uploads.doc_invoice}
+            saved_attachments={draft_attachments(@draft_attachments, :invoice)}
+          />
+          <.doc_upload_slot
+            label="Purchase order"
+            name="doc_po"
+            upload={@uploads.doc_po}
+            saved_attachments={draft_attachments(@draft_attachments, :po)}
+          />
           <.doc_upload_slot
             label="Other documents"
             name="doc_other"
             upload={@uploads.doc_other}
+            saved_attachments={draft_attachments(@draft_attachments, :other)}
           />
         </form>
-      </div>
+      </section>
 
       <div :if={@receiving_new?} class="rounded-2xl ff-surface-card p-5 sm:p-6">
         <div :if={@delivery_items == []} class="py-6">
@@ -1003,7 +2148,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             Scan or select the first product in this delivery.
             <:actions>
               <.button id="open-add-item-empty" variant="primary" phx-click="open_add_item">
-                <.icon name="hero-plus" class="size-4" /> Add item
+                <.icon name="hero-plus" class="size-4" /> Enter shipper SSCC
               </.button>
             </:actions>
           </.blank_state>
@@ -1012,63 +2157,40 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-semibold text-thamani-forest">Items in this delivery</h3>
             <.button id="open-add-item-bottom" variant="ghost" phx-click="open_add_item">
-              <.icon name="hero-plus" class="size-4" /> Add item
+              <.icon name="hero-plus" class="size-4" /> Enter shipper SSCC
             </.button>
           </div>
-          <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone bg-white">
-            <table class="w-full table-fixed text-left text-sm">
-              <thead class="bg-thamani-canvas text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
-                <tr>
-                  <th class="w-[25%] px-3 py-2">Product</th><th class="w-[18%] px-3 py-2">
-                    Batch
-                  </th><th class="hidden px-3 py-2 sm:table-cell">
-                    Expiry
-                  </th><th class="w-[22%] px-3 py-2">Quantity</th><th class="w-[23%] px-3 py-2 text-right">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-thamani-stone">
-                <tr :for={item <- @delivery_items} id={"delivery-item-#{item.id}"}>
-                  <td
-                    class="truncate px-3 py-2 font-medium text-thamani-forest"
-                    title={item.product_name}
-                  >
-                    {item.product_name}
-                  </td>
-                  <td class="truncate px-3 py-2 font-mono text-xs" title={item.batch_no}>
-                    {item.batch_no}
-                    <span
-                      :if={sscc = Map.get(item.attrs, "sscc")}
-                      class="block text-[10px] font-sans text-thamani-subtle"
-                    >
-                      SSCC {sscc}
-                    </span>
-                  </td>
-                  <td class="hidden px-3 py-2 text-thamani-pewter sm:table-cell">
-                    {Map.get(item.attrs, "expiry_date")}
-                  </td>
-                  <td class="px-3 py-2 whitespace-nowrap">
-                    {item.quantity} {unit_label(item.uom)}
-                  </td>
-                  <td class="px-3 py-2">
-                    <div class="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        phx-click="edit_delivery_item"
-                        phx-value-id={item.id}
-                        class="text-xs font-semibold text-thamani-forest hover:underline"
-                      >Edit</button><button
-                        type="button"
-                        phx-click="remove_delivery_item"
-                        phx-value-id={item.id}
-                        class="text-xs font-semibold text-thamani-error hover:underline"
-                      >Remove</button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="mt-3 space-y-4">
+            <article
+              :for={{shipper, index} <- Enum.with_index(delivery_item_groups(@delivery_items), 1)}
+              id={"delivery-shipper-#{index}"}
+              class="overflow-hidden rounded-2xl ff-surface-card"
+            >
+              <header class="flex flex-wrap items-center justify-between gap-3 border-b border-thamani-stone px-4 py-3 sm:px-5">
+                <div class="flex items-center gap-3">
+                  <span class="flex size-8 items-center justify-center rounded-lg bg-thamani-canvas text-sm font-semibold text-thamani-forest">
+                    {index}
+                  </span>
+                  <div>
+                    <p class="font-medium text-thamani-evergreen">
+                      {if shipper.sscc == "manual", do: "No case label", else: "Case"}
+                    </p>
+                    <p class="text-xs tabular-nums text-thamani-pewter">
+                      {shipper_units(shipper.items)}
+                      {if shipper_units(shipper.items) == 1, do: "unit", else: "units"}
+                    </p>
+                  </div>
+                </div>
+                <span
+                  :if={shipper.sscc != "manual"}
+                  class="rounded-lg bg-thamani-lime px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
+                >
+                  SSCC {shipper.sscc}
+                </span>
+              </header>
+
+              <.delivery_batch :for={batch <- delivery_batch_groups(shipper.items)} batch={batch} />
+            </article>
           </div>
           <.button
             id="finish-distributor-delivery"
@@ -1088,13 +2210,330 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         on_cancel={JS.push("close_add_item")}
       >
         <div class="border-b border-thamani-stone pb-4">
-          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">Add item</h2>
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
+            {cond do
+              @receipt_step == :sscc -> "Enter SSCC"
+              @receipt_step == :confirm_shipper -> "Confirm this case's contents"
+              @receipt_step == :new_product -> "Add to catalog"
+              true -> "Add item"
+            end}
+          </h2>
           <p class="mt-1 text-sm text-thamani-pewter">
-            Scan or select the product, then add its batch details.
+            {cond do
+              @receipt_step == :sscc ->
+                "Scan or type the case label's SSCC to pull in its contents."
+
+              @receipt_step == :confirm_shipper and @pending_shipper.review_unscanned? and
+                  unreviewed_serials(@pending_shipper) != [] ->
+                "These units weren't scanned. Confirm each one as accepted, damaged, or missing."
+
+              @receipt_step == :confirm_shipper and serialized_case?(@pending_shipper) ->
+                "Scan each unit's data matrix, or enter its serial number. Unmarked units stay accepted until you mark them damaged or missing."
+
+              @receipt_step == :confirm_shipper ->
+                "Unmarked contents stay accepted. Flag anything damaged or missing before adding it."
+
+              @receipt_step == :new_product ->
+                "This GTIN is not in your catalog yet. Save the product and its batch stays on this delivery."
+
+              true ->
+                "Scan or select the product, then add its batch details."
+            end}
           </p>
         </div>
 
         <%= cond do %>
+          <% @receipt_step == :sscc -> %>
+            <.form
+              for={@entry_sscc_form}
+              id="distributor-entry-sscc-form"
+              phx-change="validate_entry_sscc"
+              class="mt-5"
+            >
+              <.input
+                field={@entry_sscc_form[:sscc]}
+                label="Case label SSCC"
+                placeholder="e.g. 007923810000000013"
+                autocomplete="off"
+                phx-debounce="350"
+                class="font-medium tabular-nums tracking-tight text-thamani-forest"
+              />
+            </.form>
+
+            <%= case @entry_sscc_check do %>
+              <% :checking -> %>
+                <p class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-thamani-pewter">
+                  <.icon name="hero-arrow-path" class="size-3.5 motion-safe:animate-spin" />
+                  Looking up this SSCC&hellip;
+                </p>
+              <% {:matched, _shipper} -> %>
+                <p class="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-thamani-forest">
+                  <.icon name="hero-check-circle" class="size-4" /> Found it — contents loaded below.
+                </p>
+              <% :not_found -> %>
+                <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  <.icon name="hero-exclamation-triangle" class="size-4" />
+                  GS1 has no record of this SSCC. Add the item manually instead.
+                </p>
+              <% :unavailable -> %>
+                <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  <.icon name="hero-exclamation-triangle" class="size-4" />
+                  GS1 could not be reached for this SSCC. Try again, or add the item manually.
+                </p>
+              <% {:duplicate, sscc} -> %>
+                <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                  <.icon name="hero-exclamation-triangle" class="size-4" />
+                  Case {sscc} has already been added to this delivery — check "Items in this delivery" below.
+                </p>
+              <% _ -> %>
+                <p class="mt-2 text-xs text-thamani-pewter">
+                  Recognized SSCCs auto-fill their batch, quantity, and expiry details.
+                </p>
+            <% end %>
+
+            <div class="my-5 flex items-center gap-3 text-xs font-semibold tracking-widest text-thamani-subtle">
+              <span class="h-px flex-1 bg-thamani-stone"></span>OR<span class="h-px flex-1 bg-thamani-stone"></span>
+            </div>
+            <button
+              type="button"
+              phx-click="skip_to_manual_entry"
+              class="text-sm font-semibold text-thamani-forest hover:underline"
+            >
+              Scan or select the product instead
+            </button>
+          <% @receipt_step == :confirm_shipper -> %>
+            <div class="mt-5">
+              <.form
+                :if={serialized_case?(@pending_shipper)}
+                for={@serial_confirm_form}
+                id="serial-confirm-form"
+                phx-change="validate_serial_confirm"
+                phx-submit="confirm_serial"
+              >
+                <div class="flex items-end gap-2">
+                  <div class="min-w-0 flex-1">
+                    <.input
+                      field={@serial_confirm_form[:serial]}
+                      id="serial-confirm-input"
+                      type="text"
+                      label="Scan data matrix or enter serial number"
+                      placeholder="Scan the unit data matrix, or type the serial"
+                      autocomplete="off"
+                      autofocus
+                      phx-hook="ScanField"
+                      phx-debounce="150"
+                      class="font-medium tabular-nums tracking-tight"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    id="mark-serial-accepted"
+                    class="mb-3 inline-flex shrink-0 items-center rounded-full bg-thamani-forest px-4 py-[11px] text-sm font-semibold text-white transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+                  >
+                    Mark accepted
+                  </button>
+                </div>
+              </.form>
+              <div
+                :if={@serial_confirm_notice}
+                id="serial-confirm-notice"
+                role={if(elem(@serial_confirm_notice, 0) == :error, do: "alert", else: "status")}
+              >
+                <p
+                  id={"serial-confirm-notice-body-#{@serial_confirm_tick}"}
+                  class={[
+                    "serial-confirm-notice mt-1 mb-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold",
+                    elem(@serial_confirm_notice, 0) == :error && "bg-rose-50 text-thamani-error",
+                    elem(@serial_confirm_notice, 0) == :ok && "bg-thamani-lime text-thamani-forest"
+                  ]}
+                >
+                  <span
+                    :if={elem(@serial_confirm_notice, 0) == :ok}
+                    class="serial-confirm-check"
+                    aria-hidden="true"
+                  >
+                    <.icon name="hero-check" class="size-3.5" />
+                  </span>
+                  {elem(@serial_confirm_notice, 1)}
+                </p>
+              </div>
+              <p
+                :if={
+                  @pending_shipper.review_unscanned? and unreviewed_serials(@pending_shipper) != []
+                }
+                id="unscanned-confirm"
+                role="alert"
+                class="mb-3 rounded-xl bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-950"
+              >
+                {unscanned_confirm_message(length(unreviewed_serials(@pending_shipper)))}
+              </p>
+              <div class="mt-4 max-h-[min(28rem,55vh)] overflow-y-auto overscroll-contain rounded-2xl border border-thamani-frosted bg-white">
+                <section
+                  :for={section <- product_sections(@pending_shipper.groups)}
+                  class="border-b border-thamani-frosted last:border-b-0"
+                >
+                  <header class="bg-thamani-canvas px-4 py-3">
+                    <h3 class="text-sm font-semibold tracking-tight text-thamani-evergreen">
+                      {section.product_name}
+                    </h3>
+                    <p :if={section.shared_expiry} class="mt-0.5 text-sm text-thamani-pewter">
+                      Expires
+                      <span class="font-medium tabular-nums text-thamani-evergreen">
+                        {format_group_expiry(section.shared_expiry)}
+                      </span>
+                    </p>
+                  </header>
+
+                  <div
+                    :for={group <- section.groups}
+                    id={"pending-group-#{group.key}"}
+                    class="border-t border-thamani-frosted"
+                  >
+                    <div
+                      :if={group.small_group? and length(group.serials) == 1}
+                      id={"pending-serial-#{serial_dom_id(hd(group.serials))}"}
+                      class={[
+                        "relative isolate flex flex-col gap-2 overflow-hidden px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
+                        serial_needs_review?(@pending_shipper, hd(group.serials)) && "bg-amber-50"
+                      ]}
+                    >
+                      <.serial_row_flash
+                        serial={hd(group.serials)}
+                        last_serial={@last_scanned_serial}
+                        tick={@serial_confirm_tick}
+                      />
+                      <p class="relative z-[1] min-w-0 text-sm text-thamani-pewter">
+                        <span class="font-medium tabular-nums tracking-tight text-thamani-evergreen">
+                          {group.batch_no}
+                        </span>
+                        <span class="mx-1.5 text-thamani-pewter" aria-hidden="true">·</span>
+                        <span
+                          class="font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]"
+                          title={hd(group.serials)}
+                        >
+                          {hd(group.serials)}
+                        </span>
+                        <.serial_status pending={@pending_shipper} serial={hd(group.serials)} />
+                        <span :if={is_nil(section.shared_expiry)} class="ml-1.5 tabular-nums">
+                          {format_group_expiry(group.expiry_date)}
+                        </span>
+                      </p>
+                      <.condition_control group={group} serial={hd(group.serials)} />
+                    </div>
+
+                    <div :if={group.small_group? and length(group.serials) != 1} class="px-4 py-3">
+                      <p class="text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen">
+                        {group.batch_no}
+                      </p>
+                      <p
+                        :if={is_nil(section.shared_expiry)}
+                        class="mt-0.5 text-xs tabular-nums text-thamani-pewter"
+                      >
+                        Expires {format_group_expiry(group.expiry_date)}
+                      </p>
+                      <div
+                        :for={serial <- group.serials}
+                        id={"pending-serial-#{serial_dom_id(serial)}"}
+                        class={[
+                          "relative isolate mt-2 flex flex-col gap-2 overflow-hidden sm:flex-row sm:items-center sm:justify-between sm:gap-4",
+                          serial_needs_review?(@pending_shipper, serial) &&
+                            "-mx-4 bg-amber-50 px-4 py-2"
+                        ]}
+                      >
+                        <.serial_row_flash
+                          serial={serial}
+                          last_serial={@last_scanned_serial}
+                          tick={@serial_confirm_tick}
+                        />
+                        <span
+                          class="relative z-[1] min-w-0 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]"
+                          title={serial}
+                        >
+                          {serial}
+                          <.serial_status pending={@pending_shipper} serial={serial} />
+                        </span>
+                        <.condition_control group={group} serial={serial} />
+                      </div>
+                    </div>
+
+                    <div :if={!group.small_group?} class="px-4 py-3">
+                      <div class="flex items-baseline justify-between gap-3">
+                        <p class="min-w-0 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen">
+                          {group.batch_no}
+                        </p>
+                        <p class="shrink-0 text-xs text-thamani-pewter">
+                          Expected
+                          <span class="font-semibold tabular-nums text-thamani-evergreen">
+                            {group.expected_quantity}
+                          </span>
+                        </p>
+                      </div>
+                      <p
+                        :if={is_nil(section.shared_expiry)}
+                        class="mt-0.5 text-xs tabular-nums text-thamani-pewter"
+                      >
+                        Expires {format_group_expiry(group.expiry_date)}
+                      </p>
+                      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                        <label class="block">
+                          <span class="text-xs font-medium text-thamani-pewter">Received</span>
+                          <input
+                            type="number"
+                            min="0"
+                            max={group.expected_quantity}
+                            value={group.received_quantity}
+                            phx-change="set_group_received_quantity"
+                            phx-value-key={group.key}
+                            name="value"
+                            class="thamani-input mt-1 w-full"
+                          />
+                        </label>
+                        <label class="block">
+                          <span class="text-xs font-medium text-thamani-pewter">
+                            Damaged, of those received
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            max={group.received_quantity}
+                            value={group.damaged_quantity}
+                            phx-change="set_group_damaged_quantity"
+                            phx-value-key={group.key}
+                            name="value"
+                            class="thamani-input mt-1 w-full"
+                          />
+                        </label>
+                        <p
+                          :if={group.received_quantity < group.expected_quantity}
+                          class="text-xs font-medium text-amber-900 sm:col-span-2"
+                        >
+                          {group.expected_quantity - group.received_quantity} not received. These are flagged missing without serials.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <div class="mt-4 flex gap-3">
+                <button
+                  type="button"
+                  id="cancel-pending-shipper"
+                  phx-click="cancel_pending_shipper"
+                  class="flex-1 rounded-full border border-thamani-stone px-4 py-2.5 text-sm font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  id="confirm-pending-shipper"
+                  phx-click="confirm_pending_shipper"
+                  class="flex-1 rounded-full bg-thamani-forest px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+                >
+                  Yes, add to delivery
+                </button>
+              </div>
+            </div>
           <% @receipt_step == :product -> %>
             <.form
               for={@scan_form}
@@ -1156,27 +2595,34 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               phx-submit="save_new_product"
             >
               <input type="hidden" name="product[gtin]" value={@new_product_form[:gtin].value} />
+              <input type="hidden" name="product[uom]" value="C62" />
               <div class="grid gap-x-4 sm:grid-cols-2">
                 <.input field={@new_product_form[:generic_name]} label="Generic name" />
                 <.input field={@new_product_form[:brand_name]} label="Brand name" />
                 <.input
-                  field={@new_product_form[:uom]}
+                  field={@new_product_form[:net_content_quantity]}
+                  type="number"
+                  label="Each pack contains (optional)"
+                  placeholder="e.g. 20"
+                  min="1"
+                />
+                <.input
+                  field={@new_product_form[:net_content_uom]}
                   type="select"
-                  label="Base inventory unit"
-                  prompt="Select unit"
+                  label="What's inside"
+                  prompt="Tablets, capsules, ml"
                   options={[
-                    {"Piece (H87)", "H87"},
-                    {"Tablet (U2)", "U2"},
-                    {"Unit (C62)", "C62"},
-                    {"Kilogram (KGM)", "KGM"}
+                    {"Tablets", "U2"},
+                    {"Capsules", "AV"},
+                    {"Millilitres", "MLT"},
+                    {"Pieces", "H87"}
                   ]}
-                  required
                 />
                 <.input field={@new_product_form[:category]} label="Category" />
                 <.input
                   field={@new_product_form[:price]}
                   type="number"
-                  label="Unit price (KSh)"
+                  label="Price (KSh)"
                   min="0"
                   required
                 />
@@ -1281,11 +2727,26 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                   label="Manufacture date (optional)"
                 />
               </div>
+              <p
+                :if={Products.format_net_content(@selected_product)}
+                id="unit-net-content"
+                class="mb-3 text-xs text-thamani-pewter"
+              >
+                Each pack contains {Products.format_net_content(@selected_product)}.
+              </p>
               <div class="grid gap-x-4 sm:grid-cols-2">
+                <div :if={@locked_unit_quantity} id="locked-unit-quantity">
+                  <p class="mb-1 text-sm font-medium text-thamani-forest">Quantity received</p>
+                  <p class="mb-3 text-sm font-medium tabular-nums text-thamani-evergreen">
+                    {Products.format_unit_count(@locked_unit_quantity)}
+                  </p>
+                  <input type="hidden" name="batch[quantity]" value={@locked_unit_quantity} />
+                </div>
                 <.input
+                  :if={is_nil(@locked_unit_quantity)}
                   field={@form[:quantity]}
                   type="number"
-                  label={"Quantity received (#{unit_label(@selected_product.uom)})"}
+                  label="Quantity received (units)"
                   min="1"
                   required
                 />
@@ -1303,6 +2764,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 placeholder="Scan the pallet/case label, or type its 18-digit SSCC"
                 autocomplete="off"
                 required
+                class="font-medium tabular-nums tracking-tight text-thamani-forest"
               />
               <p
                 :if={@sscc_warning}
@@ -1332,6 +2794,13 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       >
         <:col :let={{_id, receipt}} label="Receipt">
           <span class="font-semibold text-thamani-forest">{receipt.number}</span>
+          <p
+            :if={open_discrepancy_count(receipt) > 0}
+            id={"receipt-open-lines-#{receipt.id}"}
+            class="mt-1 text-xs font-semibold text-amber-800"
+          >
+            {open_discrepancy_count(receipt)} not confirmed
+          </p>
         </:col>
         <:col :let={{_id, receipt}} label="Supplier">{receipt_supplier(receipt)}</:col>
         <:col :let={{_id, receipt}} label="Warehouse">{receipt_warehouse(receipt)}</:col>

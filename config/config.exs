@@ -17,7 +17,8 @@ config :thamani_dawa, ThamaniDawaWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
     formats: [html: ThamaniDawaWeb.ErrorHTML, json: ThamaniDawaWeb.ErrorJSON],
-    layout: false
+    layout: false,
+    root_layout: {ThamaniDawaWeb.Layouts, :root}
   ],
   pubsub_server: ThamaniDawa.PubSub,
   live_view: [signing_salt: "mRZDJjbN"]
@@ -64,8 +65,8 @@ config :thamani_dawa, Oban,
   plugins: [{Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 30}]
 
 config :thamani_dawa, ThamaniDawa.Epcis.Client,
-  capture_path: "/epcis/v2/capture",
-  distributor_capture_path: nil,
+  capture_path: "/api/integration/facility/events",
+  distributor_capture_path: "/api/integration/supplier/events",
   distributor_api_key: nil,
   enabled: false
 

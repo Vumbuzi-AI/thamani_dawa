@@ -273,15 +273,15 @@ defmodule ThamaniDawaWeb.OnboardingLive do
             id="onboarding-welcome"
             class="thamani-step-enter grid items-center gap-10 md:grid-cols-[0.9fr_1.1fr] md:gap-10 lg:gap-16"
           >
-            <div>
+            <div class="flex flex-col items-center text-center md:block md:text-left">
               <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
                 <.icon name="hero-sparkles" class="size-6" />
               </div>
 
-              <h1 class="max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
+              <h1 class="w-full max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
                 Your workspace is ready
               </h1>
-              <p class="mt-6 max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
+              <p class="mt-6 w-full max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
                 Your organization and main location are set. Next, prepare Thamani Dawa for day-to-day operations.
               </p>
 
@@ -318,19 +318,19 @@ defmodule ThamaniDawaWeb.OnboardingLive do
             id={"onboarding-panel-#{@current.key}"}
             class="thamani-step-enter grid items-center gap-10 md:grid-cols-[0.9fr_1.1fr] md:gap-10 lg:gap-16"
           >
-            <div>
+            <div class="flex flex-col items-center text-center md:block md:text-left">
               <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
                 <.icon name="hero-sparkles" class="size-6" />
               </div>
 
-              <h1 class="max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
+              <h1 class="w-full max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
                 Let's finish setting up
               </h1>
-              <p class="mt-6 max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
+              <p class="mt-6 w-full max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
                 A few more steps and you'll be ready for day-to-day operations.
               </p>
 
-              <div class="mt-10 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+              <div class="mt-10 flex w-full flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center md:w-auto md:justify-start">
                 <.link
                   id="onboarding-cta"
                   navigate={onboarding_path(@current.path, @replay)}
@@ -359,7 +359,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
               </button>
 
               <p class="mt-8 max-w-md text-sm leading-6 text-[var(--thamani-subtle)]">
-                Your progress is saved as you complete each task. You can return from the dashboard at any time.
+                Your progress is saved as you complete each task.
               </p>
             </div>
 

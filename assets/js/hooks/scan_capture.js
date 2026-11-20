@@ -21,6 +21,12 @@ export const ScanCapture = {
     }
 
     this.el.addEventListener("keydown", this.onKeydown)
+
+    this.handleEvent("scan_capture_reset", () => {
+      this.cancelScheduledFlush()
+      this.el.value = ""
+      this.el.focus()
+    })
   },
 
   scheduleFlush() {

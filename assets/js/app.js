@@ -27,18 +27,20 @@ import topbar from "../vendor/topbar"
 import {GoogleMaps} from "./hooks/google_maps"
 import {Chart} from "./hooks/chart_hook"
 import {DataMatrix} from "./hooks/datamatrix"
-import {SsccBarcode} from "./hooks/sscc_barcode"
 import {ScanCapture} from "./hooks/scan_capture"
+import {ScanField} from "./hooks/scan_field"
 import {ProductTour} from "./hooks/product_tour"
 import {FlashAutoDismiss} from "./hooks/flash_auto_dismiss"
 import {QuickSaleReceiptPrint} from "./hooks/quick_sale_receipt_print"
 import {ConditionalBatchField} from "./hooks/conditional_batch_field"
+import {LabelPrint, PrintAllLabels} from "./hooks/label_print"
+import {LabelSvgDownload, DownloadAllLabelsSvg} from "./hooks/label_svg_download"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, SsccBarcode, ScanCapture, ProductTour, FlashAutoDismiss, QuickSaleReceiptPrint, ConditionalBatchField},
+  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, ScanCapture, ScanField, ProductTour, FlashAutoDismiss, QuickSaleReceiptPrint, ConditionalBatchField, LabelPrint, PrintAllLabels, LabelSvgDownload, DownloadAllLabelsSvg},
 })
 
 // Show progress bar on live navigation and form submits

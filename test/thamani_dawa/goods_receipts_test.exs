@@ -54,6 +54,55 @@ defmodule ThamaniDawa.GoodsReceiptsTest do
     assert Enum.all?(receipt.items, &(not is_nil(&1.received_at)))
   end
 
+  test "keeps a receiving draft's verified origin for the same user", ctx do
+    draft = GoodsReceipts.ensure_receiving_draft(ctx.organization.id, ctx.user.id)
+
+    GoodsReceipts.save_draft_origin!(draft, %{
+      "gln" => "6109876543210",
+      "company" => "Draft sender",
+      "address" => "1 Market Street",
+      "po_box" => nil,
+      "site_id" => nil
+    })
+
+    restored = GoodsReceipts.get_receiving_draft(ctx.organization.id, ctx.user.id)
+
+    assert restored.origin["gln"] == "6109876543210"
+    assert restored.origin["company"] == "Draft sender"
+  end
+
+  test "replaces a single-document draft attachment without retaining the old file", ctx do
+    source_path = Path.join(System.tmp_dir!(), "receiving-draft-#{Ecto.UUID.generate()}.pdf")
+    File.write!(source_path, "document")
+
+    draft = GoodsReceipts.ensure_receiving_draft(ctx.organization.id, ctx.user.id)
+
+    first =
+      GoodsReceipts.store_draft_attachment!(draft, :delivery_note, source_path, %{
+        client_name: "first-delivery-note.pdf",
+        client_type: "application/pdf",
+        client_size: 8
+      })
+
+    replacement =
+      GoodsReceipts.store_draft_attachment!(draft, :delivery_note, source_path, %{
+        client_name: "replacement-delivery-note.pdf",
+        client_type: "application/pdf",
+        client_size: 8
+      })
+
+    restored = GoodsReceipts.get_receiving_draft(ctx.organization.id, ctx.user.id)
+
+    assert [saved] = restored.attachments
+    assert saved.id == replacement.id
+    assert saved.filename == "replacement-delivery-note.pdf"
+    refute File.exists?(first.path)
+    assert File.exists?(replacement.path)
+
+    GoodsReceipts.delete_receiving_draft!(draft)
+    File.rm(source_path)
+  end
+
   test "retrying a posting key returns the original receipt without duplicate stock", ctx do
     key = Ecto.UUID.generate()
     items = [delivery_item(ctx, "LOT-RETRY", 12)]
@@ -135,6 +184,54 @@ defmodule ThamaniDawa.GoodsReceiptsTest do
     assert receipt.origin_po_box == origin.po_box
     assert [batch] = receipt.items
     assert is_nil(batch.supplier_id)
+  end
+
+  test "groups a cased delivery into one logistic unit and leaves loose stock unlinked", ctx do
+    product_b = ProductsFixtures.product_fixture(%{organization_id: ctx.organization.id, uom: "U2"})
+    sscc = "006141411234567890"
+
+    items = [
+      cased_item(ctx, ctx.product, "CASE-A", 20, sscc),
+      cased_item(ctx, product_b, "CASE-B", 15, sscc),
+      delivery_item(ctx, "LOOSE-1", 10)
+    ]
+
+    assert {:ok, _receipt} =
+             GoodsReceipts.receive_delivery(
+               ctx.organization.id,
+               ctx.user.id,
+               items,
+               Ecto.UUID.generate()
+             )
+
+    by_no = ctx.organization.id |> Batches.list_batches() |> Map.new(&{&1.batch_no, &1})
+
+    unit_a = by_no["CASE-A"].logistic_unit_id
+    unit_b = by_no["CASE-B"].logistic_unit_id
+
+    # One unit owns both cased lines (a mixed case); loose stock stays unit-less.
+    assert unit_a && unit_a == unit_b
+    assert is_nil(by_no["LOOSE-1"].logistic_unit_id)
+
+    unit = ThamaniDawa.Repo.get!(ThamaniDawa.Batches.LogisticUnit, unit_a)
+    assert unit.sscc == sscc
+    assert unit.kind == :case
+    assert unit.source == :inbound
+  end
+
+  defp cased_item(ctx, product, batch_no, quantity, sscc) do
+    %{
+      attrs: %{
+        "product_id" => product.id,
+        "site_id" => ctx.warehouse.id,
+        "supplier_id" => ctx.supplier.id,
+        "gtin" => product.gtin,
+        "batch_no" => batch_no,
+        "expiry_date" => "2028-12-31",
+        "quantity" => Integer.to_string(quantity),
+        "sscc" => sscc
+      }
+    }
   end
 
   defp delivery_item(ctx, batch_no, quantity) do

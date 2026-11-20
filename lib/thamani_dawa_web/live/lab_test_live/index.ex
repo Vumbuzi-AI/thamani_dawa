@@ -22,8 +22,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
      |> assign(:filters, @default_filters)
      |> assign(:page, 1)
      |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
-     |> refresh_categories(org_id)
-     |> reload_lab_tests()}
+     |> refresh_categories(org_id)}
   end
 
   def handle_params(params, _url, socket) do

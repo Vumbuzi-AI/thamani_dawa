@@ -26,7 +26,19 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
      |> assign(:batch_count, length(batches))
      |> assign(:remaining_stock, Enum.sum(Enum.map(batches, & &1.remaining_quantity)))
      |> assign(:page_number, 1)
+     |> assign(:expanded_batches, MapSet.new())
      |> stream(:batches, [])}
+  end
+
+  def handle_event("toggle_batch_serials", %{"batch" => batch_id}, socket) do
+    expanded = socket.assigns.expanded_batches
+
+    expanded =
+      if MapSet.member?(expanded, batch_id),
+        do: MapSet.delete(expanded, batch_id),
+        else: MapSet.put(expanded, batch_id)
+
+    {:noreply, assign(socket, :expanded_batches, expanded)}
   end
 
   def handle_params(params, _url, socket) do
@@ -62,7 +74,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
         <:subtitle>Product details and warehouse batches for this catalog item.</:subtitle>
         <:actions>
           <.button variant="ghost" navigate={~p"/distributor/products"}>
-            <.icon name="hero-arrow-left" class="size-4" /> Products
+            <.icon name="hero-arrow-left" class="size-4" /> Inventory
           </.button>
           <.button variant="primary" navigate={~p"/distributor/receiving/new"}>
             <.icon name="hero-plus" class="size-4" /> Receive stock
@@ -105,14 +117,22 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
             </dd>
           </div>
           <div>
+            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Strength</dt><dd class="mt-1 text-sm text-thamani-ink">
+              {@product.strength || "—"}
+            </dd>
+          </div>
+          <div>
+            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+              Each pack contains
+            </dt>
+            <dd class="mt-1 text-sm text-thamani-ink">
+              {Products.format_net_content(@product) || "—"}
+            </dd>
+          </div>
+          <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
               Manufacturer
             </dt><dd class="mt-1 text-sm text-thamani-ink">{@product.manufacturer || "—"}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Unit</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {@product.uom || "—"}
-            </dd>
           </div>
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">GTIN</dt><dd class="mt-1 font-mono text-sm text-thamani-ink">
@@ -121,7 +141,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
           </div>
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Unit price
+              Price
             </dt><dd class="mt-1 text-sm text-thamani-ink">
               {if @product.price, do: "KES #{@product.price}", else: "—"}
             </dd>
@@ -154,6 +174,38 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
         </:col>
         <:col :let={{_id, batch}} label="Batch / lot">
           <span class="font-mono">{batch.batch_no}</span>
+        </:col>
+        <:col :let={{_id, batch}} label="Serials">
+          <button
+            type="button"
+            phx-click={batch.serials != [] && "toggle_batch_serials"}
+            phx-value-batch={batch.id}
+            disabled={batch.serials == []}
+            class="flex items-center gap-1 text-sm font-semibold text-thamani-forest disabled:cursor-default"
+            aria-expanded={to_string(MapSet.member?(@expanded_batches, to_string(batch.id)))}
+          >
+            {if batch.serials == [], do: "—", else: length(batch.serials)}
+            <.icon
+              :if={batch.serials != []}
+              name="hero-chevron-down"
+              class={[
+                "size-3.5 transition-transform duration-200",
+                MapSet.member?(@expanded_batches, to_string(batch.id)) && "rotate-180"
+              ]}
+            />
+          </button>
+          <div
+            :if={batch.serials != [] and MapSet.member?(@expanded_batches, to_string(batch.id))}
+            class="mt-1.5 grid gap-1.5 sm:grid-cols-2"
+          >
+            <span
+              :for={serial <- batch.serials}
+              class="truncate rounded border border-thamani-stone bg-white px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
+              title={serial}
+            >
+              {serial}
+            </span>
+          </div>
         </:col>
         <:col :let={{_id, batch}} label="Manufactured">{date_or_dash(batch.manufacture_date)}</:col>
         <:col :let={{_id, batch}} label="Expires">{date_or_dash(batch.expiry_date)}</:col>

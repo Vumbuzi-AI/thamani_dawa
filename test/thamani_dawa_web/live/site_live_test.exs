@@ -109,6 +109,32 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       refute has_element?(lv, "#site-capability")
     end
 
+    test "does not look up a branch GLN outside the verified company prefix", %{conn: conn} do
+      organization = organization_with_prefix_fixture(%{operating_models: [:pharmacy]})
+      admin = user_fixture(%{organization_id: organization.id})
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/new")
+
+      lv |> form("#site-form", site: %{gln: "9506000134352"}) |> render_submit()
+
+      assert has_element?(
+               lv,
+               "#site-gln-prefix-mismatch",
+               "This GLN does not belong to your verified GS1 company prefix."
+             )
+
+      refute has_element?(lv, "#site-form", "Checking with the GS1 registry")
+    end
+
+    test "checks for an existing branch GLN before querying GS1", %{conn: conn, admin: admin} do
+      site_fixture(%{organization_id: admin.organization_id, gln: "0614141000128"})
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/new")
+
+      lv |> form("#site-form", site: %{gln: "0614141000128"}) |> render_submit()
+
+      assert has_element?(lv, "#site-form", "This GLN is already registered to another location.")
+      refute has_element?(lv, "#site-form", "Checking with the GS1 registry")
+    end
+
     test "verifying the GLN reveals activity choices gated by the org's operating models", %{
       conn: conn
     } do
@@ -122,7 +148,9 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       assert html =~ "Verified with GS1"
       assert html =~ "Retail pharmacy"
       assert html =~ "Diagnostic laboratory"
-      assert html =~ "Pharmaceutical wholesale"
+      assert html =~ "Pharmaceutical distributor"
+      assert has_element?(lv, "#site-name[value='Test Licensee']")
+      assert has_element?(lv, "#site-address[value='Nairobi, Kenya']")
     end
 
     test "offers only the single matching activity when the org has one operating model", %{
@@ -134,10 +162,9 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
       lv |> form("#site-form", site: %{gln: "0614141000128"}) |> render_submit()
       render_async(lv, 5_000)
 
-      html = render(lv)
-      assert html =~ "Activity at this location"
-      assert html =~ "Retail pharmacy"
-      refute html =~ "Diagnostic laboratory"
+      assert has_element?(lv, "input[name='site[activity_choice]'][value='pharmacy']")
+      refute has_element?(lv, "input[name='site[activity_choice]'][value='laboratory']")
+      refute has_element?(lv, "#site-form", "Activity at this location")
     end
 
     test "creates a pharmacy site", %{conn: conn, admin: admin} do

@@ -58,16 +58,52 @@ if daraja_enabled do
     retry: false
 end
 
+epcis_cred_key =
+  if config_env() == :prod do
+    System.get_env("EPCIS_CRED_ENCRYPTION_KEY") ||
+      raise """
+      environment variable EPCIS_CRED_ENCRYPTION_KEY is missing.
+      You can generate one by calling: 32 |> :crypto.strong_rand_bytes() |> Base.encode64()
+      """
+  else
+    # Fixed, non-secret key for dev/test only — every developer's local org-level
+    # EPCIS credentials are encrypted with the same key, which is fine since none
+    # of this data is real outside of a deployed environment.
+    System.get_env("EPCIS_CRED_ENCRYPTION_KEY") ||
+      "9ibsDRVZhhbMjD1hJ47dCv+tZZm+171DJvIW2hdz/wg="
+  end
+
+config :thamani_dawa, ThamaniDawa.Vault,
+  json_library: Jason,
+  ciphers: [
+    default: {Cloak.Ciphers.AES.GCM, tag: "AES.GCM.V1", key: Base.decode64!(epcis_cred_key)}
+  ]
+
 config :thamani_dawa, ThamaniDawa.Epcis.Client,
   base_url: System.get_env("PPB_TNT_BASE_URL"),
-  capture_path: System.get_env("PPB_TNT_CAPTURE_PATH", "/epcis/v2/capture"),
+  capture_path: System.get_env("PPB_TNT_CAPTURE_PATH", "/api/integration/facility/events"),
   api_key: System.get_env("PPB_TNT_API_KEY"),
-  distributor_capture_path: System.get_env("PPB_TNT_DISTRIBUTOR_CAPTURE_PATH"),
+  distributor_capture_path:
+    System.get_env("PPB_TNT_DISTRIBUTOR_CAPTURE_PATH", "/api/integration/supplier/events"),
   distributor_api_key: System.get_env("PPB_TNT_DISTRIBUTOR_API_KEY"),
   # Always disabled under `mix test`, regardless of a developer's local
   # `.env` — the test suite must stay deterministic and never depend on
   # live credentials meant for manual `mix run` verification.
   enabled: config_env() != :test and System.get_env("PPB_TNT_ENABLED", "false") == "true"
+
+member_api = [
+  base_url: System.get_env("GS1_MEMBER_API_BASE_URL"),
+  api_token: System.get_env("GS1_MEMBER_API_TOKEN")
+]
+
+member_api =
+  if config_env() == :test do
+    Keyword.put(member_api, :client, ThamaniDawa.GS1.MemberApiStub)
+  else
+    member_api
+  end
+
+config :thamani_dawa, ThamaniDawa.GS1.MemberApi, member_api
 
 company_prefix = System.get_env("GS1_COMPANY_PREFIX")
 

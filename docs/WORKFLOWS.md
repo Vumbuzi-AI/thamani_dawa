@@ -124,11 +124,13 @@ draft --submit--> submitted --approve--> approved
 2. A portal user creates a draft shipment: order number, origin GLN (one of the organization's own sites) and destination GLN (one of its customers). Company, address and P.O. box are snapshotted onto the shipment.
 3. A mobile app user (a `distributor_mobile_users` account signing in with username + emailed 4-digit PIN) finds the draft by order number and claims it.
 4. The mobile user adds shippers and scans GS1 DataMatrix codes into them. Each scan is parsed server-side, cross-checked against any client-parsed fields, resolved to a product (previous scan, catalogue, then Verified by GS1), de-duplicated within the shipment, refused if the serial is already reserved by another shipment, and stored with a validation status against received batches (`ok`, `unknown_serial`, `data_mismatch`).
-5. Submitting validates the shipment and reserves every serial in `distributor_serial_reservations` (unique `barcode, serial`). If another shipment won a race on any unit, submission rolls back with a serial conflict.
+5. Submitting validates the shipment and reserves every serial in `distributor_serial_reservations` (unique `barcode, serial`). If another shipment won a race on any unit, submission rolls back with a serial conflict. Units with no received batch (`batch_id` nil / `unknown_serial`) are refused — stock depletes from scanned units, so every shipped unit must map to a batch.
 6. A portal user reviews warnings (unknown serials, mismatches, expired or unverified units, conflicts) and either:
-   - approves: re-validates, confirms reservations, charges one serial per shipper from the allowance, issues one SSCC per shipper with a contents snapshot, and commits the reservations; or
+   - approves: re-validates, confirms reservations, charges one serial per shipper from the allowance, issues one SSCC per shipper with a contents snapshot, commits the reservations, and decrements each scanned unit's batch (`remaining_quantity` by scanned count; a fully depleted batch moves to `:dispatch`); or
    - rejects with a reason: reservations are released so the units can be packed again.
 7. A rejected shipment can be reopened as a draft by the mobile user, corrected, and resubmitted.
+
+Shipments have no planned-vs-packed reconciliation and no picker-facing pick list. Stock depletes from scanned units at approval (truth-based). Future work: if order/PO expected lines exist, surface a planned-vs-packed variance, and/or expose a pick list on the mobile side to guide picking.
 
 The mobile app's JSON API is not exposed yet; `ThamaniDawa.Distributor` and `ThamaniDawa.Distributor.MobileAuth` already implement the mobile-side operations it will call.
 

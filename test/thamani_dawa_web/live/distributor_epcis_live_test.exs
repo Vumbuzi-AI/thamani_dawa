@@ -53,6 +53,16 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
     assert has_element?(view, "#epcis-submission-disabled")
   end
 
+  test "shows reporting controls and points to API keys when none is saved", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
+
+    assert has_element?(view, "#epcis-reporting-controls")
+    assert has_element?(view, "#epcis-mode-manual[aria-pressed='true']")
+    assert has_element?(view, "#epcis-send-now[disabled]")
+    refute has_element?(view, "#epcis-api-key-settings")
+    assert has_element?(view, "#epcis-api-keys-link", "API keys")
+  end
+
   test "flags a halted queue when a rejected event blocks the org", %{
     conn: conn,
     distributor: distributor
@@ -83,12 +93,34 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
     assert has_element?(view, "#flash-group", "requeued")
   end
 
+  test "resubmitting a blocked event requeues it and clears the blocked reason", %{
+    conn: conn,
+    distributor: distributor
+  } do
+    blocked = insert_event(distributor.organization_id, "blocked")
+
+    {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
+
+    assert has_element?(view, "#epcis-events-#{blocked.id}", "Blocked")
+    assert has_element?(view, "#epcis-events-#{blocked.id}", "Review diagnostics")
+    assert has_element?(view, "#resubmit-epcis-event-#{blocked.id}")
+
+    view |> element("#resubmit-epcis-event-#{blocked.id}") |> render_click()
+
+    assert [%OutboxEvent{} = event] = Outbox.pending_for_organization(distributor.organization_id)
+    assert event.id == blocked.id
+    assert event.event_id == blocked.event_id
+    assert event.blocked_reason == nil
+
+    assert has_element?(view, "#flash-group", "requeued")
+  end
+
   test "warning events surface their stored warnings", %{conn: conn, distributor: distributor} do
     event = insert_event(distributor.organization_id, "warning")
 
     {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
 
-    assert has_element?(view, "#epcis-events-#{event.id}", "UNKNOWN_SGLN")
+    assert has_element?(view, "#epcis-events-#{event.id}", "Review diagnostics")
   end
 
   defp insert_event(organization_id, status) do
@@ -107,6 +139,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
       payload: %{"bizStep" => "receiving"},
       occurred_at: DateTime.utc_now() |> DateTime.truncate(:second),
       status: status,
+      blocked_reason: if(status == "blocked", do: "Missing partner GLN"),
       http_status: if(status in ~w(accepted warning rejected), do: 202),
       response: response,
       source_type: "goods_receipt",

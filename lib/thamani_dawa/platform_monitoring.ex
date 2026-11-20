@@ -63,20 +63,76 @@ defmodule ThamaniDawa.PlatformMonitoring do
     )
   end
 
-  @doc "Returns recent audit records with optional organization/action filters."
-  def list_audit_activity(opts \\ []) do
-    organization_id = Keyword.get(opts, :organization_id)
-    action = Keyword.get(opts, :action)
-    limit = Keyword.get(opts, :limit, 100)
+  @audit_page_size 20
 
-    from(log in AuditLog,
-      order_by: [desc: log.inserted_at, desc: log.id],
-      limit: ^limit,
-      preload: [:organization, :user]
+  @doc """
+  Paginated, filterable audit records across every organization. Options:
+  `organization_id`, `action`, `table_name`, `user_id`, `search` (matches
+  table name, organization name, or actor name), and `page`.
+
+  Returns `%{entries:, page_number:, page_size:, total_pages:, total_entries:}`.
+  """
+  def list_audit_activity(opts \\ []) do
+    query =
+      from(log in AuditLog, order_by: [desc: log.inserted_at, desc: log.id])
+      |> maybe_filter_organization(Keyword.get(opts, :organization_id))
+      |> maybe_filter_action(Keyword.get(opts, :action))
+      |> maybe_filter_table(Keyword.get(opts, :table_name))
+      |> maybe_filter_user(Keyword.get(opts, :user_id))
+      |> maybe_search(Keyword.get(opts, :search))
+
+    page_size = @audit_page_size
+    total_entries = Repo.aggregate(query, :count, :id)
+    total_pages = max(ceil(total_entries / page_size), 1)
+    page_number = min(max(Keyword.get(opts, :page, 1), 1), total_pages)
+
+    entries =
+      Repo.all(
+        from log in query,
+          limit: ^page_size,
+          offset: ^((page_number - 1) * page_size),
+          preload: [:organization, :user]
+      )
+
+    %{
+      entries: entries,
+      page_number: page_number,
+      page_size: page_size,
+      total_pages: total_pages,
+      total_entries: total_entries
+    }
+  end
+
+  @doc "Counts of every audited action, for the audit activity dashboard tiles."
+  def audit_activity_stats do
+    counts =
+      Repo.all(from log in AuditLog, group_by: log.action, select: {log.action, count(log.id)})
+      |> Map.new()
+
+    %{
+      total: Enum.sum(Map.values(counts)),
+      insert: Map.get(counts, "insert", 0),
+      update: Map.get(counts, "update", 0),
+      delete: Map.get(counts, "delete", 0)
+    }
+  end
+
+  @doc "Distinct table names that have audited activity, for a filter dropdown."
+  def list_audited_tables do
+    Repo.all(
+      from log in AuditLog, distinct: true, select: log.table_name, order_by: log.table_name
     )
-    |> maybe_filter_organization(organization_id)
-    |> maybe_filter_action(action)
-    |> Repo.all()
+  end
+
+  @doc "Distinct actors who have audited activity, for a filter dropdown."
+  def list_audit_actors do
+    Repo.all(
+      from log in AuditLog,
+        join: u in assoc(log, :user),
+        distinct: true,
+        select: %{id: u.id, name: u.name},
+        order_by: u.name
+    )
   end
 
   @doc "Organizations without audited activity in the supplied number of days."
@@ -107,6 +163,26 @@ defmodule ThamaniDawa.PlatformMonitoring do
 
   defp maybe_filter_action(query, nil), do: query
   defp maybe_filter_action(query, action), do: where(query, [log], log.action == ^action)
+
+  defp maybe_filter_table(query, nil), do: query
+  defp maybe_filter_table(query, table_name), do: where(query, [log], log.table_name == ^table_name)
+
+  defp maybe_filter_user(query, nil), do: query
+  defp maybe_filter_user(query, user_id), do: where(query, [log], log.user_id == ^user_id)
+
+  defp maybe_search(query, term) when term in [nil, ""], do: query
+
+  defp maybe_search(query, term) do
+    pattern = "%" <> escape_like(String.trim(term)) <> "%"
+
+    from log in query,
+      left_join: org in assoc(log, :organization),
+      left_join: usr in assoc(log, :user),
+      where:
+        ilike(log.table_name, ^pattern) or ilike(org.name, ^pattern) or ilike(usr.name, ^pattern)
+  end
+
+  defp escape_like(term), do: Regex.replace(~r/[\\%_]/, term, fn char -> "\\" <> char end)
 
   defp latest_activity_by_organization do
     from(log in AuditLog,

@@ -5,7 +5,12 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.DistributorFixtures
 
+  alias ThamaniDawa.Distributor
+  alias ThamaniDawa.GoodsReceipts
+  alias ThamaniDawa.Products
   alias ThamaniDawa.ProductsFixtures
+  alias ThamaniDawa.Repo
+  alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.UserAuth
 
   defp log_in(conn, user), do: conn |> init_test_session(%{}) |> UserAuth.log_in_user(user)
@@ -204,6 +209,64 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
                |> render_submit()
     end
 
+    test "draft shipment show has scanned shippers and no products-to-pick card", %{
+      conn: conn,
+      distributor: distributor,
+      warehouse: warehouse,
+      destination: destination
+    } do
+      shipment =
+        shipment_fixture(distributor.organization_id, distributor, %{
+          warehouse: warehouse,
+          destination: destination
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/distributor/shipments/#{shipment.id}")
+
+      refute has_element?(view, "#distributor-pick-list")
+      refute has_element?(view, "#distributor-add-line-item-form")
+      refute has_element?(view, "#generate-shipment-pick-list")
+      assert has_element?(view, "#distributor-shippers")
+    end
+
+    test "transfer destination dropdown excludes the selected origin site", %{
+      conn: conn,
+      distributor: distributor,
+      warehouse: warehouse
+    } do
+      other_site = Sites.get_site!(distributor.organization_id, distributor.current_site_id)
+      assert other_site.gln != warehouse.gln
+
+      {:ok, view, _html} = live(conn, ~p"/distributor/shipments/new")
+
+      view
+      |> form("#distributor-shipment-form", shipment: %{origin_gln: warehouse.gln})
+      |> render_change()
+
+      view
+      |> element("input[type='checkbox'][phx-click='toggle_transfer_mode']")
+      |> render_click()
+
+      assert has_element?(view, "#shipment_destination_gln option[value='#{other_site.gln}']")
+      refute has_element?(view, "#shipment_destination_gln option[value='#{warehouse.gln}']")
+    end
+
+    test "transfer mode explains when there is no other site to ship to", %{
+      conn: conn,
+      warehouse: warehouse
+    } do
+      {:ok, _} = Sites.update_site(warehouse, %{is_active: false})
+
+      {:ok, view, _html} = live(conn, ~p"/distributor/shipments/new")
+
+      view
+      |> element("input[type='checkbox'][phx-click='toggle_transfer_mode']")
+      |> render_click()
+
+      assert has_element?(view, "#shipment_destination_gln")
+      assert has_element?(view, "p", "No other sites with a GLN yet.")
+    end
+
     test "approving a submitted shipment issues SSCC labels", %{
       conn: conn,
       distributor: distributor,
@@ -400,12 +463,86 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
   end
 
   describe "receiving" do
+    test "rejects the current warehouse GLN as a delivery origin", %{
+      conn: conn,
+      distributor: distributor
+    } do
+      warehouse =
+        Sites.get_site!(distributor.organization_id, distributor.current_site_id)
+
+      assert {:ok, view, _html} = live(conn, ~p"/distributor/receiving/new")
+
+      render_change(view, "validate_origin", %{"origin" => %{"gln" => warehouse.gln}})
+
+      assert has_element?(view, "#origin-gln[value='#{warehouse.gln}']")
+
+      assert has_element?(view, "p", "Enter the GLN of the sending site or supplier instead.")
+
+      refute has_element?(view, "#distributor-origin-form", "Verified")
+    end
+
+    test "an origin value that cannot be a GLN explains why", %{conn: conn} do
+      assert {:ok, view, _html} = live(conn, ~p"/distributor/receiving/new")
+
+      render_change(view, "validate_origin", %{"origin" => %{"gln" => "0061414"}})
+      refute has_element?(view, "#origin-gln-error")
+
+      render_change(view, "validate_origin", %{"origin" => %{"gln" => "006141410000000012"}})
+
+      assert has_element?(
+               view,
+               "#origin-gln-error",
+               "This is an 18-digit SSCC. It belongs on the case. The sender's GLN is 13 digits."
+             )
+
+      render_change(view, "validate_origin", %{"origin" => %{"gln" => "00614141000000001"}})
+      assert has_element?(view, "#origin-gln-error", "A GLN is 13 digits.")
+
+      render_change(view, "validate_origin", %{"origin" => %{"gln" => "GLN-123"}})
+      assert has_element?(view, "#origin-gln-error", "A GLN is 13 digits.")
+    end
+
+    test "a new receipt does not keep the previous delivery's origin or documents", %{
+      conn: conn,
+      distributor: distributor
+    } do
+      draft = GoodsReceipts.ensure_receiving_draft(distributor.organization_id, distributor.id)
+
+      GoodsReceipts.save_draft_origin!(draft, %{
+        "gln" => "0614141000036",
+        "company" => "Distribution Point 1",
+        "address" => "7887 WASHINGTON VILLAGE DR STE 300, OH, DAYTON, 45459-3988, US",
+        "po_box" => nil,
+        "site_id" => nil
+      })
+
+      source_path = Path.join(System.tmp_dir!(), "receiving-draft-#{Ecto.UUID.generate()}.png")
+      File.write!(source_path, "scan")
+
+      GoodsReceipts.store_draft_attachment!(draft, :delivery_note, source_path, %{
+        client_name: "Pharmacy Inventory Scan.png",
+        client_type: "image/png",
+        client_size: 4
+      })
+
+      assert {:ok, view, html} = live(conn, ~p"/distributor/receiving/new")
+
+      refute html =~ "0614141000036"
+      refute html =~ "Distribution Point 1"
+      refute html =~ "Pharmacy Inventory Scan.png"
+      assert has_element?(view, "#origin-gln")
+      assert GoodsReceipts.get_receiving_draft(distributor.organization_id, distributor.id) == nil
+
+      File.rm(source_path)
+    end
+
     test "a valid GTIN selects its catalog product", %{conn: conn, distributor: distributor} do
       product = ProductsFixtures.product_fixture(%{organization_id: distributor.organization_id})
 
       assert {:ok, view, _html} = live(conn, ~p"/distributor/receiving/new")
 
       view |> element("#open-add-item-empty") |> render_click()
+      view |> element("button[phx-click='skip_to_manual_entry']") |> render_click()
 
       view
       |> form("#distributor-scan-gtin-form", scan: %{gtin: product.gtin <> " "})
@@ -416,5 +553,217 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
                "#distributor-receipt-form input[name='batch[gtin]'][value='#{product.gtin}']"
              )
     end
+
+    test "a receipt counts units and does not multiply by a pack size", %{
+      conn: conn,
+      distributor: distributor
+    } do
+      product = ProductsFixtures.product_fixture(%{organization_id: distributor.organization_id})
+
+      {:ok, product} =
+        Products.update_product(product, %{
+          pack_uom: "box",
+          units_per_pack: 10,
+          net_content_quantity: 20,
+          net_content_uom: "U2"
+        })
+
+      assert {:ok, view, _html} = live(conn, ~p"/distributor/receiving/new")
+
+      view |> element("#open-add-item-empty") |> render_click()
+      view |> element("button[phx-click='skip_to_manual_entry']") |> render_click()
+
+      view
+      |> form("#distributor-scan-gtin-form", scan: %{gtin: product.gtin})
+      |> render_change()
+
+      assert has_element?(view, "#unit-net-content", "Each pack contains 20 tablet(s).")
+      assert has_element?(view, "#distributor-receipt-form", "Quantity received (units)")
+      refute has_element?(view, "#distributor-receipt-form", "Receive as")
+      refute has_element?(view, "#distributor-receipt-form", "1 box")
+
+      view
+      |> form("#distributor-receipt-form",
+        batch: %{
+          batch_no: "LOT-1",
+          expiry_date: "2028-05-12",
+          quantity: "2",
+          sscc: "006141419988776650"
+        }
+      )
+      |> render_submit()
+
+      assert has_element?(view, "#delivery-shipper-1", "2 units")
+      refute has_element?(view, "#delivery-shipper-1", "tablet")
+    end
+
+    test "scanned serials are marked accepted and unscanned units must be confirmed", %{
+      conn: conn,
+      distributor: distributor
+    } do
+      prepay_allowance_fixture(distributor.organization_id, distributor)
+
+      warehouse =
+        Sites.get_site!(distributor.organization_id, distributor.current_site_id)
+
+      product = ProductsFixtures.product_fixture(%{organization_id: distributor.organization_id})
+
+      batches =
+        Enum.map(~w(SN10001 SN10002 SN10003), fn serial ->
+          received_unit_fixture(distributor.organization_id, warehouse.id, distributor.id, %{
+            product: product,
+            serial: serial,
+            batch_no: "LOT-#{serial}"
+          })
+        end)
+
+      shipment =
+        submitted_shipment_fixture(distributor.organization_id, distributor, batches, %{
+          warehouse: warehouse
+        })
+
+      assert {:ok, approved} =
+               Distributor.approve_shipment(distributor.organization_id, distributor, shipment.id)
+
+      [shipper] = Repo.preload(approved, [shippers: :items], force: true).shippers
+      assert shipper.sscc =~ ~r/^\d{18}$/
+
+      ThamaniDawa.GS1.MemberApiStub.put_contents(shipper.sscc, gs1_contents(shipper.items))
+
+      {:ok, view, _html} = live(conn, ~p"/distributor/receiving/new")
+      view |> element("#open-add-item-empty") |> render_click()
+
+      view
+      |> form("#distributor-entry-sscc-form", sscc_entry: %{sscc: shipper.sscc})
+      |> render_change()
+
+      render_async(view)
+
+      assert shipper.sscc in ThamaniDawa.GS1.MemberApiStub.requested_contents()
+      assert has_element?(view, "#serial-confirm-form")
+      assert has_element?(view, "#pending-serial-SN10001", "Accepted")
+      refute has_element?(view, "#unscanned-confirm")
+
+      view |> element("#confirm-pending-shipper") |> render_click()
+
+      assert has_element?(view, "#unscanned-confirm", "3 units weren't scanned")
+      assert has_element?(view, "#serial-unscanned-SN10001", "Confirm")
+      assert has_element?(view, "#serial-unscanned-SN10002", "Confirm")
+      assert has_element?(view, "#serial-unscanned-SN10003", "Confirm")
+      refute has_element?(view, "#delivery-shipper-1")
+
+      view
+      |> form("#serial-confirm-form", serial_confirm: %{serial: "NOT-A-UNIT"})
+      |> render_submit()
+
+      assert has_element?(view, "#serial-confirm-notice", "That serial isn't in this case.")
+
+      view
+      |> form("#serial-confirm-form", serial_confirm: %{serial: "00" <> shipper.sscc})
+      |> render_submit()
+
+      assert has_element?(
+               view,
+               "#serial-confirm-notice",
+               "That's the case SSCC. Scan a unit data matrix from inside the case."
+             )
+
+      assert has_element?(
+               view,
+               "#serial-confirm-input[phx-hook='ScanField'][phx-debounce='150']"
+             )
+
+      [first | _] = batches
+
+      view
+      |> form("#serial-confirm-form", serial_confirm: %{serial: data_matrix_for(first)})
+      |> render_change()
+
+      assert has_element?(view, "#serial-confirm-notice", "SN10001 marked accepted")
+      assert has_element?(view, "#serial-scanned-SN10001", "Scanned")
+      refute has_element?(view, "#serial-unscanned-SN10001")
+      assert has_element?(view, "#unscanned-confirm", "2 units weren't scanned")
+
+      view
+      |> form("#serial-confirm-form", serial_confirm: %{serial: "SN10001"})
+      |> render_submit()
+
+      assert has_element?(view, "#serial-confirm-notice", "SN10001 is already marked accepted.")
+
+      view
+      |> element("#pending-serial-SN10002 button[phx-value-condition='damaged']")
+      |> render_click()
+
+      view
+      |> form("#serial-confirm-form", serial_confirm: %{serial: "SN10002"})
+      |> render_submit()
+
+      assert has_element?(view, "#serial-confirm-notice", "SN10002 marked accepted")
+      assert has_element?(view, "#serial-scanned-SN10002", "Scanned")
+
+      assert has_element?(
+               view,
+               "#pending-serial-SN10002 button[phx-value-condition='accepted'][aria-checked='true']"
+             )
+
+      view
+      |> element("#pending-serial-SN10002 button[phx-value-condition='damaged']")
+      |> render_click()
+
+      assert has_element?(
+               view,
+               "#pending-serial-SN10002 button[phx-value-condition='damaged'][aria-checked='true']"
+             )
+
+      refute has_element?(view, "#serial-unscanned-SN10002")
+      assert has_element?(view, "#unscanned-confirm", "1 unit wasn't scanned")
+
+      view |> element("#confirm-pending-shipper") |> render_click()
+      assert has_element?(view, "#unscanned-confirm", "1 unit wasn't scanned")
+
+      view
+      |> element("#pending-serial-SN10003 button[phx-value-condition='missing']")
+      |> render_click()
+
+      refute has_element?(view, "#unscanned-confirm")
+
+      view |> element("#confirm-pending-shipper") |> render_click()
+
+      refute has_element?(view, "#serial-confirm-form")
+      assert has_element?(view, "#delivery-shipper-1", "SN10001")
+      assert has_element?(view, "#delivery-shipper-1", "SN10002")
+      refute has_element?(view, "#delivery-shipper-1", "SN10003")
+      assert has_element?(view, "#delivery-shipper-1", "1 unit")
+      refute has_element?(view, "#delivery-shipper-1", "tablet")
+
+      view |> element("button[aria-label='Edit LOT-SN10001']") |> render_click()
+
+      assert has_element?(view, "#locked-unit-quantity", "1 unit")
+      refute has_element?(view, "#distributor-receipt-form", "Receive as")
+      refute has_element?(view, "input[name='batch[quantity]'][type='number']")
+    end
   end
+
+  defp gs1_contents(items) do
+    items
+    |> Enum.group_by(& &1.gtin)
+    |> Enum.map(fn {gtin, grouped} ->
+      %{
+        "gtin" => gtin,
+        "name" => hd(grouped).product_name,
+        "batches" =>
+          Enum.map(grouped, fn item ->
+            %{
+              "batch" => item.batch,
+              "production_date" => iso_date(item.production_date),
+              "expiry_date" => iso_date(item.expiry_date),
+              "serials" => [%{"serial" => item.serial}]
+            }
+          end)
+      }
+    end)
+  end
+
+  defp iso_date(nil), do: nil
+  defp iso_date(%Date{} = date), do: Date.to_iso8601(date)
 end

@@ -80,4 +80,16 @@ defmodule ThamaniDawaWeb.ProductOnboardingImportLiveTest do
     view |> element("#onboarding-product-continue") |> render_click()
     assert_redirect(view, ~p"/onboarding?complete=1&force=1")
   end
+
+  test "skipping the final product step requests the completion choice", %{conn: conn} do
+    admin = user_fixture()
+
+    {:ok, view, _html} =
+      live(log_in(conn, admin), ~p"/org/products/new?return_to=onboarding")
+
+    assert has_element?(
+             view,
+             "#onboarding-product-skip[href='/onboarding?skip=first_product&complete=1']"
+           )
+  end
 end

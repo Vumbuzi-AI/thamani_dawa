@@ -22,6 +22,7 @@ defmodule ThamaniDawa.GoodsReceipts.GoodsReceipt do
     belongs_to :reference_receipt, __MODULE__
     has_many :items, ThamaniDawa.Batches.Batch, foreign_key: :goods_receipt_id
     has_many :attachments, ThamaniDawa.GoodsReceipts.Attachment
+    has_many :discrepancies, ThamaniDawa.GoodsReceipts.ReceivingDiscrepancy
 
     timestamps(type: :utc_datetime)
   end

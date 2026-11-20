@@ -175,6 +175,26 @@ body {
   letter-spacing: normal;
 }
 
+/* Mobile table cells are flex layouts. Restore native table-cell layout at the
+   desktop breakpoint so every cell shares the row height and its divider lines
+   up continuously across the table.
+
+   This rule is more specific than Tailwind's `hidden`, so a column marked
+   `tablet="hidden"` (`sm:max-lg:hidden` on the cell) would still paint while
+   its header stayed hidden. The dates then sat past the header bar with no
+   name and no background. Re-hide those cells until the lg breakpoint. */
+@media (min-width: 40rem) {
+  .internal-app .responsive-table .responsive-table-cell {
+    display: table-cell;
+  }
+}
+
+@media (min-width: 40rem) and (max-width: 63.999rem) {
+  .internal-app .responsive-table .responsive-table-cell[class~="sm:max-lg:hidden"] {
+    display: none;
+  }
+}
+
 /* ============================================================
    App Shell — Sidebar collapse
    Single class toggled by the .Sidebar hook (layouts.ex); every
@@ -298,8 +318,18 @@ body {
 @media (min-width: 1024px) {
   #sidebar-shell {
     margin: 6px;
+    min-height: 0;
     height: calc(100vh - 12px) !important;
     border-radius: 16px;
+    overflow: hidden;
+  }
+
+  /* The shell owns the viewport: only the sidebar and main content scroll.
+     Without this, the 6px inset + rounding lets the document scroll by a
+     sliver (and scroll-chaining from <main> moves the whole shell). */
+  html:has(#sidebar-shell),
+  body:has(#sidebar-shell) {
+    height: 100%;
     overflow: hidden;
   }
 }
@@ -1124,6 +1154,88 @@ label,
   border-color: var(--thamani-error) !important;
 }
 
+/* Receiving — a scanned unit settles in with the same ease as a step change. */
+@keyframes serial-confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes serial-confirm-check {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes serial-row-flash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes serial-pill-in {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.serial-confirm-notice {
+  animation: serial-confirm-in 280ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.serial-confirm-check {
+  display: inline-flex;
+  transform-origin: center;
+  animation: serial-confirm-check 320ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.serial-row-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--thamani-lime);
+  pointer-events: none;
+  animation: serial-row-flash 720ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.serial-scanned-pill {
+  transform-origin: left center;
+  animation: serial-pill-in 280ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .serial-confirm-notice,
+  .serial-confirm-check,
+  .serial-row-flash,
+  .serial-scanned-pill {
+    animation: none;
+  }
+}
+
 /* ============================================================
    Landing Page — Thamani Badge
    ============================================================ */
@@ -1689,6 +1801,8 @@ label,
   .printable-lab-report *,
   .printable-invoice,
   .printable-invoice *,
+  .printable-shipment-doc,
+  .printable-shipment-doc *,
   .printable-sscc-labels,
   .printable-sscc-labels *,
   #distributor-sscc-labels,
@@ -1701,6 +1815,7 @@ label,
   body *:has(.printable-batch-label),
   body *:has(.printable-lab-report),
   body *:has(.printable-invoice),
+  body *:has(.printable-shipment-doc),
   body *:has(.printable-sscc-labels),
   body *:has(#prescription-receipt) {
     position: static !important;
@@ -1736,6 +1851,7 @@ label,
     color: #000 !important;
     box-shadow: none !important;
   }
+  .printable-shipment-doc,
   .printable-invoice {
     position: static !important;
     display: block !important;
@@ -1758,7 +1874,13 @@ label,
   }
   .printable-invoice img { print-color-adjust: exact; }
   .printable-invoice th,
-  .printable-invoice td { padding-top: 3mm !important; padding-bottom: 3mm !important; }
+  .printable-invoice td,
+  .printable-shipment-doc th,
+  .printable-shipment-doc td { padding-top: 3mm !important; padding-bottom: 3mm !important; }
+  .printable-shipment-doc .packing-shipper + .packing-shipper {
+    break-before: page;
+    page-break-before: always;
+  }
   .printable-invoice #invoice-header,
   .printable-invoice #invoice-bill-to,
   .printable-invoice #invoice-metadata,
@@ -1777,14 +1899,19 @@ label,
     margin: 0 !important;
     padding: 0 !important;
   }
+  .printable-sscc-labels > div {
+    display: contents !important;
+  }
   .printable-sscc-label {
     page: sscc-label;
     width: 4in !important;
-    max-width: none !important;
+    min-width: 4in !important;
+    max-width: 4in !important;
     height: 6in !important;
     min-height: 6in !important;
+    max-height: 6in !important;
     margin: 0 !important;
-    padding: 0.2in !important;
+    padding: 0 !important;
     border: 2px solid #000 !important;
     border-radius: 0 !important;
     background: #fff !important;
@@ -1800,8 +1927,8 @@ label,
     page-break-after: auto;
   }
   .printable-sscc-label canvas {
-    width: 100% !important;
-    height: auto !important;
+    width: 1.3in !important;
+    height: 1.3in !important;
   }
   @page sscc-label {
     size: 4in 6in;

@@ -41,13 +41,11 @@ defmodule ThamaniDawa.OrganizationsTest do
                  name: "Acme Pharmacy",
                  license_number: "LIC-1",
                  is_active: false,
-                 is_subscription_active: true,
-                 kyc_details: %{"verified" => true}
+                 is_subscription_active: true
                })
 
       assert organization.is_active
       refute organization.is_subscription_active
-      assert organization.kyc_details == %{}
     end
 
     test "requires a name" do
@@ -436,35 +434,6 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert is_nil(site.gln_verification_source)
     end
 
-    test "does not persist premises-level PPB details on the organization during signup" do
-      org_attrs = %{
-        name: "Acme Pharmacy",
-        license_number: "LIC-1",
-        gs1_company_prefix: "6160001",
-        ppb_facility_name: "Acme Pharmacy",
-        ppb_verification_status: "verified",
-        ppb_verified_at: ~U[2026-11-14 10:00:00Z],
-        ppb_license_valid_till: ~D[2026-12-31],
-        ppb_verification_source: "ppb_registry_scrape"
-      }
-
-      site_attrs = %{
-        name: "Acme Main",
-        activities: [:pharmacy],
-        ppb_facility_name: "Acme Pharmacy",
-        license_number: "LIC-1"
-      }
-
-      assert {:ok, %{organization: organization}} =
-               Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
-
-      assert is_nil(organization.ppb_facility_name)
-      assert organization.ppb_verification_status == :pending
-      assert is_nil(organization.ppb_verified_at)
-      assert is_nil(organization.ppb_license_valid_till)
-      assert is_nil(organization.ppb_verification_source)
-    end
-
     test "does not require premises-level PPB details during organization signup" do
       org_attrs = %{
         name: "Acme Pharmacy",
@@ -479,11 +448,8 @@ defmodule ThamaniDawa.OrganizationsTest do
         license_number: "LIC-1"
       }
 
-      assert {:ok, %{organization: organization}} =
+      assert {:ok, _result} =
                Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
-
-      assert is_nil(organization.ppb_facility_name)
-      assert organization.ppb_verification_status == :pending
     end
 
     test "does not require a PPB facility name for a laboratory-only organization" do
@@ -501,11 +467,8 @@ defmodule ThamaniDawa.OrganizationsTest do
         kmlttb_license_number: "L 01234/26"
       }
 
-      assert {:ok, %{organization: organization}} =
+      assert {:ok, _result} =
                Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
-
-      assert is_nil(organization.ppb_facility_name)
-      assert organization.ppb_verification_status == :pending
     end
 
     test "enqueues prefix and GLN verification jobs when identifiers are entered" do

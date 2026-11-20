@@ -58,13 +58,13 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
     [
       %{
         selector: ~s([data-tour-target="/pharmacy"]),
-        title: "Start with your dashboard",
+        title: "See today’s workload",
         description:
           "See today’s pharmacy workload, stock alerts, revenue, and dispensing activity at a glance."
       },
       %{
         selector: ~s([data-tour-target="/pharmacy/quick-sale"]),
-        title: "Make a quick sale",
+        title: "Record an over-the-counter sale",
         description:
           "Dispense non-prescription items and complete a sale directly from the pharmacy."
       },
@@ -76,12 +76,13 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       },
       %{
         selector: ~s([data-tour-target="/pharmacy/patients"]),
-        title: "Find patient records",
-        description: "Look up patients and review their prescription and dispensing history."
+        title: "Find a patient",
+        description:
+          "Look up patient records and review their prescription and dispensing history."
       },
       %{
         selector: ~s([data-tour-target="/pharmacy/stock"]),
-        title: "Keep stock accurate",
+        title: "Check site stock",
         description:
           "Check available medicines, batches, expiry dates, and quantities at your current site."
       },
@@ -98,14 +99,14 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       },
       %{
         selector: ~s([data-tour-target="/pharmacy/scan"]),
-        title: "Scan when speed matters",
+        title: "Scan products and batches",
         description:
           "Use scanning to identify products and batches quickly during day-to-day work."
       },
       %{
         selector: ~s([data-tour-target="/pharmacy/transactions"]),
-        title: "Review transactions",
-        description: "Review completed sales and dispensing activity for your pharmacy."
+        title: "Review completed work",
+        description: "Find completed sales and dispensing activity for the current pharmacy site."
       }
     ]
     |> Enum.reject(fn step ->

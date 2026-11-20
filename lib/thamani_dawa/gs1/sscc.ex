@@ -1,15 +1,14 @@
 defmodule ThamaniDawa.GS1.Sscc do
   @moduledoc """
-  SSCC-18 (Serial Shipping Container Code) allocation for distributor
-  shippers (cases). One SSCC is issued per shipper when its shipment is
-  approved.
+  SSCC-18 check digits and the legacy local serial allocator.
 
-  Format: extension digit (1) + GS1 Company Prefix (6–10 digits) +
-          serial reference (fills remaining to 17 digits) + Mod10 check digit = 18 digits total.
+  New case SSCCs are minted by `ThamaniDawa.GS1.MemberApi` (`create_sscc`),
+  not by `allocate/2`. This module still checks digits on identifiers the
+  platform stores, and can build an SSCC-18 from a company prefix.
 
-  Serial references are claimed with a single atomic `UPDATE ... SET
-  next_sscc_serial = next_sscc_serial + n`, so two concurrent approvals never
-  receive overlapping ranges.
+  `allocate/2` still builds that format locally — extension digit, company
+  prefix, serial reference, Mod-10 check digit — for callers that already
+  hold a prefix. Shipment approval and mini-SSCC splits do not use it.
   """
 
   import Ecto.Query, warn: false

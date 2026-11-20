@@ -4,7 +4,7 @@ defmodule ThamaniDawa.Batches.Batch do
 
   alias ThamaniDawa.GS1.Sscc
 
-  @zones [:receiving, :storage, :quarantine, :picking, :staging, :dispatch]
+  @zones [:receiving, :storage, :quarantine, :dispatch]
   @statuses [
     :active,
     :quarantined,
@@ -15,13 +15,15 @@ defmodule ThamaniDawa.Batches.Batch do
     :inactive,
     :non_sellable_other,
     :destroyed,
-    :returned
+    :returned,
+    :disaggregated
   ]
 
   schema "batches" do
     field :gtin, :string
     field :batch_no, :string
     field :serial, :string
+    field :serials, {:array, :string}, default: []
     field :sscc, :string
     field :manufacturer, :string
     field :manufacture_date, :date
@@ -42,7 +44,7 @@ defmodule ThamaniDawa.Batches.Batch do
     belongs_to :approver, ThamaniDawa.Accounts.User, foreign_key: :approver_id
     belongs_to :source_batch, __MODULE__
     belongs_to :requisition, ThamaniDawa.Requisitions.Requisition
-    belongs_to :reserved_for_shipment, ThamaniDawa.Distributor.Shipment
+    belongs_to :logistic_unit, ThamaniDawa.Batches.LogisticUnit
 
     has_many :lab_consumable_usages, ThamaniDawa.LabOrders.LabConsumableUsage
     has_many :prescription_batch_dispenses, ThamaniDawa.Prescriptions.BatchDispense
@@ -66,6 +68,7 @@ defmodule ThamaniDawa.Batches.Batch do
       :gtin,
       :batch_no,
       :serial,
+      :serials,
       :sscc,
       :manufacturer,
       :manufacture_date,
@@ -76,6 +79,7 @@ defmodule ThamaniDawa.Batches.Batch do
       :supplier_id,
       :source_batch_id,
       :goods_receipt_id,
+      :logistic_unit_id,
       :status
     ])
     |> validate_required([
@@ -96,25 +100,27 @@ defmodule ThamaniDawa.Batches.Batch do
     |> foreign_key_constraint(:supplier_id)
     |> foreign_key_constraint(:goods_receipt_id)
     |> foreign_key_constraint(:source_batch_id)
+    |> foreign_key_constraint(:logistic_unit_id)
     |> unique_constraint(:batch_no,
-      name: :batches_org_product_site_batch_no_index,
-      message: "has already been dispatched to this site"
+      name: :batches_org_product_site_batch_no_status_index,
+      message: "has already been dispatched to this site in this status"
     )
   end
 
   @doc """
-  Changeset for recording a batch as org-level stock — received by the
-  organization but not yet assigned to a site. `site_id` is intentionally
-  not cast here; a batch becomes site-bound only via `dispatch_to_site/2`,
-  which produces a separate `Batch` row via `changeset/2`.
+  Changeset for recording a batch received directly into a site's stock.
+  `site_id` is now required — all batches must be site-bound from receipt.
+  This replaces the old two-step org→site flow.
   """
   def org_intake_changeset(batch, attrs) do
     batch
     |> cast(attrs, [
       :product_id,
+      :site_id,
       :gtin,
       :batch_no,
       :serial,
+      :serials,
       :sscc,
       :manufacturer,
       :manufacture_date,
@@ -124,10 +130,12 @@ defmodule ThamaniDawa.Batches.Batch do
       :cost_per_unit,
       :supplier_id,
       :goods_receipt_id,
+      :logistic_unit_id,
       :status
     ])
     |> validate_required([
       :product_id,
+      :site_id,
       :gtin,
       :batch_no,
       :expiry_date,
@@ -139,10 +147,12 @@ defmodule ThamaniDawa.Batches.Batch do
     |> validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
     |> validate_inbound_sscc()
     |> foreign_key_constraint(:product_id)
+    |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:supplier_id)
+    |> foreign_key_constraint(:logistic_unit_id)
     |> unique_constraint(:batch_no,
-      name: :batches_org_product_batch_no_undispatched_index,
-      message: "already recorded as org stock for this product"
+      name: :batches_org_product_site_batch_no_status_index,
+      message: "has already been dispatched to this site in this status"
     )
   end
 
@@ -233,12 +243,12 @@ defmodule ThamaniDawa.Batches.Batch do
 
   @doc """
   Changeset for a batch status transition (damaged/expired/stolen/lost/
-  exported/recalled/destroyed — docs/PPB_TNT_INTEGRATION.md §4.3/§4.4).
-  Enforces the spec's own transition rules rather than trusting the caller:
-  `:damaged` may start from `:active` or `:quarantined`; `:expired`,
-  `:stolen`, `:inactive`, and `:non_sellable_other` only from `:active`;
-  `:recalled` overrides any state except `:destroyed`; `:destroyed` only
-  from `:damaged`, `:expired`, or `:recalled`.
+  exported/recalled/destroyed/returned — docs/PPB_TNT_INTEGRATION.md
+  §4.3/§4.4). Enforces the spec's own transition rules rather than trusting
+  the caller: `:damaged` may start from `:active` or `:quarantined`;
+  `:expired`, `:stolen`, `:inactive`, `:non_sellable_other`, and `:returned`
+  only from `:active`; `:recalled` overrides any state except `:destroyed`;
+  `:destroyed` only from `:damaged`, `:expired`, or `:recalled`.
   """
   def status_changeset(batch, new_status) when new_status in @statuses do
     batch
@@ -260,7 +270,7 @@ defmodule ThamaniDawa.Batches.Batch do
   defp valid_status_transition?(current, :damaged), do: current in [:active, :quarantined]
 
   defp valid_status_transition?(current, status)
-       when status in [:expired, :stolen, :inactive, :non_sellable_other],
+       when status in [:expired, :stolen, :inactive, :non_sellable_other, :returned],
        do: current == :active
 
   defp valid_status_transition?(current, :recalled), do: current != :destroyed

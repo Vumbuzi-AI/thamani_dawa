@@ -253,12 +253,23 @@ backoff and dashboard for free.
 ```elixir
 config :thamani_dawa, ThamaniDawa.Epcis.Client,
   base_url: System.get_env("PPB_TNT_BASE_URL"),
-  capture_path: System.get_env("PPB_TNT_CAPTURE_PATH", "/epcis/v2/capture"),
+  capture_path: System.get_env("PPB_TNT_CAPTURE_PATH", "/api/integration/facility/events"),
   api_key: System.get_env("PPB_TNT_API_KEY"),
-  distributor_capture_path: System.get_env("PPB_TNT_DISTRIBUTOR_CAPTURE_PATH"),
+  distributor_capture_path:
+    System.get_env("PPB_TNT_DISTRIBUTOR_CAPTURE_PATH", "/api/integration/supplier/events"),
   distributor_api_key: System.get_env("PPB_TNT_DISTRIBUTOR_API_KEY"),
   enabled: System.get_env("PPB_TNT_ENABLED", "false") == "true"
 ```
+
+**Paths confirmed 2026-11-18** from PPB's own published Bruno/Postman collection
+(`Kenya TNT - Partner API`, imported from the Partner Learning Center): the facility
+path matches what live-testing already confirmed (§10); the distributor-tier path is
+`/api/integration/supplier/events` — **not** `/api/integration/distributor/events`,
+which is the guessed path that 404'd in §10. "Supplier" is PPB's own name for the
+distributor/3PL tier. This resolves §9 open question 1 (capture endpoint URL) for the
+distributor tier without needing a live token to discover it. The manufacturer-tier
+path (`/api/integration/manufacturer/events`) is documented too but irrelevant here —
+this app never submits Commissioning events.
 
 **Key model (revised 2026-11-13, supersedes the 2026-11-10 single-key decision below):**
 the 403 `PARTNER_TYPE_BIZSTEP_MISMATCH` found live against the sandbox (§10) confirmed the
@@ -335,13 +346,15 @@ site GLN, short CBV tokens throughout. "Org prefix" = `organizations.gs1_company
 | D1 | `GoodsReceipts.receive_delivery/4` success (new receipt posted) | **Receiving** — ObjectEvent, OBSERVE, bizStep `receiving`, disposition `active` | `epcList`: inbound SSCC(s) scanned at the dock when the case label carries one; **fallback (decided 2026-11-10)** when it doesn't: class-level `quantityList` with the LGTIN (GTIN + lot) and received quantity — i.e. exactly the GTIN + batch + qty the receiving form already captures, no per-unit scanning required. `bizTransactionList`: `{type: "recadv", bizTransaction: "urn:epcglobal:cbv:bt:<orgprefix>:GRN-000123"}`. `sourceList`: `owning_party` = supplier's SGLN. `destinationList`: `owning_party` = our org SGLN. `RECEIVING_WITHOUT_SHIPPING` warnings are expected until upstream partners report — accepted, not an error. |
 | D2 | `Distributor.approve_shipment/3`, inside `issue_ssccs!/1` (one event **per shipper**, after SSCC assignment) | **Packing** — AggregationEvent, ADD, bizStep `packing`, disposition `active` | `parentID`: shipper SSCC URN. `childEPCs`: SGTIN URNs of the shipper's items. `eventTime` = `sscc_assigned_at`. All children same bizLocation (true by construction — one origin site per shipment). Max depth 3 — we use 2 (item→case), fine. |
 | D3 | Same approval transaction, **after** all D2 events (chronology!) | **Shipping** — ObjectEvent, OBSERVE, bizStep `shipping`, disposition `in_transit` | `epcList`: **shipper SSCCs only — never the child SGTINs** (`INVALID_PARENT_CHILD_RELATION` otherwise). `bizTransactionList`: `{type: "desadv", bizTransaction: "urn:epcglobal:cbv:bt:<orgprefix>:<order_number>"}`. `sourceList`: `owning_party` = origin site SGLN. `destinationList`: `owning_party` **and** `location` = customer's PPB SGLN. `eventTime` strictly ≥ every D2 eventTime (use assignment time + 1s or ordered timestamps). |
-| D4 | Future: unpack/repack flows (not in current UI) | **Unpack** — AggregationEvent, DELETE, `unpacking`/`active`; partial allowed | Only when we physically break a received SSCC to pick units. Required before shipping loose SGTINs out of a received SSCC, and before unit-level damage reporting inside a case. |
+| D4 | `Batches.break_into_mini_ssccs/3`, from **Break into mini-SSCCs** on `DistributorBatchLive`. Same transaction as the stock split. | **Unpack** — AggregationEvent, DELETE, bizStep `unpacking`, disposition `active` (covers the **whole** parent). Then one **Packing** ADD per new mini-SSCC, and a **Decommission** ObjectEvent, DELETE, bizStep `decommissioning`, disposition `inactive` for the parent SSCC. | When a received case is physically broken for storage. **Full disaggregation:** opening the inbound case consumes the whole parent — groups entered at split time, and any leftover is swept into an auto-generated remainder mini-SSCC — so the parent is debited to zero, cleared of serials, and retired to status `:disaggregated`; no stock keeps the inbound SSCC. Unpack and decommission are skipped when the parent has no SSCC (loose stock); each child still gets a packing event. `parentID`/`epcList` is the parent's SSCC. The unpack's `childEPCs` (serialized) or `quantityList` (quantity-only, manufacturer lot) now cover **every** unit, since all of them moved to children. `eventTime` ordering: unpack (now) → packs (+1s) → decommission (+2s). Children are new `batches` rows (`source_batch_id`, minted SSCC, zone `storage`, received immediately) and can be split again (which retires that child in turn). Reusing a mini-SSCC at shipment approval is still deferred: `Distributor.issue_ssccs!/1` still mints a fresh SSCC. |
 | D5 | Future: returns to supplier | **Return Shipping** — ObjectEvent, OBSERVE, `shipping`/`returned`; then counterpart Return Receiving when we take goods back from customers (`receiving`/`returned` → QA → `active` or damage/destroy chain) | `bizTransactionList`: `desadv` + RMA reference. Source/destination inverted vs forward flow. |
 | D6 | Future: write-offs | **Damaged** (`inspecting`/`damaged`), **Expired** (`inspecting`/`expired`), **Lost** (`decommissioning`/`inactive`), **Stolen** (`decommissioning`/`stolen`), **Export** (`decommissioning`/`non_sellable_other`) | Submit only for EPCs in our possession. Damaged SSCC quarantines all children; unit-level damage inside a case requires D4 first. `bizTransactionList` with `cert` + internal quality/incident reference. |
 | D7 | Future: periodic stock count | **Stock adjustment** — ObjectEvent, OBSERVE, `stock_taking`/`active` | `bizTransactionList`: `{type: "upevt", bizTransaction: "urn:kenya-tnt:stockcount:<session>"}` — stable session id per count cycle. |
 
-v1 scope = **D1 + D2 + D3**. D4–D7 have no triggering UI yet; build them when those
-flows exist, the outbox/builder make each a small addition.
+Implemented distributor events are **D1 + D2 + D3 + D4** (storage unpack into
+mini-SSCCs). D5–D7 have no triggering UI yet; build them when those flows exist,
+the outbox/builder make each a small addition. Repack under the original SSCC is
+not this split.
 
 ### 5.2 Facility tier (pharmacy portal)
 
@@ -354,6 +367,8 @@ flows exist, the outbox/builder make each a small addition.
 **D1–D3 (receiving, packing, shipping) first**; facility F1–F2 follow. D4–D6
 (returns/damage/destruction) are explicitly deferred. PPB registration is already done;
 the API key and capture URL arrive when live testing starts (not a build blocker).
+**Update 2026-11-19:** D4 storage unpack is implemented; returns, damage, and
+destruction stay deferred.
 
 ### 5.3 Events we must never send
 
@@ -578,6 +593,8 @@ Further decisions 2026-11-10 (second round, product owner):
 - **Capture URL arrives later** — not a blocker; config-only.
 - **v1 events = Receiving, Packing, Shipping** (D1–D3). Returns, damage and destruction
   (D4–D6) explicitly deferred. Facility events (F1–F2) follow once D1–D3 are proven.
+  **Update 2026-11-19:** D4 storage unpack is implemented
+  (`Batches.break_into_mini_ssccs/3`). Returns, damage, and destruction stay deferred.
 - **No-SSCC receiving = GTIN + batch + quantity** (class-level LGTIN) — exactly what the
   receiving form captures today.
 - **Testing runs locally.** Several orgs may onboard; all submit under GS1's key.
@@ -588,7 +605,12 @@ Further decisions 2026-11-10 (second round, product owner):
 
 Still open (none block the build):
 
-1. **Capture endpoint URL** — pending from PPB; blocks only §8 live tests.
+1. ~~**Capture endpoint URL**~~ — **resolved 2026-11-18**: both facility
+   (`/api/integration/facility/events`, live-confirmed §10) and distributor
+   (`/api/integration/supplier/events`, confirmed from PPB's published Bruno
+   collection, not yet live-tested) paths are known and configured (§4.3). Still
+   blocks only the *live* half of §8's distributor-tier tests until a
+   distributor-scoped token exists.
 2. **Service-provider key scoping** — confirm GS1's key is accepted for events under
    tenant orgs' GLN prefixes (spec ties keys to a GLN prefix). T0/T2 surface this on
    day one of live testing.
@@ -647,9 +669,11 @@ from exercising it against the real Hub:
 
 - **Base URL**: `https://trackiq.apeiro-digital.com`. Facility endpoint:
   `/api/integration/facility/events` (async, 202). A guessed
-  `/api/integration/distributor/events` path **404s** — the distributor endpoint's
-  real path is still unknown; a separate Distributor Certification registration is
-  needed to get it plus a distributor-scoped token.
+  `/api/integration/distributor/events` path **404s**. **Resolved 2026-11-18**: the
+  real distributor-tier path is `/api/integration/supplier/events`, confirmed from
+  PPB's own published Bruno collection (not guessed, not live-tested yet — still
+  needs a distributor-scoped token from a separate Distributor Certification
+  registration to actually exercise it against the sandbox).
 - **Content-Type bug found and fixed**: the sandbox requires
   `application/ld+json`; `Epcis.Client.submit_document/1` was sending
   `application/json` (via `Req`'s `json:` option). Fixed by sending the body as a

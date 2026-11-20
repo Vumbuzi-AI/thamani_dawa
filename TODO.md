@@ -2,11 +2,58 @@
 
 ## Product backlog
 
+- Customer quotations as printable/emailable documents: a formal price quote the distributor can
+  hand or send (print, email, text) to a customer before they commit — no stock reservation, no
+  conversion into an order. A prior attempt (`Quotations`/`DistributorQuotationLive`) built this as
+  a DB-backed record with a "convert to sales order" step and was removed because (a) it had no
+  actual document generation — nothing to print/email/send, so it was a dead end as a quoting tool,
+  and (b) the conversion target (`SalesOrders`) was removed too (see below). Re-scope to just the
+  document: customer + line items + price, rendered as something shareable, with no stock or order
+  logic attached.
+- Customer payment/invoicing: currently a distributor and customer settle outside the system
+  entirely (no invoice, no payment status tracked anywhere). Deferred deliberately for MVP — adding
+  a manually-ticked "paid" field with nothing downstream reading it would just be stale bookkeeping
+  nobody trusts. Revisit once there's an actual accounting/invoicing need; if/when a sales-order-like
+  concept returns, payment status belongs on that commercial record, not on `Shipment` (which has no
+  `customer_id`/price — its destination is just a GLN, not necessarily a paying customer).
+- A prior `SalesOrders`/`DistributorSalesOrderLive` feature (customer + price + FEFO stock
+  allocation, `draft -> confirmed -> fulfilled/cancelled`) was removed. It decremented
+  `batch.remaining_quantity` directly on confirmation, as a second, uncoordinated stock-reservation
+  mechanism alongside `Distributor.Shipment`'s serial reservation on submit (finalized on
+  `approve_shipment/3`, which depletes scanned units' batches) — the two could draw from the
+  same batch with neither aware of the other. Its `:fulfilled` status was also never wired to
+  anything; nothing ever created or linked a `Shipment` from a confirmed order, so it was a dead
+  end in practice. If a customer-order concept is rebuilt, it should delegate actual stock
+  movement to `Shipment` approval rather than decrementing batches itself.
 - Gate the requisition queue (`Requisitions`, `RequisitionQueueLive`) behind `Sites.multi_site?/1`.
   Single-site orgs currently have to create a requisition, wait for org approval, then dispatch
   stock to the one site they already own — no stock actually moves, so the whole
   approve→dispatch→receive cycle is pure overhead. Stock received by a single-site org should
   land directly on that site.
+- Add a `BatchEvent` audit log (mirroring `Distributor.ShipmentEvent`) so the Batch Show page can
+  display an "Activity"/journey timeline like the Shipment Show page already has (e.g. "Received
+  from X", "Entered quarantine", "Released from quarantine", "EPCIS event sent/accepted"), instead
+  of only showing the batch's current status/zone. Needs: a `batch_events` table (event, details,
+  actor, timestamp), inserts at every `receive_changeset`/`status_changeset`/`location_changeset`
+  transition in `lib/thamani_dawa/batches.ex`, and rendering on the batch show LiveView. Existing
+  `Epcis.OutboxEvent` rows (`source_type: "batch"`) already give EPCIS submission history for free
+  and should be merged into the same timeline rather than duplicated.
+- Breaking bulk for receiving/storage needs real design work before building: a fixed
+  per-`Product` conversion ratio (`units_per_pack`/a hypothetical `units_per_case`) is the wrong
+  model, because box/carton size varies by delivery, not by product — the same product can arrive
+  in differently-sized cartons across shipments. The real shape (per internal chat) is: receiving
+  happens under a shipper SSCC, and "breaking bulk for storage" means splitting that received SSCC
+  into several new child SSCCs for storage/shipping, where the user specifies arbitrary item counts
+  per group at split time (not a fixed per-product ratio) — e.g. "this pallet had 3 shippers of 20
+  boxes each." Those mini-SSCCs should then be shippable either as a whole (reusing their own SSCC
+  outbound, which `Distributor.issue_ssccs!/1` doesn't support today — it always mints a fresh SSCC
+  per shipper) or broken again recursively into smaller mini-SSCCs. Needs: an SSCC-level batch-split
+  context function (mirroring `Batches.dispatch_to_site/3`'s lock-parent/debit/create-child shape,
+  but same site, minting a new SSCC per group via `GS1.Sscc.allocate/2`), EPCIS Pack/Unpack
+  aggregation events for the split (requires first recording an aggregation at receipt time, which
+  doesn't exist today — `record_goods_receipt/1` only emits a class-level `ObjectEvent`, no
+  parent/child linkage), and a `Shipper`→source-batch link so packing can reuse an existing SSCC
+  instead of always minting one.
 - Add the ability to add (not remove) operating models from the org settings screen
   (`organization_settings_live.ex`). Backend already supports it — `Organization.changeset/2`
   casts/validates `:operating_models` and `update_organization_settings/2` already routes

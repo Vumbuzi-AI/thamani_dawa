@@ -65,7 +65,7 @@ defmodule ThamaniDawa.Organizations do
       }
     ]
     |> maybe_add_checklist_item(organization, :first_product, [:pharmacy, :distributor],
-      label: "Add your inventory",
+      label: "Add your products",
       description: "Build your catalogue so stock can be received and dispensed.",
       cta: "Add a product",
       done?: &(Products.list_products(&1) != []),
@@ -150,7 +150,7 @@ defmodule ThamaniDawa.Organizations do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     organization
-    |> Ecto.Changeset.change(gln_verified_at: now, gln_verification_source: "GS1 GRP")
+    |> Ecto.Changeset.change(gln_verified_at: now)
     |> Repo.update()
   end
 
@@ -165,6 +165,65 @@ defmodule ThamaniDawa.Organizations do
 
       {:ok, updated}
     end
+  end
+
+  @doc "Whether this org's EPCIS events send automatically as they're enqueued, or wait for a manual trigger."
+  def update_epcis_submission_mode(%Organization{} = organization, mode)
+      when mode in ["automatic", "manual", :automatic, :manual] do
+    organization
+    |> Organization.epcis_submission_mode_changeset(%{epcis_submission_mode: mode})
+    |> Repo.update()
+  end
+
+  @doc """
+  Sets (or, given `""`/`nil`, clears) this org's own PPB API key for one
+  tier. Clearing falls back to the platform-wide key configured on
+  `ThamaniDawa.Epcis.Client` for that tier.
+  """
+  def set_epcis_api_key(%Organization{} = organization, tier, key)
+      when tier in ["distributor", "facility"] do
+    organization
+    |> Organization.epcis_api_key_changeset(tier, key)
+    |> Repo.update()
+  end
+
+  @doc "Clears an org's own PPB API key for one tier, falling back to the platform-wide key."
+  def clear_epcis_api_key(%Organization{} = organization, tier) do
+    set_epcis_api_key(organization, tier, nil)
+  end
+
+  @doc """
+  The organization's GS1 member API token, or `nil` when none is saved.
+  Callers pass this when creating an SSCC or fetching case contents; `nil`
+  means use the platform token.
+  """
+  def gs1_api_key(%Organization{gs1_api_key: key}) when is_binary(key) and key != "", do: key
+  def gs1_api_key(%Organization{}), do: nil
+
+  def gs1_api_key(organization_id) when is_integer(organization_id) do
+    case Repo.get(Organization, organization_id) do
+      %Organization{} = organization -> gs1_api_key(organization)
+      nil -> nil
+    end
+  end
+
+  def gs1_api_key(_organization), do: nil
+
+  @doc """
+  Sets (or, given `""`/`nil`, clears) this organization's GS1 member API token.
+  Clearing falls back to the platform token for SSCC creation and fetching.
+  """
+  def set_gs1_api_key(%Organization{} = organization, key) do
+    organization
+    |> Organization.gs1_api_key_changeset(key)
+    |> Repo.update()
+  end
+
+  @doc "Dismisses the dashboard's 'Getting started' checklist for this organization."
+  def dismiss_onboarding_checklist(%Organization{} = organization) do
+    organization
+    |> Organization.dismiss_onboarding_checklist_changeset()
+    |> Repo.update()
   end
 
   @doc false

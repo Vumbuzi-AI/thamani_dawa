@@ -548,37 +548,16 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           </div>
 
           <main class="mx-auto grid w-full max-w-6xl flex-1 items-start gap-10 px-5 pb-16 pt-10 sm:px-8 sm:pt-12 md:grid-cols-[0.7fr_1.3fr] md:gap-10 md:pt-16 lg:gap-16 lg:pt-20">
-            <section class="thamani-step-enter">
+            <section class="thamani-step-enter flex flex-col items-center text-center md:block md:text-left">
               <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
                 <.icon name="hero-user-group" class="size-6" />
               </div>
-              <h1 class="max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
+              <h1 class="w-full max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
                 Invite your team
               </h1>
-              <p class="mt-6 max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
+              <p class="mt-6 w-full max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
                 Bring in the staff who will help run day-to-day operations at your locations.
               </p>
-
-              <ul class="mt-9 space-y-4 text-sm text-[var(--thamani-pewter)] sm:text-[15px]">
-                <li class="flex items-center gap-3">
-                  <.icon
-                    name="hero-check-circle"
-                    class="size-5 shrink-0 text-[var(--thamani-forest)]"
-                  /> Give the right access for each role
-                </li>
-                <li class="flex items-center gap-3">
-                  <.icon
-                    name="hero-check-circle"
-                    class="size-5 shrink-0 text-[var(--thamani-forest)]"
-                  /> Keep workflows and records consistent
-                </li>
-                <li class="flex items-center gap-3">
-                  <.icon
-                    name="hero-check-circle"
-                    class="size-5 shrink-0 text-[var(--thamani-forest)]"
-                  /> Add more teammates at any time
-                </li>
-              </ul>
             </section>
 
             <section class="thamani-step-enter rounded-3xl border border-[var(--thamani-stone)] bg-[var(--thamani-canvas)]/50 p-6 sm:p-8">
@@ -697,6 +676,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             id="onboarding-invite-modal"
             show
             on_cancel={JS.push("close_onboarding_invite")}
+            close_on_click_away={false}
           >
             <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
               Invite a teammate

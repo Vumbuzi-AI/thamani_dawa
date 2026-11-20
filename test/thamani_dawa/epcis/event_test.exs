@@ -85,6 +85,113 @@ defmodule ThamaniDawa.Epcis.EventTest do
              "urn:epc:id:sgtin:0614141.010734.1001",
              "urn:epc:id:sgtin:0614141.010734.1002"
            ]
+
+    refute Map.has_key?(event, "quantityList")
+
+    assert event == %{
+             "type" => "AggregationEvent",
+             "eventID" => "urn:uuid:" <> @event_id,
+             "eventTime" => "2026-11-10T08:30:00Z",
+             "eventTimeZoneOffset" => "+03:00",
+             "parentID" => "urn:epc:id:sscc:0614141.0123456789",
+             "childEPCs" => [
+               "urn:epc:id:sgtin:0614141.010734.1001",
+               "urn:epc:id:sgtin:0614141.010734.1002"
+             ],
+             "action" => "ADD",
+             "bizStep" => "packing",
+             "disposition" => "active",
+             "readPoint" => %{"id" => "urn:epc:id:sgln:0614141.00001.0"},
+             "bizLocation" => %{"id" => "urn:epc:id:sgln:0614141.00001.0"}
+           }
+  end
+
+  test "packing a quantity-only case uses quantityList and omits childEPCs" do
+    args = %{
+      event_id: @event_id,
+      event_time: @event_time,
+      org_prefix: @org_prefix,
+      biz_location_gln: @gln,
+      parent_sscc: "006141411234567890",
+      quantities: [%{gtin: "00614141107346", lot: "LOT123", quantity: 25, uom: "EA"}]
+    }
+
+    assert {:ok, event} = Event.packing(args)
+    assert event["action"] == "ADD"
+    assert event["bizStep"] == "packing"
+    refute Map.has_key?(event, "childEPCs")
+
+    assert event["quantityList"] == [
+             %{
+               "epcClass" => "urn:epc:class:lgtin:0614141.010734.LOT123",
+               "quantity" => 25,
+               "uom" => "EA"
+             }
+           ]
+  end
+
+  test "unpack builds a DELETE aggregation for serialized children" do
+    args = %{
+      event_id: @event_id,
+      event_time: @event_time,
+      org_prefix: @org_prefix,
+      biz_location_gln: @gln,
+      parent_sscc: "006141411234567890",
+      children: [
+        %{gtin: "00614141107346", serial: "1001"},
+        %{gtin: "00614141107346", serial: "1002"}
+      ]
+    }
+
+    assert {:ok, event} = Event.unpack(args)
+    assert event["type"] == "AggregationEvent"
+    assert event["action"] == "DELETE"
+    assert event["bizStep"] == "unpacking"
+    assert event["disposition"] == "active"
+    assert event["parentID"] == "urn:epc:id:sscc:0614141.0123456789"
+    assert event["eventTimeZoneOffset"] == "+03:00"
+    refute Map.has_key?(event, "quantityList")
+
+    assert event["childEPCs"] == [
+             "urn:epc:id:sgtin:0614141.010734.1001",
+             "urn:epc:id:sgtin:0614141.010734.1002"
+           ]
+  end
+
+  test "unpack of a quantity-only case uses quantityList" do
+    args = %{
+      event_id: @event_id,
+      event_time: @event_time,
+      org_prefix: @org_prefix,
+      biz_location_gln: @gln,
+      parent_sscc: "006141411234567890",
+      quantities: [%{gtin: "00614141107346", lot: "LOT123", quantity: 40, uom: "EA"}]
+    }
+
+    assert {:ok, event} = Event.unpack(args)
+    assert event["action"] == "DELETE"
+    assert event["bizStep"] == "unpacking"
+    refute Map.has_key?(event, "childEPCs")
+
+    assert event["quantityList"] == [
+             %{
+               "epcClass" => "urn:epc:class:lgtin:0614141.010734.LOT123",
+               "quantity" => 40,
+               "uom" => "EA"
+             }
+           ]
+  end
+
+  test "unpack with nothing removed is refused" do
+    args = %{
+      event_id: @event_id,
+      event_time: @event_time,
+      org_prefix: @org_prefix,
+      biz_location_gln: @gln,
+      parent_sscc: "006141411234567890"
+    }
+
+    assert {:error, :empty_event} = Event.unpack(args)
   end
 
   test "shipping builds an ObjectEvent with SSCCs only and desadv reference" do

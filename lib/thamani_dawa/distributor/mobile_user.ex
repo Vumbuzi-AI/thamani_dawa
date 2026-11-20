@@ -22,6 +22,7 @@ defmodule ThamaniDawa.Distributor.MobileUser do
     field :last_login_at, :utc_datetime
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
+    belongs_to :site, ThamaniDawa.Sites.Site
     has_many :sessions, ThamaniDawa.Distributor.MobileSession
 
     timestamps(type: :utc_datetime)
@@ -30,7 +31,7 @@ defmodule ThamaniDawa.Distributor.MobileUser do
   @doc "Changeset for the details a portal administrator can edit."
   def changeset(mobile_user, attrs) do
     mobile_user
-    |> cast(attrs, [:name, :username, :email, :phone])
+    |> cast(attrs, [:name, :username, :email, :phone, :site_id])
     |> update_change(:name, &trim/1)
     |> update_change(:username, &normalize_username/1)
     |> update_change(:email, &trim/1)
@@ -47,6 +48,7 @@ defmodule ThamaniDawa.Distributor.MobileUser do
       message: "Please enter a valid email"
     )
     |> unique_constraint(:username, message: "is already taken")
+    |> foreign_key_constraint(:site_id)
   end
 
   defp trim(value) when is_binary(value), do: String.trim(value)

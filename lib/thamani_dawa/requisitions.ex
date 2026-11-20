@@ -298,12 +298,12 @@ defmodule ThamaniDawa.Requisitions do
   def fulfill_requisition_line(
         organization_id,
         line_id,
-        %Batch{} = org_batch,
+        %Batch{} = source_batch,
         quantity,
         actor_id \\ nil
       ) do
     Repo.transaction(fn ->
-      fulfill_line_locked(organization_id, line_id, org_batch, quantity, actor_id)
+      fulfill_line_locked(organization_id, line_id, source_batch, quantity, actor_id)
     end)
   end
 
@@ -316,9 +316,9 @@ defmodule ThamaniDawa.Requisitions do
     end)
   end
 
-  defp fulfill_line_locked(organization_id, line_id, org_batch, quantity, actor_id) do
+  defp fulfill_line_locked(organization_id, line_id, source_batch, quantity, actor_id) do
     with {:ok, line} <- lock_approved_line(organization_id, line_id),
-         {:ok, batch} <- get_organization_warehouse_batch(organization_id, org_batch.id),
+         {:ok, batch} <- get_warehouse_batch(organization_id, source_batch.id),
          :ok <- validate_line_dispatch(line, batch, quantity) do
       dispatch_line!(line, batch, quantity, actor_id, organization_id)
     else
@@ -345,10 +345,10 @@ defmodule ThamaniDawa.Requisitions do
     end
   end
 
-  defp get_organization_warehouse_batch(organization_id, batch_id) do
+  defp get_warehouse_batch(organization_id, batch_id) do
     case Repo.get_by(Batch, id: batch_id, organization_id: organization_id) do
-      %Batch{site_id: nil} = batch -> {:ok, batch}
-      _not_a_warehouse_batch -> {:error, :batch_not_found}
+      %Batch{site_id: site_id} = batch when not is_nil(site_id) -> {:ok, batch}
+      nil -> {:error, :batch_not_found}
     end
   end
 
@@ -363,6 +363,9 @@ defmodule ThamaniDawa.Requisitions do
       quantity > line.approved_quantity - dispatched_so_far(line.id) ->
         {:error, :exceeds_approved_quantity}
 
+      fefo_violation?(batch, quantity) ->
+        {:error, :fefo_violation}
+
       true ->
         :ok
     end
@@ -373,6 +376,28 @@ defmodule ThamaniDawa.Requisitions do
       from f in RequisitionFulfillment,
         where: f.requisition_line_id == ^line_id,
         select: coalesce(sum(f.dispatched_quantity), 0)
+    )
+  end
+
+  # Returns true when an earlier-expiring, active, warehouse batch of the same
+  # product has enough remaining_quantity to cover `quantity`, meaning the
+  # caller skipped a FEFO-preferred batch. Only `:active` batches are
+  # considered — quarantined, damaged, or recalled stock is legitimately
+  # unavailable and must not trigger a false violation. Now checks warehouse
+  # sites (distribution sites) instead of siteless batches.
+  defp fefo_violation?(%Batch{} = batch, quantity) do
+    Repo.exists?(
+      from b in Batch,
+        join: s in ThamaniDawa.Sites.Site,
+        on: s.id == b.site_id,
+        where: b.organization_id == ^batch.organization_id,
+        where: b.product_id == ^batch.product_id,
+        where: not is_nil(b.site_id),
+        where: s.distribution?,
+        where: b.id != ^batch.id,
+        where: b.status == :active,
+        where: b.remaining_quantity >= ^quantity,
+        where: b.expiry_date < ^batch.expiry_date
     )
   end
 
@@ -580,10 +605,11 @@ defmodule ThamaniDawa.Requisitions do
   requisition (now or later) will require ordering more stock.
   """
   def needs_reorder?(organization_id, product_id, quantity) do
+    # Check warehouse (distribution site) stock instead of org-level batches
     available =
-      organization_id
-      |> ThamaniDawa.Batches.undispatched_summary_by_product([product_id])
-      |> Map.get(product_id, 0)
+      ThamaniDawa.Batches.stock_summary_by_product(organization_id, [product_id])
+      |> get_in([product_id, :received_remaining])
+      |> Kernel.||(0)
 
     available < quantity
   end
@@ -643,6 +669,7 @@ defmodule ThamaniDawa.Requisitions do
       batch.product_id != requisition.product_id -> {:error, :product_mismatch}
       not is_integer(quantity) or quantity <= 0 -> {:error, :invalid_dispatch_quantity}
       quantity > remaining_requested -> {:error, :exceeds_requested_quantity}
+      fefo_violation?(batch, quantity) -> {:error, :fefo_violation}
       true -> :ok
     end
   end

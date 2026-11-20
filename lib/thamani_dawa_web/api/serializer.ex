@@ -326,7 +326,8 @@ defmodule ThamaniDawaWeb.Api.Serializer do
   defp json_safe(%NaiveDateTime{} = value), do: NaiveDateTime.to_iso8601(value)
 
   defp json_safe(value)
-       when is_boolean(value) or is_nil(value) or is_number(value) or is_binary(value), do: value
+       when is_boolean(value) or is_nil(value) or is_number(value) or is_binary(value),
+       do: value
 
   defp json_safe(value) when is_atom(value), do: Atom.to_string(value)
   defp json_safe(value) when is_list(value), do: Enum.map(value, &json_safe/1)

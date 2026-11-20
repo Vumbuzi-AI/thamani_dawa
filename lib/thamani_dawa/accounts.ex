@@ -48,6 +48,16 @@ defmodule ThamaniDawa.Accounts do
     )
   end
 
+  @doc "Lists an organization's active admins — who to notify of org-wide events like recalls."
+  def list_admins(organization_id) do
+    Repo.all(
+      from u in User,
+        where: u.organization_id == ^organization_id,
+        where: u.is_active,
+        where: ^:admin in u.roles
+    )
+  end
+
   @doc "Lists outstanding staff invitations for an organization, newest first."
   def list_pending_invites(organization_id) do
     Repo.all(

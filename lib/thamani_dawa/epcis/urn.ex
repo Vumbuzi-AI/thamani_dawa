@@ -87,6 +87,28 @@ defmodule ThamaniDawa.Epcis.Urn do
   end
 
   @doc """
+  Recovers the GLN-13 from a facility-level SGLN EPC URN built by `sgln/2`.
+
+      iex> ThamaniDawa.Epcis.Urn.gln_from_sgln("urn:epc:id:sgln:0614141.00001.0")
+      {:ok, "0614141000012"}
+
+      iex> ThamaniDawa.Epcis.Urn.gln_from_sgln("urn:epc:id:sscc:0614141.0123456789")
+      :error
+  """
+  def gln_from_sgln("urn:epc:id:sgln:" <> rest) do
+    case String.split(rest, ".") do
+      [prefix, location_ref, _extension] ->
+        body = prefix <> location_ref
+        {:ok, body <> Integer.to_string(Sscc.mod10_check_digit(body))}
+
+      _other ->
+        :error
+    end
+  end
+
+  def gln_from_sgln(_urn), do: :error
+
+  @doc """
   Picks the prefix length to split `identifier` with: the organization's own
   prefix length when the identifier was issued under it, otherwise the
   configured default.

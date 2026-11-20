@@ -3408,7 +3408,7 @@ button {
         transform: none;
     }
 }
-@media (max-width: 900px) {
+@media (max-width: 1180px) {
     .hero-section-blush .hero-grid {
         grid-template-columns: 1fr;
     }
@@ -3417,9 +3417,29 @@ button {
         border-inline-end: 0;
         padding-inline-start: var(--section-pad-x-sm);
         padding-block: 36px 28px;
+        align-items: center;
+        text-align: center;
+    }
+    .hero-section-blush .hero-copy h1 {
+        max-width: 640px;
+    }
+    .hero-section-blush .hero-intro {
+        max-width: 620px;
+    }
+    .hero-section-blush .hero-actions {
+        justify-content: center;
     }
     .hero-section-blush .hero-visual {
         min-height: 360px;
+    }
+}
+@media (max-width: 720px) {
+    .hero-section-blush .hero-copy {
+        align-items: flex-start;
+        text-align: left;
+    }
+    .hero-section-blush .hero-actions {
+        justify-content: flex-start;
     }
 }
 
@@ -3481,6 +3501,20 @@ button {
         justify-content: flex-start;
     }
 }
+@media (max-width: 1180px) and (min-width: 601px) {
+    .capabilities-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px 16px;
+    }
+    .capability-item,
+    .capability-item:first-child {
+        padding-inline-start: 0;
+    }
+    .capability-item:not(:first-child)::before {
+        content: none;
+    }
+}
 @media (max-width: 600px) {
     .capabilities-row {
         display: grid;
@@ -3512,7 +3546,7 @@ button {
 .hero-fold .capabilities-section {
     flex: 0 0 auto;
 }
-@media (max-width: 900px) {
+@media (max-width: 1180px) {
     .hero-fold {
         min-height: 0;
     }
@@ -3583,5 +3617,18 @@ button {
     #results .container,
     #customers .container {
         padding-inline: var(--section-pad-x-sm);
+    }
+}
+@media (max-width: 720px) {
+    .site-footer .container {
+        width: min(calc(100% - 48px), var(--container));
+    }
+    .site-footer .footer-lead {
+        width: min(calc(100% - 40px), var(--container));
+        padding-inline: 24px;
+    }
+    .site-footer .footer-lead > p {
+        width: 100%;
+        max-width: 100%;
     }
 }

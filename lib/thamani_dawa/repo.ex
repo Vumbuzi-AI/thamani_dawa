@@ -30,6 +30,17 @@ defmodule ThamaniDawa.Repo do
     audited_write(:delete, struct, &delete(&1, opts))
   end
 
+  def audited_insert!(changeset_or_struct, opts \\ []) do
+    {:ok, record} =
+      transaction(fn ->
+        record = insert!(changeset_or_struct, opts)
+        audit_change(:insert, changeset_or_struct, record)
+        record
+      end)
+
+    record
+  end
+
   def audited_update!(changeset_or_struct, opts \\ []) do
     {:ok, record} =
       transaction(fn ->
@@ -66,7 +77,8 @@ defmodule ThamaniDawa.Repo do
       actor ->
         record_organization_id = Map.get(record, :organization_id)
 
-        if record_organization_id && record_organization_id != actor.organization_id do
+        if record_organization_id && actor.organization_id &&
+             record_organization_id != actor.organization_id do
           rollback(:audit_actor_organization_mismatch)
         end
 
