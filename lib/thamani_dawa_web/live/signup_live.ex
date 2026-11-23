@@ -769,14 +769,14 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   defp operating_model_options do
     [
-      {"pharmacy", "Retail pharmacy", "Dispense medicines directly to patients",
+      {"pharmacy", "Retail pharmacy", "Dispense medicines directly to patients.",
        "hero-building-storefront"},
-      {"laboratory", "Diagnostic laboratory", "Collect specimens and perform diagnostic tests",
+      {"laboratory", "Diagnostic laboratory", "Collect specimens and run diagnostic tests.",
        "hero-beaker"},
       {"distributor", "Pharmaceutical distributor",
-       "Supply medicines to pharmacies, hospitals, and other authorized buyers", "hero-truck"},
+       "Supply medicines to pharmacies, hospitals and other buyers.", "hero-truck"},
       {"manufacturer", "Pharmaceutical manufacturer",
-       "Produce and serialize medicines for distribution", "hero-cog-8-tooth"}
+       "Produce and serialize medicines for distribution.", "hero-cog-8-tooth"}
     ]
   end
 
@@ -792,14 +792,14 @@ defmodule ThamaniDawaWeb.SignupLive do
       %{
         key: "pharmacy",
         label: "Retail pharmacy",
-        description: "Dispense medicines directly to patients",
+        description: "Dispense medicines directly to patients.",
         icon: "hero-building-storefront",
         activities: ["pharmacy"]
       },
       %{
         key: "laboratory",
         label: "Diagnostic laboratory",
-        description: "Collect specimens and perform diagnostic tests",
+        description: "Collect specimens and run diagnostic tests.",
         icon: "hero-beaker",
         activities: ["laboratory"]
       },
@@ -813,14 +813,14 @@ defmodule ThamaniDawaWeb.SignupLive do
       %{
         key: "distribution",
         label: "Pharmaceutical distributor",
-        description: "Supply medicines to pharmacies, hospitals, and other authorized buyers",
+        description: "Supply medicines to pharmacies, hospitals and other buyers.",
         icon: "hero-truck",
         activities: ["distribution"]
       },
       %{
         key: "manufacturing",
         label: "Pharmaceutical manufacturer",
-        description: "Produce and serialize medicines for distribution",
+        description: "Produce and serialize medicines for distribution.",
         icon: "hero-cog-8-tooth",
         activities: ["manufacturing"]
       },
@@ -871,13 +871,30 @@ defmodule ThamaniDawaWeb.SignupLive do
     do: "Select all the services you operate. You can choose more than one."
 
   defp signup_subtitle(:gs1_key),
-    do: "We’ll use your GS1 member account to set up your organization and locations."
+    do: "We use your GS1 member account to set up your organization and locations."
 
   defp signup_subtitle(:main_location),
     do: "Choose this location from your GS1 account, then say what happens here."
 
   defp signup_subtitle(:administrator),
     do: "Add the administrator who will manage your sites, team, and organization settings."
+
+  attr :name, :string, required: true
+  attr :value, :string, required: true
+  attr :label, :string, required: true
+  attr :description, :string, default: nil
+  attr :selected, :boolean, default: false
+  attr :type, :string, default: "checkbox"
+
+  defp signup_option_card(assigns) do
+    ~H"""
+    <label class={["td-option", @selected && "is-selected"]}>
+      <input type={@type} name={@name} value={@value} checked={@selected} />
+      <span class="td-option-title">{@label}</span>
+      <span :if={@description} class="td-note">{@description}</span>
+    </label>
+    """
+  end
 
   def render(assigns) do
     ~H"""
@@ -1023,7 +1040,7 @@ defmodule ThamaniDawaWeb.SignupLive do
       >
         <div class="flex flex-col items-center px-6 text-center">
           <span class="flex size-12 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--color-td-accent-tint)_22%,white)] text-[var(--thamani-forest)]">
-            <.icon name="hero-arrow-path" class="size-6 animate-spin" />
+            <.td_icon name="arrows-clockwise" class="size-6 animate-spin" />
           </span>
           <p class="mt-4 text-base font-semibold text-[var(--thamani-forest)]">
             Restoring your progress&hellip;
@@ -1067,25 +1084,24 @@ defmodule ThamaniDawaWeb.SignupLive do
                   <fieldset class="mb-6">
                     <legend class="sr-only">Organization services</legend>
                     <div class="mb-3 flex items-center justify-between gap-3">
-                      <p class="text-xs text-[var(--thamani-pewter)]">Select all that apply</p>
+                      <p class="td-count-chip">Select all that apply</p>
                       <%= if selected_operating_model_count(@org_form) > 0 do %>
                         <span
                           id="operating-model-selection-count"
-                          class="rounded-full bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-2.5 py-1 text-[11px] font-semibold text-[var(--thamani-forest)]"
+                          class="td-count-chip"
                         >
                           {selected_operating_model_count(@org_form)} selected
                         </span>
                       <% end %>
                     </div>
                     <input type="hidden" name="organization[operating_models][]" value="" />
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <%= for {value, label, description, icon} <- operating_model_options() do %>
-                        <.activity_card
+                    <div class="td-mode-grid">
+                      <%= for {value, label, description, _icon} <- operating_model_options() do %>
+                        <.signup_option_card
                           name="organization[operating_models][]"
                           value={value}
                           label={label}
                           description={description}
-                          icon={icon}
                           selected={operating_model_selected?(@org_form, value)}
                         />
                       <% end %>
@@ -1119,7 +1135,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                           id="gs1-key-verified-badge"
                           class="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--thamani-forest)_12%,white)] px-2.5 py-1 text-xs font-semibold text-[var(--thamani-forest)]"
                         >
-                          <.icon name="hero-check-circle" class="size-3.5" /> Verified
+                          <.td_icon name="check-circle" class="size-3.5" /> Verified
                         </span>
                       </:badge>
                     </.thamani_input>
@@ -1129,14 +1145,16 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <%= case @gs1_key_check do %>
                       <% :checking -> %>
                         <p class="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--thamani-pewter)]">
-                          <.icon name="hero-arrow-path" class="size-3.5 animate-spin" />
-                          Verifying with GS1&hellip;
+                          <.td_icon name="arrows-clockwise" class="size-3.5 animate-spin" />
+                          Verifying with GS1
                         </p>
                       <% :invalid -> %>
-                        <p class="mb-2 text-xs text-red-700">This key wasn't accepted by GS1</p>
+                        <p class="mb-2 text-xs" style="color: var(--color-td-danger)">
+                          This key was not accepted by GS1. Check it and try again.
+                        </p>
                       <% :unavailable -> %>
-                        <p class="mb-2 text-xs text-[var(--thamani-pewter)]">
-                          Couldn't reach GS1, try again
+                        <p class="mb-2 text-xs" style="color: var(--color-td-ink-2)">
+                          We could not reach GS1. Try again in a moment.
                         </p>
                       <% _ -> %>
                     <% end %>
@@ -1145,10 +1163,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                       class="mt-5 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_14%,white)] bg-[color-mix(in_srgb,var(--thamani-forest)_4%,white)] px-5 py-5"
                     >
                       <div class="flex items-start gap-4">
-                        <.icon
-                          name="hero-information-circle"
-                          class="mt-0.5 size-5 shrink-0 text-[var(--thamani-forest)]"
-                        />
+                        <.td_icon name="info" class="mt-0.5 size-5 shrink-0" />
                         <div>
                           <p class="text-sm font-semibold text-[var(--thamani-forest)]">
                             Not sure what this is?
@@ -1164,21 +1179,21 @@ defmodule ThamaniDawaWeb.SignupLive do
                             class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--thamani-forest)] underline decoration-[color-mix(in_srgb,var(--thamani-forest)_35%,transparent)] underline-offset-4 transition hover:decoration-[var(--thamani-forest)]"
                           >
                             Get one from GS1 Kenya
-                            <.icon name="hero-arrow-up-right" class="size-3.5" />
+                            <.td_icon name="arrow-up-right" class="size-3.5" />
                           </a>
                         </div>
                       </div>
                     </aside>
                   </div>
-                  <.thamani_btn
+                  <.td_button
                     :if={!gs1_key_verified?(@gs1_key_check)}
                     id="verify-gs1-key"
                     type="submit"
                     variant="primary"
+                    size="lg"
+                    label="Verify"
                     disabled={@gs1_key_check == :checking}
-                  >
-                    Verify <.icon name="hero-arrow-right" class="ml-2 size-4" />
-                  </.thamani_btn>
+                  />
                 </.form>
 
                 <%= if gs1_key_verified?(@gs1_key_check) do %>
@@ -1186,42 +1201,35 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <div
                       :if={!blank?(@gs1_company_name)}
                       id="gs1-organization-badge"
-                      class="mb-6 flex w-full items-center gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--thamani-forest)_16%,white)] bg-[color-mix(in_srgb,var(--thamani-forest)_6%,white)] px-4 py-3 text-[var(--thamani-forest)] shadow-sm"
+                      class="td-org-badge"
                     >
-                      <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-white">
-                        <.icon name="hero-building-office-2" class="size-4.5" />
+                      <.td_icon name="buildings" class="size-5 shrink-0" />
+                      <span class="min-w-0 grow">
+                        <span>Verified organization</span>
+                        <b>{@gs1_company_name}</b>
                       </span>
-                      <span class="min-w-0">
-                        <span class="block text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--thamani-pewter)]">
-                          Verified organization
-                        </span>
-                        <span class="mt-0.5 block truncate text-base font-semibold">
-                          {@gs1_company_name}
-                        </span>
-                      </span>
-                      <.icon
-                        name="hero-check-badge"
-                        class="size-5 shrink-0 text-[var(--thamani-forest)]"
-                      />
+                      <.td_icon name="check-circle" class="size-5 shrink-0" />
                     </div>
-                    <p :if={blank?(@gs1_company_name)} class="mb-4 text-xs text-red-700">
-                      We couldn't find your company name in GS1.
-                    </p>
-                    <p :if={@gs1_key_check == :name_not_found} class="mb-4 text-xs text-red-700">
-                      We couldn't find your company name in GS1.
+                    <p :if={blank?(@gs1_company_name) or @gs1_key_check == :name_not_found} class="mb-4 text-xs" style="color: var(--color-td-danger)">
+                      Check the company details on your GS1 Kenya account, then verify again.
                     </p>
                     <.form for={@gs1_form} id="gs1-continue-form" phx-submit="continue_gs1_key">
-                      <div class="flex items-center gap-3">
-                        <button
+                      <div class="td-header-actions">
+                        <.td_button
                           id="gs1-key-back"
                           type="button"
+                          variant="secondary"
+                          label="Back"
                           phx-click="back"
                           phx-value-from="gs1_key"
-                          class="inline-flex h-11 items-center justify-center rounded-full border border-[var(--thamani-stone)] bg-white px-5 text-sm font-medium text-[var(--thamani-forest)] transition hover:border-[var(--thamani-forest)]"
-                        ><.icon name="hero-arrow-left" class="mr-2 size-4" /> Back</button>
-                        <.thamani_btn id="gs1-key-continue" type="submit" variant="primary">
-                          Continue <.icon name="hero-arrow-right" class="ml-2 size-4" />
-                        </.thamani_btn>
+                        />
+                        <.td_button
+                          id="gs1-key-continue"
+                          type="submit"
+                          variant="primary"
+                          size="lg"
+                          label="Continue"
+                        />
                       </div>
                     </.form>
                   </div>
@@ -1248,7 +1256,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                       placeholder="Select a GLN from your GS1 account"
                       options={
                         Enum.map(@gs1_glns, fn row ->
-                          {"#{member_gln_description(row)} — #{Map.get(row, "gln")}",
+                          {"#{member_gln_description(row)} · #{Map.get(row, "gln")}",
                            Map.get(row, "gln")}
                         end)
                       }
@@ -1258,13 +1266,13 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <%= case @gln_check do %>
                       <% :checking -> %>
                         <p class="-mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--thamani-pewter)]">
-                          <.icon name="hero-arrow-path" class="size-3.5 animate-spin" />
+                          <.td_icon name="arrows-clockwise" class="size-3.5 animate-spin" />
                           Checking with the GS1 registry&hellip;
                         </p>
                       <% {:matched, name, address} when is_binary(name) -> %>
                         <div class="-mt-4 mb-2 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
                           <p class="inline-flex items-center gap-1.5">
-                            <.icon name="hero-check-circle" class="size-4" /> Verified · {name}
+                            <.td_icon name="check-circle" class="size-4" /> Verified · {name}
                           </p>
                           <p :if={address} class="mt-1 font-normal text-[var(--thamani-pewter)]">
                             {address}
@@ -1273,7 +1281,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                       <% {:matched, nil, address} -> %>
                         <div class="-mt-4 mb-2 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
                           <p class="inline-flex items-center gap-1.5">
-                            <.icon name="hero-check-circle" class="size-4" /> Verified with GS1
+                            <.td_icon name="check-circle" class="size-4" /> Verified with GS1
                           </p>
                           <p :if={address} class="mt-1 font-normal text-[var(--thamani-pewter)]">
                             {address}
@@ -1289,7 +1297,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                       <% {:inactive, name, address} when is_binary(name) -> %>
                         <div class="-mt-4 mb-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-800">
                           <p class="inline-flex items-center gap-1.5">
-                            <.icon name="hero-exclamation-triangle" class="size-4" />
+                            <.td_icon name="warning" class="size-4" />
                             Found · {name} · not currently active in the GS1 registry.
                           </p>
                           <p :if={address} class="mt-1 font-normal text-amber-700">
@@ -1298,27 +1306,27 @@ defmodule ThamaniDawaWeb.SignupLive do
                         </div>
                       <% {:inactive, nil, _address} -> %>
                         <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
+                          <.td_icon name="warning" class="size-4" />
                           Found in the GS1 registry, but not currently active.
                         </p>
                       <% {:taken, _name, _address} -> %>
                         <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
-                          This GLN is already registered to another location on Thamani Dawa. Double-check the number, or use a different GLN.
+                          <.td_icon name="warning" class="size-4" />
+                          This GLN is already registered to another location on Thamani Dawa. Choose another GLN.
                         </p>
                       <% :not_found -> %>
                         <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
-                          We couldn't find this GLN in the GS1 registry. Double-check the number before continuing.
+                          <.td_icon name="warning" class="size-4" />
+                          We could not find this GLN in the GS1 registry. Double-check the number before continuing.
                         </p>
                       <% :invalid_check_digit -> %>
                         <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
-                          That doesn't look like a valid GLN. Double-check the digits.
+                          <.td_icon name="warning" class="size-4" />
+                          That does not look like a valid GLN. Double-check the digits.
                         </p>
                       <% :unavailable -> %>
                         <p class="-mt-4 text-xs text-[var(--thamani-pewter)]">
-                          We couldn't reach the GS1 registry to verify this GLN. Try again in a
+                          We could not reach the GS1 registry to verify this GLN. Try again in a
                           moment.
                         </p>
                       <% _ -> %>
@@ -1344,15 +1352,13 @@ defmodule ThamaniDawaWeb.SignupLive do
                           </p>
                           <div class="grid grid-cols-1 gap-2">
                             <%= for choice <- choices do %>
-                              <.activity_card
+                              <.signup_option_card
                                 type="radio"
                                 name="site[activity_choice]"
                                 value={choice.key}
                                 label={choice.label}
                                 description={choice.description}
-                                icon={choice.icon}
                                 selected={activity_choice_selected?(@site_form, choice)}
-                                compact
                               />
                             <% end %>
                           </div>
@@ -1395,49 +1401,27 @@ defmodule ThamaniDawaWeb.SignupLive do
                   id="signup-form"
                 >
                   <input type="hidden" name="start_tour" value="true" />
-                  <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-                    <div class="mb-5">
-                      <div class="mb-2 flex items-baseline justify-between">
-                        <label
-                          for="user_first_name"
-                          class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
-                        >
-                          First name<span class="text-red-600">&nbsp;*</span>
-                        </label>
-                      </div>
-                      <input
-                        id="user_first_name"
-                        type="text"
-                        name="user[first_name]"
-                        value={@admin_first_name}
-                        placeholder="Jane"
-                        autocomplete="given-name"
-                        phx-debounce="blur"
-                        required
-                        class="w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-surface border-[1.5px] rounded-lg outline-none transition-[border-color,box-shadow] duration-150 ease-in-out focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)] border-thamani-stone"
-                      />
-                    </div>
-                    <div class="mb-5">
-                      <div class="mb-2 flex items-baseline justify-between">
-                        <label
-                          for="user_last_name"
-                          class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
-                        >
-                          Last name<span class="text-red-600">&nbsp;*</span>
-                        </label>
-                      </div>
-                      <input
-                        id="user_last_name"
-                        type="text"
-                        name="user[last_name]"
-                        value={@admin_last_name}
-                        placeholder="Mwangi"
-                        autocomplete="family-name"
-                        phx-debounce="blur"
-                        required
-                        class="w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-surface border-[1.5px] rounded-lg outline-none transition-[border-color,box-shadow] duration-150 ease-in-out focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)] border-thamani-stone"
-                      />
-                    </div>
+                  <div class="td-mode-grid" style="margin-bottom: 16px">
+                    <.td_input
+                      id="user_first_name"
+                      name="user[first_name]"
+                      value={@admin_first_name}
+                      label="First name"
+                      placeholder="Jane"
+                      autocomplete="given-name"
+                      phx-debounce="blur"
+                      required
+                    />
+                    <.td_input
+                      id="user_last_name"
+                      name="user[last_name]"
+                      value={@admin_last_name}
+                      label="Last name"
+                      placeholder="Mwangi"
+                      autocomplete="family-name"
+                      phx-debounce="blur"
+                      required
+                    />
                   </div>
                   <p
                     :for={error <- @admin_form[:name].errors}
@@ -1460,6 +1444,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                     field={@admin_form[:password]}
                     type="password"
                     label="Password"
+                    hint="At least 12 characters"
                     placeholder="••••••••"
                     autocomplete="new-password"
                     phx-debounce="blur"
@@ -1525,9 +1510,14 @@ defmodule ThamaniDawaWeb.SignupLive do
           </div>
 
           <:footer>
-            Already have an account? <.link navigate={~p"/login"}>Log in here</.link>
+            Already have an account? <.link navigate={~p"/login"}>Log in</.link>
           </:footer>
         </.td_auth_card>
+        <nav class="td-auth-legal" aria-label="Legal">
+          <.link href={~p"/privacy"}>Privacy</.link>
+          <.link href={~p"/terms"}>Terms</.link>
+          <.link href={~p"/contact"}>Help</.link>
+        </nav>
       </div>
     </div>
     """
