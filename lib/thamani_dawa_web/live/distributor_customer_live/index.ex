@@ -152,6 +152,23 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
     end
   end
 
+  def handle_info({:gln_selected, "customer-gln", nil}, socket),
+    do: {:noreply, assign(socket, :gln_check, :idle)}
+
+  def handle_info({:gln_selected, "customer-gln", party}, socket) do
+    changeset =
+      Customers.change_customer(socket.assigns.customer, %{
+        "gln" => party.gln,
+        "name" => party.company,
+        "address" => party.address
+      })
+
+    {:noreply,
+     socket
+     |> assign(:gln_check, {:matched, party.company, party.address})
+     |> assign(:form, to_form(changeset, as: :customer))}
+  end
+
   def handle_async(:gln_lookup, {:ok, {:ok, resolved}}, socket) do
     changeset =
       Customers.change_customer(socket.assigns.customer, %{
@@ -263,17 +280,35 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
         subtitle={if @live_action == :new, do: "Look up the GLN in GS1. Verified customers are quicker to pick on orders.", else: nil}
       >
         <.form for={@form} id="distributor-customer-form" phx-change="validate" phx-submit="save">
-          <div class="mb-6">
+          <div :if={@live_action == :new and @gln_check != :skipped} class="mb-6">
+            <.live_component
+              module={ThamaniDawaWeb.GlnField}
+              id="customer-gln"
+              name="customer[gln]"
+              label="GLN"
+              placeholder="Search GS1 by name or GLN"
+              hint="Name and address are filled from GS1."
+              organization_id={@current_scope.organization_id}
+              api_token={ThamaniDawa.Organizations.gs1_api_key(@current_scope.organization_id)}
+              scope={:gs1}
+            />
+            <button
+              :if={!show_customer_fields?(@live_action, @gln_check)}
+              type="button"
+              id="customer-no-gln"
+              phx-click="skip_gln"
+              class="td-link td-s12 mt-2"
+            >
+              This customer has no GLN yet
+            </button>
+          </div>
+          <div :if={@live_action == :edit or @gln_check == :skipped} class="mb-6">
             <.input
+              :if={@live_action == :edit}
               field={@form[:gln]}
               label="GLN"
               placeholder="13-digit GLN"
               phx-debounce="500"
-              readonly={show_organization_badge?(@live_action, @gln_check)}
-              class={
-                show_organization_badge?(@live_action, @gln_check) &&
-                  "bg-td-wash text-thamani-pewter"
-              }
             />
             <%= case @gln_check do %>
               <% :checking -> %>
@@ -312,14 +347,6 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
                   Enter the customer's GLN and we'll look up their name and address for you.
                 </p>
             <% end %>
-            <button
-              :if={@live_action == :new and !show_customer_fields?(@live_action, @gln_check)}
-              type="button"
-              phx-click="skip_gln"
-              class="mt-2 text-xs font-medium text-thamani-forest hover:underline"
-            >
-              I don't have a GLN — enter details manually
-            </button>
           </div>
 
           <div :if={show_customer_fields?(@live_action, @gln_check)}>

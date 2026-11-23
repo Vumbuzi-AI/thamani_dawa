@@ -13,7 +13,8 @@ defmodule ThamaniDawaWeb.GlnField do
   when the search is edited again), as a message to the LiveView, or through
   `send_update/3` when `notify` is `{component_module, component_id}`.
 
-  Options: `scope` (`:all`, default, or `:sites` for own sites only) and
+  Options: `scope` (`:all`, default, `:sites` for own sites only, or `:gs1`
+  for the GS1 directory only, as when adding a customer) and
   `exclude_gln` (hide one GLN, such as the ship-from site).
   """
 
@@ -131,6 +132,13 @@ defmodule ThamaniDawaWeb.GlnField do
   end
 
   @doc false
+  def search(_organization_id, api_token, :gs1, _exclude_gln, query) do
+    case GlnLookup.search_destination(api_token, query, @limit) do
+      {:ok, results} -> {Enum.map(results, &Map.merge(&1, %{source: :gs1, gs1_verified: true})), false}
+      {:error, _reason} -> {[], true}
+    end
+  end
+
   def search(organization_id, api_token, scope, exclude_gln, query) do
     sites =
       organization_id

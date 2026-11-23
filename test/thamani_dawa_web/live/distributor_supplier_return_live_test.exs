@@ -35,6 +35,8 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLiveTest do
     {:ok, detail, _html} = live(conn, to)
     assert has_element?(detail, "#disposal-back[href='/distributor/returns']", "Back to Supplier returns")
     assert has_element?(detail, "#disposal-summary")
+    assert has_element?(detail, "#submit-disposal[disabled]")
+    assert has_element?(detail, "#disposal-items", "No batches added yet")
 
     [disposal] = InventoryDisposals.list_disposals(distributor.organization_id)
     assert disposal.kind == :returned

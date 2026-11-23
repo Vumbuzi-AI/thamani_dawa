@@ -3631,3 +3631,7 @@ a.td-pid { cursor: pointer; }
 .td-rows.is-static tbody + tbody tr:first-child td { border-top: 1px solid var(--color-td-hairline); }
 .td-chip { display: inline-block; margin: 4px 4px 0 0; padding: 2px 6px; border-radius: 6px; background: var(--color-td-wash); font-size: 12px; }
 .td-row-actions { white-space: nowrap; text-align: right; }
+.td-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--color-td-wash); }
+.td-seg-item { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--color-td-ink-2); transition: background-color .15s ease, color .15s ease; }
+.td-seg-item:hover { color: var(--color-td-ink); }
+.td-seg-item.is-active { background: var(--color-td-surface); color: var(--color-td-ink); box-shadow: 0 0 0 1px var(--color-td-hairline); }

@@ -234,16 +234,15 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
         id="supplier-return-modal"
         show
         on_cancel={JS.patch(~p"/distributor/returns")}
+        title="New supplier return"
+        subtitle="Start a draft, then add the batches going back. Stock is held until an admin approves."
       >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
-          Start a supplier return
-        </h2>
         <.form
           for={@form}
           id="supplier-return-form"
           phx-submit="save"
           phx-change="validate"
-          class="mt-4"
+          class="td-modal-form"
         >
           <input type="hidden" name="disposal[requested_by_id]" value={@current_scope.user.id} />
           <input type="hidden" name="disposal[kind]" value="returned" />
@@ -260,10 +259,11 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
             />
           <% end %>
           <.input field={@form[:notes]} type="textarea" label="Notes" rows="3" />
-          <div class="mt-4">
-            <.button variant="primary" class="w-full">Start supplier return</.button>
-          </div>
         </.form>
+        <:footer>
+          <.td_button type="button" label="Cancel" phx-click={JS.patch(~p"/distributor/returns")} />
+          <.td_button id="start-supplier-return" type="submit" form="supplier-return-form" variant="primary" label="Start return" />
+        </:footer>
       </.modal>
 
       <div class="td-list-page" id="supplier-returns-page">

@@ -45,52 +45,35 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
       current_scope={@current_scope}
       current_path={~p"/distributor/shipments"}
     >
-      <div class="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
-        <.link id="document-back" navigate={@back_to} class="td-back-link">
-          <.td_icon name="arrow-left" class="size-3.5" /> Back to {@shipment.reference}
-        </.link>
-        <div class="flex flex-wrap items-center gap-2">
-          <nav
-            aria-label="Shipment document"
-            class="inline-flex rounded-lg border border-thamani-stone bg-thamani-surface p-1"
-          >
-            <.link
-              id="switch-delivery-note"
-              navigate={~p"/distributor/shipments/#{@shipment.id}/delivery-note"}
-              aria-current={@live_action == :delivery_note && "page"}
-              class={[
-                "inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                @live_action == :delivery_note && "bg-td-accent-tint text-thamani-forest",
-                @live_action != :delivery_note &&
-                  "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
-              ]}
-            >
-              Delivery note
-            </.link>
-            <.link
-              id="switch-packing-list"
-              navigate={~p"/distributor/shipments/#{@shipment.id}/packing-list"}
-              aria-current={@live_action == :packing_list && "page"}
-              class={[
-                "inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                @live_action == :packing_list && "bg-td-accent-tint text-thamani-forest",
-                @live_action != :packing_list &&
-                  "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
-              ]}
-            >
-              Packing list
-            </.link>
-          </nav>
-          <.button
-            id="print-shipment-document"
-            variant="primary"
-            type="button"
-            onclick="window.print()"
-            class="gap-1.5"
-          >
-            <.icon name="hero-printer" class="size-4" /> Print
-          </.button>
-        </div>
+      <div class="no-print td-recipe td-detail-page mb-4" id="shipment-document-header">
+        <.td_back_link id="document-back" to={@back_to} label={"Back to #{@shipment.reference}"} />
+        <header class="td-idh">
+          <div class="td-idh-text">
+            <h1 class="td-idh-title"><span>{document_title(@live_action)}</span></h1>
+            <p class="td-idh-sub">Shipment {@shipment.reference} to {@shipment.destination_company || @shipment.destination_gln}</p>
+          </div>
+          <div class="td-idh-actions">
+            <nav aria-label="Shipment document" class="td-seg">
+              <.link
+                id="switch-delivery-note"
+                navigate={~p"/distributor/shipments/#{@shipment.id}/delivery-note?#{%{return_to: @back_to}}"}
+                aria-current={@live_action == :delivery_note && "page"}
+                class={["td-seg-item", @live_action == :delivery_note && "is-active"]}
+              >
+                Delivery note
+              </.link>
+              <.link
+                id="switch-packing-list"
+                navigate={~p"/distributor/shipments/#{@shipment.id}/packing-list?#{%{return_to: @back_to}}"}
+                aria-current={@live_action == :packing_list && "page"}
+                class={["td-seg-item", @live_action == :packing_list && "is-active"]}
+              >
+                Packing list
+              </.link>
+            </nav>
+            <.td_button id="print-shipment-document" variant="primary" type="button" glyph="printer" label="Print" onclick="window.print()" />
+          </div>
+        </header>
       </div>
 
       <article
@@ -142,7 +125,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
           <p class="mt-4 text-sm text-thamani-pewter">
             {tally(@shipment, @unit_count)}
           </p>
-          <div id="delivery-note-signatures" class="mt-10 grid gap-8 sm:grid-cols-2">
+          <div id="delivery-note-signatures" class="mt-10 grid gap-8 sm:grid-cols-3">
             <div>
               <p class="text-xs font-medium text-thamani-pewter">Dispatched by</p>
               <p class="mt-2 text-sm font-medium text-thamani-forest">
@@ -152,6 +135,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
               <p class="mt-1 text-xs text-thamani-pewter">
                 Signature · {short_date(@shipment.approved_at)}
               </p>
+            </div>
+            <div id="delivery-note-checked-by">
+              <p class="text-xs font-medium text-thamani-pewter">Checked by</p>
+              <div class="mt-12 border-b border-thamani-stone"></div>
+              <p class="mt-1 text-xs text-thamani-pewter">Name and signature</p>
             </div>
             <div id="delivery-note-received-by">
               <p class="text-xs font-medium text-thamani-pewter">Received by</p>
