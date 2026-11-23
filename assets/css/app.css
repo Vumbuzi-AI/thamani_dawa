@@ -3635,3 +3635,25 @@ a.td-pid { cursor: pointer; }
 .td-seg-item { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--color-td-ink-2); transition: background-color .15s ease, color .15s ease; }
 .td-seg-item:hover { color: var(--color-td-ink); }
 .td-seg-item.is-active { background: var(--color-td-surface); color: var(--color-td-ink); box-shadow: 0 0 0 1px var(--color-td-hairline); }
+
+/* Manufacturer · Batches (4KdsxCd1Xj) and View serials (Dc-F0U2xu2) */
+.td-batch-split { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 960px) { .td-batch-split { grid-template-columns: 1fr; } }
+.td-batch-rail { display: flex; flex-direction: column; }
+.td-batch-item { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px; border-top: 1px solid var(--color-td-hairline); color: var(--color-td-ink); text-decoration: none; transition: background-color 120ms ease; }
+.td-batch-item:hover { background: var(--color-td-hover); }
+.td-batch-item.is-on { background: var(--color-td-selected); }
+.td-batch-l1 { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: var(--weight-td-medium); }
+.td-batch-l2 { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--color-td-ink-2); }
+.td-batch-col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.td-batch-pair { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+@media (max-width: 1200px) { .td-batch-pair { grid-template-columns: 1fr; } }
+.td-serial-label { display: flex; align-items: center; gap: 12px; width: 50mm; height: 25mm; padding: 2mm; box-sizing: border-box; border: 1px solid var(--color-td-hairline); border-radius: 4px; background: #fff; color: #171917; }
+.td-serial-label-dm { width: 19mm; height: 19mm; flex: none; }
+.td-serial-label-tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 12px; line-height: 1.15; }
+.td-serial-label-tx b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-serial-label-tx span { font-family: var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
+/* Rendered off screen so html2canvas can rasterise every label for the print job. */
+.td-print-sheet { position: fixed; left: -10000px; top: 0; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+.td-toolbar-count { margin-left: auto; font-size: 12px; color: var(--color-td-ink-2); }
+.td-toolbar-count b { font-weight: var(--weight-td-medium); color: var(--color-td-ink); }

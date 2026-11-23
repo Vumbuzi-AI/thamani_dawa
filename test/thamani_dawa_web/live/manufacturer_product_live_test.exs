@@ -450,10 +450,34 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
              ThamaniDawaWeb.TimeFormat.datetime(batch.inserted_at)
            )
 
-    assert has_element?(serials, "#manufacturer-serials [phx-hook=DataMatrix]")
+    # The batch shows a short serial preview and one sample DataMatrix label;
+    # the full list lives behind View all serials.
+    assert has_element?(serials, "#serial-label-preview [phx-hook=DataMatrix]")
+    assert has_element?(serials, "#serial-label-sample-datamatrix[data-gs1-text*='(17)']")
     assert has_element?(serials, "#export-batch-serials")
-    assert has_element?(serials, "#manufacturer-serial-0001", "(17)")
+    assert has_element?(serials, "#manufacturer-serial-0001", "(21)0001")
     assert has_element?(serials, "#manufacturer-serial-0003")
+    assert has_element?(serials, "#primary-serial-packed", "0 of 3")
+
+    serials |> element("#open-print-labels") |> render_click()
+    assert has_element?(serials, "#print-labels-modal")
+    assert has_element?(serials, "#print-batch-labels[phx-hook=PrintAllLabels]", "Print 3 labels")
+    assert has_element?(serials, "#print-labels-sheet .printable-serial-label", "SN 0003")
+    serials |> element("#cancel-print-labels") |> render_click()
+    refute has_element?(serials, "#print-labels-modal")
+
+    {:ok, view, _html} =
+      live(
+        conn,
+        ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch.batch_no}&view=serials&return_to=/manufacturer/products"
+      )
+
+    assert has_element?(view, "#view-serials-back[href*='batch=#{batch.batch_no}']")
+    assert has_element?(view, "#view-serials-count", "3")
+    assert has_element?(view, "#manufacturer-serial-0002", batch.batch_no)
+
+    view |> form("#manufacturer-serial-search", search: "nope") |> render_change()
+    assert has_element?(view, "#view-serials-empty")
 
     csv =
       conn
