@@ -425,6 +425,7 @@ defmodule ThamaniDawaWeb.Layouts do
               aria-label="Change working context"
               aria-controls="site-switch-dropdown"
               aria-haspopup="menu"
+              data-tooltip={@current_picker_option && @current_picker_option.name}
               class="td-switch"
             >
               <.site_switch_face option={@current_picker_option} />
@@ -468,7 +469,10 @@ defmodule ThamaniDawaWeb.Layouts do
           }
           class="td-switch-form"
         >
-          <div class="td-switch is-static">
+          <div
+            class="td-switch is-static"
+            data-tooltip={@current_picker_option && @current_picker_option.name}
+          >
             <.site_switch_face option={@current_picker_option} static />
           </div>
         </div>

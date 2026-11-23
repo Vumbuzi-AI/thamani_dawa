@@ -377,20 +377,25 @@ body {
 
 
 
-/* Appended to <body> by the sidebar hook so the scroll region cannot clip it. */
+/* SHELL-COLLAPSED (Doop LToUOeDNer): fixed so #sidebar-scroll cannot clip it.
+   12/500, ink on surface, radius 8, no shadow, 48px from the item's left edge. */
 #sidebar-floating-tooltip {
   position: fixed;
-  z-index: 1000;
+  z-index: 60;
   pointer-events: none;
   transform: translateY(-50%);
-  border-radius: 10px;
-  background: var(--thamani-forest);
-  color: var(--thamani-on-accent);
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--color-td-ink);
+  color: var(--color-td-surface);
+  font-size: 12px;
   font-weight: 500;
-  line-height: 1.25rem;
+  line-height: 1;
   white-space: nowrap;
+  box-shadow: none;
+}
+#sidebar-floating-tooltip[hidden] {
+  display: none;
 }
 
 /* ============================================================
@@ -1593,28 +1598,58 @@ label {
   display: block;
 }
 
-/* SHELL-COLLAPSED (Doop LToUOeDNer): 72px rail. The full wordmark cannot
-   fit the brand cell, so the compact T mark stands in for it. */
-.td-br .td-br-mark { display: none; width: 20px; height: 20px; }
+/* SHELL-COLLAPSED (Doop LToUOeDNer): 72px rail, 56px column (8px side padding).
+   The full wordmark cannot fit the brand cell, so the compact T mark stands in. */
+.td-br .td-br-mark { display: none; width: 20px; height: 20px; max-width: none; }
 .td-shl.is-collapsed .td-br { padding: 0 14px 0 16px; }
 .td-shl.is-collapsed .td-br .td-br-word { display: none; }
 .td-shl.is-collapsed .td-br .td-br-mark { display: block; }
 @media (min-width: 1024px) {
-  .td-shl.is-collapsed #sidebar-aside.td-sd { padding: 12px 8px; align-items: center; }
-  .td-shl.is-collapsed .td-nav { align-items: center; }
-  .td-shl.is-collapsed .td-nav-item { position: relative; width: 40px; height: 32px; padding: 0; justify-content: center; }
+  .td-shl.is-collapsed #sidebar-aside.td-sd {
+    padding: 12px 8px;
+    align-items: center;
+    overflow: visible;
+  }
+  .td-shl.is-collapsed #distributor-nav-items { display: flex !important; flex-direction: column; }
+  .td-shl.is-collapsed .td-nav { align-items: center; width: 56px; }
+  .td-shl.is-collapsed .td-nav-item {
+    position: relative;
+    width: 40px;
+    height: 32px;
+    padding: 0;
+    justify-content: center;
+    color: var(--color-td-ink-3);
+  }
+  .td-shl.is-collapsed .td-nav-item:hover,
+  .td-shl.is-collapsed .td-nav-item:focus-visible {
+    background: var(--color-td-hover);
+    color: var(--color-td-ink-2);
+  }
+  .td-shl.is-collapsed .td-nav-item.is-active {
+    background: var(--color-td-selected);
+    color: var(--color-td-accent);
+  }
   .td-shl.is-collapsed .td-nav-item .td-count {
-    display: block !important; position: absolute; top: 6px; right: 7px; width: 6px; height: 6px; min-width: 0; padding: 0;
+    display: block !important; position: absolute; top: 6px; right: 8px; width: 6px; height: 6px; min-width: 0; padding: 0;
     border-radius: 99px; background: var(--color-td-accent); font-size: 0; line-height: 0; color: transparent;
   }
   .td-shl.is-collapsed .td-nav-group-label {
-    display: block !important; width: 24px; height: 1px !important; margin: 12px auto; padding: 0 !important;
+    display: block !important; width: 24px; height: 1px !important; margin: 6px 0; padding: 0 !important;
     overflow: hidden; font-size: 0; background: var(--color-td-hairline);
   }
   .td-shl.is-collapsed .td-nav-group-label svg { display: none; }
-  .td-shl.is-collapsed .td-switch { width: 40px; height: 40px; padding: 0; justify-content: center; }
+  .td-shl.is-collapsed .td-switch,
+  .td-shl.is-collapsed .td-switch.is-static {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    border: 1px solid var(--color-td-border);
+    background: var(--color-td-surface);
+  }
   .td-shl.is-collapsed .td-switch > :not(:first-child) { display: none; }
   .td-shl.is-collapsed .td-account-chip { width: 40px; height: 40px; padding: 0; justify-content: center; }
+  .td-shl.is-collapsed .td-account-chip:hover { background: var(--color-td-hover); }
   .td-shl.is-collapsed .td-account-menu { right: auto; width: 216px; }
 }
 

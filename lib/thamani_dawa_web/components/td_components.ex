@@ -309,7 +309,12 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   def td_nav_item(assigns) do
     ~H"""
-    <.link class={["td-nav-item", @active && "is-active"]} aria-current={@active && "page"} {@rest}>
+    <.link
+      class={["td-nav-item", @active && "is-active"]}
+      aria-current={@active && "page"}
+      aria-label={@label}
+      {@rest}
+    >
       <.td_icon
         name={ThamaniDawaWeb.CoreComponents.phosphor_name(@icon)}
         weight={if(@active, do: "fill", else: "regular")}
@@ -938,17 +943,49 @@ defmodule ThamaniDawaWeb.TDComponents do
           const sidebar = () => document.getElementById("sidebar-aside");
           const toggle = () => document.getElementById("sidebar-toggle");
           const mobile = () => document.getElementById("mobile-sidebar-toggle");
+          const tip = () => {
+            let el = document.getElementById("sidebar-floating-tooltip");
+            if (!el) {
+              el = document.createElement("div");
+              el.id = "sidebar-floating-tooltip";
+              el.setAttribute("role", "tooltip");
+              el.hidden = true;
+              document.body.appendChild(el);
+            }
+            return el;
+          };
+          const hideTip = () => {
+            const el = document.getElementById("sidebar-floating-tooltip");
+            if (el) el.hidden = true;
+          };
+          const showTip = (target) => {
+            if (!this.el.classList.contains("is-collapsed")) return;
+            const label = target.getAttribute("data-tooltip");
+            if (!label) return;
+            const el = tip();
+            const rect = target.getBoundingClientRect();
+            el.textContent = label;
+            el.style.top = `${rect.top + rect.height / 2}px`;
+            el.style.left = `${rect.left + 48}px`;
+            el.hidden = false;
+          };
           const apply = () => {
             const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
             this.el.classList.toggle("is-collapsed", collapsed);
             sidebar()?.classList.toggle("sidebar-collapsed", collapsed);
             toggle()?.setAttribute("aria-expanded", String(!collapsed));
             toggle()?.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+            if (collapsed) {
+              document.getElementById("distributor-nav-items")?.classList.remove("hidden");
+            } else {
+              hideTip();
+            }
           };
           apply();
           this.onClick = (event) => {
             const distributorToggle = event.target.closest("#distributor-nav-toggle");
             if (distributorToggle) {
+              if (this.el.classList.contains("is-collapsed")) return;
               const items = document.getElementById("distributor-nav-items");
               const expanded = items?.classList.toggle("hidden") === false;
               distributorToggle.setAttribute("aria-expanded", String(expanded));
@@ -978,14 +1015,40 @@ defmodule ThamaniDawaWeb.TDComponents do
               mobile()?.setAttribute("aria-expanded", "false");
             }
           };
+          this.onOver = (event) => {
+            const el = event.target.closest("#sidebar-aside [data-tooltip]");
+            if (el) showTip(el);
+          };
+          this.onOut = (event) => {
+            const el = event.target.closest("#sidebar-aside [data-tooltip]");
+            if (!el) return;
+            if (event.relatedTarget && el.contains(event.relatedTarget)) return;
+            hideTip();
+          };
+          this.onFocusIn = (event) => {
+            const el = event.target.closest("#sidebar-aside [data-tooltip]");
+            if (el) showTip(el);
+          };
+          this.onFocusOut = () => hideTip();
+          this.hideTip = hideTip;
           document.addEventListener("click", this.onClick);
+          this.el.addEventListener("mouseover", this.onOver);
+          this.el.addEventListener("mouseout", this.onOut);
+          this.el.addEventListener("focusin", this.onFocusIn);
+          this.el.addEventListener("focusout", this.onFocusOut);
         },
         updated() {
           const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
           this.el.classList.toggle("is-collapsed", collapsed);
+          if (!collapsed) this.hideTip?.();
         },
         destroyed() {
           document.removeEventListener("click", this.onClick);
+          this.el.removeEventListener("mouseover", this.onOver);
+          this.el.removeEventListener("mouseout", this.onOut);
+          this.el.removeEventListener("focusin", this.onFocusIn);
+          this.el.removeEventListener("focusout", this.onFocusOut);
+          this.hideTip?.();
         }
       }
     </script>
