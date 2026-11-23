@@ -857,6 +857,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :crumb_root, :string, default: nil
   attr :help_path, :string, default: nil
   attr :nav_label, :string, default: "Navigation"
+  attr :base_path, :string, default: "/"
   slot :tools
   slot :side
   slot :content
@@ -924,9 +925,31 @@ defmodule ThamaniDawaWeb.TDComponents do
           >
             <.td_icon name="question" />
           </.link>
-          <button type="button" class="td-icon-btn" aria-label="Notifications">
-            <.td_icon name="bell" />
-          </button>
+          <div class="td-bell-wrap">
+            <button
+              type="button"
+              id="td-notifications-toggle"
+              class="td-icon-btn"
+              aria-label="Notifications"
+              aria-haspopup="dialog"
+              aria-expanded="false"
+              aria-controls="td-notifications"
+            >
+              <.td_icon name="bell" />
+            </button>
+            <div id="td-notifications" class="td-notifications hidden" role="dialog" aria-labelledby="td-notifications-title">
+              <div class="td-notifications-hd">
+                <p id="td-notifications-title">Notifications</p>
+                <button type="button" class="td-text-btn" id="td-notifications-mark-read" disabled>
+                  Mark all read
+                </button>
+              </div>
+              <div class="td-notifications-empty">
+                <p class="td-empty-title">No notifications yet</p>
+                <p class="td-note">Stock alerts, requisitions and approvals will appear here.</p>
+              </div>
+            </div>
+          </div>
           <span :if={@tools != []} class="td-vdiv" aria-hidden="true"></span>
           {render_slot(@tools)}
         </div>
@@ -938,6 +961,178 @@ defmodule ThamaniDawaWeb.TDComponents do
         <div class="td-page">{render_slot(@content)}</div>
       </main>
     </div>
+    <div
+      id="td-chrome"
+      phx-hook=".ShellChrome"
+      data-base-path={@base_path}
+      hidden
+    >
+    </div>
+    <div
+      :if={@base_path == "/manufacturer"}
+      id="td-command-palette"
+      class="td-cmd hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command menu"
+    >
+      <div class="td-cmd-scrim" data-td-cmd-dismiss></div>
+      <div class="td-cmd-panel">
+        <div class="td-cmd-pin">
+          <.td_icon name="magnifying-glass" />
+          <input
+            id="td-command-search"
+            type="search"
+            placeholder="Type a command or search"
+            aria-label="Type a command or search"
+            autocomplete="off"
+          />
+          <kbd>Esc</kbd>
+        </div>
+        <div class="td-cmd-body">
+          <p class="td-cmd-gh">Go to</p>
+          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer"}><span class="td-cmd-ti"><.td_icon name="squares-four" /></span><span class="td-cmd-t"><b>Dashboard</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/products"}><span class="td-cmd-ti"><.td_icon name="package" /></span><span class="td-cmd-t"><b>Products</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/inventory"}><span class="td-cmd-ti"><.td_icon name="cube" /></span><span class="td-cmd-t"><b>Inventory</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/shipments"}><span class="td-cmd-ti"><.td_icon name="truck" /></span><span class="td-cmd-t"><b>Shipments</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/aggregations"}><span class="td-cmd-ti"><.td_icon name="squares-plus" /></span><span class="td-cmd-t"><b>Aggregation</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/mobile-users"}><span class="td-cmd-ti"><.td_icon name="device-mobile-camera" /></span><span class="td-cmd-t"><b>Mobile users</b></span></.link>
+          <p class="td-cmd-gh">Actions</p>
+          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/products"}><span class="td-cmd-ti"><.td_icon name="plus" /></span><span class="td-cmd-t"><b>Add product</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/aggregations"}><span class="td-cmd-ti"><.td_icon name="package" /></span><span class="td-cmd-t"><b>Add SSCC</b></span></.link>
+          <p class="td-cmd-gh">Account</p>
+          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/api-keys"}><span class="td-cmd-ti"><.td_icon name="key" /></span><span class="td-cmd-t"><b>API keys</b></span></.link>
+          <button
+            type="button"
+            class="td-cmd-row td-cmd-danger"
+            data-td-cmd-row
+            phx-click={ThamaniDawaWeb.CoreComponents.show_modal("sidebar-logout-confirm")}
+          >
+            <span class="td-cmd-ti"><.td_icon name="sign-out" /></span>
+            <span class="td-cmd-t"><b>Log out</b></span>
+          </button>
+        </div>
+        <div class="td-cmd-ft">
+          <span class="td-cmd-hint">↑↓ to move</span>
+          <span class="td-cmd-hint">↵ to run</span>
+        </div>
+      </div>
+    </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".ShellChrome">
+      export default {
+        mounted() {
+          const base = this.el.dataset.basePath || "";
+          const manufacturer = base === "/manufacturer";
+          const palette = () => document.getElementById("td-command-palette");
+          const search = () => document.getElementById("td-command-search");
+          const global = () => document.getElementById("td-global-search");
+          const bell = () => document.getElementById("td-notifications-toggle");
+          const panel = () => document.getElementById("td-notifications");
+
+          const visibleRows = () =>
+            [...(palette()?.querySelectorAll("[data-td-cmd-row]") || [])].filter((row) => !row.hidden);
+
+          const setActive = (idx) => {
+            const rows = visibleRows();
+            rows.forEach((row, i) => row.classList.toggle("on", i === idx));
+            rows[idx]?.scrollIntoView({ block: "nearest" });
+            this.active = idx;
+          };
+
+          const filterRows = () => {
+            const q = (search()?.value || "").trim().toLowerCase();
+            palette()?.querySelectorAll("[data-td-cmd-row]").forEach((row) => {
+              const text = row.textContent.toLowerCase();
+              row.hidden = q !== "" && !text.includes(q);
+            });
+            setActive(0);
+          };
+
+          const openPalette = () => {
+            const el = palette();
+            if (!el) {
+              global()?.focus();
+              return;
+            }
+            el.classList.remove("hidden");
+            if (search()) {
+              search().value = "";
+              filterRows();
+              search().focus();
+            }
+          };
+
+          const closePalette = () => {
+            palette()?.classList.add("hidden");
+          };
+
+          const runActive = () => {
+            visibleRows()[this.active || 0]?.click();
+          };
+
+          this.active = 0;
+
+          this.onKey = (e) => {
+            const metaK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k";
+            if (metaK) {
+              e.preventDefault();
+              if (manufacturer) openPalette();
+              else global()?.focus();
+              return;
+            }
+            if (e.key === "Escape") {
+              if (palette() && !palette().classList.contains("hidden")) {
+                e.preventDefault();
+                closePalette();
+              }
+              panel()?.classList.add("hidden");
+              return;
+            }
+            if (palette() && !palette().classList.contains("hidden")) {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setActive(Math.min((this.active || 0) + 1, visibleRows().length - 1));
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setActive(Math.max((this.active || 0) - 1, 0));
+              } else if (e.key === "Enter") {
+                e.preventDefault();
+                runActive();
+              }
+            }
+          };
+
+          this.onOpen = () => openPalette();
+          this.onSearch = () => filterRows();
+          this.onDismiss = (e) => {
+            if (e.target.closest("[data-td-cmd-dismiss]")) closePalette();
+          };
+          this.onBell = (e) => {
+            e.stopPropagation();
+            const p = panel();
+            if (!p) return;
+            const open = p.classList.contains("hidden");
+            p.classList.toggle("hidden", !open);
+            bell()?.setAttribute("aria-expanded", open ? "true" : "false");
+          };
+          this.onDocClick = (e) => {
+            if (!e.target.closest(".td-bell-wrap")) panel()?.classList.add("hidden");
+          };
+
+          window.addEventListener("keydown", this.onKey);
+          window.addEventListener("td:open-command-palette", this.onOpen);
+          search()?.addEventListener("input", this.onSearch);
+          palette()?.addEventListener("click", this.onDismiss);
+          bell()?.addEventListener("click", this.onBell);
+          document.addEventListener("click", this.onDocClick);
+        },
+        destroyed() {
+          window.removeEventListener("keydown", this.onKey);
+          window.removeEventListener("td:open-command-palette", this.onOpen);
+          document.removeEventListener("click", this.onDocClick);
+        }
+      }
+    </script>
     <script :type={Phoenix.LiveView.ColocatedHook} name=".Sidebar">
       export default {
         mounted() {
