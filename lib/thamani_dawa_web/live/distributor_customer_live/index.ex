@@ -8,18 +8,43 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
 
   alias ThamaniDawa.Customers
   alias ThamaniDawa.Customers.Customer
+  alias ThamaniDawa.Distributor
+  alias ThamaniDawaWeb.TimeFormat
 
   def mount(_params, _session, socket) do
     {:ok,
      socket
      |> assign(:page_title, "Customers")
      |> assign(:gln_check, :idle)
+     |> assign(:search, "")
+     |> assign(:selected, nil)
+     |> assign(:recent_orders, [])
      |> load_customers()}
   end
 
   def handle_params(params, _url, socket) do
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+    {:noreply,
+     socket
+     |> assign(:search, params["search"] || "")
+     |> load_customers()
+     |> select_customer(params["customer"])
+     |> apply_action(socket.assigns.live_action, params)}
   end
+
+  defp select_customer(socket, id) when is_binary(id) and id != "" do
+    org_id = socket.assigns.current_scope.organization_id
+
+    case Enum.find(socket.assigns.all_customers, &(Integer.to_string(&1.id) == id)) do
+      nil ->
+        socket |> assign(:selected, nil) |> assign(:recent_orders, [])
+
+      customer ->
+        orders = if customer.gln, do: Distributor.list_shipments_to(org_id, customer.gln, 5), else: []
+        socket |> assign(:selected, customer) |> assign(:recent_orders, orders)
+    end
+  end
+
+  defp select_customer(socket, _id), do: socket |> assign(:selected, nil) |> assign(:recent_orders, [])
 
   defp apply_action(socket, :new, params) do
     customer = %Customer{}
@@ -62,6 +87,11 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
       _ ->
         attrs
     end
+  end
+
+  def handle_event("search", %{"search" => search}, socket) do
+    query = if String.trim(search) == "", do: %{}, else: %{"search" => search}
+    {:noreply, push_patch(socket, to: ~p"/distributor/customers?#{query}")}
   end
 
   def handle_event("validate", %{"customer" => params} = form_params, socket) do
@@ -166,8 +196,44 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
 
   defp load_customers(socket) do
     organization_id = socket.assigns.current_scope.organization_id
-    stream(socket, :customers, Customers.list_customers(organization_id), reset: true)
+    all = Customers.list_customers(organization_id)
+    query = (socket.assigns[:search] || "") |> String.trim() |> String.downcase()
+
+    shown =
+      if query == "",
+        do: all,
+        else:
+          Enum.filter(all, fn c ->
+            Enum.any?([c.name, c.gln, c.address], &(is_binary(&1) and String.contains?(String.downcase(&1), query)))
+          end)
+
+    socket
+    |> assign(:all_customers, all)
+    |> assign(:shown_count, length(shown))
+    |> assign(:summaries, Distributor.destination_summaries(organization_id, Enum.map(all, & &1.gln)))
+    |> stream(:customers, shown, reset: true)
   end
+
+  defp panel_path(customer, search) do
+    query = %{"customer" => customer.id}
+    query = if search in [nil, ""], do: query, else: Map.put(query, "search", search)
+    ~p"/distributor/customers?#{query}"
+  end
+
+  defp summary_for(summaries, %{gln: gln}) when is_binary(gln),
+    do: Map.get(summaries, gln, %{open_orders: 0, order_count: 0, last_order_at: nil, last_shipment: nil})
+
+  defp summary_for(_summaries, _customer), do: %{open_orders: 0, order_count: 0, last_order_at: nil, last_shipment: nil}
+
+  defp type_label(type), do: Phoenix.Naming.humanize(type)
+
+  defp order_tone("submitted"), do: "warning"
+  defp order_tone("approved"), do: "success"
+  defp order_tone("rejected"), do: "danger"
+  defp order_tone(_), do: "neutral"
+
+  defp order_path(shipment, customer),
+    do: ThamaniDawaWeb.ReturnTo.with_query(~p"/distributor/shipments/#{shipment.id}", "/distributor/customers?customer=#{customer.id}")
 
   def render(assigns) do
     ~H"""
@@ -176,17 +242,16 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
       current_scope={@current_scope}
       current_path={~p"/distributor/customers"}
     >
-      <.header icon="hero-user-group">
-        Customers
-        <:subtitle>
-          Who you sell to — keep a record of customers so you don't have to re-enter GLN details each time.
-        </:subtitle>
-        <:actions>
-          <.button variant="primary" patch={~p"/distributor/customers/new"}>
-            <.icon name="hero-plus" class="size-4" /> Add customer
-          </.button>
-        </:actions>
-      </.header>
+      <div class="td-recipe td-list-page">
+        <.td_page_header
+          title="Customers"
+          subtitle="Pharmacies, hospitals and labs you ship to. A verified GLN lets you pick them quickly on new orders."
+        >
+          <:actions>
+            <.td_button id="add-customer" variant="primary" glyph="plus" patch={~p"/distributor/customers/new"} label="Add customer" />
+          </:actions>
+        </.td_page_header>
+      </div>
 
       <.modal
         :if={@live_action in [:new, :edit]}
@@ -322,31 +387,152 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
         </.form>
       </.modal>
 
-      <.table id="distributor-customers" rows={@streams.customers}>
-        <:col :let={{_id, customer}} label="Name">{customer.name}</:col>
-        <:col :let={{_id, customer}} label="Type">
-          {customer.customer_type && Phoenix.Naming.humanize(customer.customer_type)}
-        </:col>
-        <:col :let={{_id, customer}} label="GLN">{customer.gln || "—"}</:col>
-        <:col :let={{_id, customer}} label="Contact">
-          <span>{customer.contact_name || "—"}</span>
-          <span :if={customer.contact_phone} class="mt-0.5 block text-xs text-thamani-pewter">
-            {customer.contact_phone}
-          </span>
-        </:col>
-        <:action :let={{_id, customer}}>
-          <div class="flex flex-wrap justify-end gap-2">
-            <.button variant="ghost-edit" patch={~p"/distributor/customers/#{customer.id}/edit"}>
-              Edit
-            </.button>
+      <div class={["td-list-page", @selected && "td-detail-row"]} id="customers-page">
+        <div class="min-w-0">
+          <div class="td-toolbar">
+            <form id="customer-search" phx-change="search" phx-submit="search" onsubmit="return false">
+              <label class="td-search">
+                <.td_icon name="magnifying-glass" />
+                <input
+                  type="search"
+                  name="search"
+                  value={@search}
+                  placeholder="Search customer name or GLN"
+                  phx-debounce="250"
+                  autocomplete="off"
+                />
+                <kbd>/</kbd>
+              </label>
+            </form>
+            <span class="flex-1"></span>
           </div>
-        </:action>
-        <:empty_state>
-          <.blank_state icon="hero-user-group" title="No customers yet">
-            Add the businesses you sell to so you can start sales orders.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+
+          <div :if={@shown_count == 0} id="customers-empty" class="td-pad td-empty-wrap">
+            <div class="td-card td-empty-card">
+              <%= if @all_customers == [] do %>
+                <p class="td-empty-title">No customers yet</p>
+                <p class="td-note">Add the pharmacies, hospitals and labs you ship to, so you can pick them quickly on new orders.</p>
+                <.td_button id="customers-empty-add" variant="primary" patch={~p"/distributor/customers/new"} label="Add customer" />
+              <% else %>
+                <p class="td-empty-title">Nothing matches</p>
+                <p class="td-note">Try a different name or GLN.</p>
+                <.td_button id="customers-clear-search" patch={~p"/distributor/customers"} label="Clear search" />
+              <% end %>
+            </div>
+          </div>
+
+          <div class="td-list-table" hidden={@shown_count == 0}>
+            <table class="td-rows">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>GLN</th>
+                  <th :if={!@selected}>Location</th>
+                  <th class="is-num">Orders</th>
+                  <th>Last order</th>
+                </tr>
+              </thead>
+              <tbody id="distributor-customers" phx-update="stream">
+                <tr
+                  :for={{dom_id, customer} <- @streams.customers}
+                  id={dom_id}
+                  class={["is-link", @selected && @selected.id == customer.id && "is-selected"]}
+                  phx-click={JS.patch(panel_path(customer, @search))}
+                >
+                  <td>
+                    <b>{customer.name}</b>
+                    <span :if={customer.customer_type} class="td-sub td-s12">{type_label(customer.customer_type)}</span>
+                  </td>
+                  <td>
+                    <.td_pid :if={customer.gln} id={"#{dom_id}-gln"} label={customer.gln} mono>
+                      <:peek>
+                        <.td_peek kind="Customer" title={customer.name} subtitle={customer.address}>
+                          <:row label="GLN" mono>{customer.gln}</:row>
+                          <:row label="Open orders">{summary_for(@summaries, customer).open_orders}</:row>
+                          <:row label="Orders">{summary_for(@summaries, customer).order_count}</:row>
+                          <:row label="Last order">{TimeFormat.datetime(summary_for(@summaries, customer).last_order_at)}</:row>
+                          <:row :if={customer.contact_phone} label="Phone">{customer.contact_phone}</:row>
+                        </.td_peek>
+                      </:peek>
+                    </.td_pid>
+                    <span :if={!customer.gln} class="td-sub">No GLN</span>
+                  </td>
+                  <td :if={!@selected}>{customer.address || "—"}</td>
+                  <td class="is-num">{summary_for(@summaries, customer).order_count}</td>
+                  <td>{TimeFormat.date(summary_for(@summaries, customer).last_order_at)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <aside :if={@selected} class="td-card" id="customer-panel">
+          <div class="td-pad">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <h2 class="td-idh-title"><span>{@selected.name}</span></h2>
+                <p :if={@selected.customer_type} class="td-idh-sub">{type_label(@selected.customer_type)}</p>
+              </div>
+              <.link patch={~p"/distributor/customers?#{if @search == "", do: %{}, else: %{"search" => @search}}"} class="td-icon-btn" aria-label="Close" id="customer-panel-close">
+                <.td_icon name="x" class="size-4" />
+              </.link>
+            </div>
+            <dl class="td-kv-list mt-3" id="customer-panel-details">
+              <div><dt>GLN</dt><dd class="td-mono">{@selected.gln || "—"}</dd></div>
+              <div><dt>Address</dt><dd>{@selected.address || "—"}</dd></div>
+              <div><dt>Contact</dt><dd>{@selected.contact_name || "—"}</dd></div>
+              <div><dt>Phone</dt><dd>{@selected.contact_phone || "—"}</dd></div>
+            </dl>
+            <dl class="td-kv-grid is-2 mt-4" id="customer-stats">
+              <div class="td-kv">
+                <dt class="td-kv-label">Open orders</dt>
+                <dd class="td-kv-value">{summary_for(@summaries, @selected).open_orders}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">All orders</dt>
+                <dd class="td-kv-value">{summary_for(@summaries, @selected).order_count}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Last order (EAT)</dt>
+                <dd class="td-kv-value">{TimeFormat.datetime(summary_for(@summaries, @selected).last_order_at)}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Last shipment</dt>
+                <dd class="td-kv-value">
+                  {(summary_for(@summaries, @selected).last_shipment || %{reference: "—"}).reference}
+                </dd>
+              </div>
+            </dl>
+            <div class="mt-4 flex gap-2">
+              <.td_button id="customer-panel-edit" glyph="pencil-simple" patch={~p"/distributor/customers/#{@selected.id}/edit"} label="Edit" />
+              <.td_button id="customer-panel-new-order" variant="primary" navigate={~p"/distributor/orders/new"} label="New order" />
+            </div>
+          </div>
+          <.td_card_header
+            title="Recent orders"
+            subtitle={
+              case summary_for(@summaries, @selected).order_count do
+                0 -> "No orders yet"
+                n -> "#{n} #{if n == 1, do: "order", else: "orders"}"
+              end
+            }
+          />
+          <div id="customer-recent-orders">
+            <.link
+              :for={order <- @recent_orders}
+              navigate={order_path(order, @selected)}
+              class="td-li flex items-center justify-between gap-3 px-4 py-2.5"
+              id={"customer-order-#{order.id}"}
+            >
+              <span class="min-w-0">
+                <b>{order.order_number || order.reference}</b>
+                <span class="td-sub td-s12">{TimeFormat.datetime(order.updated_at)}</span>
+              </span>
+              <.td_badge tone={order_tone(order.status)} label={Phoenix.Naming.humanize(order.status)} />
+            </.link>
+          </div>
+        </aside>
+      </div>
     </Layouts.distributor_shell>
     """
   end

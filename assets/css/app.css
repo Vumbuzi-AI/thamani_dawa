@@ -3613,3 +3613,5 @@ a.td-pid { cursor: pointer; }
 .td-kv-list > div:last-child { border-bottom: 0; }
 .td-kv-list dt { color: var(--color-td-ink-2); }
 .td-kv-list dd { margin: 0; font-weight: 500; text-align: right; }
+.td-rows tr.is-selected > td { background: var(--color-td-selected); }
+#customer-recent-orders .td-li:hover { background: var(--color-td-hover); }
