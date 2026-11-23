@@ -126,7 +126,8 @@ defmodule ThamaniDawaWeb.SiteStock do
       site_options: Keyword.get(opts, :sites, []),
       base_path: Keyword.fetch!(opts, :base_path),
       export_prefix: Keyword.fetch!(opts, :export_prefix),
-      exporting: false
+      exporting: false,
+      csv_ready: nil
     )
   end
 
@@ -197,6 +198,9 @@ defmodule ThamaniDawaWeb.SiteStock do
   def handle_event("close_export", _params, socket),
     do: {:noreply, Phoenix.Component.assign(socket, :exporting, false)}
 
+  def handle_event("close_download_ready", _params, socket),
+    do: {:noreply, Phoenix.Component.assign(socket, :csv_ready, nil)}
+
   def handle_event("export_csv", params, socket) do
     columns = Map.get(params, "columns", "visible")
     %{view: view, today: today, filtered: filtered, export_prefix: prefix} = socket.assigns
@@ -206,13 +210,13 @@ defmodule ThamaniDawaWeb.SiteStock do
         do: products_csv(filtered, columns),
         else: batches_csv(filtered, columns, today)
 
+    filename = "#{prefix}-#{view}-#{Date.to_iso8601(today)}.csv"
+
     {:noreply,
      socket
      |> Phoenix.Component.assign(:exporting, false)
-     |> Phoenix.LiveView.push_event("td:csv", %{
-       filename: "#{prefix}-#{view}-#{Date.to_iso8601(today)}.csv",
-       content: content
-     })}
+     |> Phoenix.Component.assign(:csv_ready, %{filename: filename, bytes: byte_size(content)})
+     |> Phoenix.LiveView.push_event("td:csv", %{filename: filename, content: content})}
   end
 
   def handle_event("export_product", %{"id" => id}, socket) do
@@ -534,6 +538,7 @@ defmodule ThamaniDawaWeb.SiteStock do
   attr :today, Date, required: true
   attr :filtered?, :boolean, required: true
   attr :exporting, :boolean, default: false
+  attr :csv_ready, :any, default: nil
   attr :stock_takes_path, :string, required: true
   attr :disposals_path, :string, required: true
   attr :scan_path, :string, required: true
@@ -890,6 +895,14 @@ defmodule ThamaniDawaWeb.SiteStock do
         columns={[{"All visible columns", "visible"}, {"Every column", "all"}]}
         count={@total}
         noun={if @view == "products", do: "products", else: "batches"}
+      />
+
+      <.td_download_ready
+        :if={@csv_ready}
+        id={"#{@id}-download-ready"}
+        filename={@csv_ready.filename}
+        bytes={@csv_ready.bytes}
+        on_cancel={JS.push("close_download_ready")}
       />
     </section>
     """

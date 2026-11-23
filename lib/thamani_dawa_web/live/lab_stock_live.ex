@@ -92,6 +92,7 @@ defmodule ThamaniDawaWeb.LabStockLive do
         today={@today}
         filtered?={@filtered?}
         exporting={@exporting}
+        csv_ready={@csv_ready}
         stock_takes_path={~p"/lab/stock-takes"}
         disposals_path={~p"/lab/disposals"}
         scan_path={~p"/lab/scan"}
