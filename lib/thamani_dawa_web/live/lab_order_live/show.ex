@@ -444,7 +444,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             :for={item <- @items}
             class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-thamani-accent/10 text-thamani-forest border border-thamani-accent/20"
           >
-            <.icon name="hero-check" class="w-3 h-3" />
+            <.td_icon name="check" class="w-3 h-3" />
             {item}
           </span>
           <span :if={@items == []} class="text-xs text-thamani-pewter">None selected</span>
@@ -454,11 +454,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         <div class="mt-1">
           <%= if is_checked do %>
             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <.icon name="hero-check-circle" class="w-3.5 h-3.5" /> Positive / Present
+              <.td_icon name="check-circle" class="w-3.5 h-3.5" /> Positive / Present
             </span>
           <% else %>
             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-td-wash text-td-ink-2 border border-td-hairline">
-              <.icon name="hero-x-circle" class="w-3.5 h-3.5 text-td-ink-3" /> Negative / Not present
+              <.td_icon name="x-circle" class="w-3.5 h-3.5 text-td-ink-3" /> Negative / Not present
             </span>
           <% end %>
         </div>
@@ -1345,7 +1345,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
                   patch={~p"/lab/orders/#{@lab_order.id}/results/#{result.id}/edit"}
                   class="gap-1.5 py-1.5 px-3 text-xs"
                 >
-                  <.icon name="hero-pencil-square" class="size-3.5" /> Enter results
+                  <.td_icon name="note-pencil" class="size-3.5" /> Enter results
                 </.button>
               </:action>
               <:empty_state>
