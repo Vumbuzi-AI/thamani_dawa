@@ -25,6 +25,15 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
      |> load_serials()}
   end
 
+  def handle_params(params, _url, socket) do
+    fallback =
+      if gtin = socket.assigns.sscc.gtin,
+        do: ~p"/manufacturer/products/#{gtin}/ssccs",
+        else: ~p"/manufacturer/products"
+
+    {:noreply, assign(socket, :back_path, ThamaniDawaWeb.ReturnTo.path(params, fallback))}
+  end
+
   defp load_serials(socket) do
     organization_id = socket.assigns.current_scope.organization_id
     code = socket.assigns.sscc.code
@@ -92,13 +101,29 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
       current_scope={@current_scope}
       current_path={~p"/manufacturer/products"}
     >
-      <.header icon="hero-qr-code">
-        Primary serials
-        <:subtitle>
-          <span class="font-mono">{@sscc.code}</span>
-          <span :if={@remote_serials.ok?}>· {length(@serials)} total</span>
-        </:subtitle>
-      </.header>
+      <.td_back_link
+        id="sscc-serials-back"
+        to={@back_path}
+        label={ThamaniDawaWeb.ReturnTo.label(@back_path, "Back to shipper SSCCs")}
+      />
+      <div class="td-idh">
+        <div>
+          <h1 class="td-idh-title font-mono">{@sscc.code}</h1>
+          <p class="td-idh-sub">
+            Shipper SSCC<span :if={@sscc.batch}> · Batch <span class="font-mono">{@sscc.batch}</span></span>
+            <span :if={@remote_serials.ok?}> · {length(@serials)} serials</span>
+          </p>
+        </div>
+        <div class="td-idh-actions">
+          <.td_button
+            id="sscc-serials-print-label"
+            variant="primary"
+            glyph="printer"
+            label="Print label"
+            navigate={~p"/manufacturer/sscc/#{@sscc.id}/label"}
+          />
+        </div>
+      </div>
 
       <section class="mt-6 overflow-hidden rounded-2xl border border-thamani-stone bg-white shadow-sm">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-thamani-stone bg-thamani-snow px-5 py-4">

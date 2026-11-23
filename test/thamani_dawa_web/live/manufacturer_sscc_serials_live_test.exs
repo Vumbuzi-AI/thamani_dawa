@@ -67,6 +67,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccSerialsLiveTest do
     render_async(lv)
 
     assert has_element?(lv, "#sscc-serials")
+    assert has_element?(lv, "#sscc-serials-back[href$='/ssccs']")
     assert has_element?(lv, "#sscc-primary-06141411234567-GS1-LOT-SN-1")
     assert has_element?(lv, "#sscc-primary-06141411234567-GS1-LOT-SN-2")
 
@@ -74,6 +75,19 @@ defmodule ThamaniDawaWeb.ManufacturerSsccSerialsLiveTest do
              lv,
              "#print-sscc-serial-06141411234567-GS1-LOT-SN-1[data-print-target='#sscc-primary-label-06141411234567-GS1-LOT-SN-1']"
            )
+  end
+
+  test "the back link honours a safe return_to", %{conn: conn, sscc: sscc} do
+    {:ok, lv, _html} =
+      live(
+        conn,
+        ~p"/manufacturer/sscc/#{sscc.id}/serials?#{%{return_to: "/manufacturer/products/123/serials?batch=B1"}}"
+      )
+
+    assert has_element?(lv, "#sscc-serials-back", "Back to Batches")
+
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/sscc/#{sscc.id}/serials?#{%{return_to: "//evil.example"}}")
+    refute has_element?(lv, "#sscc-serials-back[href*='evil']")
   end
 
   test "shows an error when GS1 has no record of the SSCC", %{conn: conn, sscc: sscc} do
