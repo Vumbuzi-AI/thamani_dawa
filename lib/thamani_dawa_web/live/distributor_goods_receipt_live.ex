@@ -7,11 +7,14 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   def mount(%{"id" => id}, _session, socket) do
     receipt = GoodsReceipts.get_receipt!(socket.assigns.current_scope.organization_id, id)
 
+    portal = if socket.assigns.live_action == :org_show, do: :organization, else: :distributor
+    index_path = if portal == :organization, do: ~p"/org/receiving", else: ~p"/distributor/receiving"
+
     {:ok,
      socket
      |> assign(:receipt, receipt)
-     |> assign(:receiving_portal, :distributor)
-     |> assign(:receiving_index_path, ~p"/distributor/receiving")
+     |> assign(:receiving_portal, portal)
+     |> assign(:receiving_index_path, index_path)
      |> assign(:resolving_id, nil)
      |> assign(:resolving_status, nil)
      |> assign(:resolution_reference, "")}
@@ -600,6 +603,20 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   attr :current_scope, :map, required: true
   attr :current_path, :string, required: true
   slot :inner_block, required: true
+
+  defp receipt_shell(%{portal: :organization} = assigns) do
+    ~H"""
+    <Layouts.org_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      back={@current_path}
+      back_label="Back to Receiving"
+    >
+      {render_slot(@inner_block)}
+    </Layouts.org_shell>
+    """
+  end
 
   defp receipt_shell(assigns) do
     ~H"""

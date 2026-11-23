@@ -10,7 +10,21 @@ defmodule ThamaniDawaWeb.PlatformOrganizationsLive do
      socket
      |> assign(:search, "")
      |> assign(:summaries, summaries)
-     |> assign(:filtered, summaries)}
+     |> assign(:filtered, summaries)
+     |> assign(:selected, nil)}
+  end
+
+  def handle_params(%{"id" => id}, _uri, socket) do
+    selected =
+      Enum.find(socket.assigns.summaries, fn summary ->
+        to_string(summary.organization.id) == id
+      end)
+
+    {:noreply, assign(socket, :selected, selected)}
+  end
+
+  def handle_params(_params, _uri, socket) do
+    {:noreply, assign(socket, :selected, nil)}
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -47,6 +61,7 @@ defmodule ThamaniDawaWeb.PlatformOrganizationsLive do
       flash={@flash}
       current_scope={@current_scope}
       current_path="/platform/organizations"
+      crumb={if @live_action == :show && @selected, do: @selected.organization.name, else: "Organizations"}
     >
       <.header icon="hero-building-office-2">
         Organizations
@@ -65,7 +80,11 @@ defmodule ThamaniDawaWeb.PlatformOrganizationsLive do
         </:toolbar>
       </.header>
 
-      <.table id="platform-organizations" rows={@filtered}>
+      <.table
+        id="platform-organizations"
+        rows={@filtered}
+        row_click={fn summary -> JS.navigate(~p"/platform/organizations/#{summary.organization.id}") end}
+      >
         <:col :let={summary} label="Organization">{summary.organization.name}</:col>
         <:col :let={summary} label="Activities">
           {operating_models(summary.organization)}
@@ -93,6 +112,38 @@ defmodule ThamaniDawaWeb.PlatformOrganizationsLive do
           </.blank_state>
         </:empty_state>
       </.table>
+      <div :if={@live_action == :show && @selected} id="platform-organization-detail" class="td-card" style="margin-top:16px;padding:16px">
+        <.td_page_header
+          title={@selected.organization.name}
+          subtitle="Read-only organization record."
+        />
+        <dl class="td-kv-grid is-pad is-3">
+          <div class="td-kv">
+            <dt class="td-kv-label">Activities</dt>
+            <dd class="td-kv-value">{operating_models(@selected.organization)}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Sites</dt>
+            <dd class="td-kv-value">{@selected.sites_count}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Users</dt>
+            <dd class="td-kv-value">{@selected.users_count}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Last activity</dt>
+            <dd class="td-kv-value">{last_activity(@selected.last_activity_at)}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Status</dt>
+            <dd class="td-kv-value"><.status_badge status={status(@selected.organization)} /></dd>
+          </div>
+        </dl>
+      </div>
+      <div :if={@live_action == :show && is_nil(@selected)} class="td-empty-state">
+        <p class="td-empty-state-title">Organization not found</p>
+        <.td_button label="Back to organizations" navigate={~p"/platform/organizations"} />
+      </div>
     </Layouts.platform_shell>
     """
   end

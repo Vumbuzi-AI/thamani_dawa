@@ -17,21 +17,22 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
+    portal = receiving_portal(socket.assigns.live_action)
     receiving_new? = receiving_new_action?(socket.assigns.live_action)
 
     distributor_org? =
       ThamaniDawaWeb.UserAuth.distributor_organization?(socket.assigns.current_scope)
 
-    case current_distribution_site(socket.assigns.current_scope) do
+    case current_distribution_site(socket.assigns.current_scope, portal) do
       {:ok, receiving_site} ->
         {:ok,
          socket
-         |> assign(:receiving_portal, :distributor)
+         |> assign(:receiving_portal, portal)
          |> assign(:receiving_site, receiving_site)
          |> assign(:receiving_new?, receiving_new?)
          |> assign(:distributor_org?, distributor_org?)
-         |> assign(:receiving_index_path, ~p"/distributor/receiving")
-         |> assign(:receiving_new_path, ~p"/distributor/receiving/new")
+         |> assign(:receiving_index_path, receiving_index_path(portal))
+         |> assign(:receiving_new_path, receiving_new_path(portal))
          |> assign(:products, Products.list_products(organization_id))
          |> assign(:suppliers, Suppliers.list_suppliers(organization_id))
          |> assign(:warehouses, warehouse_sites(organization_id))
@@ -90,10 +91,12 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
          )}
 
       :error ->
+        home = if portal == :organization, do: ~p"/org/dashboard", else: ~p"/distributor"
+
         {:ok,
          socket
-         |> put_flash(:error, "Select a distributor warehouse before receiving stock.")
-         |> push_navigate(to: ~p"/distributor")}
+         |> put_flash(:error, "Select a warehouse before receiving stock.")
+         |> push_navigate(to: home)}
     end
   end
 
@@ -165,7 +168,17 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
-  defp receiving_new_action?(action), do: action == :distributor_new
+  defp receiving_portal(action) when action in [:org_index, :org_new], do: :organization
+  defp receiving_portal(_action), do: :distributor
+
+  defp receiving_new_action?(action), do: action in [:distributor_new, :org_new]
+
+  defp receiving_index_path(:organization), do: ~p"/org/receiving"
+  defp receiving_index_path(_), do: ~p"/distributor/receiving"
+
+  defp receiving_new_path(:organization), do: ~p"/org/receiving/new"
+  defp receiving_new_path(_), do: ~p"/distributor/receiving/new"
+
 
   def handle_event("open_add_item", _params, socket) do
     {:noreply, assign(socket, :add_item_open, true)}
@@ -724,9 +737,16 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   defp origin_payload(%{assigns: %{origin_check: {:matched, resolved}}}), do: resolved
   defp origin_payload(_socket), do: nil
 
-  defp current_distribution_site(%Scope{current_site_id: nil}), do: :error
+  defp current_distribution_site(%Scope{current_site_id: nil} = scope, :organization) do
+    case warehouse_sites(scope.organization_id) do
+      [site | _] -> {:ok, site}
+      [] -> :error
+    end
+  end
 
-  defp current_distribution_site(%Scope{} = scope) do
+  defp current_distribution_site(%Scope{current_site_id: nil}, _portal), do: :error
+
+  defp current_distribution_site(%Scope{} = scope, _portal) do
     site = Sites.get_site!(scope.organization_id, scope.current_site_id)
 
     if Site.distribution?(site), do: {:ok, site}, else: :error
