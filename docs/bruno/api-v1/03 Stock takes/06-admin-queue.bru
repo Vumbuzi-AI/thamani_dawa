@@ -1,0 +1,19 @@
+meta {
+  name: Admin queue
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/api/v1/org/stock-takes
+  body: none
+  auth: bearer
+}
+
+params:query {
+  status: pending
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

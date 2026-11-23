@@ -1,0 +1,26 @@
+meta {
+  name: Start an expiry write-off
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/v1/pharmacy/disposals
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "kind": "expiry",
+    "reason": "Expired on shelf"
+  }
+}

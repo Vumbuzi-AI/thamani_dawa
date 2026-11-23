@@ -1,0 +1,25 @@
+meta {
+  name: Record a count
+  type: http
+  seq: 4
+}
+
+put {
+  url: {{base_url}}/api/v1/pharmacy/stock-takes/{{stock_take_id}}/items/1
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "counted_quantity": 42
+  }
+}

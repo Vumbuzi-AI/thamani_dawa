@@ -1,0 +1,25 @@
+meta {
+  name: Admin rejects
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{base_url}}/api/v1/org/stock-takes/{{stock_take_id}}/reject
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "rejection_reason": "Recount shelf B"
+  }
+}

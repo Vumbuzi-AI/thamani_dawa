@@ -1,0 +1,19 @@
+meta {
+  name: Find by order number
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/v1/distributor/mobile/shipments/search
+  body: none
+  auth: bearer
+}
+
+params:query {
+  order_number: PO-
+}
+
+auth:bearer {
+  token: {{mobile_access_token}}
+}

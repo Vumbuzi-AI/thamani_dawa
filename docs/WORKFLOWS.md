@@ -132,7 +132,7 @@ draft --submit--> submitted --approve--> approved
 
 Shipments have no planned-vs-packed reconciliation and no picker-facing pick list. Stock depletes from scanned units at approval (truth-based). Future work: if order/PO expected lines exist, surface a planned-vs-packed variance, and/or expose a pick list on the mobile side to guide picking.
 
-The mobile app's JSON API is not exposed yet; `ThamaniDawa.Distributor` and `ThamaniDawa.Distributor.MobileAuth` already implement the mobile-side operations it will call.
+The mobile app calls `/api/v1/distributor/mobile` (see `docs/API.md`), which wraps the mobile-side operations in `ThamaniDawa.Distributor` and `ThamaniDawa.Distributor.MobileAuth`.
 
 Contexts: `Distributor`, `Distributor.MobileAuth`, `Distributor.Billing`, `Distributor.Reports`, `GS1.Sscc`, `DistributorCustomers`.
 

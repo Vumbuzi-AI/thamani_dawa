@@ -1,0 +1,28 @@
+meta {
+  name: Add a returned pack
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/api/v1/distributor/customer-returns/{{return_id}}/items
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "product_id": "{{product_id}}",
+    "quantity": 4,
+    "batch_no": "LOT-001",
+    "expiry_date": "2027-12-31"
+  }
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Add a shipper
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/api/v1/distributor/mobile/shipments/{{shipment_id}}/shippers
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{mobile_access_token}}
+}
+
+body:json {
+  {
+    "name": "Carton 1",
+    "material_description": "Corrugated box"
+  }
+}

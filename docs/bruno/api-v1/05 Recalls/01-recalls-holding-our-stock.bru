@@ -1,0 +1,19 @@
+meta {
+  name: Recalls holding our stock
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/org/recalls
+  body: none
+  auth: bearer
+}
+
+params:query {
+  status: open
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

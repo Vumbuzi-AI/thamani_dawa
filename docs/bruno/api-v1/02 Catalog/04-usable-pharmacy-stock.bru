@@ -1,0 +1,19 @@
+meta {
+  name: Usable pharmacy stock
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/api/v1/pharmacy/stock
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  Leaves out disaggregated, returned and expired batches.
+}

@@ -1,0 +1,26 @@
+meta {
+  name: Start a supplier return
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/v1/pharmacy/disposals
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "kind": "returned",
+    "reason": "Damaged in delivery"
+  }
+}

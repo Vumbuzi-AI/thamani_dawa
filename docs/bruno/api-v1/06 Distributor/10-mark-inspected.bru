@@ -1,0 +1,23 @@
+meta {
+  name: Mark inspected
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/api/v1/distributor/customer-returns/{{return_id}}/inspect
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {}
+}

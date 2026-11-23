@@ -1,0 +1,23 @@
+meta {
+  name: Complete and put away
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{base_url}}/api/v1/distributor/customer-returns/{{return_id}}/complete
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {}
+}

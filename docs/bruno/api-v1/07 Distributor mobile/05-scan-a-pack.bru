@@ -1,0 +1,21 @@
+meta {
+  name: Scan a pack
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/api/v1/distributor/mobile/shippers/{{shipper_id}}/items
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{mobile_access_token}}
+}
+
+body:json {
+  {
+    "raw_data_matrix": "0106164000000016215SN0001\u001d10LOT-001\u001d17271231"
+  }
+}

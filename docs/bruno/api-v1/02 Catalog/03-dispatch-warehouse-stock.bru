@@ -1,0 +1,30 @@
+meta {
+  name: Dispatch warehouse stock
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/api/v1/batches/{{batch_id}}/dispatch
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "site_id": "{{site_id}}",
+    "quantity": 10
+  }
+}
+
+docs {
+  Only warehouse (no-site) batches can be dispatched; a site batch returns 422 `already_dispatched`.
+}

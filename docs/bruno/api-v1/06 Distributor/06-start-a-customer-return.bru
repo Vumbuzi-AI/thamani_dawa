@@ -1,0 +1,31 @@
+meta {
+  name: Start a customer return
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/api/v1/distributor/customer-returns
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "customer_id": "{{customer_id}}",
+    "reason": "overstock",
+    "site_id": "{{site_id}}"
+  }
+}
+
+docs {
+  `site_id` is ignored for staff stationed at a warehouse; their warehouse is used.
+}
