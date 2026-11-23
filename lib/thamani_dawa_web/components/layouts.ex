@@ -251,9 +251,10 @@ defmodule ThamaniDawaWeb.Layouts do
       nav_groups={[
         {nil,
          [
-           {"Dashboard", "hero-squares-2x2", ~p"/platform"},
-           {"Audit activity", "hero-clipboard-document-list", ~p"/platform/audit"},
-           {"Recalls", "hero-exclamation-triangle", ~p"/platform/recalls"}
+           {"Dashboard", "squares-four", ~p"/platform"},
+           {"Organizations", "buildings", ~p"/platform/organizations"},
+           {"Audit activity", "clipboard-text", ~p"/platform/audit"},
+           {"Recalls", "warning", ~p"/platform/recalls"}
          ]}
       ]}
     >
@@ -388,6 +389,7 @@ defmodule ThamaniDawaWeb.Layouts do
       crumb_parent={@crumb_parent}
       nav_label={"#{@section_label} navigation"}
       help_path={if(@show_product_tour, do: product_tour_path(@base_path))}
+      base_path={@base_path}
     >
       <:tools :if={@tools != []}>
         {render_slot(@tools)}
@@ -596,7 +598,9 @@ defmodule ThamaniDawaWeb.Layouts do
                 class="td-menu-item"
                 role="menuitem"
                 phx-click={
-                  JS.hide(to: "#sidebar-account-dropdown") |> JS.focus(to: "#td-global-search")
+                  JS.hide(to: "#sidebar-account-dropdown")
+                    |> JS.dispatch("td:open-command-palette")
+                    |> JS.focus(to: "#td-command-search")
                 }
               >
                 <.td_icon name="keyboard" />
@@ -746,7 +750,7 @@ defmodule ThamaniDawaWeb.Layouts do
     labeled_ops =
       case ops_groups do
         [{:distributor, _items}] ->
-          [{"Distributor", distributor_items()}]
+          distributor_item_groups()
 
         [{:manufacturer, _items}] ->
           manufacturer_item_groups()
@@ -788,7 +792,7 @@ defmodule ThamaniDawaWeb.Layouts do
         [{"Account", [{"API keys", "hero-key", ~p"/distributor/api-keys"}]}]
 
       Enum.any?(ops_groups, &match?({:manufacturer, _}, &1)) ->
-        [{"Account", [{"API keys", "hero-key", ~p"/manufacturer/api-keys"}]}]
+        []
 
       true ->
         []
@@ -897,23 +901,24 @@ defmodule ThamaniDawaWeb.Layouts do
     Enum.flat_map(distributor_item_groups(), fn {_label, items} -> items end)
   end
 
+  # NAV-1: Doop group labels, order and Phosphor icons. Access rules stay
+  # with master: Reference data and Account (billing, settings, sites,
+  # mobile users) are still only layered on in the unsited admin context.
   defp distributor_item_groups do
     [
-      {"Overview",
-       [
-         {"Dashboard", "hero-squares-2x2", ~p"/distributor"}
-       ]},
-      {"Inventory",
-       [
-         {"Receiving", "hero-arrow-down-tray", ~p"/distributor/receiving"},
-         {"Inventory", "hero-archive-box", ~p"/distributor/products"}
-       ]},
-      {"Sales & distribution",
-       [
-         {"Shipments", "hero-truck", ~p"/distributor/shipments"},
-         {"Customers", "hero-user-group", ~p"/distributor/customers"},
-         {"Returns", "hero-arrow-uturn-left", ~p"/distributor/returns"}
-       ]}
+      {"Distributor", distributor_ops_items()}
+    ]
+  end
+
+  defp distributor_ops_items do
+    [
+      {"Dashboard", "squares-four", ~p"/distributor"},
+      {"Shipments", "truck", ~p"/distributor/shipments"},
+      {"Receiving", "download-simple", ~p"/distributor/receiving"},
+      {"Returns", "arrow-u-up-left", ~p"/distributor/returns"},
+      {"Stock", "package", ~p"/distributor/stock"},
+      {"Products", "cube", ~p"/distributor/products"},
+      {"Customers", "address-book", ~p"/distributor/customers"}
     ]
   end
 
@@ -921,32 +926,33 @@ defmodule ThamaniDawaWeb.Layouts do
     Enum.flat_map(manufacturer_item_groups(), fn {_label, items} -> items end)
   end
 
+  # NAV-2: two groups on every manufacturer page, Phosphor icons throughout.
   defp manufacturer_item_groups do
     [
-      {"Overview",
+      {"Manufacturer",
        [
-         {"Dashboard", "hero-squares-2x2", ~p"/manufacturer"}
-       ]},
-      {"Products",
-       [
-         {"Products", "hero-archive-box", ~p"/manufacturer/products"},
-         {"Inventory", "hero-cube", ~p"/manufacturer/inventory"},
-         {"Shipments", "hero-truck", ~p"/manufacturer/shipments"},
-         {"Aggregation", "hero-squares-plus", ~p"/manufacturer/aggregations"},
+         {"Dashboard", "squares-four", ~p"/manufacturer"},
+         {"Products", "package", ~p"/manufacturer/products"},
+         {"Inventory", "cube", ~p"/manufacturer/inventory"},
+         {"Shipments", "truck", ~p"/manufacturer/shipments"},
+         {"Aggregation", "squares-plus", ~p"/manufacturer/aggregations"},
          {"Mobile users", "device-mobile-camera", ~p"/manufacturer/mobile-users"}
        ]},
-      {"Compliance",
+      {"Account",
        [
-         {"TNT reporting", "broadcast", ~p"/manufacturer/epcis"}
+         {"TNT reporting", "broadcast", ~p"/manufacturer/epcis"},
+         {"API keys", "key", ~p"/manufacturer/api-keys"},
+         {"Org settings", "gear", ~p"/manufacturer/settings"}
        ]}
     ]
   end
 
   defp org_items(multi_site?) do
     [
-      {"Dashboard", "hero-squares-2x2", ~p"/org/dashboard"},
-      {"Requisitions", "hero-clipboard-document-list", ~p"/org/requisitions"},
-      {"Transactions", "hero-banknotes", ~p"/org/earnings"}
+      {"Dashboard", "squares-four", ~p"/org/dashboard"},
+      {"Receiving", "download-simple", ~p"/org/receiving"},
+      {"Requisitions", "clipboard-text", ~p"/org/requisitions"},
+      {"Transactions", "currency-circle-dollar", ~p"/org/earnings"}
     ]
     |> reject_single_site_requisitions(multi_site?)
   end
@@ -974,14 +980,7 @@ defmodule ThamaniDawaWeb.Layouts do
     [
       {"Reference data",
        [
-         {"Mobile users", "device-mobile-camera", ~p"/manufacturer/mobile-users"},
-         {"Sites", "hero-building-office-2", ~p"/org/sites"}
-       ]},
-      {"Account",
-       [
-         {"API keys", "hero-key", ~p"/manufacturer/api-keys"},
-         {"TNT reporting", "broadcast", ~p"/manufacturer/epcis"},
-         {"Org settings", "hero-cog-6-tooth", ~p"/manufacturer/settings"}
+         {"Sites", "buildings", ~p"/org/sites"}
        ]}
     ]
   end
@@ -990,15 +989,14 @@ defmodule ThamaniDawaWeb.Layouts do
     [
       {"Reference data",
        [
-         {"Mobile users", "hero-device-phone-mobile", ~p"/distributor/mobile-users"},
-         {"Sites", "hero-building-office-2", ~p"/org/sites"}
+         {"Mobile users", "device-mobile-camera", ~p"/distributor/mobile-users"},
+         {"Sites", "buildings", ~p"/org/sites"}
        ]},
       {"Account",
        [
-         {"Billing", "hero-credit-card", ~p"/distributor/billing"},
-         {"API keys", "hero-key", ~p"/distributor/api-keys"},
+         {"Billing", "credit-card", ~p"/distributor/billing"},
          {"TNT reporting", "broadcast", ~p"/distributor/epcis"},
-         {"Org settings", "hero-cog-6-tooth", ~p"/distributor/settings"}
+         {"Org settings", "gear", ~p"/distributor/settings"}
        ]}
     ]
   end
