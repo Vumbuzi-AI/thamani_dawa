@@ -41,6 +41,7 @@
 .td-br img {
   height: 15px;
   width: auto;
+  max-width: none;
   display: block;
 }
 
@@ -381,11 +382,17 @@
 }
 
 .td-shl.is-collapsed .nav-label,
-.td-shl.is-collapsed #sidebar-brand-text,
 .td-shl.is-collapsed #sidebar-profile,
 .td-shl.is-collapsed .td-switch span span {
   display: none;
 }
+
+/* SHELL-COLLAPSED (Doop LToUOeDNer). Live rules also live in app.css. */
+.td-br .td-br-mark { display: none; width: 20px; height: 20px; max-width: none; }
+.td-shl.is-collapsed .td-br { padding: 0 14px 0 16px; }
+.td-shl.is-collapsed .td-br .td-br-word { display: none; }
+.td-shl.is-collapsed .td-br .td-br-mark { display: block; }
+
 
 .td-backdrop {
   display: none;

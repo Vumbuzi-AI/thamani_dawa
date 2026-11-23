@@ -119,6 +119,31 @@ defmodule ThamaniDawaWeb.LayoutsTest do
       assert has_element?(lv, "#sidebar-profile", "Test User")
       assert has_element?(lv, "#sidebar-account-dropdown #sidebar-logout", "Log out")
     end
+
+    test "collapsed rail keeps the compact mark and labelled nav items", %{
+      conn: conn,
+      admin: admin
+    } do
+      site_fixture(%{organization_id: admin.organization_id, name: "HQ"})
+      site_fixture(%{organization_id: admin.organization_id, name: "Branch"})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      assert has_element?(lv, "#sidebar-brand-logo.td-br-word[src='/images/logo-transparent.png']")
+      assert has_element?(lv, "img.td-br-mark[src='/images/logo-mark.png']")
+
+      assert has_element?(
+               lv,
+               "a.td-nav-item[aria-label='Sites'][data-tooltip='Sites'][href='/org/sites']"
+             )
+
+      assert has_element?(
+               lv,
+               "a.td-nav-item[aria-label='Team'][data-tooltip='Team'][href='/org/team']"
+             )
+
+      assert has_element?(lv, "#site-switch-trigger[data-tooltip]")
+    end
   end
 
   defp nav_order_index(html, id) do
