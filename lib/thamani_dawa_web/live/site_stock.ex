@@ -663,29 +663,29 @@ defmodule ThamaniDawaWeb.SiteStock do
             <kbd>/</kbd>
           </label>
         </form>
-        <.filter_chip
+        <.td_filter_menu
           :if={length(@sites) > 1}
           id={@id}
           field="site"
           label="Site"
           value={@filters.site}
-          options={[{"", "All"} | Enum.map(@sites, fn {name, id} -> {to_string(id), name} end)]}
+          options={[{"", "Any"} | Enum.map(@sites, fn {name, id} -> {to_string(id), name} end)]}
         />
-        <.filter_chip
+        <.td_filter_menu
           id={@id}
           field="category"
           label="Category"
           value={@filters.category}
-          options={[{"", "All"} | Enum.map(@categories, &{&1, &1})]}
+          options={[{"", "Any"} | Enum.map(@categories, &{&1, &1})]}
         />
-        <.filter_chip
+        <.td_filter_menu
           id={@id}
           field="status"
           label="Status"
           value={@filters.status}
           options={status_options(@view)}
         />
-        <.filter_chip
+        <.td_filter_menu
           id={@id}
           field="expiry"
           label="Expiry"
@@ -906,53 +906,6 @@ defmodule ThamaniDawaWeb.SiteStock do
       />
     </section>
     """
-  end
-
-  attr :id, :string, required: true
-  attr :field, :string, required: true
-  attr :label, :string, required: true
-  attr :value, :string, required: true
-  attr :options, :list, required: true
-
-  defp filter_chip(assigns) do
-    ~H"""
-    <div class="td-chip-wrap">
-      <button
-        type="button"
-        id={"#{@id}-chip-#{@field}"}
-        class="td-chip"
-        phx-click={JS.toggle(to: "##{@id}-menu-#{@field}")}
-        phx-click-away={JS.hide(to: "##{@id}-menu-#{@field}")}
-        aria-haspopup="menu"
-      >
-        <span class="td-chip-label">{@label}</span>
-        <span class="td-chip-value">{option_label(@options, @value)}</span>
-        <.td_icon name="caret-down" />
-      </button>
-      <div id={"#{@id}-menu-#{@field}"} class="td-popover td-filter-menu hidden" role="menu">
-        <p class="td-popover-label">{@label}</p>
-        <button
-          :for={{value, label} <- @options}
-          type="button"
-          id={"#{@id}-#{@field}-#{if value == "", do: "any", else: value}"}
-          class={["td-menu-item", value == @value && "is-selected"]}
-          phx-click={
-            JS.push("set_filter", value: %{field: @field, value: value})
-            |> JS.hide(to: "##{@id}-menu-#{@field}")
-          }
-          role="menuitemradio"
-          aria-checked={to_string(value == @value)}
-        >
-          <span>{label}</span>
-          <.td_icon :if={value == @value} name="check" class="size-4 td-menu-check" />
-        </button>
-      </div>
-    </div>
-    """
-  end
-
-  defp option_label(options, value) do
-    Enum.find_value(options, value, fn {v, label} -> if v == value, do: label end)
   end
 
   attr :id, :string, required: true

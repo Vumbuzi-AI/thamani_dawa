@@ -413,6 +413,62 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
+  @doc """
+  Doop filter-menu chip (Category `RBA4UYrkXr`, Status `TTXzDZPEWP`,
+  Expiry `v0UH0bx6L9` and the other Filter menu · * frames): a labelled
+  chip that opens a single-select popover. The empty value is shown as
+  Any. Options are `{value, label}` pairs supplied by the page.
+  """
+  attr :id, :string, required: true
+  attr :field, :string, required: true
+  attr :label, :string, required: true
+  attr :value, :string, default: ""
+  attr :options, :list, required: true
+  attr :event, :string, default: "set_filter"
+
+  def td_filter_menu(assigns) do
+    current = Enum.find_value(assigns.options, assigns.value, fn {v, label} ->
+      if v == assigns.value, do: label
+    end)
+
+    assigns = assign(assigns, :current_label, current)
+
+    ~H"""
+    <div class="td-chip-wrap" phx-click-away={JS.hide(to: "##{@id}-menu-#{@field}")}>
+      <button
+        type="button"
+        id={"#{@id}-chip-#{@field}"}
+        class="td-chip"
+        phx-click={JS.toggle(to: "##{@id}-menu-#{@field}")}
+        aria-haspopup="menu"
+        aria-expanded="false"
+      >
+        <span class="td-chip-label">{@label}</span>
+        <span class="td-chip-value">{@current_label}</span>
+        <.td_icon name="caret-down" />
+      </button>
+      <div id={"#{@id}-menu-#{@field}"} class="td-popover td-filter-menu hidden" role="menu">
+        <p class="td-popover-label">{@label}</p>
+        <button
+          :for={{value, label} <- @options}
+          type="button"
+          id={"#{@id}-#{@field}-#{if value == "", do: "any", else: value}"}
+          class={["td-menu-item", value == @value && "is-selected"]}
+          phx-click={
+            JS.push(@event, value: %{field: @field, value: value})
+            |> JS.hide(to: "##{@id}-menu-#{@field}")
+          }
+          role="menuitemradio"
+          aria-checked={to_string(value == @value)}
+        >
+          <span class="flex-1">{label}</span>
+          <.td_icon :if={value == @value} name="check" class="size-3.5" />
+        </button>
+      </div>
+    </div>
+    """
+  end
+
   attr :label, :string, required: true
   attr :value, :string, default: nil
 
