@@ -2038,7 +2038,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   attr :type, :string,
     default: "text",
-    values: ~w(text email url password textarea),
+    values: ~w(text email url password textarea select combobox),
     doc: "HTML input type"
 
   attr :placeholder, :string, default: nil
@@ -2046,7 +2046,285 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :class, :any, default: nil, doc: "extra classes on the wrapper div"
   attr :required, :boolean, default: false, doc: "shows a required marker next to the label"
   attr :icon, :string, default: nil, doc: "optional hero-* icon name shown leading the input"
+
+  attr :sensitive, :boolean,
+    default: false,
+    doc: "visually masks non-password secrets without invoking browser password managers"
+
+  attr :options, :list, default: [], doc: "options for select inputs, as label/value pairs"
   attr :rest, :global, include: ~w(disabled readonly rows)
+
+  slot :badge, doc: "optional trailing badge rendered vertically centered inside the input"
+
+  def thamani_input(%{type: "combobox", field: field} = assigns) do
+    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+
+    opts =
+      Enum.map(assigns[:options] || [], fn
+        {label, value} -> [to_string(label), to_string(value)]
+        label -> [to_string(label), to_string(label)]
+      end)
+
+    assigns =
+      assigns
+      |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+      |> assign(:input_id, field.id)
+      |> assign(:name, field.name)
+      |> assign(:value, field.value)
+      |> assign(:opts_json, Jason.encode!(opts))
+
+    ~H"""
+    <div class={["mb-5", @class]}>
+      <div class={[
+        "flex items-baseline justify-between mb-2",
+        @errors != [] && "mb-1"
+      ]}>
+        <label
+          for={"#{@input_id}-trigger"}
+          class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
+        >
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
+        </label>
+      </div>
+      <div
+        id={"#{@input_id}-combobox"}
+        phx-hook=".ThamaniCombobox"
+        data-options={@opts_json}
+        data-prompt={@placeholder || ""}
+        class="relative"
+      >
+        <select id={@input_id} name={@name} data-tc-input required={@required} class="hidden">
+          <option :if={@placeholder} value="">{@placeholder}</option>
+          <option
+            :for={{label, value} <- @options}
+            value={value}
+            selected={to_string(@value) == to_string(value)}
+          >
+            {label}
+          </option>
+        </select>
+        <button
+          type="button"
+          id={"#{@input_id}-trigger"}
+          data-tc-trigger
+          aria-haspopup="listbox"
+          aria-expanded="false"
+          class={[
+            "flex w-full items-center justify-between gap-2 box-border px-4 py-3 text-left",
+            "text-[15px] bg-thamani-snow border-[1.5px] rounded-lg outline-none cursor-pointer select-none",
+            "transition-[border-color,box-shadow] duration-150 ease-in-out",
+            "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
+            (@errors != [] && "border-thamani-error") || "border-thamani-stone"
+          ]}
+        >
+          <span data-tc-display class="truncate text-[var(--thamani-pewter)]">
+            {@placeholder || "Select…"}
+          </span>
+          <span
+            data-tc-chevron
+            class="inline-flex shrink-0 text-[var(--thamani-pewter)] transition-transform duration-150"
+          >
+            <.icon name="hero-chevron-down" class="size-4" />
+          </span>
+        </button>
+        <div
+          data-tc-dropdown
+          role="listbox"
+          class="absolute z-[70] mt-1 hidden w-full overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow shadow-lg"
+        >
+          <div class="border-b border-thamani-stone/50 px-2 pb-1.5 pt-2">
+            <input
+              data-tc-search
+              type="text"
+              placeholder="Search…"
+              autocomplete="off"
+              class="w-full rounded-lg border-0 bg-thamani-stone/40 px-2.5 py-1.5 text-sm text-thamani-forest outline-none placeholder:text-thamani-pewter/50"
+            />
+          </div>
+          <div data-tc-list class="max-h-52 overflow-y-auto py-1"></div>
+        </div>
+      </div>
+      <p :for={msg <- @errors} class="text-[13px] text-thamani-error mt-1.5">
+        {msg}
+      </p>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".ThamaniCombobox">
+        export default {
+          mounted() { this.init() },
+          updated() { this.syncDisplay() },
+          destroyed() {
+            document.removeEventListener("click", this.onDocClick)
+            document.removeEventListener("keydown", this.onKey)
+          },
+          init() {
+            this.input    = this.el.querySelector("[data-tc-input]")
+            this.trigger  = this.el.querySelector("[data-tc-trigger]")
+            this.display  = this.el.querySelector("[data-tc-display]")
+            this.dropdown = this.el.querySelector("[data-tc-dropdown]")
+            this.list     = this.el.querySelector("[data-tc-list]")
+            this.search   = this.el.querySelector("[data-tc-search]")
+            this.chevron  = this.el.querySelector("[data-tc-chevron]")
+            this.renderList("")
+            this.syncDisplay()
+            this.onTrigger  = (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              this.toggle()
+            }
+            this.onDocClick = (e) => { if (!this.el.contains(e.target)) this.close() }
+            this.onKey      = (e) => { if (e.key === "Escape") this.close() }
+            this.trigger.addEventListener("click", this.onTrigger)
+            if (this.search) {
+              this.search.addEventListener("input", () => this.renderList(this.search.value))
+              this.search.addEventListener("click", (e) => e.stopPropagation())
+              this.search.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") { e.stopPropagation(); this.close() }
+                if (e.key === "ArrowDown") {
+                  e.preventDefault()
+                  const first = this.list.querySelector("[data-tc-val]")
+                  if (first) first.focus()
+                }
+              })
+            }
+            document.addEventListener("click", this.onDocClick)
+            document.addEventListener("keydown", this.onKey)
+          },
+          opts()   { return JSON.parse(this.el.dataset.options || "[]") },
+          prompt() { return this.el.dataset.prompt || "" },
+          renderList(query) {
+            this.list.innerHTML = ""
+            const q = (query || "").toLowerCase().trim()
+            const cur = this.input ? String(this.input.value) : ""
+            const allOpts = this.opts()
+            const filtered = q === "" ? allOpts : allOpts.filter(([label]) => label.toLowerCase().includes(q))
+            const p = this.prompt()
+            if (p && q === "") this.list.appendChild(this.makeBtn("", p, false, true))
+            if (filtered.length === 0) {
+              const empty = document.createElement("div")
+              empty.textContent = "No matches"
+              empty.className = "px-3 py-2 text-sm text-center text-[var(--thamani-pewter)]"
+              this.list.appendChild(empty)
+              return
+            }
+            filtered.forEach(([label, val]) => {
+              this.list.appendChild(this.makeBtn(String(val), label, String(val) === cur, false))
+            })
+          },
+          makeBtn(val, label, active, isPrompt) {
+            const b = document.createElement("button")
+            b.type = "button"
+            b.dataset.tcVal = val
+            b.textContent = label
+            b.tabIndex = 0
+            b.className = active
+              ? "block w-full text-left px-3 py-2 text-sm font-medium cursor-pointer outline-none text-[var(--thamani-forest)] bg-[color-mix(in_srgb,var(--thamani-lime)_26%,white)]"
+              : "block w-full text-left px-3 py-2 text-sm cursor-pointer outline-none transition-colors hover:bg-thamani-stone/50 " +
+                (isPrompt ? "text-[var(--thamani-pewter)]" : "text-base-content")
+            b.addEventListener("mousedown", (e) => { e.preventDefault() })
+            b.addEventListener("click", (e) => { e.stopPropagation(); this.select(b.dataset.tcVal) })
+            b.addEventListener("keydown", (e) => {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this.select(b.dataset.tcVal) }
+              if (e.key === "ArrowDown") { e.preventDefault(); const n = b.nextElementSibling; if (n) n.focus() }
+              if (e.key === "ArrowUp")   {
+                e.preventDefault()
+                const p = b.previousElementSibling
+                if (p && p.dataset.tcVal !== undefined) p.focus()
+                else if (this.search) this.search.focus()
+              }
+            })
+            return b
+          },
+          select(val) {
+            this.input.value = val
+            this.input.dispatchEvent(new Event("input",  { bubbles: true }))
+            this.input.dispatchEvent(new Event("change", { bubbles: true }))
+            this.renderList("")
+            this.syncDisplay()
+            this.close()
+          },
+          syncDisplay() {
+            if (!this.input || !this.display) return
+            const val   = String(this.input.value)
+            const match = this.opts().find(([, v]) => String(v) === val)
+            if (match) {
+              this.display.textContent = match[0]
+              this.display.classList.remove("text-[var(--thamani-pewter)]")
+            } else {
+              this.display.textContent = this.prompt() || "Select…"
+              this.display.classList.add("text-[var(--thamani-pewter)]")
+            }
+          },
+          toggle() { this.dropdown.classList.contains("hidden") ? this.open() : this.close() },
+          open() {
+            if (this.search) this.search.value = ""
+            this.renderList("")
+            this.dropdown.classList.remove("hidden")
+            this.trigger.setAttribute("aria-expanded", "true")
+            if (this.chevron) this.chevron.style.transform = "rotate(180deg)"
+            setTimeout(() => { if (this.search) this.search.focus() }, 10)
+          },
+          close() {
+            this.dropdown.classList.add("hidden")
+            this.trigger.setAttribute("aria-expanded", "false")
+            if (this.chevron) this.chevron.style.transform = ""
+            if (this.search) this.search.value = ""
+          }
+        }
+      </script>
+    </div>
+    """
+  end
+
+  def thamani_input(%{type: "select", field: field} = assigns) do
+    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+
+    assigns =
+      assigns
+      |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+      |> assign(:input_id, field.id)
+      |> assign(:name, field.name)
+      |> assign(:value, field.value)
+
+    ~H"""
+    <div class={["mb-5", @class]}>
+      <div class={[
+        "flex items-baseline justify-between mb-2",
+        @errors != [] && "mb-1"
+      ]}>
+        <label
+          for={@input_id}
+          class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
+        >
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
+        </label>
+      </div>
+      <select
+        id={@input_id}
+        name={@name}
+        required={@required}
+        class={[
+          "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
+          "border-[1.5px] rounded-lg outline-none",
+          "transition-[border-color,box-shadow] duration-150 ease-in-out",
+          "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
+          (@errors != [] && "border-thamani-error") || "border-thamani-stone"
+        ]}
+        {@rest}
+      >
+        <option :if={@placeholder} value="">{@placeholder}</option>
+        <option
+          :for={{label, value} <- @options}
+          value={value}
+          selected={to_string(@value) == to_string(value)}
+        >
+          {label}
+        </option>
+      </select>
+      <p :for={msg <- @errors} class="text-[13px] text-thamani-error mt-1.5">
+        {msg}
+      </p>
+    </div>
+    """
+  end
 
   def thamani_input(%{type: "textarea", field: field} = assigns) do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
@@ -2101,6 +2379,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       |> assign(:input_id, field.id)
       |> assign(:name, field.name)
       |> assign(:value, field.value)
+      |> assign(:input_type, if(assigns.sensitive, do: "text", else: assigns.type))
 
     ~H"""
     <div class={["mb-5", @class]}>
@@ -2124,9 +2403,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
         </span>
         <input
           id={@input_id}
-          type={@type}
+          type={@input_type}
           name={@name}
-          value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
+          value={Phoenix.HTML.Form.normalize_value(@input_type, assigns[:value])}
           placeholder={@placeholder}
           autocomplete={@autocomplete}
           required={@required}
@@ -2136,19 +2415,34 @@ defmodule ThamaniDawaWeb.CoreComponents do
             "transition-[border-color,box-shadow] duration-150 ease-in-out",
             "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
             if(@icon, do: "pl-11!", else: "pl-4!"),
-            @type == "password" && "pr-11!",
+            (@type == "password" || @sensitive) && "pr-11!",
+            @sensitive && "[-webkit-text-security:disc]",
             (@errors != [] && "border-thamani-error") || "border-thamani-stone"
           ]}
           {@rest}
         />
+        <span
+          :if={@badge != []}
+          class={[
+            "pointer-events-none absolute inset-y-0 flex items-center",
+            (@type == "password" || @sensitive) && "right-11",
+            !(@type == "password" || @sensitive) && "right-3"
+          ]}
+        >
+          {render_slot(@badge)}
+        </span>
         <button
-          :if={@type == "password"}
+          :if={@type == "password" || @sensitive}
           type="button"
           id={"#{@input_id}-toggle"}
           aria-label="Show password"
           class="absolute inset-y-0 right-3 flex items-center text-thamani-pewter hover:text-thamani-forest"
           phx-click={
-            JS.toggle_attribute({"type", "text", "password"}, to: "##{@input_id}")
+            if @sensitive do
+              JS.toggle_class("[-webkit-text-security:disc]", to: "##{@input_id}")
+            else
+              JS.toggle_attribute({"type", "text", "password"}, to: "##{@input_id}")
+            end
             |> JS.toggle(to: "##{@input_id}-eye")
             |> JS.toggle(to: "##{@input_id}-eye-slash")
           }

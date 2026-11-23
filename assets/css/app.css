@@ -244,6 +244,10 @@ body {
   font-weight: 650;
 }
 
+#distributor-nav-group.is-expanded .distributor-nav-chevron {
+  transform: rotate(180deg);
+}
+
 #sidebar-aside .text-thamani-pewter,
 #sidebar-profile > span:last-child {
   color: #58625e !important;

@@ -43,6 +43,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     |> assign(:gln_check, :idle)
     |> assign(:operating_models, organization.operating_models)
     |> assign(:gs1_company_prefixes, org_prefixes(organization.id))
+    |> assign(:gs1_glns, Organizations.list_member_glns(organization))
     |> assign(:onboarding_progress, Organizations.onboarding_progress(organization))
   end
 
@@ -56,6 +57,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     |> assign(:back_path, back_path(params, ~p"/org/sites"))
     |> assign(:gln_check, nil)
     |> assign(:operating_models, organization.operating_models)
+    |> assign(:gs1_glns, [])
   end
 
   defp apply_action(socket, :index, _params) do
@@ -63,6 +65,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     |> assign(form: nil, site: nil, back_path: ~p"/org/sites")
     |> assign(:gln_check, nil)
     |> assign(:operating_models, [])
+    |> assign(:gs1_glns, [])
   end
 
   def handle_event("validate", _, %{assigns: %{live_action: :index}} = socket) do
@@ -475,20 +478,34 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   attr :form, :map, required: true
   attr :gln_check, :any, default: nil
   attr :operating_models, :list, default: []
+  attr :gs1_glns, :list, default: []
 
   defp site_form(assigns) do
     ~H"""
     <form id="site-form" phx-submit="save" phx-change="validate">
       <%= if @gln_check do %>
-        <.input
-          id="site-gln"
-          field={@form[:gln]}
-          label="GS1 Global Location Number (GLN)"
-          placeholder="13-digit GLN issued by GS1"
-          inputmode="numeric"
-          phx-debounce="500"
-          required
-        />
+        <%= if @gs1_glns != [] do %>
+          <.input
+            id="site-gln"
+            type="combobox"
+            field={@form[:gln]}
+            label="GS1 Global Location Number (GLN)"
+            placeholder="Select a GLN from your GS1 account"
+            options={@gs1_glns}
+            phx-debounce="500"
+            required
+          />
+        <% else %>
+          <.input
+            id="site-gln"
+            field={@form[:gln]}
+            label="GS1 Global Location Number (GLN)"
+            placeholder="13-digit GLN issued by GS1"
+            inputmode="numeric"
+            phx-debounce="500"
+            required
+          />
+        <% end %>
 
         <%= case @gln_check do %>
           <% :checking -> %>
@@ -801,7 +818,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     >
       <h2 class="pr-10 text-2xl font-medium tracking-tight text-thamani-forest">Add a branch</h2>
       <div class="mt-6">
-        <.site_form form={@form} gln_check={@gln_check} operating_models={@operating_models} />
+        <.site_form form={@form} gln_check={@gln_check} operating_models={@operating_models} gs1_glns={@gs1_glns} />
       </div>
     </.modal>
     """
@@ -874,7 +891,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           Configure the location identity, activities, and map position.
         </p>
         <div class="mt-6">
-          <.site_form form={@form} gln_check={@gln_check} operating_models={@operating_models} />
+          <.site_form form={@form} gln_check={@gln_check} operating_models={@operating_models} gs1_glns={@gs1_glns} />
         </div>
       </.modal>
 

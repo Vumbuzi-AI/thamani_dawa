@@ -5,9 +5,19 @@ defmodule ThamaniDawa.Epcis.UrnTest do
 
   doctest ThamaniDawa.Epcis.Urn
 
-  test "sgtin rejects non-numeric and wrong-length input" do
+  test "sgtin rejects non-numeric and unsupported-length input" do
     assert {:error, :not_numeric} = Urn.sgtin("0061414110734X", "1", 7)
-    assert {:error, :invalid_length} = Urn.sgtin("0614141107346", "1", 7)
+    assert {:error, :invalid_length} = Urn.sgtin("061414110746", "1", 7)
+  end
+
+  test "sgtin normalizes a valid GTIN-13 to its GTIN-14 representation" do
+    assert {:ok, "urn:epc:id:sgtin:6164005.005651.1001"} =
+             Urn.sgtin("6164005056517", "1001", 7)
+  end
+
+  test "lgtin normalizes a valid GTIN-13 to its GTIN-14 representation" do
+    assert {:ok, "urn:epc:class:lgtin:6164005.005651.LOT123"} =
+             Urn.lgtin("6164005056517", "LOT123", 7)
   end
 
   test "sgtin rejects serials outside the GS1 AI(21) charset" do

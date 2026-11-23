@@ -297,7 +297,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
       current_scope={@current_scope}
       icon="hero-key"
       title="Connect your tracing keys"
-      description="Add your GS1 and EPCIS keys so serials, SSCCs and PPB reporting work."
+      description="Add your EPCIS keys so PPB reporting works."
       progress_current={elem(@onboarding_progress, 0)}
       progress_total={elem(@onboarding_progress, 1)}
     >
@@ -305,7 +305,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
         <div>
           <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">API keys</h2>
           <p class="mt-2 text-sm leading-6 text-thamani-pewter">
-            Credentials this organization uses with PPB Track &amp; Trace and GS1.
+            Credentials this organization uses with PPB Track &amp; Trace.
           </p>
         </div>
 
@@ -316,70 +316,6 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
             last4={key_last4(@organization, tier)}
             editing={@editing_key_tier == tier}
           />
-        </div>
-
-        <div
-          id="keys-gs1-row"
-          class="mt-6 rounded-xl border border-thamani-frosted bg-thamani-canvas px-4 py-3"
-        >
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div class="min-w-0">
-              <p class="text-sm font-semibold text-thamani-forest">Member API</p>
-              <p class="mt-0.5 text-xs text-thamani-pewter">
-                SSCC creation and case contents
-              </p>
-            </div>
-
-            <form
-              :if={@editing_gs1}
-              id="gs1-api-key-form"
-              phx-submit="save_gs1_key"
-              class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center"
-            >
-              <input
-                type="password"
-                name="key"
-                autocomplete="off"
-                placeholder="GS1 API key"
-                aria-label="GS1 API key"
-                class="thamani-input w-full sm:w-64"
-              />
-              <.button type="submit" variant="primary">Save</.button>
-              <.button type="button" phx-click="cancel_gs1_key">Cancel</.button>
-            </form>
-
-            <div :if={!@editing_gs1} class="flex items-center justify-between gap-3 sm:justify-end">
-              <p class="text-sm text-thamani-pewter">
-                <%= if @organization.gs1_api_key_last4 do %>
-                  Key ending
-                  <span class="font-medium tabular-nums text-thamani-forest">
-                    {@organization.gs1_api_key_last4}
-                  </span>
-                <% else %>
-                  No key saved
-                <% end %>
-              </p>
-              <div class="flex items-center gap-2">
-                <.button
-                  type="button"
-                  id="edit-gs1-key"
-                  phx-click="edit_gs1_key"
-                  variant={if(@organization.gs1_api_key_last4, do: "ghost", else: "primary")}
-                >
-                  {if @organization.gs1_api_key_last4, do: "Replace", else: "Add key"}
-                </.button>
-                <.button
-                  :if={@organization.gs1_api_key_last4}
-                  type="button"
-                  id="clear-gs1-key"
-                  phx-click="clear_gs1_key"
-                  data-confirm="Clear this key and use the platform-wide key?"
-                >
-                  Clear
-                </.button>
-              </div>
-            </div>
-          </div>
         </div>
       </:right>
 

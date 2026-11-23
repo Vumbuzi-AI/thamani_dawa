@@ -13,6 +13,7 @@ defmodule ThamaniDawa.Distributor.GlnLookup do
 
   alias ThamaniDawa.Grp
   alias ThamaniDawa.Grp.Licence
+  alias ThamaniDawa.GS1.MemberApi
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
@@ -78,6 +79,42 @@ defmodule ThamaniDawa.Distributor.GlnLookup do
 
   def resolve_party(_gln), do: {:error, :not_found}
 
+  @doc "Searches the GS1 all-GLN directory used by the GS1 Admin portal."
+  @spec search_destination(String.t() | nil, String.t() | nil, pos_integer()) ::
+          {:ok, [resolved()]} | {:error, term()}
+  def search_destination(api_token, query, limit \\ 25) do
+    query = String.trim(query || "")
+
+    if String.length(query) < 2 do
+      {:ok, []}
+    else
+      with {:ok, glns} <- MemberApi.search_glns(query, api_token: api_token) do
+        {:ok, glns |> Enum.map(&directory_result/1) |> Enum.take(limit)}
+      end
+    end
+  end
+
+  @doc "Resolves an exact destination GLN through the GS1 all-GLN directory."
+  @spec resolve_destination(String.t() | nil, String.t() | nil) ::
+          {:ok, resolved()} | {:error, :not_found | term()}
+  def resolve_destination(api_token, gln) when is_binary(gln) do
+    gln = String.trim(gln)
+
+    if Regex.match?(~r/^\d{13}$/, gln) do
+      with {:ok, results} <- search_destination(api_token, gln),
+           result when not is_nil(result) <- Enum.find(results, &(&1.gln == gln)) do
+        {:ok, result}
+      else
+        nil -> {:error, :not_found}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, :not_found}
+    end
+  end
+
+  def resolve_destination(_api_token, _gln), do: {:error, :not_found}
+
   defp resolve_via_registry(gln) do
     case Grp.verify_gln(gln) do
       {:ok, :verified, licence} ->
@@ -93,6 +130,16 @@ defmodule ThamaniDawa.Distributor.GlnLookup do
       _other ->
         {:error, :not_found}
     end
+  end
+
+  defp directory_result(gln) do
+    %{
+      gln: gln["gln"],
+      company: gln["company"] || gln["description"] || "",
+      address: gln["address"] || gln["location"],
+      po_box: nil,
+      site_id: nil
+    }
   end
 
   defp like_pattern(term) do

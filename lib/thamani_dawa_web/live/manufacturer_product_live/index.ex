@@ -141,14 +141,47 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
         search: socket.assigns.search
       )
 
-    counts = Manufacturing.generation_counts(organization_id)
+    remote_counts = remote_counts(organization_id)
     usage = Billing.active_usage(organization_id)
+
+    page_info = %{page_info | entries: merge_remote_counts(page_info.entries, remote_counts)}
+
+    counts =
+      organization_id
+      |> Manufacturing.list_products_with_counts()
+      |> merge_remote_counts(remote_counts)
+      |> generation_counts()
 
     socket
     |> assign(:page_info, page_info)
     |> assign(:rows, page_info.entries)
     |> assign(:number_generated, counts.serials + counts.ssccs)
     |> assign(:maximum, maximum(usage))
+  end
+
+  defp remote_counts(organization_id) do
+    case Manufacturing.remote_product_counts(organization_id) do
+      {:ok, counts} -> counts
+      {:error, _reason} -> %{}
+    end
+  end
+
+  defp merge_remote_counts(entries, remote_counts) do
+    Enum.map(entries, fn %{product: product} = entry ->
+      case remote_counts[product.gtin] do
+        nil -> entry
+        counts -> Map.merge(entry, counts)
+      end
+    end)
+  end
+
+  defp generation_counts(entries) do
+    Enum.reduce(entries, %{serials: 0, ssccs: 0}, fn entry, totals ->
+      %{
+        serials: totals.serials + entry.serial_count,
+        ssccs: totals.ssccs + entry.sscc_count
+      }
+    end)
   end
 
   defp maximum(%{quantity_limit: nil}), do: "Unlimited"
@@ -284,7 +317,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
                 navigate={~p"/manufacturer/products/#{product.gtin}/ssccs"}
                 class="rounded-lg p-2 text-thamani-pewter transition hover:bg-thamani-mist hover:text-thamani-forest"
                 aria-label={"View SSCCs for #{product.name}"}
-              ><.icon name="hero-eye" class="size-4" /></.link><span>{count}</span>
+              ><.icon name="hero-eye" class="size-4" /></.link><span id={"product-#{product.id}-sscc-count"}>{count}</span>
             </div>
           </:col>
           <:col :let={%{product: product, serial_count: count}} label="Serials">
@@ -294,7 +327,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
                 navigate={~p"/manufacturer/products/#{product.gtin}/serials"}
                 class="rounded-lg p-2 text-thamani-pewter transition hover:bg-thamani-mist hover:text-thamani-forest"
                 aria-label={"View serials for #{product.name}"}
-              ><.icon name="hero-eye" class="size-4" /></.link><span>{count}</span>
+              ><.icon name="hero-eye" class="size-4" /></.link><span id={"product-#{product.id}-serial-count"}>{count}</span>
             </div>
           </:col>
           <:action :let={%{product: product}}>

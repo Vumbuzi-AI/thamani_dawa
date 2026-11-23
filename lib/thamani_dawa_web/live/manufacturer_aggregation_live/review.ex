@@ -39,10 +39,15 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Review do
 
       {:error, {:invalid, _items}} ->
         {:noreply,
-         put_flash(socket, :error, "Some serials are no longer valid. Review them before approving.")}
+         put_flash(
+           socket,
+           :error,
+           "Some serials are no longer valid. Review them before approving."
+         )}
 
       {:error, {:over_capacity, _details}} ->
-        {:noreply, put_flash(socket, :error, "This aggregation exceeds the target SSCC capacity.")}
+        {:noreply,
+         put_flash(socket, :error, "This aggregation exceeds the target SSCC capacity.")}
 
       {:error, _reason} ->
         {:noreply, put_flash(socket, :error, "Aggregation could not be approved.")}

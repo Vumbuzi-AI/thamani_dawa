@@ -78,7 +78,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     >
       <.header icon="hero-qr-code">
         Primary serials
-        <:subtitle>{@product.name} · <span class="font-mono">{@product.gtin}</span></:subtitle>
+        <:subtitle>{@product.name} · {@product.gtin}</:subtitle>
         <:actions>
           <.button navigate={~p"/manufacturer/products"}><.icon name="hero-arrow-left" class="size-4" />
           Products</.button>
@@ -134,15 +134,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         <section
           :if={@selected_batch}
           id="selected-serial-batch"
-          class="rounded-2xl border border-thamani-stone bg-white p-5 shadow-sm"
+          class="overflow-hidden rounded-2xl border border-thamani-stone bg-white shadow-sm"
         >
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">Batch</p><h2 class="mt-1 text-xl font-semibold text-thamani-forest">
-                {@selected_batch.batch_no}
-              </h2><p class="mt-1 text-sm text-thamani-pewter">
-                {@selected_batch.production_date} → {@selected_batch.expiry_date}
-              </p>
+          <div class="flex flex-wrap items-center justify-between gap-4 border-b border-thamani-stone bg-thamani-snow px-5 py-4 sm:px-6">
+            <div class="flex items-center gap-3">
+              <span class="flex size-10 items-center justify-center rounded-xl bg-thamani-lime/45 text-thamani-forest shadow-sm">
+                <.icon name="hero-qr-code" class="size-5" />
+              </span>
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
+                  Primary serial batch
+                </p>
+                <h2 class="mt-0.5 text-lg font-semibold tracking-tight text-thamani-forest">
+                  Batch {@selected_batch.batch_no}
+                </h2>
+              </div>
             </div>
             <.button
               id="export-batch-serials"
@@ -152,7 +158,45 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             ><.icon name="hero-arrow-down-tray" class="size-4" /> Export CSV</.button>
           </div>
 
-          <div id="manufacturer-serials" class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <dl
+            id="primary-serial-batch-details"
+            class="grid divide-y divide-thamani-stone sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4"
+          >
+            <div id="primary-serial-gtin" class="px-5 py-4 sm:px-6">
+              <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-thamani-pewter">
+                <.icon name="hero-barcode" class="size-4 text-thamani-forest" /> GTIN
+              </dt>
+              <dd class="mt-2 font-mono text-sm font-semibold text-thamani-forest">
+                {@product.gtin}
+              </dd>
+            </div>
+            <div id="primary-serial-batch-number" class="px-5 py-4 sm:px-6">
+              <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-thamani-pewter">
+                <.icon name="hero-tag" class="size-4 text-thamani-forest" /> Batch number
+              </dt>
+              <dd class="mt-2 font-mono text-sm font-semibold text-thamani-forest">
+                {@selected_batch.batch_no}
+              </dd>
+            </div>
+            <div id="primary-serial-production-date" class="px-5 py-4 sm:px-6">
+              <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-thamani-pewter">
+                <.icon name="hero-calendar-days" class="size-4 text-thamani-forest" /> Production date
+              </dt>
+              <dd class="mt-2 text-sm font-semibold text-thamani-forest">
+                {Calendar.strftime(@selected_batch.production_date, "%d %b %Y")}
+              </dd>
+            </div>
+            <div id="primary-serial-expiry-date" class="px-5 py-4 sm:px-6">
+              <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-thamani-pewter">
+                <.icon name="hero-calendar-days" class="size-4 text-thamani-forest" /> Expiry date
+              </dt>
+              <dd class="mt-2 text-sm font-semibold text-thamani-forest">
+                {Calendar.strftime(@selected_batch.expiry_date, "%d %b %Y")}
+              </dd>
+            </div>
+          </dl>
+
+          <div id="manufacturer-serials" class="m-5 grid gap-3 sm:m-6 sm:grid-cols-2 xl:grid-cols-3">
             <article
               :for={serial <- @serial_page.entries}
               id={"manufacturer-serial-#{serial.id}"}
@@ -184,6 +228,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
           <.blank_state
             :if={@serial_page.total_entries == 0}
+            class="mx-5 mb-5 sm:mx-6 sm:mb-6"
             icon="hero-magnifying-glass"
             title="No matching serials"
           >

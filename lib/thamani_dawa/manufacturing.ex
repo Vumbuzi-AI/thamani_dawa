@@ -146,6 +146,46 @@ defmodule ThamaniDawa.Manufacturing do
     }
   end
 
+  @doc """
+  Returns GS1's current serial and SSCC counts keyed by GTIN.
+
+  These totals include identifiers issued outside this application, so callers
+  should prefer them over local counts whenever the member API is available.
+  """
+  def remote_product_counts(organization_id, opts \\ []) do
+    opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
+
+    with {:ok, products} <- MemberApi.list_products(%{}, opts) do
+      counts =
+        products
+        |> Enum.reduce(%{}, fn product, acc ->
+          case Map.get(product, "gtin") do
+            gtin when is_binary(gtin) and gtin != "" ->
+              Map.put(acc, gtin, %{
+                serial_count: api_count(product["serial_count"]),
+                sscc_count: api_count(product["sscc_count"])
+              })
+
+            _other ->
+              acc
+          end
+        end)
+
+      {:ok, counts}
+    end
+  end
+
+  defp api_count(value) when is_integer(value) and value >= 0, do: value
+
+  defp api_count(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {count, ""} when count >= 0 -> count
+      _other -> 0
+    end
+  end
+
+  defp api_count(_value), do: 0
+
   @doc "Changeset for building or editing a product form."
   def change_product(product \\ %Product{}, attrs \\ %{}) do
     Product.changeset(product, attrs)
@@ -411,9 +451,7 @@ defmodule ThamaniDawa.Manufacturing do
       "production" => batch_attrs["production_date"],
       "expiry" => batch_attrs["expiry_date"],
       "trade_item_qty" => quantity,
-      "shipper_qty" => quantity + 1,
-      "from" => %{"gln" => site_gln},
-      "to" => %{"gln" => site_gln}
+      "create_shippers" => false
     }
 
     api_token = Organizations.gs1_api_key(organization_id)
@@ -435,11 +473,10 @@ defmodule ThamaniDawa.Manufacturing do
     do: {:error, :invalid_quantity}
 
   @doc """
-  Make-to-order path of the "+ Serial" wizard: mints `primary_quantity`
-  primary serials exactly like `generate_primary_serials/5`, then mints
-  `shipper_quantity` shipper SSCCs around them under one pallet, splitting
-  the primaries evenly across the shippers (remainder on the last). Each
-  shipper's EPCIS Pack event carries only the serials assigned to it.
+  Make-to-order path of the "+ Serial" wizard. It generates the primary
+  serials first, then mints shipper SSCCs through the dedicated GS1 SSCC
+  endpoint and assigns the primary serials locally. `shipper_quantity` is the
+  number of primary units in each shipper.
   `parties` carries the From/To GLN/company/address fields printed on the
   shipper labels (string keys: `from_gln`, `from_company_name`,
   `from_address`, `to_gln`, `to_company_name`, `to_address`).
@@ -455,7 +492,8 @@ defmodule ThamaniDawa.Manufacturing do
       )
       when is_integer(primary_quantity) and primary_quantity > 0 and
              is_integer(shipper_quantity) and shipper_quantity > 0 and
-             shipper_quantity <= primary_quantity and is_binary(site_gln) do
+             shipper_quantity <= primary_quantity and
+             rem(primary_quantity, shipper_quantity) == 0 and is_binary(site_gln) do
     api_token = Organizations.gs1_api_key(organization_id)
 
     serials_params = %{
@@ -464,6 +502,9 @@ defmodule ThamaniDawa.Manufacturing do
       "production" => batch_attrs["production_date"],
       "expiry" => batch_attrs["expiry_date"],
       "trade_item_qty" => primary_quantity,
+      # Keep this request primary-only. The serialisation endpoint does not
+      # return enough information to persist shipper-to-serial assignments;
+      # shipper SSCCs are minted below through /create_sscc.
       "shipper_qty" => primary_quantity + 1,
       "from" => %{"gln" => site_gln},
       "to" => %{"gln" => site_gln}
@@ -533,7 +574,7 @@ defmodule ThamaniDawa.Manufacturing do
          api_token
        ) do
     serials
-    |> split_serials(shipper_quantity)
+    |> Enum.chunk_every(shipper_quantity)
     |> Enum.reduce_while({:ok, []}, fn group, {:ok, acc} ->
       case mint_shipper_sscc(
              organization_id,
@@ -555,28 +596,12 @@ defmodule ThamaniDawa.Manufacturing do
     end
   end
 
-  @doc false
-  def split_serials(serials, shipper_quantity) do
-    total = length(serials)
-    base = div(total, shipper_quantity)
-    remainder = rem(total, shipper_quantity)
-
-    {groups, []} =
-      Enum.reduce(1..shipper_quantity, {[], serials}, fn i, {acc, remaining} ->
-        size = if i == shipper_quantity, do: base + remainder, else: base
-        {group, rest} = Enum.split(remaining, size)
-        {[group | acc], rest}
-      end)
-
-    Enum.reverse(groups)
-  end
-
   defp mint_shipper_sscc(
          organization_id,
          product,
          batch,
          pallet,
-         group,
+         serials,
          parties,
          site_gln,
          api_token
@@ -596,46 +621,47 @@ defmodule ThamaniDawa.Manufacturing do
           "to_address" => parties["to_address"]
         },
         "facility_gln" => parties["from_gln"],
-        "count_of_trade_items" => length(group),
+        "count_of_trade_items" => length(serials),
         "material_description" => product.name
       }
-      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
-      |> Map.new()
 
-    with {:ok, code} <- MemberApi.create_sscc(sscc_params, api_token: api_token) do
-      {:ok, shipper_sscc} =
-        %ShipperSscc{organization_id: organization_id, manufacturer_pallet_id: pallet.id}
-        |> ShipperSscc.changeset(
-          Map.merge(parties, %{
-            "code" => code,
-            "gtin" => product.gtin,
-            "batch" => batch.batch_no,
-            "production_date" => batch.production_date,
-            "expiry_date" => batch.expiry_date,
-            "count_of_trade_items" => length(group)
-          })
-        )
-        |> Repo.insert()
-
-      %SsccBatch{}
-      |> SsccBatch.changeset(%{
-        manufacturer_shipper_sscc_id: shipper_sscc.id,
-        manufacturer_batch_id: batch.id
-      })
-      |> Repo.insert!()
-
-      from(s in Serial, where: s.id in ^Enum.map(group, & &1.id))
+    with {:ok, code} <- MemberApi.create_sscc(sscc_params, api_token: api_token),
+         {:ok, shipper_sscc} <-
+           %ShipperSscc{organization_id: organization_id, manufacturer_pallet_id: pallet.id}
+           |> ShipperSscc.changeset(
+             Map.merge(parties, %{
+               "code" => code,
+               "gtin" => product.gtin,
+               "batch" => batch.batch_no,
+               "production_date" => batch.production_date,
+               "expiry_date" => batch.expiry_date,
+               "count_of_trade_items" => length(serials)
+             })
+           )
+           |> Repo.insert(),
+         {:ok, _sscc_batch} <-
+           %SsccBatch{}
+           |> SsccBatch.changeset(%{
+             manufacturer_shipper_sscc_id: shipper_sscc.id,
+             manufacturer_batch_id: batch.id
+           })
+           |> Repo.insert() do
+      from(s in Serial, where: s.id in ^Enum.map(serials, & &1.id))
       |> Repo.update_all(set: [manufacturer_shipper_sscc_id: shipper_sscc.id])
 
       Epcis.record_manufacturer_serial_pack(
         organization_id,
         product,
         shipper_sscc,
-        group,
+        serials,
         site_gln
       )
 
       {:ok, shipper_sscc}
+    else
+      [] -> {:error, :invalid_shipper_response}
+      false -> {:error, :invalid_shipper_response}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -688,10 +714,126 @@ defmodule ThamaniDawa.Manufacturing do
 
   @doc "Fetches a pallet scoped to the organization."
   def get_pallet!(organization_id, id) do
-    Repo.get_by!(Pallet, id: id, organization_id: organization_id)
+    Pallet
+    |> Repo.get_by!(id: id, organization_id: organization_id)
+    |> Repo.preload(shipper_ssccs: [:batches])
+  end
+
+  @doc "Lists an organization's manually assembled pallets and their shippers."
+  def list_pallets(organization_id) do
+    Repo.all(
+      from p in Pallet,
+        where: p.organization_id == ^organization_id,
+        order_by: [desc: p.inserted_at, desc: p.id],
+        preload: [shipper_ssccs: [:batches]]
+    )
   end
 
   # Shipper SSCCs
+
+  @doc "Creates a manually supplied shipper SSCC, inheriting pallet parties when present."
+  def create_manual_sscc(organization_id, pallet, attrs) do
+    attrs = inherit_pallet_parties(attrs, pallet)
+
+    %ShipperSscc{
+      organization_id: organization_id,
+      manufacturer_pallet_id: pallet && pallet.id
+    }
+    |> ShipperSscc.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc "Mints a shipper SSCC through the GS1 member API, then persists its party details."
+  def mint_empty_shipper_sscc(organization_id, pallet, attrs) do
+    attrs = inherit_pallet_parties(attrs, pallet)
+
+    params = %{
+      "serials" => [],
+      "from" => %{"gln" => attrs["from_gln"]},
+      "to" => %{"gln" => attrs["to_gln"]}
+    }
+
+    with {:ok, code} <-
+           MemberApi.create_shipper_sscc(params,
+             api_token: Organizations.gs1_api_key(organization_id)
+           ) do
+      create_manual_sscc(organization_id, pallet, Map.put(attrs, "code", code))
+    end
+  end
+
+  defp inherit_pallet_parties(attrs, nil), do: attrs
+
+  defp inherit_pallet_parties(attrs, pallet) do
+    Map.merge(attrs, %{
+      "from_gln" => pallet.from_gln,
+      "from_company_name" => pallet.from_company_name,
+      "from_address" => pallet.from_address,
+      "to_gln" => pallet.to_gln,
+      "to_company_name" => pallet.to_company_name,
+      "to_address" => pallet.to_address
+    })
+  end
+
+  @doc "Links an existing organization batch to a manually assembled shipper."
+  def add_batch_to_sscc(organization_id, sscc_id, batch_id) do
+    with %ShipperSscc{} = sscc <-
+           Repo.get_by(ShipperSscc, id: sscc_id, organization_id: organization_id),
+         %Batch{} = batch <-
+           Repo.get_by(Batch, id: batch_id, organization_id: organization_id) do
+      Repo.transaction(fn ->
+        %SsccBatch{}
+        |> SsccBatch.changeset(%{
+          manufacturer_shipper_sscc_id: sscc.id,
+          manufacturer_batch_id: batch.id
+        })
+        |> Repo.insert(on_conflict: :nothing)
+
+        sscc
+        |> Ecto.Changeset.change(
+          gtin: sscc.gtin || Repo.get!(Product, batch.manufacturer_product_id).gtin,
+          count_of_trade_items: count_sscc_serials(sscc.id)
+        )
+        |> Repo.update!()
+
+        batch
+      end)
+    else
+      nil -> {:error, :not_found}
+    end
+  end
+
+  @doc "Adds one manually supplied serial to a batch and packs it in the shipper."
+  def create_manual_serial(organization_id, batch, sscc, attrs) do
+    %Serial{
+      organization_id: organization_id,
+      manufacturer_product_id: batch.manufacturer_product_id,
+      manufacturer_batch_id: batch.id,
+      manufacturer_shipper_sscc_id: sscc && sscc.id
+    }
+    |> Serial.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, serial} ->
+        if sscc do
+          sscc
+          |> Ecto.Changeset.change(count_of_trade_items: count_sscc_serials(sscc.id))
+          |> Repo.update!()
+        end
+
+        {:ok, serial}
+
+      error ->
+        error
+    end
+  end
+
+  defp count_sscc_serials(sscc_id) do
+    Repo.aggregate(
+      from(s in Serial, where: s.manufacturer_shipper_sscc_id == ^sscc_id),
+      :count,
+      :id
+    )
+  end
 
   @doc """
   Mints a shipper SSCC via the GS1 member API, persists it (optionally
@@ -775,7 +917,7 @@ defmodule ThamaniDawa.Manufacturing do
   def get_sscc_group!(organization_id, id) do
     ShipperSscc
     |> Repo.get_by!(id: id, organization_id: organization_id)
-    |> Repo.preload(:pallet)
+    |> Repo.preload([:pallet, batches: [:product, :serials]])
   end
 
   # Shipments
@@ -1093,8 +1235,9 @@ defmodule ThamaniDawa.Manufacturing do
     }
   end
 
-  defp filter_aggregation_status(query, status) when status in ~w(draft submitted approved rejected),
-    do: where(query, [a], a.status == ^status)
+  defp filter_aggregation_status(query, status)
+       when status in ~w(draft submitted approved rejected),
+       do: where(query, [a], a.status == ^status)
 
   defp filter_aggregation_status(query, _status), do: query
 
@@ -1109,7 +1252,13 @@ defmodule ThamaniDawa.Manufacturing do
   def get_aggregation!(organization_id, id) do
     Aggregation
     |> Repo.get_by!(id: id, organization_id: organization_id)
-    |> Repo.preload([shipper_sscc: :batches, items: [], created_by: [], approved_by: []])
+    |> Repo.preload(
+      shipper_sscc: :batches,
+      items: [],
+      created_by: [],
+      approved_by: [],
+      rejected_by: []
+    )
   end
 
   def change_aggregation(aggregation \\ %Aggregation{}, attrs \\ %{}),
@@ -1158,22 +1307,33 @@ defmodule ThamaniDawa.Manufacturing do
   @doc "Creates a draft, scans the given serial strings, then submits it for review."
   def create_submitted_aggregation(organization_id, user, sscc_id, serial_strings) do
     Repo.transaction(fn ->
-      with {:ok, aggregation} <- create_aggregation(organization_id, user, sscc_id) do
-        Enum.each(serial_strings, fn serial ->
-          case scan_aggregation_item(organization_id, aggregation, serial) do
-            {:ok, _item} -> :ok
-            {:error, reason} -> Repo.rollback(reason)
-          end
-        end)
+      case create_aggregation(organization_id, user, sscc_id) do
+        {:ok, aggregation} ->
+          scan_all!(organization_id, aggregation, serial_strings)
+          mark_submitted!(organization_id, aggregation)
 
-        aggregation
-        |> Ecto.Changeset.change(status: "submitted", submitted_at: now())
-        |> Repo.update!()
-        |> then(&get_aggregation!(organization_id, &1.id))
-      else
-        {:error, reason} -> Repo.rollback(reason)
+        {:error, reason} ->
+          Repo.rollback(reason)
       end
     end)
+  end
+
+  defp scan_all!(organization_id, aggregation, serial_strings) do
+    Enum.each(serial_strings, &scan_one!(organization_id, aggregation, &1))
+  end
+
+  defp scan_one!(organization_id, aggregation, serial) do
+    case scan_aggregation_item(organization_id, aggregation, serial) do
+      {:ok, _item} -> :ok
+      {:error, reason} -> Repo.rollback(reason)
+    end
+  end
+
+  defp mark_submitted!(organization_id, aggregation) do
+    aggregation
+    |> Ecto.Changeset.change(status: "submitted", submitted_at: now())
+    |> Repo.update!()
+    |> then(&get_aggregation!(organization_id, &1.id))
   end
 
   @doc "Moves a draft aggregation to submitted under a row lock."
@@ -1243,9 +1403,7 @@ defmodule ThamaniDawa.Manufacturing do
       capacity = sscc.count_of_trade_items || 0
 
       if linked + adding > capacity do
-        Repo.rollback(
-          {:over_capacity, %{capacity: capacity, linked: linked, adding: adding}}
-        )
+        Repo.rollback({:over_capacity, %{capacity: capacity, linked: linked, adding: adding}})
       end
 
       Repo.update_all(

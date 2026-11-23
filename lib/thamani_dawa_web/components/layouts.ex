@@ -506,7 +506,7 @@ defmodule ThamaniDawaWeb.Layouts do
             <nav class="flex flex-col gap-0.5">
               <%= for {{group_label, items}, index} <- Enum.with_index(@nav_groups) do %>
                 <div
-                  :if={group_label}
+                  :if={group_label && group_label != "Distributor"}
                   class={[
                     "sidebar-group-label nav-label px-3 pb-1 text-[11px] font-medium uppercase tracking-wide transition-opacity duration-150",
                     index > 0 && "mt-3 border-t border-thamani-border-nav pt-3"
@@ -515,37 +515,65 @@ defmodule ThamaniDawaWeb.Layouts do
                 >
                   {group_label}
                 </div>
-                <%= for {label, icon, path} <- items do %>
-                  <% active =
-                    if path == @base_path,
-                      do: @current_path == @base_path,
-                      else: @current_path == path or String.starts_with?(@current_path, path <> "/") %>
-                  <.link
-                    navigate={path}
-                    data-tour-target={path}
-                    data-tooltip={label}
-                    aria-current={active && "page"}
-                    class="flex items-center gap-3 rounded-xl text-[14px] font-medium transition-[background-color,color,scale] whitespace-nowrap active:scale-[0.96]"
-                    style={
-                      if active,
-                        do:
-                          "background: var(--thamani-forest); color: var(--thamani-snow); padding: 9px 12px; min-height: 40px;",
-                        else: "color: var(--thamani-pewter); padding: 9px 12px; min-height: 40px;"
-                    }
+                <div
+                  :if={group_label == "Distributor"}
+                  id="distributor-nav-group"
+                  class={[
+                    "mt-3 border-t border-thamani-border-nav pt-3",
+                    index == 0 && "mt-0 border-t-0 pt-0"
+                  ]}
+                >
+                  <button
+                    id="distributor-nav-toggle"
+                    type="button"
+                    aria-controls="distributor-nav-items"
+                    aria-expanded="false"
+                    class="sidebar-group-label nav-label flex w-full cursor-pointer items-center justify-between px-3 pb-1 text-[11px] font-medium uppercase tracking-wide transition-colors hover:text-thamani-forest focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/60"
+                    style="color: var(--thamani-subtle);"
                   >
-                    <.icon name={icon} class="size-5 shrink-0" />
-                    <span id={"nav-label-#{path}"} class="nav-label transition-opacity duration-150">
-                      {label}
-                    </span>
-                    <span
-                      :if={Map.get(@nav_badges, path, 0) > 0}
-                      class="nav-badge bg-warning ml-auto inline-flex items-center justify-center rounded-full text-[11px] font-semibold leading-none"
-                      style="min-width: 20px; height: 20px; padding: 0 6px; background: var(--thamani-lime); color: var(--thamani-forest);"
+                    Distributor
+                    <.icon
+                      name="hero-chevron-down"
+                      class="distributor-nav-chevron size-3.5 transition-transform duration-150"
+                    />
+                  </button>
+                </div>
+                <div
+                  id={if(group_label == "Distributor", do: "distributor-nav-items")}
+                  class={[group_label == "Distributor" && "hidden"]}
+                >
+                  <%= for {label, icon, path} <- items do %>
+                    <% active =
+                      if path == @base_path,
+                        do: @current_path == @base_path,
+                        else: @current_path == path or String.starts_with?(@current_path, path <> "/") %>
+                    <.link
+                      navigate={path}
+                      data-tour-target={path}
+                      data-tooltip={label}
+                      aria-current={active && "page"}
+                      class="flex items-center gap-3 rounded-xl text-[14px] font-medium transition-[background-color,color,scale] whitespace-nowrap active:scale-[0.96]"
+                      style={
+                        if active,
+                          do:
+                            "background: var(--thamani-forest); color: var(--thamani-snow); padding: 9px 12px; min-height: 40px;",
+                          else: "color: var(--thamani-pewter); padding: 9px 12px; min-height: 40px;"
+                      }
                     >
-                      {Map.get(@nav_badges, path)}
-                    </span>
-                  </.link>
-                <% end %>
+                      <.icon name={icon} class="size-5 shrink-0" />
+                      <span id={"nav-label-#{path}"} class="nav-label transition-opacity duration-150">
+                        {label}
+                      </span>
+                      <span
+                        :if={Map.get(@nav_badges, path, 0) > 0}
+                        class="nav-badge bg-warning ml-auto inline-flex items-center justify-center rounded-full text-[11px] font-semibold leading-none"
+                        style="min-width: 20px; height: 20px; padding: 0 6px; background: var(--thamani-lime); color: var(--thamani-forest);"
+                      >
+                        {Map.get(@nav_badges, path)}
+                      </span>
+                    </.link>
+                  <% end %>
+                </div>
               <% end %>
             </nav>
           </div>
@@ -719,6 +747,18 @@ defmodule ThamaniDawaWeb.Layouts do
           this.handleTooltipBlur = hideTooltip;
 
           this.handleGlobalClick = (e) => {
+            const distributorToggle = e.target.closest("#distributor-nav-toggle");
+            if (distributorToggle) {
+              const distributorItems = document.getElementById("distributor-nav-items");
+              const distributorGroup = document.getElementById("distributor-nav-group");
+              const expanded = distributorItems?.classList.toggle("hidden") === false;
+
+              distributorToggle.setAttribute("aria-expanded", String(expanded));
+              distributorGroup?.classList.toggle("is-expanded", expanded);
+              requestAnimationFrame(this.updateScrollAffordance);
+              return;
+            }
+
             const toggleBtn = e.target.closest("#sidebar-toggle");
             if (toggleBtn) {
               e.preventDefault();
@@ -806,7 +846,7 @@ defmodule ThamaniDawaWeb.Layouts do
     labeled_ops =
       case ops_groups do
         [{:distributor, _items}] ->
-          distributor_item_groups()
+          [{"Distributor", distributor_items()}]
 
         [{:manufacturer, _items}] ->
           manufacturer_item_groups()
@@ -1106,6 +1146,7 @@ defmodule ThamaniDawaWeb.Layouts do
   defp site_context_icon(site) do
     cond do
       Site.distribution?(site) -> "hero-archive-box"
+      Site.manufacturer?(site) -> "hero-cog-8-tooth"
       Site.pharmacy?(site) and Site.lab?(site) -> "hero-building-office-2"
       Site.pharmacy?(site) -> "hero-building-storefront"
       Site.lab?(site) -> "hero-beaker"
@@ -1160,7 +1201,8 @@ defmodule ThamaniDawaWeb.Layouts do
       Enum.flat_map(activities || [], fn
         :pharmacy -> ["Pharmacy"]
         :laboratory -> ["Lab"]
-        :distribution -> ["Distribution"]
+        :distribution -> ["Distributor"]
+        :manufacturing -> ["Manufacturer"]
         _ -> []
       end)
 

@@ -6,6 +6,7 @@ defmodule ThamaniDawa.Organizations do
 
   import Ecto.Query, warn: false
   alias ThamaniDawa.Accounts
+  alias ThamaniDawa.GS1.MemberApi
   alias ThamaniDawa.Grp.GlnVerificationWorker
   alias ThamaniDawa.Grp.PrefixVerificationWorker
   alias ThamaniDawa.Organizations.Organization
@@ -77,7 +78,7 @@ defmodule ThamaniDawa.Organizations do
       :connect_keys,
       [:pharmacy, :laboratory, :distributor, :manufacturer],
       label: "Connect your tracing keys",
-      description: "Add your GS1 and EPCIS keys so serials, SSCCs and PPB reporting work.",
+      description: "Add your EPCIS keys so PPB reporting works.",
       cta: "Add API keys",
       done?: fn _ -> keys_ready?(organization) end,
       path: "/org/api-keys?return_to=onboarding"
@@ -219,6 +220,44 @@ defmodule ThamaniDawa.Organizations do
   @doc "Removes a GS1 company prefix from an organization."
   def delete_gs1_prefix(%OrganizationGs1Prefix{} = prefix), do: Repo.delete(prefix)
 
+  @doc """
+  Lists the GLNs registered to the organization's GS1 member account, as
+  `{label, gln}` pairs ready for a combobox. Returns `[]` when the
+  organization has no GS1 API key on file or the member API can't be
+  reached — callers fall back to a free-text GLN field in that case.
+  """
+  def list_member_glns(%Organization{} = organization) do
+    case gs1_api_key(organization) do
+      nil ->
+        []
+
+      api_key ->
+        case MemberApi.list_glns(api_token: api_key) do
+          {:ok, glns} -> Enum.map(glns, &member_gln_option/1)
+          {:error, _reason} -> []
+        end
+    end
+  end
+
+  def list_member_glns(organization_id) when is_integer(organization_id) do
+    organization_id |> get_organization!() |> list_member_glns()
+  end
+
+  defp member_gln_option(row) do
+    gln = Map.get(row, "gln")
+    label = member_gln_description(row)
+    {"#{label} — #{gln}", gln}
+  end
+
+  defp member_gln_description(row) do
+    Enum.find_value(["description", "location", "address"], "", fn key ->
+      value = Map.get(row, key, "")
+      if blank?(value), do: nil, else: value
+    end)
+  end
+
+  defp blank?(value), do: value in [nil, ""]
+
   @doc "Marks the organization's GLN as verified directly (skips Oban)."
   def mark_gln_verified(%Organization{} = organization) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
@@ -306,14 +345,16 @@ defmodule ThamaniDawa.Organizations do
   first site, and first admin in one transaction. The site's GLN (there is
   only ever one site at this point) is also copied onto the organization
   itself, since org-level events with no site attached — such as org-portal
-  receiving — fall back to the organization's own GLN. GS1 company prefixes
-  are not collected at signup; they're added afterward from the settings
-  page via `add_gs1_prefix/2`. Verification of the GLN(s) is enqueued as a
-  background job and never blocks or fails the account itself.
+  receiving — fall back to the organization's own GLN. GS1 details fetched
+  during signup (the member API key, company prefixes, and the chosen
+  primary prefix) are persisted in the same transaction. Verification of
+  the GLN(s) is enqueued as a background job and never blocks or fails the
+  account itself.
   """
-  def signup(org_attrs, site_attrs, admin_attrs) do
+  def signup(org_attrs, site_attrs, admin_attrs, opts \\ []) do
     Repo.transaction(fn ->
       with {:ok, organization} <- create_signup_organization(org_attrs),
+           {:ok, organization} <- persist_gs1_details(organization, Keyword.get(opts, :gs1)),
            {:ok, site} <- Sites.create_default_site(organization.id, site_attrs),
            {:ok, organization} <- copy_site_gln(organization, site),
            {:ok, user} <-
@@ -325,6 +366,57 @@ defmodule ThamaniDawa.Organizations do
         {:error, changeset} -> Repo.rollback(changeset)
       end
     end)
+  end
+
+  defp persist_gs1_details(organization, nil), do: {:ok, organization}
+
+  defp persist_gs1_details(organization, %{} = gs1) do
+    api_key = Map.get(gs1, :api_key) || Map.get(gs1, "api_key")
+    prefixes = Map.get(gs1, :prefixes) || Map.get(gs1, "prefixes") || []
+    primary_prefix = Map.get(gs1, :primary_prefix) || Map.get(gs1, "primary_prefix")
+
+    with {:ok, organization} <- maybe_set_gs1_api_key(organization, api_key),
+         {:ok, added} <- add_gs1_prefixes(organization, prefixes) do
+      promote_primary_prefix(organization, added, primary_prefix)
+    end
+  end
+
+  defp maybe_set_gs1_api_key(organization, key) when key in [nil, ""], do: {:ok, organization}
+  defp maybe_set_gs1_api_key(organization, key), do: set_gs1_api_key(organization, key)
+
+  defp add_gs1_prefixes(organization, prefixes) do
+    prefixes
+    |> Enum.map(&to_string/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq()
+    |> Enum.reduce_while({:ok, []}, fn prefix, {:ok, added} ->
+      case add_gs1_prefix(organization, %{prefix: prefix}) do
+        {:ok, record} -> {:cont, {:ok, [{prefix, record} | added]}}
+        {:error, changeset} -> {:halt, {:error, changeset}}
+      end
+    end)
+    |> case do
+      {:ok, added} -> {:ok, Enum.reverse(added)}
+      error -> error
+    end
+  end
+
+  defp promote_primary_prefix(organization, _added, nil), do: {:ok, organization}
+
+  defp promote_primary_prefix(organization, added, primary_prefix) do
+    case Enum.find(added, fn {prefix, _record} -> prefix == to_string(primary_prefix) end) do
+      nil ->
+        {:ok, organization}
+
+      {_prefix, %{is_primary: true}} ->
+        {:ok, organization}
+
+      {_prefix, record} ->
+        case set_primary_gs1_prefix(record) do
+          {:ok, _promoted} -> {:ok, organization}
+          {:error, changeset} -> {:error, changeset}
+        end
+    end
   end
 
   defp copy_site_gln(organization, %{gln: gln}) when gln not in [nil, ""] do
@@ -397,8 +489,7 @@ defmodule ThamaniDawa.Organizations do
   end
 
   defp keys_ready?(%Organization{} = organization) do
-    gs1_key_set?(organization) and
-      Enum.all?(relevant_epcis_tiers(organization), &epcis_key_set?(organization, &1))
+    Enum.all?(relevant_epcis_tiers(organization), &epcis_key_set?(organization, &1))
   end
 
   defp relevant_epcis_tiers(%Organization{operating_models: models}) do
@@ -411,8 +502,6 @@ defmodule ThamaniDawa.Organizations do
     ]
     |> Enum.filter(& &1)
   end
-
-  defp gs1_key_set?(organization), do: present?(organization.gs1_api_key_last4)
 
   defp epcis_key_set?(organization, "distributor"),
     do: present?(organization.epcis_distributor_api_key_last4)

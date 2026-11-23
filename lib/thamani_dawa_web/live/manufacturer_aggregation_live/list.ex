@@ -60,7 +60,9 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.List do
     |> stream(:aggregations, result.entries, reset: true)
   end
 
-  defp filter_path(socket, changes), do: aggregation_path(Map.merge(socket.assigns.filters, changes))
+  defp filter_path(socket, changes),
+    do: aggregation_path(Map.merge(socket.assigns.filters, changes))
+
   defp pagination_path(filters), do: aggregation_path(filters)
 
   defp aggregation_path(filters),
@@ -136,9 +138,11 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.List do
       <.table
         id="manufacturer-aggregations"
         rows={@streams.aggregations}
-        row_click={fn {_id, aggregation} ->
-          JS.navigate(~p"/manufacturer/aggregations/#{aggregation.id}")
-        end}
+        row_click={
+          fn {_id, aggregation} ->
+            JS.navigate(~p"/manufacturer/aggregations/#{aggregation.id}")
+          end
+        }
       >
         <:col :let={{_id, aggregation}} label="Reference">
           <p class="font-medium text-thamani-forest">{aggregation.reference}</p>

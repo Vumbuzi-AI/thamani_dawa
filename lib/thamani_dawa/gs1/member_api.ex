@@ -3,13 +3,17 @@ defmodule ThamaniDawa.GS1.MemberApi do
   Client for the GS1 Kenya member API (`/activate`, plus the sibling
   `/HBS/products` endpoint on the same host).
 
-  SSCC numbers are minted by `POST /create_sscc`. The serials inside a case
+  Standalone SSCC numbers are minted by `POST /create_sscc`; shipper SSCCs
+  around already-issued primary serials are minted by `POST /create_shipper_sscc`.
+  The serials inside a case
   are read with `POST /get_sscc_contents`. Both calls use the sandbox
   contract as-is: the API chooses the SSCC, and contents returns every
   serial that member account has already issued for each GTIN and batch
   listed on the case. `GET /HBS/products` lists every GTIN registered to
   the member account — unlike every other call here, it isn't under
   `/activate`, so it's requested against the base URL's host directly.
+  `POST /get_company_prefixes` and `POST /list_glns` read the member's
+  company prefixes and GLNs, used during signup.
 
   The base URL comes from the environment; the bearer token never does —
   every call must pass the calling organization's own token as `:api_token`
@@ -25,9 +29,13 @@ defmodule ThamaniDawa.GS1.MemberApi do
   """
 
   @callback post_create_sscc(map()) :: {:ok, String.t()} | {:error, term()}
+  @callback post_create_shipper_sscc(map()) :: {:ok, String.t()} | {:error, term()}
   @callback post_sscc_contents(String.t()) :: {:ok, map()} | {:error, term()}
   @callback post_create_serials(map()) :: {:ok, map()} | {:error, term()}
   @callback post_list_products(map()) :: {:ok, [map()]} | {:error, term()}
+  @callback post_get_company_prefixes(map()) :: {:ok, [String.t()]} | {:error, term()}
+  @callback post_list_glns(map()) :: {:ok, [map()]} | {:error, term()}
+  @callback post_search_glns(map()) :: {:ok, [map()]} | {:error, term()}
 
   @doc """
   Mints an SSCC. `params` is the member-API body: `batch_info` and `address`
@@ -35,6 +43,11 @@ defmodule ThamaniDawa.GS1.MemberApi do
   """
   def create_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
     dispatch(:post_create_sscc, [params], opts)
+  end
+
+  @doc "Mints a shipper SSCC around previously issued primary serials."
+  def create_shipper_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
+    dispatch(:post_create_shipper_sscc, [params], opts)
   end
 
   @doc "Products, batches, and serials packed in `sscc`."
@@ -60,9 +73,36 @@ defmodule ThamaniDawa.GS1.MemberApi do
     dispatch(:post_list_products, [params], opts)
   end
 
+  @doc """
+  Lists the company prefixes registered to the member account behind
+  `opts[:api_token]`, via `POST /get_company_prefixes`.
+  """
+  def get_company_prefixes(opts \\ []) when is_list(opts) do
+    dispatch(:post_get_company_prefixes, [%{}], opts)
+  end
+
+  @doc """
+  Lists the GLNs registered to the member account behind
+  `opts[:api_token]`, via `POST /list_glns`.
+  """
+  def list_glns(opts \\ []) when is_list(opts) do
+    dispatch(:post_list_glns, [%{"per_page" => 500, "page" => 1}], opts)
+  end
+
+  @doc "Searches the GS1 directory for GLNs available to the supplied API token."
+  def search_glns(query, opts \\ []) when is_binary(query) and is_list(opts) do
+    dispatch(:post_search_glns, [%{"query" => query, "per_page" => 25, "page" => 1}], opts)
+  end
+
   def post_create_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
     params
     |> post("/create_sscc", opts)
+    |> decode_create_response()
+  end
+
+  def post_create_shipper_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
+    params
+    |> post("/create_shipper_sscc", opts)
     |> decode_create_response()
   end
 
@@ -82,6 +122,24 @@ defmodule ThamaniDawa.GS1.MemberApi do
     opts
     |> get("/HBS/products")
     |> decode_products_response()
+  end
+
+  def post_get_company_prefixes(params, opts \\ []) when is_map(params) and is_list(opts) do
+    params
+    |> post("/get_company_prefixes", opts)
+    |> decode_prefixes_response()
+  end
+
+  def post_list_glns(params, opts \\ []) when is_map(params) and is_list(opts) do
+    params
+    |> post("/list_glns", opts)
+    |> decode_glns_response()
+  end
+
+  def post_search_glns(params, opts \\ []) when is_map(params) and is_list(opts) do
+    params
+    |> post("/search_glns", opts)
+    |> decode_glns_response()
   end
 
   # The test stub implements the callbacks at arity 1. The live client
@@ -156,12 +214,44 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def decode_products_response({:error, :unconfigured}), do: {:error, :unconfigured}
   def decode_products_response({:error, _reason}), do: {:error, :unavailable}
 
+  @doc false
+  def decode_prefixes_response({:ok, status, %{"company_prefixes" => prefixes}})
+      when status in 200..299 and is_list(prefixes) do
+    {:ok, prefixes}
+  end
+
+  def decode_prefixes_response({:ok, status, _body}) when status in 200..299, do: {:ok, []}
+
+  def decode_prefixes_response({:ok, status, _body}) when status in [401, 403],
+    do: {:error, auth_error(status, nil)}
+
+  def decode_prefixes_response({:ok, _status, _body}), do: {:error, :unavailable}
+  def decode_prefixes_response({:error, :unconfigured}), do: {:error, :unavailable}
+  def decode_prefixes_response({:error, _reason}), do: {:error, :unavailable}
+
+  @doc false
+  def decode_glns_response({:ok, status, %{"glns" => glns}})
+      when status in 200..299 and is_list(glns) do
+    {:ok, glns}
+  end
+
+  def decode_glns_response({:ok, status, _body}) when status in 200..299, do: {:ok, []}
+
+  def decode_glns_response({:ok, status, _body}) when status in [401, 403],
+    do: {:error, auth_error(status, nil)}
+
+  def decode_glns_response({:ok, _status, _body}), do: {:error, :unavailable}
+  def decode_glns_response({:error, :unconfigured}), do: {:error, :unavailable}
+  def decode_glns_response({:error, _reason}), do: {:error, :unavailable}
+
   defp normalize_product(product) do
     %{
       "gtin" => product["gtin"],
       "name" => product["name"],
       "description" => product["description"],
-      "status" => if(product["status"] == "true", do: "active", else: "inactive")
+      "status" => if(product["status"] == "true", do: "active", else: "inactive"),
+      "serial_count" => product["serial_count"],
+      "sscc_count" => product["sscc_count"]
     }
   end
 
