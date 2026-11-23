@@ -85,7 +85,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       assert has_element?(
                view,
                distributor_card,
-               "Supply medicines to pharmacies, hospitals, and other authorized buyers"
+               "Supply medicines to pharmacies, hospitals and other buyers."
              )
     end
 
