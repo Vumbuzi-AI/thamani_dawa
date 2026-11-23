@@ -50,7 +50,6 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
      |> assign(:pending_prescriptions, prescriptions)
      |> assign(:stats, Dashboards.pharmacy_stats(organization_id, site_id))
      |> assign(:dispensed_today, Dashboards.dispensed_today(organization_id, site_id))
-     |> assign(:dispensed_by_day, Dashboards.dispensed_by_day(organization_id, site_id))
      |> assign(:top_products, Dashboards.top_dispensed_products(organization_id, site_id))}
   end
 
@@ -117,7 +116,10 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
   defp product_name(nil), do: "(unknown product)"
   defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
 
-  defp money(amount) do
+  defp money(%Decimal{} = amount), do: amount |> Decimal.to_float() |> money()
+  defp money(nil), do: "KSh 0"
+
+  defp money(amount) when is_number(amount) do
     grouped =
       amount
       |> round()
@@ -129,45 +131,21 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
     "KSh " <> grouped
   end
 
-  defp dispensed_by_day_chart_data(dispensed_by_day) do
-    %{
-      labels: Enum.map(dispensed_by_day, fn {date, _qty} -> Calendar.strftime(date, "%d %b") end),
-      datasets: [
-        %{
-          label: "Units dispensed",
-          data: Enum.map(dispensed_by_day, fn {_date, qty} -> qty end),
-          borderColor: "#17302a",
-          backgroundColor: "rgba(28, 58, 19, 0.14)",
-          fill: true,
-          tension: 0.3,
-          pointRadius: 3
-        }
-      ]
-    }
+  defp phrase(1, one, _many), do: "1 #{one}"
+  defp phrase(count, _one, many), do: "#{count} #{many}"
+
+  defp paid_label(true), do: "Paid"
+  defp paid_label(_), do: "Unpaid"
+
+  defp patient_label(%{patient_name: name}) when is_binary(name) and name != "", do: name
+  defp patient_label(_), do: "Patient"
+
+  defp stock_health_max(out, low, near, pending) do
+    max(length(out) + length(low) + length(near) + pending, 1)
   end
 
-  defp top_products_chart_data(top_products) do
-    %{
-      labels: Enum.map(top_products, fn {name, _qty} -> name end),
-      datasets: [
-        %{
-          label: "Units dispensed",
-          data: Enum.map(top_products, fn {_name, qty} -> qty end),
-          backgroundColor: "#707371",
-          borderRadius: 4
-        }
-      ]
-    }
-  end
-
-  defp chart_options do
-    %{
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: %{legend: %{display: false}},
-      scales: %{y: %{beginAtZero: true}}
-    }
-  end
+  defp top_products_max([]), do: 1
+  defp top_products_max(products), do: products |> Enum.map(&elem(&1, 1)) |> Enum.max() |> max(1)
 
   def render(assigns) do
     ~H"""
@@ -177,144 +155,197 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
       current_path="/pharmacy"
       crumb="Dashboard"
     >
-      <:tools>
-        <.button variant="ghost" navigate={~p"/pharmacy/scan"}>Scan</.button>
-        <.button variant="ghost" navigate={~p"/pharmacy/quick-sale"}>Quick sale</.button>
-        <.button variant="primary" navigate={~p"/pharmacy/prescriptions/new"}>
-          New prescription
-        </.button>
-      </:tools>
-      <p class="td-note">Pending prescriptions, dispensing, and revenue at your site.</p>
-      <div class="dashboard-stat-grid">
-        <.stat_tile
-          icon="hero-document-text"
-          label="Pending prescriptions"
-          value={length(@pending_prescriptions)}
-          sublabel="Awaiting dispensing"
-        />
-        <.stat_tile
-          icon="hero-arrow-down-tray"
-          label="Pending batches"
-          value={@pending_batches_count}
-          sublabel="Awaiting receipt at your site"
-        />
-        <.stat_tile
-          icon="hero-banknotes"
-          label="Revenue this month"
-          value={money(@stats.revenue_this_month)}
-          sublabel="Wallet credits collected"
-        />
-        <.stat_tile
-          id="dispensed-today-card"
-          icon="hero-check-badge"
-          label="Dispensed today"
-          value={@dispensed_today}
-          sublabel="Units dispensed today"
-        />
-      </div>
-
-      <div class="dashboard-chart-grid mt-6">
-        <.chart_card
-          id="dispensed-by-day-chart"
-          title="Prescriptions dispensed"
-          subtitle="Units dispensed per day, last 30 days"
-          type="line"
-          data={dispensed_by_day_chart_data(@dispensed_by_day)}
-          options={chart_options()}
-        />
-        <.chart_card
-          id="top-products-chart"
-          title="Top dispensed products"
-          subtitle="By units dispensed this month"
-          type="bar"
-          data={top_products_chart_data(@top_products)}
-          options={chart_options()}
-        />
-      </div>
-
-      <.header variant="plain" class="mt-6">
-        Out of stock
-        <:subtitle>Products with no remaining stock at your site</:subtitle>
-      </.header>
-      <.table
-        id="out-of-stock"
-        rows={@out_of_stock}
-        row_click={fn _row -> JS.navigate(~p"/pharmacy/receive-stock") end}
+      <.td_dashboard
+        id="pharmacy-dashboard"
+        title="Pharmacy dashboard"
+        subtitle="Pending prescriptions, dispensing, and revenue at your site."
       >
-        <:col :let={{product, _total}} label="Product">{product_name(product)}</:col>
-        <:col :let={{product, _total}} label="Reorder level">{product && product.reorder_level}</:col>
-        <:col :let={{_product, total}} label="Remaining">
-          <span class="text-error font-semibold">{total}</span>
-        </:col>
-        <:empty_state>
-          <.blank_state icon="hero-check-circle" title="Nothing out of stock">
-            Every product at your site has remaining stock.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        <:actions>
+          <.td_button variant="secondary" label="Scan" navigate={~p"/pharmacy/scan"} />
+          <.td_button variant="secondary" label="Quick sale" navigate={~p"/pharmacy/quick-sale"} />
+          <.td_button variant="primary" label="New prescription" navigate={~p"/pharmacy/prescriptions/new"} />
+        </:actions>
 
-      <.header variant="plain" class="mt-6">
-        Low stock
-        <:subtitle>Products at or below their reorder level</:subtitle>
-      </.header>
-      <.table
-        id="low-stock"
-        rows={@low_stock}
-        row_click={fn _row -> JS.navigate(~p"/pharmacy/receive-stock") end}
-      >
-        <:col :let={{product, _total}} label="Product">{product_name(product)}</:col>
-        <:col :let={{product, _total}} label="Reorder level">{product && product.reorder_level}</:col>
-        <:col :let={{_product, total}} label="Remaining">{total}</:col>
-        <:empty_state>
-          <.blank_state icon="hero-check-circle" title="No products are low on stock">
-            Products will show up here once they drop to their reorder level.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        <:strip id="pharmacy-glances">
+          <.td_glance_cell
+            navigate={~p"/pharmacy/prescriptions"}
+            tone="warning"
+            value={phrase(length(@pending_prescriptions), "pending prescription", "pending prescriptions")}
+            caption="Awaiting dispensing"
+          >
+            <:icon><.td_icon name="clipboard-text" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            navigate={~p"/pharmacy/receive-stock"}
+            tone="info"
+            value={phrase(@pending_batches_count, "pending batch", "pending batches")}
+            caption="Awaiting receipt at your site"
+          >
+            <:icon><.td_icon name="package" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            navigate={~p"/pharmacy/transactions"}
+            tone="success"
+            value={"#{money(@stats.revenue_this_month)} this month"}
+            caption="Wallet credits collected"
+          >
+            <:icon><.td_icon name="currency-circle-dollar" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="dispensed-today-card"
+            tone="neutral"
+            value={phrase(@dispensed_today, "unit dispensed today", "units dispensed today")}
+            caption="Dispensed today"
+          >
+            <:icon><.td_icon name="check-circle" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+        </:strip>
 
-      <.header variant="plain" class="mt-6">
-        Near-expiry batches
-        <:subtitle>Expiring within {@near_expiry_days} days</:subtitle>
-      </.header>
-      <.table
-        id="near-expiry"
-        rows={@near_expiry}
-        row_click={fn batch -> JS.navigate(~p"/pharmacy/scan?gtin=#{batch.gtin}") end}
-      >
-        <:col :let={batch} label="Product">{product_name(@products_by_id[batch.product_id])}</:col>
-        <:col :let={batch} label="Batch no.">
-          <span class="code-pill">{batch.batch_no}</span>
-        </:col>
-        <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
-        <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
-        <:empty_state>
-          <.blank_state icon="hero-calendar-days" title="No batches expiring soon">
-            Batches will appear here within {@near_expiry_days} days of their expiry date.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        <.td_dash_row>
+          <.td_dash_card
+            id="stock-health"
+            title="Stock health"
+            subtitle="Your site, today"
+            width={340}
+          >
+            <.td_tick_row
+              label={phrase(length(@out_of_stock), "out of stock", "out of stock")}
+              caption="Products with no remaining stock"
+              count={length(@out_of_stock)}
+              max={stock_health_max(@out_of_stock, @low_stock, @near_expiry, @pending_batches_count)}
+              tone="danger"
+              navigate={~p"/pharmacy/receive-stock"}
+            />
+            <.td_tick_row
+              label={phrase(length(@low_stock), "low on stock", "low on stock")}
+              caption="At or below reorder level"
+              count={length(@low_stock)}
+              max={stock_health_max(@out_of_stock, @low_stock, @near_expiry, @pending_batches_count)}
+              tone="warning"
+              navigate={~p"/pharmacy/stock"}
+            />
+            <.td_tick_row
+              label={phrase(length(@near_expiry), "near-expiry batch", "near-expiry batches")}
+              caption={"Expiring within #{@near_expiry_days} days"}
+              count={length(@near_expiry)}
+              max={stock_health_max(@out_of_stock, @low_stock, @near_expiry, @pending_batches_count)}
+              tone="expiry"
+              navigate={~p"/pharmacy/stock"}
+            />
+            <.td_tick_row
+              label={phrase(@pending_batches_count, "batch to receive", "batches to receive")}
+              caption="Awaiting receipt at your site"
+              count={@pending_batches_count}
+              max={stock_health_max(@out_of_stock, @low_stock, @near_expiry, @pending_batches_count)}
+              tone="info"
+              navigate={~p"/pharmacy/receive-stock"}
+            />
+          </.td_dash_card>
 
-      <.header variant="plain" class="mt-6">
-        Pending prescriptions
-      </.header>
-      <.table
-        id="pending-prescriptions"
-        rows={@pending_prescriptions}
-        row_click={fn prescription -> JS.navigate(~p"/pharmacy/prescriptions/#{prescription.id}") end}
-      >
-        <:col :let={prescription} label="Status">
-          <.status_badge status={prescription.status} />
-        </:col>
-        <:col :let={prescription} label="Total">{prescription.total_amount}</:col>
-        <:col :let={prescription} label="Paid">
-          {if prescription.has_paid, do: "Yes", else: "No"}
-        </:col>
-        <:empty_state>
-          <.blank_state icon="hero-clipboard-document-check" title="No pending prescriptions">
-            Prescriptions awaiting dispensing at your site will appear here.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+          <.td_dash_card
+            id="top-products"
+            title="Top dispensed products"
+            subtitle="By units dispensed this month"
+          >
+            <div :if={@top_products != []} class="td-tick-list">
+              <.td_tick_row
+                :for={{name, qty} <- @top_products}
+                label={name}
+                count={qty}
+                max={top_products_max(@top_products)}
+                tone="neutral"
+                navigate={~p"/pharmacy/stock"}
+              />
+            </div>
+            <.td_empty
+              :if={@top_products == []}
+              id="top-products-empty"
+              title="No dispensing this month"
+              hint="Products will appear here once you dispense or complete a sale."
+            />
+          </.td_dash_card>
+        </.td_dash_row>
+
+        <.td_dash_row>
+          <.td_dash_card id="out-of-stock-table" title="Out of stock" subtitle="Products with no remaining stock at your site.">
+            <.table
+              id="out-of-stock"
+              rows={@out_of_stock}
+              row_click={fn _row -> JS.navigate(~p"/pharmacy/receive-stock") end}
+            >
+              <:col :let={{product, _total}} label="Product">{product_name(product)}</:col>
+              <:col :let={{product, _total}} label="Reorder level">{product && product.reorder_level}</:col>
+              <:col :let={{_product, total}} label="Remaining">{total}</:col>
+              <:empty_state>
+                <.td_empty title="Nothing out of stock" hint="Every product at your site has remaining stock." />
+              </:empty_state>
+            </.table>
+          </.td_dash_card>
+        </.td_dash_row>
+
+        <.td_dash_row>
+          <.td_dash_card id="low-stock-table" title="Low stock" subtitle="Products at or below their reorder level.">
+            <.table
+              id="low-stock"
+              rows={@low_stock}
+              row_click={fn _row -> JS.navigate(~p"/pharmacy/receive-stock") end}
+            >
+              <:col :let={{product, _total}} label="Product">{product_name(product)}</:col>
+              <:col :let={{product, _total}} label="Reorder level">{product && product.reorder_level}</:col>
+              <:col :let={{_product, total}} label="Remaining">{total}</:col>
+              <:empty_state>
+                <.td_empty title="No products are low on stock" hint="Products will show up here once they drop to their reorder level." />
+              </:empty_state>
+            </.table>
+          </.td_dash_card>
+        </.td_dash_row>
+
+        <.td_dash_row>
+          <.td_dash_card id="near-expiry-table" title="Near-expiry batches" subtitle={"Expiring within #{@near_expiry_days} days"}>
+            <.table
+              id="near-expiry"
+              rows={@near_expiry}
+              row_click={fn batch -> JS.navigate(~p"/pharmacy/scan?gtin=#{batch.gtin}") end}
+            >
+              <:col :let={batch} label="Product">{product_name(@products_by_id[batch.product_id])}</:col>
+              <:col :let={batch} label="Batch no.">
+                <span class="td-mono">{batch.batch_no}</span>
+              </:col>
+              <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
+              <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
+              <:empty_state>
+                <.td_empty title="No batches expiring soon" hint={"Batches will appear here within #{@near_expiry_days} days of their expiry date."} />
+              </:empty_state>
+            </.table>
+          </.td_dash_card>
+        </.td_dash_row>
+
+        <.td_dash_row>
+          <.td_dash_card id="pending-prescriptions-card" title="Pending prescriptions">
+            <:actions>
+              <.td_button variant="secondary" label="View all" navigate={~p"/pharmacy/prescriptions"} />
+            </:actions>
+            <.table
+              id="pending-prescriptions"
+              rows={@pending_prescriptions}
+              row_click={fn prescription -> JS.navigate(~p"/pharmacy/prescriptions/#{prescription.id}") end}
+            >
+              <:col :let={prescription} label="Patient">{patient_label(prescription)}</:col>
+              <:col :let={prescription} label="Status">
+                <.status_badge status={prescription.status} />
+              </:col>
+              <:col :let={prescription} label="Total">{money(prescription.total_amount)}</:col>
+              <:col :let={prescription} label="Paid">{paid_label(prescription.has_paid)}</:col>
+              <:empty_state>
+                <.td_empty
+                  title="No pending prescriptions"
+                  hint="Prescriptions awaiting dispensing at your site will appear here."
+                />
+              </:empty_state>
+            </.table>
+          </.td_dash_card>
+        </.td_dash_row>
+      </.td_dashboard>
 
       <Layouts.product_tour
         id="pharmacy-product-tour"
