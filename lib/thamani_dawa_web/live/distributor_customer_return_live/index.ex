@@ -830,6 +830,12 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
     )
   end
 
+  defp condition_totals(items) do
+    items
+    |> Enum.group_by(&(&1.condition || "unset"))
+    |> Enum.map(fn {condition, rows} -> {to_string(condition), rows |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()} end)
+  end
+
   defp reason_label(nil), do: "—"
   defp reason_label(reason), do: Phoenix.Naming.humanize(reason)
 
@@ -977,66 +983,75 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
         </div>
       </form>
 
-      <div :if={@customer_return.items != []} class="space-y-2">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-thamani-pewter">
-          Items on this return
-        </h3>
-        <div
-          :for={item <- @customer_return.items}
-          class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-thamani-canvas px-3 py-2"
-        >
-          <div class="min-w-0">
-            <p class="text-sm font-medium text-thamani-forest">{product_name(item.product)}</p>
-            <p class="text-xs text-thamani-pewter">
-              Qty {item.quantity} · {item.batch_no} · exp {item.expiry_date}
-              <span :if={item.serial}>· {item.serial}</span>
-            </p>
-            <p
-              :if={@customer_return.shipment && not item.matched}
-              class="text-xs font-semibold text-amber-800"
-            >
-              Not on this shipment
-            </p>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <%= if @customer_return.status == :received do %>
-              <form
-                id={"condition-form-#{item.id}"}
-                class="[&>div]:mb-0"
-                phx-value-item_id={item.id}
-                phx-value-customer_return_id={@customer_return.id}
-              >
-                <.input
-                  type="select"
-                  id={"condition-#{item.id}"}
-                  name="condition"
-                  label="Condition"
-                  value={item.condition}
-                  options={
-                    Enum.map(CustomerReturnItem.conditions(), &{Phoenix.Naming.humanize(&1), &1})
-                  }
-                  prompt="Needs a condition"
-                  phx-change="set_condition"
-                />
-              </form>
-            <% else %>
-              <span :if={item.condition} class="text-sm font-medium text-thamani-forest">
-                {Phoenix.Naming.humanize(item.condition)}
-              </span>
-            <% end %>
-
-            <.button
-              :if={@customer_return.status == :draft}
-              variant="ghost"
-              type="button"
-              phx-click="remove_item"
-              phx-value-item_id={item.id}
-              phx-value-customer_return_id={@customer_return.id}
-            >
-              Remove
-            </.button>
-          </div>
+      <div :if={@customer_return.items != []} class="td-card" id="customer-return-items">
+        <.td_card_header
+          title="Returned items"
+          subtitle={if @customer_return.status == :received, do: "Set the condition of each item after inspection.", else: "#{length(@customer_return.items)} on this return"}
+        />
+        <div class="td-list-table">
+          <table class="td-rows is-static">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Batch</th>
+                <th class="is-num">Units</th>
+                <th>Condition</th>
+                <th><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={item <- @customer_return.items} id={"return-item-#{item.id}"}>
+                <td>
+                  {product_name(item.product)}
+                  <span :if={item.serial} class="td-sub td-mono td-s12">{item.serial}</span>
+                  <span :if={@customer_return.shipment && not item.matched} class="td-sub td-s12">
+                    <.td_badge tone="warning" label="Not on this shipment" />
+                  </span>
+                </td>
+                <td>
+                  <span class="td-mono">{item.batch_no}</span>
+                  <span :if={item.expiry_date} class="td-sub td-s12">Exp {ThamaniDawaWeb.TimeFormat.date(item.expiry_date)}</span>
+                </td>
+                <td class="is-num">{item.quantity}</td>
+                <td>
+                  <%= if @customer_return.status == :received do %>
+                    <form
+                      id={"condition-form-#{item.id}"}
+                      class="[&>div]:mb-0"
+                      phx-value-item_id={item.id}
+                      phx-value-customer_return_id={@customer_return.id}
+                    >
+                      <.input
+                        type="select"
+                        id={"condition-#{item.id}"}
+                        name="condition"
+                        value={item.condition}
+                        options={Enum.map(CustomerReturnItem.conditions(), &{Phoenix.Naming.humanize(&1), &1})}
+                        prompt="Needs a condition"
+                        phx-change="set_condition"
+                      />
+                    </form>
+                  <% else %>
+                    {(item.condition && Phoenix.Naming.humanize(item.condition)) || "—"}
+                  <% end %>
+                </td>
+                <td class="td-row-actions">
+                  <button
+                    :if={@customer_return.status == :draft}
+                    type="button"
+                    class="td-icon-btn"
+                    phx-click="remove_item"
+                    phx-value-item_id={item.id}
+                    phx-value-customer_return_id={@customer_return.id}
+                    aria-label="Remove"
+                    title="Remove"
+                  >
+                    <.td_icon name="trash" class="size-4" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -1084,16 +1099,38 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
         </.button>
       </div>
       <div class="flex justify-end gap-3">
-        <.button
+        <.td_button
           :if={@customer_return.status == :inspected}
+          id="open-complete-return"
           variant="primary"
-          type="button"
-          phx-click="complete"
-          phx-value-id={@customer_return.id}
-        >
-          <.icon name="hero-check" class="size-4" /> Complete
-        </.button>
+          glyph="check"
+          label="Complete return"
+          phx-click={show_modal("complete-return-modal")}
+        />
       </div>
+      <.modal
+        :if={@customer_return.status == :inspected}
+        id="complete-return-modal"
+        size="confirm"
+        title={"Inspection done. Complete return ##{@customer_return.id}?"}
+        subtitle="You can complete it now or later from this page."
+      >
+        <dl class="td-kv-list">
+          <div :for={{condition, units} <- condition_totals(@customer_return.items)}>
+            <dt>{Phoenix.Naming.humanize(condition)}</dt>
+            <dd>{units} units</dd>
+          </div>
+        </dl>
+        <:footer>
+          <.td_button type="button" label="Not yet" phx-click={hide_modal("complete-return-modal")} />
+          <.td_button
+            id="confirm-complete-return"
+            variant="primary"
+            label="Complete return"
+            phx-click={JS.push("complete", value: %{id: to_string(@customer_return.id)}) |> hide_modal("complete-return-modal")}
+          />
+        </:footer>
+      </.modal>
     </div>
     """
   end
@@ -1183,10 +1220,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
           id="customer-return-modal"
           show
           on_cancel={JS.patch(~p"/distributor/customer-returns")}
+          title="New customer return"
+          subtitle="Pick the customer and, if you can, the shipment it came from."
         >
-          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
-            Start a new return
-          </h2>
           <div
             role="radiogroup"
             aria-label="Where this return comes from"

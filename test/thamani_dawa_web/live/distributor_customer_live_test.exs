@@ -60,4 +60,20 @@ defmodule ThamaniDawaWeb.DistributorCustomerLiveTest do
     assert_patch(view, ~p"/distributor/customers")
     assert has_element?(view, "#distributor-customers", "Coast Diagnostics Ltd")
   end
+
+  test "adding a customer uses the shared GLN search, or no GLN at all", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/distributor/customers/new")
+    assert has_element?(view, "#customer-gln")
+    assert has_element?(view, "#save-customer[disabled]")
+
+    view |> element("#customer-no-gln") |> render_click()
+    refute has_element?(view, "#save-customer[disabled]")
+
+    view
+    |> form("#distributor-customer-form", customer: %{name: "Nakuru Town Pharmacy", customer_type: "pharmacy"})
+    |> render_submit()
+
+    assert_patch(view, ~p"/distributor/customers")
+    assert has_element?(view, "#distributor-customers", "Nakuru Town Pharmacy")
+  end
 end

@@ -302,7 +302,7 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
         <section
           :if={@disposal.status == :draft}
           id="add-batch-panel"
-          class="rounded-2xl border border-thamani-frosted bg-td-surface p-4 sm:p-5"
+          class="td-card td-pad"
         >
           <h2 class="text-sm font-semibold text-thamani-forest">
             {if @disposal.kind == :expiry, do: "Add an expired lot", else: "Add a batch"}
@@ -362,170 +362,126 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
           </p>
         </section>
 
-        <section id="disposal-items">
-          <div class="mb-3 flex items-baseline justify-between gap-3">
-            <h2 class="text-base font-semibold text-thamani-forest">
-              {if @disposal.kind == :expiry, do: "Lots to write off", else: "Batches to return"}
-            </h2>
-            <p class="text-sm tabular-nums text-thamani-pewter">{length(@disposal.items)}</p>
+        <section id="disposal-items" class="td-card">
+          <.td_card_header
+            title={if @disposal.kind == :expiry, do: "Lots to write off", else: "Batches in this return"}
+            subtitle={
+              if @disposal.status in [:draft, :pending],
+                do: "Units are held from sale while the return is open.",
+                else: "#{length(@disposal.items)} #{if length(@disposal.items) == 1, do: "batch", else: "batches"}"
+            }
+          >
+            <:actions>
+              <.td_button
+                :if={@disposal.status == :draft}
+                id="submit-disposal"
+                variant="primary"
+                label="Submit for approval"
+                disabled={@disposal.items == []}
+                phx-click="confirm_submit"
+              />
+              <.td_button
+                :if={@disposal.status == :pending}
+                id="reopen-disposal"
+                glyph="arrow-u-up-left"
+                label="Reopen for editing"
+                phx-click="reopen"
+              />
+            </:actions>
+          </.td_card_header>
+
+          <div :if={@disposal.items == []} class="td-pad td-empty-wrap">
+            <div class="td-empty-card">
+              <p class="td-empty-title">{if(@no_lots_to_add, do: "No expired stock", else: "No batches added yet")}</p>
+              <p class="td-note">
+                {cond do
+                  @no_lots_to_add -> "This warehouse has no lot past its date."
+                  @disposal.kind == :expiry -> "Add the expired lots above."
+                  true -> "Add the batches going back to the supplier above."
+                end}
+              </p>
+            </div>
           </div>
 
-          <.blank_state
-            :if={@disposal.items == []}
-            icon={
-              if @disposal.kind == :expiry, do: "hero-calendar-days", else: "hero-arrow-uturn-left"
-            }
-            title={if(@no_lots_to_add, do: "No expired stock", else: "No batches added yet")}
-          >
-            {cond do
-              @no_lots_to_add -> "This warehouse has no lot past its date."
-              @disposal.kind == :expiry -> "Add the expired lots above."
-              true -> "Add the batches going back to the supplier."
-            end}
-          </.blank_state>
-
-          <div
-            :if={@disposal.items != []}
-            id="disposal-item-rows"
-            class="overflow-hidden rounded-2xl border border-thamani-frosted bg-td-surface"
-          >
-            <article
-              :for={item <- @disposal.items}
-              id={"item-#{item.id}"}
-              class="border-b border-thamani-frosted px-4 py-4 last:border-b-0 sm:px-5"
-            >
-              <% batch = item.batch %>
-              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div class="min-w-0">
-                  <p class="text-sm font-semibold text-thamani-forest">
+          <div :if={@disposal.items != []} class="td-list-table" id="disposal-item-rows">
+            <table class="td-rows is-static">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Batch</th>
+                  <th>Expiry</th>
+                  <th :if={@disposal.kind == :returned}>Supplier</th>
+                  <th class="is-num">Available</th>
+                  <th class="is-num">Units</th>
+                  <th><span class="sr-only">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={item <- @disposal.items} id={"item-#{item.id}"}>
+                  <% batch = item.batch %>
+                  <td>
                     {product_name(@products_by_id, batch && batch.product_id)}
-                  </p>
-                  <p class="mt-1 text-xs text-thamani-pewter">
-                    <span class="font-medium tabular-nums tracking-tight text-thamani-forest">
-                      {batch && batch.batch_no}
-                    </span>
-                    <span :if={batch && batch.gtin} class="mx-1 text-thamani-subtle">·</span>
-                    <span :if={batch && batch.gtin} class="tabular-nums tracking-tight">
-                      {batch.gtin}
-                    </span>
-                  </p>
-                  <div :if={batch} class="mt-2">
+                    <span :if={batch && batch.gtin} class="td-sub td-mono td-s12">{batch.gtin}</span>
                     <button
+                      :if={batch && batch.serials != []}
                       type="button"
-                      phx-click={batch.serials != [] && "toggle_batch_serials"}
+                      class="td-link td-s12"
+                      phx-click="toggle_batch_serials"
                       phx-value-batch={batch.id}
-                      disabled={batch.serials == []}
-                      class="flex w-fit items-center gap-1.5 text-xs font-medium text-thamani-pewter disabled:cursor-default"
-                      aria-expanded={
-                        to_string(MapSet.member?(@expanded_batches, to_string(batch.id)))
-                      }
+                      aria-expanded={to_string(MapSet.member?(@expanded_batches, to_string(batch.id)))}
                     >
-                      <.icon
-                        :if={batch.serials != []}
-                        name="hero-chevron-right"
-                        class={[
-                          "size-3.5 transition-transform duration-200",
-                          MapSet.member?(@expanded_batches, to_string(batch.id)) && "rotate-90"
-                        ]}
-                      />
-                      {if batch.serials == [],
-                        do: "No serials",
-                        else:
-                          "#{length(batch.serials)} #{if length(batch.serials) == 1, do: "serial", else: "serials"}"}
+                      {length(batch.serials)} {if length(batch.serials) == 1, do: "serial", else: "serials"}
                     </button>
-                    <ul
-                      :if={
-                        batch.serials != [] and
-                          MapSet.member?(@expanded_batches, to_string(batch.id))
-                      }
-                      class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1"
+                    <div :if={batch && batch.serials != [] and MapSet.member?(@expanded_batches, to_string(batch.id))}>
+                      <span :for={serial <- batch.serials} class="td-chip td-mono">{serial}</span>
+                    </div>
+                  </td>
+                  <td class="td-mono">{batch && batch.batch_no}</td>
+                  <td>{batch && batch.expiry_date && ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}</td>
+                  <td :if={@disposal.kind == :returned}>{supplier_name(item)}</td>
+                  <td class="is-num">{item.available_quantity}</td>
+                  <td class="is-num">{item.quantity}</td>
+                  <td class="td-row-actions">
+                    <button
+                      :if={@disposal.status == :draft}
+                      type="button"
+                      class="td-icon-btn"
+                      phx-click="remove_item"
+                      phx-value-item_id={item.id}
+                      aria-label="Remove"
+                      title="Remove"
                     >
-                      <li
-                        :for={serial <- batch.serials}
-                        class="text-xs font-medium tabular-nums tracking-tight text-thamani-forest [overflow-wrap:anywhere]"
-                        title={serial}
-                      >
-                        {serial}
-                      </li>
-                    </ul>
-                  </div>
-                  <p :if={@disposal.kind == :returned} class="mt-1 text-xs text-thamani-pewter">
-                    Supplier: {supplier_name(item)}
-                  </p>
-                </div>
-
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between lg:justify-end">
-                  <dl class="grid w-full grid-cols-2 gap-2 sm:w-44 sm:shrink-0">
-                    <div>
-                      <dt class="text-xs font-medium text-thamani-subtle">Available</dt>
-                      <dd class="mt-1 text-sm font-semibold tabular-nums text-thamani-forest">
-                        {item.available_quantity}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt class="text-xs font-medium text-thamani-subtle">Requested</dt>
-                      <dd class="mt-1 text-sm font-semibold tabular-nums text-thamani-forest">
-                        {item.quantity}
-                      </dd>
-                    </div>
-                  </dl>
-                  <.button
-                    :if={@disposal.status == :draft}
-                    variant="ghost"
-                    type="button"
-                    phx-click="remove_item"
-                    phx-value-item_id={item.id}
-                    class="w-full sm:w-auto"
-                  >
-                    Remove
-                  </.button>
-                </div>
-              </div>
-            </article>
+                      <.td_icon name="trash" class="size-4" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </section>
-
-        <div :if={@disposal.status == :draft} class="flex justify-end pt-2">
-          <.button
-            variant="primary"
-            class="w-full sm:w-auto"
-            disabled={@disposal.items == []}
-            phx-click="confirm_submit"
-          >
-            <.icon name="hero-paper-airplane" class="size-4" /> Submit for approval
-          </.button>
-        </div>
-
-        <div :if={@disposal.status == :pending} class="flex justify-end pt-2">
-          <.button variant="ghost" class="w-full sm:w-auto" phx-click="reopen">
-            <.icon name="hero-arrow-uturn-left" class="size-4" /> Reopen for editing
-          </.button>
-        </div>
 
         <.modal
           :if={@confirm_submit}
           id="confirm-submit-modal"
           show
+          size="confirm"
+          title={if @disposal.kind == :expiry, do: "Submit this write-off?", else: "Submit this return for approval?"}
+          subtitle={
+            if @disposal.kind == :expiry,
+              do: "An admin will review this write-off. Once approved, the remaining quantity of each lot leaves stock.",
+              else: "Your organisation admin reviews it. Once approved, the requested quantities leave stock."
+          }
           on_cancel={JS.push("cancel_submit")}
         >
-          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-            Submit for approval
-          </h2>
-          <p class="mb-6 text-sm text-thamani-pewter">
-            {if @disposal.kind == :expiry,
-              do:
-                "An admin will review this write-off. Once approved, the remaining quantity of each lot leaves stock.",
-              else:
-                "An admin will review this return. Once approved, the requested quantities leave stock."}
-          </p>
-          <div class="flex justify-end gap-3">
-            <.button type="button" phx-click="cancel_submit">
-              Cancel
-            </.button>
-            <.button variant="primary" phx-click="submit" phx-disable-with="Submitting…">
-              Submit
-            </.button>
-          </div>
+          <dl class="td-kv-list">
+            <div><dt>Batches</dt><dd>{length(@disposal.items)}</dd></div>
+            <div><dt>Units</dt><dd>{@disposal.items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()}</dd></div>
+            <div :if={@disposal.kind == :returned}><dt>Supplier</dt><dd>{disposal_supplier(@disposal)}</dd></div>
+          </dl>
+          <:footer>
+            <.td_button type="button" label="Cancel" phx-click="cancel_submit" />
+            <.td_button id="confirm-submit" variant="primary" label="Submit for approval" phx-click="submit" phx-disable-with="Submitting…" />
+          </:footer>
         </.modal>
 
         <aside
