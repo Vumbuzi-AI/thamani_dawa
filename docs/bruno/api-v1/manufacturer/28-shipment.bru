@@ -1,0 +1,15 @@
+meta {
+  name: Shipment
+  type: http
+  seq: 28
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/shipments/{{shipment_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

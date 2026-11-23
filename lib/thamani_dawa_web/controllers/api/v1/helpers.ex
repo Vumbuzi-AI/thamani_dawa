@@ -14,6 +14,16 @@ defmodule ThamaniDawaWeb.Api.V1.Helpers do
   def site_id(conn), do: scope(conn).current_site_id
   def actor_id(conn), do: scope(conn).user.id
 
+  @doc "The signed-in user's current site, or `:none` when they have none."
+  def current_site(conn) do
+    with site_id when is_integer(site_id) <- site_id(conn),
+         {:ok, site} <- fetch(fn -> ThamaniDawa.Sites.get_site!(org_id(conn), site_id) end) do
+      {:ok, site}
+    else
+      _none -> :none
+    end
+  end
+
   def fetch(fun) when is_function(fun, 0) do
     {:ok, fun.()}
   rescue

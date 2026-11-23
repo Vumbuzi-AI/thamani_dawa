@@ -1,0 +1,19 @@
+meta {
+  name: SSCCs to pack
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/aggregations/ssccs
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  SSCCs that can still take an aggregation.
+}

@@ -227,21 +227,8 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
 
   defp event_site_name(_event, _site_names), do: nil
 
-  defp status_counts(organization_id) do
-    counts = Outbox.count_by_status(organization_id, tier: "manufacturer")
-
-    Map.merge(
-      %{
-        "pending" => 0,
-        "blocked" => 0,
-        "accepted" => 0,
-        "warning" => 0,
-        "rejected" => 0,
-        "dead" => 0
-      },
-      counts
-    )
-  end
+  defp status_counts(organization_id),
+    do: Outbox.status_summary(organization_id, tier: "manufacturer")
 
   defp filter_events(events, "all"), do: events
   defp filter_events(events, status), do: Enum.filter(events, &(&1.status == status))
@@ -273,28 +260,7 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
   defp status_class("dead"), do: "bg-thamani-error text-white"
   defp status_class(_status), do: "bg-thamani-stone text-thamani-forest"
 
-  defp event_detail(%OutboxEvent{status: "blocked", blocked_reason: reason})
-       when is_binary(reason),
-       do: reason
-
-  defp event_detail(%OutboxEvent{status: "warning", response: %{"warnings" => warnings}})
-       when is_list(warnings),
-       do: warnings |> Enum.map(&warning_message/1) |> Enum.join(" · ")
-
-  defp event_detail(%OutboxEvent{status: status, response: response})
-       when status in ["rejected", "dead"] and is_map(response) do
-    cond do
-      response["error"] -> response["error"]
-      response["raw"] -> response["raw"]
-      true -> inspect(response)
-    end
-  end
-
-  defp event_detail(_event), do: nil
-
-  defp warning_message(%{"message" => message}) when is_binary(message), do: message
-  defp warning_message(message) when is_binary(message), do: message
-  defp warning_message(warning), do: inspect(warning)
+  defp event_detail(event), do: Outbox.event_detail(event)
 
   defp short_id(event_id), do: String.slice(event_id, -8, 8)
 

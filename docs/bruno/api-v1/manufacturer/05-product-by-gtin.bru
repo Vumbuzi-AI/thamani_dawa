@@ -1,0 +1,15 @@
+meta {
+  name: Product by GTIN
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/products/gtin/{{gtin}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

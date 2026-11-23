@@ -1,0 +1,19 @@
+meta {
+  name: GS1 prefixes
+  type: http
+  seq: 33
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/gs1-prefixes
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  Admins only.
+}

@@ -1,0 +1,19 @@
+meta {
+  name: Dashboard
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/dashboard
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  Counts for products, batches, serials, SSCCs, aggregations and shipments, plus aggregations awaiting review.
+}

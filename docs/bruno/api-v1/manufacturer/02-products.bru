@@ -1,0 +1,20 @@
+meta {
+  name: Products
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/products
+  body: none
+  auth: bearer
+}
+
+params:query {
+  search: 
+  page: 1
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

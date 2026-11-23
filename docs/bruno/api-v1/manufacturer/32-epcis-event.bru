@@ -1,0 +1,19 @@
+meta {
+  name: EPCIS event
+  type: http
+  seq: 32
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/epcis/events/{{event_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  Includes the payload.
+}

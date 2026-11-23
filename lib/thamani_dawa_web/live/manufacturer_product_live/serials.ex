@@ -63,11 +63,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     end) || elem(hd(batches), 0)
   end
 
-  defp gs1_text(product, batch, serial) do
-    "(01)#{String.pad_leading(product.gtin, 14, "0")}(10)#{batch.batch_no}(11)#{date_ai(batch.production_date)}(17)#{date_ai(batch.expiry_date)}(21)#{serial.serial}"
-  end
-
-  defp date_ai(date), do: Calendar.strftime(date, "%y%m%d")
+  defp gs1_text(product, batch, serial), do: Manufacturing.gs1_text(product, batch, serial)
 
   def render(assigns) do
     ~H"""

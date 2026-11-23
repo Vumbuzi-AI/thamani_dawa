@@ -1,0 +1,19 @@
+meta {
+  name: Batches
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/products/{{product_id}}/batches
+  body: none
+  auth: bearer
+}
+
+params:query {
+  search: 
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

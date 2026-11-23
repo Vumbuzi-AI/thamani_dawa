@@ -1,0 +1,19 @@
+meta {
+  name: Inventory
+  type: http
+  seq: 16
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/inventory
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  Batches grouped by product.
+}

@@ -1,0 +1,20 @@
+meta {
+  name: Batch serials
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/products/{{product_id}}/batches/{{batch_id}}/serials
+  body: none
+  auth: bearer
+}
+
+params:query {
+  search: 
+  page: 1
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

@@ -1,0 +1,35 @@
+meta {
+  name: Generate serials for an order
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/products/{{product_id}}/serials
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "mode": "order",
+    "batch_no": "LOT-002",
+    "production_date": "2026-11-20",
+    "expiry_date": "2027-11-20",
+    "primary_quantity": 20,
+    "shipper_quantity": 2,
+    "to_gln": "{{to_gln}}"
+  }
+}
+
+docs {
+  Also mints shipper SSCCs under a pallet. From defaults to your current site; To is looked up from `to_gln`. Shipper quantity cannot exceed primary quantity.
+}

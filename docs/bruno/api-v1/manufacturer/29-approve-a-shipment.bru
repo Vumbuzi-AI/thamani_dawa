@@ -1,0 +1,27 @@
+meta {
+  name: Approve a shipment
+  type: http
+  seq: 29
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/shipments/{{shipment_id}}/approve
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Approving an approved shipment returns it unchanged.
+}
