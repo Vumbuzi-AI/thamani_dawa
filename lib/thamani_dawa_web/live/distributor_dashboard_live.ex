@@ -234,9 +234,9 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
         <.td_button
           id="distributor-new-shipment"
           variant="primary"
-          label="New shipment"
+          label="New order"
           glyph="plus"
-          navigate={~p"/distributor/shipments/new"}
+          navigate={~p"/distributor/orders/new"}
         />
       </:tools>
 
@@ -272,7 +272,7 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
         <:strip id="distributor-attention">
           <.td_glance_cell
             id="stat-shipments-submitted"
-            navigate={~p"/distributor/shipments?#{%{status: "submitted"}}"}
+            navigate={~p"/distributor/orders?#{%{status: "submitted"}}"}
             tone="warning"
             value={"#{number(@analytics.status_counts["submitted"] || 0)} awaiting review"}
             caption="Shipments to approve or reject"
@@ -281,7 +281,7 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
           </.td_glance_cell>
           <.td_glance_cell
             id="stat-shipments-draft"
-            navigate={~p"/distributor/shipments?#{%{status: "draft"}}"}
+            navigate={~p"/distributor/orders?#{%{status: "draft"}}"}
             tone="neutral"
             value={phrase(@analytics.status_counts["draft"], "draft", "drafts")}
             caption="Being packed on the mobile app"
@@ -367,7 +367,7 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
                   :for={shipment <- @analytics.recent_shipments}
                   id={"recent-shipment-#{shipment.id}"}
                   class="is-link"
-                  phx-click={JS.navigate(~p"/distributor/shipments/#{shipment.id}")}
+                  phx-click={JS.navigate(~p"/distributor/shipments/#{shipment.id}?#{%{return_to: "/distributor"}}")}
                 >
                   <td class="td-mono">{shipment.order_number || shipment.reference}</td>
                   <td>

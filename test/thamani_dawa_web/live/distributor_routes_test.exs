@@ -302,7 +302,8 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
 
       {:ok, index, _html} = live(conn, ~p"/distributor/shipments")
       assert has_element?(index, "#distributor-shipments")
-      assert has_element?(index, "#filter-status")
+      assert has_element?(index, "#tab-ready")
+      assert has_element?(index, "#tab-all-shipments")
 
       {:ok, view, _html} = live(conn, ~p"/distributor/shipments/#{shipment.id}")
       assert has_element?(view, "#approve-distributor-shipment")

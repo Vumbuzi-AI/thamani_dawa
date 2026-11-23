@@ -1,24 +1,27 @@
 defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
   @moduledoc """
-  Distributor shipment list: status tabs (submitted first), free-text
-  search, mobile-user and date filters, pagination, and live refresh when
-  shipments change on the mobile app or elsewhere in the portal.
+  Two views over the distributor's shipments (Doop "Flagship · Distributor"):
+
+    * Orders (`/distributor/orders`, `BtVvvYcI0u`): drafts, submitted and
+      rejected shipments, with New order as a modal (`oOLJEW6Y9i`).
+    * Shipments (`/distributor/shipments`, `3qslZ7MTx3`): approved shipments
+      ("Ready to dispatch") by default; the All shipments tab drops the filter.
+
+  Tabs, search, the Customer and Packed by menus and the shared date filter
+  all filter in place. IDs carry TD Peek cards. Lists refresh live when the
+  mobile app or another tab changes a shipment.
   """
 
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Customers
   alias ThamaniDawa.Distributor
-  alias ThamaniDawaWeb.SiteScoping
+  alias ThamaniDawaWeb.{DateRangeFilter, SiteScoping, TimeFormat}
 
   on_mount {ThamaniDawaWeb.DistributorAccess, :require_serialisation_plan}
 
-  @tabs [
-    {"", "All"},
-    {"submitted", "Awaiting review"},
-    {"draft", "Drafts"},
-    {"approved", "Approved"},
-    {"rejected", "Rejected"}
-  ]
+  @order_statuses ["draft", "submitted", "rejected"]
+  @filter_keys ["status", "search", "customer", "mobile_user_id", "date", "date_from", "date_to"]
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -26,73 +29,111 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
 
     {:ok,
      socket
-     |> assign(:page_title, "Shipments")
-     |> assign(:tabs, @tabs)
      |> assign(:mobile_users, Distributor.list_mobile_users(organization_id))
+     |> assign(:customers, Customers.list_customers(organization_id))
+     |> assign(:summaries, %{})
      |> stream(:shipments, [])}
   end
 
+  # Old links to /distributor/shipments?status=draft|submitted|rejected now
+  # live on Orders.
+  def handle_params(%{"status" => status} = params, _url, %{assigns: %{live_action: :index}} = socket)
+      when status in @order_statuses do
+    {:noreply, push_navigate(socket, to: ~p"/distributor/orders?#{params}", replace: true)}
+  end
+
   def handle_params(params, _url, socket) do
+    mode = if socket.assigns.live_action in [:orders, :new], do: :orders, else: :shipments
+
     filters = %{
-      "status" => valid_status(params["status"]),
+      "status" => valid_status(mode, params["status"]),
       "search" => params["search"] || "",
+      "customer" => params["customer"] || "",
       "mobile_user_id" => params["mobile_user_id"] || "",
+      "date" => DateRangeFilter.valid_preset(params["date"]),
       "date_from" => params["date_from"] || "",
       "date_to" => params["date_to"] || ""
     }
 
     {:noreply,
      socket
+     |> assign(:mode, mode)
+     |> assign(:page_title, if(mode == :orders, do: "Orders", else: "Shipments"))
+     |> assign(:base_path, if(mode == :orders, do: "/distributor/orders", else: "/distributor/shipments"))
      |> assign(:filters, filters)
      |> assign(:page, page_number(params))
      |> load_shipments()}
   end
 
-  def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
+  def handle_event("search", %{"search" => search}, socket),
+    do: {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
+
+  def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
+      when field in ["customer", "mobile_user_id", "status"],
+      do: {:noreply, push_patch(socket, to: filter_path(socket, %{field => value}))}
+
+  def handle_event("set_date_preset", %{"value" => value}, socket) do
+    changes = %{"date" => value, "date_from" => "", "date_to" => ""}
+    {:noreply, push_patch(socket, to: filter_path(socket, changes))}
   end
 
-  def handle_event("apply_filters", %{"filters" => filters}, socket) do
-    changes = Map.take(filters, ["status", "mobile_user_id", "date_from", "date_to"])
+  def handle_event("apply_date_range", params, socket) do
+    from = params["date_from"] || ""
+    to = params["date_to"] || ""
+    preset = if from == "" and to == "", do: "", else: "custom"
+    changes = %{"date" => preset, "date_from" => from, "date_to" => to}
     {:noreply, push_patch(socket, to: filter_path(socket, changes))}
   end
 
   def handle_event("clear_filters", _params, socket) do
-    changes = %{
-      "status" => "",
-      "mobile_user_id" => "",
-      "date_from" => "",
-      "date_to" => ""
-    }
-
+    changes = Map.new(@filter_keys -- ["status"], &{&1, ""})
     {:noreply, push_patch(socket, to: filter_path(socket, changes))}
   end
 
-  def handle_event("clear_filter", %{"filter" => filter}, socket)
-      when filter in ["status", "mobile_user_id", "date_from", "date_to"] do
-    {:noreply, push_patch(socket, to: filter_path(socket, %{filter => ""}))}
-  end
-
-  def handle_info({:distributor_shipment, _event, _shipment_id}, socket) do
-    {:noreply, load_shipments(socket)}
-  end
+  def handle_info({:distributor_shipment, _event, _shipment_id}, socket),
+    do: {:noreply, load_shipments(socket)}
 
   defp load_shipments(socket) do
     organization_id = socket.assigns.current_scope.organization_id
-    filters = socket.assigns.filters
+    %{filters: filters, mode: mode} = socket.assigns
+    {from, to} = DateRangeFilter.resolve(filters["date"], filters["date_from"], filters["date_to"])
+
+    status =
+      cond do
+        filters["status"] not in ["", "all"] -> filters["status"]
+        mode == :orders -> @order_statuses
+        filters["status"] == "all" -> nil
+        true -> "approved"
+      end
+
+    date_opts =
+      if mode == :orders,
+        do: %{date_from: from, date_to: to},
+        else: %{approved_from: from, approved_to: to}
 
     result =
-      Distributor.list_shipments(organization_id, %{
-        status: filters["status"],
-        search: filters["search"],
-        mobile_user_id: parse_id(filters["mobile_user_id"]),
-        origin_site_id: SiteScoping.default_site_id(socket.assigns.current_scope),
-        date_from: parse_date(filters["date_from"]),
-        date_to: parse_date(filters["date_to"]),
-        page: socket.assigns.page
-      })
+      Distributor.list_shipments(
+        organization_id,
+        Map.merge(date_opts, %{
+          status: status,
+          search: filters["search"],
+          destination_gln: filters["customer"],
+          mobile_user_id: parse_id(filters["mobile_user_id"]),
+          origin_site_id: SiteScoping.default_site_id(socket.assigns.current_scope),
+          page: socket.assigns.page
+        })
+      )
+
+    counts = Distributor.status_counts(organization_id)
+
+    summaries =
+      if mode == :orders,
+        do: Distributor.destination_summaries(organization_id, Enum.map(result.entries, & &1.destination_gln)),
+        else: %{}
 
     socket
+    |> assign(:counts, counts)
+    |> assign(:summaries, summaries)
     |> assign(:page_info, Map.delete(result, :entries))
     |> stream(:shipments, result.entries, reset: true)
   end
@@ -104,22 +145,24 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
       |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
       |> Map.new()
 
-    ~p"/distributor/shipments?#{query}"
+    "#{socket.assigns.base_path}?#{URI.encode_query(query)}" |> String.trim_trailing("?")
   end
 
-  defp pagination_path(filters) do
+  defp tab_path(base_path, filters, status) do
     query =
       filters
+      |> Map.put("status", status)
       |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
       |> Map.new()
 
-    ~p"/distributor/shipments?#{query}"
+    if query == %{}, do: base_path, else: "#{base_path}?#{URI.encode_query(query)}"
   end
 
-  defp valid_status(status) when status in ["draft", "submitted", "approved", "rejected"],
-    do: status
+  defp pagination_path(base_path, filters), do: tab_path(base_path, filters, filters["status"])
 
-  defp valid_status(_status), do: ""
+  defp valid_status(:orders, status) when status in @order_statuses, do: status
+  defp valid_status(:shipments, "all"), do: "all"
+  defp valid_status(_mode, _status), do: ""
 
   defp page_number(params) do
     case Integer.parse(params["page"] || "1") do
@@ -135,166 +178,364 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
     end
   end
 
-  defp parse_date(value) do
-    case Date.from_iso8601(value || "") do
-      {:ok, date} -> date
-      _ -> nil
+  defp filtered?(filters),
+    do: Enum.any?(["search", "customer", "mobile_user_id", "date"], &(filters[&1] not in [nil, ""]))
+
+  defp unit_count(shipment), do: shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum()
+
+  defp holder(%{status: "draft", assigned_to: nil}), do: nil
+  defp holder(%{status: "draft", assigned_to: mobile_user}), do: mobile_user
+  defp holder(%{submitted_by: nil, assigned_to: mobile_user}), do: mobile_user
+  defp holder(%{submitted_by: mobile_user}), do: mobile_user
+
+  defp products(shipment) do
+    shipment.shippers
+    |> Enum.flat_map(fn shipper -> [shipper.product_name | Enum.map(shipper.items, & &1.product_name)] end)
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.map(&(&1 |> String.split(" ") |> List.first()))
+    |> Enum.uniq()
+    |> case do
+      [] -> "None yet"
+      names -> Enum.join(names, ", ")
     end
   end
 
-  defp active_filter_count(filters),
-    do:
-      Enum.count(
-        ["status", "mobile_user_id", "date_from", "date_to"],
-        &(filters[&1] not in [nil, ""])
-      )
+  defp order_badge(assigns) do
+    {tone, label} =
+      case assigns.status do
+        "draft" -> {"neutral", "Draft"}
+        "submitted" -> {"warning", "Submitted"}
+        "approved" -> {"success", "Approved"}
+        "rejected" -> {"danger", "Rejected"}
+        other -> {"neutral", Phoenix.Naming.humanize(other)}
+      end
 
-  defp mobile_user_name(mobile_users, id) do
-    case Enum.find(mobile_users, &(Integer.to_string(&1.id) == id)) do
-      nil -> "Unknown"
-      mobile_user -> mobile_user.name
-    end
+    assigns = assign(assigns, tone: tone, label: label)
+
+    ~H"""
+    <.td_badge tone={@tone} label={@label} />
+    """
   end
 
-  defp unit_count(shipment),
-    do: shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum()
+  defp status_long("draft"), do: "Draft"
+  defp status_long("submitted"), do: "Submitted for approval"
+  defp status_long("rejected"), do: "Rejected"
+  defp status_long("approved"), do: "Approved"
+  defp status_long(other), do: other
 
-  defp holder(%{status: "draft", assigned_to: nil}), do: "Unclaimed"
-  defp holder(%{status: "draft", assigned_to: mobile_user}), do: mobile_user.name
-  defp holder(%{submitted_by: nil, assigned_to: nil}), do: "—"
-  defp holder(%{submitted_by: nil, assigned_to: mobile_user}), do: mobile_user.name
-  defp holder(%{submitted_by: mobile_user}), do: mobile_user.name
+  defp customer_for(customers, gln), do: Enum.find(customers, &(&1.gln == gln))
+
+  defp detail_path(shipment, mode),
+    do: ~p"/distributor/shipments/#{shipment.id}?#{%{return_to: if(mode == :orders, do: "/distributor/orders", else: "/distributor/shipments")}}"
+
+  defp short_time(nil), do: "—"
+  defp short_time(value), do: TimeFormat.short_datetime(value)
+
+  defp count_for(counts, statuses), do: statuses |> Enum.map(&Map.get(counts, &1, 0)) |> Enum.sum()
 
   def render(assigns) do
     ~H"""
     <Layouts.distributor_shell
       flash={@flash}
       current_scope={@current_scope}
-      current_path={~p"/distributor/shipments"}
+      current_path={@base_path}
+      crumb={@page_title}
     >
-      <.header icon="hero-truck">
-        Shipments
-        <:subtitle>
-          Create shipments, then review what your mobile team packed and approve to issue SSCCs.
-        </:subtitle>
-        <:actions>
-          <.button
-            id="new-distributor-shipment"
-            variant="primary"
-            navigate={~p"/distributor/shipments/new"}
-          >
-            <.icon name="hero-plus" class="size-4" /> New shipment
-          </.button>
-        </:actions>
-        <:toolbar>
-          <form id="distributor-shipment-search" phx-change="search" phx-submit="search">
-            <.search_input
-              name="search"
-              value={@filters["search"]}
-              placeholder="Search order, reference, GLN, customer, GTIN, batch, serial or SSCC"
-            />
-          </form>
-          <div class="flex flex-wrap items-center gap-2">
-            <.filter_drawer
-              id="distributor-shipment-filters"
-              title="Filter shipments"
-              apply_event="apply_filters"
-              active_count={active_filter_count(@filters)}
-            >
-              <:group label="Status">
-                <.input
-                  type="select"
-                  id="filter-status"
-                  name="filters[status]"
-                  value={@filters["status"]}
-                  options={Enum.map(@tabs, fn {value, label} -> {label, value} end)}
-                />
-              </:group>
-              <:group label="Mobile user">
-                <.input
-                  type="select"
-                  id="filter-mobile-user"
-                  name="filters[mobile_user_id]"
-                  value={@filters["mobile_user_id"]}
-                  prompt="Anyone"
-                  options={Enum.map(@mobile_users, &{&1.name, &1.id})}
-                />
-              </:group>
-              <:chip
-                :if={@filters["status"] != ""}
-                label={"Status: #{Phoenix.Naming.humanize(@filters["status"])}"}
-                clear={JS.push("clear_filter", value: %{filter: "status"})}
-              />
-              <:group label="Created between">
-                <.date_range_picker
-                  id="filter-dates"
-                  from_name="filters[date_from]"
-                  from_value={@filters["date_from"]}
-                  to_name="filters[date_to]"
-                  to_value={@filters["date_to"]}
-                />
-              </:group>
-              <:chip
-                :if={@filters["mobile_user_id"] != ""}
-                label={"Mobile user: #{mobile_user_name(@mobile_users, @filters["mobile_user_id"])}"}
-                clear={JS.push("clear_filter", value: %{filter: "mobile_user_id"})}
-              />
-              <:chip
-                :if={@filters["date_from"] != ""}
-                label={"From #{ThamaniDawaWeb.TimeFormat.date(@filters["date_from"])}"}
-                clear={JS.push("clear_filter", value: %{filter: "date_from"})}
-              />
-              <:chip
-                :if={@filters["date_to"] != ""}
-                label={"To #{ThamaniDawaWeb.TimeFormat.date(@filters["date_to"])}"}
-                clear={JS.push("clear_filter", value: %{filter: "date_to"})}
-              />
-            </.filter_drawer>
-          </div>
-        </:toolbar>
-      </.header>
+      <:tools>
+        <.td_button
+          id="new-distributor-shipment"
+          variant="primary"
+          label="New order"
+          glyph="plus"
+          patch={~p"/distributor/orders/new"}
+        />
+      </:tools>
 
-      <.table
-        id="distributor-shipments"
-        rows={@streams.shipments}
-        row_click={fn {_id, shipment} -> JS.navigate(~p"/distributor/shipments/#{shipment.id}") end}
-      >
-        <:col :let={{_id, shipment}} label="Order">
-          <div class="min-w-0">
-            <p class="font-medium text-thamani-forest">{shipment.order_number}</p>
-            <p class="font-mono text-xs text-thamani-pewter">{shipment.reference}</p>
-          </div>
-        </:col>
-        <:col :let={{_id, shipment}} label="Status" mobile="aside">
-          <.shipment_status_badge status={shipment.status} />
-        </:col>
-        <:col :let={{_id, shipment}} label="From">
-          <span class="text-sm">{shipment.origin_company}</span>
-        </:col>
-        <:col :let={{_id, shipment}} label="To">
-          <span class="text-sm">{shipment.destination_company}</span>
-        </:col>
-        <:col :let={{_id, shipment}} label="Shippers / units">
-          {length(shipment.shippers)} / {unit_count(shipment)}
-        </:col>
-        <:col :let={{_id, shipment}} label="Mobile user" tablet="hidden">
-          {holder(shipment)}
-        </:col>
-        <:col :let={{_id, shipment}} label="Updated" mobile="hidden">
-          <span class="text-xs text-thamani-pewter">{date_time(shipment.updated_at)}</span>
-        </:col>
-        <:empty_state>
-          <.blank_state icon="hero-truck" title="No shipments here">
-            <%= if @filters["status"] == "draft" do %>
-              Create a shipment so your mobile team can find it by order number and start packing.
-            <% else %>
-              Nothing matches this status and filter combination yet.
+      <section class="td-recipe td-list-page" id={"distributor-#{@mode}-page"}>
+        <.td_page_header
+          title={@page_title}
+          subtitle={
+            if @mode == :orders,
+              do: "Customer orders your mobile team is packing or has sent for approval. Approving an order issues its SSCCs and turns it into a shipment.",
+              else: "Approved orders with SSCCs issued. Print the shipper labels and dispatch documents from here."
+          }
+        />
+
+        <nav class="td-tabs" aria-label={"#{@page_title} status"}>
+          <%= if @mode == :orders do %>
+            <.td_tab
+              id="tab-all"
+              label="All"
+              count={count_for(@counts, ["draft", "submitted", "rejected"])}
+              active={@filters["status"] == ""}
+              patch={tab_path(@base_path, @filters, "")}
+            />
+            <.td_tab
+              :for={{status, label} <- [{"draft", "Draft"}, {"submitted", "Submitted"}, {"rejected", "Rejected"}]}
+              id={"tab-#{status}"}
+              label={label}
+              count={Map.get(@counts, status, 0)}
+              active={@filters["status"] == status}
+              patch={tab_path(@base_path, @filters, status)}
+            />
+          <% else %>
+            <.td_tab
+              id="tab-ready"
+              label="Ready to dispatch"
+              count={Map.get(@counts, "approved", 0)}
+              active={@filters["status"] != "all"}
+              patch={tab_path(@base_path, @filters, "")}
+            />
+            <.td_tab
+              id="tab-all-shipments"
+              label="All shipments"
+              count={count_for(@counts, ["draft", "submitted", "approved", "rejected"])}
+              active={@filters["status"] == "all"}
+              patch={tab_path(@base_path, @filters, "all")}
+            />
+          <% end %>
+        </nav>
+
+        <div class="td-toolbar">
+          <form id="distributor-shipment-search" phx-change="search" phx-submit="search" onsubmit="return false">
+            <label class="td-search">
+              <.td_icon name="magnifying-glass" />
+              <input
+                type="search"
+                name="search"
+                value={@filters["search"]}
+                placeholder={
+                  if @mode == :orders,
+                    do: "Search order number, customer, GLN or batch",
+                    else: "Search shipment, order, customer, SSCC or batch"
+                }
+                phx-debounce="250"
+                autocomplete="off"
+              />
+              <kbd>/</kbd>
+            </label>
+          </form>
+          <.td_filter_menu
+            id="shipments"
+            field="customer"
+            label="Customer"
+            value={@filters["customer"]}
+            options={[{"", "Any"} | Enum.map(Enum.filter(@customers, & &1.gln), &{&1.gln, &1.name})]}
+          />
+          <.td_filter_menu
+            :if={@mode == :orders}
+            id="shipments"
+            field="mobile_user_id"
+            label="Packed by"
+            value={@filters["mobile_user_id"]}
+            options={[{"", "Anyone"} | Enum.map(@mobile_users, &{Integer.to_string(&1.id), &1.name})]}
+          />
+          <.td_date_filter
+            id="shipments-date"
+            label={if @mode == :orders, do: "Created", else: "Approved"}
+            preset={@filters["date"]}
+            date_from={@filters["date_from"]}
+            date_to={@filters["date_to"]}
+          />
+          <span class="flex-1"></span>
+        </div>
+
+        <div :if={@page_info.total_entries == 0} id={"#{@mode}-empty"} class="td-pad td-empty-wrap">
+          <div class="td-card td-empty-card">
+            <%= cond do %>
+              <% filtered?(@filters) -> %>
+                <p class="td-empty-title">Nothing matches</p>
+                <p class="td-note">Try a different search, or clear the filters.</p>
+                <.td_button id="clear-filters" phx-click="clear_filters" label="Clear filters" />
+              <% @mode == :orders -> %>
+                <p class="td-empty-title">No orders yet</p>
+                <p class="td-note">Record a customer order and your mobile team can start packing it.</p>
+                <.td_button id="empty-new-order" patch={~p"/distributor/orders/new"} label="New order" />
+              <% true -> %>
+                <p class="td-empty-title">Nothing ready to dispatch</p>
+                <p class="td-note">Approved orders appear here with their SSCCs, labels and dispatch documents.</p>
+                <.td_button id="empty-open-orders" navigate={~p"/distributor/orders"} label="Open orders" />
             <% end %>
-          </.blank_state>
-        </:empty_state>
-      </.table>
-      <.pagination page={@page_info} path={pagination_path(@filters)} />
+          </div>
+        </div>
+
+        <div class="td-list-table" hidden={@page_info.total_entries == 0}>
+          <table class="td-rows" id="distributor-shipments-table">
+            <thead>
+              <tr :if={@mode == :orders}>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Status</th>
+                <th class="is-num">Shippers / units</th>
+                <th>Packed by</th>
+                <th>Updated (EAT)</th>
+              </tr>
+              <tr :if={@mode == :shipments}>
+                <th>Shipment</th>
+                <th>Order</th>
+                <th>Customer</th>
+                <th class="is-num">SSCCs</th>
+                <th class="is-num">Units</th>
+                <th>Approved (EAT)</th>
+                <th>Approved by</th>
+              </tr>
+            </thead>
+            <tbody id="distributor-shipments" phx-update="stream">
+              <tr
+                :for={{dom_id, shipment} <- @streams.shipments}
+                id={dom_id}
+                class="is-link"
+                phx-click={JS.navigate(detail_path(shipment, @mode))}
+              >
+                <%= if @mode == :orders do %>
+                  <td>
+                    <.td_pid id={"#{dom_id}-order"} label={shipment.order_number}>
+                      <:peek>
+                        <.td_peek
+                          kind="Order"
+                          title={shipment.order_number}
+                          subtitle={Enum.join(Enum.reject([shipment.destination_company, shipment.destination_address], &is_nil/1), " · ")}
+                        >
+                          <:badge><.order_badge status={shipment.status} /></:badge>
+                          <:row label="Shipment">{shipment.reference}</:row>
+                          <:row label="Status">{status_long(shipment.status)}</:row>
+                          <:row label="Shippers / units">{length(shipment.shippers)} / {unit_count(shipment)}</:row>
+                          <:row label="Products">{products(shipment)}</:row>
+                          <:row label="Packed by">{(holder(shipment) && holder(shipment).name) || "Not started"}</:row>
+                          <:row :if={shipment.submitted_at} label="Submitted">{TimeFormat.datetime(shipment.submitted_at)} EAT</:row>
+                          <:action>
+                            <.td_button navigate={detail_path(shipment, @mode)} label="Open order" glyph="arrow-right" />
+                          </:action>
+                        </.td_peek>
+                      </:peek>
+                    </.td_pid>
+                    <span class="td-sub td-s12">{shipment.reference}</span>
+                  </td>
+                  <td>
+                    <.td_pid id={"#{dom_id}-customer"} label={shipment.destination_company || "—"}>
+                      <:peek>
+                        <.customer_peek
+                          shipment={shipment}
+                          customer={customer_for(@customers, shipment.destination_gln)}
+                          summary={Map.get(@summaries, shipment.destination_gln)}
+                        />
+                      </:peek>
+                    </.td_pid>
+                    <span class="td-sub td-s12">{shipment.destination_address}</span>
+                  </td>
+                  <td><.order_badge status={shipment.status} /></td>
+                  <td class="is-num">{length(shipment.shippers)} / {unit_count(shipment)}</td>
+                  <td>
+                    <.td_person_cell :if={holder(shipment)} name={holder(shipment).name} seed={holder(shipment).id} />
+                    <span :if={!holder(shipment)} class="td-muted">Not started</span>
+                  </td>
+                  <td>{short_time(shipment.updated_at)}</td>
+                <% else %>
+                  <td>
+                    <.td_pid id={"#{dom_id}-shipment"} label={shipment.reference}>
+                      <:peek>
+                        <.td_peek
+                          kind="Shipment"
+                          icon="truck"
+                          title={shipment.reference}
+                          subtitle={Enum.join(Enum.reject([shipment.destination_company, shipment.destination_address], &is_nil/1), " · ")}
+                        >
+                          <:badge><.order_badge status={shipment.status} /></:badge>
+                          <:row label="Order">{shipment.order_number}</:row>
+                          <:row label="SSCCs / units">{length(shipment.shippers)} / {unit_count(shipment)}</:row>
+                          <:row label="Approved">{if shipment.approved_at, do: "#{TimeFormat.datetime(shipment.approved_at)} EAT", else: "Not yet"}</:row>
+                          <:action>
+                            <.td_button navigate={detail_path(shipment, @mode)} label="Open shipment" glyph="arrow-right" />
+                          </:action>
+                        </.td_peek>
+                      </:peek>
+                    </.td_pid>
+                    <span :if={shipment.status != "approved"} class="td-sub"><.order_badge status={shipment.status} /></span>
+                  </td>
+                  <td>{shipment.order_number}</td>
+                  <td>
+                    {shipment.destination_company}
+                    <span class="td-sub td-mono">{shipment.destination_gln}</span>
+                  </td>
+                  <td class="is-num">{length(shipment.shippers)}</td>
+                  <td class="is-num">{unit_count(shipment)}</td>
+                  <td>{short_time(shipment.approved_at)}</td>
+                  <td>
+                    <.td_person_cell :if={shipment.approved_by} name={shipment.approved_by.name || shipment.approved_by.email} seed={shipment.approved_by.id} />
+                    <span :if={!shipment.approved_by} class="td-muted">—</span>
+                  </td>
+                <% end %>
+              </tr>
+            </tbody>
+          </table>
+          <div class="td-tfoot">
+            <span>
+              <b>{(@page_info.page_number - 1) * @page_info.page_size + 1} to {min(@page_info.page_number * @page_info.page_size, @page_info.total_entries)}</b>
+              of {@page_info.total_entries} {if @mode == :orders, do: "orders", else: "shipments"}
+            </span>
+            <span :if={@page_info.total_pages > 1} class="td-tfoot-pager">
+              <.link
+                :if={@page_info.page_number > 1}
+                class="td-icon-btn"
+                patch={pagination_path(@base_path, Map.put(@filters, "page", @page_info.page_number - 1))}
+                aria-label="Previous page"
+              ><.td_icon name="caret-left" /></.link>
+              <.link
+                :if={@page_info.page_number < @page_info.total_pages}
+                class="td-icon-btn"
+                patch={pagination_path(@base_path, Map.put(@filters, "page", @page_info.page_number + 1))}
+                aria-label="Next page"
+              ><.td_icon name="caret-right" /></.link>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <.live_component
+        :if={@live_action == :new}
+        module={ThamaniDawaWeb.DistributorShipmentLive.OrderFormComponent}
+        id="new-order"
+        action={:new}
+        current_scope={@current_scope}
+        cancel={~p"/distributor/orders"}
+      />
     </Layouts.distributor_shell>
+    """
+  end
+
+  attr :shipment, :map, required: true
+  attr :customer, :any, default: nil
+  attr :summary, :any, default: nil
+
+  defp customer_peek(assigns) do
+    ~H"""
+    <.td_peek
+      kind="Customer"
+      icon="address-book"
+      title={@shipment.destination_company || @shipment.destination_gln}
+      subtitle={@shipment.destination_address}
+    >
+      <:badge>
+        <.td_badge :if={@customer} tone="success" label="Saved" />
+        <.td_badge :if={!@customer} tone="neutral" label="Not saved" />
+      </:badge>
+      <:row label="GLN" mono>{@shipment.destination_gln}</:row>
+      <:row label="Open orders">{(@summary && @summary.open_orders) || 0}</:row>
+      <:row label="Last shipment">
+        {if @summary && @summary.last_shipment,
+          do: "#{@summary.last_shipment.reference}, #{TimeFormat.date(@summary.last_shipment.approved_at)}",
+          else: "None yet"}
+      </:row>
+      <:row :if={@customer && @customer.contact_phone} label="Contact">{@customer.contact_phone}</:row>
+      <:action>
+        <.td_button
+          :if={@customer}
+          navigate={~p"/distributor/customers?#{%{selected: @customer.id}}"}
+          label="Open customer"
+          glyph="arrow-right"
+        />
+      </:action>
+    </.td_peek>
     """
   end
 end

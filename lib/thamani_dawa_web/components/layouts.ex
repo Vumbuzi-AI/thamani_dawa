@@ -913,9 +913,11 @@ defmodule ThamaniDawaWeb.Layouts do
   defp distributor_ops_items do
     [
       {"Dashboard", "squares-four", ~p"/distributor"},
+      {"Orders", "clipboard-text", ~p"/distributor/orders"},
       {"Shipments", "truck", ~p"/distributor/shipments"},
       {"Receiving", "download-simple", ~p"/distributor/receiving"},
-      {"Returns", "arrow-u-up-left", ~p"/distributor/returns"},
+      {"Supplier returns", "arrow-u-up-left", ~p"/distributor/returns"},
+      {"Customer returns", "arrow-u-down-left", ~p"/distributor/customer-returns"},
       {"Stock", "package", ~p"/distributor/stock"},
       {"Products", "cube", ~p"/distributor/products"},
       {"Customers", "address-book", ~p"/distributor/customers"}
@@ -1032,6 +1034,9 @@ defmodule ThamaniDawaWeb.Layouts do
     end)
     |> maybe_badge(paths, ~p"/org/requisitions", fn ->
       ThamaniDawa.Requisitions.count_pending(scope.organization_id)
+    end)
+    |> maybe_badge(paths, ~p"/distributor/orders", fn ->
+      ThamaniDawa.Distributor.status_counts(scope.organization_id) |> Map.get("submitted", 0)
     end)
   end
 

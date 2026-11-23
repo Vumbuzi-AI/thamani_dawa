@@ -27,6 +27,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
      |> assign(:expanded, MapSet.new())
      |> assign(:approving?, false)
      |> assign(:approval_confirming?, false)
+     |> assign(:serial_shortage?, false)
      |> assign(:rejecting?, false)
      |> assign(:prompt_save_customer, false)
      |> assign(:saving_customer?, false)
@@ -35,7 +36,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
      |> load(id)}
   end
 
-  def handle_params(%{"prompt_save_customer" => _}, _url, socket) do
+  def handle_params(params, _url, socket) do
+    {:noreply, socket |> assign_return_to(params) |> maybe_prompt_save_customer(params)}
+  end
+
+  defp maybe_prompt_save_customer(socket, %{"prompt_save_customer" => _}) do
     organization_id = socket.assigns.current_scope.organization_id
     shipment = socket.assigns.shipment
 
@@ -43,12 +48,28 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
       shipment.destination_gln &&
         !Customers.get_by_gln(organization_id, shipment.destination_gln)
 
-    {:noreply, assign(socket, :prompt_save_customer, should_prompt)}
+    assign(socket, :prompt_save_customer, should_prompt)
   end
 
-  def handle_params(_params, _url, socket) do
-    {:noreply, socket}
+  defp maybe_prompt_save_customer(socket, _params), do: socket
+
+  # Back link: `return_to` when given, else Orders for drafts, submitted
+  # and rejected orders, Shipments once approved.
+  defp assign_return_to(socket, params) do
+    shipment = socket.assigns.shipment
+    list = list_path(shipment)
+    return_to = ThamaniDawaWeb.ReturnTo.path(params, list)
+    return_query = if Map.has_key?(params, "return_to"), do: %{"return_to" => return_to}, else: %{}
+
+    socket
+    |> assign(:return_to, return_to)
+    |> assign(:return_query, return_query)
+    |> assign(:back_label, ThamaniDawaWeb.ReturnTo.label(return_to, if(list == "/distributor/orders", do: "Back to Orders", else: "Back to Shipments")))
+    |> assign(:self_path, "/distributor/shipments/#{shipment.id}")
   end
+
+  defp list_path(%{status: "approved"}), do: "/distributor/shipments"
+  defp list_path(_shipment), do: "/distributor/orders"
 
   defp load(socket, id) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -57,9 +78,14 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
     shipper_count = length(shipment.shippers)
     remaining_allowance = SerialUsage.serials_left(usage)
 
+    order? = shipment.status != "approved"
+
     socket
     |> assign(:shipment, shipment)
-    |> assign(:page_title, "Shipment #{shipment.order_number}")
+    |> assign(:order?, order?)
+    |> assign(:nav_path, if(order?, do: "/distributor/orders", else: "/distributor/shipments"))
+    |> assign(:crumb_parent, if(order?, do: "Orders", else: "Shipments"))
+    |> assign(:page_title, if(order?, do: "Order #{shipment.order_number}", else: "Shipment #{shipment.reference}"))
     |> assign(:warnings, Reports.shipment_warnings(shipment))
     |> assign(:item_groups, Reports.item_groups(shipment))
     |> assign(:labels, Reports.shipper_labels(shipment))
@@ -99,7 +125,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
     do: {:noreply, assign(socket, :approval_confirming?, true)}
 
   def handle_event("close_approve", _params, socket),
-    do: {:noreply, assign(socket, :approval_confirming?, false)}
+    do: {:noreply, assign(socket, approval_confirming?: false, serial_shortage?: false)}
 
   def handle_event("approve", _params, %{assigns: %{approving?: true}} = socket),
     do: {:noreply, socket}
@@ -216,11 +242,16 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
 
     case result do
       {:ok, {:ok, _shipment}} ->
+        socket = load(socket, shipment_id)
+
         {:noreply,
          socket
          |> assign(:problems, [])
-         |> put_flash(:info, "Shipment approved. SSCCs have been issued for every shipper.")
-         |> load(shipment_id)}
+         |> assign(:back_label, if(socket.assigns.return_to == "/distributor/orders", do: "Back to Orders", else: socket.assigns.back_label))
+         |> put_flash(:info, "Approved. #{count_phrase(socket.assigns.shipper_count, "SSCC")} issued.")}
+
+      {:ok, {:error, {:billing, :insufficient_allowance}}} ->
+        {:noreply, socket |> assign(:serial_shortage?, true) |> load(shipment_id)}
 
       {:ok, {:already_approved, _shipment}} ->
         {:noreply,
@@ -306,6 +337,76 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
     """
   end
 
+  defp shipment_badge(assigns) do
+    {tone, label} =
+      case assigns.status do
+        "draft" -> {"neutral", "Draft"}
+        "submitted" -> {"warning", "Submitted"}
+        "approved" -> {"success", "Approved"}
+        "rejected" -> {"danger", "Rejected"}
+        other -> {"neutral", Phoenix.Naming.humanize(other)}
+      end
+
+    assigns = assign(assigns, tone: tone, label: label)
+
+    ~H"""
+    <.td_badge tone={@tone} label={@label} />
+    """
+  end
+
+  defp header_sub(%{status: "approved"} = s),
+    do: "Order #{s.order_number} · Approved by #{user_name(s.approved_by)} on #{date_time(s.approved_at)} EAT"
+
+  defp header_sub(%{status: "rejected"} = s),
+    do: "Shipment #{s.reference} · Rejected by #{user_name(s.rejected_by)} on #{date_time(s.rejected_at)} EAT"
+
+  defp header_sub(%{status: "submitted"} = s),
+    do: "Shipment #{s.reference} · Submitted by #{(s.submitted_by && s.submitted_by.name) || "the mobile team"} on #{date_time(s.submitted_at)} EAT"
+
+  defp header_sub(s),
+    do: "Shipment #{s.reference} · Created by #{user_name(s.created_by)} on #{date_time(s.inserted_at)} EAT"
+
+  defp user_name(%{name: name}) when is_binary(name) and name != "", do: name
+  defp user_name(%{email: email}) when is_binary(email), do: email
+  defp user_name(_user), do: "an administrator"
+
+  defp packed_by(%{submitted_by: %{name: name}}), do: name
+  defp packed_by(%{assigned_to: %{name: name}}), do: name
+  defp packed_by(_shipment), do: "Not started"
+
+  defp shipper_items_field(shipper, field) do
+    shipper.items |> Enum.map(&Map.get(&1, field)) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+  end
+
+  defp shipper_product(shipper) do
+    case shipper.product_name || List.first(shipper_items_field(shipper, :product_name)) do
+      nil -> if shipper.items == [], do: "Empty", else: "Unverified product"
+      name -> if length(shipper_items_field(shipper, :gtin)) > 1, do: "#{name} and more", else: name
+    end
+  end
+
+  defp shipper_batch(shipper) do
+    case shipper.batch || shipper_items_field(shipper, :batch) do
+      batch when is_binary(batch) -> batch
+      [] -> "—"
+      [one] -> one
+      many -> "#{length(many)} batches"
+    end
+  end
+
+  defp shipper_gtin(shipper) do
+    case shipper.gtin || shipper_items_field(shipper, :gtin) do
+      gtin when is_binary(gtin) -> gtin
+      [] -> "—"
+      [one] -> one
+      _many -> "Mixed"
+    end
+  end
+
+  defp shipper_expiry(shipper) do
+    shipper.expiry_date || shipper.items |> Enum.map(& &1.expiry_date) |> Enum.reject(&is_nil/1) |> Enum.min(Date, fn -> nil end)
+  end
+
   defp count_phrase(1, word), do: "1 #{word}"
   defp count_phrase(count, word), do: "#{count} #{word}s"
 
@@ -361,10 +462,6 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
   defp actor(%{mobile_user: %{name: name}}), do: "#{name} (mobile)"
   defp actor(_event), do: "System"
 
-  defp warning_icon(:serial_conflict), do: "hero-no-symbol"
-  defp warning_icon(:expired), do: "hero-clock"
-  defp warning_icon(_code), do: "hero-exclamation-triangle"
-
   defp customer_type_icon(:pharmacy), do: "hero-building-storefront"
   defp customer_type_icon(:wholesaler), do: "hero-truck"
   defp customer_type_icon(:hospital), do: "hero-building-office-2"
@@ -380,98 +477,231 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
     <Layouts.distributor_shell
       flash={@flash}
       current_scope={@current_scope}
-      current_path={~p"/distributor/shipments"}
+      current_path={@nav_path}
+      crumb_parent={@crumb_parent}
+      crumb={if @order?, do: @shipment.order_number, else: @shipment.reference}
     >
-      <div class="no-print">
-        <.header icon="hero-truck" back={~p"/distributor/shipments"}>
-          <span class="flex flex-wrap items-center gap-3">
-            {@shipment.order_number}
-            <.shipment_status_badge status={@shipment.status} />
-          </span>
-          <:subtitle>
-            <span class="tracking-tight tabular-nums">{@shipment.reference}</span>
-            · {count_phrase(length(@shipment.shippers), "shipper")} · {count_phrase(
-              @unit_count,
-              "unit"
-            )}
-          </:subtitle>
-          <:actions>
-            <div class="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap md:w-auto md:justify-end md:[&>*]:w-auto">
-              <.button
-                :if={@shipment.status == "draft"}
-                id="edit-distributor-shipment"
-                navigate={~p"/distributor/shipments/#{@shipment.id}/edit"}
-              >
-                <.icon name="hero-pencil-square" class="size-4" /> Edit
-              </.button>
-              <.button
-                :if={@shipment.status == "approved"}
-                id="delivery-note"
-                variant="primary"
-                navigate={~p"/distributor/shipments/#{@shipment.id}/delivery-note"}
-              >
-                <.icon name="hero-document-text" class="size-4" /> View delivery note
-              </.button>
-              <.button
-                :if={@shipment.status == "approved"}
-                id="packing-list"
-                navigate={~p"/distributor/shipments/#{@shipment.id}/packing-list"}
-              >
-                <.icon name="hero-queue-list" class="size-4" /> View packing list
-              </.button>
-              <.button
-                :if={@unit_count > 0}
-                id="export-distributor-shipment"
-                href={~p"/distributor/shipments/#{@shipment.id}/export"}
-              >
-                <.icon name="hero-arrow-down-tray" class="size-4" /> Export units CSV
-              </.button>
-              <.button
-                :if={@labels != []}
-                id="print-distributor-labels"
-                type="button"
-                phx-hook="PrintAllLabels"
-              >
-                <.icon name="hero-printer" class="size-4" /> Print case labels
-              </.button>
-              <.button
-                :if={@shipment.status == "submitted"}
-                id="reject-distributor-shipment"
-                variant="destructive"
-                phx-click="open_reject"
-              >
-                Reject
-              </.button>
-              <.button
-                :if={@shipment.status == "submitted"}
-                id="approve-distributor-shipment"
-                variant="primary"
-                phx-click="open_approve"
-                disabled={@approving?}
-              >
-                <.icon :if={!@approving?} name="hero-check-badge" class="size-4" />
-                {if @approving?, do: "Approving…", else: "Approve & issue SSCCs"}
-              </.button>
-            </div>
-          </:actions>
-        </.header>
+      <div class="no-print td-recipe td-list-page td-detail-page" id="distributor-shipment-detail">
+        <.td_back_link id="shipment-back" to={@return_to} label={@back_label} />
 
-        <div
-          :if={@prompt_save_customer}
-          id="save-customer-prompt"
-          class="mb-5 flex gap-3 rounded-2xl border border-transparent bg-td-accent-tint p-4"
-        >
-          <.icon name="hero-star" class="mt-0.5 size-5 shrink-0 text-thamani-forest" />
-          <div class="flex flex-1 flex-col gap-2 text-sm sm:flex-row sm:items-center">
-            <div class="flex-1 text-thamani-forest">
-              <p class="font-semibold">{@shipment.destination_company}</p>
-              <p class="text-xs text-thamani-pewter">
-                Save this destination as a customer for faster ordering next time.
-              </p>
+        <header class="td-idh">
+          <div class="td-idh-text">
+            <h1 class="td-idh-title">
+              <span>{if @order?, do: "Order #{@shipment.order_number}", else: "Shipment #{@shipment.reference}"}</span>
+              <.shipment_badge status={@shipment.status} />
+            </h1>
+            <p class="td-idh-sub">{header_sub(@shipment)}</p>
+          </div>
+          <div class="td-idh-actions">
+            <.td_button
+              :if={@shipment.status == "draft"}
+              id="edit-distributor-shipment"
+              glyph="pencil-simple"
+              label="Edit details"
+              patch={~p"/distributor/shipments/#{@shipment.id}/edit-details?#{@return_query}"}
+            />
+            <.td_button
+              :if={@unit_count > 0}
+              id="export-distributor-shipment"
+              glyph="download-simple"
+              label="Export CSV"
+              href={~p"/distributor/shipments/#{@shipment.id}/export"}
+            />
+            <.td_button
+              :if={@labels != []}
+              id="print-distributor-labels"
+              type="button"
+              glyph="printer"
+              label="Print labels"
+              phx-hook="PrintAllLabels"
+            />
+            <.td_button
+              :if={@shipment.status == "approved"}
+              id="packing-list"
+              glyph="list-checks"
+              label="Packing list"
+              navigate={~p"/distributor/shipments/#{@shipment.id}/packing-list?#{%{return_to: @self_path}}"}
+            />
+            <.td_button
+              :if={@shipment.status == "approved"}
+              id="delivery-note"
+              variant="primary"
+              glyph="file-text"
+              label="Delivery note"
+              navigate={~p"/distributor/shipments/#{@shipment.id}/delivery-note?#{%{return_to: @self_path}}"}
+            />
+            <.td_button
+              :if={@shipment.status == "submitted"}
+              id="reject-distributor-shipment"
+              variant="danger"
+              label="Reject"
+              phx-click="open_reject"
+            />
+            <.td_button
+              :if={@shipment.status == "submitted"}
+              id="approve-distributor-shipment"
+              variant="primary"
+              glyph={if !@approving?, do: "seal-check"}
+              label={if @approving?, do: "Approving…", else: "Approve and issue SSCCs"}
+              phx-click="open_approve"
+              disabled={@approving?}
+            />
+          </div>
+        </header>
+
+        <div class="td-pad td-stack">
+          <div :if={@shipment.status == "draft"} id="draft-banner" class="td-ban is-info">
+            <.td_icon name="info" />
+            <span>
+              Your mobile team can pick this order up now. It moves to Submitted when the packer
+              finishes on the mobile app, then you can approve it.
+            </span>
+          </div>
+
+          <div :if={@shipment.status == "approved"} id="approved-banner" class="td-ban is-success">
+            <.td_icon name="check-circle" />
+            <span>
+              {count_phrase(@shipper_count, "SSCC")} issued and the shipping event is queued for
+              TNT. Print the labels, then the delivery note for the driver.
+            </span>
+          </div>
+
+          <div :if={@shipment.status == "rejected"} id="distributor-rejection-reason" class="td-ban is-danger">
+            <.td_icon name="x-circle" />
+            <span>
+              <b>Reason sent to {(@shipment.submitted_by && @shipment.submitted_by.name) || "the packer"}:</b>
+              {@shipment.rejection_reason}
+              <span class="td-note">The packer can reopen it as a draft on the mobile app, fix it, and submit it again.</span>
+            </span>
+          </div>
+
+          <div :if={@problems != []} id="distributor-approval-problems" class="td-ban is-danger">
+            <.td_icon name="warning-circle" />
+            <span>
+              <b>Can't approve yet</b>
+              <span :for={problem <- @problems} class="block">{problem.message}</span>
+            </span>
+          </div>
+
+          <div :if={@warnings != []} id="distributor-shipment-warnings" class="td-stack">
+            <div :for={warning <- @warnings} id={"warning-#{warning.code}"} class="td-ban is-warning">
+              <.td_icon name="warning" />
+              <span><b>{warning.count}</b> {warning.message}</span>
             </div>
-            <.button class="shrink-0" variant="primary" phx-click="open_save_customer">
-              <.icon name="hero-plus" class="size-4" /> Add customer
-            </.button>
+          </div>
+
+          <div :if={@prompt_save_customer} id="save-customer-prompt" class="td-ban is-info">
+            <.td_icon name="address-book" />
+            <span class="flex-1">
+              <b>{@shipment.destination_company}</b>
+              <span class="block">Save this destination as a customer for faster ordering next time.</span>
+            </span>
+            <.td_button variant="primary" glyph="plus" label="Add customer" phx-click="open_save_customer" />
+          </div>
+
+          <div class="td-card">
+            <dl class="td-kv-grid is-pad is-6">
+              <div class="td-kv">
+                <dt class="td-kv-label">Customer</dt>
+                <dd class="td-kv-value">{@shipment.destination_company || "—"}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Ship to GLN</dt>
+                <dd class="td-kv-value is-mono">{@shipment.destination_gln || "—"}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Ship from</dt>
+                <dd class="td-kv-value">{@shipment.origin_company || "—"}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">From GLN</dt>
+                <dd class="td-kv-value is-mono">{@shipment.origin_gln || "—"}</dd>
+              </div>
+              <div :if={@order?} class="td-kv">
+                <dt class="td-kv-label">Packed by</dt>
+                <dd class="td-kv-value">{packed_by(@shipment)}</dd>
+              </div>
+              <div :if={!@order?} class="td-kv">
+                <dt class="td-kv-label">Order</dt>
+                <dd class="td-kv-value">{@shipment.order_number}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">{if @order?, do: "Shippers / units", else: "SSCCs / units"}</dt>
+                <dd class="td-kv-value">{@shipper_count} / {@unit_count}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="td-detail-row">
+            <div class="td-card" id="distributor-shippers">
+              <.td_card_header
+                title={if @order?, do: "Shippers", else: "Shippers and SSCCs"}
+                subtitle={
+                  if @order?,
+                    do: "#{count_phrase(@shipper_count, "shipper")} · #{count_phrase(@unit_count, "unit")} packed on the mobile app",
+                    else: "Hover an SSCC to preview it. Labels print in this order."
+                }
+              />
+              <div :if={@shipment.shippers == []} id="shippers-empty" class="td-empty-inline">
+                <p class="td-empty-title">Nothing packed yet</p>
+                <p class="td-note">
+                  Shippers appear here as they are scanned on the mobile app. A mobile user finds this
+                  order by {@shipment.order_number}.
+                </p>
+              </div>
+              <table :if={@shipment.shippers != []} class="td-rows is-tight" id="shipment-shippers-table">
+                <thead>
+                  <tr>
+                    <th>{if @order?, do: "Shipper", else: "SSCC"}</th>
+                    <th>Product</th>
+                    <th>Batch</th>
+                    <th class="is-num">Units</th>
+                    <th>Expiry</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={shipper <- @shipment.shippers} id={"shipper-row-#{shipper.id}"}>
+                    <td>
+                      <%= if shipper.sscc do %>
+                        <.td_pid id={"sscc-#{shipper.id}"} label={shipper.sscc} mono>
+                          <:peek>
+                            <.td_peek kind="SSCC" icon="package" title={shipper.sscc} mono subtitle={shipper_product(shipper)}>
+                              <:row label="Batch" mono>{shipper_batch(shipper)}</:row>
+                              <:row label="GTIN" mono>{shipper_gtin(shipper)}</:row>
+                              <:row label="Expiry">{short_date(shipper_expiry(shipper))}</:row>
+                              <:row label="Shipment">{@shipment.reference}</:row>
+                              <:row label="Units">{length(shipper.items)}</:row>
+                              <:row :if={shipper.sscc_assigned_at} label="Issued">{date_time(shipper.sscc_assigned_at)} EAT</:row>
+                            </.td_peek>
+                          </:peek>
+                        </.td_pid>
+                      <% else %>
+                        {shipper.name || "Shipper #{shipper.sequence}"}
+                      <% end %>
+                    </td>
+                    <td>{shipper_product(shipper)}</td>
+                    <td><span class="td-mono">{shipper_batch(shipper)}</span></td>
+                    <td class="is-num">{length(shipper.items)}</td>
+                    <td>{short_date(shipper_expiry(shipper))}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="td-card" id="distributor-shipment-activity">
+              <.td_card_header title="Activity" subtitle="Times in EAT" />
+              <p :if={@shipment.events == []} class="td-empty-inline td-note">No activity yet.</p>
+              <ol :if={@shipment.events != []} class="td-list">
+                <li :for={event <- @shipment.events} class="td-li">
+                  <.td_orb seed={actor(event)} size={24} />
+                  <div class="td-li-g">
+                    <b>{event_label(event.event)}</b>
+                    <span>{actor(event)} · {date_time(event.inserted_at)}</span>
+                    <span :if={event.details["reason"]} class="td-note">“{event.details["reason"]}”</span>
+                  </div>
+                </li>
+              </ol>
+            </div>
           </div>
         </div>
 
@@ -539,116 +769,8 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
           </.form>
         </.modal>
 
-        <div
-          :if={@shipment.status == "rejected"}
-          id="distributor-rejection-reason"
-          class="mb-5 flex gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4"
-        >
-          <.icon name="hero-x-circle" class="mt-0.5 size-5 shrink-0 text-rose-700" />
-          <div class="text-sm">
-            <p class="font-semibold text-rose-900">
-              Rejected by {(@shipment.rejected_by && @shipment.rejected_by.name) || "an administrator"} · {date_time(
-                @shipment.rejected_at
-              )}
-            </p>
-            <p class="mt-1 text-rose-800">{@shipment.rejection_reason}</p>
-            <p class="mt-1 text-xs text-rose-700">
-              The mobile user can reopen it as a draft, fix it, and resubmit.
-            </p>
-          </div>
-        </div>
-
-        <div
-          :if={@problems != []}
-          id="distributor-approval-problems"
-          class="mb-5 rounded-2xl border border-rose-200 bg-td-surface p-4"
-        >
-          <p class="flex items-center gap-2 text-sm font-semibold text-rose-800">
-            <.icon name="hero-exclamation-circle" class="size-5" /> Can't approve yet
-          </p>
-          <ul class="mt-2 list-disc space-y-1 pl-6 text-sm text-rose-800">
-            <li :for={problem <- @problems}>{problem.message}</li>
-          </ul>
-        </div>
-
-        <div class="grid gap-4 md:grid-cols-3">
-          <.party_card
-            title="Ship from"
-            icon="hero-building-office-2"
-            company={@shipment.origin_company}
-            address={@shipment.origin_address}
-            po_box={@shipment.origin_po_box}
-            gln={@shipment.origin_gln}
-          />
-          <.party_card
-            title="Ship to"
-            icon="hero-building-storefront"
-            company={@shipment.destination_company}
-            address={@shipment.destination_address}
-            po_box={@shipment.destination_po_box}
-            gln={@shipment.destination_gln}
-          />
-          <div class="rounded-2xl ff-surface-card p-4">
-            <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-thamani-pewter">
-              <.icon name="hero-device-phone-mobile" class="size-4" /> Mobile team
-            </div>
-            <dl class="mt-2 space-y-1.5 text-sm">
-              <div class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">Held by</dt>
-                <dd class="text-right font-medium text-thamani-forest">
-                  {(@shipment.assigned_to && @shipment.assigned_to.name) || "Unclaimed"}
-                </dd>
-              </div>
-              <div class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">Submitted by</dt>
-                <dd class="text-right font-medium text-thamani-forest">
-                  {(@shipment.submitted_by && @shipment.submitted_by.name) || "—"}
-                </dd>
-              </div>
-              <div class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">Submitted</dt>
-                <dd class="text-right">{date_time(@shipment.submitted_at)}</dd>
-              </div>
-              <div :if={@shipment.approved_at} class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">Approved</dt>
-                <dd class="text-right">
-                  {date_time(@shipment.approved_at)}
-                  <span :if={@shipment.approved_by} class="block text-xs text-thamani-pewter">
-                    by {@shipment.approved_by.name}
-                  </span>
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-
-        <div
-          :if={@warnings != []}
-          id="distributor-shipment-warnings"
-          class="mt-5 grid gap-2 sm:grid-cols-2"
-        >
-          <div
-            :for={warning <- @warnings}
-            id={"warning-#{warning.code}"}
-            class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-          >
-            <.icon name={warning_icon(warning.code)} class="mt-0.5 size-4 shrink-0" />
-            <span><span class="font-semibold">{warning.count}</span> {warning.message}</span>
-          </div>
-        </div>
-
-        <section class="mt-6 space-y-4" id="distributor-shippers">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">Shippers</h2>
-          <div
-            :if={@item_groups == []}
-            class="rounded-2xl border border-dashed border-thamani-stone bg-thamani-canvas p-8 text-center text-sm text-thamani-pewter"
-          >
-            <.icon name="hero-device-phone-mobile" class="mx-auto mb-2 size-8 text-thamani-subtle" />
-            Nothing packed yet. A mobile user finds this shipment by order
-            <span class="font-semibold text-thamani-forest">{@shipment.order_number}</span>
-            and scans units into shippers.
-          </div>
-
+        <section :if={@item_groups != []} class="td-pad td-stack" id="distributor-units">
+          <h2 class="td-sec">Units by shipper</h2>
           <article
             :for={%{shipper: shipper, groups: groups} <- @item_groups}
             id={"shipper-#{shipper.id}"}
@@ -762,25 +884,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
           </article>
         </section>
 
-        <section
-          :if={@shipment.events != []}
-          class="mt-6 rounded-2xl ff-surface-card p-5"
-          id="distributor-shipment-activity"
-        >
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">Activity</h2>
-          <ol class="mt-3 space-y-3 border-l border-thamani-stone pl-4">
-            <li :for={event <- @shipment.events} class="relative text-sm">
-              <span class="absolute -left-[21px] top-1.5 size-2.5 rounded-full bg-thamani-forest"></span>
-              <p class="font-medium text-thamani-ink">{event_label(event.event)}</p>
-              <p class="text-xs text-thamani-pewter">
-                {actor(event)} · {date_time(event.inserted_at)}
-              </p>
-              <p :if={event.details["reason"]} class="mt-0.5 text-xs text-thamani-ink">
-                “{event.details["reason"]}”
-              </p>
-            </li>
-          </ol>
-        </section>
+
       </div>
 
       <section :if={@labels != []} id="distributor-sscc-labels" class="mt-6">
@@ -936,115 +1040,136 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
         :if={@rejecting?}
         id="distributor-reject-modal"
         show
+        size="confirm"
+        title={"Reject order #{@shipment.order_number}?"}
+        subtitle={"The order goes back to #{packed_by(@shipment)} with your reason."}
         on_cancel={JS.push("close_reject")}
       >
-        <h2 class="mb-1 text-2xl font-medium tracking-tight text-thamani-forest">Reject shipment</h2>
-        <p class="mb-4 text-sm text-thamani-pewter">
-          The reason is shown to the mobile team. All {@unit_count} unit(s) are released so they can
-          be packed again.
-        </p>
-        <.form for={@reject_form} id="distributor-reject-form" phx-submit="reject">
+        <.form for={@reject_form} id="distributor-reject-form" class="td-modal-form" phx-submit="reject">
           <.input
             field={@reject_form[:reason]}
             type="textarea"
-            label="Reason"
-            placeholder="e.g. Shipper 2 contains expired units, repack without them."
+            label="Reason for the packer"
+            placeholder="For example: Shipper 2 has the wrong batch. Repack without it."
             required
           />
-          <.button id="confirm-reject-shipment" variant="danger-confirm" class="mt-2 w-full">
-            Reject shipment
-          </.button>
+          <p class="td-note">
+            The packer sees this reason on the mobile app. All {count_phrase(@unit_count, "unit")} are
+            released so they can be packed again.
+          </p>
         </.form>
+        <:footer>
+          <.td_button type="button" label="Cancel" phx-click="close_reject" />
+          <.td_button
+            id="confirm-reject-shipment"
+            type="submit"
+            form="distributor-reject-form"
+            variant="danger-confirm"
+            label="Reject order"
+          />
+        </:footer>
       </.modal>
 
       <.modal
-        :if={@approval_confirming?}
+        :if={@approval_confirming? or @serial_shortage?}
         id="distributor-approve-modal"
         show
+        title={"Approve order #{@shipment.order_number}?"}
+        subtitle="Approving issues one SSCC per shipper and turns this order into a shipment."
         on_cancel={JS.push("close_approve")}
       >
-        <h2
-          id="distributor-approve-modal-title"
-          class="mb-1 text-2xl font-medium tracking-tight text-thamani-forest"
-        >
-          Approve shipment?
-        </h2>
-        <p id="distributor-approve-modal-description" class="mb-4 text-sm text-thamani-pewter">
-          Review the serialisation usage before issuing SSCCs.
-        </p>
-        <dl class="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-thamani-surface p-4 text-sm">
-          <dt class="text-thamani-pewter">Shipment / order</dt>
-          <dd id="approval-order-number" class="text-right font-semibold text-thamani-forest">
-            {@shipment.order_number}
-          </dd>
-          <dt class="text-thamani-pewter">Shippers</dt>
-          <dd id="approval-shipper-count" class="text-right font-semibold text-thamani-forest">
-            {@shipper_count}
-          </dd>
-          <dt class="text-thamani-pewter">SSCCs to issue</dt>
-          <dd id="approval-sscc-count" class="text-right font-semibold text-thamani-forest">
-            {@shipper_count}
-          </dd>
-          <dt class="text-thamani-pewter">Credits to consume</dt>
-          <dd id="approval-credit-count" class="text-right font-semibold text-thamani-forest">
-            {@shipper_count}
-          </dd>
-          <dt class="text-thamani-pewter">Current allowance</dt>
-          <dd id="approval-current-allowance" class="text-right font-semibold text-thamani-forest">
-            {if is_integer(@remaining_allowance), do: @remaining_allowance, else: "Unlimited"}
-          </dd>
-          <dt class="text-thamani-pewter">Remaining after approval</dt>
-          <dd id="approval-remaining-allowance" class="text-right font-semibold text-thamani-forest">
-            {if is_integer(@remaining_allowance),
-              do: max(@remaining_allowance - @shipper_count, 0),
-              else: "Unlimited"}
-          </dd>
+        <dl class="td-kv-grid is-2">
+          <div class="td-kv">
+            <dt class="td-kv-label">Order</dt>
+            <dd id="approval-order-number" class="td-kv-value">{@shipment.order_number}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Customer</dt>
+            <dd class="td-kv-value">{@shipment.destination_company || "—"}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">SSCCs to issue</dt>
+            <dd id="approval-sscc-count" class="td-kv-value">
+              <span id="approval-shipper-count">{@shipper_count}</span>, one per shipper
+            </dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Serials used</dt>
+            <dd id="approval-credit-count" class="td-kv-value">{@shipper_count}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Allowance now</dt>
+            <dd id="approval-current-allowance" class="td-kv-value">
+              {if is_integer(@remaining_allowance), do: count_phrase(@remaining_allowance, "serial"), else: "Unlimited"}
+            </dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">After approval</dt>
+            <dd id="approval-remaining-allowance" class="td-kv-value">
+              {cond do
+                @serial_shortage? -> "Not enough"
+                is_integer(@remaining_allowance) -> count_phrase(max(@remaining_allowance - @shipper_count, 0), "serial")
+                true -> "Unlimited"
+              end}
+            </dd>
+          </div>
         </dl>
+        <div :if={@serial_shortage?} id="approval-not-enough-serials" role="alert" class="td-ban is-danger">
+          <.td_icon name="warning-circle" />
+          <span>
+            {if is_integer(@remaining_allowance),
+              do: "You have #{count_phrase(@remaining_allowance, "serial")} left and this order needs #{@shipper_count}.",
+              else: "There are not enough serials left for this order."} Buy more serials, then approve again.
+          </span>
+        </div>
         <div
-          :if={@insufficient_allowance?}
+          :if={@insufficient_allowance? and not @serial_shortage?}
           id="approval-insufficient-allowance"
           role="alert"
-          class="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+          class="td-ban is-warning"
         >
-          This shipment needs {@shipper_count} credits, but only {@remaining_allowance} remain in your allowance. Approval may fail if your available buffer cannot cover the difference.
+          <.td_icon name="warning" />
+          <span>
+            This order needs {@shipper_count} serials, but only {@remaining_allowance} remain in your
+            allowance. Approval may fail if your available buffer cannot cover the difference.
+          </span>
         </div>
-        <div class="mt-5 flex justify-end gap-3">
-          <.button id="cancel-approve-shipment" type="button" phx-click="close_approve">
-            Cancel
-          </.button>
-          <.button
+        <p :if={not @serial_shortage?} class="td-note">
+          SSCCs can't be withdrawn once issued. The stock is taken out of {@shipment.origin_company || "the ship-from site"} and a shipping event is queued for TNT.
+        </p>
+        <:footer>
+          <.td_button id="cancel-approve-shipment" type="button" label="Cancel" phx-click="close_approve" />
+          <.td_button
+            :if={@serial_shortage?}
+            id="buy-serials"
+            variant="primary"
+            label="Buy serials"
+            navigate={~p"/distributor/billing"}
+          />
+          <.td_button
+            :if={not @serial_shortage?}
             id="confirm-approve-shipment"
             variant="primary"
+            label="Approve and issue SSCCs"
             phx-click="approve"
             phx-disable-with="Approving…"
             disabled={@approving?}
-          >
-            Approve &amp; issue SSCCs
-          </.button>
-        </div>
+          />
+        </:footer>
       </.modal>
+
+      <.live_component
+        :if={@live_action == :edit and @shipment.status == "draft"}
+        module={ThamaniDawaWeb.DistributorShipmentLive.OrderFormComponent}
+        id="edit-order"
+        action={:edit}
+        shipment={@shipment}
+        return_query={@return_query}
+        current_scope={@current_scope}
+        cancel={~p"/distributor/shipments/#{@shipment.id}?#{@return_query}"}
+      />
     </Layouts.distributor_shell>
     """
   end
 
-  attr :title, :string, required: true
-  attr :icon, :string, required: true
-  attr :company, :string, default: nil
-  attr :address, :string, default: nil
-  attr :po_box, :string, default: nil
-  attr :gln, :string, required: true
-
-  defp party_card(assigns) do
-    ~H"""
-    <div class="rounded-2xl ff-surface-card p-4">
-      <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-thamani-pewter">
-        <.icon name={@icon} class="size-4" /> {@title}
-      </div>
-      <p class="mt-2 font-medium text-thamani-forest">{@company || "—"}</p>
-      <p :if={@address} class="text-sm text-thamani-ink">{@address}</p>
-      <p :if={@po_box} class="text-sm text-thamani-ink">{@po_box}</p>
-      <p class="mt-1 font-mono text-xs text-thamani-pewter">GLN {@gln}</p>
-    </div>
-    """
-  end
 end
