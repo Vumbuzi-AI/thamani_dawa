@@ -78,6 +78,23 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
     {:noreply, socket |> assign(:filters, filters) |> assign_prescriptions()}
   end
 
+  def handle_event("set_status", %{"status" => status}, socket) do
+    {:noreply,
+     socket
+     |> assign(:filters, %{socket.assigns.filters | status: status || ""})
+     |> assign_prescriptions()}
+  end
+
+  def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
+      when field in ["payment_type", "paid", "status"] do
+    key = String.to_existing_atom(field)
+
+    {:noreply,
+     socket
+     |> assign(:filters, %{socket.assigns.filters | key => value || ""})
+     |> assign_prescriptions()}
+  end
+
   def handle_event("clear_filters", _params, socket) do
     {:noreply, socket |> assign(:filters, @default_filters) |> assign_prescriptions()}
   end
@@ -294,9 +311,26 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
       |> filter_by_payment_type(socket.assigns.filters.payment_type)
       |> filter_by_paid(socket.assigns.filters.paid)
 
+    status_counts =
+      organization_id
+      |> Prescriptions.list_prescriptions()
+      |> SiteScoping.for_current_site(socket.assigns.current_scope)
+      |> status_counts()
+
     socket
     |> assign(:prescriptions, filtered)
     |> assign(:page_info, page_result)
+    |> assign(:status_counts, status_counts)
+  end
+
+  defp status_counts(prescriptions) do
+    %{
+      all: length(prescriptions),
+      pending: Enum.count(prescriptions, &(&1.status == :pending)),
+      partially_dispensed: Enum.count(prescriptions, &(&1.status == :partially_dispensed)),
+      completed: Enum.count(prescriptions, &(&1.status == :completed)),
+      cancelled: Enum.count(prescriptions, &(&1.status == :cancelled))
+    }
   end
 
   defp filter_by_search(prescriptions, ""), do: prescriptions
@@ -349,76 +383,84 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
       flash={@flash}
       current_scope={@current_scope}
       current_path="/pharmacy/prescriptions"
+      crumb="Prescriptions"
     >
-      <.header icon="hero-document-text">
-        Prescriptions
-        <:subtitle>Search, filter, and manage prescriptions at your site.</:subtitle>
-        <:actions>
-          <.button
-            id="prescription-new-button"
-            variant="primary"
-            patch={~p"/pharmacy/prescriptions/new"}
+      <:tools>
+        <.td_button
+          id="prescription-new-button"
+          variant="primary"
+          label="New prescription"
+          patch={~p"/pharmacy/prescriptions/new"}
+        >
+          <:icon><.td_icon name="plus" /></:icon>
+        </.td_button>
+      </:tools>
+
+      <section class="td-recipe td-list-page">
+        <.td_page_header title="Prescriptions" />
+
+        <nav class="td-tabs" aria-label="Prescription status">
+          <button
+            :for={
+              {value, label} <- [
+                {"", "All"},
+                {"pending", "Pending"},
+                {"partially_dispensed", "Partially dispensed"},
+                {"completed", "Completed"},
+                {"cancelled", "Cancelled"}
+              ]
+            }
+            type="button"
+            id={"prescriptions-tab-#{if value == "", do: "all", else: value}"}
+            class={["td-tab", @filters.status == value && "is-active"]}
+            phx-click="set_status"
+            phx-value-status={value}
+            aria-current={@filters.status == value && "page"}
           >
-            <.icon name="hero-plus" class="size-4" /> New prescription
-          </.button>
-        </:actions>
-        <:toolbar>
-          <form phx-change="search" class="flex-1" id="search-form">
-            <.search_input
-              name="search"
-              value={@search}
-              placeholder="Search by patient name or phone"
-            />
+            <span>{label}</span>
+            <span class="td-count">
+              {Map.get(
+                @status_counts,
+                if(value == "", do: :all, else: String.to_existing_atom(value)),
+                0
+              )}
+            </span>
+          </button>
+        </nav>
+
+        <div class="td-toolbar">
+          <form phx-change="search" id="search-form" onsubmit="return false">
+            <label class="td-search">
+              <.td_icon name="magnifying-glass" />
+              <input
+                type="search"
+                name="search"
+                value={@search}
+                placeholder="Search by patient name or phone"
+                phx-debounce="200"
+                autocomplete="off"
+              />
+              <kbd>/</kbd>
+            </label>
           </form>
+          <.td_filter_menu
+            id="prescriptions"
+            field="payment_type"
+            label="Payment"
+            value={@filters.payment_type}
+            options={[{"", "Any"} | Enum.map(ThamaniDawa.PaymentMethods.all(), &{&1, &1})]}
+          />
+        </div>
 
-          <.filter_drawer
-            id="prescriptions-filters"
-            title="Filter prescriptions"
-            apply_event="apply_filters"
-            active_count={active_filter_count(@filters)}
-          >
-            <:group label="Status">
-              <.input
-                type="select"
-                name="filters[status]"
-                value={@filters.status}
-                options={Enum.map(Prescription.statuses(), &{Phoenix.Naming.humanize(&1), &1})}
-                prompt="All statuses"
-              />
-            </:group>
-            <:group label="Payment">
-              <.input
-                type="select"
-                name="filters[payment_type]"
-                value={@filters.payment_type}
-                options={ThamaniDawa.PaymentMethods.all()}
-                prompt="All payment methods"
-              />
-              <.input
-                type="select"
-                name="filters[paid]"
-                value={@filters.paid}
-                options={[{"Paid", "true"}, {"Unpaid", "false"}]}
-                prompt="Paid or unpaid"
-              />
-            </:group>
-            <:chip
-              :for={chip <- filter_chips(@filters)}
-              label={chip.label}
-              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-            />
-          </.filter_drawer>
-        </:toolbar>
-      </.header>
-
-      <.modal
+      <.td_modal
         :if={@live_action == :new}
         id="prescription-modal"
         show
-        class="max-w-4xl"
+        width={800}
+        title="New prescription"
         on_cancel={JS.patch(~p"/pharmacy/prescriptions")}
       >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">New prescription</h2>
+        <:body>
 
         <.form
           for={@header_form}
@@ -764,44 +806,66 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
             Create Prescription
           </.button>
         </.form>
-      </.modal>
+        </:body>
+      </.td_modal>
 
-      <.table
-        id="prescriptions"
-        rows={@prescriptions}
-        row_click={&JS.navigate(~p"/pharmacy/prescriptions/#{&1.id}")}
-      >
-        <:col :let={prescription} label="ID">#{prescription.id}</:col>
-        <:col :let={prescription} label="Patient">
-          <div class="font-semibold">{prescription.patient_name || "Walk-in"}</div>
-          <div class="text-xs text-base-content/70">{prescription.patient_phone}</div>
-        </:col>
-        <:col :let={prescription} label="Status">
-          <.status_badge status={prescription.status} />
-        </:col>
-        <:col :let={prescription} label="Items">{prescription.items_count}</:col>
-        <:col :let={prescription} label="Total">{prescription.total_amount}</:col>
-        <:col :let={prescription} label="Prescriber">{prescription.referring_doctor}</:col>
-        <:col :let={prescription} label="Created">
-          {Calendar.strftime(prescription.inserted_at, "%b %d, %H:%M")}
-        </:col>
-        <:empty_state>
-          <.blank_state
-            icon="hero-clipboard-document-list"
-            title={
-              if @search != "" or active_filter_count(@filters) > 0,
-                do: "No prescriptions match your search or filters",
-                else: "No prescriptions yet"
-            }
+      <div :if={@prescriptions == []} class="td-pad td-empty-wrap">
+        <div id="prescriptions-empty" class="td-card td-empty-card">
+          <%= if @search != "" or active_filter_count(@filters) > 0 do %>
+            <p class="td-empty-title">No prescriptions match</p>
+            <p class="td-note">Try a different search, or clear the applied filters.</p>
+            <button type="button" id="prescriptions-clear-filters" class="td-btn is-secondary" phx-click="clear_filters">
+              Clear filters
+            </button>
+          <% else %>
+            <p class="td-empty-title">No prescriptions yet</p>
+            <p class="td-note">Prescriptions created at your site will appear here.</p>
+          <% end %>
+        </div>
+      </div>
+
+      <table :if={@prescriptions != []} id="prescriptions" class="td-rows">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Patient</th>
+            <th>Status</th>
+            <th class="is-num">Items</th>
+            <th class="is-num">Total</th>
+            <th>Prescriber</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            :for={prescription <- @prescriptions}
+            id={"prescriptions-#{prescription.id}"}
+            phx-click={JS.navigate(~p"/pharmacy/prescriptions/#{prescription.id}")}
+            class="td-row-link"
           >
-            {if @search != "" or active_filter_count(@filters) > 0,
-              do: "Try a different search term, or clear the applied filters.",
-              else: "Prescriptions created at your site will appear here."}
-          </.blank_state>
-        </:empty_state>
-      </.table>
+            <td class="is-num">{prescription.id}</td>
+            <td>
+              <span class="td-person">
+                <.td_orb seed={prescription.patient_name || "walk-in"} size={24} />
+                <span>
+                  <b>{prescription.patient_name || "Walk-in"}</b>
+                  <span :if={prescription.patient_phone} class="td-muted">{prescription.patient_phone}</span>
+                </span>
+              </span>
+            </td>
+            <td>
+              <.status_badge status={prescription.status} />
+            </td>
+            <td class="is-num">{prescription.items_count}</td>
+            <td class="is-num">{ThamaniDawaWeb.Money.ksh(prescription.total_amount)}</td>
+            <td>{prescription.referring_doctor || "—"}</td>
+            <td>{ThamaniDawaWeb.TimeFormat.short_datetime(prescription.inserted_at)} EAT</td>
+          </tr>
+        </tbody>
+      </table>
 
       <.pagination page={@page_info} path={~p"/pharmacy/prescriptions"} />
+      </section>
     </Layouts.pharmacy_shell>
     """
   end

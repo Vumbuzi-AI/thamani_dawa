@@ -3549,3 +3549,5 @@ label.td-option > input { position: absolute; opacity: 0; pointer-events: none; 
 .td-download-ready-icon { width: 20px; height: 20px; color: var(--color-td-success); flex: none; }
 .td-download-ready-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .td-download-ready-copy b { font-weight: 500; font-size: 14px; color: var(--color-td-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.td-row-link { cursor: pointer; }
