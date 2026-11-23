@@ -34,13 +34,14 @@ import {FlashAutoDismiss} from "./hooks/flash_auto_dismiss"
 import {QuickSaleReceiptPrint} from "./hooks/quick_sale_receipt_print"
 import {ConditionalBatchField} from "./hooks/conditional_batch_field"
 import {LabelPrint, PrintAllLabels} from "./hooks/label_print"
+import {TdPeek} from "./hooks/td_peek"
 import {LabelSvgDownload, DownloadAllLabelsSvg} from "./hooks/label_svg_download"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, ScanCapture, ScanField, ProductTour, FlashAutoDismiss, QuickSaleReceiptPrint, ConditionalBatchField, LabelPrint, PrintAllLabels, LabelSvgDownload, DownloadAllLabelsSvg},
+  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, ScanCapture, ScanField, ProductTour, FlashAutoDismiss, QuickSaleReceiptPrint, ConditionalBatchField, LabelPrint, PrintAllLabels, LabelSvgDownload, DownloadAllLabelsSvg, TdPeek},
 })
 
 // Show progress bar on live navigation and form submits

@@ -16,4 +16,22 @@ defmodule ThamaniDawaWeb.ReturnTo do
     sep = if String.contains?(path, "?"), do: "&", else: "?"
     path <> sep <> "return_to=" <> URI.encode_www_form(return_to)
   end
+
+  @doc "The safe back path from params: `return_to` when it is an in-app path, else `fallback`."
+  def path(%{"return_to" => value}, fallback), do: safe(value, fallback)
+  def path(_params, fallback), do: fallback
+
+  @doc "A back label for a known list path, e.g. \"Back to Orders\"."
+  def label(path, default) do
+    case path |> URI.parse() |> Map.get(:path) do
+      "/distributor/orders" -> "Back to Orders"
+      "/distributor/shipments" -> "Back to Shipments"
+      "/distributor/receiving" -> "Back to Receiving"
+      "/distributor/returns" -> "Back to Supplier returns"
+      "/distributor/customer-returns" -> "Back to Customer returns"
+      "/distributor/customers" -> "Back to Customers"
+      "/distributor" -> "Back to Dashboard"
+      _ -> default
+    end
+  end
 end

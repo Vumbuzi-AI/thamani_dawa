@@ -283,7 +283,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :on, :boolean, default: false
   attr :label, :string, default: nil
-  attr :rest, :global, include: ~w(id type phx-click)
+  attr :rest, :global, include: ~w(id type phx-click phx-target)
 
   def td_switch(assigns) do
     ~H"""
@@ -1776,4 +1776,204 @@ defmodule ThamaniDawaWeb.TDComponents do
     |> JS.hide(to: "##{id}-container")
     |> JS.hide(to: "##{id}")
   end
+
+  @doc """
+  TD Peek (Doop `cuo1ccz0cc`, spec `lUbiG4NO-X`): the hover card for a
+  record ID (order, shipment, SSCC, customer, GLN, batch). Shows the facts a
+  person would otherwise click through for, plus one Open action. Wrap the ID
+  with `td_pid/1`, which places this card under it and opens it 300ms after
+  hover or on focus; Esc closes it. Fill `:row` with label/value facts.
+  """
+  attr :id, :string, default: nil
+  attr :kind, :string, required: true
+  attr :title, :string, required: true
+  attr :subtitle, :string, default: nil
+  attr :hint, :string, default: "Click the ID to open it"
+  attr :icon, :string, default: "clipboard-text"
+  attr :mono, :boolean, default: false
+
+  slot :badge
+  slot :action
+
+  slot :row do
+    attr :label, :string, required: true
+    attr :mono, :boolean
+  end
+
+  def td_peek(assigns) do
+    ~H"""
+    <div id={@id} class="td-peek" data-mono={to_string(@mono)} role="tooltip">
+      <div class="td-peek-hd">
+        <span class="td-peek-tile"><.td_icon name={@icon} /></span>
+        <div class="td-peek-tt">
+          <span class="td-peek-k">{@kind}</span>
+          <b>{@title}</b>
+        </div>
+        <span :if={@badge != []} class="td-peek-bd">{render_slot(@badge)}</span>
+      </div>
+      <span :if={@subtitle} class="td-peek-sub">{@subtitle}</span>
+      <div :if={@row != []} class="td-peek-rows">
+        <div :for={row <- @row} class="td-peek-row" data-mono={to_string(Map.get(row, :mono, false))}>
+          <span class="td-peek-l">{row.label}</span>
+          <span class="td-peek-v">{render_slot(row)}</span>
+        </div>
+      </div>
+      <div class="td-peek-ft">
+        <span class="td-peek-hint">{@hint}</span>
+        <span :if={@action != []} class="td-peek-act">{render_slot(@action)}</span>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  A dashed-underline record ID that opens a `td_peek/1` card on hover or
+  focus. `:peek` holds the card. Clicking the ID follows `navigate` when
+  given; inside a clickable table row the click stops at the ID.
+  """
+  attr :id, :string, required: true
+  attr :label, :string, required: true
+  attr :mono, :boolean, default: false
+  attr :navigate, :string, default: nil
+  attr :align, :string, values: ~w(left right), default: "left"
+  slot :peek, required: true
+
+  def td_pid(assigns) do
+    ~H"""
+    <span id={@id} class={["td-pid-wrap", @align == "right" && "is-right"]} phx-hook="TdPeek">
+      <.link
+        :if={@navigate}
+        navigate={@navigate}
+        class={["td-pid", @mono && "td-mono"]}
+        aria-describedby={"#{@id}-peek"}
+      >{@label}</.link>
+      <span
+        :if={!@navigate}
+        tabindex="0"
+        class={["td-pid", @mono && "td-mono"]}
+        aria-describedby={"#{@id}-peek"}
+      >{@label}</span>
+      <span id={"#{@id}-peek"} class="td-peek-pop">{render_slot(@peek)}</span>
+    </span>
+    """
+  end
+
+  @doc """
+  The back link at the top of every detail page ("Back to …"). `to` is the
+  page's `return_to` when it is a safe in-app path, else the parent list.
+  """
+  attr :id, :string, default: nil
+  attr :to, :string, required: true
+  attr :label, :string, required: true
+
+  def td_back_link(assigns) do
+    ~H"""
+    <div class="td-back">
+      <.link id={@id} navigate={@to} class="td-back-link">
+        <.td_icon name="arrow-left" class="size-3.5" /> {@label}
+      </.link>
+    </div>
+    """
+  end
+
+  @doc """
+  The one shared date-range filter chip (Doop "Orders · Created date filter"
+  `QtYrmaQO7u`): presets plus a custom range on the TD date picker, in EAT.
+  Pushes `set_date_preset` with `%{"field" => field, "value" => preset}` and
+  submits `apply_date_range` with `date_from` / `date_to`.
+  """
+  attr :id, :string, required: true
+  attr :field, :string, default: "date"
+  attr :label, :string, required: true
+  attr :preset, :string, default: ""
+  attr :date_from, :string, default: ""
+  attr :date_to, :string, default: ""
+
+  def td_date_filter(assigns) do
+    assigns =
+      assign(assigns, :shown, ThamaniDawaWeb.DateRangeFilter.label(assigns.preset, assigns.date_from, assigns.date_to))
+
+    ~H"""
+    <div class="td-chip-wrap" phx-click-away={JS.hide(to: "##{@id}-pop")}>
+      <button
+        type="button"
+        id={"#{@id}-chip"}
+        class="td-chip"
+        phx-click={JS.toggle(to: "##{@id}-pop")}
+        aria-haspopup="dialog"
+      >
+        <span class="td-chip-label">{@label}</span>
+        <span class="td-chip-value">{@shown}</span>
+        <.td_icon name="caret-down" />
+      </button>
+      <div id={"#{@id}-pop"} class="td-popover td-date-filter hidden" role="dialog">
+        <div class="td-date-filter-presets">
+          <button
+            :for={{value, text} <- ThamaniDawaWeb.DateRangeFilter.presets()}
+            type="button"
+            id={"#{@id}-preset-#{if value == "", do: "any", else: value}"}
+            class={["td-menu-item", value == @preset && "is-selected"]}
+            phx-click={
+              JS.push("set_date_preset", value: %{field: @field, value: value})
+              |> JS.hide(to: "##{@id}-pop")
+            }
+          >
+            <span class="flex-1">{text}</span>
+            <.td_icon :if={value == @preset} name="check" class="size-3.5" />
+          </button>
+        </div>
+        <form id={"#{@id}-form"} class="td-date-filter-custom" phx-submit="apply_date_range">
+          <input type="hidden" name="field" value={@field} />
+          <.date_range_picker_proxy id={"#{@id}-range"} date_from={@date_from} date_to={@date_to} />
+          <div class="td-date-filter-ft">
+            <span class="td-s12">{ThamaniDawaWeb.DateRangeFilter.range_caption(@date_from, @date_to)}</span>
+            <span class="flex gap-2">
+              <button
+                type="button"
+                class="td-btn is-secondary"
+                phx-click={
+                  JS.push("set_date_preset", value: %{field: @field, value: ""})
+                  |> JS.hide(to: "##{@id}-pop")
+                }
+              >
+                Clear
+              </button>
+              <button type="submit" class="td-btn is-primary" phx-click={JS.hide(to: "##{@id}-pop")}>
+                Apply
+              </button>
+            </span>
+          </div>
+        </form>
+      </div>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :date_from, :string, default: ""
+  attr :date_to, :string, default: ""
+
+  defp date_range_picker_proxy(assigns) do
+    ~H"""
+    <ThamaniDawaWeb.CoreComponents.date_range_picker
+      id={@id}
+      from_name="date_from"
+      from_value={@date_from}
+      to_name="date_to"
+      to_value={@date_to}
+      placeholder="Custom range"
+    />
+    """
+  end
+
+  @doc "A seeded orb and a name, for people in tables and activity lists."
+  attr :name, :string, required: true
+  attr :seed, :any, default: nil
+
+  def td_person_cell(assigns) do
+    ~H"""
+    <span class="td-person"><.td_orb seed={to_string(@seed || @name)} size={20} /><span>{@name}</span></span>
+    """
+  end
+
 end
