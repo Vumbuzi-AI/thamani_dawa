@@ -3634,3 +3634,10 @@ a.td-pid { cursor: pointer; }
 .td-date-filter-presets { display: flex; flex-direction: column; }
 .td-date-filter-custom { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--color-td-hairline); padding-top: 10px; }
 .td-date-filter-ft { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* Distributor flagship: key/value list inside confirm modals (Accept delivery) */
+.td-kv-list { display: grid; gap: 0; margin: 0; }
+.td-kv-list > div { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--color-td-hairline); font-size: 13px; }
+.td-kv-list > div:last-child { border-bottom: 0; }
+.td-kv-list dt { color: var(--color-td-ink-2); }
+.td-kv-list dd { margin: 0; font-weight: 500; text-align: right; }
