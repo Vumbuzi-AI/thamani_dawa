@@ -7,6 +7,10 @@ defmodule ThamaniDawaWeb.Api.Serializer do
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Batches.Batch
+  alias ThamaniDawa.Distributor.MobileUser
+  alias ThamaniDawa.Distributor.Shipment
+  alias ThamaniDawa.Distributor.ShipmentItem
+  alias ThamaniDawa.Distributor.Shipper
   alias ThamaniDawa.GS1Encoder
   alias ThamaniDawa.InventoryDisposals.InventoryDisposal
   alias ThamaniDawa.InventoryDisposals.InventoryDisposalItem
@@ -404,6 +408,80 @@ defmodule ThamaniDawaWeb.Api.Serializer do
           }
         end),
       batch: maybe(holder.batch, &batch/1)
+    })
+  end
+
+  def mobile_session(tokens) do
+    json_safe(%{
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      token_type: "Bearer",
+      access_expires_at: tokens.access_expires_at,
+      refresh_expires_at: tokens.refresh_expires_at,
+      mobile_user: mobile_user(tokens.mobile_user)
+    })
+  end
+
+  def mobile_user(%MobileUser{} = mobile_user) do
+    json_safe(%{
+      id: mobile_user.id,
+      name: mobile_user.name,
+      username: mobile_user.username,
+      organization_id: mobile_user.organization_id,
+      site_id: mobile_user.site_id,
+      last_login_at: mobile_user.last_login_at
+    })
+  end
+
+  def shipment(%Shipment{} = shipment) do
+    json_safe(%{
+      id: shipment.id,
+      reference: shipment.reference,
+      order_number: shipment.order_number,
+      status: shipment.status,
+      is_return: shipment.is_return,
+      origin_gln: shipment.origin_gln,
+      origin_company: shipment.origin_company,
+      destination_gln: shipment.destination_gln,
+      destination_company: shipment.destination_company,
+      destination_address: shipment.destination_address,
+      assigned_mobile_user_id: shipment.assigned_mobile_user_id,
+      submitted_by_mobile_user_id: shipment.submitted_by_mobile_user_id,
+      submitted_at: shipment.submitted_at,
+      approved_at: shipment.approved_at,
+      rejected_at: shipment.rejected_at,
+      rejection_reason: shipment.rejection_reason,
+      updated_at: shipment.updated_at,
+      shippers: loaded(shipment.shippers, &shipper/1)
+    })
+  end
+
+  def shipper(%Shipper{} = shipper) do
+    json_safe(%{
+      id: shipper.id,
+      sequence: shipper.sequence,
+      name: shipper.name,
+      material_description: shipper.material_description,
+      sscc: shipper.sscc,
+      unit_count: shipper.unit_count,
+      items: loaded(shipper.items, &shipment_item/1)
+    })
+  end
+
+  def shipment_item(%ShipmentItem{} = item) do
+    json_safe(%{
+      id: item.id,
+      shipper_id: item.shipper_id,
+      shipment_id: item.shipment_id,
+      gtin: item.gtin,
+      batch: item.batch,
+      serial: item.serial,
+      production_date: item.production_date,
+      expiry_date: item.expiry_date,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      validation_status: item.validation_status,
+      scanned_at: item.scanned_at
     })
   end
 

@@ -54,6 +54,35 @@ defmodule ThamaniDawaWeb.Router do
     post "/invites/:token", SessionController, :accept_invite
   end
 
+  # Distributor packing app: username + PIN sign-in for mobile users, with
+  # its own bearer tokens (see `ThamaniDawa.Distributor.MobileAuth`).
+  scope "/api/v1/distributor/mobile", ThamaniDawaWeb.Api.V1, as: :api_v1_mobile do
+    pipe_through :api
+
+    post "/login", DistributorMobileController, :login
+    post "/token/refresh", DistributorMobileController, :refresh
+  end
+
+  scope "/api/v1/distributor/mobile", ThamaniDawaWeb.Api.V1, as: :api_v1_mobile do
+    pipe_through [:api, ThamaniDawaWeb.Plugs.DistributorMobileAuth]
+
+    post "/logout", DistributorMobileController, :logout
+    get "/me", DistributorMobileController, :me
+    get "/shipments", DistributorMobileController, :shipments
+    get "/shipments/search", DistributorMobileController, :search
+    get "/shipments/:id", DistributorMobileController, :show
+    post "/shipments/:id/select", DistributorMobileController, :select
+    post "/shipments/:id/release", DistributorMobileController, :release
+    post "/shipments/:id/shippers", DistributorMobileController, :create_shipper
+    post "/shipments/:id/submit", DistributorMobileController, :submit
+    post "/shipments/:id/reopen", DistributorMobileController, :reopen
+    patch "/shippers/:shipper_id", DistributorMobileController, :update_shipper
+    delete "/shippers/:shipper_id", DistributorMobileController, :delete_shipper
+    post "/shippers/:shipper_id/items", DistributorMobileController, :scan
+    delete "/items/:item_id", DistributorMobileController, :delete_item
+    patch "/items/:item_id", DistributorMobileController, :move_item
+  end
+
   scope "/api/v1", ThamaniDawaWeb.Api.V1, as: :api_v1 do
     pipe_through [:api, ThamaniDawaWeb.Plugs.ApiAuth]
 
