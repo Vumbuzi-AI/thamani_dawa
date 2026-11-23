@@ -1252,18 +1252,14 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
                 </div>
               </:col>
               <:action :let={specimen}>
-                <.button
-                  variant="ghost-edit"
+                <.td_button
+                  variant="secondary"
+                  label="Print label"
                   patch={~p"/lab/orders/#{@lab_order.id}/specimens/#{specimen.id}/label"}
-                  class="gap-1.5 py-1.5 px-3 text-xs"
-                >
-                  <.icon name="hero-printer" class="size-3.5" /> Print label
-                </.button>
+                />
               </:action>
               <:empty_state>
-                <.blank_state icon="hero-beaker" title="No specimens collected yet">
-                  Collect a specimen to start tracking samples for this order.
-                </.blank_state>
+                <.td_empty title="No specimens collected yet" hint="Collect a specimen to start tracking samples for this order." />
               </:empty_state>
             </.table>
           </div>
@@ -1352,9 +1348,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
                 </.button>
               </:action>
               <:empty_state>
-                <.blank_state icon="hero-clipboard-document-check" title="No tests on this order yet">
-                  Use "Add test" above to add the first test.
-                </.blank_state>
+                <.td_empty title="No tests on this order yet" hint="Add a test to this order to enter results." />
               </:empty_state>
             </.table>
           </div>
