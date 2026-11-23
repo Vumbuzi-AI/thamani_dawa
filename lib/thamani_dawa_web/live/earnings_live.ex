@@ -592,12 +592,9 @@ defmodule ThamaniDawaWeb.EarningsLive do
   def render(assigns) do
     ~H"""
     <.portal_shell portal={@portal} flash={@flash} current_scope={@current_scope}>
-      <.header icon="hero-banknotes">
-        {portal_title(@portal)}
-        <:subtitle>
-          {portal_description(@portal)}
-        </:subtitle>
-        <:toolbar>
+      <section class="td-recipe td-list-page">
+        <.td_page_header title={portal_title(@portal)} subtitle={portal_description(@portal)} />
+        <div class="td-toolbar">
           <form id="transaction-search-form" phx-change="search_transactions" class="min-w-0">
             <.search_input
               name="search"
@@ -653,8 +650,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
               clear={JS.push("clear_chip", value: %{"field" => chip.field})}
             />
           </.filter_drawer>
-        </:toolbar>
-      </.header>
+        </div>
 
       <.table
         id="transactions"
@@ -684,23 +680,24 @@ defmodule ThamaniDawaWeb.EarningsLive do
           <% end %>
         </:col>
         <:empty_state>
-          <.blank_state
-            icon="hero-banknotes"
+          <.td_empty
             title={
               if active_filter_count(@filters) > 0,
                 do: "No transactions match your filters",
                 else: "No transactions yet"
             }
-          >
-            {if active_filter_count(@filters) > 0,
-              do: "Try a different date range, or clear the applied filters.",
-              else: "Completed, pending, and failed payments will appear here."}
-          </.blank_state>
+            hint={
+              if active_filter_count(@filters) > 0,
+                do: "Try a different date range, or clear the applied filters.",
+                else: "Completed, pending, and failed payments will appear here."
+            }
+          />
         </:empty_state>
       </.table>
 
       <.transaction_modal :if={@live_action == :lab_show && @selected} selected={@selected} />
       <.receipt_sheet :if={@live_action == :lab_receipt && @selected} selected={@selected} />
+      </section>
     </.portal_shell>
     """
   end
