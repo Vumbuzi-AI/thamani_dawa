@@ -643,6 +643,57 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
+  attr :id, :string, required: true
+  attr :current, :string, default: "week"
+  attr :event, :string, default: "set_calendar_view"
+
+  def td_view_menu(assigns) do
+    views = [{"day", "Day"}, {"week", "Week"}, {"month", "Month"}]
+    current_label = views |> Enum.into(%{}) |> Map.get(assigns.current, "Week")
+
+    assigns =
+      assigns
+      |> assign(:views, views)
+      |> assign(:current_label, current_label)
+
+    ~H"""
+    <div id={@id} class="td-view-menu">
+      <button
+        type="button"
+        id={"#{@id}-trigger"}
+        class="td-chip td-view-menu-trigger"
+        aria-haspopup="menu"
+        aria-expanded="false"
+        phx-click={JS.toggle(to: "##{@id}-menu") |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "##{@id}-trigger")}
+      >
+        <.td_icon name="calendar-blank" class="size-3.5" />
+        <span>View</span>
+        <span class="td-chip-value">{@current_label}</span>
+        <.td_icon name="caret-down" class="size-3.5" />
+      </button>
+      <div
+        id={"#{@id}-menu"}
+        class="td-popover td-view-menu-pop"
+        role="menu"
+        hidden
+        phx-click-away={JS.hide(to: "##{@id}-menu")}
+      >
+        <p class="td-popover-label">View</p>
+        <button
+          :for={{key, label} <- @views}
+          type="button"
+          role="menuitem"
+          class={["td-menu-item", key == @current && "is-selected"]}
+          phx-click={JS.hide(to: "##{@id}-menu") |> JS.push(@event, value: %{view: key})}
+        >
+          <span class="flex-1">{label}</span>
+          <.td_icon :if={key == @current} name="check" class="size-3.5" />
+        </button>
+      </div>
+    </div>
+    """
+  end
+
   attr :id, :string, default: nil
   attr :title, :string, required: true
   attr :hint, :string, default: nil

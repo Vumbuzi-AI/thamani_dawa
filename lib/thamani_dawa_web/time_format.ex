@@ -18,6 +18,14 @@ defmodule ThamaniDawaWeb.TimeFormat do
   @doc "`18 Nov 2026`; timestamps are converted to EAT first."
   def date(nil), do: "—"
   def date(%Date{} = date), do: Calendar.strftime(date, "%-d %b %Y")
+
+  def date(iso) when is_binary(iso) do
+    case Date.from_iso8601(iso) do
+      {:ok, date} -> date(date)
+      _ -> iso
+    end
+  end
+
   def date(value), do: value |> to_eat() |> Calendar.strftime("%-d %b %Y")
 
   @doc "Shifts a UTC timestamp to EAT wall-clock time."

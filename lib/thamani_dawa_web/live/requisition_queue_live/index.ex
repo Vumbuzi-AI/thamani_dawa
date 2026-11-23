@@ -505,12 +505,12 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
             />
             <:chip
               :if={@filters["date_from"] != ""}
-              label={"From #{@filters["date_from"]}"}
+              label={"From #{ThamaniDawaWeb.TimeFormat.date(@filters["date_from"])}"}
               clear={JS.push("clear_filter", value: %{filter: "date_from"})}
             />
             <:chip
               :if={@filters["date_to"] != ""}
-              label={"To #{@filters["date_to"]}"}
+              label={"To #{ThamaniDawaWeb.TimeFormat.date(@filters["date_to"])}"}
               clear={JS.push("clear_filter", value: %{filter: "date_to"})}
             />
           </.filter_drawer>
