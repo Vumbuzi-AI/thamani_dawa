@@ -25,6 +25,8 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       |> assign(:staff, Accounts.list_users_for_site(organization_id, site.id))
       |> assign(:top_products, Dashboards.top_dispensed_products(organization_id, site.id, 8))
       |> assign(:sales_by_method, Payments.sales_by_payment_method(organization_id, site.id))
+      |> assign(:return_to, ~p"/org/sites")
+      |> assign(:back_label, "Back to Sites")
       |> assign_range("today")
       |> load_pharmacy(organization_id, site)
       |> load_lab(organization_id, site)
@@ -33,7 +35,15 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
   end
 
   def handle_params(params, _url, socket) do
-    {:noreply, assign(socket, :tab, tab_from_params(params, socket.assigns.site))}
+    default = ~p"/org/sites"
+    return_to = ThamaniDawaWeb.ReturnTo.safe(params["return_to"], default)
+    back_label = if return_to == ~p"/org/dashboard", do: "Back to Dashboard", else: "Back to Sites"
+
+    {:noreply,
+     socket
+     |> assign(:tab, tab_from_params(params, socket.assigns.site))
+     |> assign(:return_to, return_to)
+     |> assign(:back_label, back_label)}
   end
 
   def handle_event("set_range", %{"range" => range}, socket) do
@@ -191,10 +201,6 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp parse_date(%Date{} = d), do: {:ok, d}
   defp parse_date(_), do: {:error, :invalid}
-
-  defp format_range_dates({from, to}) do
-    "Granular view for #{Calendar.strftime(from, "%d %b %Y")} to #{Calendar.strftime(to, "%d %b %Y")}"
-  end
 
   defp to_date_val(%DateTime{} = dt), do: DateTime.to_date(dt)
   defp to_date_val(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_date(ndt)
@@ -429,187 +435,183 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
     Enum.map_join(site.activities, ", ", &Phoenix.Naming.humanize/1)
   end
 
+  defp tab_path(site, tab, return_to) do
+    path = ~p"/org/sites/#{site.id}?tab=#{tab}"
+    if return_to in [nil, "", ~p"/org/sites"], do: path, else: ThamaniDawaWeb.ReturnTo.with_query(path, return_to)
+  end
+
+  defp site_subtitle(site) do
+    gln = if is_binary(site.gln) and site.gln != "", do: site.gln, else: "—"
+    "#{activity_labels(site)} · GLN #{gln}"
+  end
+
+  defp range_chip_label("custom", {from, to}) do
+    "#{ThamaniDawaWeb.TimeFormat.date(from)} – #{ThamaniDawaWeb.TimeFormat.date(to)}"
+  end
+
+  defp range_chip_label(range, _dates) do
+    Dashboards.ranges() |> Enum.into(%{}) |> Map.get(range, "Today")
+  end
+
   def render(assigns) do
+    assigns = assign(assigns, :range_label, range_chip_label(assigns.range, assigns.dates))
+
     ~H"""
     <Layouts.org_shell
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/org/sites"}
-      back={~p"/org/sites"}
+      back={@return_to}
+      back_label={@back_label}
     >
-      <%!-- Granular Site Header Dashboard Card --%>
-      <div class="relative mb-6 rounded-3xl p-4 ff-surface-card sm:p-6 lg:p-8">
-        <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-              <h1 class="text-xl font-semibold tracking-tight text-td-ink sm:text-3xl">
-                {@site.name}
-              </h1>
-              <span class="px-3 py-1 text-xs font-medium bg-td-accent-tint text-thamani-forest rounded-full border border-thamani-forest/10 capitalize">
-                {activity_labels(@site)}
-              </span>
-            </div>
-            <p class="text-xs sm:text-sm text-td-ink-2 font-normal mt-1.5">
-              {@site.address || "No address specified"} · {format_range_dates(@dates)}
-            </p>
-          </div>
-
-          <.button
-            navigate={~p"/org/sites/#{@site.id}/edit"}
-            class="shrink-0 !rounded-xl px-3 py-2 text-xs font-medium sm:px-5"
+      <div class="td-back">
+        <.link navigate={@return_to} class="td-back-link">
+          <.td_icon name="arrow-left" class="size-3.5" /> {@back_label}
+        </.link>
+      </div>
+      <.td_page_header title={@site.name} subtitle={site_subtitle(@site)}>
+        <:actions>
+          <.td_badge
+            :if={@site.is_active}
+            tone="success"
+            label="Active"
+          />
+          <.td_badge
+            :if={!@site.is_active}
+            tone="neutral"
+            label="Inactive"
+          />
+          <.td_button
             id="btn-edit-site"
+            variant="secondary"
+            navigate={~p"/org/sites/#{@site.id}/edit"}
+            label="Edit site"
           >
-            <.icon name="hero-pencil-square" class="size-4 sm:mr-1" />
-            <span class="max-sm:sr-only">Edit site</span>
-          </.button>
-        </div>
+            <:icon><.td_icon name="note-pencil" /></:icon>
+          </.td_button>
+        </:actions>
+      </.td_page_header>
 
-        <div id="site-dashboard-range-filter" class="mt-5">
-          <.range_filter event="set_range" current={@range} ranges={Dashboards.ranges()} />
-        </div>
-
-        <%!-- Fixed backdrop blur overlay when search popover is active --%>
-        <div
-          :if={
-            @search_query != "" and String.trim(@search_query) != "" and
-              Map.get(assigns, :search_active, true)
-          }
-          class="fixed inset-0 z-30 bg-black/15 backdrop-blur-sm transition-opacity"
-          phx-click="dismiss_search"
-        />
-
-        <%!-- Search & Filters row --%>
-        <div class="mt-5 grid w-full grid-cols-1 items-start gap-3 min-[480px]:grid-cols-[minmax(0,1fr)_auto]">
-          <div class="relative min-w-0 w-full">
-            <input
-              type="text"
-              name="search"
-              value={@search_query}
-              phx-keyup="search"
-              phx-focus="activate_search"
-              phx-click="activate_search"
-              phx-debounce="250"
-              placeholder={"Search patients, visits, revenue or reports at #{@site.name}..."}
-              class="thamani-input relative z-40 w-full rounded-xl px-4 py-2.5 text-sm placeholder:text-thamani-pewter/60 focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
-            />
-
-            <%!-- Search Results Popover --%>
+      <div class="td-filter-row mb-4">
+        <div class="td-org-dash-search">
+          <input
+            type="search"
+            name="search"
+            value={@search_query}
+            placeholder={"Search patients, visits, revenue or reports at #{@site.name}..."}
+            phx-keyup="search"
+            phx-focus="activate_search"
+            phx-click="activate_search"
+            phx-debounce="250"
+            autocomplete="off"
+            class="td-input td-org-dash-search-input"
+          />
             <div
               :if={
                 @search_query != "" and String.trim(@search_query) != "" and
                   Map.get(assigns, :search_active, true)
               }
-              class="absolute left-0 right-0 top-full z-40 mt-2 rounded-2xl p-4 space-y-3 max-h-[460px] overflow-y-auto ff-surface-popover"
+              class="td-popover td-org-dash-search-pop"
             >
-              <div class="flex items-center justify-between border-b border-thamani-stone pb-2.5">
-                <div class="flex items-center gap-2">
-                  <.icon name="hero-magnifying-glass" class="size-4 text-thamani-forest" />
-                  <span class="text-xs font-medium text-thamani-forest uppercase tracking-wider">
-                    Search hits at {@site.name} for "{@search_query}"
-                  </span>
-                </div>
-                <div class="flex items-center gap-3">
-                  <button
-                    type="button"
-                    phx-click="clear_search"
-                    class="text-xs font-medium text-thamani-forest hover:underline cursor-pointer"
-                  >
-                    Clear search
-                  </button>
-                  <button
-                    type="button"
-                    phx-click="dismiss_search"
-                    class="text-xs font-medium text-thamani-pewter hover:text-thamani-forest cursor-pointer"
-                  >
-                    <.icon name="hero-x-mark" class="size-4" />
-                  </button>
-                </div>
+              <% items = combined_search_items(@search_results) %>
+              <div class="td-org-dash-search-hd">
+                <p class="td-popover-label">Search hits at {@site.name} for "{@search_query}"</p>
+                <button type="button" phx-click="clear_search" class="td-text-btn">
+                  Clear search
+                </button>
               </div>
-
-              <div class="text-xs text-thamani-pewter bg-thamani-stone/50 p-2.5 rounded-lg border border-thamani-stone flex items-center justify-between">
-                <span>Site metrics below filtered for "{@search_query}"</span>
-                <span class="font-medium text-thamani-forest">
+              <p class="td-org-dash-search-hint">
+                Site metrics below filtered for "{@search_query}"
+                <span>
                   {@stats.total_patients} patients • {@stats.patient_visits} visits • {money(
                     @stats.revenue_collected
                   )}
                 </span>
-              </div>
-
-              <%!-- Unified Flat Search Items List --%>
-              <% items = combined_search_items(@search_results) %>
-              <div
-                :if={items != []}
-                class="divide-y divide-thamani-stone/60 rounded-xl ff-surface-card"
-              >
-                <div
-                  :for={item <- items}
-                  class="p-3 hover:bg-thamani-stone/40 transition-colors flex items-center justify-between gap-3"
-                >
-                  <div class="flex items-center gap-3 min-w-0">
-                    <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-thamani-stone text-thamani-forest">
-                      <.icon name={item.icon} class="size-4" />
-                    </div>
-                    <div class="min-w-0">
-                      <p class="text-sm font-medium text-thamani-forest truncate">{item.title}</p>
-                      <p class="text-xs text-thamani-pewter truncate">{item.subtitle}</p>
-                    </div>
-                  </div>
-                  <span class="px-2.5 py-1 text-xs font-medium bg-td-accent-tint text-thamani-forest rounded-full shrink-0">
-                    {item.badge}
-                  </span>
-                </div>
-              </div>
-
-              <%!-- Empty state --%>
-              <div
-                :if={items == []}
-                class="py-8 text-center text-sm text-thamani-pewter"
-              >
+              </p>
+              <div :if={items == []} class="td-empty-inline">
                 No matching records found at {@site.name} for "{@search_query}"
               </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            phx-click="toggle_filters"
-            class="inline-flex h-[42px] w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full bg-thamani-forest px-5 text-sm font-normal text-thamani-on-accent transition-colors hover:opacity-90 min-[480px]:w-auto"
-          >
-            <.icon name="hero-adjustments-horizontal" class="size-4" /> Filters
-          </button>
-        </div>
-
-        <%!-- Date Range Filter Popover Modal --%>
-        <div
-          :if={@show_filters}
-          class="absolute inset-x-4 top-[9.5rem] z-50 mt-2 w-auto rounded-2xl p-5 ff-surface-popover transition-all sm:inset-x-auto sm:right-6 sm:top-[80px] sm:w-full sm:max-w-md sm:p-6"
-        >
-          <form phx-submit="apply_custom_range">
-            <div class="flex items-center justify-between border-b border-thamani-stone pb-3 mb-4">
-              <h3 class="font-medium text-thamani-forest text-base">Filters</h3>
-              <div class="flex items-center gap-3">
-                <button
-                  type="button"
-                  phx-click="reset_filters"
-                  class="text-xs font-medium text-thamani-forest hover:underline cursor-pointer"
-                >
-                  Reset all
-                </button>
-                <button
-                  type="button"
-                  phx-click="toggle_filters"
-                  class="text-thamani-pewter hover:text-thamani-forest cursor-pointer"
-                >
-                  <.icon name="hero-x-mark" class="size-4" />
-                </button>
+              <div :for={item <- items} class="td-org-dash-search-item">
+                <div>
+                  <p class="td-org-dash-search-title">{item.title}</p>
+                  <p class="td-muted">{item.subtitle}</p>
+                </div>
+                <span class="td-chip is-quiet">{item.badge}</span>
               </div>
             </div>
+        </div>
 
-            <p class="text-xs font-medium tracking-wider text-thamani-pewter uppercase mb-3">
-              Date Range
-            </p>
+        <div id="site-dashboard-range-filter" class="td-view-menu">
+          <button
+            type="button"
+            id="site-dashboard-range-filter-trigger"
+            class="td-chip td-view-menu-trigger"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            phx-click={
+              JS.toggle(to: "#site-dashboard-range-filter-menu")
+              |> JS.toggle_attribute({"aria-expanded", "true", "false"},
+                to: "#site-dashboard-range-filter-trigger"
+              )
+            }
+          >
+            <.td_icon name="calendar-blank" class="size-3.5" />
+            <span>Date range</span>
+            <span class="td-chip-value">{@range_label}</span>
+            <.td_icon name="caret-down" class="size-3.5" />
+          </button>
+          <div
+            id="site-dashboard-range-filter-menu"
+            class="td-popover td-view-menu-pop"
+            role="menu"
+            hidden
+            phx-click-away={JS.hide(to: "#site-dashboard-range-filter-menu")}
+          >
+            <p class="td-popover-label">Date range</p>
+            <button
+              :for={{key, label} <- Dashboards.ranges()}
+              type="button"
+              role="menuitem"
+              class={["td-menu-item", key == @range && "is-selected"]}
+              phx-click={
+                JS.hide(to: "#site-dashboard-range-filter-menu")
+                |> JS.push("set_range", value: %{range: key})
+              }
+            >
+              <span class="flex-1">{label}</span>
+              <.td_icon :if={key == @range} name="check" class="size-3.5" />
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              class={["td-menu-item", @range == "custom" && "is-selected"]}
+              phx-click={
+                JS.hide(to: "#site-dashboard-range-filter-menu")
+                |> JS.push("toggle_filters")
+              }
+            >
+              <span class="flex-1">Custom…</span>
+              <.td_icon :if={@range == "custom"} name="check" class="size-3.5" />
+            </button>
+          </div>
+        </div>
 
-            <div class="mb-6">
+        <div class="relative">
+          <button type="button" phx-click="toggle_filters" class="td-chip">
+            <.td_icon name="funnel-simple" class="size-3.5" />
+            Filters
+            <span :if={@range == "custom"} class="td-chip-dot"></span>
+          </button>
+          <div :if={@show_filters} class="fixed inset-0 z-40" phx-click="toggle_filters" />
+          <div :if={@show_filters} class="td-popover td-org-dash-filters absolute right-0 top-full z-50 mt-2">
+            <form phx-submit="apply_custom_range">
+              <div class="td-org-dash-filters-hd">
+                <h3>Filters</h3>
+                <button type="button" phx-click="toggle_filters" class="td-icon-btn" aria-label="Close filters">
+                  <.td_icon name="x" class="size-3.5" />
+                </button>
+              </div>
+              <p class="td-popover-label">Date range</p>
               <.date_range_picker
                 id="site-filter-dates"
                 from_name="from"
@@ -618,26 +620,23 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
                 to_value={elem(@dates, 1)}
                 max="today"
               />
-            </div>
-
-            <div class="flex items-center justify-end gap-3 border-t border-td-wash pt-4">
-              <button
-                type="button"
-                phx-click="clear_filters"
-                class="px-4 py-2 text-xs sm:text-sm font-medium text-td-ink-2 hover:text-td-ink border border-td-hairline rounded-xl hover:bg-td-wash transition-colors cursor-pointer"
-              >
-                Clear filters
-              </button>
-              <button
-                type="submit"
-                class="px-5 py-2 text-xs sm:text-sm font-medium text-thamani-on-accent bg-thamani-forest hover:opacity-90 rounded-full transition-colors cursor-pointer"
-              >
-                Apply filters
-              </button>
-            </div>
-          </form>
+              <div class="td-org-dash-filters-ft">
+                <button type="submit" class="td-btn is-primary">Apply filters</button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
+
+      <div
+        :if={
+          @search_query != "" and String.trim(@search_query) != "" and
+            Map.get(assigns, :search_active, true)
+        }
+        class="fixed inset-0 z-30"
+        style="background: var(--color-td-scrim);"
+        phx-click="dismiss_search"
+      />
 
       <%!-- Site Stat Cards Grid --%>
       <div class="dashboard-stat-grid mt-6">
@@ -762,7 +761,12 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           <:subtitle>People currently assigned to this location</:subtitle>
         </.header>
         <.table id="site-staff" rows={@staff}>
-          <:col :let={user} label="Name">{user.name}</:col>
+          <:col :let={user} label="Name">
+            <span class="td-person">
+              <.td_orb seed={to_string(user.id)} size={24} />
+              {user.name}
+            </span>
+          </:col>
           <:col :let={user} label="Role">{Accounts.User.humanize_roles(user.roles)}</:col>
           <:empty_state>
             <.blank_state icon="hero-users" title="No staff assigned">
@@ -777,13 +781,13 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         class="tabs tabs-boxed w-fit mt-6 mb-2 p-1 bg-base-200"
       >
         <.link
-          patch={~p"/org/sites/#{@site.id}?tab=pharmacy"}
+          patch={tab_path(@site, :pharmacy, @return_to)}
           class={["tab px-6 font-medium", @tab == :pharmacy && "tab-active"]}
         >
           Pharmacy
         </.link>
         <.link
-          patch={~p"/org/sites/#{@site.id}?tab=lab"}
+          patch={tab_path(@site, :lab, @return_to)}
           class={["tab px-6 font-medium", @tab == :lab && "tab-active"]}
         >
           Lab
