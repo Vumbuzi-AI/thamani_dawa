@@ -427,7 +427,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :label, :string, required: true
   attr :active, :boolean, default: false
-  attr :rest, :global, include: ~w(type phx-click)
+  attr :rest, :global, include: ~w(id type phx-click phx-value-mode)
 
   def td_segment(assigns) do
     ~H"""

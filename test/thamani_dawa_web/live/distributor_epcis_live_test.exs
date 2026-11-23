@@ -22,7 +22,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
 
-    assert has_element?(view, "#epcis-events-#{accepted.id}", "Accepted")
+    assert has_element?(view, "#epcis-events-#{accepted.id}", "Sent")
     assert has_element?(view, "#epcis-events-#{pending.id}", "Pending")
   end
 
@@ -44,7 +44,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
     view |> element("#epcis-filter-all") |> render_click()
 
     assert has_element?(view, "#epcis-filter-all[aria-pressed='true']")
-    assert has_element?(view, "#epcis-events-#{accepted.id}", "Accepted")
+    assert has_element?(view, "#epcis-events-#{accepted.id}", "Sent")
     assert has_element?(view, "#epcis-events-#{pending.id}", "Pending")
   end
 
@@ -75,6 +75,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
 
     assert has_element?(view, "#epcis-send-now[disabled]")
     view |> element("#send-epcis-event-#{pending.id}") |> render_click()
+    view |> element("#send-epcis-event-#{pending.id}-confirm") |> render_click()
 
     assert ThamaniDawa.Repo.reload!(pending).status == "pending"
   end
@@ -88,7 +89,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
     {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
 
     assert has_element?(view, "#epcis-queue-halted")
-    assert has_element?(view, "#epcis-events-#{rejected.id}", "Rejected")
+    assert has_element?(view, "#epcis-events-#{rejected.id}", "Failed")
     assert has_element?(view, "#resubmit-epcis-event-#{rejected.id}")
   end
 
@@ -101,6 +102,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
     {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
 
     view |> element("#resubmit-epcis-event-#{rejected.id}") |> render_click()
+    view |> element("#resubmit-epcis-event-#{rejected.id}-confirm") |> render_click()
 
     assert [%OutboxEvent{} = event] = Outbox.pending_for_organization(distributor.organization_id)
     assert event.id == rejected.id
@@ -117,11 +119,11 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
 
-    assert has_element?(view, "#epcis-events-#{blocked.id}", "Blocked")
-    assert has_element?(view, "#epcis-events-#{blocked.id}", "Review diagnostics")
+    assert has_element?(view, "#epcis-events-#{blocked.id}", "Failed")
     assert has_element?(view, "#resubmit-epcis-event-#{blocked.id}")
 
     view |> element("#resubmit-epcis-event-#{blocked.id}") |> render_click()
+    view |> element("#resubmit-epcis-event-#{blocked.id}-confirm") |> render_click()
 
     assert [%OutboxEvent{} = event] = Outbox.pending_for_organization(distributor.organization_id)
     assert event.id == blocked.id
@@ -136,7 +138,9 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
 
     {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
 
-    assert has_element?(view, "#epcis-events-#{event.id}", "Review diagnostics")
+    assert has_element?(view, "#epcis-events-#{event.id}", "Sent")
+    view |> element("#inspect-epcis-event-#{event.id}") |> render_click()
+    assert has_element?(view, "#epcis-payload-modal", "UNKNOWN_SGLN")
   end
 
   defp insert_event(organization_id, status) do
