@@ -417,17 +417,26 @@ defmodule ThamaniDawa.Manufacturing do
             batch_no: batch_no,
             production_date: parse_api_date(first["production"]),
             expiry_date: parse_api_date(first["expiry"]),
-            serial_count:
-              batch_rows
-              |> Enum.map(& &1["serial"])
-              |> Enum.filter(&(is_binary(&1) and &1 != ""))
-              |> Enum.uniq()
-              |> length()
+            serial_count: batch_serial_count(batch_rows)
           }
         end)
         |> Enum.sort_by(&{&1.production_date || ~D[0000-01-01], &1.batch_no}, :desc)
 
       {:ok, batches}
+    end
+  end
+
+  # GS1 now sends one row per batch with `serial_count`. Older responses sent
+  # one row per serial, so count those when the field is missing.
+  defp batch_serial_count(rows) do
+    if Enum.any?(rows, &is_integer(&1["serial_count"])) do
+      rows |> Enum.map(&(&1["serial_count"] || 0)) |> Enum.sum()
+    else
+      rows
+      |> Enum.map(& &1["serial"])
+      |> Enum.filter(&(is_binary(&1) and &1 != ""))
+      |> Enum.uniq()
+      |> length()
     end
   end
 
