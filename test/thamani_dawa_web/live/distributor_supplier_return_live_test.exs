@@ -19,6 +19,7 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLiveTest do
        %{conn: conn, distributor: distributor} do
     {:ok, view, _html} = live(conn, ~p"/distributor/returns")
 
+    assert has_element?(view, "#supplier-returns-empty", "No supplier returns yet")
     assert has_element?(view, "#returns-tab-supplier[aria-selected='true']")
     assert has_element?(view, "#returns-tab-customer")
 
@@ -37,5 +38,12 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLiveTest do
 
     [disposal] = InventoryDisposals.list_disposals(distributor.organization_id)
     assert disposal.kind == :returned
+
+    {:ok, list, _html} = live(conn, ~p"/distributor/returns")
+    assert has_element?(list, "#supplier-returns", "Return ##{disposal.id}")
+    assert has_element?(list, "#sr-tab-draft", "1")
+
+    {:ok, list, _html} = live(conn, ~p"/distributor/returns?status=approved")
+    assert has_element?(list, "#supplier-returns-empty", "Nothing matches")
   end
 end

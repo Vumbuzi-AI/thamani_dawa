@@ -70,7 +70,7 @@ defmodule ThamaniDawa.InventoryDisposals do
       from d in InventoryDisposal,
         where: d.organization_id == ^organization_id,
         order_by: [desc: d.inserted_at],
-        preload: [:site, :requested_by, :admin, :approved_by, :items]
+        preload: [:site, :requested_by, :admin, :approved_by, items: [batch: :supplier]]
     )
   end
 
@@ -82,7 +82,8 @@ defmodule ThamaniDawa.InventoryDisposals do
         where: d.site_id == ^site_id,
         where: d.kind == ^kind,
         where: d.inventory_type == ^inventory_type,
-        order_by: [desc: d.inserted_at]
+        order_by: [desc: d.inserted_at],
+        preload: [:site, :requested_by, items: [batch: :supplier]]
     )
   end
 

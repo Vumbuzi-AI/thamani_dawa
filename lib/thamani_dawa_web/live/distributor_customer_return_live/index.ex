@@ -50,7 +50,12 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
   end
 
   def handle_params(params, _url, socket) do
-    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+    status = if params["status"] in ~w(draft received inspected completed), do: params["status"], else: ""
+
+    {:noreply,
+     socket
+     |> assign(:cr_status, status)
+     |> apply_action(socket.assigns.live_action, params)}
   end
 
   defp apply_action(socket, :new, _params) do
@@ -1098,7 +1103,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
     <Layouts.distributor_shell
       flash={@flash}
       current_scope={@current_scope}
-      current_path={if @live_action == :show, do: "/distributor/customer-returns", else: "/distributor/returns"}
+      current_path="/distributor/customer-returns"
     >
       <%= if @live_action == :show do %>
         <div class="td-recipe td-detail-page" id="customer-return-page">
@@ -1160,21 +1165,16 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
           <.return_panel customer_return={@customer_return} products={@products} />
         </section>
       <% else %>
-        <.header icon="hero-arrow-uturn-left">
-          Returns
-          <:subtitle>
-            Stock moving back to suppliers or in from customers, tracked through to approval.
-          </:subtitle>
-          <:actions>
-            <.button
-              id="new-customer-return"
-              variant="primary"
-              patch={~p"/distributor/customer-returns/new"}
-            >
-              <.icon name="hero-plus" class="size-4" /> New return
-            </.button>
-          </:actions>
-        </.header>
+        <div class="td-recipe td-list-page">
+          <.td_page_header
+            title="Customer returns"
+            subtitle="Stock your customers send back. Receive it, inspect each item, then complete the return."
+          >
+            <:actions>
+              <.td_button id="new-customer-return" variant="primary" glyph="plus" patch={~p"/distributor/customer-returns/new"} label="New customer return" />
+            </:actions>
+          </.td_page_header>
+        </div>
 
         <.returns_tabs active={:customer} />
 
@@ -1439,38 +1439,64 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
           </.form>
         </.modal>
 
-        <.table
-          id="customer-returns"
-          rows={@streams.returns}
-          row_click={fn {_id, customer_return} -> open_return(customer_return) end}
-        >
-          <:col :let={{_id, customer_return}} label="Return">
-            <div class="min-w-0">
-              <p class="font-medium text-thamani-forest">{customer_return.customer.name}</p>
-              <p class="text-xs tabular-nums text-thamani-pewter">Return #{customer_return.id}</p>
+        <div class="td-list-page" id="customer-returns-page">
+          <nav class="td-tabs" aria-label="Customer return status">
+            <.td_tab id="cr-tab-all" label="All" count={length(@returns)} active={@cr_status == ""} patch={~p"/distributor/customer-returns"} />
+            <.td_tab
+              :for={{status, label} <- [{"draft", "Draft"}, {"received", "Received"}, {"inspected", "Inspected"}, {"completed", "Completed"}]}
+              id={"cr-tab-#{status}"}
+              label={label}
+              count={Enum.count(@returns, &(Atom.to_string(&1.status) == status))}
+              active={@cr_status == status}
+              patch={~p"/distributor/customer-returns?#{%{status: status}}"}
+            />
+          </nav>
+          <% shown = Enum.filter(@returns, &(@cr_status == "" or Atom.to_string(&1.status) == @cr_status)) %>
+          <div :if={shown == []} id="customer-returns-empty" class="td-pad td-empty-wrap">
+            <div class="td-card td-empty-card">
+              <%= if @returns == [] do %>
+                <p class="td-empty-title">No customer returns yet</p>
+                <p class="td-note">Start a return when a customer sends stock back.</p>
+                <.td_button id="customer-returns-empty-new" variant="primary" patch={~p"/distributor/customer-returns/new"} label="New customer return" />
+              <% else %>
+                <p class="td-empty-title">Nothing here</p>
+                <p class="td-note">No returns are at this step right now.</p>
+                <.td_button patch={~p"/distributor/customer-returns"} label="Show all" />
+              <% end %>
             </div>
-          </:col>
-          <:col :let={{_id, customer_return}} label="Status" mobile="aside">
-            <.status_badge status={customer_return.status} />
-          </:col>
-          <:col :let={{_id, customer_return}} label="Site">
-            <span class="text-sm">{customer_return.site.name}</span>
-          </:col>
-          <:col :let={{_id, customer_return}} label="Reason" tablet="hidden">
-            {reason_label(customer_return.reason)}
-          </:col>
-          <:col :let={{_id, customer_return}} label="Items">
-            <span class="tabular-nums">{item_count(customer_return.items)}</span>
-          </:col>
-          <:col :let={{_id, customer_return}} label="Updated" mobile="hidden">
-            <span class="text-xs text-thamani-pewter">{date_time(customer_return.updated_at)}</span>
-          </:col>
-          <:empty_state>
-            <.blank_state icon="hero-arrow-uturn-left" title="No customer returns yet">
-              Start a return when a customer sends stock back.
-            </.blank_state>
-          </:empty_state>
-        </.table>
+          </div>
+          <div class="td-list-table" hidden={shown == []}>
+            <table class="td-rows">
+              <thead>
+                <tr>
+                  <th>Return</th>
+                  <th>Customer</th>
+                  <th>From order</th>
+                  <th>Reason</th>
+                  <th class="is-num">Items</th>
+                  <th>Status</th>
+                  <th>Updated (EAT)</th>
+                </tr>
+              </thead>
+              <tbody id="customer-returns">
+                <tr
+                  :for={customer_return <- shown}
+                  id={"returns-#{customer_return.id}"}
+                  class="is-link"
+                  phx-click={open_return(customer_return)}
+                >
+                  <td><b>Return #{customer_return.id}</b><span class="td-sub td-s12">{customer_return.site.name}</span></td>
+                  <td>{customer_return.customer.name}</td>
+                  <td>{(customer_return.shipment && (customer_return.shipment.order_number || customer_return.shipment.reference)) || "—"}</td>
+                  <td>{reason_label(customer_return.reason)}</td>
+                  <td class="is-num">{item_count(customer_return.items)}</td>
+                  <td><.status_badge status={customer_return.status} /></td>
+                  <td>{ThamaniDawaWeb.TimeFormat.datetime(customer_return.updated_at)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         <.modal
           :if={customer_return = detail_return(@returns, @detail_id)}
