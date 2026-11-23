@@ -30,6 +30,7 @@ defmodule ThamaniDawaWeb.ReturnTo do
       "/distributor/returns" -> "Back to Supplier returns"
       "/distributor/customer-returns" -> "Back to Customer returns"
       "/distributor/customers" -> "Back to Customers"
+      "/distributor/expiry-write-offs" -> "Back to Expiry write-offs"
       "/distributor" -> "Back to Dashboard"
       _ -> default
     end

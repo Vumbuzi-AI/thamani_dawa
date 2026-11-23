@@ -219,6 +219,14 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
   defp supplier_name(%{batch: %{supplier: %{name: name}}}), do: name
   defp supplier_name(_item), do: "—"
 
+  defp disposal_supplier(%{items: items}) do
+    case items |> Enum.map(&supplier_name/1) |> Enum.uniq() do
+      [] -> "—"
+      [name] -> name
+      names -> "#{length(names)} suppliers"
+    end
+  end
+
   defp format_changeset_error(changeset) do
     changeset
     |> Ecto.Changeset.traverse_errors(fn {msg, _opts} -> msg end)
@@ -242,21 +250,54 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
       flash={@flash}
       current_scope={@current_scope}
       current_path={@list_path}
-      back={@return_to}
-      back_label="Back to list"
     >
-      <div class="space-y-6">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-          <div class="min-w-0">
-            <h1 class="text-xl font-semibold tracking-tight text-thamani-forest sm:text-2xl">
-              {kind_label(@disposal.kind)}
+      <div class="space-y-6 td-recipe td-detail-page" id="disposal-detail">
+        <.td_back_link
+          id="disposal-back"
+          to={@return_to}
+          label={ThamaniDawaWeb.ReturnTo.label(@return_to, "Back to list")}
+        />
+        <header class="td-idh">
+          <div class="td-idh-text">
+            <h1 class="td-idh-title">
+              <span>{kind_label(@disposal.kind)}</span>
+              <.status_badge status={@disposal.status} class="shrink-0" />
             </h1>
-            <p class="mt-1 text-sm text-thamani-pewter">
-              {@site.name}. {status_message(@disposal.status)}
-            </p>
+            <p class="td-idh-sub">{@site.name}. {status_message(@disposal.status)}</p>
           </div>
-          <.status_badge status={@disposal.status} class="shrink-0" />
-        </div>
+        </header>
+
+        <section class="td-card" id="disposal-summary">
+          <dl class="td-kv-grid is-pad is-6">
+            <div :if={@disposal.kind == :returned} class="td-kv">
+              <dt class="td-kv-label">Supplier</dt>
+              <dd class="td-kv-value">{disposal_supplier(@disposal)}</dd>
+            </div>
+            <div class="td-kv">
+              <dt class="td-kv-label">From</dt>
+              <dd class="td-kv-value">{@site.name}</dd>
+            </div>
+            <div class="td-kv">
+              <dt class="td-kv-label">Reason</dt>
+              <dd class="td-kv-value">{@disposal.reason || "—"}</dd>
+            </div>
+            <div class="td-kv">
+              <dt class="td-kv-label">Batches</dt>
+              <dd class="td-kv-value">{length(@disposal.items)}</dd>
+            </div>
+            <div class="td-kv">
+              <dt class="td-kv-label">Units</dt>
+              <dd class="td-kv-value">{@disposal.items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()}</dd>
+            </div>
+            <div class="td-kv">
+              <dt class="td-kv-label">Created (EAT)</dt>
+              <dd class="td-kv-value">
+                {ThamaniDawaWeb.TimeFormat.datetime(@disposal.inserted_at)}
+                <span :if={@disposal.requested_by} class="td-sub td-s12">by {@disposal.requested_by.name}</span>
+              </dd>
+            </div>
+          </dl>
+        </section>
 
         <section
           :if={@disposal.status == :draft}

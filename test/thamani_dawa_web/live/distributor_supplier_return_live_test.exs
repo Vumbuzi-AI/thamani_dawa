@@ -26,10 +26,14 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLiveTest do
     refute has_element?(view, "#supplier-return-form select[name='disposal[site_id]']")
     refute has_element?(view, "#supplier-return-form input[name='disposal[reason]']")
 
-    assert {:error, {:live_redirect, %{to: "/distributor/returns/" <> _id}}} =
+    assert {:error, {:live_redirect, %{to: "/distributor/returns/" <> _id = to}}} =
              view
              |> form("#supplier-return-form", %{disposal: %{notes: "Damaged on arrival"}})
              |> render_submit()
+
+    {:ok, detail, _html} = live(conn, to)
+    assert has_element?(detail, "#disposal-back[href='/distributor/returns']", "Back to Supplier returns")
+    assert has_element?(detail, "#disposal-summary")
 
     [disposal] = InventoryDisposals.list_disposals(distributor.organization_id)
     assert disposal.kind == :returned
