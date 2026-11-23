@@ -44,8 +44,30 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
      |> assign(:overdue_count, overdue_count)
      |> assign(:completed_this_month, completed_this_month)
      |> assign(:stats, Dashboards.lab_stats(organization_id, site_id))
-     |> assign(:orders_by_day, Dashboards.lab_orders_by_day(organization_id, site_id))
-     |> assign(:orders_by_status, Dashboards.lab_orders_by_status(organization_id, site_id))}
+     |> assign(:calendar_view, "week")
+     |> assign(:orders_by_status, Dashboards.lab_orders_by_status(organization_id, site_id))
+     |> assign_orders_chart(organization_id, site_id)}
+  end
+
+  def handle_event("set_calendar_view", %{"view" => view}, socket)
+      when view in ["day", "week", "month"] do
+    scope = socket.assigns.current_scope
+
+    {:noreply,
+     socket
+     |> assign(:calendar_view, view)
+     |> assign_orders_chart(scope.organization_id, scope.current_site_id)}
+  end
+
+  defp assign_orders_chart(socket, organization_id, site_id) do
+    days =
+      case socket.assigns.calendar_view do
+        "day" -> 14
+        "month" -> 365
+        _ -> 84
+      end
+
+    assign(socket, :orders_by_day, Dashboards.lab_orders_by_day(organization_id, site_id, days))
   end
 
   defp product_tour_steps do
@@ -102,8 +124,20 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
   defp phrase(1, singular, _plural), do: "1 #{singular}"
   defp phrase(n, _singular, plural), do: "#{n} #{plural}"
 
-  defp bar_marks(orders_by_day) do
-    points = Enum.take(orders_by_day, -30)
+  defp bar_marks(orders_by_day, view) do
+    {points, label_fun, recent_from} =
+      case view do
+        "day" ->
+          {Enum.take(orders_by_day, -14), &day_label/1, 7}
+
+        "month" ->
+          {grouped_counts(orders_by_day, fn date -> Date.new!(date.year, date.month, 1) end, 12),
+           &month_label/1, 1}
+
+        _ ->
+          {grouped_counts(orders_by_day, &Date.beginning_of_week/1, 12), &week_label/1, 2}
+      end
+
     max = points |> Enum.map(fn {_date, n} -> n end) |> Enum.max(fn -> 0 end)
     total = length(points)
 
@@ -114,11 +148,23 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
 
       %{
         height: height,
-        recent: index >= total - 7,
-        label: date |> Calendar.strftime("%d %b") |> String.trim_leading("0")
+        recent: index >= total - recent_from,
+        label: label_fun.(date)
       }
     end)
   end
+
+  defp grouped_counts(orders_by_day, key_fun, take) do
+    orders_by_day
+    |> Enum.group_by(fn {date, _n} -> key_fun.(date) end, fn {_date, n} -> n end)
+    |> Enum.map(fn {key, counts} -> {key, Enum.sum(counts)} end)
+    |> Enum.sort_by(&elem(&1, 0), Date)
+    |> Enum.take(-take)
+  end
+
+  defp day_label(date), do: date |> Calendar.strftime("%d %b") |> String.trim_leading("0")
+  defp week_label(date), do: "W/c " <> day_label(date)
+  defp month_label(date), do: Calendar.strftime(date, "%b %Y")
 
   defp axis_labels(marks) do
     case marks do
@@ -165,7 +211,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
   def render(assigns) do
     assigns =
       assigns
-      |> assign(:bars, bar_marks(assigns.orders_by_day))
+      |> assign(:bars, bar_marks(assigns.orders_by_day, assigns.calendar_view))
       |> assign(:statuses, status_rows(assigns.orders_by_status))
       |> assign(:pending_rows, assigns.pending |> newest() |> Enum.take(4))
       |> assign(:incomplete_rows, assigns.incomplete |> newest() |> Enum.take(4))
@@ -189,6 +235,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         subtitle="Pending orders and incomplete reports at your site."
       >
         <:actions>
+          <.td_view_menu id="lab-calendar-view" current={@calendar_view} />
           <.td_button variant="secondary" navigate={~p"/lab/scan"} label="Scan">
             <:icon><.td_icon name="scan" /></:icon>
           </.td_button>
