@@ -89,7 +89,7 @@ defmodule ThamaniDawaWeb.ManufacturerDashboardLive do
         <.td_dash_row>
           <.td_dash_card
             id="manufacturer-recent-serial-jobs"
-            title="Recent serial jobs"
+            title="Recent batches"
             subtitle="Latest DataMatrix issuance by batch"
           >
             <:actions>
