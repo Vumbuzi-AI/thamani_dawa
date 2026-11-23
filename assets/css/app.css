@@ -3490,3 +3490,22 @@ label.td-option > input { position: absolute; opacity: 0; pointer-events: none; 
 .td-view-menu { position: relative; display: inline-flex; }
 .td-view-menu-trigger { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; cursor: pointer; background: var(--color-td-surface); border: 1px solid var(--color-td-border); }
 .td-view-menu-pop { left: auto; right: 0; width: 200px; }
+
+
+/* Org admin dashboard (voIG90Ocbf) */
+.td-org-dash-search { position: relative; display: flex; align-items: center; min-width: 220px; }
+.td-org-dash-search-input { height: 32px; min-width: 220px; padding-right: 32px; }
+.td-org-dash-search .td-icon-btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
+.td-org-dash-search-pop { top: calc(100% + 8px); left: 0; width: min(420px, 80vw); max-height: 460px; overflow: auto; padding: 12px; z-index: 50; }
+.td-org-dash-search-hd { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.td-org-dash-search-hd .td-popover-label { margin: 0; }
+.td-org-dash-search-hint { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--color-td-ink-2); background: var(--color-td-hover); padding: 8px 10px; border-radius: 10px; margin-bottom: 8px; }
+.td-org-dash-search-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 4px; border-top: 1px solid var(--color-td-border); }
+.td-org-dash-search-title { font-size: 13px; font-weight: 500; color: var(--color-td-ink); }
+.td-empty-inline { padding: 24px 8px; text-align: center; font-size: 13px; color: var(--color-td-ink-2); }
+.td-org-dash-filters { width: min(420px, 90vw); padding: 16px; }
+.td-org-dash-filters-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.td-org-dash-filters-hd h3 { flex: 1; margin: 0; font-size: 14px; font-weight: 600; color: var(--color-td-ink); }
+.td-org-dash-filters-ft { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-td-border); }
+.td-chip-dot { width: 6px; height: 6px; border-radius: 99px; background: var(--color-td-accent); }
+.td-chip.is-quiet { height: auto; padding: 2px 8px; font-size: 11px; pointer-events: none; }
