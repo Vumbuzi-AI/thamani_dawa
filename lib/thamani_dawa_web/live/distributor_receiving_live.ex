@@ -2124,8 +2124,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         id="distributor-add-item-modal"
         show
         width={640}
-        title={add_item_modal_title(@receipt_step)}
-        subtitle={add_item_modal_subtitle(@receipt_step)}
+        title={add_item_modal_title(@receipt_step, @receiving_portal)}
+        subtitle={add_item_modal_subtitle(@receipt_step, @receiving_portal)}
         on_cancel={JS.push("close_add_item")}
       >
         <:body>
@@ -2141,10 +2141,10 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       >
         <div class="border-b border-thamani-stone pb-4">
           <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
-            {add_item_modal_title(@receipt_step)}
+            {add_item_modal_title(@receipt_step, @receiving_portal)}
           </h2>
           <p class="mt-1 text-sm text-thamani-pewter">
-            {add_item_modal_subtitle(@receipt_step)}
+            {add_item_modal_subtitle(@receipt_step, @receiving_portal)}
           </p>
         </div>
         <.add_item_steps {assigns} />
@@ -2191,21 +2191,24 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   end
 
 
-  defp add_item_modal_title(:sscc), do: "Enter SSCC"
-  defp add_item_modal_title(:confirm_shipper), do: "Confirm this case's contents"
-  defp add_item_modal_title(:new_product), do: "Add to catalog"
-  defp add_item_modal_title(_), do: "Add item"
+  defp add_item_modal_title(:new_product, portal) when portal != :organization, do: "Add to catalog"
+  defp add_item_modal_title(:sscc, _), do: "Enter SSCC"
+  defp add_item_modal_title(:confirm_shipper, _), do: "Confirm this case's contents"
+  defp add_item_modal_title(_, _), do: "Add item"
 
-  defp add_item_modal_subtitle(:sscc),
+  defp add_item_modal_subtitle(:sscc, _),
     do: "Scan or type the case label's SSCC to pull in its contents."
 
-  defp add_item_modal_subtitle(:confirm_shipper),
+  defp add_item_modal_subtitle(:confirm_shipper, _),
     do: "Unmarked contents stay accepted. Flag anything damaged or missing before adding it."
 
-  defp add_item_modal_subtitle(:new_product),
+  defp add_item_modal_subtitle(:new_product, :organization),
+    do: "Scan or select the product, then add its batch details."
+
+  defp add_item_modal_subtitle(:new_product, _),
     do: "This GTIN is not in your catalog yet. Save the product and its batch stays on this delivery."
 
-  defp add_item_modal_subtitle(_),
+  defp add_item_modal_subtitle(_, _),
     do: "Scan or select the product, then add its batch details."
 
   defp add_item_steps(assigns) do
@@ -2485,6 +2488,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 <p class="mt-0.5 font-mono text-xs text-thamani-pewter">
                   GTIN {@new_product_form[:gtin].value}
                 </p>
+                <p :if={@receiving_portal == :organization} class="mt-1 text-xs font-medium text-thamani-pewter">
+                  Not in your catalogue
+                </p>
               </div>
               <button
                 type="button"
@@ -2508,7 +2514,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 <.input
                   field={@new_product_form[:net_content_uom]}
                   type="select"
-                  label="Unit of measure (UOM)"
+                  label={if @receiving_portal == :organization, do: "Base inventory unit", else: "Unit of measure (UOM)"}
                   prompt="Tablets, capsules, ml"
                   options={[
                     {"Tablets", "U2"},
@@ -2528,7 +2534,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 <.input
                   field={@new_product_form[:price]}
                   type="number"
-                  label="Price (KSh)"
+                  label={if @receiving_portal == :organization, do: "Unit price (KSh)", else: "Price (KSh)"}
                   min="0"
                   required
                 />
