@@ -86,10 +86,10 @@ defmodule ThamaniDawa.Sites do
     })
   end
 
-  def create_default_site(organization_id, attrs)
+  def create_default_site(organization_id, attrs, opts \\ [])
       when is_integer(organization_id) and is_map(attrs) do
     %Site{}
-    |> Site.default_changeset(attrs)
+    |> Site.default_changeset(attrs, opts)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Repo.audited_insert()
   end
