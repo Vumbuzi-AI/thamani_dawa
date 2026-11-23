@@ -936,7 +936,8 @@ defmodule ThamaniDawaWeb.Layouts do
        [
          {"Products", "hero-archive-box", ~p"/manufacturer/products"},
          {"Inventory", "hero-cube", ~p"/manufacturer/inventory"},
-         {"Shipments", "hero-truck", ~p"/manufacturer/shipments"}
+         {"Shipments", "hero-truck", ~p"/manufacturer/shipments"},
+         {"Aggregation", "hero-squares-plus", ~p"/manufacturer/aggregations"}
        ]},
       {"Compliance",
        [

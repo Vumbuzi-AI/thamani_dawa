@@ -381,6 +381,10 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer/shipments/new", ManufacturerShipmentLive.Form, :new
       live "/manufacturer/shipments/:id", ManufacturerShipmentLive.Review, :show
 
+      live "/manufacturer/aggregations", ManufacturerAggregationLive.List, :index
+      live "/manufacturer/aggregations/new", ManufacturerAggregationLive.Form, :new
+      live "/manufacturer/aggregations/:id", ManufacturerAggregationLive.Review, :show
+
       live "/manufacturer/sscc/:id/serials", ManufacturerSsccLive.Serials, :show
       live "/manufacturer/sscc/:id/label", ManufacturerSsccLive.Label, :show
       live "/manufacturer/epcis", ManufacturerEpcisLive, :index

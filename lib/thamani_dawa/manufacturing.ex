@@ -1,0 +1,1345 @@
+defmodule ThamaniDawa.Manufacturing do
+  @moduledoc """
+  Manufacturer operations: GTIN product catalogue, batches, serialised
+  DataMatrix codes, and the pallet/shipper SSCC hierarchy packed around
+  them. Mirrors the shape of `gs1_admin`'s `ErpLive.Mo` context but every
+  table carries `organization_id` directly, matching this app's tenancy
+  convention, rather than only the top-level GTIN/pallet/SSCC rows.
+
+  Serial and SSCC codes are minted by the real GS1 member API
+  (`ThamaniDawa.GS1.MemberApi`) and persisted here — this context never
+  generates a GS1 identifier itself.
+  """
+
+  import Ecto.Query, warn: false
+
+  alias ThamaniDawa.Epcis
+  alias ThamaniDawa.GS1.MemberApi
+  alias ThamaniDawa.Manufacturing.Aggregation
+  alias ThamaniDawa.Manufacturing.AggregationItem
+  alias ThamaniDawa.Manufacturing.Batch
+  alias ThamaniDawa.Manufacturing.Pallet
+  alias ThamaniDawa.Manufacturing.Product
+  alias ThamaniDawa.Manufacturing.Serial
+  alias ThamaniDawa.Manufacturing.Shipment
+  alias ThamaniDawa.Manufacturing.ShipmentItem
+  alias ThamaniDawa.Manufacturing.ShipperSscc
+  alias ThamaniDawa.Manufacturing.SsccBatch
+  alias ThamaniDawa.Organizations
+  alias ThamaniDawa.Repo
+
+  @product_page_size 10
+
+  # Products
+
+  @doc "Lists an organization's manufactured products, most recently added first."
+  def list_products(organization_id) do
+    Repo.all(
+      from p in Product,
+        where: p.organization_id == ^organization_id,
+        order_by: [desc: p.inserted_at, desc: p.id]
+    )
+  end
+
+  @doc """
+  Lists an organization's products with their SSCC and serial counts, for
+  the Products page's stats table.
+  """
+  def list_products_with_counts(organization_id) do
+    sscc_counts =
+      from s in ShipperSscc,
+        where: s.gtin == parent_as(:product).gtin and s.organization_id == ^organization_id,
+        select: count(s.id)
+
+    serial_counts =
+      from s in Serial,
+        where: s.manufacturer_product_id == parent_as(:product).id,
+        select: count(s.id)
+
+    Repo.all(
+      from p in Product,
+        as: :product,
+        where: p.organization_id == ^organization_id,
+        order_by: [desc: p.inserted_at, desc: p.id],
+        select: %{
+          product: p,
+          sscc_count: subquery(sscc_counts),
+          serial_count: subquery(serial_counts)
+        }
+    )
+  end
+
+  def paginate_products_with_counts(organization_id, opts \\ []) do
+    page = max(Keyword.get(opts, :page, 1), 1)
+    page_size = Keyword.get(opts, :page_size, @product_page_size)
+    search = opts |> Keyword.get(:search, "") |> to_string() |> String.trim()
+
+    base_query = from p in Product, where: p.organization_id == ^organization_id
+
+    base_query =
+      if search == "" do
+        base_query
+      else
+        pattern = "%#{search}%"
+
+        where(
+          base_query,
+          [p],
+          ilike(p.gtin, ^pattern) or ilike(p.name, ^pattern) or
+            ilike(coalesce(p.brand_owner, ""), ^pattern) or
+            ilike(coalesce(p.description, ""), ^pattern)
+        )
+      end
+
+    total_entries = Repo.aggregate(base_query, :count)
+    total_pages = max(ceil(total_entries / page_size), 1)
+    page = min(page, total_pages)
+
+    sscc_counts =
+      from s in ShipperSscc,
+        where: s.gtin == parent_as(:product).gtin and s.organization_id == ^organization_id,
+        select: count(s.id)
+
+    serial_counts =
+      from s in Serial,
+        where: s.manufacturer_product_id == parent_as(:product).id,
+        select: count(s.id)
+
+    entries =
+      Repo.all(
+        from p in base_query,
+          as: :product,
+          order_by: [desc: p.inserted_at, desc: p.id],
+          limit: ^page_size,
+          offset: ^((page - 1) * page_size),
+          select: %{
+            product: p,
+            sscc_count: subquery(sscc_counts),
+            serial_count: subquery(serial_counts)
+          }
+      )
+
+    %{
+      entries: entries,
+      page_number: page,
+      page_size: page_size,
+      total_entries: total_entries,
+      total_pages: total_pages
+    }
+  end
+
+  @doc "Fetches a product scoped to the organization."
+  def get_product!(organization_id, id) do
+    Repo.get_by!(Product, id: id, organization_id: organization_id)
+  end
+
+  @doc "Fetches a product by its GTIN, scoped to the organization."
+  def get_product_by_gtin!(organization_id, gtin) do
+    Repo.get_by!(Product, gtin: gtin, organization_id: organization_id)
+  end
+
+  @doc "Total serials and SSCCs generated across an organization's products."
+  def generation_counts(organization_id) do
+    %{
+      serials: count(Serial, organization_id),
+      ssccs: count(ShipperSscc, organization_id)
+    }
+  end
+
+  @doc "Changeset for building or editing a product form."
+  def change_product(product \\ %Product{}, attrs \\ %{}) do
+    Product.changeset(product, attrs)
+  end
+
+  @doc "Creates a manufactured product."
+  def create_product(organization_id, attrs) do
+    %Product{organization_id: organization_id}
+    |> Product.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc "Updates a manufactured product."
+  def update_product(%Product{} = product, attrs) do
+    product
+    |> Product.changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Syncs this organization's product catalogue from the GS1 member API
+  (`GET /HBS/products`), upserting by GTIN. Manual add + bulk import still
+  work alongside this — a product created by hand is simply adopted (its
+  name/description/status refreshed) the first time a sync sees its GTIN.
+  """
+  def sync_products(organization_id, opts \\ []) do
+    opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
+
+    case MemberApi.list_products(%{}, opts) do
+      {:ok, products} when is_list(products) ->
+        Enum.each(products, &upsert_synced_product(organization_id, &1))
+        {:ok, length(products)}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp upsert_synced_product(organization_id, %{"gtin" => gtin} = attrs) do
+    case Repo.get_by(Product, organization_id: organization_id, gtin: gtin) do
+      nil -> create_product(organization_id, attrs)
+      product -> update_product(product, attrs)
+    end
+  end
+
+  defp upsert_synced_product(_organization_id, _attrs), do: :ok
+
+  # Batches
+
+  @doc "Lists a product's batches with their serial counts, most recent first."
+  def list_batches(organization_id, product_id) do
+    serial_counts =
+      from s in Serial,
+        where: s.manufacturer_batch_id == parent_as(:batch).id,
+        select: count(s.id)
+
+    Repo.all(
+      from b in Batch,
+        as: :batch,
+        where: b.organization_id == ^organization_id and b.manufacturer_product_id == ^product_id,
+        order_by: [desc: b.inserted_at, desc: b.id],
+        select: {b, subquery(serial_counts)}
+    )
+  end
+
+  @doc "Fetches a batch scoped to the organization."
+  def get_batch!(organization_id, id) do
+    Repo.get_by!(Batch, id: id, organization_id: organization_id)
+  end
+
+  @doc "Changeset for building or editing a batch form."
+  def change_batch(batch \\ %Batch{}, attrs \\ %{}) do
+    Batch.changeset(batch, attrs)
+  end
+
+  @doc "Creates a batch for a product."
+  def create_batch(organization_id, product_id, attrs) do
+    %Batch{organization_id: organization_id, manufacturer_product_id: product_id}
+    |> Batch.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Finds the product's existing batch by batch number, or creates one — the
+  "+ Serial" wizard's step 2 doesn't force picking an existing batch from a
+  dropdown, so typing in a batch number that already exists reuses it
+  instead of failing the unique constraint.
+  """
+  def find_or_create_batch(organization_id, product_id, attrs) do
+    batch_no = attrs["batch_no"] || attrs[:batch_no]
+
+    case Repo.get_by(Batch,
+           organization_id: organization_id,
+           manufacturer_product_id: product_id,
+           batch_no: batch_no
+         ) do
+      nil ->
+        create_batch(organization_id, product_id, attrs)
+
+      batch ->
+        production_date = parse_date(attrs["production_date"] || attrs[:production_date])
+        expiry_date = parse_date(attrs["expiry_date"] || attrs[:expiry_date])
+
+        if batch.production_date == production_date and batch.expiry_date == expiry_date do
+          {:ok, batch}
+        else
+          {:error,
+           batch
+           |> Batch.changeset(attrs)
+           |> Ecto.Changeset.add_error(
+             :batch_no,
+             "already exists with different production or expiry dates"
+           )}
+        end
+    end
+  end
+
+  def list_batches_for_serials(organization_id, product_id, search \\ "") do
+    search = String.trim(search)
+
+    query =
+      from b in Batch,
+        left_join: s in Serial,
+        on: s.manufacturer_batch_id == b.id,
+        where: b.organization_id == ^organization_id,
+        where: b.manufacturer_product_id == ^product_id,
+        group_by: b.id,
+        order_by: [desc: b.inserted_at, desc: b.id],
+        select: {b, count(s.id)}
+
+    query =
+      if search == "" do
+        query
+      else
+        pattern = "%#{search}%"
+        where(query, [b, s], ilike(b.batch_no, ^pattern) or ilike(s.serial, ^pattern))
+      end
+
+    Repo.all(query)
+  end
+
+  # Serials
+
+  @per_page 50
+
+  @doc """
+  One page of a batch's serials, optionally filtered by a serial substring
+  — queried and counted in SQL rather than loaded in full, since a batch
+  can carry thousands of serials over repeated generation runs.
+  """
+  def paginate_serials(organization_id, batch_id, opts \\ []) do
+    page = max(Keyword.get(opts, :page, 1), 1)
+    page_size = Keyword.get(opts, :page_size, @per_page)
+    search = opts |> Keyword.get(:search, "") |> to_string() |> String.trim()
+
+    base_query =
+      from s in Serial,
+        where: s.organization_id == ^organization_id and s.manufacturer_batch_id == ^batch_id
+
+    base_query =
+      if search == "",
+        do: base_query,
+        else: where(base_query, [s], ilike(s.serial, ^"%#{search}%"))
+
+    total_entries = Repo.aggregate(base_query, :count)
+    total_pages = max(ceil(total_entries / page_size), 1)
+    page = min(page, total_pages)
+
+    entries =
+      Repo.all(
+        from s in base_query,
+          order_by: [asc: s.serial],
+          limit: ^page_size,
+          offset: ^((page - 1) * page_size)
+      )
+
+    %{
+      entries: entries,
+      page_number: page,
+      page_size: page_size,
+      total_entries: total_entries,
+      total_pages: total_pages
+    }
+  end
+
+  @doc """
+  Lists the primary serials packed under a shipper SSCC — every serial of a
+  batch linked to it via `manufacturer_sscc_batches`, unless the serials
+  were individually split across several shippers of the same batch (the
+  make-to-order path), in which case only the serials actually assigned to
+  this shipper count.
+  """
+  def list_serials_for_sscc(organization_id, sscc_id) do
+    batch_ids =
+      Repo.all(
+        from sb in SsccBatch,
+          where: sb.manufacturer_shipper_sscc_id == ^sscc_id,
+          select: sb.manufacturer_batch_id
+      )
+
+    Repo.all(
+      from s in Serial,
+        where: s.organization_id == ^organization_id and s.manufacturer_batch_id in ^batch_ids,
+        where:
+          is_nil(s.manufacturer_shipper_sscc_id) or s.manufacturer_shipper_sscc_id == ^sscc_id,
+        order_by: [asc: s.serial]
+    )
+  end
+
+  @doc "Lists the serials generated for a batch."
+  def list_serials(organization_id, batch_id) do
+    Repo.all(
+      from s in Serial,
+        where: s.organization_id == ^organization_id and s.manufacturer_batch_id == ^batch_id,
+        order_by: [asc: s.serial]
+    )
+  end
+
+  @doc """
+  Generates serialised DataMatrix codes for `batch` via the GS1 member API,
+  persists them locally, optionally persists any shipper SSCCs the call
+  minted alongside them, and enqueues the Commission EPCIS event.
+  `member_params` extends the call (`trade_item_qty`, `shipper_qty`,
+  `from`/`to` GLNs, `create_shippers`); GTIN/batch/dates are taken from
+  `product`/`batch`.
+  """
+  def generate_serials(organization_id, %Product{} = product, %Batch{} = batch, member_params) do
+    params =
+      member_params
+      |> Map.merge(%{
+        "barcode" => product.gtin,
+        "batch" => batch.batch_no,
+        "production" => Date.to_iso8601(batch.production_date),
+        "expiry" => Date.to_iso8601(batch.expiry_date)
+      })
+
+    api_token = Organizations.gs1_api_key(organization_id)
+
+    with {:ok, result} <- MemberApi.create_serials(params, api_token: api_token) do
+      Repo.transaction(fn ->
+        serials = persist_serials(organization_id, product, batch, result)
+        Epcis.record_manufacturer_commission(organization_id, product, batch, serials)
+        {:ok, result}
+      end)
+      |> case do
+        {:ok, {:ok, result}} -> {:ok, result}
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  def generate_primary_serials(
+        organization_id,
+        %Product{} = product,
+        batch_attrs,
+        quantity,
+        site_gln
+      )
+      when is_integer(quantity) and quantity > 0 and is_binary(site_gln) do
+    params = %{
+      "barcode" => product.gtin,
+      "batch" => batch_attrs["batch_no"],
+      "production" => batch_attrs["production_date"],
+      "expiry" => batch_attrs["expiry_date"],
+      "trade_item_qty" => quantity,
+      "shipper_qty" => quantity + 1,
+      "from" => %{"gln" => site_gln},
+      "to" => %{"gln" => site_gln}
+    }
+
+    api_token = Organizations.gs1_api_key(organization_id)
+
+    with {:ok, result} <- MemberApi.create_serials(params, api_token: api_token) do
+      Repo.transaction(fn ->
+        with {:ok, batch} <- find_or_create_batch(organization_id, product.id, batch_attrs) do
+          serials = persist_serials(organization_id, product, batch, result)
+          Epcis.record_manufacturer_commission(organization_id, product, batch, serials, site_gln)
+          %{batch: batch, serials: serials, result: result}
+        else
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+    end
+  end
+
+  def generate_primary_serials(_organization_id, _product, _batch_attrs, _quantity, _site_gln),
+    do: {:error, :invalid_quantity}
+
+  @doc """
+  Make-to-order path of the "+ Serial" wizard: mints `primary_quantity`
+  primary serials exactly like `generate_primary_serials/5`, then mints
+  `shipper_quantity` shipper SSCCs around them under one pallet, splitting
+  the primaries evenly across the shippers (remainder on the last). Each
+  shipper's EPCIS Pack event carries only the serials assigned to it.
+  `parties` carries the From/To GLN/company/address fields printed on the
+  shipper labels (string keys: `from_gln`, `from_company_name`,
+  `from_address`, `to_gln`, `to_company_name`, `to_address`).
+  """
+  def generate_order_serials(
+        organization_id,
+        %Product{} = product,
+        batch_attrs,
+        primary_quantity,
+        shipper_quantity,
+        site_gln,
+        parties
+      )
+      when is_integer(primary_quantity) and primary_quantity > 0 and
+             is_integer(shipper_quantity) and shipper_quantity > 0 and
+             shipper_quantity <= primary_quantity and is_binary(site_gln) do
+    api_token = Organizations.gs1_api_key(organization_id)
+
+    serials_params = %{
+      "barcode" => product.gtin,
+      "batch" => batch_attrs["batch_no"],
+      "production" => batch_attrs["production_date"],
+      "expiry" => batch_attrs["expiry_date"],
+      "trade_item_qty" => primary_quantity,
+      "shipper_qty" => primary_quantity + 1,
+      "from" => %{"gln" => site_gln},
+      "to" => %{"gln" => site_gln}
+    }
+
+    with {:ok, result} <- MemberApi.create_serials(serials_params, api_token: api_token) do
+      Repo.transaction(fn ->
+        with {:ok, batch} <- find_or_create_batch(organization_id, product.id, batch_attrs),
+             serials = persist_serials(organization_id, product, batch, result),
+             _commission =
+               Epcis.record_manufacturer_commission(
+                 organization_id,
+                 product,
+                 batch,
+                 serials,
+                 site_gln
+               ),
+             {:ok, pallet} <- create_order_pallet(organization_id, parties),
+             {:ok, shippers} <-
+               mint_shipper_ssccs(
+                 organization_id,
+                 product,
+                 batch,
+                 pallet,
+                 serials,
+                 shipper_quantity,
+                 parties,
+                 site_gln,
+                 api_token
+               ) do
+          %{batch: batch, serials: serials, pallet: pallet, shippers: shippers}
+        else
+          {:error, reason} -> Repo.rollback(reason)
+        end
+      end)
+    end
+  end
+
+  def generate_order_serials(
+        _organization_id,
+        _product,
+        _batch_attrs,
+        _primary_quantity,
+        _shipper_quantity,
+        _site_gln,
+        _parties
+      ),
+      do: {:error, :invalid_quantity}
+
+  defp create_order_pallet(organization_id, parties) do
+    code = "PAL-" <> Base.encode32(:crypto.strong_rand_bytes(8), padding: false)
+
+    %Pallet{organization_id: organization_id}
+    |> Pallet.changeset(Map.put(parties, "code", code))
+    |> Repo.insert()
+  end
+
+  defp mint_shipper_ssccs(
+         organization_id,
+         product,
+         batch,
+         pallet,
+         serials,
+         shipper_quantity,
+         parties,
+         site_gln,
+         api_token
+       ) do
+    serials
+    |> split_serials(shipper_quantity)
+    |> Enum.reduce_while({:ok, []}, fn group, {:ok, acc} ->
+      case mint_shipper_sscc(
+             organization_id,
+             product,
+             batch,
+             pallet,
+             group,
+             parties,
+             site_gln,
+             api_token
+           ) do
+        {:ok, shipper} -> {:cont, {:ok, [shipper | acc]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, shippers} -> {:ok, Enum.reverse(shippers)}
+      error -> error
+    end
+  end
+
+  @doc false
+  def split_serials(serials, shipper_quantity) do
+    total = length(serials)
+    base = div(total, shipper_quantity)
+    remainder = rem(total, shipper_quantity)
+
+    {groups, []} =
+      Enum.reduce(1..shipper_quantity, {[], serials}, fn i, {acc, remaining} ->
+        size = if i == shipper_quantity, do: base + remainder, else: base
+        {group, rest} = Enum.split(remaining, size)
+        {[group | acc], rest}
+      end)
+
+    Enum.reverse(groups)
+  end
+
+  defp mint_shipper_sscc(
+         organization_id,
+         product,
+         batch,
+         pallet,
+         group,
+         parties,
+         site_gln,
+         api_token
+       ) do
+    sscc_params =
+      %{
+        "batch_info" => [
+          %{
+            "gtin" => product.gtin,
+            "batch" => batch.batch_no,
+            "production_date" => Date.to_iso8601(batch.production_date),
+            "expiry_date" => Date.to_iso8601(batch.expiry_date)
+          }
+        ],
+        "address" => %{
+          "from_address" => parties["from_address"],
+          "to_address" => parties["to_address"]
+        },
+        "facility_gln" => parties["from_gln"],
+        "count_of_trade_items" => length(group),
+        "material_description" => product.name
+      }
+      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
+      |> Map.new()
+
+    with {:ok, code} <- MemberApi.create_sscc(sscc_params, api_token: api_token) do
+      {:ok, shipper_sscc} =
+        %ShipperSscc{organization_id: organization_id, manufacturer_pallet_id: pallet.id}
+        |> ShipperSscc.changeset(
+          Map.merge(parties, %{
+            "code" => code,
+            "gtin" => product.gtin,
+            "batch" => batch.batch_no,
+            "production_date" => batch.production_date,
+            "expiry_date" => batch.expiry_date,
+            "count_of_trade_items" => length(group)
+          })
+        )
+        |> Repo.insert()
+
+      %SsccBatch{}
+      |> SsccBatch.changeset(%{
+        manufacturer_shipper_sscc_id: shipper_sscc.id,
+        manufacturer_batch_id: batch.id
+      })
+      |> Repo.insert!()
+
+      from(s in Serial, where: s.id in ^Enum.map(group, & &1.id))
+      |> Repo.update_all(set: [manufacturer_shipper_sscc_id: shipper_sscc.id])
+
+      Epcis.record_manufacturer_serial_pack(
+        organization_id,
+        product,
+        shipper_sscc,
+        group,
+        site_gln
+      )
+
+      {:ok, shipper_sscc}
+    end
+  end
+
+  @insert_chunk 1_000
+
+  defp persist_serials(organization_id, product, batch, %{"primary_datamatrices" => codes}) do
+    now = DateTime.truncate(DateTime.utc_now(), :second)
+
+    entries =
+      Enum.map(codes, fn %{"serial" => serial} ->
+        %{
+          organization_id: organization_id,
+          manufacturer_product_id: product.id,
+          manufacturer_batch_id: batch.id,
+          serial: serial,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    entries
+    |> Enum.chunk_every(@insert_chunk)
+    |> Enum.flat_map(fn chunk ->
+      {_count, inserted} =
+        Repo.insert_all(Serial, chunk,
+          on_conflict: :nothing,
+          conflict_target: [:manufacturer_product_id, :serial],
+          returning: true
+        )
+
+      inserted
+    end)
+  end
+
+  defp persist_serials(_organization_id, _product, _batch, _result), do: []
+
+  # Pallets
+
+  @doc "Changeset for building or editing a pallet form."
+  def change_pallet(pallet \\ %Pallet{}, attrs \\ %{}) do
+    Pallet.changeset(pallet, attrs)
+  end
+
+  @doc "Creates a pallet (a free-standing GS1 identifier grouping shipper SSCCs)."
+  def create_pallet(organization_id, attrs) do
+    %Pallet{organization_id: organization_id}
+    |> Pallet.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc "Fetches a pallet scoped to the organization."
+  def get_pallet!(organization_id, id) do
+    Repo.get_by!(Pallet, id: id, organization_id: organization_id)
+  end
+
+  # Shipper SSCCs
+
+  @doc """
+  Mints a shipper SSCC via the GS1 member API, persists it (optionally
+  under `pallet`), links the given `batches`, and enqueues the Pack
+  AggregationEvent.
+  """
+  def create_sscc(organization_id, product, batches, member_params, opts \\ [])
+      when is_list(batches) do
+    pallet = Keyword.get(opts, :pallet)
+
+    params =
+      Map.merge(member_params, %{
+        "material_description" => product.name
+      })
+
+    api_token = Organizations.gs1_api_key(organization_id)
+
+    with {:ok, code} <- MemberApi.create_sscc(params, api_token: api_token) do
+      Repo.transaction(fn ->
+        {:ok, shipper_sscc} =
+          %ShipperSscc{
+            organization_id: organization_id,
+            manufacturer_pallet_id: pallet && pallet.id
+          }
+          |> ShipperSscc.changeset(
+            Map.merge(member_params, %{"code" => code, "gtin" => product.gtin})
+          )
+          |> Repo.insert()
+
+        Enum.each(batches, fn batch ->
+          %SsccBatch{}
+          |> SsccBatch.changeset(%{
+            manufacturer_shipper_sscc_id: shipper_sscc.id,
+            manufacturer_batch_id: batch.id
+          })
+          |> Repo.insert!()
+        end)
+
+        Epcis.record_manufacturer_pack(organization_id, product, shipper_sscc, batches)
+
+        shipper_sscc
+      end)
+    end
+  end
+
+  @doc """
+  Per-GTIN pallet-SSCC groups for a product: every shipper SSCC minted for
+  this GTIN, with the primary-serial count packed inside it, preloaded with
+  its pallet. The product-detail page groups these by pallet into cards —
+  "Pallet SSCC code · Batch · GTIN · Produced · Expires · N Shippers · N
+  Primary serials" — mirroring `ErpLive.Mo.list_ssccs_with_gtins/3`'s shape,
+  scoped by `organization_id` instead of `member_id`.
+  """
+  def list_sscc_groups(organization_id, product_id) do
+    %Product{gtin: gtin} = get_product!(organization_id, product_id)
+
+    serial_counts =
+      from s in Serial,
+        join: sb in SsccBatch,
+        on: sb.manufacturer_batch_id == s.manufacturer_batch_id,
+        where: sb.manufacturer_shipper_sscc_id == parent_as(:sscc).id,
+        where:
+          is_nil(s.manufacturer_shipper_sscc_id) or
+            s.manufacturer_shipper_sscc_id == parent_as(:sscc).id,
+        select: count(s.id)
+
+    from(sscc in ShipperSscc,
+      as: :sscc,
+      where: sscc.organization_id == ^organization_id and sscc.gtin == ^gtin,
+      order_by: [desc: sscc.inserted_at],
+      preload: [:pallet, :batches],
+      select: {sscc, subquery(serial_counts)}
+    )
+    |> Repo.all()
+    |> Enum.map(fn {sscc, serial_count} ->
+      %{sscc: sscc, serial_count: serial_count}
+    end)
+  end
+
+  @doc "Fetches a shipper SSCC scoped to the organization, with its pallet preloaded."
+  def get_sscc_group!(organization_id, id) do
+    ShipperSscc
+    |> Repo.get_by!(id: id, organization_id: organization_id)
+    |> Repo.preload(:pallet)
+  end
+
+  # Shipments
+
+  def list_shipments(organization_id) do
+    Repo.all(
+      from s in Shipment,
+        where: s.organization_id == ^organization_id,
+        order_by: [desc: s.inserted_at, desc: s.id],
+        preload: [:created_by, :shipped_by, shipper_ssccs: :pallet]
+    )
+  end
+
+  def list_shipments_page(organization_id, opts \\ %{}) do
+    query =
+      from(s in Shipment, where: s.organization_id == ^organization_id)
+      |> filter_shipment_status(opts[:status])
+      |> search_shipments(opts[:search])
+      |> filter_shipment_date_from(opts[:date_from])
+      |> filter_shipment_date_to(opts[:date_to])
+
+    total_entries = Repo.aggregate(query, :count, :id)
+    total_pages = max(ceil(total_entries / 20), 1)
+    page_number = min(max(opts[:page] || 1, 1), total_pages)
+
+    entries =
+      Repo.all(
+        from s in query,
+          order_by: [desc: s.updated_at, desc: s.id],
+          limit: 20,
+          offset: ^((page_number - 1) * 20),
+          preload: [:created_by, :shipped_by, shipper_ssccs: :pallet]
+      )
+
+    %{
+      entries: entries,
+      page_number: page_number,
+      page_size: 20,
+      total_pages: total_pages,
+      total_entries: total_entries
+    }
+  end
+
+  defp filter_shipment_status(query, status) when status in ~w(draft submitted approved rejected),
+    do: where(query, [s], s.status == ^status)
+
+  defp filter_shipment_status(query, _status), do: query
+
+  defp search_shipments(query, term) when term in [nil, ""], do: query
+
+  defp search_shipments(query, term) do
+    pattern = "%#{String.replace(String.trim(term), ["%", "_"], "")}%"
+
+    where(
+      query,
+      [s],
+      ilike(s.reference, ^pattern) or ilike(s.order_number, ^pattern) or
+        ilike(s.origin_gln, ^pattern) or ilike(s.destination_gln, ^pattern) or
+        ilike(s.origin_company, ^pattern) or ilike(s.destination_company, ^pattern)
+    )
+  end
+
+  defp filter_shipment_date_from(query, %Date{} = date),
+    do: where(query, [s], s.inserted_at >= ^DateTime.new!(date, ~T[00:00:00], "Etc/UTC"))
+
+  defp filter_shipment_date_from(query, _date), do: query
+
+  defp filter_shipment_date_to(query, %Date{} = date),
+    do:
+      where(
+        query,
+        [s],
+        s.inserted_at < ^DateTime.new!(Date.add(date, 1), ~T[00:00:00], "Etc/UTC")
+      )
+
+  defp filter_shipment_date_to(query, _date), do: query
+
+  def get_shipment!(organization_id, id) do
+    Shipment
+    |> Repo.get_by!(id: id, organization_id: organization_id)
+    |> Repo.preload([:created_by, :shipped_by, shipper_ssccs: :pallet])
+  end
+
+  def change_shipment(shipment \\ %Shipment{}, attrs \\ %{}),
+    do: Shipment.changeset(shipment, attrs)
+
+  def list_available_ssccs(organization_id) do
+    used = from i in ShipmentItem, select: i.manufacturer_shipper_sscc_id
+
+    Repo.all(
+      from s in ShipperSscc,
+        where: s.organization_id == ^organization_id and s.id not in subquery(used),
+        order_by: [desc: s.inserted_at, desc: s.id],
+        preload: [:pallet, :batches]
+    )
+  end
+
+  def create_shipment(organization_id, user, attrs, sscc_ids) when is_list(sscc_ids) do
+    changeset =
+      %Shipment{
+        organization_id: organization_id,
+        created_by_id: user.id,
+        reference: shipment_reference()
+      }
+      |> Shipment.changeset(attrs)
+      |> resolve_shipment_parties(organization_id)
+
+    Repo.transaction(fn ->
+      with false <- sscc_ids == [],
+           {:ok, shipment} <- Repo.insert(changeset),
+           {:ok, ssccs} <- available_ssccs(organization_id, sscc_ids) do
+        Enum.each(ssccs, fn sscc ->
+          %ShipmentItem{}
+          |> ShipmentItem.changeset(%{
+            manufacturer_shipment_id: shipment.id,
+            manufacturer_shipper_sscc_id: sscc.id
+          })
+          |> Repo.insert!()
+        end)
+
+        get_shipment!(organization_id, shipment.id)
+      else
+        true -> Repo.rollback(:no_ssccs)
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  def submit_shipment(organization_id, id),
+    do: transition_shipment(organization_id, id, "draft", status: "submitted")
+
+  def approve_shipment(organization_id, user, id) do
+    Repo.transaction(fn ->
+      shipment =
+        Repo.one!(
+          from s in Shipment,
+            where: s.id == ^id and s.organization_id == ^organization_id,
+            lock: "FOR UPDATE",
+            preload: [:shipper_ssccs]
+        )
+
+      if shipment.status != "submitted", do: Repo.rollback({:invalid_state, shipment.status})
+      if shipment.shipper_ssccs == [], do: Repo.rollback(:no_ssccs)
+      shipped_at = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      shipment =
+        shipment
+        |> Ecto.Changeset.change(
+          status: "approved",
+          shipped_at: shipped_at,
+          shipped_by_id: user.id
+        )
+        |> Repo.update!()
+
+      Epcis.record_manufacturer_ship(
+        organization_id,
+        shipment.id,
+        Enum.map(shipment.shipper_ssccs, & &1.code),
+        shipment.origin_gln,
+        shipment.destination_gln,
+        shipment.order_number,
+        shipped_at
+      )
+
+      get_shipment!(organization_id, shipment.id)
+    end)
+  end
+
+  defp transition_shipment(organization_id, id, expected_status, changes) do
+    Repo.transaction(fn ->
+      shipment =
+        Repo.one!(
+          from s in Shipment,
+            where: s.id == ^id and s.organization_id == ^organization_id,
+            lock: "FOR UPDATE"
+        )
+
+      if shipment.status != expected_status,
+        do: Repo.rollback({:invalid_state, shipment.status})
+
+      shipment
+      |> Ecto.Changeset.change(changes)
+      |> Repo.update!()
+      |> then(&get_shipment!(organization_id, &1.id))
+    end)
+  end
+
+  defp available_ssccs(organization_id, ids) do
+    ids = ids |> Enum.uniq() |> Enum.map(&parse_id/1)
+
+    taken = from i in ShipmentItem, select: i.manufacturer_shipper_sscc_id
+
+    ssccs =
+      Repo.all(
+        from s in ShipperSscc,
+          where: s.organization_id == ^organization_id and s.id in ^ids,
+          where: s.id not in subquery(taken)
+      )
+
+    if length(ssccs) == length(ids), do: {:ok, ssccs}, else: {:error, :sscc_unavailable}
+  end
+
+  defp parse_id(id) when is_integer(id), do: id
+  defp parse_id(id) when is_binary(id), do: String.to_integer(id)
+
+  defp resolve_shipment_parties(changeset, organization_id) do
+    origin_gln = Ecto.Changeset.get_field(changeset, :origin_gln)
+    destination_gln = Ecto.Changeset.get_field(changeset, :destination_gln)
+
+    changeset
+    |> resolve_party(
+      :origin,
+      ThamaniDawa.Distributor.GlnLookup.resolve_origin(organization_id, origin_gln)
+    )
+    |> resolve_party(
+      :destination,
+      ThamaniDawa.Distributor.GlnLookup.resolve_party(destination_gln)
+    )
+  end
+
+  defp resolve_party(changeset, side, {:ok, party}) do
+    Ecto.Changeset.change(changeset, %{
+      :"#{side}_company" => party.company,
+      :"#{side}_address" => party.address
+    })
+  end
+
+  defp resolve_party(changeset, side, {:error, :not_found}),
+    do: Ecto.Changeset.add_error(changeset, :"#{side}_gln", "could not be verified")
+
+  defp shipment_reference,
+    do: "MSH-" <> Base.encode32(:crypto.strong_rand_bytes(5), padding: false)
+
+  # Aggregations
+
+  @aggregation_page_size 20
+
+  @doc "Lists an organization's shipper SSCCs for the aggregation form's picker."
+  def available_ssccs_for_aggregation(organization_id) do
+    Repo.all(
+      from s in ShipperSscc,
+        where: s.organization_id == ^organization_id,
+        order_by: [desc: s.inserted_at, desc: s.id],
+        preload: [:batches]
+    )
+  end
+
+  @doc """
+  Classifies a scanned serial against an SSCC without writing anything:
+  `"unknown_serial"`, `"wrong_batch"`, `"already_aggregated"` or `"ok"`,
+  paired with the serial record when one exists.
+  """
+  def classify_serial(organization_id, %ShipperSscc{} = sscc, serial_string) do
+    serial_value = serial_string |> to_string() |> String.trim()
+
+    case Repo.get_by(Serial, organization_id: organization_id, serial: serial_value) do
+      nil ->
+        {"unknown_serial", nil}
+
+      serial ->
+        batch_ids =
+          Repo.all(
+            from sb in SsccBatch,
+              where: sb.manufacturer_shipper_sscc_id == ^sscc.id,
+              select: sb.manufacturer_batch_id
+          )
+
+        cond do
+          serial.manufacturer_batch_id not in batch_ids ->
+            {"wrong_batch", serial}
+
+          serial.manufacturer_shipper_sscc_id &&
+              serial.manufacturer_shipper_sscc_id != sscc.id ->
+            {"already_aggregated", serial}
+
+          true ->
+            {"ok", serial}
+        end
+    end
+  end
+
+  @doc "One filtered, searched, paginated page of an organization's aggregations."
+  def list_aggregations(organization_id, opts \\ %{}) do
+    query =
+      from(a in Aggregation, where: a.organization_id == ^organization_id)
+      |> filter_aggregation_status(opts[:status])
+      |> search_aggregations(opts[:search])
+
+    total_entries = Repo.aggregate(query, :count, :id)
+    total_pages = max(ceil(total_entries / @aggregation_page_size), 1)
+    page_number = min(max(opts[:page] || 1, 1), total_pages)
+
+    item_counts =
+      from i in AggregationItem,
+        where: i.manufacturer_aggregation_id == parent_as(:agg).id,
+        select: count(i.id)
+
+    entries =
+      Repo.all(
+        from a in query,
+          as: :agg,
+          order_by: [desc: a.updated_at, desc: a.id],
+          limit: @aggregation_page_size,
+          offset: ^((page_number - 1) * @aggregation_page_size),
+          select_merge: %{item_count: subquery(item_counts)},
+          preload: [:shipper_sscc, :created_by]
+      )
+
+    %{
+      entries: entries,
+      page_number: page_number,
+      page_size: @aggregation_page_size,
+      total_pages: total_pages,
+      total_entries: total_entries
+    }
+  end
+
+  defp filter_aggregation_status(query, status) when status in ~w(draft submitted approved rejected),
+    do: where(query, [a], a.status == ^status)
+
+  defp filter_aggregation_status(query, _status), do: query
+
+  defp search_aggregations(query, term) when term in [nil, ""], do: query
+
+  defp search_aggregations(query, term) do
+    pattern = "%#{String.replace(String.trim(term), ["%", "_"], "")}%"
+    where(query, [a], ilike(a.reference, ^pattern))
+  end
+
+  @doc "Fetches an aggregation scoped to the organization, ready for review."
+  def get_aggregation!(organization_id, id) do
+    Aggregation
+    |> Repo.get_by!(id: id, organization_id: organization_id)
+    |> Repo.preload([shipper_sscc: :batches, items: [], created_by: [], approved_by: []])
+  end
+
+  def change_aggregation(aggregation \\ %Aggregation{}, attrs \\ %{}),
+    do: Aggregation.changeset(aggregation, attrs)
+
+  @doc "Creates a draft aggregation targeting an existing shipper SSCC."
+  def create_aggregation(organization_id, user, sscc_id) do
+    %Aggregation{organization_id: organization_id, created_by_id: user.id}
+    |> Aggregation.changeset(%{
+      reference: aggregation_reference(),
+      status: "draft",
+      manufacturer_shipper_sscc_id: parse_id(sscc_id)
+    })
+    |> Repo.insert()
+  end
+
+  @doc """
+  Scans one serial into an aggregation — the seam the mobile API will call.
+  The SSCC is resolved from the aggregation, the serial is classified, and
+  the resulting item is recorded even when its validation status is not
+  `"ok"`, so an operator can see and correct it on review.
+  """
+  def scan_aggregation_item(organization_id, %Aggregation{} = aggregation, raw_or_serial) do
+    sscc =
+      Repo.get_by!(ShipperSscc,
+        id: aggregation.manufacturer_shipper_sscc_id,
+        organization_id: organization_id
+      )
+
+    {status, serial_record} = classify_serial(organization_id, sscc, raw_or_serial)
+    serial_value = raw_or_serial |> to_string() |> String.trim()
+
+    %AggregationItem{organization_id: organization_id}
+    |> AggregationItem.changeset(%{
+      manufacturer_aggregation_id: aggregation.id,
+      manufacturer_serial_id: serial_record && serial_record.id,
+      raw_data_matrix: to_string(raw_or_serial),
+      serial: serial_value,
+      gtin: sscc.gtin,
+      validation_status: status,
+      scanned_at: now()
+    })
+    |> Repo.insert()
+  end
+
+  @doc "Creates a draft, scans the given serial strings, then submits it for review."
+  def create_submitted_aggregation(organization_id, user, sscc_id, serial_strings) do
+    Repo.transaction(fn ->
+      with {:ok, aggregation} <- create_aggregation(organization_id, user, sscc_id) do
+        Enum.each(serial_strings, fn serial ->
+          case scan_aggregation_item(organization_id, aggregation, serial) do
+            {:ok, _item} -> :ok
+            {:error, reason} -> Repo.rollback(reason)
+          end
+        end)
+
+        aggregation
+        |> Ecto.Changeset.change(status: "submitted", submitted_at: now())
+        |> Repo.update!()
+        |> then(&get_aggregation!(organization_id, &1.id))
+      else
+        {:error, reason} -> Repo.rollback(reason)
+      end
+    end)
+  end
+
+  @doc "Moves a draft aggregation to submitted under a row lock."
+  def submit_aggregation(organization_id, id) do
+    Repo.transaction(fn ->
+      aggregation =
+        Repo.one!(
+          from a in Aggregation,
+            where: a.id == ^id and a.organization_id == ^organization_id,
+            lock: "FOR UPDATE"
+        )
+
+      if aggregation.status != "draft",
+        do: Repo.rollback({:invalid_state, aggregation.status})
+
+      aggregation
+      |> Ecto.Changeset.change(status: "submitted", submitted_at: now())
+      |> Repo.update!()
+      |> then(&get_aggregation!(organization_id, &1.id))
+    end)
+  end
+
+  @doc """
+  Approves a submitted aggregation: re-classifies every item, checks the
+  target SSCC's capacity, commits the serial-to-SSCC linkage, and enqueues
+  the manufacturer EPCIS Pack event.
+  """
+  def approve_aggregation(organization_id, user, id) do
+    Repo.transaction(fn ->
+      aggregation =
+        Repo.one!(
+          from a in Aggregation,
+            where: a.id == ^id and a.organization_id == ^organization_id,
+            lock: "FOR UPDATE",
+            preload: [items: [], shipper_sscc: :batches]
+        )
+
+      if aggregation.status != "submitted",
+        do: Repo.rollback({:invalid_state, aggregation.status})
+
+      sscc = aggregation.shipper_sscc
+
+      classified =
+        Enum.map(aggregation.items, fn item ->
+          {item, classify_serial(organization_id, sscc, item.serial)}
+        end)
+
+      invalid =
+        for {item, {status, _serial}} <- classified, status != "ok", do: item
+
+      if invalid != [], do: Repo.rollback({:invalid, invalid})
+
+      serial_records = Enum.map(classified, fn {_item, {_status, serial}} -> serial end)
+      adding = length(serial_records)
+
+      linked =
+        Repo.aggregate(
+          from(s in Serial,
+            where:
+              s.organization_id == ^organization_id and
+                s.manufacturer_shipper_sscc_id == ^sscc.id
+          ),
+          :count,
+          :id
+        )
+
+      capacity = sscc.count_of_trade_items || 0
+
+      if linked + adding > capacity do
+        Repo.rollback(
+          {:over_capacity, %{capacity: capacity, linked: linked, adding: adding}}
+        )
+      end
+
+      Repo.update_all(
+        from(s in Serial, where: s.id in ^Enum.map(serial_records, & &1.id)),
+        set: [manufacturer_shipper_sscc_id: sscc.id]
+      )
+
+      product = aggregation_product(organization_id, sscc, serial_records)
+
+      if is_nil(product), do: Repo.rollback(:missing_product)
+
+      Epcis.record_manufacturer_serial_pack(
+        organization_id,
+        product,
+        sscc,
+        serial_records,
+        sscc.from_gln
+      )
+
+      aggregation
+      |> Ecto.Changeset.change(
+        status: "approved",
+        approved_at: now(),
+        approved_by_id: user.id
+      )
+      |> Repo.update!()
+      |> then(&get_aggregation!(organization_id, &1.id))
+    end)
+  end
+
+  @doc "Rejects a submitted aggregation with a reason."
+  def reject_aggregation(organization_id, user, id, reason) do
+    reason = String.trim(reason || "")
+
+    Repo.transaction(fn ->
+      aggregation =
+        Repo.one!(
+          from a in Aggregation,
+            where: a.id == ^id and a.organization_id == ^organization_id,
+            lock: "FOR UPDATE"
+        )
+
+      if aggregation.status != "submitted",
+        do: Repo.rollback({:invalid_state, aggregation.status})
+
+      aggregation
+      |> Ecto.Changeset.change(
+        status: "rejected",
+        rejection_reason: reason,
+        rejected_at: now(),
+        rejected_by_id: user.id
+      )
+      |> Repo.update!()
+      |> then(&get_aggregation!(organization_id, &1.id))
+    end)
+  end
+
+  defp aggregation_product(organization_id, sscc, serial_records) do
+    Repo.get_by(Product, organization_id: organization_id, gtin: sscc.gtin) ||
+      Enum.find_value(serial_records, fn serial ->
+        Repo.get_by(Product, organization_id: organization_id, id: serial.manufacturer_product_id)
+      end)
+  end
+
+  defp aggregation_reference,
+    do: "MAG-" <> Base.encode32(:crypto.strong_rand_bytes(5), padding: false)
+
+  defp now, do: DateTime.utc_now() |> DateTime.truncate(:second)
+
+  # Dashboard
+
+  @doc "Products/batches/serials/pallets/SSCCs counts for an organization's dashboard."
+  def dashboard_counts(organization_id) do
+    %{
+      products: count(Product, organization_id),
+      batches: count(Batch, organization_id),
+      serials: count(Serial, organization_id),
+      pallets: count(Pallet, organization_id),
+      ssccs: count(ShipperSscc, organization_id)
+    }
+  end
+
+  defp count(schema, organization_id) do
+    Repo.aggregate(from(r in schema, where: r.organization_id == ^organization_id), :count)
+  end
+
+  defp parse_date(%Date{} = date), do: date
+
+  defp parse_date(value) when is_binary(value) do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> date
+      _error -> nil
+    end
+  end
+
+  defp parse_date(_value), do: nil
+end
