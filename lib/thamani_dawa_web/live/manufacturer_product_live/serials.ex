@@ -1,7 +1,10 @@
 defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Distributor.GlnLookup
   alias ThamaniDawa.Manufacturing
+  alias ThamaniDawa.Organizations
+  alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.DistributorPagination
 
   @page_size 24
@@ -20,7 +23,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      |> assign(:selected_batch, nil)
      |> assign(:serials_cache, %{})
      |> assign(:serials_error, nil)
-     |> assign(:serial_page, nil)}
+     |> assign(:serial_page, nil)
+     |> assign(:batch_shippers, [])
+     |> assign(:serial_shippers, %{})
+     |> reset_pack()}
   end
 
   # Nested GS1 flow, kept light on the API: the batch list is fetched once
@@ -61,10 +67,25 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
     case selected do
       nil ->
-        assign(socket, selected_batch: nil, serial_page: nil, serials_error: nil)
+        assign(socket,
+          selected_batch: nil,
+          serial_page: nil,
+          serials_error: nil,
+          batch_shippers: [],
+          serial_shippers: %{}
+        )
 
       batch ->
         {socket, result} = batch_serials(socket, batch.batch_no)
+
+        {shippers, by_serial} =
+          Manufacturing.list_batch_shippers(
+            org_id(socket),
+            socket.assigns.product.gtin,
+            batch.batch_no
+          )
+
+        socket = assign(socket, batch_shippers: shippers, serial_shippers: by_serial)
 
         case result do
           {:ok, serials} ->
@@ -143,12 +164,181 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      push_patch(socket, to: ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials")}
   end
 
+  # Aggregation later: pack a batch's unpacked serials into a new shipper
+  # SSCC. Unpacked serials are fetched (one `list_unpacked_serials` call)
+  # only when the panel is opened, never on page load.
+  def handle_event("open_pack", _params, socket) do
+    %{product: product, selected_batch: batch} = socket.assigns
+
+    case Manufacturing.fetch_unpacked_serials(org_id(socket), product.gtin, batch.batch_no) do
+      {:ok, serials} ->
+        facilities = Sites.list_sites(org_id(socket))
+        from_gln = default_from_gln(socket, facilities)
+
+        {:noreply,
+         socket
+         |> assign(:pack_open, true)
+         |> assign(:pack_serials, serials)
+         |> assign(:pack_selected, MapSet.new(serials))
+         |> assign(:pack_facilities, Enum.filter(facilities, &(&1.gln not in [nil, ""])))
+         |> assign(:pack_error, nil)
+         |> assign(:pack_form, pack_form(%{"from_gln" => from_gln}))}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, pack_open: true, pack_serials: [], pack_error: reason)}
+    end
+  end
+
+  def handle_event("close_pack", _params, socket), do: {:noreply, reset_pack(socket)}
+
+  def handle_event("toggle_pack_serial", %{"serial" => serial}, socket) do
+    selected = socket.assigns.pack_selected
+
+    selected =
+      if MapSet.member?(selected, serial),
+        do: MapSet.delete(selected, serial),
+        else: MapSet.put(selected, serial)
+
+    {:noreply, assign(socket, :pack_selected, selected)}
+  end
+
+  def handle_event("pack_select_all", _params, socket),
+    do: {:noreply, assign(socket, :pack_selected, MapSet.new(socket.assigns.pack_serials))}
+
+  def handle_event("pack_clear", _params, socket),
+    do: {:noreply, assign(socket, :pack_selected, MapSet.new())}
+
+  def handle_event("validate_pack", %{"pack" => params}, socket),
+    do: {:noreply, assign(socket, :pack_form, pack_form(params))}
+
+  # Destination GLN combobox backed by the GS1 GLN directory.
+  def handle_event("search_pack_to_gln", %{"value" => query}, socket) do
+    query = String.trim(query)
+    form = pack_form(Map.put(socket.assigns.pack_form.params, "to_gln", ""))
+
+    socket =
+      socket
+      |> assign(:pack_form, form)
+      |> assign(:to_gln_query, query)
+      |> assign(:to_gln_results, [])
+
+    if String.length(query) < 2 do
+      {:noreply, assign(socket, :to_gln_search_status, :idle)}
+    else
+      api_token = Organizations.gs1_api_key(org_id(socket))
+
+      {:noreply,
+       socket
+       |> assign(:to_gln_search_status, :searching)
+       |> start_async(:to_gln_search, fn ->
+         {query, GlnLookup.search_destination(api_token, query)}
+       end)}
+    end
+  end
+
+  def handle_event("select_pack_to_gln", %{"gln" => gln}, socket) do
+    case Enum.find(socket.assigns.to_gln_results, &(&1.gln == gln)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "That destination GLN is no longer available.")}
+
+      party ->
+        {:noreply,
+         socket
+         |> assign(:pack_form, pack_form(Map.put(socket.assigns.pack_form.params, "to_gln", gln)))
+         |> assign(:to_gln_query, "#{party.gln} · #{party.company}")
+         |> assign(:to_gln_results, [])
+         |> assign(:to_gln_search_status, :selected)}
+    end
+  end
+
+  def handle_event("submit_pack", %{"pack" => params}, socket) do
+    %{product: product, selected_batch: batch, pack_serials: all, pack_selected: selected} =
+      socket.assigns
+
+    serials = Enum.filter(all, &MapSet.member?(selected, &1))
+
+    case Manufacturing.pack_serials_into_shipper(
+           org_id(socket),
+           product,
+           batch,
+           serials,
+           params,
+           site_gln: current_site_gln(socket)
+         ) do
+      {:ok, shipper} ->
+        {:noreply,
+         socket
+         |> reset_pack()
+         |> put_flash(
+           :info,
+           "Shipper SSCC #{shipper.code} created with #{length(serials)} serials."
+         )
+         |> push_navigate(to: ~p"/manufacturer/sscc/#{shipper.id}/serials")}
+
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> assign(:pack_form, pack_form(params))
+         |> assign(:pack_error, reason)}
+    end
+  end
+
   def handle_event("retry", _params, socket) do
     {:noreply,
      socket
      |> assign(batches: nil, serials_cache: %{})
      |> push_patch(to: ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials")}
   end
+
+  def handle_async(:to_gln_search, {:ok, {query, {:ok, results}}}, socket) do
+    if socket.assigns.to_gln_query == query do
+      {:noreply,
+       socket |> assign(:to_gln_results, results) |> assign(:to_gln_search_status, :complete)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_async(:to_gln_search, _result, socket) do
+    {:noreply,
+     socket |> assign(:to_gln_results, []) |> assign(:to_gln_search_status, :unavailable)}
+  end
+
+  defp reset_pack(socket) do
+    socket
+    |> assign(:to_gln_query, "")
+    |> assign(:to_gln_results, [])
+    |> assign(:to_gln_search_status, :idle)
+    |> assign(:pack_open, false)
+    |> assign(:pack_serials, [])
+    |> assign(:pack_selected, MapSet.new())
+    |> assign(:pack_facilities, [])
+    |> assign(:pack_error, nil)
+    |> assign(:pack_form, pack_form(%{}))
+  end
+
+  defp pack_form(params) do
+    %{"from_gln" => "", "to_gln" => "", "order_number" => ""}
+    |> Map.merge(params)
+    |> to_form(as: :pack)
+  end
+
+  defp default_from_gln(socket, facilities) do
+    current_site_gln(socket) ||
+      Enum.find_value(facilities, &if(&1.gln not in [nil, ""], do: &1.gln))
+  end
+
+  defp current_site_gln(socket) do
+    with id when not is_nil(id) <- socket.assigns.current_scope.current_site_id,
+         %{gln: gln} when gln not in [nil, ""] <- Sites.get_site!(org_id(socket), id) do
+      gln
+    else
+      _ -> nil
+    end
+  end
+
+  defp facility_options(facilities),
+    do: Enum.map(facilities, &{"#{&1.name} · #{&1.gln}", &1.gln})
 
   defp search_params(socket, search) do
     case socket.assigns.selected_batch do
@@ -282,12 +472,297 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                 </h2>
               </div>
             </div>
-            <.button
-              id="export-batch-serials"
-              href={
-                ~p"/manufacturer/products/#{@product.gtin}/batches/#{@selected_batch.batch_no}/serials/export"
-              }
-            ><.icon name="hero-arrow-down-tray" class="size-4" /> Export CSV</.button>
+            <div class="flex flex-wrap gap-2">
+              <.button
+                :if={!@pack_open}
+                id="open-pack-serials"
+                type="button"
+                phx-click="open_pack"
+                phx-disable-with="Loading unpacked serials…"
+              ><.icon name="hero-archive-box-arrow-down" class="size-4" /> Create shipper SSCC</.button>
+              <.button
+                id="export-batch-serials"
+                href={
+                  ~p"/manufacturer/products/#{@product.gtin}/batches/#{@selected_batch.batch_no}/serials/export"
+                }
+              ><.icon name="hero-arrow-down-tray" class="size-4" /> Export CSV</.button>
+            </div>
+          </div>
+
+          <section
+            :if={@pack_open}
+            id="pack-serials-panel"
+            class="border-b border-thamani-stone bg-thamani-mist/40 px-5 py-5 sm:px-6"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
+                  Aggregate later
+                </p>
+                <h3 class="mt-0.5 text-base font-semibold text-thamani-forest">
+                  Pack unpacked serials into a shipper SSCC
+                </h3>
+                <p class="mt-1 text-xs text-thamani-pewter">
+                  Batch {@selected_batch.batch_no} · {length(@pack_serials)} unpacked ·
+                  <span id="pack-selected-count">{MapSet.size(@pack_selected)}</span>
+                  selected
+                </p>
+              </div>
+              <button
+                id="close-pack-serials"
+                type="button"
+                phx-click="close_pack"
+                class="rounded-lg p-1.5 text-thamani-pewter transition hover:bg-white hover:text-thamani-forest"
+              >
+                <.icon name="hero-x-mark" class="size-5" />
+              </button>
+            </div>
+
+            <p
+              :if={@pack_error}
+              id="pack-serials-error"
+              class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+            >
+              {error_message(@pack_error)}
+            </p>
+
+            <p
+              :if={@pack_serials == [] and is_nil(@pack_error)}
+              id="pack-serials-empty"
+              class="mt-4 rounded-xl border border-thamani-stone bg-white px-4 py-3 text-sm text-thamani-pewter"
+            >
+              Every serial in this batch is already packed into a shipper.
+            </p>
+
+            <.form
+              :if={@pack_serials != []}
+              for={@pack_form}
+              id="pack-serials-form"
+              phx-change="validate_pack"
+              phx-submit="submit_pack"
+              class="mt-4 space-y-4"
+            >
+              <div class="flex items-center gap-3 text-xs font-semibold">
+                <button
+                  id="pack-select-all"
+                  type="button"
+                  phx-click="pack_select_all"
+                  class="text-thamani-forest underline-offset-2 hover:underline"
+                >
+                  Select all
+                </button>
+                <button
+                  id="pack-clear"
+                  type="button"
+                  phx-click="pack_clear"
+                  class="text-thamani-pewter underline-offset-2 hover:underline"
+                >
+                  Clear
+                </button>
+              </div>
+
+              <div
+                id="pack-serial-options"
+                class="grid max-h-72 gap-2 overflow-y-auto rounded-xl border border-thamani-stone bg-white p-3 sm:grid-cols-2 xl:grid-cols-4"
+              >
+                <button
+                  :for={serial <- @pack_serials}
+                  id={"pack-serial-#{dom_key(serial)}"}
+                  type="button"
+                  phx-click="toggle_pack_serial"
+                  phx-value-serial={serial}
+                  class={[
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-left font-mono text-xs transition",
+                    if(MapSet.member?(@pack_selected, serial),
+                      do: "border-thamani-forest bg-thamani-lime/20 text-thamani-forest",
+                      else: "border-thamani-stone text-thamani-pewter hover:border-thamani-sage"
+                    )
+                  ]}
+                >
+                  <.icon
+                    name={
+                      if(MapSet.member?(@pack_selected, serial),
+                        do: "hero-check-circle-solid",
+                        else: "hero-stop"
+                      )
+                    }
+                    class="size-4 shrink-0"
+                  />
+                  <span class="truncate">{serial}</span>
+                </button>
+              </div>
+
+              <div class="grid gap-4 sm:grid-cols-3">
+                <.input
+                  field={@pack_form[:from_gln]}
+                  type="select"
+                  label="From facility"
+                  options={facility_options(@pack_facilities)}
+                  prompt="Choose a facility"
+                />
+                <div class="space-y-1.5">
+                  <label for="pack_to_gln_search" class="thamani-label">To GLN</label>
+                  <input type="hidden" name="pack[to_gln]" value={@pack_form[:to_gln].value} />
+                  <div id="pack-to-gln-combobox" class="relative">
+                    <input
+                      id="pack_to_gln_search"
+                      type="search"
+                      value={@to_gln_query}
+                      phx-keyup="search_pack_to_gln"
+                      phx-debounce="300"
+                      autocomplete="off"
+                      placeholder="Search by GLN, company, or address"
+                      class="thamani-input w-full"
+                    />
+                    <div
+                      :if={@to_gln_results != []}
+                      id="pack-to-gln-results"
+                      role="listbox"
+                      class="absolute z-[70] mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-thamani-stone bg-white py-1 shadow-lg"
+                    >
+                      <button
+                        :for={party <- @to_gln_results}
+                        id={"pack-to-gln-#{party.gln}"}
+                        type="button"
+                        role="option"
+                        phx-click="select_pack_to_gln"
+                        phx-value-gln={party.gln}
+                        class="block w-full px-3 py-2 text-left text-sm transition hover:bg-thamani-mist"
+                      >
+                        <span class="block font-mono font-semibold text-thamani-forest">
+                          {party.gln}
+                        </span>
+                        <span class="block text-xs text-thamani-pewter">
+                          {party.company} · {party.address || "—"}
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+                  <p :if={String.length(@to_gln_query) == 1} class="text-xs text-thamani-pewter">
+                    Type at least 2 characters to search the GS1 GLN directory.
+                  </p>
+                  <p :if={@to_gln_search_status == :searching} class="text-xs text-thamani-pewter">
+                    <.icon name="hero-arrow-path" class="inline size-3.5 motion-safe:animate-spin" />
+                    Searching GS1 GLNs…
+                  </p>
+                  <p
+                    :if={@to_gln_search_status == :complete and @to_gln_results == []}
+                    class="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
+                  >
+                    No GS1 GLNs match this search.
+                  </p>
+                  <p :if={@to_gln_search_status == :unavailable} class="text-xs text-red-700">
+                    The GS1 GLN directory is unavailable. Try again in a moment.
+                  </p>
+                </div>
+                <.input
+                  field={@pack_form[:order_number]}
+                  type="text"
+                  label="Order number (optional)"
+                />
+              </div>
+
+              <div class="flex justify-end">
+                <.button
+                  id="submit-pack-serials"
+                  type="submit"
+                  variant="primary"
+                  disabled={MapSet.size(@pack_selected) == 0}
+                  phx-disable-with="Creating shipper SSCC…"
+                >
+                  <.icon name="hero-archive-box" class="size-4" />
+                  Create SSCC for {MapSet.size(@pack_selected)} serials
+                </.button>
+              </div>
+            </.form>
+          </section>
+
+          <div
+            :if={@batch_shippers != []}
+            id="batch-shipper-ssccs"
+            class="border-b border-thamani-stone px-5 py-5 sm:px-6"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
+                  Aggregation
+                </p>
+                <h3 class="mt-0.5 font-semibold text-thamani-forest">
+                  Shipper SSCCs for batch {@selected_batch.batch_no}
+                </h3>
+              </div>
+              <span class="rounded-full bg-thamani-mist px-3 py-1 text-xs font-bold text-thamani-forest">
+                {length(@batch_shippers)} SSCCs
+              </span>
+            </div>
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <article
+                :for={shipper <- @batch_shippers}
+                id={"batch-shipper-#{shipper.id}"}
+                class="flex flex-col rounded-2xl border border-thamani-stone bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-thamani-sage hover:shadow-md"
+              >
+                <div class="flex items-start gap-3">
+                  <span class="flex size-10 flex-none items-center justify-center rounded-xl bg-thamani-lime/45 text-thamani-forest">
+                    <.icon name="hero-qr-code" class="size-5" />
+                  </span>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">
+                      Shipper SSCC
+                    </p>
+                    <p
+                      class="truncate font-mono text-sm font-bold text-thamani-forest"
+                      title={shipper.code}
+                    >
+                      {shipper.code}
+                    </p>
+                  </div>
+                </div>
+                <dl class="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
+                  <div>
+                    <dt class="text-xs font-bold uppercase text-thamani-pewter/80">Batch</dt>
+                    <dd class="mt-1 font-bold text-thamani-forest">{shipper.batch}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-bold uppercase text-thamani-pewter/80">GTIN</dt>
+                    <dd class="mt-1 truncate font-mono text-thamani-forest">{shipper.gtin}</dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-bold uppercase text-thamani-pewter/80">To GLN</dt>
+                    <dd class="mt-1 truncate font-mono text-thamani-forest">
+                      {shipper.to_gln || "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt class="text-xs font-bold uppercase text-thamani-pewter/80">Packed</dt>
+                    <dd class="mt-1 text-thamani-forest">
+                      {Calendar.strftime(shipper.inserted_at, "%d %b %Y")}
+                    </dd>
+                  </div>
+                </dl>
+                <div class="mt-5 flex flex-wrap gap-2">
+                  <span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
+                    {shipper.count_of_trade_items || 0} Primary serials
+                  </span>
+                </div>
+                <hr class="my-5 border-thamani-stone" />
+                <div class="mt-auto flex flex-wrap gap-2">
+                  <.link
+                    id={"batch-shipper-serials-#{shipper.id}"}
+                    navigate={~p"/manufacturer/sscc/#{shipper.id}/serials"}
+                    class="inline-flex items-center gap-1.5 rounded-full bg-thamani-forest px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-thamani-forest/90"
+                  >
+                    <.icon name="hero-list-bullet" class="size-4" /> Serials
+                  </.link>
+                  <.link
+                    id={"batch-shipper-label-#{shipper.id}"}
+                    navigate={~p"/manufacturer/sscc/#{shipper.id}/label"}
+                    class="inline-flex items-center gap-1.5 rounded-full border border-thamani-stone px-3 py-1.5 text-xs font-semibold text-thamani-forest transition hover:border-thamani-sage hover:bg-thamani-mist"
+                  >
+                    <.icon name="hero-qr-code" class="size-4" /> Shipper label
+                  </.link>
+                </div>
+              </article>
+            </div>
           </div>
 
           <dl
@@ -350,7 +825,28 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
               <p class="truncate font-mono text-sm font-semibold text-thamani-forest">
                 {serial.serial}
               </p>
-              <p class="mt-0.5 text-xs text-thamani-pewter">serial</p>
+              <div class="mt-0.5 flex items-center justify-between gap-2">
+                <p class="text-xs text-thamani-pewter">serial</p>
+                <%= case Map.get(@serial_shippers, serial.serial) do %>
+                  <% nil -> %>
+                    <span
+                      id={"serial-unpacked-#{dom_key(serial.serial)}"}
+                      class="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-thamani-pewter"
+                    >
+                      Unpacked
+                    </span>
+                  <% shipper -> %>
+                    <.link
+                      id={"serial-sscc-#{dom_key(serial.serial)}"}
+                      navigate={~p"/manufacturer/sscc/#{shipper.id}/serials"}
+                      title={"Packed in SSCC #{shipper.code}"}
+                      class="inline-flex min-w-0 items-center gap-1 rounded-full bg-thamani-forest px-2 py-0.5 font-mono text-[11px] font-semibold text-white transition hover:bg-thamani-forest/85"
+                    >
+                      <.icon name="hero-archive-box" class="size-3 shrink-0" />
+                      <span class="truncate">SSCC {shipper.code}</span>
+                    </.link>
+                <% end %>
+              </div>
               <div class="mt-3 flex items-center gap-3">
                 <canvas
                   id={"serial-datamatrix-#{dom_key(serial.serial)}"}

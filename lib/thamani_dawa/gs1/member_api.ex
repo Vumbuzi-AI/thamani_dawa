@@ -38,6 +38,8 @@ defmodule ThamaniDawa.GS1.MemberApi do
   @callback post_search_glns(map()) :: {:ok, [map()]} | {:error, term()}
   @callback post_barcode_batches(String.t()) :: {:ok, [map()]} | {:error, term()}
   @callback post_batch_serials(String.t(), String.t()) :: {:ok, [map()]} | {:error, term()}
+  @callback post_unpacked_serials(String.t(), String.t() | nil) ::
+              {:ok, [map()]} | {:error, term()}
 
   @doc """
   Mints an SSCC. `params` is the member-API body: `batch_info` and `address`
@@ -113,6 +115,23 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def batch_serials(gtin, batch, opts \\ [])
       when is_binary(gtin) and is_binary(batch) and is_list(opts) do
     dispatch(:post_batch_serials, [gtin, batch], opts)
+  end
+
+  @doc """
+  Primary serials for a GTIN (optionally one batch) not yet packed into a
+  shipper, via `POST /list_unpacked_serials` — the candidates for
+  `create_shipper_sscc/2`. Each carries `serial`, `batch`, `production`,
+  `expiry`.
+  """
+  def unpacked_serials(gtin, batch \\ nil, opts \\ []) when is_binary(gtin) and is_list(opts) do
+    dispatch(:post_unpacked_serials, [gtin, batch], opts)
+  end
+
+  def post_unpacked_serials(gtin, batch, opts \\ []) when is_binary(gtin) and is_list(opts) do
+    %{"barcode" => gtin, "limit" => 1_000}
+    |> then(&if(is_binary(batch) and batch != "", do: Map.put(&1, "batch", batch), else: &1))
+    |> post("/list_unpacked_serials", opts)
+    |> decode_unpacked_serials_response()
   end
 
   def post_barcode_batches(gtin, opts \\ []) when is_binary(gtin) and is_list(opts) do
@@ -193,8 +212,11 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def decode_create_response({:ok, status, body}) when status in [401, 403],
     do: {:error, auth_error(status, body)}
 
-  def decode_create_response({:ok, 400, %{"result" => message}}) when is_binary(message),
-    do: {:error, {:invalid, message}}
+  # 400 bad request; 402 plan/allocation exhausted; 404 GLN not found;
+  # 422 serials missing, already packed, or mixed batches.
+  def decode_create_response({:ok, status, %{"result" => message}})
+      when status in [400, 402, 404, 422] and is_binary(message),
+      do: {:error, {:invalid, message}}
 
   def decode_create_response({:ok, 400, _body}),
     do: {:error, {:invalid, "GS1 rejected the SSCC request"}}
@@ -247,6 +269,25 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def decode_products_response({:ok, _status, _body}), do: {:error, :unavailable}
   def decode_products_response({:error, :unconfigured}), do: {:error, :unconfigured}
   def decode_products_response({:error, _reason}), do: {:error, :unavailable}
+
+  @doc false
+  def decode_unpacked_serials_response({:ok, status, %{"serials" => serials}})
+      when status in 200..299 and is_list(serials),
+      do: {:ok, Enum.filter(serials, &is_map/1)}
+
+  def decode_unpacked_serials_response({:ok, status, _body}) when status in 200..299,
+    do: {:ok, []}
+
+  def decode_unpacked_serials_response({:ok, status, _body}) when status in [401, 403],
+    do: {:error, auth_error(status, nil)}
+
+  def decode_unpacked_serials_response({:ok, 400, %{"result" => message}})
+      when is_binary(message),
+      do: {:error, {:invalid, message}}
+
+  def decode_unpacked_serials_response({:ok, _status, _body}), do: {:error, :unavailable}
+  def decode_unpacked_serials_response({:error, :unconfigured}), do: {:error, :unconfigured}
+  def decode_unpacked_serials_response({:error, _reason}), do: {:error, :unavailable}
 
   @doc false
   def decode_barcode_batches_response({:ok, status, %{"product" => %{"batches" => batches}}})

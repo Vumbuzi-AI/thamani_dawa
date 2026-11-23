@@ -448,6 +448,155 @@ defmodule ThamaniDawa.Manufacturing do
     end
   end
 
+  @doc """
+  A batch's primary serials that GS1 reports as not yet packed into a
+  shipper (`POST /list_unpacked_serials`) — the candidates for
+  `pack_serials_into_shipper/5`. Sorted by serial.
+  """
+  def fetch_unpacked_serials(organization_id, gtin, batch_no, opts \\ [])
+      when is_binary(gtin) and is_binary(batch_no) do
+    opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
+
+    with {:ok, rows} <- MemberApi.unpacked_serials(gtin, batch_no, opts) do
+      serials =
+        rows
+        |> Enum.filter(
+          &(&1["batch"] == batch_no and is_binary(&1["serial"]) and &1["serial"] != "")
+        )
+        |> Enum.map(& &1["serial"])
+        |> Enum.uniq()
+        |> Enum.sort()
+
+      {:ok, serials}
+    end
+  end
+
+  @doc """
+  Aggregation-later: packs already-issued, unpacked primary `serials` of one
+  batch into a new shipper SSCC minted by GS1 (`POST /create_shipper_sscc`),
+  then records the shipper locally and enqueues the EPCIS packing event.
+
+  `batch` is a GS1 batch map (`fetch_product_batches/2`). `attrs` carries
+  `"from_gln"` (one of the organization's GLNs), `"to_gln"`, and an optional
+  `"order_number"`. `opts[:site_gln]` is the EPCIS business location.
+  """
+  def pack_serials_into_shipper(organization_id, product, batch, serials, attrs, opts \\ [])
+
+  def pack_serials_into_shipper(_organization_id, _product, _batch, [], _attrs, _opts),
+    do: {:error, {:invalid, "Select at least one serial to pack."}}
+
+  def pack_serials_into_shipper(
+        organization_id,
+        %Product{} = product,
+        batch,
+        serials,
+        attrs,
+        opts
+      )
+      when is_list(serials) do
+    from_gln = attrs |> Map.get("from_gln", "") |> String.trim()
+    to_gln = attrs |> Map.get("to_gln", "") |> String.trim()
+    order_number = attrs |> Map.get("order_number", "") |> String.trim()
+
+    cond do
+      not Regex.match?(~r/^\d{13}$/, from_gln) ->
+        {:error, {:invalid, "Choose the facility the shipper leaves from."}}
+
+      not Regex.match?(~r/^\d{13}$/, to_gln) ->
+        {:error, {:invalid, "Enter the 13-digit GLN the shipper is going to."}}
+
+      true ->
+        params =
+          %{
+            # `barcode` is ignored by GS1; it scopes the request for clarity.
+            "barcode" => product.gtin,
+            "serials" => serials,
+            "from" => %{"gln" => from_gln},
+            "to" => %{"gln" => to_gln}
+          }
+          |> then(
+            &if(order_number == "", do: &1, else: Map.put(&1, "order_number", order_number))
+          )
+
+        with {:ok, code} <-
+               MemberApi.create_shipper_sscc(params,
+                 api_token: Organizations.gs1_api_key(organization_id)
+               ) do
+          record_packed_shipper(
+            organization_id,
+            product,
+            batch,
+            serials,
+            code,
+            from_gln,
+            to_gln,
+            opts
+          )
+        end
+    end
+  end
+
+  defp record_packed_shipper(
+         organization_id,
+         product,
+         batch,
+         serials,
+         code,
+         from_gln,
+         to_gln,
+         opts
+       ) do
+    Repo.transaction(fn ->
+      shipper_sscc =
+        %ShipperSscc{organization_id: organization_id}
+        |> ShipperSscc.changeset(%{
+          "code" => code,
+          "gtin" => product.gtin,
+          "batch" => batch.batch_no,
+          "production_date" => batch.production_date,
+          "expiry_date" => batch.expiry_date,
+          "from_gln" => from_gln,
+          "to_gln" => to_gln,
+          "count_of_trade_items" => length(serials),
+          "packed_serials" => serials
+        })
+        |> Repo.insert!()
+
+      # Mirror onto local rows when this app also holds the batch/serials.
+      case Repo.get_by(Batch,
+             organization_id: organization_id,
+             manufacturer_product_id: product.id,
+             batch_no: batch.batch_no
+           ) do
+        %Batch{} = local_batch ->
+          %SsccBatch{}
+          |> SsccBatch.changeset(%{
+            manufacturer_shipper_sscc_id: shipper_sscc.id,
+            manufacturer_batch_id: local_batch.id
+          })
+          |> Repo.insert!(on_conflict: :nothing)
+
+          from(s in Serial,
+            where: s.manufacturer_batch_id == ^local_batch.id and s.serial in ^serials
+          )
+          |> Repo.update_all(set: [manufacturer_shipper_sscc_id: shipper_sscc.id])
+
+        nil ->
+          :ok
+      end
+
+      Epcis.record_manufacturer_serial_pack(
+        organization_id,
+        product,
+        shipper_sscc,
+        Enum.map(serials, &%{serial: &1}),
+        opts[:site_gln]
+      )
+
+      shipper_sscc
+    end)
+  end
+
   defp sscc_content_serials(%{} = product) do
     gtin = product["gtin"]
     name = product["name"]
@@ -1006,6 +1155,33 @@ defmodule ThamaniDawa.Manufacturing do
     |> Enum.map(fn {sscc, serial_count} ->
       %{sscc: sscc, serial_count: serial_count}
     end)
+  end
+
+  @doc """
+  Shipper SSCCs packed from one GTIN + batch, newest first, with a
+  `serial => shipper` map covering every primary serial packed into them
+  (from the recorded pack list and any mirrored local serial rows).
+  """
+  def list_batch_shippers(organization_id, gtin, batch_no) do
+    shippers =
+      Repo.all(
+        from s in ShipperSscc,
+          where:
+            s.organization_id == ^organization_id and s.gtin == ^gtin and
+              s.batch == ^batch_no,
+          order_by: [desc: s.inserted_at, desc: s.id],
+          preload: [
+            serials: ^from(se in Serial, select: [:id, :serial, :manufacturer_shipper_sscc_id])
+          ]
+      )
+
+    by_serial =
+      for shipper <- Enum.reverse(shippers),
+          serial <- Enum.uniq(shipper.packed_serials ++ Enum.map(shipper.serials, & &1.serial)),
+          into: %{},
+          do: {serial, shipper}
+
+    {shippers, by_serial}
   end
 
   @doc "Fetches a shipper SSCC scoped to the organization, with its pallet preloaded."

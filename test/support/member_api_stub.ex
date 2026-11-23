@@ -188,6 +188,36 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
     {:ok, results}
   end
 
+  # Unpacked = generated without shippers and not yet in a later
+  # `create_shipper_sscc` call.
+  @impl true
+  def post_unpacked_serials(gtin, batch) when is_binary(gtin) do
+    ensure_started()
+
+    packed =
+      __MODULE__
+      |> Agent.get(& &1.shipper_sscc_creates)
+      |> Enum.filter(&(&1["barcode"] == gtin))
+      |> Enum.flat_map(&List.wrap(&1["serials"]))
+      |> MapSet.new()
+
+    serials =
+      for params <- created_for(gtin),
+          !Map.get(params, "create_shippers"),
+          is_nil(batch) or params["batch"] == batch,
+          serial <- created_serials(params),
+          not MapSet.member?(packed, serial) do
+        %{
+          "serial" => serial,
+          "batch" => params["batch"],
+          "production" => params["production"],
+          "expiry" => params["expiry"]
+        }
+      end
+
+    {:ok, serials}
+  end
+
   defp created_for(gtin) do
     __MODULE__
     |> Agent.get(& &1.serial_creates)

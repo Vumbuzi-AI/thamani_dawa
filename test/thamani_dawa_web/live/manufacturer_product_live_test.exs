@@ -337,6 +337,89 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(ssccs, "#manufacturer-sscc-empty-state")
   end
 
+  test "packs selected unpacked serials into a new shipper SSCC", %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+    batch = manufacturer_batch_fixture(organization.id, product.id)
+
+    assert {:ok, %{serials: [_, _, _]}} =
+             Manufacturing.generate_primary_serials(
+               organization.id,
+               product,
+               %{
+                 "batch_no" => batch.batch_no,
+                 "production_date" => Date.to_iso8601(batch.production_date),
+                 "expiry_date" => Date.to_iso8601(batch.expiry_date)
+               },
+               3,
+               manufacturer_session_gln(user)
+             )
+
+    conn = log_in_user(conn, user)
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials")
+
+    lv |> element("#open-pack-serials") |> render_click()
+
+    assert has_element?(lv, "#pack-serials-panel")
+    assert has_element?(lv, "#pack-serial-0001")
+    assert has_element?(lv, "#pack-selected-count", "3")
+
+    lv |> element("#pack-serial-0002") |> render_click()
+    assert has_element?(lv, "#pack-selected-count", "2")
+
+    lv |> element("#pack_to_gln_search") |> render_keyup(%{"value" => "Afya Test"})
+    render_async(lv)
+    lv |> element("#pack-to-gln-0614141000784") |> render_click()
+
+    assert {:error, {:live_redirect, %{to: "/manufacturer/sscc/" <> _}}} =
+             lv
+             |> form("#pack-serials-form", %{
+               "pack" => %{
+                 "from_gln" => manufacturer_session_gln(user),
+                 "order_number" => "PO-77"
+               }
+             })
+             |> render_submit()
+
+    request =
+      Enum.find(
+        ThamaniDawa.GS1.MemberApiStub.shipper_sscc_requests(),
+        &(&1["barcode"] == product.gtin)
+      )
+
+    assert request["serials"] == ["0001", "0003"]
+    assert request["to"] == %{"gln" => "0614141000784"}
+    assert request["order_number"] == "PO-77"
+
+    assert [%{sscc: shipper}] = Manufacturing.list_sscc_groups(organization.id, product.id)
+    assert shipper.batch == batch.batch_no
+    assert shipper.count_of_trade_items == 2
+    assert shipper.to_gln == "0614141000784"
+
+    packed =
+      organization.id
+      |> Manufacturing.list_serials(batch.id)
+      |> Enum.filter(&(&1.manufacturer_shipper_sscc_id == shipper.id))
+      |> Enum.map(& &1.serial)
+
+    assert packed == ["0001", "0003"]
+
+    # Packed serials no longer show up as candidates.
+    assert {:ok, ["0002"]} =
+             Manufacturing.fetch_unpacked_serials(organization.id, product.gtin, batch.batch_no)
+
+    assert shipper.packed_serials == ["0001", "0003"]
+
+    # The batch page lists the new shipper and tags each packed serial.
+    {:ok, lv, _html} =
+      live(conn, ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch.batch_no}")
+
+    assert has_element?(lv, "#batch-shipper-#{shipper.id}")
+    assert has_element?(lv, "#batch-shipper-serials-#{shipper.id}")
+    assert has_element?(lv, "#serial-sscc-0001")
+    assert has_element?(lv, "#serial-sscc-0003")
+    assert has_element?(lv, "#serial-unpacked-0002")
+  end
+
   defp manufacturer_session_gln(user) do
     ThamaniDawa.Sites.get_site!(user.organization_id, user.current_site_id).gln
   end
