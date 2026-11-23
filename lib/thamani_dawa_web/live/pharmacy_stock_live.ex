@@ -89,6 +89,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
         today={@today}
         filtered?={@filtered?}
         exporting={@exporting}
+        csv_ready={@csv_ready}
         stock_takes_path={~p"/pharmacy/stock-takes"}
         disposals_path={~p"/pharmacy/disposals"}
         scan_path={~p"/pharmacy/scan"}

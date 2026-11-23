@@ -802,43 +802,47 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :submit, :string, default: "export_csv"
   attr :on_cancel, JS, required: true
   attr :columns, :list, default: [{"All visible columns", "visible"}]
-  attr :ranges, :list, default: nil
+  attr :from, :any, default: nil
+  attr :to, :any, default: nil
   attr :count, :integer, default: nil
   attr :noun, :string, default: "rows"
 
   def td_export_modal(assigns) do
     ~H"""
-    <ThamaniDawaWeb.CoreComponents.modal
+    <.td_modal
       id={@id}
       show
-      size="confirm"
-      class="td-export-modal"
+      width={520}
       title="Export CSV"
       subtitle="Download the rows that match your current filters."
       on_cancel={@on_cancel}
     >
-      <.form for={%{}} as={:export} id={"#{@id}-form"} phx-submit={@submit} class="td-modal-form">
-        <ThamaniDawaWeb.CoreComponents.input
-          :if={@ranges}
-          type="select"
-          id={"#{@id}-range"}
-          name="range"
-          label="Date range"
-          value={@ranges |> List.first() |> elem(1)}
-          options={@ranges}
-        />
-        <ThamaniDawaWeb.CoreComponents.input
-          type="select"
-          id={"#{@id}-columns"}
-          name="columns"
-          label="Columns"
-          value={@columns |> List.first() |> elem(1)}
-          options={@columns}
-        />
-        <p class="td-note">
-          The file downloads as CSV and opens in Excel or Google Sheets.<span :if={@count}>{@count} {@noun} match.</span>
-        </p>
-      </.form>
+      <:body>
+        <.form for={%{}} as={:export} id={"#{@id}-form"} phx-submit={@submit} class="td-modal-form">
+          <div :if={@from && @to}>
+            <p class="td-field-label">Date range</p>
+            <ThamaniDawaWeb.CoreComponents.date_range_picker
+              id={"#{@id}-dates"}
+              from_name="from"
+              from_value={@from}
+              to_name="to"
+              to_value={@to}
+              max="today"
+            />
+          </div>
+          <ThamaniDawaWeb.CoreComponents.input
+            type="select"
+            id={"#{@id}-columns"}
+            name="columns"
+            label="Columns"
+            value={@columns |> List.first() |> elem(1)}
+            options={@columns}
+          />
+          <p class="td-note">
+            The file downloads as CSV and opens in Excel or Google Sheets.<span :if={@count}> {@count} {@noun} match.</span>
+          </p>
+        </.form>
+      </:body>
       <:footer>
         <.td_button type="button" variant="secondary" label="Cancel" phx-click={@on_cancel} />
         <.td_button
@@ -850,9 +854,57 @@ defmodule ThamaniDawaWeb.TDComponents do
           form={"#{@id}-form"}
         />
       </:footer>
-    </ThamaniDawaWeb.CoreComponents.modal>
+    </.td_modal>
     """
   end
+
+  @doc """
+  Doop "Download ready" dialog (zkycQlzsjO): shown after a CSV has been
+  sent to the browser. Filename, size, and a Done button.
+  """
+  attr :id, :string, required: true
+  attr :filename, :string, required: true
+  attr :bytes, :integer, required: true
+  attr :on_cancel, JS, required: true
+
+  def td_download_ready(assigns) do
+    ~H"""
+    <.td_modal
+      id={@id}
+      show
+      width={480}
+      title="Your file is ready"
+      subtitle="It is saved to your downloads folder."
+      on_cancel={@on_cancel}
+    >
+      <:body>
+        <div class="td-download-ready">
+          <.td_icon name="check-circle" class="td-download-ready-icon" />
+          <div class="td-download-ready-copy">
+            <b>{@filename}</b>
+            <span class="td-muted">{format_download_bytes(@bytes)} · ready</span>
+          </div>
+        </div>
+      </:body>
+      <:footer>
+        <.td_button type="button" variant="primary" label="Done" phx-click={@on_cancel} />
+      </:footer>
+    </.td_modal>
+    """
+  end
+
+  defp format_download_bytes(bytes) when is_integer(bytes) and bytes < 1_000, do: "#{bytes} B"
+
+  defp format_download_bytes(bytes) when is_integer(bytes) and bytes < 1_000_000 do
+    kb = bytes / 1_000
+    if kb < 10, do: "#{Float.round(kb, 1)} KB", else: "#{round(kb)} KB"
+  end
+
+  defp format_download_bytes(bytes) when is_integer(bytes) do
+    "#{Float.round(bytes / 1_000_000, 1)} MB"
+  end
+
+  defp format_download_bytes(_), do: "—"
 
   attr :id, :string, required: true
   attr :show, :boolean, default: false

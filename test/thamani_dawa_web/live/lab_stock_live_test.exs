@@ -275,6 +275,10 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
       assert content =~ "Product,GTIN,Category"
       assert content =~ "Csv Reagent"
       refute has_element?(lv, "#lab-stock-export-modal")
+      assert has_element?(lv, "#lab-stock-download-ready", "Your file is ready")
+      assert has_element?(lv, "#lab-stock-download-ready", "ready")
+      lv |> element("#lab-stock-download-ready button", "Done") |> render_click()
+      refute has_element?(lv, "#lab-stock-download-ready")
     end
 
     test "a product at or below reorder_level shows the Low stock badge", %{conn: conn} do
