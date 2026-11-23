@@ -43,13 +43,10 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
 
     # Both operating models were selected, so the default site activity is
     # already the combined "pharmacy + diagnostic lab" choice — no radio
-    # selection needed, just the PPB and KMLTTB licenses in turn. "Unique
-    # Pharmacy"/"AB1XXXX9999" and "Unique Lab"/"L 01000/26" are recognized
-    # by the respective registry test stubs as unique matches.
+    # selection needed, just the KMLTTB license. "Unique Lab"/"L 01000/26"
+    # is recognized by the registry test stub as a unique match.
     site_attrs = %{
       gln: "0614141000784",
-      ppb_facility_name: "Unique Pharmacy",
-      license_number: "AB1XXXX9999",
       kmlttb_facility_name: "Unique Lab",
       kmlttb_license_number: "L 01000/26"
     }

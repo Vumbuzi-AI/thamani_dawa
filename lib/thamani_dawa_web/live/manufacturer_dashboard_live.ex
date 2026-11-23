@@ -23,10 +23,10 @@ defmodule ThamaniDawaWeb.ManufacturerDashboardLive do
     >
       <:tools>
         <.td_button
-          id="manufacturer-new-product"
+          id="manufacturer-view-products"
           variant="primary"
-          label="Add product"
-          navigate={~p"/manufacturer/products/new"}
+          label="View products"
+          navigate={~p"/manufacturer/products"}
         />
       </:tools>
 
@@ -40,7 +40,11 @@ defmodule ThamaniDawaWeb.ManufacturerDashboardLive do
         <div class="td-stats">
           <.td_stat id="stat-manufacturer-products" caption="Products" value={@counts.products} />
           <.td_stat id="stat-manufacturer-batches" caption="Batches" value={@counts.batches} />
-          <.td_stat id="stat-manufacturer-serials" caption="Serials generated" value={@counts.serials} />
+          <.td_stat
+            id="stat-manufacturer-serials"
+            caption="Serials generated"
+            value={@counts.serials}
+          />
           <.td_stat id="stat-manufacturer-ssccs" caption="SSCCs issued" value={@counts.ssccs} />
         </div>
       </.td_list_page>

@@ -1272,10 +1272,17 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         class="rounded-lg border p-3"
         style={
           case @gtin_lookup do
-            :searching -> "background-color: var(--color-td-info-tint); border-color: var(--color-td-info-line);"
-            {:found, _} -> "background-color: var(--color-td-success-tint); border-color: var(--color-td-success-line);"
-            {:error, _} -> "background-color: var(--color-td-danger-tint); border-color: var(--color-td-danger-line);"
-            _ -> ""
+            :searching ->
+              "background-color: var(--color-td-info-tint); border-color: var(--color-td-info-line);"
+
+            {:found, _} ->
+              "background-color: var(--color-td-success-tint); border-color: var(--color-td-success-line);"
+
+            {:error, _} ->
+              "background-color: var(--color-td-danger-tint); border-color: var(--color-td-danger-line);"
+
+            _ ->
+              ""
           end
         }
       >

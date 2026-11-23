@@ -9,7 +9,6 @@ defmodule ThamaniDawaWeb.SignupLive do
   alias ThamaniDawa.Kmlttb
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Organizations.Organization
-  alias ThamaniDawa.Ppb
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
 
@@ -55,7 +54,6 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> assign(:gs1_key_check, :idle)
       |> assign(:gln_verification_source, nil)
       |> assign(:gln_check, :idle)
-      |> assign(:ppb_check, :idle)
       |> assign(:kmlttb_check, :idle)
       |> assign(:admin_first_name, "")
       |> assign(:admin_last_name, "")
@@ -114,7 +112,6 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> assign(:org_form, to_form(org_changeset, as: :organization))
       |> assign(:site_form, to_form(site_changeset, as: :site))
       |> reverify_restored_gln(site_params, step)
-      |> reverify_restored_ppb(site_params, step)
       |> reverify_restored_kmlttb(site_params, step)
 
     {:reply, %{restored: true}, socket}
@@ -219,10 +216,8 @@ defmodule ThamaniDawaWeb.SignupLive do
      socket
      |> assign(:site_form, to_form(site_changeset, as: :site))
      |> assign(:site_params, site_params)
-     |> maybe_autofill_ppb_facility_name()
      |> maybe_autofill_kmlttb_facility_name()
      |> select_member_gln(params, site_params)
-     |> maybe_check_ppb(params, site_params)
      |> maybe_check_kmlttb(params, site_params)}
   end
 
@@ -236,13 +231,11 @@ defmodule ThamaniDawaWeb.SignupLive do
     socket = verify_member_gln(socket, site_params)
 
     site_changeset = Site.default_changeset(%Site{}, site_params)
-    ppb_ftype = Site.ppb_ftype(Map.get(site_params, "activities", []))
     kmlttb_required = Site.kmlttb_required?(Map.get(site_params, "activities", []))
 
     socket =
       socket
       |> assign(:site_form, to_form(site_changeset, as: :site))
-      |> maybe_autofill_ppb_facility_name()
       |> maybe_autofill_kmlttb_facility_name()
 
     cond do
@@ -294,29 +287,6 @@ defmodule ThamaniDawaWeb.SignupLive do
            :error,
            "We couldn't find this GLN in the GS1 registry. Get one from GS1 Kenya, then try again."
          )}
-
-      ppb_ftype && socket.assigns.ppb_check == :checking ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "Still checking this location's PPB license. Press Continue again in a moment."
-         )}
-
-      ppb_ftype && socket.assigns.ppb_check == :idle ->
-        {:noreply,
-         socket
-         |> maybe_check_ppb(
-           Map.put(params, "_target", ["site", "license_number"]),
-           site_params
-         )
-         |> put_flash(
-           :error,
-           "Checking this location's PPB license. Press Continue again in a moment."
-         )}
-
-      ppb_ftype && not match?({:matched, _}, socket.assigns.ppb_check) ->
-        {:noreply, put_flash(socket, :error, ppb_error_message(socket.assigns.ppb_check))}
 
       kmlttb_required && socket.assigns.kmlttb_check == :checking ->
         {:noreply,
@@ -378,19 +348,6 @@ defmodule ThamaniDawaWeb.SignupLive do
     {:noreply, assign(socket, :step, previous)}
   end
 
-  def handle_event("select_ppb_candidate", %{"index" => index}, socket) do
-    case socket.assigns.ppb_check do
-      {:ambiguous, candidates} ->
-        case Enum.at(candidates, String.to_integer(index)) do
-          nil -> {:noreply, socket}
-          detail -> {:noreply, assign(socket, :ppb_check, {:matched, detail})}
-        end
-
-      _ ->
-        {:noreply, socket}
-    end
-  end
-
   def handle_event("select_kmlttb_candidate", %{"index" => index}, socket) do
     case socket.assigns.kmlttb_check do
       {:ambiguous, candidates} ->
@@ -407,7 +364,6 @@ defmodule ThamaniDawaWeb.SignupLive do
   def handle_event("save", %{"user" => admin_params}, socket) do
     admin_params = compose_admin_name(admin_params)
     site_activities = Map.get(socket.assigns.site_params || %{}, "activities", [])
-    site_ppb_ftype = Site.ppb_ftype(site_activities)
     site_kmlttb_required = Site.kmlttb_required?(site_activities)
 
     cond do
@@ -426,15 +382,6 @@ defmodule ThamaniDawaWeb.SignupLive do
          socket
          |> assign(:step, :main_location)
          |> put_flash(:error, "Please verify your location GLN again before continuing.")}
-
-      site_ppb_ftype && not match?({:matched, _}, socket.assigns.ppb_check) ->
-        {:noreply,
-         socket
-         |> assign(:step, :main_location)
-         |> put_flash(
-           :error,
-           "Please verify this location's PPB license again before continuing."
-         )}
 
       site_kmlttb_required && not match?({:matched, _}, socket.assigns.kmlttb_check) ->
         {:noreply,
@@ -557,7 +504,6 @@ defmodule ThamaniDawaWeb.SignupLive do
        |> clear_flash(:error)
        |> assign(:gln_check, {:matched, name, address})
        |> maybe_autofill_site_fields(licence)
-       |> maybe_autofill_ppb_facility_name()
        |> maybe_autofill_kmlttb_facility_name()}
     end
   end
@@ -604,34 +550,6 @@ defmodule ThamaniDawaWeb.SignupLive do
     {:noreply, socket |> clear_flash(:error) |> assign(:gln_check, :unavailable)}
   end
 
-  def handle_async(:ppb_lookup, {:ok, {:ok, :verified, detail}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:ppb_check, {:matched, detail})}
-  end
-
-  def handle_async(:ppb_lookup, {:ok, {:ok, :license_inactive, detail}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:ppb_check, {:license_inactive, detail})}
-  end
-
-  def handle_async(:ppb_lookup, {:ok, {:ok, :ambiguous, candidates}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:ppb_check, {:ambiguous, candidates})}
-  end
-
-  def handle_async(:ppb_lookup, {:ok, {:error, :name_not_found}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:ppb_check, :name_not_found)}
-  end
-
-  def handle_async(:ppb_lookup, {:ok, {:error, :license_mismatch}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:ppb_check, :license_mismatch)}
-  end
-
-  def handle_async(:ppb_lookup, {:ok, {:error, _reason}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:ppb_check, :unavailable)}
-  end
-
-  def handle_async(:ppb_lookup, {:exit, _reason}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:ppb_check, :unavailable)}
-  end
-
   def handle_async(:kmlttb_lookup, {:ok, {:ok, :verified, detail}}, socket) do
     {:noreply, socket |> clear_flash(:error) |> assign(:kmlttb_check, {:matched, detail})}
   end
@@ -672,7 +590,7 @@ defmodule ThamaniDawaWeb.SignupLive do
   # activities from the org's operating models each time they're submitted
   # — including a second time, if the user goes back and continues again
   # without changing anything. Rebasing on a bare %Site{} would silently
-  # wipe out the GLN, PPB fields, or any manually-adjusted activities
+  # wipe out the GLN, licence fields, or any manually-adjusted activities
   # already entered on step 3.
   defp site_base(socket) do
     Ecto.Changeset.apply_changes(socket.assigns.site_form.source)
@@ -708,9 +626,7 @@ defmodule ThamaniDawaWeb.SignupLive do
       "address" => "",
       # These are typed, not registry-derived, so unlike name/address above
       # they're worth restoring — losing them on a refresh meant redoing
-      # PPB/KMLTTB verification from scratch for no reason.
-      "ppb_facility_name" => restored_string(params, "ppb_facility_name", 200),
-      "license_number" => restored_string(params, "license_number", 50),
+      # KMLTTB verification from scratch for no reason.
       "kmlttb_facility_name" => restored_string(params, "kmlttb_facility_name", 200),
       "kmlttb_license_number" => restored_string(params, "kmlttb_license_number", 50)
     }
@@ -741,13 +657,6 @@ defmodule ThamaniDawaWeb.SignupLive do
   end
 
   defp reverify_restored_gln(socket, _site_params, _step), do: socket
-
-  defp reverify_restored_ppb(socket, site_params, step)
-       when step in [:main_location, :administrator] do
-    check_ppb(socket, site_params)
-  end
-
-  defp reverify_restored_ppb(socket, _site_params, _step), do: socket
 
   defp reverify_restored_kmlttb(socket, site_params, step)
        when step in [:main_location, :administrator] do
@@ -914,62 +823,6 @@ defmodule ThamaniDawaWeb.SignupLive do
     Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(payload)) == check
   end
 
-  defp maybe_check_ppb(socket, params, site_params) do
-    if Map.get(params, "_target") in [["site", "ppb_facility_name"], ["site", "license_number"]] do
-      check_ppb(socket, site_params)
-    else
-      socket
-    end
-  end
-
-  defp check_ppb(socket, site_params) do
-    ftype = Site.ppb_ftype(Map.get(site_params, "activities", []))
-
-    facility_name =
-      site_params |> Map.get("ppb_facility_name", "") |> to_string() |> String.trim()
-
-    license_number = site_params |> Map.get("license_number", "") |> to_string() |> String.trim()
-
-    if ftype && likely_complete_name?(facility_name) && ppb_license_complete?(license_number) do
-      socket
-      |> assign(:ppb_check, :checking)
-      |> start_async(:ppb_lookup, fn ->
-        Ppb.verify_license(facility_name, license_number, ftype)
-      end)
-    else
-      assign(socket, :ppb_check, :idle)
-    end
-  end
-
-  # Every PPB masked license we've observed (any ftype) is 11 characters —
-  # a 3-character prefix, 4 masked characters, and a 4-character suffix —
-  # and `Ppb.license_match?/2` only ever matches when the entered value's
-  # length equals the mask's, so a value that isn't 11 characters can never
-  # verify. Gate on that length instead of firing on every keystroke.
-  defp ppb_license_complete?(value), do: String.length(value) == 11
-
-  defp ppb_error_message({:ambiguous, _candidates}),
-    do:
-      "Multiple facilities matched that name and license. Pick the correct one below before continuing."
-
-  defp ppb_error_message(:name_not_found),
-    do:
-      "We couldn't find a facility by that name with PPB. Double-check the spelling, or confirm this location's activities (retail vs. wholesale) match how it's actually licensed."
-
-  defp ppb_error_message(:license_mismatch),
-    do:
-      "We found that facility with PPB, but this license number doesn't match their record for it. Double-check the number."
-
-  defp ppb_error_message({:license_inactive, _detail}),
-    do:
-      "This facility's PPB license was found but isn't currently active. Please check its status with PPB before continuing."
-
-  defp ppb_error_message(:unavailable),
-    do: "We couldn't reach the PPB registry to verify this license. Try again in a moment."
-
-  defp ppb_error_message(_ppb_check),
-    do: "Please verify this location's PPB license before continuing."
-
   defp maybe_check_kmlttb(socket, params, site_params) do
     if Map.get(params, "_target") in [
          ["site", "kmlttb_facility_name"],
@@ -1004,7 +857,7 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   # KMLTTB's licence numbers are unmasked, and every real one we've seen
   # follows "L" + 5 digits + "/" + 2 digits (e.g. "L 01710/26"), with or
-  # without the space — so unlike PPB we can gate on the actual format,
+  # without the space — so we can gate on the actual format,
   # not just a length guess.
   defp kmlttb_license_complete?(value), do: Regex.match?(~r/^L\s?\d{5}\/\d{2}$/i, value)
 
@@ -1013,8 +866,7 @@ defmodule ThamaniDawaWeb.SignupLive do
   # non-empty check combined with a short debounce meant a normal pause
   # mid-name (e.g. glancing at a card before typing the next word) fired a
   # real external API call for each partial value. License numbers have
-  # their own format-specific gates (`ppb_license_complete?/1`,
-  # `kmlttb_license_complete?/1`) since we know their real shape; a
+  # their own format-specific gate (`kmlttb_license_complete?/1`) since we know their real shape; a
   # facility name is free text, so length is the only signal available.
   defp likely_complete_name?(value), do: String.length(value) >= 4
 
@@ -1040,8 +892,8 @@ defmodule ThamaniDawaWeb.SignupLive do
   defp kmlttb_error_message(_kmlttb_check),
     do: "Please verify this location's KMLTTB license before continuing."
 
-  # Prefills the KMLTTB facility-name field the same way
-  # `maybe_autofill_ppb_facility_name/1` does for PPB — left editable, since
+  # Prefills the KMLTTB facility-name field from the GLN-matched site name —
+  # left editable, since
   # a lab's KMLTTB trading name can legitimately differ from the parent
   # organization's GS1 legal name.
   defp maybe_autofill_kmlttb_facility_name(socket) do
@@ -1060,28 +912,6 @@ defmodule ThamaniDawaWeb.SignupLive do
     end
   end
 
-  # Prefills the PPB facility-name field from the site's (already-resolved)
-  # GLN-matched name once a licensable activity is selected, the same
-  # "verified name feeds the next field" pattern used for the GS1 steps —
-  # left editable, since a branch's PPB trading name can legitimately differ
-  # from the parent organization's GS1 legal name.
-  defp maybe_autofill_ppb_facility_name(socket) do
-    changeset = socket.assigns.site_form.source
-
-    if Site.ppb_ftype(Ecto.Changeset.get_field(changeset, :activities) || []) do
-      autofill_field(
-        socket,
-        :site_form,
-        :site,
-        :ppb_facility_name,
-        Ecto.Changeset.get_field(changeset, :name)
-      )
-    else
-      socket
-    end
-  end
-
-  defp current_site_ftype(form), do: Site.ppb_ftype(form[:activities].value || [])
   defp current_site_lab_required?(form), do: Site.kmlttb_required?(form[:activities].value || [])
 
   defp gln_present?(site_params) do
@@ -1315,8 +1145,6 @@ defmodule ThamaniDawaWeb.SignupLive do
               "gln",
               "name",
               "address",
-              "ppb_facility_name",
-              "license_number",
               "kmlttb_facility_name",
               "kmlttb_license_number"
             ], draft.site)
@@ -1468,7 +1296,6 @@ defmodule ThamaniDawaWeb.SignupLive do
                   />
                 </.form>
               <% :gs1_key -> %>
-
                 <.form for={@gs1_form} id="gs1-key-form" phx-submit="verify_gs1_key">
                   <div class="mb-8">
                     <.thamani_input
@@ -1727,115 +1554,13 @@ defmodule ThamaniDawaWeb.SignupLive do
                         </fieldset>
                     <% end %>
 
-                    <%= if ftype = current_site_ftype(@site_form) do %>
-                      <div class="mb-7">
-                        <h2 class="mb-1 text-sm font-medium text-[var(--thamani-forest)]">
-                          PPB facility license
-                        </h2>
-                        <p class="mb-4 text-xs leading-5 text-[var(--thamani-pewter)]">
-                          <%= cond do %>
-                            <% ftype == "retail" -> %>
-                              Retail pharmacy premises are licensed by PPB separately from
-                              wholesale ones — verify this location's facility license below.
-                            <% ftype == "manufacturer" -> %>
-                              Manufacturing premises are licensed by PPB separately from
-                              retail and wholesale ones — verify this location's facility
-                              license below.
-                            <% true -> %>
-                              Wholesale distribution premises are licensed by PPB separately
-                              from retail ones — verify this location's facility license below.
-                          <% end %>
-                        </p>
-
-                        <.td_input
-                          field={@site_form[:ppb_facility_name]}
-                          label="Facility name (as licensed with PPB)"
-                          placeholder="e.g. Afya CBD Pharmacy"
-                          phx-debounce="900"
-                          required
-                        />
-                        <.td_input
-                          field={@site_form[:license_number]}
-                          label="PPB license number"
-                          placeholder="e.g. RD1234"
-                          phx-debounce="900"
-                          required
-                        />
-
-                        <%= case @ppb_check do %>
-                          <% :checking -> %>
-                            <p class="-mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--thamani-pewter)]">
-                              <.icon name="hero-arrow-path" class="size-3.5 animate-spin" />
-                              Checking with the PPB registry&hellip;
-                            </p>
-                          <% {:matched, detail} -> %>
-                            <div class="-mt-3 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
-                              <p class="inline-flex items-center gap-1.5">
-                                <.icon name="hero-check-circle" class="size-4" /> Verified with PPB
-                              </p>
-                              <p
-                                :if={detail[:valid_till]}
-                                class="mt-1 font-normal text-[var(--thamani-pewter)]"
-                              >
-                                Valid till {detail[:valid_till]}
-                              </p>
-                            </div>
-                          <% {:license_inactive, detail} -> %>
-                            <div class="-mt-3 rounded-lg bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-800">
-                              <p class="inline-flex items-center gap-1.5">
-                                <.icon name="hero-exclamation-triangle" class="size-4" />
-                                Found with PPB, but not currently active.
-                              </p>
-                              <p :if={detail[:status]} class="mt-1 font-normal text-amber-700">
-                                Licence status: {detail[:status]}
-                              </p>
-                            </div>
-                          <% {:ambiguous, candidates} -> %>
-                            <div class="-mt-3 rounded-lg bg-amber-50 px-3 py-3 text-xs text-amber-800">
-                              <p class="mb-2 inline-flex items-center gap-1.5 font-semibold">
-                                <.icon name="hero-exclamation-triangle" class="size-4" />
-                                Multiple facilities matched — pick the correct one:
-                              </p>
-                              <div class="td-mode-grid">
-                                <%= for {candidate, index} <- Enum.with_index(candidates) do %>
-                                  <.td_option_card
-                                    title={candidate[:name]}
-                                    body={candidate[:county]}
-                                    phx-click="select_ppb_candidate"
-                                    phx-value-index={index}
-                                  />
-                                <% end %>
-                              </div>
-                            </div>
-                          <% :name_not_found -> %>
-                            <p class="-mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                              <.icon name="hero-exclamation-triangle" class="size-4" />
-                              We couldn't find a facility by that name with PPB. Double-check the spelling, or confirm this matches how it's actually licensed (retail vs. wholesale).
-                            </p>
-                          <% :license_mismatch -> %>
-                            <p class="-mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                              <.icon name="hero-exclamation-triangle" class="size-4" />
-                              We found that facility, but this license number doesn't match PPB's record for it.
-                            </p>
-                          <% :unavailable -> %>
-                            <p class="-mt-3 text-xs text-[var(--thamani-pewter)]">
-                              We couldn't reach the PPB registry to verify this license. Try again in a moment.
-                            </p>
-                          <% _ -> %>
-                            <p class="-mt-3 text-xs text-[var(--thamani-pewter)]">
-                              We verify this with the PPB facilities register once both fields are filled in.
-                            </p>
-                        <% end %>
-                      </div>
-                    <% end %>
-
                     <%= if current_site_lab_required?(@site_form) do %>
                       <div class="mb-7">
                         <h2 class="mb-1 text-sm font-medium text-[var(--thamani-forest)]">
                           KMLTTB lab license
                         </h2>
                         <p class="mb-4 text-xs leading-5 text-[var(--thamani-pewter)]">
-                          Diagnostic labs are licensed by KMLTTB, separately from PPB — verify
+                          Diagnostic labs are licensed by KMLTTB — verify
                           this location's lab license below.
                         </p>
 
@@ -1941,8 +1666,6 @@ defmodule ThamaniDawaWeb.SignupLive do
                       }
                       disabled={
                         not match?({:matched, _, _}, @gln_check) or
-                          (current_site_ftype(@site_form) != nil and
-                             not match?({:matched, _}, @ppb_check)) or
                           (current_site_lab_required?(@site_form) and
                              not match?({:matched, _}, @kmlttb_check))
                       }

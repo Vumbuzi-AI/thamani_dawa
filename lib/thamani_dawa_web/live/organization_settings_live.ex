@@ -419,7 +419,12 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
         </div>
 
         <div class="flex justify-end border-t border-thamani-stone bg-thamani-canvas/40 px-6 py-4 lg:px-8">
-          <.td_button id="save-organization-settings" type="submit" variant="primary" label="Save changes" />
+          <.td_button
+            id="save-organization-settings"
+            type="submit"
+            variant="primary"
+            label="Save changes"
+          />
         </div>
       </.form>
 

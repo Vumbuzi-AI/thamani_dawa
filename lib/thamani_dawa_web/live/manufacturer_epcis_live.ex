@@ -374,7 +374,12 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
               What has been queued or sent for this organization.
             </p>
           </div>
-          <.td_button id="refresh-epcis-events" variant="secondary" label="Refresh" phx-click="refresh" />
+          <.td_button
+            id="refresh-epcis-events"
+            variant="secondary"
+            label="Refresh"
+            phx-click="refresh"
+          />
         </div>
 
         <div class="flex flex-col gap-3 border-b border-thamani-frosted px-4 py-3 sm:flex-row sm:items-center sm:px-5">

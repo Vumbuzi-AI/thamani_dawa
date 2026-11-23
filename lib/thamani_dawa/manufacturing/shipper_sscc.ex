@@ -15,6 +15,7 @@ defmodule ThamaniDawa.Manufacturing.ShipperSscc do
     field :production_date, :date
     field :expiry_date, :date
     field :count_of_trade_items, :integer
+    field :order_number, :string
     field :packed_serials, {:array, :string}, default: []
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
@@ -45,6 +46,7 @@ defmodule ThamaniDawa.Manufacturing.ShipperSscc do
     :expiry_date,
     :count_of_trade_items,
     :packed_serials,
+    :order_number,
     :manufacturer_pallet_id
   ]
 

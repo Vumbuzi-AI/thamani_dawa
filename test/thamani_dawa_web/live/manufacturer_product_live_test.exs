@@ -62,26 +62,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(lv, "#manufacturer-number-generated", "20")
   end
 
-  test "adds a product via the modal form", %{conn: conn} do
-    %{organization: organization, user: user} = manufacturer_session(conn)
-    conn = log_in_user(conn, user)
+  test "has no add-product flow; products come from GS1", %{conn: conn} do
+    %{user: user} = manufacturer_session(conn)
+    {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/manufacturer/products")
 
-    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/new")
-
-    lv
-    |> form("#manufacturer-product-form", %{
-      "product" => %{
-        "gtin" => "06160000000012",
-        "name" => "Amoxicillin 250mg",
-        "description" => "Antibiotic capsules"
-      }
-    })
-    |> render_submit()
-
-    added =
-      Enum.find(Manufacturing.list_products(organization.id), &(&1.name == "Amoxicillin 250mg"))
-
-    assert added.name == "Amoxicillin 250mg"
+    refute has_element?(lv, "#add-manufacturer-product")
+    assert has_element?(lv, "#sync-manufacturer-products")
   end
 
   test "make-to-stock path creates a batch and primary serials without an SSCC", %{
@@ -214,6 +200,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
            )
 
     assert has_element?(lv, "#serial-generation-to-gln-combobox")
+    assert has_element?(lv, "#serial-generation-order-number")
     refute has_element?(lv, "#serial-generation-to-gln-results")
 
     lv
@@ -251,7 +238,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
         "from_gln" => other_facility.gln,
         "to_gln" => site.gln,
         "to_company_name" => "Untrusted submitted name",
-        "to_address" => "Untrusted submitted address"
+        "to_address" => "Untrusted submitted address",
+        "order_number" => "PO-2026-0142"
       }
     })
     |> render_submit()
@@ -266,6 +254,20 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert sscc.to_gln == site.gln
     assert sscc.to_company_name == site.name
     assert sscc.to_address == site.address
+    assert sscc.order_number == "PO-2026-0142"
+
+    # Each shipper is packed through /create_shipper_sscc with its serials.
+    pack_requests =
+      Enum.filter(
+        ThamaniDawa.GS1.MemberApiStub.shipper_sscc_requests(),
+        &(&1["barcode"] == product.gtin)
+      )
+
+    assert length(pack_requests) == 2
+    assert Enum.all?(pack_requests, &(length(&1["serials"]) == 2))
+    assert Enum.all?(pack_requests, &(&1["order_number"] == "PO-2026-0142"))
+    assert Enum.all?(pack_requests, &(&1["to"] == %{"gln" => site.gln}))
+    assert Enum.all?(pack_requests, &(&1["from"] == %{"gln" => other_facility.gln}))
     assert sscc.manufacturer_pallet_id
 
     pack_events =
@@ -295,7 +297,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
       Enum.find(ThamaniDawa.GS1.MemberApiStub.serial_requests(), &(&1["barcode"] == product.gtin))
 
     assert serial_request["shipper_qty"] == 5
-    assert serial_request["from"] == %{"gln" => site.gln}
+    assert serial_request["from"] == %{"gln" => other_facility.gln}
     assert serial_request["to"] == %{"gln" => site.gln}
   end
 
@@ -415,6 +417,19 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     assert shipper.packed_serials == ["0001", "0003"]
 
+    # From/To details and order number are saved for the label.
+    site = ThamaniDawa.Sites.get_site!(user.organization_id, user.current_site_id)
+    assert shipper.from_company_name == site.name
+    assert shipper.from_address == site.address
+    assert shipper.to_company_name not in [nil, ""]
+    assert shipper.order_number == "PO-77"
+
+    {:ok, label, _html} = live(conn, ~p"/manufacturer/sscc/#{shipper.id}/label")
+    assert has_element?(label, "#sscc-label-from", site.name)
+    assert has_element?(label, "#sscc-label-to", shipper.to_company_name)
+    assert has_element?(label, "#sscc-label-quantity", "2")
+    assert has_element?(label, "#sscc-label-order-number", "PO-77")
+
     # The batch page lists the new shipper and tags each packed serial.
     {:ok, lv, _html} =
       live(conn, ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch.batch_no}")
@@ -424,6 +439,59 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(lv, "#serial-sscc-0001")
     assert has_element?(lv, "#serial-sscc-0003")
     assert has_element?(lv, "#serial-unpacked-0002")
+    # One serial is still unpacked, so packing stays available.
+    assert has_element?(lv, "#open-pack-serials")
+    refute has_element?(lv, "#batch-fully-packed")
+
+    # Once the last serial is packed, the button gives way to a badge.
+    gs1_batch = %{
+      batch_no: batch.batch_no,
+      production_date: batch.production_date,
+      expiry_date: batch.expiry_date
+    }
+
+    assert {:ok, _} =
+             Manufacturing.pack_serials_into_shipper(
+               organization.id,
+               product,
+               gs1_batch,
+               ["0002"],
+               %{"from_gln" => manufacturer_session_gln(user), "to_gln" => "0614141000784"}
+             )
+
+    {:ok, lv, _html} =
+      live(conn, ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch.batch_no}")
+
+    assert has_element?(lv, "#batch-fully-packed")
+    refute has_element?(lv, "#open-pack-serials")
+  end
+
+  test "label resolves From/To names from GLNs for older shippers", %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+    site = ThamaniDawa.Sites.get_site!(user.organization_id, user.current_site_id)
+
+    shipper =
+      ThamaniDawa.Repo.insert!(%ThamaniDawa.Manufacturing.ShipperSscc{
+        organization_id: organization.id,
+        code: "261640050560000999",
+        gtin: product.gtin,
+        batch: "B1",
+        from_gln: site.gln,
+        to_gln: "0614141000784",
+        count_of_trade_items: 5
+      })
+
+    {:ok, label, _html} =
+      live(log_in_user(conn, user), ~p"/manufacturer/sscc/#{shipper.id}/label")
+
+    assert has_element?(label, "#sscc-label-from", site.name)
+    assert has_element?(label, "#sscc-barcode-#{shipper.id}[data-gs1-text*='(02)']")
+    refute has_element?(label, "#sscc-barcode-#{shipper.id}[data-gs1-text*='(01)']")
+
+    saved = ThamaniDawa.Repo.get!(ThamaniDawa.Manufacturing.ShipperSscc, shipper.id)
+    assert saved.from_company_name == site.name
+    assert saved.to_company_name not in [nil, ""]
+    assert has_element?(label, "#sscc-label-to", saved.to_company_name)
   end
 
   defp manufacturer_session_gln(user) do

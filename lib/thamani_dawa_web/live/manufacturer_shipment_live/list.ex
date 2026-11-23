@@ -148,7 +148,10 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
             <.td_key_value label={shipment.order_number} value={shipment.reference} mono />
           </:col>
           <:col :let={{_id, shipment}} label="Status">
-            <.td_badge tone={status_tone(shipment.status)} label={Phoenix.Naming.humanize(shipment.status)} />
+            <.td_badge
+              tone={status_tone(shipment.status)}
+              label={Phoenix.Naming.humanize(shipment.status)}
+            />
           </:col>
           <:col :let={{_id, shipment}} label="From">{shipment.origin_company}</:col>
           <:col :let={{_id, shipment}} label="To">{shipment.destination_company}</:col>
@@ -167,7 +170,10 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
             />
           </:action>
           <:empty>
-            <.td_empty title="No shipments here" hint="Nothing matches this status and filter combination yet." />
+            <.td_empty
+              title="No shipments here"
+              hint="Nothing matches this status and filter combination yet."
+            />
           </:empty>
         </.td_data_table>
       </.td_list_page>

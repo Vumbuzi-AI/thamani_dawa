@@ -370,7 +370,8 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           not @setup_required? and @search_query != "" and String.trim(@search_query) != "" and
             Map.get(assigns, :search_active, true)
         }
-        class="fixed inset-0 z-30" style="background: var(--color-td-scrim);"
+        class="fixed inset-0 z-30"
+        style="background: var(--color-td-scrim);"
         phx-click="dismiss_search"
       />
 

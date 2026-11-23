@@ -201,7 +201,8 @@ defmodule ThamaniDawaWeb.PageComponents do
 
   # Pattern-matched helper: active link gets bright colour + weight; inactive is muted
   defp footer_legal_link_style(true),
-    do: "font-size: 14px; color: var(--thamani-on-accent); text-decoration: none; font-weight: 500;"
+    do:
+      "font-size: 14px; color: var(--thamani-on-accent); text-decoration: none; font-weight: 500;"
 
   defp footer_legal_link_style(false),
     do: "font-size: 14px; color: rgba(252,252,247,0.6); text-decoration: none;"

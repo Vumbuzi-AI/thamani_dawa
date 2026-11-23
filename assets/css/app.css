@@ -3187,3 +3187,32 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-nav-group-toggle:focus-visible { outline: 2px solid var(--color-td-focus); outline-offset: -2px; border-radius: 6px; }
 .td-nav-group-caret { width: 12px; height: 12px; flex: none; transition: transform .15s ease-out; }
 #distributor-nav-group.is-expanded .td-nav-group-caret { transform: rotate(180deg); }
+
+/* ---- Spacing pass: give every page breathing room ---- */
+.td-page { padding: 24px 28px 32px; gap: 20px; }
+.td-page:has(> .td-list-page) { height: auto; }
+@media (max-width: 640px) { .td-page { padding: 16px; gap: 16px; } }
+
+.td-recipe {
+  min-height: 0; border: 1px solid var(--color-td-hairline); border-radius: 12px; overflow: hidden;
+}
+.td-recipe + .td-recipe { margin-top: 4px; }
+.td-recipe > .td-page-header { height: auto; min-height: 76px; padding: 16px 20px; gap: 16px; flex-wrap: wrap; }
+.td-recipe > .td-page-header > div:first-child { gap: 8px; }
+.td-recipe > .td-filter-row {
+  align-items: flex-end; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--color-td-hairline);
+}
+.td-recipe > .td-filter-row > form:first-child { flex: 1 1 280px; min-width: 0; }
+.td-recipe > .td-filter-row .td-filter-row { gap: 12px; align-items: flex-end; }
+.td-recipe > .td-kv-grid { gap: 24px 32px; padding: 20px; }
+.td-recipe > .td-pad, .td-recipe > .td-stack { padding: 20px; gap: 20px; }
+
+.td-data th:first-child, .td-data td:first-child { padding-left: 20px; }
+.td-data th:last-child, .td-data td:last-child { padding-right: 20px; }
+.td-data td { height: 56px; padding-top: 10px; padding-bottom: 10px; }
+.td-data tbody tr:last-child td { border-bottom: 0; }
+
+.td-card-header { padding: 14px 20px; }
+.td-kv-grid.is-pad { padding: 20px; }
+.td-li { padding: 10px 20px; }
+.td-empty-card { padding: 48px 20px; }

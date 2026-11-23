@@ -198,7 +198,10 @@ defmodule ThamaniDawaWeb.ManufacturerMobileUserLive.Index do
             />
           </:action>
           <:empty>
-            <.td_empty title="No mobile users yet" hint="Add the people who scan and pack so they can sign in to the mobile app." />
+            <.td_empty
+              title="No mobile users yet"
+              hint="Add the people who scan and pack so they can sign in to the mobile app."
+            />
           </:empty>
         </.td_data_table>
       </.td_list_page>
@@ -218,7 +221,13 @@ defmodule ThamaniDawaWeb.ManufacturerMobileUserLive.Index do
           phx-submit="save"
         >
           <.td_input field={@form[:name]} label="Full name" required />
-          <.td_input field={@form[:username]} label="Username" autocomplete="off" autocapitalize="none" required />
+          <.td_input
+            field={@form[:username]}
+            label="Username"
+            autocomplete="off"
+            autocapitalize="none"
+            required
+          />
           <.td_input field={@form[:email]} type="email" label="Email (receives the PIN)" required />
           <.td_input field={@form[:phone]} type="tel" label="Phone" />
           <.td_select

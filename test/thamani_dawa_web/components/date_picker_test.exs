@@ -10,7 +10,13 @@ defmodule ThamaniDawaWeb.DatePickerTest do
 
     html =
       rendered_to_string(~H"""
-      <.date_picker id="expiry" name="batch[expiry_date]" label="Expiry date" value={~D[2026-11-23]} required />
+      <.date_picker
+        id="expiry"
+        name="batch[expiry_date]"
+        label="Expiry date"
+        value={~D[2026-11-23]}
+        required
+      />
       """)
 
     assert html =~ ~s(phx-hook="ThamaniDawaWeb.CoreComponents.DatePicker")
@@ -52,12 +58,19 @@ defmodule ThamaniDawaWeb.DatePickerTest do
   test "<.td_input type=date> renders the picker with field errors" do
     assigns = %{
       form:
-        to_form(%{"production_date" => "2026-03-01"}, as: :serial_generation, errors: [production_date: {"can't be blank", []}])
+        to_form(%{"production_date" => "2026-03-01"},
+          as: :serial_generation,
+          errors: [production_date: {"can't be blank", []}]
+        )
     }
 
     html =
       rendered_to_string(~H"""
-      <ThamaniDawaWeb.TDComponents.td_input field={@form[:production_date]} type="date" label="Production date" />
+      <ThamaniDawaWeb.TDComponents.td_input
+        field={@form[:production_date]}
+        type="date"
+        label="Production date"
+      />
       """)
 
     assert html =~ "td-dp-trigger"

@@ -11,7 +11,6 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
   @org_name "Afya Test Org"
   @site_gln "0614141000784"
-  @unique_pharmacy_ppb %{ppb_facility_name: "Unique Pharmacy", license_number: "AB1XXXX9999"}
 
   describe "authenticated access" do
     test "redirects an authenticated user out of the signup wizard", %{conn: conn} do
@@ -34,7 +33,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       assert has_element?(view, "#site-setup-form")
 
       view
-      |> complete_site_step(Map.merge(%{gln: @site_gln}, @unique_pharmacy_ppb))
+      |> complete_site_step(%{gln: @site_gln})
 
       assert has_element?(view, "#signup-form")
       assert has_element?(view, "#signup-submit", "Create account")
@@ -133,7 +132,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       view = complete_operating_model_step(view, ["pharmacy"])
 
-      view |> complete_site_step(Map.merge(%{gln: @site_gln}, @unique_pharmacy_ppb))
+      view |> complete_site_step(%{gln: @site_gln})
 
       html =
         view
@@ -236,7 +235,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       assert html =~ "GLN is required"
       refute has_element?(view, "#signup-form")
 
-      view |> complete_site_step(Map.merge(%{gln: @site_gln}, @unique_pharmacy_ppb))
+      view |> complete_site_step(%{gln: @site_gln})
 
       html =
         view
@@ -264,10 +263,10 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       submit_site(view, %{gln: @site_gln})
       render_async(view, 5_000)
 
-      assert has_element?(view, "input[name='site[activity_choice]'][value='distribution']")
-      refute has_element?(view, "input[name='site[activity_choice]'][value='pharmacy']")
-      assert has_element?(view, "#site_ppb_facility_name[value='Test Licensee']")
-      refute has_element?(view, "#single-site-activity")
+      # No PPB licence is collected at signup, so a distributor site with a
+      # verified GLN goes straight on to the administrator step.
+      refute has_element?(view, "#site_ppb_facility_name")
+      assert has_element?(view, "#signup-form")
     end
 
     test "offers the four real-world site types but not wholesale + lab", %{conn: conn} do
@@ -331,7 +330,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       view = complete_operating_model_step(view, ["pharmacy"])
 
-      view |> complete_site_step(Map.merge(%{gln: @site_gln}, @unique_pharmacy_ppb))
+      view |> complete_site_step(%{gln: @site_gln})
 
       assert has_element?(view, "input[name='user[accepted_legal_terms]'][required]")
       assert has_element?(view, "a[href='/terms'][target='_blank']", "Terms of Service")
@@ -430,7 +429,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
   defp stringify_keys(attrs), do: Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
 
   # Raw event dispatch rather than `form/3`, since some of these fields
-  # (activity_choice, ppb_facility_name, license_number, kmlttb_*) don't
+  # (activity_choice, kmlttb_*) don't
   # exist as actual inputs in the DOM until an earlier field (the GLN, the
   # activity choice) has already resolved — `form/3` can only set values on
   # inputs that are currently rendered.
@@ -438,34 +437,26 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
     render_submit(view, "continue_site", %{"site" => stringify_keys(attrs)})
   end
 
-  # Completes the main-location step of the wizard. Each of the GLN, PPB,
-  # and KMLTTB checks is async and gated behind the previous one resolving
-  # (PPB/KMLTTB fields aren't even rendered until the GLN matches), so
+  # Completes the main-location step of the wizard. Each of the GLN and
+  # KMLTTB checks is async and gated behind the previous one resolving
+  # (KMLTTB fields aren't even rendered until the GLN matches), so
   # `continue_site` itself triggers the next pending check and flashes an
   # "press Continue again" error each time it's submitted with that check
   # still idle — this just keeps pressing it, once per check present in
   # `site`, until the step actually advances.
   defp complete_site_step(view, site) do
     gln_attrs = Map.take(site, [:gln])
-    ppb_attrs = Map.take(site, [:ppb_facility_name, :license_number])
     kmlttb_attrs = Map.take(site, [:kmlttb_facility_name, :kmlttb_license_number])
 
     view |> form("#site-setup-form", site: gln_attrs) |> render_submit()
 
-    if site[:gln] do
+    if site[:gln] && has_element?(view, "#site-setup-form") do
       render_async(view, 5_000)
       view |> form("#site-setup-form", site: gln_attrs) |> render_submit()
     end
 
-    if ppb_attrs != %{} do
-      full = Map.merge(gln_attrs, ppb_attrs)
-      view |> form("#site-setup-form", site: full) |> render_submit()
-      render_async(view, 5_000)
-      view |> form("#site-setup-form", site: full) |> render_submit()
-    end
-
-    if kmlttb_attrs != %{} do
-      full = gln_attrs |> Map.merge(ppb_attrs) |> Map.merge(kmlttb_attrs)
+    if kmlttb_attrs != %{} && has_element?(view, "#site-setup-form") do
+      full = Map.merge(gln_attrs, kmlttb_attrs)
       view |> form("#site-setup-form", site: full) |> render_submit()
       render_async(view, 5_000)
       view |> form("#site-setup-form", site: full) |> render_submit()

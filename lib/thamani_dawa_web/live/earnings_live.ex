@@ -79,7 +79,9 @@ defmodule ThamaniDawaWeb.EarningsLive do
 
   defp transaction_detail(socket, payment) do
     organization_id = socket.assigns.current_scope.organization_id
-    lab_order = payment.lab_order_id && LabOrders.get_lab_order!(organization_id, payment.lab_order_id)
+
+    lab_order =
+      payment.lab_order_id && LabOrders.get_lab_order!(organization_id, payment.lab_order_id)
 
     patient =
       lab_order &&
@@ -92,7 +94,11 @@ defmodule ThamaniDawaWeb.EarningsLive do
         organization_id
         |> LabOrders.list_lab_order_results_for_order(lab_order.id)
         |> Enum.map(fn result ->
-          %{name: (result.lab_test && result.lab_test.name) || "Lab test", qty: 1, amount: result.lab_test && result.lab_test.price}
+          %{
+            name: (result.lab_test && result.lab_test.name) || "Lab test",
+            qty: 1,
+            amount: result.lab_test && result.lab_test.price
+          }
         end)
       else
         []
@@ -456,7 +462,9 @@ defmodule ThamaniDawaWeb.EarningsLive do
         <div :if={@selected.items != []} class="td-card">
           <table class="td-mini-table">
             <thead>
-              <tr><th>Item</th><th class="is-num">Qty</th><th class="is-num">Amount</th></tr>
+              <tr>
+                <th>Item</th><th class="is-num">Qty</th><th class="is-num">Amount</th>
+              </tr>
             </thead>
             <tbody>
               <tr :for={item <- @selected.items}>
@@ -532,16 +540,22 @@ defmodule ThamaniDawaWeb.EarningsLive do
           <span class="td-s12">{(@selected.site && @selected.site.name) || ""}</span>
         </div>
         <div class="td-rc-ln">
-          <span class="td-rc-muted">Receipt</span><span class="td-mono">{receipt_number(@selected.payment)}</span>
+          <span class="td-rc-muted">Receipt</span><span class="td-mono">{receipt_number(
+            @selected.payment
+          )}</span>
         </div>
         <div :if={@selected.lab_order} class="td-rc-ln">
-          <span class="td-rc-muted">Order</span><span class="td-mono">{LabOrders.reference(@selected.lab_order)}</span>
+          <span class="td-rc-muted">Order</span><span class="td-mono">{LabOrders.reference(
+            @selected.lab_order
+          )}</span>
         </div>
         <div :if={@selected.patient} class="td-rc-ln">
           <span class="td-rc-muted">Patient</span><span>{@selected.patient.full_name}</span>
         </div>
         <div class="td-rc-ln">
-          <span class="td-rc-muted">Time</span><span>{ThamaniDawaWeb.TimeFormat.datetime(@selected.time)}</span>
+          <span class="td-rc-muted">Time</span><span>{ThamaniDawaWeb.TimeFormat.datetime(
+            @selected.time
+          )}</span>
         </div>
         <div class="td-rc-dash"></div>
         <div :for={item <- @selected.items} class="td-rc-ln">
@@ -560,7 +574,13 @@ defmodule ThamaniDawaWeb.EarningsLive do
         <.td_button type="button" phx-click={JS.patch(~p"/lab/transactions/#{@selected.payment.id}")}>
           Close
         </.td_button>
-        <.td_button id="print-receipt" variant="primary" type="button" glyph="printer" onclick="window.print()">
+        <.td_button
+          id="print-receipt"
+          variant="primary"
+          type="button"
+          glyph="printer"
+          onclick="window.print()"
+        >
           Print
         </.td_button>
       </:footer>

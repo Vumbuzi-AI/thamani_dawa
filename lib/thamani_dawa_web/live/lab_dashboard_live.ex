@@ -157,7 +157,8 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
   defp status_tone(:cancelled), do: "neutral"
   defp status_tone(_), do: "neutral"
 
-  defp status_label(status), do: status |> to_string() |> String.replace("_", " ") |> String.capitalize()
+  defp status_label(status),
+    do: status |> to_string() |> String.replace("_", " ") |> String.capitalize()
 
   defp short_dt(%DateTime{} = dt), do: Calendar.strftime(dt, "%d %b, %H:%M")
   defp short_dt(_), do: ""
@@ -246,7 +247,13 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
             <.td_glance_cell
               navigate={~p"/lab/orders"}
               tone="info"
-              value={phrase(@stats.tests_awaiting_results, "test awaiting results", "tests awaiting results")}
+              value={
+                phrase(
+                  @stats.tests_awaiting_results,
+                  "test awaiting results",
+                  "tests awaiting results"
+                )
+              }
               caption="Samples collected, results not finalized"
             >
               <:icon><.td_icon name="eyedropper" class="size-[18px]" /></:icon>
@@ -293,8 +300,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
                     tick_on?(index, row.count, status_max(@statuses)) && "is-on",
                     "is-#{row.tone}"
                   ]}
-                >
-                </i>
+                ></i>
               </span>
               <span class="td-status-n">{row.count}</span>
             </div>
@@ -333,7 +339,10 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
                   </td>
                   <td>{short_dt(lab_order.inserted_at)}</td>
                   <td>
-                    <.td_badge tone={status_tone(lab_order.status)} label={status_label(lab_order.status)} />
+                    <.td_badge
+                      tone={status_tone(lab_order.status)}
+                      label={status_label(lab_order.status)}
+                    />
                   </td>
                 </tr>
                 <tr :if={@pending_rows == []}>
@@ -359,7 +368,10 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
                     </.link>
                   </td>
                   <td>
-                    <.td_badge tone={status_tone(lab_order.status)} label={status_label(lab_order.status)} />
+                    <.td_badge
+                      tone={status_tone(lab_order.status)}
+                      label={status_label(lab_order.status)}
+                    />
                   </td>
                 </tr>
                 <tr :if={@incomplete_rows == []}>

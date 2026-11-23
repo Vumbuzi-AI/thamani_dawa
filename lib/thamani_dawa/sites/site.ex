@@ -86,13 +86,9 @@ defmodule ThamaniDawa.Sites.Site do
 
   @doc """
   Minimal changeset for system-created sites (signup default site) — no
-  address yet. Also requires a PPB facility name and license number
-  whenever the selected activities make this a PPB-licensable premises
-  (retail pharmacy or wholesale distribution — see `ppb_ftype/1`), and a
-  KMLTTB facility name and license number whenever a diagnostic lab is
-  among the activities (see `kmlttb_required?/1`) — PPB doesn't license
-  labs at all, that's KMLTTB's separate register. A pharmacy+lab site
-  requires both.
+  address yet. PPB licence details are not collected at signup. Requires
+  a KMLTTB facility name and license number whenever a diagnostic lab is
+  among the activities (see `kmlttb_required?/1`).
   """
   def default_changeset(site, attrs) do
     site
@@ -103,7 +99,6 @@ defmodule ThamaniDawa.Sites.Site do
     |> validate_format(:gln, ~r/^\d{13}$/, message: "must be 13 digits")
     |> validate_gln_check_digit()
     |> validate_activity_exclusivity()
-    |> validate_ppb_fields()
     |> validate_kmlttb_fields()
     |> unique_constraint(:gln)
   end
@@ -143,18 +138,6 @@ defmodule ThamaniDawa.Sites.Site do
 
       true ->
         changeset
-    end
-  end
-
-  defp validate_ppb_fields(changeset) do
-    activities = get_field(changeset, :activities) || []
-
-    if ppb_ftype(activities) do
-      validate_required(changeset, [:ppb_facility_name, :license_number],
-        message: "is required to verify this location's PPB license"
-      )
-    else
-      changeset
     end
   end
 

@@ -368,7 +368,6 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer", ManufacturerDashboardLive, :index
 
       live "/manufacturer/products", ManufacturerProductLive.Index, :index
-      live "/manufacturer/products/new", ManufacturerProductLive.Index, :new
       live "/manufacturer/products/:gtin/serials", ManufacturerProductLive.Serials, :index
 
       live "/manufacturer/products/:gtin/serials/new",
@@ -382,7 +381,11 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer/inventory", ManufacturerInventoryLive, :index
       live "/manufacturer/shipments", ManufacturerShipmentLive.List, :index
       live "/manufacturer/shipments/new", ManufacturerShipmentLive.Form, :new
-      live "/manufacturer/shipments/:id/packing-list", ManufacturerShipmentLive.Review, :packing_list
+
+      live "/manufacturer/shipments/:id/packing-list",
+           ManufacturerShipmentLive.Review,
+           :packing_list
+
       live "/manufacturer/shipments/:id", ManufacturerShipmentLive.Review, :show
 
       live "/manufacturer/aggregations", ManufacturerAggregationLive.Dashboard, :index

@@ -471,21 +471,41 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
   defp format_date(%Date{} = date), do: Calendar.strftime(date, "%d %b %Y")
   defp format_date(other), do: to_string(other)
 
-  defp status_meta(:result, :pending), do: {"Not started", "var(--color-td-wash)", "var(--color-td-ink-2)"}
-  defp status_meta(:result, :collected), do: {"Sample collected", "var(--color-td-accent-tint)", "var(--color-td-accent)"}
-  defp status_meta(:result, :completed), do: {"Completed", "var(--color-td-accent)", "var(--color-td-on-accent)"}
-  defp status_meta(:order, :pending), do: {"Pending", "var(--color-td-hover)", "var(--color-td-ink-2)"}
-  defp status_meta(:order, :in_progress), do: {"In progress", "var(--color-td-accent-tint)", "var(--color-td-accent)"}
-  defp status_meta(:order, :completed), do: {"Completed", "var(--color-td-accent)", "var(--color-td-on-accent)"}
-  defp status_meta(:order, :cancelled), do: {"Cancelled", "var(--color-td-danger-tint)", "var(--color-td-danger)"}
+  defp status_meta(:result, :pending),
+    do: {"Not started", "var(--color-td-wash)", "var(--color-td-ink-2)"}
+
+  defp status_meta(:result, :collected),
+    do: {"Sample collected", "var(--color-td-accent-tint)", "var(--color-td-accent)"}
+
+  defp status_meta(:result, :completed),
+    do: {"Completed", "var(--color-td-accent)", "var(--color-td-on-accent)"}
+
+  defp status_meta(:order, :pending),
+    do: {"Pending", "var(--color-td-hover)", "var(--color-td-ink-2)"}
+
+  defp status_meta(:order, :in_progress),
+    do: {"In progress", "var(--color-td-accent-tint)", "var(--color-td-accent)"}
+
+  defp status_meta(:order, :completed),
+    do: {"Completed", "var(--color-td-accent)", "var(--color-td-on-accent)"}
+
+  defp status_meta(:order, :cancelled),
+    do: {"Cancelled", "var(--color-td-danger-tint)", "var(--color-td-danger)"}
 
   defp status_meta(:specimen, :pending_collection),
     do: {"Awaiting collection", "var(--color-td-wash)", "var(--color-td-ink-2)"}
 
-  defp status_meta(:specimen, :collected), do: {"Collected", "var(--color-td-accent-tint)", "var(--color-td-accent)"}
-  defp status_meta(:specimen, :received), do: {"Received at lab", "var(--color-td-accent)", "var(--color-td-on-accent)"}
-  defp status_meta(:specimen, :rejected), do: {"Rejected", "var(--color-td-danger-tint)", "var(--color-td-danger)"}
-  defp status_meta(_kind, other), do: {Phoenix.Naming.humanize(other), "var(--color-td-wash)", "var(--color-td-ink-2)"}
+  defp status_meta(:specimen, :collected),
+    do: {"Collected", "var(--color-td-accent-tint)", "var(--color-td-accent)"}
+
+  defp status_meta(:specimen, :received),
+    do: {"Received at lab", "var(--color-td-accent)", "var(--color-td-on-accent)"}
+
+  defp status_meta(:specimen, :rejected),
+    do: {"Rejected", "var(--color-td-danger-tint)", "var(--color-td-danger)"}
+
+  defp status_meta(_kind, other),
+    do: {Phoenix.Naming.humanize(other), "var(--color-td-wash)", "var(--color-td-ink-2)"}
 
   defp can_enter?(result), do: result.status in [:collected, :completed]
 
@@ -680,15 +700,27 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             name="lab_test_id"
             label="Test"
             value={nil}
-            options={Enum.map(@lab_tests, &{"#{&1.name} · #{ThamaniDawaWeb.Money.ksh(&1.price)}", &1.id})}
+            options={
+              Enum.map(@lab_tests, &{"#{&1.name} · #{ThamaniDawaWeb.Money.ksh(&1.price)}", &1.id})
+            }
             prompt="Choose a test"
           />
         </.form>
         <:footer>
-          <.td_button type="button" aria-label="Cancel" phx-click={JS.patch(~p"/lab/orders/#{@lab_order.id}")}>
+          <.td_button
+            type="button"
+            aria-label="Cancel"
+            phx-click={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
+          >
             Cancel
           </.td_button>
-          <.td_button id="add-test-submit" variant="primary" type="submit" form="add-test-form" glyph="plus">
+          <.td_button
+            id="add-test-submit"
+            variant="primary"
+            type="submit"
+            form="add-test-form"
+            glyph="plus"
+          >
             Add test
           </.td_button>
         </:footer>
@@ -887,7 +919,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         :if={@live_action == :edit_result && @editing_result}
         id="result-entry-modal"
         show
-        title={if @editing_result.status == :completed, do: "Amend test results", else: "Enter test results"}
+        title={
+          if @editing_result.status == :completed,
+            do: "Amend test results",
+            else: "Enter test results"
+        }
         subtitle={@editing_lab_test.name}
         size="wide"
         on_cancel={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
@@ -1002,7 +1038,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
       <section id="lab-order-detail" class="td-recipe td-list-page td-detail-page">
         <div class="td-back">
-          <.link navigate={~p"/lab/orders"} class="td-back-link"><.td_icon name="arrow-left" class="size-3.5" /> Back to Lab orders</.link>
+          <.link navigate={~p"/lab/orders"} class="td-back-link"><.td_icon
+            name="arrow-left"
+            class="size-3.5"
+          /> Back to Lab orders</.link>
         </div>
 
         <header class="td-idh">
@@ -1012,7 +1051,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               <.status_pill kind={:order} status={@lab_order.status} />
             </h1>
             <p class="td-idh-sub">
-              <span :if={@patient.gsrn}>GSRN <span class="td-mono">{@patient.gsrn}</span> · </span><span :if={@patient.phone}>{@patient.phone} · </span>created {ThamaniDawaWeb.TimeFormat.datetime(@lab_order.inserted_at)}
+              <span :if={@patient.gsrn}>GSRN <span class="td-mono">{@patient.gsrn}</span>   · </span><span :if={
+                @patient.phone
+              }>{@patient.phone} · </span>created {ThamaniDawaWeb.TimeFormat.datetime(
+                @lab_order.inserted_at
+              )}
             </p>
           </div>
           <div class="td-idh-actions">
@@ -1047,7 +1090,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               </div>
               <div class="td-kv">
                 <dt class="td-kv-label">Urgency</dt>
-                <dd class="td-kv-value">{Phoenix.Naming.humanize(@lab_order.urgency || "routine")}</dd>
+                <dd class="td-kv-value">
+                  {Phoenix.Naming.humanize(@lab_order.urgency || "routine")}
+                </dd>
               </div>
               <div class="td-kv">
                 <dt class="td-kv-label">Prescriber</dt>
@@ -1056,12 +1101,16 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               <div class="td-kv">
                 <dt class="td-kv-label">Payment</dt>
                 <dd class="td-kv-value">
-                  <span :if={@lab_order.payment_type}>{Phoenix.Naming.humanize(@lab_order.payment_type)} · </span><.link
+                  <span :if={@lab_order.payment_type}>{Phoenix.Naming.humanize(
+                    @lab_order.payment_type
+                  )} · </span><.link
                     :if={@lab_payment}
                     id="order-payment-link"
                     navigate={~p"/lab/transactions/#{@lab_payment.id}"}
                     class="td-link"
-                  >Paid</.link><span :if={!@lab_payment}>{if @lab_order.has_paid, do: "Paid", else: "Unpaid"}</span>
+                  >Paid</.link><span :if={!@lab_payment}>{if @lab_order.has_paid,
+                    do: "Paid",
+                    else: "Unpaid"}</span>
                 </dd>
               </div>
               <div class="td-kv">
@@ -1089,197 +1138,210 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
           />
         </nav>
         <div class="td-detail-scroll">
+          <%!-- Samples tab --%>
+          <div :if={@detail_tab == "samples"}>
+            <div class="td-toolbar">
+              <h2 class="td-sec">Specimens</h2>
+              <span class="flex-1"></span>
+              <.td_button
+                :if={@collectable_results != []}
+                id="collect-specimen-button"
+                variant="secondary"
+                type="button"
+                glyph="test-tube"
+                patch={~p"/lab/orders/#{@lab_order.id}/collect"}
+              >
+                Collect specimen
+              </.td_button>
+            </div>
 
-      <%!-- Samples tab --%>
-      <div :if={@detail_tab == "samples"}>
-        <div class="td-toolbar">
-          <h2 class="td-sec">Specimens</h2>
-          <span class="flex-1"></span>
-          <.td_button
-            :if={@collectable_results != []}
-            id="collect-specimen-button"
-            variant="secondary"
-            type="button"
-            glyph="test-tube"
-            patch={~p"/lab/orders/#{@lab_order.id}/collect"}
-          >
-            Collect specimen
-          </.td_button>
-        </div>
-
-        <.table id="specimens" rows={@specimens}>
-          <:col :let={specimen} label="Specimen">
-            <div class="font-medium" style="color: var(--color-td-ink);">{specimen.specimen_number}</div>
-            <div class="mt-0.5 text-xs" style="color: var(--color-td-ink-3);">
-              {Phoenix.Naming.humanize(specimen.specimen_type || "sample")}
-            </div>
-          </:col>
-          <:col :let={specimen} label="Tests">{specimen_tests(specimen)}</:col>
-          <:col :let={specimen} label="Collected on">
-            {format_date(specimen.collected_at && DateTime.to_date(specimen.collected_at))}
-            <div :if={specimen.collected_by} class="mt-0.5 text-xs" style="color: var(--color-td-ink-3);">
-              {user_name(specimen.collected_by)}
-            </div>
-          </:col>
-          <:col :let={specimen} label="Status">
-            <.status_pill kind={:specimen} status={specimen.status} />
-            <div :if={specimen.status == :rejected} class="mt-1 text-xs" style="color: var(--color-td-ink-3);">
-              {specimen.rejection_reason} · {user_name(specimen.rejected_by)}
-            </div>
-          </:col>
-          <:action :let={specimen}>
-            <.button
-              variant="ghost-edit"
-              patch={~p"/lab/orders/#{@lab_order.id}/specimens/#{specimen.id}/label"}
-              class="gap-1.5 py-1.5 px-3 text-xs"
-            >
-              <.icon name="hero-printer" class="size-3.5" /> Print label
-            </.button>
-          </:action>
-          <:empty_state>
-            <.blank_state icon="hero-beaker" title="No specimens collected yet">
-              Collect a specimen to start tracking samples for this order.
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
-
-      <%!-- Results tab --%>
-      <div :if={@detail_tab == "results"}>
-        <div class="td-toolbar">
-          <h2 class="td-sec">Tests</h2>
-          <span class="flex-1"></span>
-          <.td_button
-            :if={@results != []}
-            id="print-results-button"
-            variant="secondary"
-            type="button"
-            glyph="printer"
-            patch={~p"/lab/orders/#{@lab_order.id}/report"}
-          >
-            Print results
-          </.td_button>
-        </div>
-
-        <.table id="results" rows={@results}>
-          <:col :let={result} label="Test">
-            <div class="font-medium" style="color: var(--color-td-ink);">{test_name(result)}</div>
-            <div class="mt-0.5 text-xs" style="color: var(--color-td-ink-3);">
-              KES {result.lab_test && result.lab_test.price}
-            </div>
-          </:col>
-          <:col :let={result} label="Result">
-            <div :if={result.results == %{}} class="text-sm" style="color: var(--color-td-ink-3);">
-              No results recorded yet.
-            </div>
-            <div :if={result.results != %{}} class="flex flex-col gap-2">
-              <div :for={{key, %{"value" => value}} <- result.results}>
+            <.table id="specimens" rows={@specimens}>
+              <:col :let={specimen} label="Specimen">
+                <div class="font-medium" style="color: var(--color-td-ink);">
+                  {specimen.specimen_number}
+                </div>
+                <div class="mt-0.5 text-xs" style="color: var(--color-td-ink-3);">
+                  {Phoenix.Naming.humanize(specimen.specimen_type || "sample")}
+                </div>
+              </:col>
+              <:col :let={specimen} label="Tests">{specimen_tests(specimen)}</:col>
+              <:col :let={specimen} label="Collected on">
+                {format_date(specimen.collected_at && DateTime.to_date(specimen.collected_at))}
                 <div
-                  class="text-[11px] font-medium uppercase tracking-wider"
+                  :if={specimen.collected_by}
+                  class="mt-0.5 text-xs"
                   style="color: var(--color-td-ink-3);"
                 >
-                  {key}
+                  {user_name(specimen.collected_by)}
                 </div>
-                <.render_result_preview
-                  key={key}
-                  value={value}
-                  unit={result_unit(result, key)}
-                  field_definition={get_field_definition(result, key)}
-                />
+              </:col>
+              <:col :let={specimen} label="Status">
+                <.status_pill kind={:specimen} status={specimen.status} />
+                <div
+                  :if={specimen.status == :rejected}
+                  class="mt-1 text-xs"
+                  style="color: var(--color-td-ink-3);"
+                >
+                  {specimen.rejection_reason} · {user_name(specimen.rejected_by)}
+                </div>
+              </:col>
+              <:action :let={specimen}>
+                <.button
+                  variant="ghost-edit"
+                  patch={~p"/lab/orders/#{@lab_order.id}/specimens/#{specimen.id}/label"}
+                  class="gap-1.5 py-1.5 px-3 text-xs"
+                >
+                  <.icon name="hero-printer" class="size-3.5" /> Print label
+                </.button>
+              </:action>
+              <:empty_state>
+                <.blank_state icon="hero-beaker" title="No specimens collected yet">
+                  Collect a specimen to start tracking samples for this order.
+                </.blank_state>
+              </:empty_state>
+            </.table>
+          </div>
+
+          <%!-- Results tab --%>
+          <div :if={@detail_tab == "results"}>
+            <div class="td-toolbar">
+              <h2 class="td-sec">Tests</h2>
+              <span class="flex-1"></span>
+              <.td_button
+                :if={@results != []}
+                id="print-results-button"
+                variant="secondary"
+                type="button"
+                glyph="printer"
+                patch={~p"/lab/orders/#{@lab_order.id}/report"}
+              >
+                Print results
+              </.td_button>
+            </div>
+
+            <.table id="results" rows={@results}>
+              <:col :let={result} label="Test">
+                <div class="font-medium" style="color: var(--color-td-ink);">{test_name(result)}</div>
+                <div class="mt-0.5 text-xs" style="color: var(--color-td-ink-3);">
+                  KES {result.lab_test && result.lab_test.price}
+                </div>
+              </:col>
+              <:col :let={result} label="Result">
+                <div :if={result.results == %{}} class="text-sm" style="color: var(--color-td-ink-3);">
+                  No results recorded yet.
+                </div>
+                <div :if={result.results != %{}} class="flex flex-col gap-2">
+                  <div :for={{key, %{"value" => value}} <- result.results}>
+                    <div
+                      class="text-[11px] font-medium uppercase tracking-wider"
+                      style="color: var(--color-td-ink-3);"
+                    >
+                      {key}
+                    </div>
+                    <.render_result_preview
+                      key={key}
+                      value={value}
+                      unit={result_unit(result, key)}
+                      field_definition={get_field_definition(result, key)}
+                    />
+                  </div>
+                </div>
+
+                <% result_amendments = Map.get(@amendments, result.id, []) %>
+                <div :if={result_amendments != []} class="mt-3">
+                  <p
+                    class="text-[11px] font-medium uppercase tracking-wider mb-1"
+                    style="color: var(--color-td-ink-3);"
+                  >
+                    Amendment history
+                  </p>
+                  <ul class="space-y-1">
+                    <li
+                      :for={amendment <- result_amendments}
+                      class="text-xs"
+                      style="color: var(--color-td-ink);"
+                    >
+                      <span style="color: var(--color-td-ink-3);">
+                        {Calendar.strftime(amendment.inserted_at, "%d %b %Y %H:%M")} · {user_name(
+                          amendment.amended_by
+                        )}:
+                      </span>
+                      {amendment.reason}
+                    </li>
+                  </ul>
+                </div>
+              </:col>
+              <:col :let={result} label="Performed by">{user_name(result.performed_by)}</:col>
+              <:col :let={result} label="Status">
+                <.status_pill kind={:result} status={result.status} />
+              </:col>
+              <:action :let={result}>
+                <.button
+                  :if={can_enter?(result)}
+                  variant="primary"
+                  patch={~p"/lab/orders/#{@lab_order.id}/results/#{result.id}/edit"}
+                  class="gap-1.5 py-1.5 px-3 text-xs"
+                >
+                  <.icon name="hero-pencil-square" class="size-3.5" /> Enter results
+                </.button>
+              </:action>
+              <:empty_state>
+                <.blank_state icon="hero-clipboard-document-check" title="No tests on this order yet">
+                  Use "Add test" above to add the first test.
+                </.blank_state>
+              </:empty_state>
+            </.table>
+          </div>
+
+          <%!-- Consumables tab --%>
+          <div :if={@detail_tab == "consumables"}>
+            <div class="td-toolbar">
+              <h2 class="td-sec">Consumables</h2>
+              <span class="flex-1"></span>
+              <.td_button
+                id="record-consumable-button"
+                variant="secondary"
+                type="button"
+                glyph="plus"
+                disabled={@active_batches == []}
+                title={@active_batches == [] && "No lab consumable stock at this site yet"}
+                patch={@active_batches != [] && ~p"/lab/orders/#{@lab_order.id}/consumables/new"}
+              >
+                Record consumable
+              </.td_button>
+            </div>
+
+            <div :if={@active_batches == []} class="td-pad is-flush-bottom">
+              <div class="td-notice is-info" role="status">
+                <span>
+                  No lab consumable stock has been received at this site yet.
+                  <.link navigate={~p"/lab/receive-stock"} class="td-link">Receive stock</.link>
+                  to start recording usage.
+                </span>
               </div>
             </div>
 
-            <% result_amendments = Map.get(@amendments, result.id, []) %>
-            <div :if={result_amendments != []} class="mt-3">
-              <p
-                class="text-[11px] font-medium uppercase tracking-wider mb-1"
-                style="color: var(--color-td-ink-3);"
-              >
-                Amendment history
-              </p>
-              <ul class="space-y-1">
-                <li :for={amendment <- result_amendments} class="text-xs" style="color: var(--color-td-ink);">
-                  <span style="color: var(--color-td-ink-3);">
-                    {Calendar.strftime(amendment.inserted_at, "%d %b %Y %H:%M")} · {user_name(
-                      amendment.amended_by
-                    )}:
-                  </span>
-                  {amendment.reason}
-                </li>
-              </ul>
+            <div :if={@consumable_usages == []} class="td-pad">
+              <div class="td-empty-card">
+                <p class="td-empty-title">No consumables recorded</p>
+                <p class="td-muted">Usage you record against this order's tests shows up here.</p>
+              </div>
             </div>
-          </:col>
-          <:col :let={result} label="Performed by">{user_name(result.performed_by)}</:col>
-          <:col :let={result} label="Status">
-            <.status_pill kind={:result} status={result.status} />
-          </:col>
-          <:action :let={result}>
-            <.button
-              :if={can_enter?(result)}
-              variant="primary"
-              patch={~p"/lab/orders/#{@lab_order.id}/results/#{result.id}/edit"}
-              class="gap-1.5 py-1.5 px-3 text-xs"
-            >
-              <.icon name="hero-pencil-square" class="size-3.5" /> Enter results
-            </.button>
-          </:action>
-          <:empty_state>
-            <.blank_state icon="hero-clipboard-document-check" title="No tests on this order yet">
-              Use "Add test" above to add the first test.
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
 
-      <%!-- Consumables tab --%>
-      <div :if={@detail_tab == "consumables"}>
-        <div class="td-toolbar">
-          <h2 class="td-sec">Consumables</h2>
-          <span class="flex-1"></span>
-          <.td_button
-            id="record-consumable-button"
-            variant="secondary"
-            type="button"
-            glyph="plus"
-            disabled={@active_batches == []}
-            title={@active_batches == [] && "No lab consumable stock at this site yet"}
-            patch={@active_batches != [] && ~p"/lab/orders/#{@lab_order.id}/consumables/new"}
-          >
-            Record consumable
-          </.td_button>
-        </div>
-
-        <div :if={@active_batches == []} class="td-pad is-flush-bottom">
-          <div class="td-notice is-info" role="status">
-            <span>
-              No lab consumable stock has been received at this site yet.
-              <.link navigate={~p"/lab/receive-stock"} class="td-link">Receive stock</.link>
-              to start recording usage.
-            </span>
+            <.table :if={@consumable_usages != []} id="consumable-usages" rows={@consumable_usages}>
+              <:col :let={usage} label="Item">
+                {case usage.batch.product do
+                  %{generic_name: n} when is_binary(n) and n != "" -> n
+                  %{brand_name: n} when is_binary(n) and n != "" -> n
+                  _ -> "Batch"
+                end}
+              </:col>
+              <:col :let={usage} label="Batch">{usage.batch.batch_no || "##{usage.batch.id}"}</:col>
+              <:col :let={usage} label="Quantity">{usage.quantity}</:col>
+              <:col :let={usage} label="For test">{usage_test_name(@results, usage)}</:col>
+              <:col :let={usage} label="Recorded by">{user_name(usage.used_by)}</:col>
+            </.table>
           </div>
-        </div>
-
-        <div :if={@consumable_usages == []} class="td-pad">
-          <div class="td-empty-card">
-            <p class="td-empty-title">No consumables recorded</p>
-            <p class="td-muted">Usage you record against this order's tests shows up here.</p>
-          </div>
-        </div>
-
-        <.table :if={@consumable_usages != []} id="consumable-usages" rows={@consumable_usages}>
-          <:col :let={usage} label="Item">
-            {case usage.batch.product do
-              %{generic_name: n} when is_binary(n) and n != "" -> n
-              %{brand_name: n} when is_binary(n) and n != "" -> n
-              _ -> "Batch"
-            end}
-          </:col>
-          <:col :let={usage} label="Batch">{usage.batch.batch_no || "##{usage.batch.id}"}</:col>
-          <:col :let={usage} label="Quantity">{usage.quantity}</:col>
-          <:col :let={usage} label="For test">{usage_test_name(@results, usage)}</:col>
-          <:col :let={usage} label="Recorded by">{user_name(usage.used_by)}</:col>
-        </.table>
-      </div>
         </div>
       </section>
     </Layouts.lab_shell>

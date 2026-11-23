@@ -3,7 +3,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
 
   alias ThamaniDawa.Distributor.Billing
   alias ThamaniDawa.Manufacturing
-  alias ThamaniDawa.Manufacturing.Product
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.DistributorPagination
 
@@ -26,14 +25,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
       |> load_products()
 
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
-  end
-
-  defp apply_action(socket, :new, _params) do
-    product = %Product{}
-
-    socket
-    |> assign(:product, product)
-    |> assign(:form, to_form(Manufacturing.change_product(product), as: :product))
   end
 
   defp apply_action(socket, :new_serial, %{"gtin" => gtin}) do
@@ -83,30 +74,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, "Couldn't sync products: #{inspect(reason)}")}
-    end
-  end
-
-  def handle_event("validate", %{"product" => params}, socket) do
-    changeset =
-      socket.assigns.product
-      |> Manufacturing.change_product(params)
-      |> Map.put(:action, :validate)
-
-    {:noreply, assign(socket, :form, to_form(changeset, as: :product))}
-  end
-
-  def handle_event("save", %{"product" => params}, socket) do
-    organization_id = socket.assigns.current_scope.organization_id
-
-    case Manufacturing.create_product(organization_id, params) do
-      {:ok, product} ->
-        {:noreply,
-         socket
-         |> put_flash(:info, "#{product.name} added.")
-         |> push_patch(to: ~p"/manufacturer/products")}
-
-      {:error, changeset} ->
-        {:noreply, assign(socket, :form, to_form(changeset, as: :product))}
     end
   end
 
@@ -258,12 +225,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
             label="Sync from GS1"
             phx-click="sync_products"
           />
-          <.td_button
-            id="add-manufacturer-product"
-            variant="primary"
-            label="Add product"
-            patch={~p"/manufacturer/products/new"}
-          />
         </:actions>
         <:filters>
           <div class="td-stats">
@@ -388,26 +349,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
         page={@page_info}
         path={~p"/manufacturer/products?#{%{search: @search, view: @view_mode}}"}
       />
-
-      <.td_overlay_form
-        :if={@live_action == :new}
-        id="manufacturer-product"
-        title="Add product"
-        submit="Save product"
-        on_cancel={JS.patch(~p"/manufacturer/products")}
-      >
-        <.form
-          for={@form}
-          id="manufacturer-product-form"
-          phx-change="validate"
-          phx-submit="save"
-        >
-          <.td_input field={@form[:gtin]} label="GTIN" placeholder="8 to 14 digits" required />
-          <.td_input field={@form[:name]} label="Product name" required />
-          <.td_input field={@form[:description]} label="Description" />
-          <.td_input field={@form[:brand_owner]} label="Brand owner" />
-        </.form>
-      </.td_overlay_form>
 
       <.td_modal
         :if={@live_action == :new_serial}
