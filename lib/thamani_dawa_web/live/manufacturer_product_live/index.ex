@@ -13,6 +13,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
      |> assign(:search, "")
      |> assign(:view_mode, "list")
      |> assign(:page_number, 1)
+     |> assign(:serials_filter, "")
+     |> assign(:sync_error, nil)
      |> assign(:product, nil)}
   end
 
@@ -22,6 +24,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
       |> assign(:page_number, DistributorPagination.page_number(params))
       |> assign(:search, Map.get(params, "search", socket.assigns.search))
       |> assign(:view_mode, view_mode(params, socket.assigns.view_mode))
+      |> assign(:serials_filter, if(params["serials"] in ["with", "none"], do: params["serials"], else: ""))
       |> load_products()
 
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
@@ -48,6 +51,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
      )}
   end
 
+  def handle_event("set_filter", %{"field" => "serials", "value" => value}, socket) do
+    query = Enum.reject([search: socket.assigns.search, serials: value], fn {_k, v} -> v in [nil, ""] end)
+    {:noreply, push_patch(socket, to: ~p"/manufacturer/products?#{query}")}
+  end
+
   def handle_event("reset", _params, socket) do
     {:noreply, push_patch(socket, to: ~p"/manufacturer/products")}
   end
@@ -70,10 +78,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
            :info,
            "Synced #{count} product#{if count == 1, do: "", else: "s"} from GS1."
          )
+         |> assign(:sync_error, nil)
          |> load_products()}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Couldn't sync products: #{inspect(reason)}")}
+        {:noreply, assign(socket, :sync_error, sync_error_message(reason))}
     end
   end
 
@@ -109,6 +118,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
     {:noreply, put_flash(socket, :error, generation_error(reason))}
   end
 
+  defp sync_error_message(:unconfigured), do: "Add your GS1 API key in organization settings, then sync again."
+  defp sync_error_message(reason) when reason in [:unauthorized, :forbidden], do: "GS1 rejected your API key. Check it in organization settings."
+  defp sync_error_message(_reason), do: "Thamani couldn't reach GS1. Your products are unchanged. Try again in a moment."
+
+  defp filter_rows(rows, "with"), do: Enum.filter(rows, &(&1.serial_count > 0))
+  defp filter_rows(rows, "none"), do: Enum.filter(rows, &(&1.serial_count == 0))
+  defp filter_rows(rows, _), do: rows
+
   defp issued_stock_flash(count) do
     "#{count} primary serial#{if count == 1, do: "", else: "s"} generated."
   end
@@ -140,7 +157,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
 
     socket
     |> assign(:page_info, page_info)
-    |> assign(:rows, page_info.entries)
+    |> assign(:rows, filter_rows(page_info.entries, socket.assigns[:serials_filter]))
     |> assign(:number_generated, counts.serials + counts.ssccs)
     |> assign(:maximum, maximum(usage))
   end
@@ -243,6 +260,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
               phx-debounce="300"
             />
           </form>
+          <.td_filter_menu
+            id="products"
+            field="serials"
+            label="Serials"
+            value={@serials_filter}
+            options={[{"", "All"}, {"with", "Has serials"}, {"none", "No serials yet"}]}
+          />
           <.td_segmented>
             <.td_segment
               id="manufacturer-list-view"
@@ -267,53 +291,94 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
           />
         </:filters>
 
-        <.td_data_table
-          :if={@view_mode == "list"}
-          id="manufacturer-products"
-          rows={@rows}
-          row_id={fn %{product: product} -> "manufacturer-product-#{product.id}" end}
-        >
-          <:col :let={%{product: product}} label="GTIN">
-            <span class="td-kv-value is-mono">{product.gtin}</span>
-          </:col>
-          <:col :let={%{product: product}} label="Product">{product.name}</:col>
-          <:col :let={%{product: product}} label="Description">{product.description || "—"}</:col>
-          <:col :let={%{product: product}} label="Created at">
-            {Calendar.strftime(product.inserted_at, "%d %b %Y")}
-          </:col>
-          <:col :let={%{product: product, sscc_count: count}} label="SSCC">
-            <span id={"product-#{product.id}-sscc-count"}>{count}</span>
-            <.td_button
-              id={"product-#{product.id}-ssccs"}
-              variant="secondary"
-              label="View"
-              navigate={~p"/manufacturer/products/#{product.gtin}/ssccs"}
-            />
-          </:col>
-          <:col :let={%{product: product, serial_count: count}} label="Serials">
-            <span id={"product-#{product.id}-serial-count"}>{count}</span>
-            <.td_button
-              id={"product-#{product.id}-serials"}
-              variant="secondary"
-              label="View"
-              navigate={~p"/manufacturer/products/#{product.gtin}/serials"}
-            />
-          </:col>
-          <:action :let={%{product: product}}>
-            <.td_button
-              id={"product-#{product.id}-add-serial"}
-              variant="primary"
-              label="Serial"
-              patch={~p"/manufacturer/products/#{product.gtin}/serials/new"}
-            />
-          </:action>
-          <:empty>
-            <.td_empty
-              title="No products found"
-              hint="Add or sync a GTIN to start generating primary serials."
-            />
-          </:empty>
-        </.td_data_table>
+        <div :if={@sync_error} id="products-sync-error" class="td-ban is-danger mb-3">
+          <.td_icon name="warning-circle" class="size-4" />
+          <span><b>Sync failed.</b> {@sync_error}</span>
+          <.td_button id="retry-sync-products" label="Retry sync" phx-click="sync_products" />
+        </div>
+
+        <div :if={@view_mode == "list" and @rows == []} id="manufacturer-products-empty" class="td-pad td-empty-wrap">
+          <div class="td-card td-empty-card">
+            <%= if @search != "" or @serials_filter != "" do %>
+              <p class="td-empty-title">Nothing matches</p>
+              <p class="td-note">Try a different search, or clear the filters.</p>
+              <.td_button id="products-clear-filters" phx-click="reset" label="Clear filters" />
+            <% else %>
+              <p class="td-empty-title">No products yet</p>
+              <p class="td-note">Products come from your GS1 member account. Sync to bring in your GTINs, then generate serials for a batch.</p>
+              <.td_button id="products-empty-sync" variant="primary" glyph="arrows-clockwise" label="Sync from GS1" phx-click="sync_products" />
+            <% end %>
+          </div>
+        </div>
+
+        <div :if={@view_mode == "list"} class="td-list-table" hidden={@rows == []}>
+          <table class="td-rows" id="manufacturer-products">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>GTIN</th>
+                <th class="is-num">Serials</th>
+                <th class="is-num">Shipper SSCCs</th>
+                <th>Status</th>
+                <th><span class="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                :for={%{product: product, serial_count: serials, sscc_count: ssccs} <- @rows}
+                id={"manufacturer-product-#{product.id}"}
+              >
+                <td>
+                  <.link
+                    id={"product-#{product.id}-open"}
+                    class="td-link"
+                    navigate={~p"/manufacturer/products/#{product.id}?#{%{return_to: "/manufacturer/products"}}"}
+                  >
+                    {product.name}
+                  </.link>
+                  <span :if={product.description} class="td-sub td-s12">{product.description}</span>
+                </td>
+                <td>
+                  <.td_pid id={"product-#{product.id}-gtin"} label={product.gtin} mono>
+                    <:peek>
+                      <.td_peek kind="GTIN" title={product.gtin} subtitle={product.name} mono>
+                        <:row :if={product.brand_owner} label="Brand owner">{product.brand_owner}</:row>
+                        <:row label="Serials">{serials}</:row>
+                        <:row label="Shipper SSCCs">{ssccs}</:row>
+                        <:row label="Added">{ThamaniDawaWeb.TimeFormat.date(product.inserted_at)}</:row>
+                        <:action>
+                          <.td_button :if={serials > 0} navigate={~p"/manufacturer/products/#{product.gtin}/serials"} label="View serials" />
+                          <.td_button :if={serials == 0} patch={~p"/manufacturer/products/#{product.gtin}/serials/new"} label="Generate serials" />
+                        </:action>
+                      </.td_peek>
+                    </:peek>
+                  </.td_pid>
+                </td>
+                <td class="is-num"><span id={"product-#{product.id}-serial-count"}>{serials}</span></td>
+                <td class="is-num">
+                  <.link id={"product-#{product.id}-ssccs"} navigate={~p"/manufacturer/products/#{product.gtin}/ssccs"} class="td-link">
+                    <span id={"product-#{product.id}-sscc-count"}>{ssccs}</span>
+                  </.link>
+                </td>
+                <td><.td_badge tone="success" label="Active" /></td>
+                <td class="td-row-actions">
+                  <.td_button
+                    :if={serials > 0}
+                    id={"product-#{product.id}-serials"}
+                    label="View serials"
+                    navigate={~p"/manufacturer/products/#{product.gtin}/serials"}
+                  />
+                  <.td_button
+                    :if={serials == 0}
+                    id={"product-#{product.id}-add-serial"}
+                    label="Generate serials"
+                    patch={~p"/manufacturer/products/#{product.gtin}/serials/new"}
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <div
           :if={@view_mode == "grid"}

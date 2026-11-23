@@ -33,9 +33,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert html =~ "Products"
     assert has_element?(lv, "#manufacturer-products", product.gtin)
     assert has_element?(lv, "#manufacturer-products", product.name)
-    assert has_element?(lv, "#product-#{product.id}-serials")
+    # A product with no serials offers Generate serials; View serials appears once serials exist.
+    refute has_element?(lv, "#product-#{product.id}-serials")
     assert has_element?(lv, "#product-#{product.id}-ssccs")
-    assert has_element?(lv, "#product-#{product.id}-add-serial")
+    assert has_element?(lv, "#product-#{product.id}-add-serial", "Generate serials")
     assert has_element?(lv, "#manufacturer-number-generated")
     assert has_element?(lv, "#manufacturer-maximum")
     refute has_element?(lv, "#amount-to-pay")
@@ -58,8 +59,22 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     {:ok, lv, _html} = live(conn, ~p"/manufacturer/products")
 
     assert has_element?(lv, "#product-#{product.id}-serial-count", "17")
+    assert has_element?(lv, "#product-#{product.id}-serials", "View serials")
+    refute has_element?(lv, "#product-#{product.id}-add-serial")
     assert has_element?(lv, "#product-#{product.id}-sscc-count", "3")
     assert has_element?(lv, "#manufacturer-number-generated", "20")
+  end
+
+  test "filters by serials and shows the empty and no-match states", %{conn: conn} do
+    %{user: user, product: product} = manufacturer_session(conn)
+    {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/manufacturer/products?serials=with")
+
+    refute has_element?(lv, "#manufacturer-product-#{product.id}")
+    assert has_element?(lv, "#manufacturer-products-empty", "Nothing matches")
+
+    {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/manufacturer/products?serials=none")
+    assert has_element?(lv, "#manufacturer-product-#{product.id}")
+    assert has_element?(lv, "#product-#{product.id}-open[href*='return_to']")
   end
 
   test "has no add-product flow; products come from GS1", %{conn: conn} do

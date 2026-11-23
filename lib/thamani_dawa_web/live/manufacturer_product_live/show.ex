@@ -23,6 +23,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
   end
 
   def handle_params(params, _url, socket) do
+    socket = assign(socket, :back_path, ThamaniDawaWeb.ReturnTo.path(params, ~p"/manufacturer/products"))
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -184,6 +185,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
       current_path={~p"/manufacturer/products"}
       crumb="Products"
     >
+      <.td_back_link
+        id="product-back"
+        to={@back_path}
+        label={ThamaniDawaWeb.ReturnTo.label(@back_path, "Back to Products")}
+      />
       <.td_detail_page
         title={@product.name}
         subtitle={"#{@product.gtin} · #{@product.description}"}

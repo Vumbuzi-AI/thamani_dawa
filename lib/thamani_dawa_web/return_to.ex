@@ -32,6 +32,21 @@ defmodule ThamaniDawaWeb.ReturnTo do
       "/distributor/customers" -> "Back to Customers"
       "/distributor/expiry-write-offs" -> "Back to Expiry write-offs"
       "/distributor" -> "Back to Dashboard"
+      "/manufacturer/products" -> "Back to Products"
+      "/manufacturer/inventory" -> "Back to Inventory"
+      "/manufacturer/aggregations" -> "Back to Aggregations"
+      "/manufacturer/shipments" -> "Back to Shipments"
+      "/manufacturer" -> "Back to Dashboard"
+      "/manufacturer/products/" <> rest -> manufacturer_product_label(rest, default)
+      _ -> default
+    end
+  end
+
+  defp manufacturer_product_label(rest, default) do
+    case String.split(rest, "/") do
+      [_gtin, "serials"] -> "Back to Batches"
+      [_gtin, "ssccs"] -> "Back to Shipper SSCCs"
+      [_id] -> "Back to Product"
       _ -> default
     end
   end
