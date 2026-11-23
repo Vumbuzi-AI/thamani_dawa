@@ -101,7 +101,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   end
 
   defp assign_origin_defaults(socket) do
-    if socket.assigns.distributor_org? do
+    if socket.assigns.distributor_org? or socket.assigns.receiving_portal == :organization do
       assign(socket, :origin_check, :idle)
     else
       assign(socket, :origin_check, nil)
@@ -1877,6 +1877,29 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       current_scope={@current_scope}
       current_path={@receiving_index_path}
     >
+      <%= if @receiving_new? and @receiving_portal == :organization do %>
+        <div class="td-recipe">
+          <div class="td-back">
+            <.link navigate={@receiving_index_path} class="td-back-link">
+              <.td_icon name="arrow-left" class="size-3.5" /> Back to Receiving
+            </.link>
+          </div>
+          <.td_page_header
+            title="Receive inventory"
+            subtitle={"Check in a delivery directly into #{@receiving_site.name}."}
+          >
+            <:actions>
+              <.td_button variant="secondary" patch={@receiving_index_path} label="Cancel" />
+              <.td_button
+                id="finish-org-delivery"
+                variant="primary"
+                label="Receive stock"
+                phx-click="finish_delivery"
+              />
+            </:actions>
+          </.td_page_header>
+        </div>
+      <% else %>
       <.header :if={@receiving_new?} icon="hero-arrow-down-tray">
         Receive stock
         <:subtitle>
@@ -1886,6 +1909,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           <.button variant="ghost" patch={@receiving_index_path}>Cancel</.button>
         </:actions>
       </.header>
+      <% end %>
 
       <.header :if={!@receiving_new?} icon="hero-arrow-down-tray">
         Receive inventory
@@ -1902,7 +1926,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       </.header>
 
       <div
-        :if={@receiving_new? and @distributor_org?}
+        :if={@receiving_new? and (@distributor_org? or @receiving_portal == :organization)}
         class="mb-4 rounded-2xl ff-surface-card p-5 sm:p-6"
       >
         <h3 class="text-sm font-semibold text-thamani-forest">Receiving from</h3>
@@ -2054,6 +2078,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             </article>
           </div>
           <.button
+            :if={@receiving_portal != :organization}
             id="finish-distributor-delivery"
             class="mt-4 w-full"
             variant="primary"
