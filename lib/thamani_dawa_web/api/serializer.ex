@@ -7,10 +7,15 @@ defmodule ThamaniDawaWeb.Api.Serializer do
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Batches.Batch
+  alias ThamaniDawa.CustomerReturns.CustomerReturn
+  alias ThamaniDawa.CustomerReturns.CustomerReturnItem
+  alias ThamaniDawa.Customers.Customer
   alias ThamaniDawa.Distributor.MobileUser
   alias ThamaniDawa.Distributor.Shipment
   alias ThamaniDawa.Distributor.ShipmentItem
   alias ThamaniDawa.Distributor.Shipper
+  alias ThamaniDawa.GoodsReceipts.GoodsReceipt
+  alias ThamaniDawa.GoodsReceipts.ReceivingDiscrepancy
   alias ThamaniDawa.GS1Encoder
   alias ThamaniDawa.InventoryDisposals.InventoryDisposal
   alias ThamaniDawa.InventoryDisposals.InventoryDisposalItem
@@ -408,6 +413,94 @@ defmodule ThamaniDawaWeb.Api.Serializer do
           }
         end),
       batch: maybe(holder.batch, &batch/1)
+    })
+  end
+
+  def goods_receipt(%GoodsReceipt{} = receipt) do
+    json_safe(%{
+      id: receipt.id,
+      number: receipt.number,
+      received_at: receipt.received_at,
+      received_by_id: receipt.received_by_id,
+      origin_gln: receipt.origin_gln,
+      origin_company: receipt.origin_company,
+      origin_address: receipt.origin_address,
+      origin_site_id: receipt.origin_site_id,
+      is_return: receipt.is_return,
+      reference_receipt_id: receipt.reference_receipt_id,
+      items: loaded(receipt.items, &receipt_item/1),
+      discrepancies: loaded(receipt.discrepancies, &discrepancy/1)
+    })
+  end
+
+  defp receipt_item(%Batch{} = batch) do
+    batch
+    |> batch()
+    |> Map.put(:product, maybe(batch.product, &product/1))
+  end
+
+  def discrepancy(%ReceivingDiscrepancy{} = discrepancy) do
+    json_safe(%{
+      id: discrepancy.id,
+      goods_receipt_id: discrepancy.goods_receipt_id,
+      product_id: discrepancy.product_id,
+      site_id: discrepancy.site_id,
+      sscc: discrepancy.sscc,
+      gtin: discrepancy.gtin,
+      batch_no: discrepancy.batch_no,
+      serial: discrepancy.serial,
+      quantity: discrepancy.quantity,
+      expiry_date: discrepancy.expiry_date,
+      reason: discrepancy.reason,
+      status: discrepancy.status,
+      resolution_reference: discrepancy.resolution_reference,
+      resolved_at: discrepancy.resolved_at,
+      resolved_by_id: discrepancy.resolved_by_id
+    })
+  end
+
+  def customer(%Customer{} = customer) do
+    json_safe(%{
+      id: customer.id,
+      name: customer.name,
+      gln: customer.gln,
+      address: customer.address,
+      customer_type: customer.customer_type,
+      contact_name: customer.contact_name,
+      contact_email: customer.contact_email,
+      contact_phone: customer.contact_phone
+    })
+  end
+
+  def customer_return(%CustomerReturn{} = customer_return) do
+    json_safe(%{
+      id: customer_return.id,
+      status: customer_return.status,
+      reason: customer_return.reason,
+      notes: customer_return.notes,
+      document_reference: customer_return.document_reference,
+      customer_id: customer_return.customer_id,
+      site_id: customer_return.site_id,
+      shipment_id: customer_return.shipment_id,
+      received_by_id: customer_return.received_by_id,
+      inserted_at: customer_return.inserted_at,
+      customer: maybe(customer_return.customer, &customer/1),
+      items: loaded(customer_return.items, &customer_return_item/1)
+    })
+  end
+
+  def customer_return_item(%CustomerReturnItem{} = item) do
+    json_safe(%{
+      id: item.id,
+      product_id: item.product_id,
+      quantity: item.quantity,
+      batch_no: item.batch_no,
+      expiry_date: item.expiry_date,
+      serial: item.serial,
+      matched: item.matched,
+      condition: item.condition,
+      batch_id: item.batch_id,
+      product: maybe(item.product, &product/1)
     })
   end
 

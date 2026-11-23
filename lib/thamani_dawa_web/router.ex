@@ -117,6 +117,29 @@ defmodule ThamaniDawaWeb.Router do
     post "/pharmacy/requisitions", RequisitionController, :create
     get "/pharmacy/requisitions/:id", RequisitionController, :show
 
+    # Distributor staff: receiving, customers and customer returns. Packing
+    # is done by mobile users under /distributor/mobile.
+    scope "/distributor" do
+      get "/receipts", DistributorController, :receipts
+      get "/receipts/:id", DistributorController, :receipt
+      get "/discrepancies", DistributorController, :discrepancies
+      post "/discrepancies/:id/resolve", DistributorController, :resolve_discrepancy
+
+      get "/customers", DistributorController, :customers
+      post "/customers", DistributorController, :create_customer
+      patch "/customers/:id", DistributorController, :update_customer
+
+      get "/customer-returns", DistributorController, :returns
+      post "/customer-returns", DistributorController, :create_return
+      get "/customer-returns/:id", DistributorController, :show_return
+      post "/customer-returns/:id/items", DistributorController, :add_return_item
+      delete "/customer-returns/:id/items/:item_id", DistributorController, :remove_return_item
+      put "/customer-returns/:id/items/:item_id", DistributorController, :set_item_condition
+      post "/customer-returns/:id/receive", DistributorController, :receive_return
+      post "/customer-returns/:id/inspect", DistributorController, :inspect_return
+      post "/customer-returns/:id/complete", DistributorController, :complete_return
+    end
+
     # Stock takes and disposals; the stock type comes from the portal.
     scope "/pharmacy", assigns: %{inventory_type: :medicine} do
       get "/stock-takes", StockTakeController, :index

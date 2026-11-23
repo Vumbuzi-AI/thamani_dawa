@@ -137,7 +137,24 @@ defmodule ThamaniDawaWeb.Api.Response do
     do: {422, "no_counted_items", "Count at least one batch before submitting."}
 
   defp reason_details(:no_items),
-    do: {422, "no_items", "Add at least one batch before submitting."}
+    do: {422, "no_items", "Add at least one item first."}
+
+  defp reason_details(:items_not_inspected),
+    do: {422, "items_not_inspected", "Every item needs a condition first."}
+
+  defp reason_details(:not_received),
+    do: {409, "not_received", "Mark this return received first."}
+
+  defp reason_details(:not_inspected),
+    do: {409, "not_inspected", "Finish inspecting this return first."}
+
+  defp reason_details(:shipment_return),
+    do:
+      {422, "shipment_return",
+       "This return is linked to a shipment; only packs from that shipment can be added."}
+
+  defp reason_details(:already_resolved),
+    do: {409, "already_resolved", "This discrepancy is already resolved."}
 
   defp reason_details(:not_expired),
     do: {422, "not_expired", "Only a batch past its expiry date can be written off."}
