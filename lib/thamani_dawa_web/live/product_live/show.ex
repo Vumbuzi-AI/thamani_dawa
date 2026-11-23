@@ -257,8 +257,16 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/org/products"}
+      crumb={product_name(@product)}
+      crumb_parent="Products"
       back={~p"/org/products"}
+      back_label="Back to Products"
     >
+      <div class="td-back">
+        <.link navigate={~p"/org/products"} class="td-back-link">
+          <.td_icon name="arrow-left" class="size-3.5" /> Back to Products
+        </.link>
+      </div>
       <.header icon="hero-cube">
         {product_name(@product)}
         <:actions>
