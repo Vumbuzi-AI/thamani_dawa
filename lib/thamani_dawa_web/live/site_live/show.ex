@@ -609,27 +609,15 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
               Date Range
             </p>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-              <div>
-                <.date_picker
-                  id="site-filter-date-from"
-                  name="from"
-                  value={elem(@dates, 0)}
-                  label="Date From"
-                  placeholder="MM/DD/YYYY"
-                  max="today"
-                />
-              </div>
-              <div>
-                <.date_picker
-                  id="site-filter-date-to"
-                  name="to"
-                  value={elem(@dates, 1)}
-                  label="Date To"
-                  placeholder="MM/DD/YYYY"
-                  max="today"
-                />
-              </div>
+            <div class="mb-6">
+              <.date_range_picker
+                id="site-filter-dates"
+                from_name="from"
+                from_value={elem(@dates, 0)}
+                to_name="to"
+                to_value={elem(@dates, 1)}
+                max="today"
+              />
             </div>
 
             <div class="flex items-center justify-end gap-3 border-t border-td-wash pt-4">

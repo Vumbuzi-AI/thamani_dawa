@@ -124,17 +124,13 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
               value={@filters["status"]}
               options={Enum.map(@tabs, fn {value, label} -> {label, value} end)}
             />
-            <.date_picker
-              id="filter-date-from"
-              name="filters[date_from]"
-              label="From"
-              value={@filters["date_from"]}
-            />
-            <.date_picker
-              id="filter-date-to"
-              name="filters[date_to]"
-              label="To"
-              value={@filters["date_to"]}
+            <.date_range_picker
+              id="filter-dates"
+              label="Dates"
+              from_name="filters[date_from]"
+              from_value={@filters["date_from"]}
+              to_name="filters[date_to]"
+              to_value={@filters["date_to"]}
             />
           </form>
         </:filters>

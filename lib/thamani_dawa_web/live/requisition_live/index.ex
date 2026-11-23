@@ -332,18 +332,13 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
               />
             </:group>
             <:group label="Requested between">
-              <div class="grid grid-cols-2 gap-2">
-                <.date_picker
-                  id="filter-date-from"
-                  name="filters[date_from]"
-                  value={@filters["date_from"]}
-                />
-                <.date_picker
-                  id="filter-date-to"
-                  name="filters[date_to]"
-                  value={@filters["date_to"]}
-                />
-              </div>
+              <.date_range_picker
+                id="filter-dates"
+                from_name="filters[date_from]"
+                from_value={@filters["date_from"]}
+                to_name="filters[date_to]"
+                to_value={@filters["date_to"]}
+              />
             </:group>
             <:chip
               :if={@filters["status"] != "all"}

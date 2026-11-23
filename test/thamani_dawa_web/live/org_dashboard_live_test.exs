@@ -141,8 +141,10 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
 
     view |> element("button", "Filters") |> render_click()
 
-    assert has_element?(view, "#filter-date-from-dp[data-max='today']")
-    assert has_element?(view, "#filter-date-to-dp[data-max='today']")
+    # one TD range picker submits both ends
+    assert has_element?(view, "#filter-dates-dp.is-range[data-max='today']")
+    assert has_element?(view, ~s(#filter-dates-dp [data-dp-input="from"][name="from"]))
+    assert has_element?(view, ~s(#filter-dates-dp [data-dp-input="to"][name="to"]))
 
     html =
       render_submit(view, "apply_custom_range", %{
@@ -151,7 +153,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
       })
 
     assert html =~ "Date From must be on or before Date To."
-    assert has_element?(view, "#filter-date-from-dp")
+    assert has_element?(view, "#filter-dates-dp")
 
     html =
       render_submit(view, "apply_custom_range", %{
@@ -160,6 +162,6 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
       })
 
     assert html =~ "Date range cannot include future dates."
-    assert has_element?(view, "#filter-date-to-dp")
+    assert has_element?(view, "#filter-dates-dp")
   end
 end

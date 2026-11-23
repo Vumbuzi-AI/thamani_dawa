@@ -1,33 +1,30 @@
 defmodule ThamaniDawaWeb.LabStockLive do
   @moduledoc """
-  Read-only view of batch/product stock for lab sites. Admins see every lab site
-  in the organization, with a site filter to narrow down. Non-admin lab staff
-  (lab_technician, pharma_lab) are restricted to their assigned lab sites.
-  Nothing here mutates a batch — receiving stays on `LabReceiveStockLive`.
+  Read-only stock for lab sites (Doop _VFeE7v1Z3 products, QxyvdDb1ea all
+  batches). Admins see every lab site in the organization; lab staff
+  (lab_technician, pharma_lab) see their assigned lab sites, and a picked
+  current site narrows it to that site. Nothing here mutates a batch —
+  receiving stays on `LabReceiveStockLive`.
 
-  Two views, toggled without a full page navigation: "Products" (paginated,
-  one row per product with a batch/stock roll-up) and "Batches" (paginated,
-  the flat batch-level table for lab sites). Clicking a product navigates to
-  `LabStockProductLive`, which lists that product's batches at lab sites;
-  clicking a batch there (or in the flat batches view) navigates to
-  `LabStockBatchLive`, which shows details and usage history.
+  Filters, tab and page live in the URL so the stat strip can link to a
+  filtered view. Rows are rolled up and filtered in memory by
+  `ThamaniDawaWeb.SiteStock`, which also renders the page.
   """
 
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
-  alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
-  alias ThamaniDawa.Suppliers
-
-  @default_filters %{site: "", status: ""}
+  alias ThamaniDawaWeb.SiteStock
 
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
-    org_id = scope.organization_id
-    sites = if Scope.admin?(scope), do: Sites.list_sites(org_id), else: scope.user.sites
+
+    sites =
+      if Scope.admin?(scope), do: Sites.list_sites(scope.organization_id), else: scope.user.sites
+
     lab_sites = Enum.filter(sites, &Site.lab?/1)
 
     allowed_site_ids =
@@ -36,375 +33,73 @@ defmodule ThamaniDawaWeb.LabStockLive do
         current_id -> [current_id]
       end
 
+    batches = Batches.list_site_stock(scope.organization_id, allowed_site_ids)
+
+    site_options =
+      for site <- lab_sites, site.id in allowed_site_ids, do: {site.name, site.id}
+
     {:ok,
      socket
-     |> assign(:products_by_id, org_id |> Products.list_products() |> Map.new(&{&1.id, &1}))
-     |> assign(:sites_by_id, Map.new(lab_sites, &{&1.id, &1}))
-     |> assign(:suppliers_by_id, org_id |> Suppliers.list_suppliers() |> Map.new(&{&1.id, &1}))
-     |> assign(:site_options, Enum.map(lab_sites, &{&1.name, &1.id}))
-     |> assign(:allowed_site_ids, allowed_site_ids)
-     |> assign(:search, "")
-     |> assign(:filters, @default_filters)
-     |> assign(:view, "batches")
-     |> assign(:page, 1)
-     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0, page_size: 10})
-     |> reload()}
+     |> assign(:page_title, "Lab stock")
+     |> SiteStock.init(batches, allowed_site_ids,
+       sites: site_options,
+       base_path: "/lab/stock",
+       export_prefix: "lab-stock"
+     )}
   end
 
-  def handle_params(params, _url, socket) do
-    view = Map.get(params, "view", socket.assigns.view)
-    page = if p = Map.get(params, "page"), do: String.to_integer(p), else: socket.assigns.page
-    search = Map.get(params, "search", socket.assigns.search)
-    allowed_site_ids = socket.assigns.allowed_site_ids
+  def handle_params(params, _url, socket), do: {:noreply, SiteStock.apply_params(socket, params)}
 
-    site_val =
-      if site_str = Map.get(params, "site"),
-        do: sanitize_site_filter(site_str, allowed_site_ids),
-        else: socket.assigns.filters.site
+  def handle_event(event, params, socket), do: SiteStock.handle_event(event, params, socket)
 
-    status_val = Map.get(params, "status", socket.assigns.filters.status)
-
-    filters = %{
-      site: site_val,
-      status: status_val
-    }
-
-    {:noreply,
-     socket
-     |> assign(:view, view)
-     |> assign(:page, page)
-     |> assign(:search, search)
-     |> assign(:filters, filters)
-     |> reload()}
-  end
-
-  def handle_event("set_view", %{"view" => view}, socket) do
-    {:noreply,
-     socket
-     |> assign(:view, view)
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, socket |> assign(:search, search) |> assign(:page, 1) |> reload()}
-  end
-
-  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
-    filters = %{
-      site:
-        sanitize_site_filter(Map.get(filter_params, "site", ""), socket.assigns.allowed_site_ids),
-      status: Map.get(filter_params, "status", "")
-    }
-
-    {:noreply,
-     socket
-     |> assign(:view, "batches")
-     |> assign(:filters, filters)
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("clear_filters", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:view, "batches")
-     |> assign(:filters, @default_filters)
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("clear_chip", %{"field" => "site"}, socket) do
-    {:noreply,
-     socket
-     |> assign(:view, "batches")
-     |> assign(:filters, %{socket.assigns.filters | site: ""})
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("clear_chip", %{"field" => "status"}, socket) do
-    {:noreply,
-     socket
-     |> assign(:view, "batches")
-     |> assign(:filters, %{socket.assigns.filters | status: ""})
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("go_to_page", %{"page" => page}, socket) do
-    {:noreply, socket |> assign(:page, String.to_integer(page)) |> reload()}
-  end
-
-  defp pagination_path(view, search, filters) do
-    search = String.trim(search || "")
-    site = Map.get(filters, :site, "")
-    status = Map.get(filters, :status, "")
-
-    params =
-      %{}
-      |> then(fn m -> if view != "batches", do: Map.put(m, "view", view), else: m end)
-      |> then(fn m -> if search != "", do: Map.put(m, "search", search), else: m end)
-      |> then(fn m -> if site != "", do: Map.put(m, "site", site), else: m end)
-      |> then(fn m -> if status != "", do: Map.put(m, "status", status), else: m end)
-
-    if map_size(params) > 0 do
-      ~p"/lab/stock?#{params}"
-    else
-      ~p"/lab/stock"
-    end
-  end
-
-  defp reload(socket) do
-    case socket.assigns.view do
-      "products" -> reload_products(socket)
-      "batches" -> reload_batches(socket)
-    end
-  end
-
-  defp reload_products(socket) do
-    org_id = socket.assigns.current_scope.organization_id
-
-    page_result =
-      Products.list_products_with_site_batches_paginated(
-        org_id,
-        socket.assigns.allowed_site_ids,
-        socket.assigns.page,
-        search: socket.assigns.search
-      )
-
-    products = page_result.entries
-
-    product_ids = Enum.map(products, & &1.id)
-
-    summary =
-      Batches.stock_summary_by_product(org_id, product_ids, socket.assigns.allowed_site_ids)
-
-    undispatched = Batches.undispatched_summary_by_product(org_id, product_ids)
-
-    rows =
-      Enum.map(products, fn product ->
-        total_remaining = get_in(summary, [product.id, :total_remaining]) || 0
-
-        %{
-          id: product.id,
-          product: product,
-          batch_count: get_in(summary, [product.id, :batch_count]) || 0,
-          total_remaining: total_remaining,
-          awaiting_dispatch: Map.get(undispatched, product.id, 0),
-          stock_level: stock_level(total_remaining, product.reorder_level)
-        }
-      end)
-
-    socket
-    |> assign(:page_info, page_result)
-    |> stream(:products, rows, reset: true)
-  end
-
-  defp reload_batches(socket) do
-    org_id = socket.assigns.current_scope.organization_id
-
-    page_result =
-      Batches.list_batches_paginated(
-        org_id,
-        socket.assigns.page,
-        socket.assigns.allowed_site_ids,
-        search: socket.assigns.search,
-        site: socket.assigns.filters.site,
-        status: socket.assigns.filters.status
-      )
-
-    socket
-    |> assign(:page_info, page_result)
-    |> stream(:batches, page_result.entries, reset: true)
-  end
-
-  defp sanitize_site_filter("", _allowed_site_ids), do: ""
-
-  defp sanitize_site_filter(site_id_str, allowed_site_ids) do
-    case Integer.parse(site_id_str) do
-      {site_id, ""} -> if site_id in allowed_site_ids, do: site_id_str, else: ""
-      _ -> ""
-    end
-  end
-
-  defp active_filter_count(filters) do
-    Enum.count([filters.site != "", filters.status != ""], & &1)
-  end
-
-  defp filter_chips(filters, sites_by_id) do
-    [
-      filters.site != "" &&
-        %{label: "Site: #{site_label(filters.site, sites_by_id)}", field: "site"},
-      filters.status != "" &&
-        %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"}
-    ]
-    |> Enum.filter(& &1)
-  end
-
-  defp site_label(site_id_str, sites_by_id) do
-    case Integer.parse(site_id_str) do
-      {site_id, ""} -> if site = sites_by_id[site_id], do: site.name, else: site_id_str
-      _ -> site_id_str
-    end
-  end
-
-  defp stock_level(_total, nil), do: nil
-  defp stock_level(total, _reorder_level) when total <= 0, do: :out_of_stock
-  defp stock_level(total, reorder_level) when total <= reorder_level, do: :low_stock
-  defp stock_level(_total, _reorder_level), do: nil
-
-  defp product_name(nil), do: "(unknown product)"
-  defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
-
-  defp site_name(nil), do: "(unknown site)"
-  defp site_name(site), do: site.name
-
-  defp supplier_name(nil), do: "—"
-  defp supplier_name(supplier), do: supplier.name
-
-  defp stock_subtitle([]), do: "Every batch across lab sites in your organization, read-only."
-  defp stock_subtitle(_site_ids), do: "Every batch across your assigned lab sites, read-only."
+  defp subtitle([_one]), do: "Every batch across your site, read-only."
+  defp subtitle(_site_ids), do: "Every batch across your lab sites, read-only."
 
   def render(assigns) do
     ~H"""
-    <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path="/lab/stock">
-      <.header icon="hero-cube">
-        Lab stock
-        <:subtitle>{stock_subtitle(@allowed_site_ids)}</:subtitle>
-        <:toolbar>
-          <div
-            id="lab-stock-toolbar"
-            class="grid min-w-0 gap-3 min-[480px]:col-span-2 md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center"
-          >
-            <.tab_group class="w-full md:w-auto">
-              <:tab
-                id="products-tab"
-                active={@view == "products"}
-                phx_click="set_view"
-                phx_value_view="products"
-              >
-                Products
-              </:tab>
-              <:tab
-                id="batches-tab"
-                active={@view == "batches"}
-                phx_click="set_view"
-                phx_value_view="batches"
-              >
-                All batches
-              </:tab>
-            </.tab_group>
+    <Layouts.lab_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/lab/stock"
+      crumb="Stock"
+    >
+      <:tools>
+        <.td_button
+          id="lab-stock-receive"
+          variant="primary"
+          label="Receive stock"
+          glyph="tray-arrow-down"
+          navigate={~p"/lab/receive-stock"}
+        />
+      </:tools>
 
-            <form phx-change="search" class="min-w-0 w-full" id="search-form">
-              <.search_input
-                name="search"
-                value={@search}
-                placeholder={
-                  if @view == "products",
-                    do: "Search by product, GTIN, or category",
-                    else: "Search by product, GTIN, or batch no."
-                }
-              />
-            </form>
-
-            <.filter_drawer
-              id="stock-filters"
-              title="Filter stock"
-              apply_event="apply_filters"
-              active_count={active_filter_count(@filters)}
-            >
-              <:group label="Status">
-                <.input
-                  type="select"
-                  name="filters[status]"
-                  value={@filters.status}
-                  options={[{"Active", "active"}, {"Pending receipt", "pending"}]}
-                  prompt="All statuses"
-                />
-              </:group>
-              <:chip
-                :for={chip <- filter_chips(@filters, @sites_by_id)}
-                label={chip.label}
-                clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-              />
-            </.filter_drawer>
-          </div>
-        </:toolbar>
-      </.header>
-
-      <div :if={@view == "products"}>
-        <.table
-          id="products"
-          rows={@streams.products}
-          row_click={fn {_id, row} -> JS.navigate(~p"/lab/stock/products/#{row.product.id}") end}
-        >
-          <:col :let={{_id, row}} label="Product">{product_name(row.product)}</:col>
-          <:col :let={{_id, row}} label="Category">{row.product.category || "—"}</:col>
-          <:col :let={{_id, row}} label="GTIN">{row.product.gtin}</:col>
-          <:col :let={{_id, row}} label="Price">
-            {row.product.price && "KES #{row.product.price}"}
-          </:col>
-          <:col :let={{_id, row}} label="Batches">{row.batch_count}</:col>
-          <:col :let={{_id, row}} label="Remaining">
-            <span class="tabular-nums">{row.total_remaining}</span>
-            <.status_badge :if={row.stock_level} status={row.stock_level} class="ml-2" />
-          </:col>
-          <:col :let={{_id, row}} label="Awaiting dispatch">
-            <span class="tabular-nums">{row.awaiting_dispatch}</span>
-          </:col>
-          <:empty_state>
-            <.blank_state
-              icon="hero-cube"
-              title={if @search != "", do: "No products match your search", else: "No products yet"}
-            >
-              {if @search != "",
-                do: "Try a different search term.",
-                else: "Products with stock will appear here."}
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
-
-      <div :if={@view == "batches"}>
-        <.table
-          id="stock"
-          rows={@streams.batches}
-          row_click={fn {_id, batch} -> JS.navigate(~p"/lab/stock/batches/#{batch.id}") end}
-        >
-          <:col :let={{_id, batch}} label="Product">
-            {product_name(@products_by_id[batch.product_id])}
-          </:col>
-          <:col :let={{_id, batch}} label="Site">{site_name(@sites_by_id[batch.site_id])}</:col>
-          <:col :let={{_id, batch}} label="Batch no.">{batch.batch_no}</:col>
-          <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
-          <:col :let={{_id, batch}} label="Manufacture date">{batch.manufacture_date || "—"}</:col>
-          <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
-          <:col :let={{_id, batch}} label="Remaining">{batch.remaining_quantity}</:col>
-          <:col :let={{_id, batch}} label="Supplier">
-            {supplier_name(@suppliers_by_id[batch.supplier_id])}
-          </:col>
-          <:col :let={{_id, batch}} label="Status">
-            <.status_badge status={if batch.approver_id, do: :active, else: :pending_receipt} />
-          </:col>
-          <:empty_state>
-            <.blank_state
-              icon="hero-cube"
-              title={
-                if @search != "" or active_filter_count(@filters) > 0,
-                  do: "No batches match your search or filters",
-                  else: "No stock yet"
-              }
-            >
-              {if @search != "",
-                do: "Try a different search term.",
-                else: "Batches dispatched to any lab site will appear here."}
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
-
-      <.pagination page={@page_info} path={pagination_path(@view, @search, @filters)} />
+      <SiteStock.stock_page
+        id="lab-stock"
+        title="Lab stock"
+        subtitle={subtitle(@allowed_site_ids)}
+        base_path="/lab/stock"
+        view={@view}
+        entries={@entries}
+        total={@total}
+        page={@page}
+        last_page={@last_page}
+        search={@search}
+        filters={@filters}
+        sites={@site_options}
+        categories={@categories}
+        stats={@stats}
+        tick_max={@tick_max}
+        today={@today}
+        filtered?={@filtered?}
+        exporting={@exporting}
+        stock_takes_path={~p"/lab/stock-takes"}
+        disposals_path={~p"/lab/disposals"}
+        scan_path={~p"/lab/scan"}
+        requisition_path={~p"/lab/requisitions/new"}
+        product_path={fn id -> ~p"/lab/stock/products/#{id}" end}
+        batch_path={fn id -> ~p"/lab/stock/batches/#{id}" end}
+        empty_hint="Batches received at your lab site appear here."
+      />
     </Layouts.lab_shell>
     """
   end

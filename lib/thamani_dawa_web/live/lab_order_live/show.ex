@@ -359,6 +359,34 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
 
   defp current_value(result, key), do: get_in(result.results, [key, "value"])
 
+  defp result_text(%{results: results}) when results == %{} or is_nil(results), do: "—"
+
+  defp result_text(%{results: results}) do
+    Enum.map_join(results, ", ", fn
+      {_key, %{"value" => value}} when is_list(value) -> Enum.join(value, ", ")
+      {_key, %{"value" => value}} -> to_string(value)
+      {_key, value} -> to_string(value)
+    end)
+  end
+
+  defp specimen_text(specimens, result) do
+    specimen =
+      Enum.find(specimens || [], fn specimen ->
+        specimen
+        |> Map.get(:lab_order_results, [])
+        |> List.wrap()
+        |> Enum.any?(&(&1.id == result.id))
+      end)
+
+    case specimen do
+      nil ->
+        "Not collected yet"
+
+      specimen ->
+        "#{specimen.specimen_number} · #{Phoenix.Naming.humanize(specimen.specimen_type)}"
+    end
+  end
+
   defp option_description(option) when is_binary(option) do
     case String.downcase(option) do
       "negative" -> "Target not detected"
@@ -690,8 +718,8 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         :if={@live_action == :add_test}
         id="add-test-modal"
         show
-        title="Add test"
-        subtitle="Add another test to this order. It is billed with the order total."
+        title="Add a test"
+        subtitle={"Add another test to #{ThamaniDawa.LabOrders.reference(@lab_order)}."}
         on_cancel={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
       >
         <.form for={%{}} id="add-test-form" class="td-modal-form" phx-submit="add_result">
@@ -705,6 +733,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             }
             prompt="Choose a test"
           />
+          <p class="td-note">The test price is added to this order's total.</p>
         </.form>
         <:footer>
           <.td_button
@@ -731,62 +760,66 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         :if={@live_action == :collect_specimen}
         id="collect-specimen-modal"
         show
+        title="Collect specimen"
+        subtitle={"Record a specimen for #{ThamaniDawa.LabOrders.reference(@lab_order)}."}
         on_cancel={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
       >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-1">
-          Collect specimen
-        </h2>
-        <p class="mb-5 text-sm text-thamani-pewter">
-          One specimen can serve several tests. Tick each test this sample is for.
-        </p>
-        <.form for={%{}} id="collect-specimen-form" phx-submit="collect_specimen">
-          <.input
-            type="select"
-            name="specimen_type"
-            label="Specimen type"
-            options={specimen_type_options()}
-            prompt="Choose type"
-            required
-          />
-          <.date_picker
-            name="collection_date"
-            label="Collected on"
-            value={to_string(Date.utc_today())}
-          />
-          <.input type="text" name="collection_notes" label="Notes (optional)" value="" />
-
-          <div class="mt-2">
-            <span class="block text-sm font-medium text-thamani-forest mb-2">Tests covered</span>
-            <div class="flex flex-col gap-2">
-              <label
-                :for={result <- @collectable_results}
-                class="inline-flex items-center gap-2 text-sm text-thamani-forest cursor-pointer rounded-lg border border-thamani-stone bg-thamani-surface px-3 py-2 hover:border-thamani-accent/50 transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  name="result_ids[]"
-                  value={result.id}
-                  class="checkbox checkbox-sm accent-thamani-forest"
-                /> {test_name(result)}
+        <.form
+          for={%{}}
+          id="collect-specimen-form"
+          class="td-modal-form"
+          phx-submit="collect_specimen"
+        >
+          <div class="td-fgrid is-2">
+            <.input
+              type="select"
+              name="specimen_type"
+              label="Specimen type"
+              options={specimen_type_options()}
+              prompt="Choose type"
+              required
+            />
+            <.date_picker
+              id="collection-date"
+              name="collection_date"
+              label="Collected on"
+              value={to_string(Date.utc_today())}
+              max="today"
+            />
+          </div>
+          <fieldset class="td-fieldset">
+            <legend class="td-field-label">Tests covered</legend>
+            <div class="td-check-list">
+              <label :for={result <- @collectable_results} class="td-check">
+                <input type="checkbox" name="result_ids[]" value={result.id} />
+                <span>{test_name(result)}</span>
               </label>
             </div>
-            <p :if={@collectable_results == []} class="text-sm text-thamani-pewter">
+            <p :if={@collectable_results == []} class="td-note">
               Every test already has a specimen.
             </p>
-          </div>
-
-          <div class="mt-5">
-            <.button
-              type="submit"
-              variant="primary"
-              phx-disable-with="Saving…"
-              class="w-full"
-              disabled={@collectable_results == []}
-            >
-              Collect specimen
-            </.button>
-          </div>
+          </fieldset>
+          <.input type="textarea" name="collection_notes" label="Notes (optional)" value="" />
+          <p class="td-note">
+            One specimen can serve several tests. Tick each test this sample is for.
+          </p>
         </.form>
+        <:footer>
+          <.td_button type="button" phx-click={JS.patch(~p"/lab/orders/#{@lab_order.id}")}>
+            Cancel
+          </.td_button>
+          <.td_button
+            id="collect-specimen-submit"
+            variant="primary"
+            type="submit"
+            form="collect-specimen-form"
+            glyph="check"
+            phx-disable-with="Saving…"
+            disabled={@collectable_results == []}
+          >
+            Collect specimen
+          </.td_button>
+        </:footer>
       </.modal>
 
       <%!-- Specimen label modal --%>
@@ -794,6 +827,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         :if={@live_action == :print_specimen_label && @printing_specimen}
         specimen={@printing_specimen}
         patient={@patient}
+        lab_order={@lab_order}
         on_close={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
       />
 
@@ -813,7 +847,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         id="record-consumable-modal"
         show
         title="Record consumable"
-        subtitle="Drawn directly from this site's stock."
+        subtitle="What you used from stock for this order."
         on_cancel={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
       >
         <%= if is_nil(@selected_consumable_product_id) do %>
@@ -864,40 +898,48 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
           </p>
         <% else %>
           <% product = selected_product(@active_batches, @selected_consumable_product_id) %>
-          <div class="mb-4 flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas/50 px-3 py-3">
-            <div>
-              <p class="text-xs uppercase tracking-wide text-thamani-subtle">Selected product</p>
-              <p class="mt-1 text-sm font-medium text-td-ink">
-                {product.generic_name || product.brand_name}
-                <span
-                  :if={product.brand_name && product.brand_name != product.generic_name}
-                  class="font-normal text-thamani-pewter"
-                >· {product.brand_name}</span>
-              </p>
+          <.form
+            for={%{}}
+            id="record-consumable-form"
+            class="td-modal-form"
+            phx-submit="record_consumable"
+          >
+            <div class="td-picked">
+              <div class="td-picked-body">
+                <span class="td-kv-label">Selected product</span>
+                <span class="td-picked-title">
+                  {product.generic_name || product.brand_name}
+                  <span :if={product.brand_name && product.brand_name != product.generic_name}>
+                    · {product.brand_name}
+                  </span>
+                </span>
+                <span :if={product.gtin} class="td-picked-sub td-mono">{product.gtin}</span>
+              </div>
+              <.td_button
+                id="change-consumable-product"
+                type="button"
+                phx-click="change_consumable_product"
+              >
+                Change
+              </.td_button>
             </div>
-            <button
-              id="change-consumable-product"
-              type="button"
-              phx-click="change_consumable_product"
-              class="text-sm font-medium text-thamani-forest hover:underline"
-            >Change</button>
-          </div>
-          <.form for={%{}} id="record-consumable-form" phx-submit="record_consumable">
             <input type="hidden" name="product_id" value={@selected_consumable_product_id} />
-            <.input
-              type="select"
-              name="batch_id"
-              label="Batch / lot"
-              options={
-                Enum.map(
-                  batches_for_product(@active_batches, @selected_consumable_product_id),
-                  fn batch -> {batch_label(batch), batch.id} end
-                )
-              }
-              prompt="Choose a batch"
-              required
-            />
-            <.input type="number" name="usage_quantity" label="Quantity used" min="1" required />
+            <div class="td-fgrid is-2">
+              <.input
+                type="select"
+                name="batch_id"
+                label="Batch / lot"
+                options={
+                  Enum.map(
+                    batches_for_product(@active_batches, @selected_consumable_product_id),
+                    fn batch -> {batch_label(batch), batch.id} end
+                  )
+                }
+                prompt="Choose a batch"
+                required
+              />
+              <.input type="number" name="usage_quantity" label="Quantity used" min="1" required />
+            </div>
             <.input
               type="select"
               name="lab_order_result_id"
@@ -905,13 +947,25 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               value=""
               options={[{"None", ""} | Enum.map(@results, &{test_name(&1), &1.id})]}
             />
-            <div class="mt-5">
-              <.button type="submit" variant="primary" phx-disable-with="Saving…" class="w-full">
-                Record consumable
-              </.button>
-            </div>
+            <p class="td-note">Drawn directly from this site's stock.</p>
           </.form>
         <% end %>
+        <:footer>
+          <.td_button type="button" phx-click={JS.patch(~p"/lab/orders/#{@lab_order.id}")}>
+            Cancel
+          </.td_button>
+          <.td_button
+            :if={@selected_consumable_product_id}
+            id="record-consumable-submit"
+            variant="primary"
+            type="submit"
+            form="record-consumable-form"
+            glyph="check"
+            phx-disable-with="Saving…"
+          >
+            Record consumable
+          </.td_button>
+        </:footer>
       </.modal>
 
       <%!-- Result entry modal --%>
@@ -920,16 +974,32 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
         id="result-entry-modal"
         show
         title={
-          if @editing_result.status == :completed,
-            do: "Amend test results",
-            else: "Enter test results"
+          if @editing_result.status == :completed, do: "Amend result", else: "Enter test results"
         }
-        subtitle={@editing_lab_test.name}
+        subtitle={
+          if @editing_result.status == :completed,
+            do: "Change a finalized result. A reason is required.",
+            else: "Fill in each result field for this test."
+        }
         size="wide"
         on_cancel={JS.patch(~p"/lab/orders/#{@lab_order.id}")}
       >
-        <.form for={%{}} id="result-entry-form" phx-submit="save_result">
-          <div class="flex flex-col gap-5">
+        <.form for={%{}} id="result-entry-form" class="td-modal-form" phx-submit="save_result">
+          <dl class="td-fgrid is-2">
+            <div class="td-kv">
+              <dt class="td-kv-label">Test</dt>
+              <dd class="td-kv-value">{@editing_lab_test.name}</dd>
+            </div>
+            <div :if={@editing_result.status == :completed} class="td-kv">
+              <dt class="td-kv-label">Current result</dt>
+              <dd class="td-kv-value">{result_text(@editing_result)}</dd>
+            </div>
+            <div :if={@editing_result.status != :completed} class="td-kv">
+              <dt class="td-kv-label">Specimen</dt>
+              <dd class="td-kv-value">{specimen_text(@specimens, @editing_result)}</dd>
+            </div>
+          </dl>
+          <div class="td-fgrid is-2 td-result-fields">
             <%= for {key, definition} <- @editing_lab_test.field_definitions do %>
               <%= cond do %>
                 <% definition["type"] == "checkbox" and is_list(definition["options"]) and definition["options"] != [] -> %>
@@ -1003,37 +1073,34 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
             <% end %>
           </div>
 
-          <div
-            :if={@editing_result.status == :completed}
-            class="mt-5 rounded-xl bg-thamani-canvas p-4"
-          >
+          <div :if={@editing_result.status == :completed} class="td-stack">
             <.input
-              type="text"
+              type="textarea"
               name="amendment_reason"
               label="Reason for amending this result"
               value=""
               required
             />
-          </div>
-
-          <div class="mt-6 flex flex-col-reverse gap-3 border-t border-thamani-stone pt-5 sm:flex-row sm:justify-end">
-            <.link
-              patch={~p"/lab/orders/#{@lab_order.id}"}
-              class="inline-flex min-h-11 items-center justify-center rounded-xl border border-thamani-stone px-5 text-sm font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas"
-            >
-              Cancel
-            </.link>
-            <.button
-              id="save-result-button"
-              type="submit"
-              variant="primary"
-              phx-disable-with="Saving…"
-              class="min-h-11 sm:min-w-44"
-            >
-              <.icon name="hero-bookmark-square" class="mr-2 size-4" /> Save results
-            </.button>
+            <p class="td-note">
+              The original result and your reason are kept in the amendment history.
+            </p>
           </div>
         </.form>
+        <:footer>
+          <.td_button type="button" phx-click={JS.patch(~p"/lab/orders/#{@lab_order.id}")}>
+            Cancel
+          </.td_button>
+          <.td_button
+            id="save-result-button"
+            variant="primary"
+            type="submit"
+            form="result-entry-form"
+            glyph="check"
+            phx-disable-with="Saving…"
+          >
+            {if @editing_result.status == :completed, do: "Save amendment", else: "Save results"}
+          </.td_button>
+        </:footer>
       </.modal>
 
       <section id="lab-order-detail" class="td-recipe td-list-page td-detail-page">
@@ -1051,11 +1118,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               <.status_pill kind={:order} status={@lab_order.status} />
             </h1>
             <p class="td-idh-sub">
-              <span :if={@patient.gsrn}>GSRN <span class="td-mono">{@patient.gsrn}</span>    · </span><span :if={
-                @patient.phone
-              }>{@patient.phone} · </span>created {ThamaniDawaWeb.TimeFormat.datetime(
-                @lab_order.inserted_at
-              )}
+              <span :if={@patient.gsrn}>
+                GSRN <span class="td-mono">{@patient.gsrn}</span>{" · "}
+              </span>
+              <span :if={@patient.phone}>{@patient.phone}{" · "}</span>
+              <span>created {ThamaniDawaWeb.TimeFormat.datetime(@lab_order.inserted_at)}</span>
             </p>
           </div>
           <div class="td-idh-actions">

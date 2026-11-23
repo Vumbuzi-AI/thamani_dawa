@@ -56,7 +56,8 @@
             el.classList.toggle("is-on", dark);
           });
           document.querySelectorAll("[data-phx-theme]:not([data-theme-switch])").forEach((el) => {
-            el.setAttribute("aria-pressed", String(el.dataset.phxTheme === pref));
+            const on = String(el.dataset.phxTheme === pref);
+            el.setAttribute(el.getAttribute("role") === "menuitemradio" ? "aria-checked" : "aria-pressed", on);
           });
         };
 

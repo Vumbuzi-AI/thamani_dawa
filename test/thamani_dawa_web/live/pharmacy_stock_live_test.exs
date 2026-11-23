@@ -47,28 +47,34 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
   describe "access control" do
     test "an admin can reach it", %{conn: conn} do
       admin = user_fixture()
-      assert {:ok, _view, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
+
+      assert {:ok, _view, _html} =
+               live(log_in_user(conn, admin), ~p"/pharmacy/stock?view=batches")
     end
 
     test "a pharmacist can reach it", %{conn: conn} do
       pharmacist = staff_fixture(%{role: :pharmacist})
-      assert {:ok, _view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+
+      assert {:ok, _view, _html} =
+               live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
     end
 
     test "combined pharmacy/lab staff can reach it", %{conn: conn} do
       pharma_lab = staff_fixture(%{role: :pharma_lab})
-      assert {:ok, _view, _html} = live(log_in_user(conn, pharma_lab), ~p"/pharmacy/stock")
+
+      assert {:ok, _view, _html} =
+               live(log_in_user(conn, pharma_lab), ~p"/pharmacy/stock?view=batches")
     end
 
     test "a lab technician is redirected to the lab portal instead", %{conn: conn} do
       lab_technician = staff_fixture(%{role: :lab_technician})
 
       assert {:error, {:redirect, %{to: "/lab"}}} =
-               live(log_in_user(conn, lab_technician), ~p"/pharmacy/stock")
+               live(log_in_user(conn, lab_technician), ~p"/pharmacy/stock?view=batches")
     end
 
     test "an anonymous visitor is redirected away", %{conn: conn} do
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/pharmacy/stock")
+      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/pharmacy/stock?view=batches")
     end
   end
 
@@ -82,7 +88,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       batch_b =
         batch_fixture(%{organization_id: org_id, site_id: site_b.id, batch_no: "BATCH-SITE-B"})
 
-      {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
       assert html =~ batch_a.batch_no
       refute html =~ batch_b.batch_no
@@ -105,7 +111,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
           batch_no: "BATCH-THEIRS"
         })
 
-      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
       assert html =~ mine.batch_no
       refute html =~ theirs.batch_no
@@ -113,7 +119,8 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       refute html =~ "value=\"#{off_limits.id}\""
 
       # ...and hand-crafting the filter value is rejected server-side.
-      html = render_submit(lv, "apply_filters", %{"filters" => %{"site" => "#{off_limits.id}"}})
+      render_click(lv, "set_filter", %{"field" => "site", "value" => "#{off_limits.id}"})
+      html = render(lv)
 
       assert html =~ mine.batch_no
       refute html =~ theirs.batch_no
@@ -129,7 +136,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       other_org_batch =
         batch_fixture(%{organization_id: other_org.id, batch_no: "OTHER-ORG-BATCH"})
 
-      {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
       assert html =~ mine.batch_no
       refute html =~ other_org_batch.batch_no
@@ -139,7 +146,12 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
 
       active =
-        batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "ACTIVE-BATCH"})
+        batch_fixture(%{
+          organization_id: org_id,
+          site_id: site_a.id,
+          batch_no: "ACTIVE-BATCH",
+          expiry_date: Date.add(Date.utc_today(), 365)
+        })
 
       pending =
         batch_fixture(%{
@@ -149,12 +161,12 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
           pending: true
         })
 
-      {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
-      assert has_element?(view, "#stock", active.batch_no)
-      assert has_element?(view, "#stock", "Active")
-      assert has_element?(view, "#stock", pending.batch_no)
-      assert has_element?(view, "#stock", "Pending receipt")
+      assert has_element?(view, "#pharmacy-stock-batches", active.batch_no)
+      assert has_element?(view, "#pharmacy-stock-batches", "Active")
+      assert has_element?(view, "#pharmacy-stock-batches", pending.batch_no)
+      assert has_element?(view, "#pharmacy-stock-batches", "Pending receipt")
     end
 
     test "shows serial, manufacture date, and supplier when present", %{conn: conn} do
@@ -170,10 +182,10 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
         supplier_id: supplier.id
       })
 
-      {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, _view, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
       assert html =~ "SN-77665"
-      assert html =~ "2026-04-01"
+      assert html =~ "1 Apr 2026"
       assert html =~ "Bulk Rx"
     end
 
@@ -182,9 +194,9 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
 
       batch_fixture(%{organization_id: org_id, site_id: site_a.id, batch_no: "BARE-BATCH"})
 
-      {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
-      assert has_element?(view, "#stock td", "—")
+      assert has_element?(view, "#pharmacy-stock-batches td", "—")
     end
   end
 
@@ -199,14 +211,14 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
 
       batch_fixture(%{organization_id: org_id, site_id: site.id, product_id: product.id})
 
-      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock?view=batches")
 
       html = render_click(lv, "set_view", %{"view" => "products"})
 
       assert html =~ "Admin-Visible Product"
     end
 
-    test "a product with only undispatched (org-level) stock shows as zero site stock, not an org-wide figure",
+    test "a product with only undispatched (org-level) stock is not listed as site stock",
          %{conn: conn} do
       admin = user_fixture()
       org_id = admin.organization_id
@@ -216,12 +228,11 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
 
       org_batch_fixture(%{organization_id: org_id, product_id: product.id, quantity: 25})
 
-      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock?view=batches")
 
       html = render_click(lv, "set_view", %{"view" => "products"})
 
-      assert html =~ "Awaiting Dispatch Product"
-      refute html =~ "Awaiting dispatch"
+      refute html =~ "Awaiting Dispatch Product"
     end
 
     test "a product at or below reorder_level shows the Low stock or Out of stock badge", %{
@@ -241,7 +252,8 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
         site_id: site.id,
         product_id: low_stock_product.id,
         quantity: 5,
-        remaining_quantity: 5
+        remaining_quantity: 5,
+        expiry_date: Date.add(Date.utc_today(), 365)
       })
 
       healthy_product =
@@ -259,7 +271,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
         remaining_quantity: 100
       })
 
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
       html = render_click(lv, "set_view", %{"view" => "products"})
 
       assert html =~ "Low Stock Drug"
@@ -283,18 +295,16 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
           pending: true
         })
 
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
-      lv
-      |> form("#stock-filters-form", filters: %{status: "active"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "active"})
 
       html = render(lv)
       assert html =~ active.batch_no
       refute html =~ pending.batch_no
     end
 
-    test "clearing the status filter chip removes just that filter", %{conn: conn} do
+    test "setting the status filter back to Any shows every batch again", %{conn: conn} do
       {org_id, pharmacist, [site_a]} = pharmacist_assigned_to(["Site A"])
 
       active =
@@ -308,15 +318,13 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
           pending: true
         })
 
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
-      lv
-      |> form("#stock-filters-form", filters: %{status: "pending"})
-      |> render_submit()
+      lv |> element("#pharmacy-stock-status-pending") |> render_click()
+      assert render(lv) =~ "Status"
+      refute render(lv) =~ active.batch_no
 
-      lv
-      |> element("button[aria-label='Remove Status: Pending filter']")
-      |> render_click()
+      lv |> element("#pharmacy-stock-status-any") |> render_click()
 
       html = render(lv)
       assert html =~ active.batch_no
@@ -337,11 +345,9 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
           pending: true
         })
 
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
-      lv
-      |> form("#stock-filters-form", filters: %{status: "pending"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "pending"})
 
       html = render(lv)
       assert html =~ pending.batch_no
@@ -362,7 +368,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
       amoxil_batch =
         batch_fixture(%{organization_id: org_id, site_id: site_a.id, product_id: amoxil.id})
 
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
       lv |> form("form[phx-change='search']", search: "panadol") |> render_change()
 
@@ -410,7 +416,8 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
         site_id: site.id,
         product_id: low_stock_product.id,
         quantity: 5,
-        remaining_quantity: 5
+        remaining_quantity: 5,
+        expiry_date: Date.add(Date.utc_today(), 365)
       })
 
       batch_fixture(%{
@@ -422,12 +429,12 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
         expiry_date: Date.add(Date.utc_today(), 10)
       })
 
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
-      assert has_element?(lv, "#out-of-stock-card", "1")
-      assert has_element?(lv, "#low-stock-card", "1")
-      assert has_element?(lv, "#near-expiry-card", "1")
-      assert has_element?(lv, "#low-stock-value-card", "KSh")
+      assert has_element?(lv, "#pharmacy-stock-stat-out", "1")
+      assert has_element?(lv, "#pharmacy-stock-stat-low", "1")
+      assert has_element?(lv, "#pharmacy-stock-stat-near-expiry", "1")
+      assert has_element?(lv, "#pharmacy-stock-stat-reorder", "KSh")
     end
 
     test "pending (unreceived) batches are excluded from the tiles", %{conn: conn} do
@@ -450,11 +457,11 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
         pending: true
       })
 
-      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
-      assert has_element?(lv, "#out-of-stock-card", "0")
-      assert has_element?(lv, "#low-stock-card", "0")
-      assert has_element?(lv, "#near-expiry-card", "0")
+      assert has_element?(lv, "#pharmacy-stock-stat-out", "0")
+      assert has_element?(lv, "#pharmacy-stock-stat-low", "0")
+      assert has_element?(lv, "#pharmacy-stock-stat-near-expiry", "0")
     end
 
     test "the tiles follow the site filter", %{conn: conn} do
@@ -478,14 +485,14 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
         remaining_quantity: 0
       })
 
-      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock")
-      assert has_element?(lv, "#out-of-stock-card", "1")
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/pharmacy/stock?view=batches")
+      assert has_element?(lv, "#pharmacy-stock-stat-out", "1")
 
       {:ok, filtered, _html} =
         live(log_in_user(conn, admin), ~p"/pharmacy/stock?site=#{site_b.id}")
 
-      refute has_element?(filtered, "#out-of-stock-card", "1")
-      assert has_element?(filtered, "#out-of-stock-card", "0")
+      refute has_element?(filtered, "#pharmacy-stock-stat-out", "1")
+      assert has_element?(filtered, "#pharmacy-stock-stat-out", "0")
     end
   end
 
@@ -495,7 +502,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLiveTest do
 
       batch_fixture(%{organization_id: org_id, site_id: site_a.id, pending: true})
 
-      {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
+      {:ok, view, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock?view=batches")
 
       refute has_element?(view, "#stock form")
       refute has_element?(view, "button", "Receive")

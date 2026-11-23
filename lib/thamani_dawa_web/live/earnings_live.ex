@@ -394,6 +394,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
     <.modal
       id="transaction-modal"
       show
+      class="td-txn-modal"
       title={"Payment #{ThamaniDawaWeb.Money.ksh(@selected.payment.amount)}"}
       subtitle={"#{method_label(@selected.payment)} · #{ThamaniDawaWeb.TimeFormat.datetime(@selected.time)}"}
       on_cancel={JS.patch(~p"/lab/transactions")}
@@ -637,11 +638,14 @@ defmodule ThamaniDawaWeb.EarningsLive do
                 prompt="All statuses"
               />
             </:group>
-            <:group label="From date">
-              <.date_picker name="filters[date_from]" value={@filters.date_from} />
-            </:group>
-            <:group label="To date">
-              <.date_picker name="filters[date_to]" value={@filters.date_to} />
+            <:group label="Date">
+              <.date_range_picker
+                id="earnings-filter-dates"
+                from_name="filters[date_from]"
+                from_value={@filters.date_from}
+                to_name="filters[date_to]"
+                to_value={@filters.date_to}
+              />
             </:group>
             <:chip
               :for={chip <- filter_chips(@filters, @sites_by_id)}

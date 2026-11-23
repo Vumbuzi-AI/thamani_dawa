@@ -196,10 +196,10 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
 
       {:ok, stock_lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy/stock")
 
-      assert has_element?(stock_lv, "#out-of-stock-card")
-      assert has_element?(stock_lv, "#low-stock-card")
-      assert has_element?(stock_lv, "#near-expiry-card")
-      assert has_element?(stock_lv, "#low-stock-value-card")
+      assert has_element?(stock_lv, "#pharmacy-stock-stat-out")
+      assert has_element?(stock_lv, "#pharmacy-stock-stat-low")
+      assert has_element?(stock_lv, "#pharmacy-stock-stat-near-expiry")
+      assert has_element?(stock_lv, "#pharmacy-stock-stat-reorder")
     end
   end
 

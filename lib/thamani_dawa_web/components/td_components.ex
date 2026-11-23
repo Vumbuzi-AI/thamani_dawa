@@ -507,6 +507,137 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
+  @doc """
+  Doop dashboard recipe (frames 8OjVBGuJw2 / ssU7S65tZF, element y1dna0): a
+  68px page header on the surface, then a 16px pad on the canvas holding one
+  or more TD Stat strips and rows of cards. The last row grows to fill the
+  viewport. Shared by the manufacturer, distributor, lab and pharmacy
+  dashboards.
+
+      <.td_dashboard id="x" title="…" subtitle="…">
+        <:actions>secondary buttons</:actions>
+        <:strip><.td_glance_cell … /> × 4</:strip>
+        <.td_dash_row>
+          <.td_dash_card title="…" subtitle="…">…</.td_dash_card>
+          <.td_dash_card title="…" width={320}>…</.td_dash_card>
+        </.td_dash_row>
+      </.td_dashboard>
+  """
+  attr :id, :string, default: nil
+  attr :title, :string, required: true
+  attr :subtitle, :string, default: nil
+  slot :actions
+  slot :notice, doc: "optional banner above the strips"
+
+  slot :strip, doc: "one TD Stat strip; its children are td_glance_cell" do
+    attr :id, :string
+  end
+
+  slot :inner_block
+
+  def td_dashboard(assigns) do
+    ~H"""
+    <section id={@id} class="td-dashboard">
+      <.td_page_header title={@title} subtitle={@subtitle}>
+        <:actions :if={@actions != []}>{render_slot(@actions)}</:actions>
+      </.td_page_header>
+      <div class="td-dashboard-pad">
+        {render_slot(@notice)}
+        <div :for={strip <- @strip} id={strip[:id]} class="td-glance">{render_slot(strip)}</div>
+        {render_slot(@inner_block)}
+      </div>
+    </section>
+    """
+  end
+
+  attr :class, :any, default: nil
+  slot :inner_block, required: true
+
+  def td_dash_row(assigns) do
+    ~H"""
+    <div class={["td-dash-row", @class]}>{render_slot(@inner_block)}</div>
+    """
+  end
+
+  attr :id, :string, default: nil
+  attr :title, :string, required: true
+  attr :subtitle, :string, default: nil
+  attr :width, :integer, default: nil, doc: "fixed width in px; nil fills the row"
+  slot :actions
+  slot :inner_block
+
+  def td_dash_card(assigns) do
+    ~H"""
+    <section
+      id={@id}
+      class={["td-dash-card", @width && "is-fixed"]}
+      style={@width && "width: #{@width}px"}
+    >
+      <.td_card_header title={@title} subtitle={@subtitle}>
+        <:actions :if={@actions != []}>{render_slot(@actions)}</:actions>
+      </.td_card_header>
+      {render_slot(@inner_block)}
+    </section>
+    """
+  end
+
+  attr :count, :integer, required: true
+  attr :max, :integer, required: true
+  attr :tone, :string, values: ~w(neutral info success warning danger expiry), default: "neutral"
+
+  def td_ticks(assigns) do
+    assigns = assign(assigns, :filled, ticks_filled(assigns.count, assigns.max))
+
+    ~H"""
+    <span class="td-ticks" aria-hidden="true">
+      <i :for={index <- 0..11} class={[index < @filled && "is-on", "is-#{@tone}"]}></i>
+    </span>
+    """
+  end
+
+  @doc false
+  def ticks_filled(count, max)
+      when is_integer(count) and is_integer(max) and count > 0 and max > 0,
+      do: count |> Kernel./(max) |> Kernel.*(12) |> Float.ceil() |> trunc() |> min(12)
+
+  def ticks_filled(_count, _max), do: 0
+
+  attr :id, :string, default: nil
+  attr :label, :string, required: true
+  attr :caption, :string, default: nil
+  attr :count, :integer, required: true
+  attr :max, :integer, required: true
+  attr :tone, :string, default: "neutral"
+  attr :rest, :global, include: ~w(navigate patch href)
+
+  def td_tick_row(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :link?,
+        !!(assigns.rest[:navigate] || assigns.rest[:patch] || assigns.rest[:href])
+      )
+
+    ~H"""
+    <.link :if={@link?} id={@id} class="td-status-row is-link" {@rest}>
+      <span class="td-status-copy">
+        <b>{@label}</b>
+        <span :if={@caption}>{@caption}</span>
+      </span>
+      <.td_ticks count={@count} max={@max} tone={@tone} />
+      <span class="td-status-n">{@count}</span>
+    </.link>
+    <div :if={!@link?} id={@id} class="td-status-row">
+      <span class="td-status-copy">
+        <b>{@label}</b>
+        <span :if={@caption}>{@caption}</span>
+      </span>
+      <.td_ticks count={@count} max={@max} tone={@tone} />
+      <span class="td-status-n">{@count}</span>
+    </div>
+    """
+  end
+
   attr :title, :string, required: true
   attr :hint, :string, default: nil
   slot :action
@@ -575,6 +706,97 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
+  @doc """
+  Hidden hook target that turns a `push_event(socket, "td:csv", %{filename:,
+  content:})` into a browser download, so a LiveView can export the rows it
+  already holds without a separate controller route.
+  """
+  attr :id, :string, required: true
+
+  def td_csv_download(assigns) do
+    ~H"""
+    <span id={@id} phx-hook=".CsvDownload" hidden></span>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".CsvDownload">
+      export default {
+        mounted() {
+          this.handleEvent("td:csv", ({filename, content}) => {
+            const blob = new Blob([content], {type: "text/csv;charset=utf-8"})
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement("a")
+            link.href = url
+            link.download = filename
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+            setTimeout(() => URL.revokeObjectURL(url), 1000)
+          })
+        }
+      }
+    </script>
+    """
+  end
+
+  @doc """
+  Doop "Export CSV" dialog (2E9yucAGjQ): an optional date range, a column
+  choice and a note, then Cancel / Download CSV. Submits `submit` with
+  `%{"columns" => value}` (and `"range"` when `ranges` is given).
+  """
+  attr :id, :string, required: true
+  attr :submit, :string, default: "export_csv"
+  attr :on_cancel, JS, required: true
+  attr :columns, :list, default: [{"All visible columns", "visible"}]
+  attr :ranges, :list, default: nil
+  attr :count, :integer, default: nil
+  attr :noun, :string, default: "rows"
+
+  def td_export_modal(assigns) do
+    ~H"""
+    <ThamaniDawaWeb.CoreComponents.modal
+      id={@id}
+      show
+      size="confirm"
+      class="td-export-modal"
+      title="Export CSV"
+      subtitle="Download the rows that match your current filters."
+      on_cancel={@on_cancel}
+    >
+      <.form for={%{}} as={:export} id={"#{@id}-form"} phx-submit={@submit} class="td-modal-form">
+        <ThamaniDawaWeb.CoreComponents.input
+          :if={@ranges}
+          type="select"
+          id={"#{@id}-range"}
+          name="range"
+          label="Date range"
+          value={@ranges |> List.first() |> elem(1)}
+          options={@ranges}
+        />
+        <ThamaniDawaWeb.CoreComponents.input
+          type="select"
+          id={"#{@id}-columns"}
+          name="columns"
+          label="Columns"
+          value={@columns |> List.first() |> elem(1)}
+          options={@columns}
+        />
+        <p class="td-note">
+          The file downloads as CSV and opens in Excel or Google Sheets.<span :if={@count}>{@count} {@noun} match.</span>
+        </p>
+      </.form>
+      <:footer>
+        <.td_button type="button" variant="secondary" label="Cancel" phx-click={@on_cancel} />
+        <.td_button
+          id={"#{@id}-submit"}
+          type="submit"
+          variant="primary"
+          label="Download CSV"
+          glyph="download-simple"
+          form={"#{@id}-form"}
+        />
+      </:footer>
+    </ThamaniDawaWeb.CoreComponents.modal>
+    """
+  end
+
   attr :id, :string, required: true
   attr :show, :boolean, default: false
   attr :title, :string, default: nil
@@ -639,7 +861,13 @@ defmodule ThamaniDawaWeb.TDComponents do
       <button id="sidebar-backdrop" type="button" class="td-backdrop" aria-label="Close navigation" />
       <div class="td-br">
         <a id="sidebar-brand-link" href="/" aria-label="Thamani Dawa home">
-          <img id="sidebar-brand-logo" src="/images/logo-transparent.png" alt="Thamani Dawa" />
+          <img
+            id="sidebar-brand-logo"
+            class="td-br-word"
+            src="/images/logo-transparent.png"
+            alt="Thamani Dawa"
+          />
+          <img class="td-br-mark" src="/images/logo-mark.png" alt="" aria-hidden="true" />
         </a>
         <button
           type="button"
@@ -771,7 +999,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   def td_account_chip(assigns) do
     ~H"""
-    <div class="td-account">
+    <div id="sidebar-account" class="td-account" phx-hook=".AccountMenu">
       <button
         id="sidebar-account-card"
         type="button"
@@ -789,10 +1017,55 @@ defmodule ThamaniDawaWeb.TDComponents do
         </span>
         <span class="td-account-more nav-label"><.td_icon name="dots-three" /></span>
       </button>
-      <div id="sidebar-account-dropdown" class="td-account-menu" hidden>
+      <div
+        id="sidebar-account-dropdown"
+        class="td-account-menu"
+        role="menu"
+        aria-label="Account"
+        hidden
+      >
         {render_slot(@menu)}
       </div>
     </div>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".AccountMenu">
+      // Keyboard for the account menu (SHELL-ACCOUNT): Enter/Space on the
+      // chip opens it on the first row, arrows move and wrap, Home/End jump,
+      // Escape closes and returns focus to the chip, Tab closes.
+      export default {
+        mounted() {
+          const chip = this.el.querySelector("#sidebar-account-card")
+          const menu = this.el.querySelector("#sidebar-account-dropdown")
+          const items = () =>
+            Array.from(menu.querySelectorAll("[role^=menuitem]")).filter((el) => el.offsetParent !== null)
+          const isOpen = () => getComputedStyle(menu).display !== "none"
+          const close = (refocus) => {
+            menu.style.display = "none"
+            chip.setAttribute("aria-expanded", "false")
+            if (refocus) chip.focus()
+          }
+          chip.setAttribute("aria-expanded", "false")
+          chip.addEventListener("click", () =>
+            requestAnimationFrame(() => chip.setAttribute("aria-expanded", String(isOpen())))
+          )
+          chip.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " " || e.key === "ArrowUp" || e.key === "ArrowDown") {
+              if (e.key.startsWith("Arrow")) { e.preventDefault(); chip.click() }
+              requestAnimationFrame(() => isOpen() && items()[0]?.focus())
+            }
+          })
+          menu.addEventListener("keydown", (e) => {
+            const list = items()
+            const i = list.indexOf(document.activeElement)
+            if (e.key === "ArrowDown") { e.preventDefault(); list[(i + 1) % list.length]?.focus() }
+            else if (e.key === "ArrowUp") { e.preventDefault(); list[(i - 1 + list.length) % list.length]?.focus() }
+            else if (e.key === "Home") { e.preventDefault(); list[0]?.focus() }
+            else if (e.key === "End") { e.preventDefault(); list[list.length - 1]?.focus() }
+            else if (e.key === "Escape") { e.preventDefault(); close(true) }
+            else if (e.key === "Tab") { close(false) }
+          })
+        }
+      }
+    </script>
     """
   end
 

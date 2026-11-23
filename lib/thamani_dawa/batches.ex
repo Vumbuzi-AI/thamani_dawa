@@ -1242,6 +1242,26 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc """
+  Every batch held at one of `site_ids`, with its product, site and supplier
+  preloaded, soonest expiry first. Feeds the read-only site stock pages
+  (`/lab/stock`, `/pharmacy/stock`), which roll batches up by product and
+  filter in memory; an empty `site_ids` returns no batches.
+  """
+  def list_site_stock(_organization_id, []), do: []
+
+  def list_site_stock(organization_id, site_ids) when is_list(site_ids) do
+    product_query = from p in Product, where: p.organization_id == ^organization_id
+
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.site_id in ^site_ids,
+        order_by: [asc: b.expiry_date, asc: b.id],
+        preload: [:site, :supplier, product: ^product_query]
+    )
+  end
+
+  @doc """
   Lists every batch across every site in an organization, for the
   warehouse-contents view when the viewer (an org admin) has no single
   current site. Preloads `product`.

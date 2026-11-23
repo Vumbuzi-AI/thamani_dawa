@@ -287,8 +287,10 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
 
       lv |> element("button", "Filters") |> render_click()
 
-      assert has_element?(lv, "#site-filter-date-from-dp[data-max='today']")
-      assert has_element?(lv, "#site-filter-date-to-dp[data-max='today']")
+      # one TD range picker submits both ends
+      assert has_element?(lv, "#site-filter-dates-dp.is-range[data-max='today']")
+      assert has_element?(lv, ~s(#site-filter-dates-dp [data-dp-input="from"][name="from"]))
+      assert has_element?(lv, ~s(#site-filter-dates-dp [data-dp-input="to"][name="to"]))
 
       html =
         render_submit(lv, "apply_custom_range", %{
@@ -297,7 +299,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
         })
 
       assert html =~ "Date From must be on or before Date To."
-      assert has_element?(lv, "#site-filter-date-from-dp")
+      assert has_element?(lv, "#site-filter-dates-dp")
 
       html =
         render_submit(lv, "apply_custom_range", %{
@@ -306,7 +308,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
         })
 
       assert html =~ "Date range cannot include future dates."
-      assert has_element?(lv, "#site-filter-date-to-dp")
+      assert has_element?(lv, "#site-filter-dates-dp")
     end
   end
 
