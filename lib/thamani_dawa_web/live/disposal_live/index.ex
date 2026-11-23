@@ -22,7 +22,8 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
      socket
      |> assign(:sites, sites)
      |> assign(:sites_by_id, scope.organization_id |> Sites.list_sites() |> Map.new(&{&1.id, &1}))
-     |> assign(:list_kind, "expiry")}
+     |> assign(:list_kind, "expiry")
+     |> assign(:disposal_count, 0)}
   end
 
   def handle_params(params, _url, socket) do
@@ -97,7 +98,13 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
           {:noreply,
            socket
            |> put_flash(:info, "Disposal request started.")
-           |> push_navigate(to: ~p"/pharmacy/disposals/#{disposal.id}")}
+           |> push_navigate(
+               to:
+                 ThamaniDawaWeb.ReturnTo.with_query(
+                   ~p"/pharmacy/disposals/#{disposal.id}",
+                   kind_path(:index, socket.assigns.list_kind)
+                 )
+             )}
 
         {:error, changeset} ->
           {:noreply, assign(socket, form: to_form(changeset, as: :disposal))}
@@ -147,7 +154,9 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
           )
       end
 
-    stream(socket, :disposals, disposals, reset: true)
+    socket
+    |> assign(:disposal_count, length(disposals))
+    |> stream(:disposals, disposals, reset: true)
   end
 
   defp locked_site(sites, scope) do
@@ -198,7 +207,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
       <.header icon="hero-trash">
         Disposals
         <:subtitle>Stock leaving this site, sent for approval.</:subtitle>
-        <:actions>
+        <:actions :if={@disposal_count > 0}>
           <.button id="new-disposal" variant="primary" patch={new_path(@list_kind)}>
             <.icon name="hero-plus" class="size-4" /> New disposal
           </.button>
@@ -268,7 +277,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
           {Calendar.strftime(d.inserted_at, "%d %b %Y")}
         </:col>
         <:action :let={{_id, d}}>
-          <.button variant="ghost" navigate={~p"/pharmacy/disposals/#{d.id}"} class="gap-2">
+          <.button variant="ghost" navigate={ThamaniDawaWeb.ReturnTo.with_query(~p"/pharmacy/disposals/#{d.id}", kind_path(:index, @list_kind))} class="gap-2">
             <.icon
               name={if d.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
               class="size-4"
@@ -277,9 +286,19 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
           </.button>
         </:action>
         <:empty_state>
-          <.blank_state icon="hero-trash" title={empty_title(@list_kind)}>
-            {empty_body(@list_kind)}
-          </.blank_state>
+          <div class="td-empty-state">
+            <.td_icon name="trash" class="td-empty-state-icon" />
+            <p class="td-empty-state-title">{empty_title(@list_kind)}</p>
+            <p class="td-empty-state-text">{empty_body(@list_kind)}</p>
+            <div class="td-empty-state-actions">
+              <.td_button
+                id="new-disposal"
+                variant="primary"
+                label={if @list_kind == "returned", do: "Start a supplier return", else: "Start an expiry write-off"}
+                patch={new_path(@list_kind)}
+              />
+            </div>
+          </div>
         </:empty_state>
       </.table>
     </Layouts.pharmacy_shell>

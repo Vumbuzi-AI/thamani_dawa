@@ -12,7 +12,7 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
 
-  def mount(%{"id" => id}, _session, socket) do
+  def mount(%{"id" => id} = params, _session, socket) do
     scope = socket.assigns.current_scope
     org_id = scope.organization_id
 
@@ -27,7 +27,8 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
      |> assign(:products_by_id, products_by_id)
      |> assign(:addable_batches, addable_batches(org_id, disposal))
      |> assign(:expanded_batches, MapSet.new())
-     |> assign(:confirm_submit, false)}
+     |> assign(:confirm_submit, false)
+     |> assign(:return_to, ThamaniDawaWeb.ReturnTo.safe(params["return_to"], ~p"/distributor/returns"))}
   end
 
   defp addable_batches(org_id, disposal) do
@@ -241,6 +242,8 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
       flash={@flash}
       current_scope={@current_scope}
       current_path={@list_path}
+      back={@return_to}
+      back_label="Back to list"
     >
       <div class="space-y-6">
         <div class="flex flex-wrap items-start justify-between gap-3">
