@@ -340,4 +340,41 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
                ThamaniDawa.Sites.get_site!(admin.organization_id, site.id)
     end
   end
+
+  describe "GLN picker" do
+    setup do
+      organization = organization_fixture(%{operating_models: [:distributor, :manufacturer]})
+      {:ok, organization} = ThamaniDawa.Organizations.set_gs1_api_key(organization, "gs1-secret")
+      {:ok, admin: user_fixture(%{organization_id: organization.id})}
+    end
+
+    test "lists the member's GLNs and filters them by name", %{conn: conn, admin: admin} do
+      {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
+
+      assert has_element?(lv, "#gln-option-0614141000784")
+      assert has_element?(lv, "#gln-option-0614141000456")
+
+      lv
+      |> form("#site-form")
+      |> render_change(%{"_target" => ["gln_query"], "gln_query" => "annex"})
+
+      refute has_element?(lv, "#gln-option-0614141000784")
+      assert has_element?(lv, "#gln-option-0614141000456")
+    end
+
+    test "picking a GLN selects it and offers manufacturer activities", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _} = live(log_in_user(conn, admin), ~p"/org/sites/new")
+
+      lv |> element("#gln-option-0614141000784 button") |> render_click()
+      render_async(lv, 5_000)
+
+      assert has_element?(lv, "#gln-picker-selected")
+      html = render(lv)
+      assert html =~ "Pharmaceutical manufacturer"
+      assert html =~ "Manufacturer + distributor"
+    end
+  end
 end

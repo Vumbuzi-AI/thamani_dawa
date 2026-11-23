@@ -148,6 +148,59 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
     end
   end
 
+  # Batches and serials are derived from the `create_serialised_datamatrix`
+  # calls this stub has seen, so anything generated in a test reads back.
+  @impl true
+  def post_barcode_batches(gtin) when is_binary(gtin) do
+    ensure_started()
+
+    rows =
+      for params <- created_for(gtin),
+          serial <- created_serials(params) do
+        %{
+          "barcode" => gtin,
+          "batch" => params["batch"],
+          "production" => params["production"],
+          "expiry" => params["expiry"],
+          "serial" => serial
+        }
+      end
+
+    {:ok, rows}
+  end
+
+  @impl true
+  def post_batch_serials(gtin, batch) when is_binary(gtin) and is_binary(batch) do
+    ensure_started()
+
+    results =
+      for params <- created_for(gtin),
+          params["batch"] == batch,
+          serial <- created_serials(params) do
+        %{
+          "serial" => serial,
+          "payload" => "https://gs1.ke/01/#{gtin}/21/#{serial}",
+          "human_readable" => "(01)#{gtin} (10)#{batch} (21)#{serial}",
+          "exists" => true
+        }
+      end
+
+    {:ok, results}
+  end
+
+  defp created_for(gtin) do
+    __MODULE__
+    |> Agent.get(& &1.serial_creates)
+    |> Enum.reverse()
+    |> Enum.filter(&(&1["barcode"] == gtin))
+  end
+
+  defp created_serials(params) do
+    # Mirrors the serials `build_serialisation/1` hands back.
+    for n <- 1..Map.get(params, "trade_item_qty", 1),
+        do: n |> Integer.to_string() |> String.pad_leading(4, "0")
+  end
+
   @impl true
   def post_list_products(_params) do
     ensure_started()

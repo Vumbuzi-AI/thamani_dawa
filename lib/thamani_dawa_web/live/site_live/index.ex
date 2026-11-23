@@ -43,7 +43,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     |> assign(:gln_check, :idle)
     |> assign(:operating_models, organization.operating_models)
     |> assign(:gs1_company_prefixes, org_prefixes(organization.id))
-    |> assign(:gs1_glns, Organizations.list_member_glns(organization))
+    |> assign_member_glns(organization)
     |> assign(:onboarding_progress, Organizations.onboarding_progress(organization))
   end
 
@@ -58,6 +58,8 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     |> assign(:gln_check, nil)
     |> assign(:operating_models, organization.operating_models)
     |> assign(:gs1_glns, [])
+    |> assign(:taken_glns, MapSet.new())
+    |> assign(:gln_query, "")
   end
 
   defp apply_action(socket, :index, _params) do
@@ -66,10 +68,16 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     |> assign(:gln_check, nil)
     |> assign(:operating_models, [])
     |> assign(:gs1_glns, [])
+    |> assign(:taken_glns, MapSet.new())
+    |> assign(:gln_query, "")
   end
 
   def handle_event("validate", _, %{assigns: %{live_action: :index}} = socket) do
     {:noreply, socket}
+  end
+
+  def handle_event("validate", %{"_target" => ["gln_query"], "gln_query" => query}, socket) do
+    {:noreply, assign(socket, :gln_query, query)}
   end
 
   def handle_event("validate", %{"site" => attrs} = params, socket) do
@@ -135,6 +143,29 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
       true ->
         save_site(socket, :new, attrs)
     end
+  end
+
+  def handle_event("pick_gln", %{"gln" => gln}, socket) do
+    row = Enum.find(socket.assigns.gs1_glns, &(&1["gln"] == gln))
+
+    if row && gln_pickable?(row, socket.assigns.taken_glns) do
+      attrs = %{"gln" => gln}
+      changeset = Site.changeset(%Site{}, attrs)
+
+      {:noreply,
+       socket
+       |> assign(:form, to_form(changeset, as: :site))
+       |> check_gln(attrs)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("clear_gln", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:gln_check, :idle)
+     |> assign(:form, to_form(Site.changeset(%Site{}, %{}), as: :site))}
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -254,6 +285,61 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :site))}
+    end
+  end
+
+  defp assign_member_glns(socket, organization) do
+    rows = Organizations.list_member_gln_rows(organization)
+
+    taken =
+      rows
+      |> Enum.map(& &1["gln"])
+      |> Enum.filter(&Sites.gln_taken?/1)
+      |> MapSet.new()
+
+    socket
+    |> assign(:gs1_glns, rows)
+    |> assign(:taken_glns, taken)
+    |> assign(:gln_query, "")
+  end
+
+  defp gln_active?(row), do: row["status"] in [true, "true", "active", "Active", 1, "1", nil]
+
+  defp gln_pickable?(row, taken),
+    do: gln_active?(row) and not MapSet.member?(taken, row["gln"])
+
+  defp gln_name(row) do
+    Enum.find_value(["description", "location", "address"], row["gln"], fn key ->
+      case row[key] do
+        value when is_binary(value) and value != "" -> value
+        _ -> nil
+      end
+    end)
+  end
+
+  defp gln_place(row) do
+    [row["address"], row["location"]]
+    |> Enum.filter(&(is_binary(&1) and &1 != "" and &1 != gln_name(row)))
+    |> Enum.uniq()
+    |> Enum.join(" · ")
+  end
+
+  defp filter_glns(rows, query) do
+    case query |> to_string() |> String.trim() |> String.downcase() do
+      "" ->
+        rows
+
+      q ->
+        terms = String.split(q)
+
+        Enum.filter(rows, fn row ->
+          haystack =
+            ["gln", "description", "address", "location", "company"]
+            |> Enum.map_join(" ", &to_string(row[&1] || ""))
+            |> String.downcase()
+
+          Enum.all?(terms, &String.contains?(haystack, &1))
+        end)
     end
   end
 
@@ -421,6 +507,11 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   defp activities_for_choice("laboratory"), do: ["laboratory"]
   defp activities_for_choice("pharmacy_laboratory"), do: ["pharmacy", "laboratory"]
   defp activities_for_choice("distribution"), do: ["distribution"]
+  defp activities_for_choice("manufacturing"), do: ["manufacturing"]
+
+  defp activities_for_choice("manufacturing_distribution"),
+    do: ["manufacturing", "distribution"]
+
   defp activities_for_choice(_choice), do: []
 
   # The four real-world premises types a site can actually be licensed as,
@@ -433,6 +524,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
         :pharmacy -> ["pharmacy"]
         :laboratory -> ["laboratory"]
         :distributor -> ["distribution"]
+        :manufacturer -> ["manufacturing"]
         _ -> []
       end)
       |> MapSet.new()
@@ -465,6 +557,20 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
         description: "Supply medicines to pharmacies, hospitals, and other authorized buyers",
         icon: "hero-truck",
         activities: ["distribution"]
+      },
+      %{
+        key: "manufacturing",
+        label: "Pharmaceutical manufacturer",
+        description: "Produce and serialize medicines for distribution",
+        icon: "hero-cog-8-tooth",
+        activities: ["manufacturing"]
+      },
+      %{
+        key: "manufacturing_distribution",
+        label: "Manufacturer + distributor",
+        description: "Produce medicines and also supply them onward from this location",
+        icon: "hero-cog-8-tooth",
+        activities: ["manufacturing", "distribution"]
       }
     ]
     |> Enum.filter(fn choice -> Enum.all?(choice.activities, &(&1 in allowed)) end)
@@ -477,23 +583,156 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   attr :form, :map, required: true
   attr :gln_check, :any, default: nil
+  attr :rows, :list, required: true
+  attr :taken, :any, required: true
+  attr :query, :string, default: ""
+
+  defp gln_picker(assigns) do
+    selected = assigns.form[:gln].value |> to_string()
+    selected_row = Enum.find(assigns.rows, &(&1["gln"] == selected))
+    filtered = filter_glns(assigns.rows, assigns.query)
+    available = Enum.count(assigns.rows, &gln_pickable?(&1, assigns.taken))
+
+    assigns =
+      assign(assigns,
+        selected: selected,
+        selected_row: selected_row,
+        filtered: filtered,
+        available: available
+      )
+
+    ~H"""
+    <div id="gln-picker" class="mb-1">
+      <input type="hidden" name="site[gln]" value={@selected} />
+      <div class="mb-2 flex items-baseline justify-between gap-3">
+        <span class="thamani-label">
+          GS1 Global Location Number (GLN)<span class="text-error">&nbsp;*</span>
+        </span>
+        <span :if={is_nil(@selected_row)} class="text-xs tabular-nums text-thamani-pewter">
+          {@available} of {length(@rows)} available
+        </span>
+      </div>
+
+      <%= if @selected_row do %>
+        <div
+          id="gln-picker-selected"
+          class="flex items-start gap-3 rounded-xl border border-thamani-forest/30 bg-[color-mix(in_srgb,var(--thamani-lime)_10%,white)] p-3"
+        >
+          <span class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-thamani-forest text-white">
+            <.icon name="hero-map-pin" class="size-4 bg-white" />
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-semibold text-thamani-forest">
+              {gln_name(@selected_row)}
+            </p>
+            <p :if={gln_place(@selected_row) != ""} class="truncate text-xs text-thamani-pewter">
+              {gln_place(@selected_row)}
+            </p>
+            <p class="mt-1 font-mono text-xs tabular-nums text-thamani-forest/80">{@selected}</p>
+          </div>
+          <button
+            type="button"
+            id="gln-picker-change"
+            phx-click="clear_gln"
+            class="shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-thamani-forest transition hover:bg-thamani-forest/10"
+          >
+            Change
+          </button>
+        </div>
+      <% else %>
+        <div class="relative">
+          <.icon
+            name="hero-magnifying-glass"
+            class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-thamani-pewter"
+          />
+          <input
+            type="search"
+            id="gln-picker-search"
+            name="gln_query"
+            value={@query}
+            placeholder="Search by name, town, address or GLN"
+            autocomplete="off"
+            phx-debounce="150"
+            class="thamani-input pl-9"
+          />
+        </div>
+
+        <ul
+          id="gln-picker-list"
+          role="listbox"
+          class="mt-2 max-h-80 divide-y divide-thamani-stone/70 overflow-y-auto rounded-xl border border-thamani-stone bg-white"
+        >
+          <li :if={@filtered == []} class="px-4 py-6 text-center text-sm text-thamani-pewter">
+            No GLNs match “{@query}”.
+          </li>
+          <li :for={row <- @filtered} id={"gln-option-#{row["gln"]}"}>
+            <% pickable = gln_pickable?(row, @taken) %>
+            <button
+              type="button"
+              phx-click="pick_gln"
+              phx-value-gln={row["gln"]}
+              disabled={!pickable}
+              class={[
+                "group flex w-full items-center gap-3 px-3 py-2.5 text-left transition",
+                if(pickable,
+                  do: "hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none",
+                  else: "cursor-not-allowed opacity-55"
+                )
+              ]}
+            >
+              <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-thamani-pewter transition group-hover:bg-thamani-forest group-hover:text-white group-disabled:group-hover:bg-slate-100 group-disabled:group-hover:text-thamani-pewter">
+                <.icon name="hero-building-office-2" class="size-4" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium text-thamani-forest">
+                  {gln_name(row)}
+                </span>
+                <span class="block truncate text-xs text-thamani-pewter">
+                  <span class="font-mono tabular-nums">{row["gln"]}</span>
+                  <span :if={gln_place(row) != ""}> · {gln_place(row)}</span>
+                </span>
+              </span>
+              <%= cond do %>
+                <% MapSet.member?(@taken, row["gln"]) -> %>
+                  <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-thamani-pewter">
+                    Already added
+                  </span>
+                <% not gln_active?(row) -> %>
+                  <span class="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                    Inactive
+                  </span>
+                <% true -> %>
+                  <.icon
+                    name="hero-chevron-right"
+                    class="size-4 shrink-0 text-thamani-pewter/60 transition group-hover:translate-x-0.5 group-hover:text-thamani-forest"
+                  />
+              <% end %>
+            </button>
+          </li>
+        </ul>
+      <% end %>
+    </div>
+    """
+  end
+
+  attr :form, :map, required: true
+  attr :gln_check, :any, default: nil
   attr :operating_models, :list, default: []
   attr :gs1_glns, :list, default: []
+  attr :taken_glns, :any, default: MapSet.new()
+  attr :gln_query, :string, default: ""
 
   defp site_form(assigns) do
     ~H"""
     <form id="site-form" phx-submit="save" phx-change="validate">
       <%= if @gln_check do %>
         <%= if @gs1_glns != [] do %>
-          <.input
-            id="site-gln"
-            type="combobox"
-            field={@form[:gln]}
-            label="GS1 Global Location Number (GLN)"
-            placeholder="Select a GLN from your GS1 account"
-            options={@gs1_glns}
-            phx-debounce="500"
-            required
+          <.gln_picker
+            form={@form}
+            gln_check={@gln_check}
+            rows={@gs1_glns}
+            taken={@taken_glns}
+            query={@gln_query}
           />
         <% else %>
           <.input
@@ -574,6 +813,8 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
                 phx-debounce="blur"
                 required
               />
+            <% {:matched, _name, _address} when @gs1_glns != [] -> %>
+              <input type="hidden" name="site[name]" value={@form[:name].value} />
             <% {:matched, name, address} -> %>
               <input type="hidden" name="site[name]" value={@form[:name].value} />
               <div class="mb-4 rounded-xl border border-thamani-stone bg-slate-50/60 p-3">
@@ -818,7 +1059,14 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     >
       <h2 class="pr-10 text-2xl font-medium tracking-tight text-thamani-forest">Add a branch</h2>
       <div class="mt-6">
-        <.site_form form={@form} gln_check={@gln_check} operating_models={@operating_models} gs1_glns={@gs1_glns} />
+        <.site_form
+          form={@form}
+          gln_check={@gln_check}
+          operating_models={@operating_models}
+          gs1_glns={@gs1_glns}
+          taken_glns={@taken_glns}
+          gln_query={@gln_query}
+        />
       </div>
     </.modal>
     """
@@ -891,7 +1139,14 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           Configure the location identity, activities, and map position.
         </p>
         <div class="mt-6">
-          <.site_form form={@form} gln_check={@gln_check} operating_models={@operating_models} gs1_glns={@gs1_glns} />
+          <.site_form
+            form={@form}
+            gln_check={@gln_check}
+            operating_models={@operating_models}
+            gs1_glns={@gs1_glns}
+            taken_glns={@taken_glns}
+            gln_query={@gln_query}
+          />
         </div>
       </.modal>
 

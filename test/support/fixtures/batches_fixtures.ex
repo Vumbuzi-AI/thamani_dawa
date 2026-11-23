@@ -47,7 +47,10 @@ defmodule ThamaniDawa.BatchesFixtures do
     # with a valid date, then backdate it directly so the validation stays
     # intact while the fixture can still represent legacy on-hand stock.
     {requested_expiry, attrs} = Map.pop(attrs, :expiry_date)
-    past_expiry? = is_struct(requested_expiry, Date) and Date.compare(requested_expiry, ThamaniDawa.BusinessDate.today()) != :gt
+
+    past_expiry? =
+      is_struct(requested_expiry, Date) and
+        Date.compare(requested_expiry, ThamaniDawa.BusinessDate.today()) != :gt
 
     attrs =
       if past_expiry? do

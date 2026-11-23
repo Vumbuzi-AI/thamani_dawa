@@ -372,28 +372,123 @@ defmodule ThamaniDawa.Manufacturing do
   end
 
   @doc """
-  Lists the primary serials packed under a shipper SSCC — every serial of a
-  batch linked to it via `manufacturer_sscc_batches`, unless the serials
-  were individually split across several shippers of the same batch (the
-  make-to-order path), in which case only the serials actually assigned to
-  this shipper count.
-  """
-  def list_serials_for_sscc(organization_id, sscc_id) do
-    batch_ids =
-      Repo.all(
-        from sb in SsccBatch,
-          where: sb.manufacturer_shipper_sscc_id == ^sscc_id,
-          select: sb.manufacturer_batch_id
-      )
+  Lists the primary serials packed under a shipper SSCC, read from the GS1
+  member API (`POST /get_sscc_contents`) rather than the local database, so
+  the list reflects what GS1 has actually recorded for the case — including
+  serials issued outside this application.
 
-    Repo.all(
-      from s in Serial,
-        where: s.organization_id == ^organization_id and s.manufacturer_batch_id in ^batch_ids,
-        where:
-          is_nil(s.manufacturer_shipper_sscc_id) or s.manufacturer_shipper_sscc_id == ^sscc_id,
-        order_by: [asc: s.serial]
-    )
+  Each entry carries its own GTIN, batch, and dates (a case may span several
+  batches). Returns `{:ok, serials}` or `{:error, reason}` where reason is
+  `:not_found`, `:unconfigured`, `:unauthorized`, `:forbidden`, or
+  `:unavailable`.
+  """
+  def fetch_sscc_serials(organization_id, sscc_code, opts \\ []) when is_binary(sscc_code) do
+    opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
+
+    with {:ok, body} <- MemberApi.sscc_contents(sscc_code, opts) do
+      serials =
+        body
+        |> Map.get("products", [])
+        |> List.wrap()
+        |> Enum.flat_map(&sscc_content_serials/1)
+        |> Enum.sort_by(& &1.serial)
+
+      {:ok, serials}
+    end
   end
+
+  @doc """
+  A product's batches as GS1 records them (`POST /getbarcode_batches`),
+  one entry per batch number with its dates and serial count, newest
+  production first. Read from the member API, not the local database, so
+  serials issued outside this application are included.
+  """
+  def fetch_product_batches(organization_id, gtin, opts \\ []) when is_binary(gtin) do
+    opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
+
+    with {:ok, rows} <- MemberApi.barcode_batches(gtin, opts) do
+      batches =
+        rows
+        |> Enum.filter(&(is_binary(&1["batch"]) and &1["batch"] != ""))
+        |> Enum.group_by(& &1["batch"])
+        |> Enum.map(fn {batch_no, [first | _] = batch_rows} ->
+          %{
+            batch_no: batch_no,
+            production_date: parse_api_date(first["production"]),
+            expiry_date: parse_api_date(first["expiry"]),
+            serial_count:
+              batch_rows
+              |> Enum.map(& &1["serial"])
+              |> Enum.filter(&(is_binary(&1) and &1 != ""))
+              |> Enum.uniq()
+              |> length()
+          }
+        end)
+        |> Enum.sort_by(&{&1.production_date || ~D[0000-01-01], &1.batch_no}, :desc)
+
+      {:ok, batches}
+    end
+  end
+
+  @doc """
+  Every serial GS1 has issued for `gtin` + `batch_no`
+  (`POST /get_batch_serials`), sorted by serial.
+  """
+  def fetch_batch_serials(organization_id, gtin, batch_no, opts \\ [])
+      when is_binary(gtin) and is_binary(batch_no) do
+    opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
+
+    with {:ok, results} <- MemberApi.batch_serials(gtin, batch_no, opts) do
+      serials =
+        for %{"serial" => serial} = row <- results, is_binary(serial) and serial != "" do
+          %{serial: serial, payload: row["payload"], human_readable: row["human_readable"]}
+        end
+
+      {:ok, serials |> Enum.uniq_by(& &1.serial) |> Enum.sort_by(& &1.serial)}
+    end
+  end
+
+  defp sscc_content_serials(%{} = product) do
+    gtin = product["gtin"]
+    name = product["name"]
+
+    Enum.flat_map(List.wrap(product["batches"]), fn batch ->
+      production_date = parse_api_date(batch["production_date"])
+      expiry_date = parse_api_date(batch["expiry_date"])
+
+      for %{"serial" => serial} <- List.wrap(batch["serials"]),
+          is_binary(serial) and serial != "" do
+        %{
+          serial: serial,
+          gtin: gtin,
+          product_name: name,
+          batch: batch["batch"],
+          production_date: production_date,
+          expiry_date: expiry_date
+        }
+      end
+    end)
+  end
+
+  defp sscc_content_serials(_product), do: []
+
+  # GS1 dates arrive as ISO strings ("2026-01-15", optionally with a time)
+  # or as the GS1 AI form ("260115").
+  defp parse_api_date(<<yy::binary-size(2), mm::binary-size(2), dd::binary-size(2)>>) do
+    case Date.from_iso8601("20#{yy}-#{mm}-#{dd}") do
+      {:ok, date} -> date
+      _ -> nil
+    end
+  end
+
+  defp parse_api_date(value) when is_binary(value) do
+    case Date.from_iso8601(String.slice(value, 0, 10)) do
+      {:ok, date} -> date
+      _ -> nil
+    end
+  end
+
+  defp parse_api_date(_value), do: nil
 
   @doc "Lists the serials generated for a batch."
   def list_serials(organization_id, batch_id) do

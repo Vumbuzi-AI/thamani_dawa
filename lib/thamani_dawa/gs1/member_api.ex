@@ -36,6 +36,8 @@ defmodule ThamaniDawa.GS1.MemberApi do
   @callback post_get_company_prefixes(map()) :: {:ok, [String.t()]} | {:error, term()}
   @callback post_list_glns(map()) :: {:ok, [map()]} | {:error, term()}
   @callback post_search_glns(map()) :: {:ok, [map()]} | {:error, term()}
+  @callback post_barcode_batches(String.t()) :: {:ok, [map()]} | {:error, term()}
+  @callback post_batch_serials(String.t(), String.t()) :: {:ok, [map()]} | {:error, term()}
 
   @doc """
   Mints an SSCC. `params` is the member-API body: `batch_info` and `address`
@@ -92,6 +94,38 @@ defmodule ThamaniDawa.GS1.MemberApi do
   @doc "Searches the GS1 directory for GLNs available to the supplied API token."
   def search_glns(query, opts \\ []) when is_binary(query) and is_list(opts) do
     dispatch(:post_search_glns, [%{"query" => query, "per_page" => 25, "page" => 1}], opts)
+  end
+
+  @doc """
+  Every batch row GS1 has recorded for a GTIN, via
+  `POST /getbarcode_batches`. Rows can repeat per serial; each carries
+  `batch`, `production`, `expiry`, and (when serialised) `serial`.
+  """
+  def barcode_batches(gtin, opts \\ []) when is_binary(gtin) and is_list(opts) do
+    dispatch(:post_barcode_batches, [gtin], opts)
+  end
+
+  @doc """
+  Every serial GS1 has issued for a GTIN + batch, via
+  `POST /get_batch_serials`. Each result carries `serial`, `payload`,
+  `human_readable`, and `image`.
+  """
+  def batch_serials(gtin, batch, opts \\ [])
+      when is_binary(gtin) and is_binary(batch) and is_list(opts) do
+    dispatch(:post_batch_serials, [gtin, batch], opts)
+  end
+
+  def post_barcode_batches(gtin, opts \\ []) when is_binary(gtin) and is_list(opts) do
+    %{"barcode" => gtin}
+    |> post("/getbarcode_batches", opts)
+    |> decode_barcode_batches_response()
+  end
+
+  def post_batch_serials(gtin, batch, opts \\ [])
+      when is_binary(gtin) and is_binary(batch) and is_list(opts) do
+    %{"barcode" => gtin, "batch" => batch}
+    |> post("/get_batch_serials", opts)
+    |> decode_batch_serials_response()
   end
 
   def post_create_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
@@ -213,6 +247,45 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def decode_products_response({:ok, _status, _body}), do: {:error, :unavailable}
   def decode_products_response({:error, :unconfigured}), do: {:error, :unconfigured}
   def decode_products_response({:error, _reason}), do: {:error, :unavailable}
+
+  @doc false
+  def decode_barcode_batches_response({:ok, status, %{"product" => %{"batches" => batches}}})
+      when status in 200..299 and is_list(batches),
+      do: {:ok, Enum.filter(batches, &is_map/1)}
+
+  def decode_barcode_batches_response({:ok, status, _body}) when status in 200..299,
+    do: {:ok, []}
+
+  # GS1 answers 404 when the GTIN has no record yet: no batches.
+  def decode_barcode_batches_response({:ok, 404, _body}), do: {:ok, []}
+
+  def decode_barcode_batches_response({:ok, status, _body}) when status in [401, 403],
+    do: {:error, auth_error(status, nil)}
+
+  def decode_barcode_batches_response({:ok, _status, _body}), do: {:error, :unavailable}
+  def decode_barcode_batches_response({:error, :unconfigured}), do: {:error, :unconfigured}
+  def decode_barcode_batches_response({:error, _reason}), do: {:error, :unavailable}
+
+  @doc false
+  def decode_batch_serials_response({:ok, status, %{"results" => results}})
+      when status in 200..299 and is_list(results),
+      do: {:ok, Enum.filter(results, &is_map/1)}
+
+  def decode_batch_serials_response({:ok, status, _body}) when status in 200..299,
+    do: {:ok, []}
+
+  # GS1 answers 404 when the batch carries no serials yet.
+  def decode_batch_serials_response({:ok, 404, _body}), do: {:ok, []}
+
+  def decode_batch_serials_response({:ok, status, _body}) when status in [401, 403],
+    do: {:error, auth_error(status, nil)}
+
+  def decode_batch_serials_response({:ok, 400, %{"result" => message}}) when is_binary(message),
+    do: {:error, {:invalid, message}}
+
+  def decode_batch_serials_response({:ok, _status, _body}), do: {:error, :unavailable}
+  def decode_batch_serials_response({:error, :unconfigured}), do: {:error, :unconfigured}
+  def decode_batch_serials_response({:error, _reason}), do: {:error, :unavailable}
 
   @doc false
   def decode_prefixes_response({:ok, status, %{"company_prefixes" => prefixes}})

@@ -243,6 +243,24 @@ defmodule ThamaniDawa.Organizations do
     organization_id |> get_organization!() |> list_member_glns()
   end
 
+  @doc """
+  The raw GLN rows (`"gln"`, `"description"`, `"address"`, `"location"`,
+  `"status"`, `"company"`) registered to the organization's own GS1 member
+  account, sorted by description. `[]` when there's no API key or the
+  member API can't be reached.
+  """
+  def list_member_gln_rows(%Organization{} = organization) do
+    with api_key when is_binary(api_key) <- gs1_api_key(organization),
+         {:ok, rows} <- MemberApi.list_glns(api_token: api_key) do
+      rows
+      |> Enum.filter(&(is_map(&1) and not blank?(Map.get(&1, "gln"))))
+      |> Enum.uniq_by(&Map.get(&1, "gln"))
+      |> Enum.sort_by(&String.downcase(to_string(member_gln_description(&1))))
+    else
+      _ -> []
+    end
+  end
+
   defp member_gln_option(row) do
     gln = Map.get(row, "gln")
     label = member_gln_description(row)

@@ -313,7 +313,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     conn = log_in_user(conn, user)
 
     {:ok, serials, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials")
-    assert has_element?(serials, "#serial-batch-#{batch.id}")
+    # Batches and serials come from the GS1 member API (stubbed here).
+    assert has_element?(serials, "#serial-batch-#{batch.batch_no}", "3")
     assert has_element?(serials, "#primary-serial-batch-details")
     assert has_element?(serials, "#primary-serial-gtin", product.gtin)
     assert has_element?(serials, "#primary-serial-batch-number", batch.batch_no)
@@ -321,6 +322,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(serials, "#primary-serial-expiry-date")
     assert has_element?(serials, "#manufacturer-serials [phx-hook=DataMatrix]")
     assert has_element?(serials, "#export-batch-serials")
+    assert has_element?(serials, "#manufacturer-serial-0001", "(17)")
+    assert has_element?(serials, "#manufacturer-serial-0003")
+
+    csv =
+      conn
+      |> get(~p"/manufacturer/products/#{product.gtin}/batches/#{batch.batch_no}/serials/export")
+      |> response(200)
+
+    assert csv =~ "#{product.gtin},#{batch.batch_no},"
+    assert csv =~ ",0003\r\n"
 
     {:ok, ssccs, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/ssccs")
     assert has_element?(ssccs, "#manufacturer-sscc-empty-state")
