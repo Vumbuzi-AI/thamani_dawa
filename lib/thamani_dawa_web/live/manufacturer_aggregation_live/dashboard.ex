@@ -4,117 +4,135 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Dashboard do
   alias ThamaniDawa.Manufacturing
 
   def mount(_params, _session, socket) do
-    pallets = Manufacturing.list_pallets(socket.assigns.current_scope.organization_id)
+    organization_id = socket.assigns.current_scope.organization_id
 
     {:ok,
      socket
      |> assign(:page_title, "Aggregation")
-     |> assign(:pallets, pallets)
-     |> assign(:query, "")}
+     |> assign(:pallets, Manufacturing.list_pallets(organization_id))
+     |> assign(:shippers, Manufacturing.list_standalone_shippers(organization_id))}
   end
-
-  def handle_event("search", %{"q" => query}, socket) do
-    {:noreply, assign(socket, :query, query)}
-  end
-
-  defp visible(%{pallets: pallets, query: query}) do
-    case String.downcase(String.trim(query)) do
-      "" ->
-        pallets
-
-      term ->
-        Enum.filter(pallets, fn pallet ->
-          [pallet.code | Enum.flat_map(pallet.shipper_ssccs, &[&1.code, &1.gtin, &1.batch])]
-          |> Enum.any?(&(is_binary(&1) and String.contains?(String.downcase(&1), term)))
-        end)
-    end
-  end
-
-  defp total_serials(pallet),
-    do: Enum.sum(Enum.map(pallet.shipper_ssccs, &(&1.count_of_trade_items || 0)))
-
-  defp distinct_count(pallet, field),
-    do:
-      pallet.shipper_ssccs
-      |> Enum.map(&Map.get(&1, field))
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-      |> length()
 
   def render(assigns) do
-    assigns = assign(assigns, :visible, visible(assigns))
-
     ~H"""
     <Layouts.manufacturer_shell
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/aggregations"}
     >
-      <.header icon="hero-squares-plus">
-        Aggregation
-        <:subtitle>Group shipper SSCCs from any product or batch into pallet SSCCs.</:subtitle>
+      <.td_page_header
+        title="Aggregation"
+        subtitle="Build pallet and shipper SSCC hierarchies, then add their GTINs, batches, and serials."
+      >
         <:actions>
-          <.button
-            id="create-pallet"
+          <.td_button
+            id="add-sscc"
             variant="primary"
-            navigate={~p"/manufacturer/aggregations/pallets/new"}
-          ><.icon name="hero-plus" class="size-4" /> Create pallet SSCC</.button>
+            label="Add SSCC"
+            glyph="plus"
+            navigate={~p"/manufacturer/aggregations/new"}
+          />
         </:actions>
-      </.header>
+      </.td_page_header>
 
-      <section id="aggregation-pallets" class="overflow-hidden rounded-2xl ff-surface-card">
-        <div class="border-b border-thamani-stone p-4">
-          <form id="pallet-search" phx-change="search" phx-submit="search">
-            <label class="relative block">
-              <.icon
-                name="hero-magnifying-glass"
-                class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-thamani-pewter"
-              />
-              <input
-                type="search"
-                name="q"
-                value={@query}
-                phx-debounce="200"
-                placeholder="Search pallets by SSCC, shipper, GTIN or batch"
-                autocomplete="off"
-                class="w-full rounded-xl border border-thamani-stone bg-td-surface py-2.5 pl-9 pr-3 text-sm text-thamani-forest outline-none transition focus:border-thamani-forest"
-              />
-            </label>
-          </form>
-        </div>
-        <div
-          :if={@visible == []}
-          id="aggregation-pallets-empty"
-          class="p-10 text-center text-sm text-thamani-pewter"
-        >
-          {if @pallets == [], do: "No pallet SSCCs yet.", else: "No pallets match “#{@query}”."}
-        </div>
-        <div class="divide-y divide-thamani-stone">
-          <.link
-            :for={pallet <- @visible}
-            id={"aggregation-pallet-#{pallet.id}"}
-            navigate={~p"/manufacturer/aggregations/pallets/#{pallet.id}"}
-            class="flex items-center justify-between gap-4 px-5 py-4 transition hover:bg-thamani-lime/20"
+      <div class="space-y-4">
+        <section id="aggregation-pallets" class="td-card">
+          <.td_card_header
+            title="Pallet SSCCs"
+            subtitle="Parties are entered once and inherited by every shipper."
           >
-            <div class="min-w-0">
-              <p class="truncate font-mono text-sm font-semibold text-thamani-forest">
-                {pallet.code}
-              </p>
-              <p class="mt-1 text-xs text-thamani-pewter">
-                {distinct_count(pallet, :gtin)} products · {distinct_count(pallet, :batch)} batches · {total_serials(
-                  pallet
-                )} serials
-              </p>
-            </div>
-            <div class="flex shrink-0 items-center gap-3">
-              <span class="rounded-full bg-thamani-canvas px-3 py-1 text-xs font-semibold text-thamani-forest">
-                {length(pallet.shipper_ssccs)} shippers
-              </span>
-              <.icon name="hero-chevron-right" class="size-5 text-thamani-pewter" />
-            </div>
-          </.link>
-        </div>
-      </section>
+            <:actions>
+              <.td_button
+                id="create-pallet"
+                variant="secondary"
+                label="Group shippers"
+                navigate={~p"/manufacturer/aggregations/pallets/new"}
+              />
+            </:actions>
+          </.td_card_header>
+
+          <div :if={@pallets == []} id="aggregation-pallets-empty" class="td-empty-card">
+            <p class="td-empty-title">No pallet SSCCs yet</p>
+            <p class="td-note">Add an SSCC or group existing shippers into a pallet.</p>
+          </div>
+
+          <div :if={@pallets != []} class="td-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Pallet SSCC</th>
+                  <th>From and to</th>
+                  <th class="td-num">Shippers</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  :for={pallet <- @pallets}
+                  id={"aggregation-pallet-#{pallet.id}"}
+                  class="is-link"
+                  phx-click={JS.navigate(~p"/manufacturer/aggregations/pallets/#{pallet.id}")}
+                >
+                  <td class="td-mono">{pallet.code}</td>
+                  <td>
+                    <span class="td-party-cell">
+                      {pallet.from_company_name}
+                      <.td_icon name="arrow-right" />
+                      {pallet.to_company_name}
+                    </span>
+                  </td>
+                  <td class="td-num">{length(pallet.shipper_ssccs)}</td>
+                  <td><span class="td-chev"><.td_icon name="caret-right" /></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="aggregation-shippers" class="td-card">
+          <.td_card_header
+            title="Standalone shipper SSCCs"
+            subtitle="Cases that are not grouped under a pallet."
+          />
+
+          <div :if={@shippers == []} id="aggregation-shippers-empty" class="td-empty-card">
+            <p class="td-empty-title">No standalone shippers yet</p>
+            <p class="td-note">Add a shipper SSCC, then pack its GTINs, batches and serials.</p>
+          </div>
+
+          <div :if={@shippers != []} class="td-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Shipper SSCC</th>
+                  <th>From and to</th>
+                  <th class="td-num">Serials</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  :for={shipper <- @shippers}
+                  id={"aggregation-shipper-#{shipper.id}"}
+                  class="is-link"
+                  phx-click={JS.navigate(~p"/manufacturer/aggregations/ssccs/#{shipper.id}")}
+                >
+                  <td class="td-mono">{shipper.code}</td>
+                  <td>
+                    <span class="td-party-cell">
+                      {shipper.from_company_name}
+                      <.td_icon name="arrow-right" />
+                      {shipper.to_company_name}
+                    </span>
+                  </td>
+                  <td class="td-num">{shipper.count_of_trade_items || 0}</td>
+                  <td><span class="td-chev"><.td_icon name="caret-right" /></span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </Layouts.manufacturer_shell>
     """
   end

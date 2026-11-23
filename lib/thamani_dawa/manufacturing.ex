@@ -1036,7 +1036,7 @@ defmodule ThamaniDawa.Manufacturing do
   def get_pallet!(organization_id, id) do
     Pallet
     |> Repo.get_by!(id: id, organization_id: organization_id)
-    |> Repo.preload(shipper_ssccs: [:batches])
+    |> Repo.preload(shipper_ssccs: [batches: :product])
   end
 
   @doc "Lists an organization's manually assembled pallets and their shippers."
@@ -1045,7 +1045,16 @@ defmodule ThamaniDawa.Manufacturing do
       from p in Pallet,
         where: p.organization_id == ^organization_id,
         order_by: [desc: p.inserted_at, desc: p.id],
-        preload: [shipper_ssccs: [:batches]]
+        preload: [shipper_ssccs: [batches: :product]]
+    )
+  end
+
+  @doc "Lists shipper SSCCs that are not grouped under a pallet."
+  def list_standalone_shippers(organization_id) do
+    Repo.all(
+      from s in ShipperSscc,
+        where: s.organization_id == ^organization_id and is_nil(s.manufacturer_pallet_id),
+        order_by: [desc: s.inserted_at, desc: s.id]
     )
   end
 

@@ -2342,6 +2342,40 @@ a.td-status-row:hover { background: var(--color-td-hover); }
   color: var(--color-td-ink);
   box-shadow: none;
 }
+.td-table { width: 100%; border-collapse: collapse; overflow: hidden; }
+.td-table table { width: 100%; border-collapse: collapse; }
+.td-table th {
+  height: 40px; background: var(--color-td-wash); font-size: 14px; font-weight: 500;
+  color: var(--color-td-ink-2); text-align: left; padding: 0 16px;
+  border-bottom: 1px solid var(--color-td-hairline); white-space: nowrap;
+}
+.td-table td {
+  height: 48px; padding: 0 16px; font-size: 14px; color: var(--color-td-ink);
+  border-bottom: 1px solid var(--color-td-hairline); white-space: nowrap;
+}
+.td-table tr.is-link { cursor: pointer; }
+.td-table tr.is-link:hover td { background: var(--color-td-hover); }
+.td-mono { font-family: var(--font-mono); font-size: 12px; color: var(--color-td-ink-2); }
+.td-num { text-align: right; font-variant-numeric: tabular-nums; }
+.td-party-cell { display: inline-flex; align-items: center; gap: 6px; }
+.td-party-cell svg { width: 14px; height: 14px; color: var(--color-td-ink-3); flex: none; }
+.td-chev { display: inline-flex; color: var(--color-td-ink-3); }
+.td-agg-form { width: min(720px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.td-notice.is-danger {
+  border-color: var(--color-td-danger-line, var(--color-td-hairline));
+  background: var(--color-td-danger-tint, var(--color-td-wash));
+}
+.td-status-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-td-ink-2); }
+.td-status-dot i { width: 6px; height: 6px; border-radius: 99px; background: var(--color-td-ink-3); display: inline-block; }
+.td-status-dot.is-success { color: var(--color-td-success); }
+.td-status-dot.is-success i { background: var(--color-td-success); }
+.td-status-dot.is-danger { color: var(--color-td-danger); }
+.td-status-dot.is-danger i { background: var(--color-td-danger); }
+.td-party-card { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.td-party-card .td-k { font-size: 12px; font-weight: 500; color: var(--color-td-ink-3); }
+.td-party-card .td-v { font-size: 16px; font-weight: 500; color: var(--color-td-ink); }
+.td-party-card .td-a { font-size: 14px; color: var(--color-td-ink-2); }
+
 
 
 

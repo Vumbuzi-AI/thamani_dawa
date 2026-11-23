@@ -282,81 +282,90 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.SsccShow do
       current_scope={@current_scope}
       current_path={~p"/manufacturer/aggregations"}
     >
-      <.header
-        icon="hero-cube"
-        back={
+      <.link
+        navigate={
           if(@sscc.pallet,
             do: ~p"/manufacturer/aggregations/pallets/#{@sscc.pallet.id}",
             else: ~p"/manufacturer/aggregations"
           )
         }
+        class="td-back-link"
       >
-        Shipper SSCC: {@sscc.code}
-        <:subtitle>The GTINs, batches, and serials packed in this shipper.</:subtitle>
+        <.td_icon name="arrow-left" /> {if @sscc.pallet, do: "Pallet", else: "Aggregation"}
+      </.link>
+      <.td_page_header title={"Shipper SSCC"} subtitle={@sscc.code}>
         <:actions>
-          <.button
+          <.td_button
             id="upload-sscc-gtins"
-            variant="ghost"
+            variant="secondary"
+            label="Upload GTINs"
+            glyph="upload-simple"
             phx-click="open"
             phx-value-mode="bulk_gtins"
-          >
-            <.icon name="hero-arrow-up-tray" class="size-4" /> Upload GTINs
-          </.button>
-          <.button id="add-sscc-gtin" variant="primary" phx-click="open" phx-value-mode="gtin"><.icon
-            name="hero-plus"
-            class="size-4"
-          /> Add GTIN</.button>
+          />
+          <.td_button
+            id="add-sscc-gtin"
+            variant="primary"
+            label="Add GTIN"
+            glyph="plus"
+            phx-click="open"
+            phx-value-mode="gtin"
+          />
         </:actions>
-      </.header>
+      </.td_page_header>
 
-      <div class="grid gap-4 md:grid-cols-2">
-        <.party
-          title="From"
-          gln={@sscc.from_gln}
-          company={@sscc.from_company_name}
-          address={@sscc.from_address}
-        />
-        <.party
-          title="To"
-          gln={@sscc.to_gln}
-          company={@sscc.to_company_name}
-          address={@sscc.to_address}
-        />
+      <div class="grid gap-4 md:grid-cols-2" style="margin-bottom:16px">
+        <section class="td-card td-party-card">
+          <span class="td-k"><.td_icon name="factory" /> From</span>
+          <span class="td-v">{@sscc.from_company_name}</span>
+          <span class="td-mono">{@sscc.from_gln}</span>
+          <span class="td-a">{@sscc.from_address}</span>
+        </section>
+        <section class="td-card td-party-card">
+          <span class="td-k"><.td_icon name="warehouse" /> To</span>
+          <span class="td-v">{@sscc.to_company_name}</span>
+          <span class="td-mono">{@sscc.to_gln}</span>
+          <span class="td-a">{@sscc.to_address}</span>
+        </section>
       </div>
 
-      <section id="sscc-contents" class="mt-6 overflow-hidden rounded-2xl ff-surface-card">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-thamani-stone p-5">
-          <div>
-            <h2 class="font-semibold text-thamani-forest">Contents</h2><p class="text-sm text-thamani-pewter">
-              Add several batches and enter serials one at a time or in bulk.
-            </p>
-          </div><div class="flex gap-2">
-            <.button id="add-sscc-batch" variant="ghost" phx-click="open" phx-value-mode="batch">Add batch</.button><.button
-              id="add-sscc-serials"
-              variant="ghost"
-              phx-click="open"
-              phx-value-mode="serials"
-            >Add serials</.button>
-          </div>
-        </div>
-        <div :if={@sscc.batches == []} class="p-10 text-center text-sm text-thamani-pewter">
-          No GTINs or batches on this SSCC yet.
-        </div>
-        <div
-          :for={batch <- @sscc.batches}
-          id={"sscc-batch-#{batch.id}"}
-          class="flex flex-wrap items-center justify-between gap-3 border-b border-thamani-stone p-5 last:border-0"
+      <section id="sscc-contents" class="td-card">
+        <.td_card_header
+          title="Contents"
+          subtitle="Add several batches and enter serials one at a time or in bulk."
         >
-          <div>
-            <p class="font-semibold text-thamani-forest">
-              {batch.product.gtin} · {batch.product.name}
-            </p><p class="mt-1 text-sm text-thamani-pewter">
-              Batch {batch.batch_no} · {batch.production_date} → {batch.expiry_date}
-            </p>
-          </div>
-          <span class="rounded-full bg-thamani-lime/40 px-3 py-1 text-xs font-semibold text-thamani-forest">{serial_count(
-            batch
-          )} serials</span>
+          <:actions>
+            <.td_button id="add-sscc-batch" variant="secondary" label="Add batch" phx-click="open" phx-value-mode="batch" />
+            <.td_button id="add-sscc-serials" variant="secondary" label="Add serials" phx-click="open" phx-value-mode="serials" />
+          </:actions>
+        </.td_card_header>
+        <div :if={@sscc.batches == []} class="td-empty-card">
+          <p class="td-empty-title">No GTINs or batches on this SSCC yet</p>
+        </div>
+        <div :if={@sscc.batches != []} class="td-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Batch</th>
+                <th>Production</th>
+                <th>Expiry</th>
+                <th class="td-num">Serials</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr :for={batch <- @sscc.batches} id={"sscc-batch-#{batch.id}"}>
+                <td>
+                  <div>{batch.product.name}</div>
+                  <div class="td-mono">{batch.product.gtin}</div>
+                </td>
+                <td class="td-mono">{batch.batch_no}</td>
+                <td>{batch.production_date}</td>
+                <td>{batch.expiry_date}</td>
+                <td class="td-num">{serial_count(batch)} serials</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -436,35 +445,34 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.SsccShow do
           <div
             :if={@bulk_status == :verifying}
             id="bulk-gtin-verifying"
-            class="mt-8 rounded-2xl bg-thamani-canvas p-8 text-center text-sm text-thamani-pewter"
+            class="td-empty-state"
           >
-            <.icon name="hero-arrow-path" class="mx-auto mb-3 size-6 animate-spin" />
-            Checking each GTIN against GS1…
+            <.td_icon name="circle-notch" class="td-empty-state-icon motion-safe:animate-spin" />
+            <p class="td-empty-state-title">Checking each GTIN against GS1…</p>
           </div>
           <div :if={@bulk_status == :review} id="bulk-gtin-review" class="mt-5 space-y-3">
             <div
               :for={result <- @bulk_results}
               id={"bulk-gtin-#{result.code}"}
-              class="flex items-center justify-between gap-3 rounded-xl border border-thamani-stone p-4"
+              class="flex items-center justify-between gap-3"
+              style="padding:12px 0;border-bottom:1px solid var(--color-td-hairline)"
             >
               <div>
-                <p class="font-mono text-sm font-semibold text-thamani-forest">{result.code}</p>
-                <p class="text-sm text-thamani-pewter">{result.name}</p>
+                <p class="td-mono">{result.code}</p>
+                <p class="td-note">{result.name}</p>
               </div>
               <span class={[
-                "rounded-full px-3 py-1 text-xs font-semibold",
-                if(result.status == :failed,
-                  do: "bg-red-50 text-red-700",
-                  else: "bg-thamani-lime/40 text-thamani-forest"
-                )
+                "td-status-dot",
+                result.status == :failed && "is-danger",
+                result.status == :verified && "is-success"
               ]}>
+                <i></i>
                 {bulk_status_label(result.status)}
               </span>
             </div>
-            <div class="flex justify-end pt-3">
-              <.button id="save-bulk-gtins" variant="primary" phx-click="save_bulk_gtins">
-                Save ready GTINs
-              </.button>
+            <div class="flex justify-end gap-2 pt-3">
+              <.td_button variant="secondary" label="Back" phx-click="open" phx-value-mode="bulk_gtins" />
+              <.td_button id="save-bulk-gtins" variant="primary" label="Save ready GTINs" phx-click="save_bulk_gtins" />
             </div>
           </div>
         </div>
@@ -526,22 +534,6 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.SsccShow do
         </div>
       </.modal>
     </Layouts.manufacturer_shell>
-    """
-  end
-
-  attr :title, :string, required: true
-  attr :gln, :string, default: nil
-  attr :company, :string, default: nil
-  attr :address, :string, default: nil
-
-  defp party(assigns) do
-    ~H"""
-    <article class="rounded-2xl ff-surface-card p-5">
-      <p class="text-sm font-semibold text-thamani-forest">{@title}</p>
-      <p class="mt-2 font-medium">{@company}</p>
-      <p class="text-sm text-thamani-pewter">GLN {@gln}</p>
-      <p class="mt-1 text-sm text-thamani-pewter">{@address}</p>
-    </article>
     """
   end
 end
