@@ -70,8 +70,8 @@ defmodule ThamaniDawaWeb.AccountSettingsComponent do
                 </span>
               </div>
             </div>
-            <.td_input field={@form[:name]} label="Full name" required />
-            <.td_input field={@form[:email]} type="email" label="Email" required />
+            <.td_input field={@form[:name]} id="account-settings-name" label="Full name" required />
+            <.td_input field={@form[:email]} id="account-settings-email" type="email" label="Email" required />
             <div class="td-access-row">
               <div>
                 <b>Password</b>
