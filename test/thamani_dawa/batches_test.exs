@@ -1284,9 +1284,7 @@ defmodule ThamaniDawa.BatchesTest do
       assert Enum.all?(children, & &1.logistic_unit_id)
 
       child_units =
-        ThamaniDawa.Repo.all(
-          from u in LogisticUnit, where: u.parent_logistic_unit_id == ^unit.id
-        )
+        ThamaniDawa.Repo.all(from u in LogisticUnit, where: u.parent_logistic_unit_id == ^unit.id)
 
       assert length(child_units) == 2
       assert Enum.all?(child_units, &(&1.source == :minted))

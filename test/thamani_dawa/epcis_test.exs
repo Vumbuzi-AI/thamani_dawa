@@ -10,6 +10,7 @@ defmodule ThamaniDawa.EpcisTest do
   alias ThamaniDawa.Epcis.OutboxEvent
   alias ThamaniDawa.Epcis.Urn
   alias ThamaniDawa.GoodsReceipts
+  alias ThamaniDawa.Organizations
   alias ThamaniDawa.OrganizationsFixtures
   alias ThamaniDawa.PatientVisitsFixtures
   alias ThamaniDawa.Prescriptions
@@ -495,9 +496,9 @@ defmodule ThamaniDawa.EpcisTest do
     end
 
     test "an org without a GS1 prefix gets a blocked dispensing event", ctx do
-      ctx.organization
-      |> Ecto.Changeset.change(%{gs1_company_prefix: nil})
-      |> Repo.update!()
+      ctx.organization.id
+      |> Organizations.list_gs1_prefixes()
+      |> Enum.each(&Organizations.delete_gs1_prefix/1)
 
       assert {:ok, _updated_item} =
                Prescriptions.dispense_item(ctx.organization.id, ctx.item.id, ctx.user.id, 2)
@@ -726,10 +727,11 @@ defmodule ThamaniDawa.EpcisTest do
     end
 
     test "a serialized case unpacks every serial across the children" do
-      ctx = %{
-        organization: organization,
-        user: user
-      } = received_case_context()
+      ctx =
+        %{
+          organization: organization,
+          user: user
+        } = received_case_context()
 
       batch =
         received_case(ctx, %{
@@ -940,7 +942,8 @@ defmodule ThamaniDawa.EpcisTest do
   end
 
   defp sgln!(gln, organization) do
-    {:ok, urn} = Urn.sgln(gln, Urn.prefix_length_for(gln, organization.gs1_company_prefix))
+    prefix = Organizations.primary_gs1_prefix(organization.id).prefix
+    {:ok, urn} = Urn.sgln(gln, Urn.prefix_length_for(gln, prefix))
     urn
   end
 

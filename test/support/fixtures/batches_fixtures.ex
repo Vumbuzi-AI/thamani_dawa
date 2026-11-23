@@ -6,6 +6,7 @@ defmodule ThamaniDawa.BatchesFixtures do
   alias ThamaniDawa.AccountsFixtures
   alias ThamaniDawa.Batches
   alias ThamaniDawa.OrganizationsFixtures
+  alias ThamaniDawa.Repo
   alias ThamaniDawa.ProductsFixtures
   alias ThamaniDawa.SitesFixtures
 
@@ -41,6 +42,20 @@ defmodule ThamaniDawa.BatchesFixtures do
   def batch_fixture(attrs \\ %{}) do
     {pending, attrs} = Map.pop(attrs, :pending, false)
 
+    # Batches can only be received with a future expiry date, but tests also
+    # need already-expired lots (e.g. for disposal flows). Receive the batch
+    # with a valid date, then backdate it directly so the validation stays
+    # intact while the fixture can still represent legacy on-hand stock.
+    {requested_expiry, attrs} = Map.pop(attrs, :expiry_date)
+    past_expiry? = is_struct(requested_expiry, Date) and Date.compare(requested_expiry, ThamaniDawa.BusinessDate.today()) != :gt
+
+    attrs =
+      if past_expiry? do
+        Map.put(attrs, :expiry_date, Date.add(ThamaniDawa.BusinessDate.today(), 1))
+      else
+        if requested_expiry, do: Map.put(attrs, :expiry_date, requested_expiry), else: attrs
+      end
+
     {organization_id, attrs} =
       Map.pop_lazy(attrs, :organization_id, fn ->
         OrganizationsFixtures.organization_fixture().id
@@ -63,12 +78,21 @@ defmodule ThamaniDawa.BatchesFixtures do
       |> valid_batch_attributes()
       |> then(&Batches.create_batch(organization_id, &1))
 
-    if pending do
+    batch =
+      if pending do
+        batch
+      else
+        receiver = AccountsFixtures.user_fixture(%{organization_id: organization_id})
+        {:ok, received_batch} = Batches.receive_batch(batch, receiver.id)
+        received_batch
+      end
+
+    if past_expiry? do
       batch
+      |> Ecto.Changeset.change(expiry_date: requested_expiry)
+      |> Repo.update!()
     else
-      receiver = AccountsFixtures.user_fixture(%{organization_id: organization_id})
-      {:ok, received_batch} = Batches.receive_batch(batch, receiver.id)
-      received_batch
+      batch
     end
   end
 

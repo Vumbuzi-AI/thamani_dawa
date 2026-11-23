@@ -20,15 +20,11 @@ defmodule ThamaniDawa.OrganizationsFixtures do
     organization
   end
 
-  @doc "Creates an organization with a GS1 company prefix already set."
+  @doc "Creates an organization with a (primary) GS1 company prefix already set."
   def organization_with_prefix_fixture(attrs \\ %{}, prefix \\ "0614141") do
     organization = organization_fixture(Enum.into(attrs, %{operating_models: [:distributor]}))
 
-    {:ok, organization} =
-      ThamaniDawa.Organizations.update_organization_gs1_settings(
-        organization,
-        %{gs1_company_prefix: prefix}
-      )
+    {:ok, _prefix} = ThamaniDawa.Organizations.add_gs1_prefix(organization, %{prefix: prefix})
 
     organization
   end

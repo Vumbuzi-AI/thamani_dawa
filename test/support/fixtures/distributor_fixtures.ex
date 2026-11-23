@@ -23,8 +23,7 @@ defmodule ThamaniDawa.DistributorFixtures do
       |> Enum.into(%{operating_models: [:distributor]})
       |> OrganizationsFixtures.organization_fixture()
 
-    {:ok, org} =
-      Organizations.update_organization_gs1_settings(org, %{gs1_company_prefix: "0614141"})
+    {:ok, _prefix} = Organizations.add_gs1_prefix(org, %{prefix: "0614141"})
 
     org
   end

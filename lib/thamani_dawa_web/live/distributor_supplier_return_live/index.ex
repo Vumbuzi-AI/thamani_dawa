@@ -176,7 +176,9 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
     >
       <.header icon="hero-arrow-uturn-left">
         Returns
-        <:subtitle>Stock going back to a supplier, sent for approval.</:subtitle>
+        <:subtitle>
+          Stock moving back to suppliers or in from customers, tracked through to approval.
+        </:subtitle>
         <:actions>
           <.button id="new-supplier-return" variant="primary" patch={~p"/distributor/returns/new"}>
             <.icon name="hero-plus" class="size-4" /> New supplier return

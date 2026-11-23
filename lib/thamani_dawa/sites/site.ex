@@ -2,7 +2,7 @@ defmodule ThamaniDawa.Sites.Site do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @activities [:pharmacy, :laboratory, :distribution]
+  @activities [:pharmacy, :laboratory, :distribution, :manufacturing]
 
   schema "sites" do
     field :name, :string
@@ -119,14 +119,30 @@ defmodule ThamaniDawa.Sites.Site do
   defp validate_activity_exclusivity(changeset) do
     activities = get_field(changeset, :activities) || []
 
-    if :pharmacy in activities and :distribution in activities do
-      add_error(
-        changeset,
-        :activities,
-        "A location can be licensed for retail pharmacy or wholesale distribution, not both — PPB requires separate premises for each"
-      )
-    else
-      changeset
+    cond do
+      :pharmacy in activities and :distribution in activities ->
+        add_error(
+          changeset,
+          :activities,
+          "A location can be licensed for retail pharmacy or wholesale distribution, not both — PPB requires separate premises for each"
+        )
+
+      :manufacturing in activities and :pharmacy in activities ->
+        add_error(
+          changeset,
+          :activities,
+          "A location can be licensed for manufacturing or retail pharmacy, not both — PPB requires separate premises for each"
+        )
+
+      :manufacturing in activities and :laboratory in activities ->
+        add_error(
+          changeset,
+          :activities,
+          "A location can be licensed for manufacturing or diagnostic lab work, not both — PPB requires separate premises for each"
+        )
+
+      true ->
+        changeset
     end
   end
 
@@ -201,13 +217,20 @@ defmodule ThamaniDawa.Sites.Site do
 
   def distribution?(_), do: false
 
+  @doc "Returns true if the site is used for manufacturing."
+  def manufacturer?(%__MODULE__{activities: activities}) when is_list(activities),
+    do: :manufacturing in activities
+
+  def manufacturer?(_), do: false
+
   @doc """
   The PPB search `ftype` this site's activities call for — `"retail"` for a
-  pharmacy, `"wholesale"` for a distributor, or `nil` if the site isn't
-  PPB-licensable at all (lab-only, or no activities chosen yet). Accepts
-  either a `%Site{}`, a list of activity atoms, or a list of activity
-  strings (raw, not-yet-cast form params), so both schema-backed and
-  in-progress signup state can use it.
+  pharmacy, `"wholesale"` for a distributor, `"manufacturer"` for a
+  manufacturing site, or `nil` if the site isn't PPB-licensable at all
+  (lab-only, or no activities chosen yet). Accepts either a `%Site{}`, a
+  list of activity atoms, or a list of activity strings (raw,
+  not-yet-cast form params), so both schema-backed and in-progress signup
+  state can use it.
   """
   def ppb_ftype(%__MODULE__{activities: activities}), do: ppb_ftype(activities)
 
@@ -217,6 +240,7 @@ defmodule ThamaniDawa.Sites.Site do
     cond do
       "pharmacy" in activities -> "retail"
       "distribution" in activities -> "wholesale"
+      "manufacturing" in activities -> "manufacturer"
       true -> nil
     end
   end
@@ -249,6 +273,7 @@ defmodule ThamaniDawa.Sites.Site do
       :pharmacist -> pharmacy?(site)
       :lab_technician -> lab?(site)
       :distributor -> distribution?(site)
+      :manufacturer -> manufacturer?(site)
       :pharma_lab -> pharmacy?(site) or lab?(site)
       _other -> false
     end)

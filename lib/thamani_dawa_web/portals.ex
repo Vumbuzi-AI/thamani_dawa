@@ -27,12 +27,13 @@ defmodule ThamaniDawaWeb.Portals do
 
   @org_dashboard "/org/dashboard"
   @distributor_root "/distributor"
+  @manufacturer_root "/manufacturer"
   @pharmacy_root "/pharmacy"
   @lab_root "/lab"
   @platform_root "/platform"
   @app_root "/"
 
-  @portals [:org, :pharmacy, :lab, :distributor]
+  @portals [:org, :pharmacy, :lab, :distributor, :manufacturer]
 
   @doc "Every portal a scope can be granted or denied access to."
   def portals, do: @portals
@@ -58,6 +59,11 @@ defmodule ThamaniDawaWeb.Portals do
       Scope.distributor_access?(scope) and distributor_organization?(scope) and
         site_offers?(scope, :distributor)
 
+  def portal_access?(%Scope{} = scope, :manufacturer),
+    do:
+      Scope.manufacturer_access?(scope) and manufacturer_organization?(scope) and
+        site_offers?(scope, :manufacturer)
+
   @doc """
   The path a signed-in scope should land on: the organization dashboard
   for an admin in org context (no current site), otherwise the panel the
@@ -77,6 +83,7 @@ defmodule ThamaniDawaWeb.Portals do
   defp site_default_path(%Scope{} = scope, site) do
     cond do
       Site.distribution?(site) and portal_access?(scope, :distributor) -> @distributor_root
+      Site.manufacturer?(site) and portal_access?(scope, :manufacturer) -> @manufacturer_root
       Site.pharmacy?(site) and portal_access?(scope, :pharmacy) -> @pharmacy_root
       Site.lab?(site) and portal_access?(scope, :lab) -> @lab_root
       Scope.admin?(scope) -> @org_dashboard
@@ -91,12 +98,26 @@ defmodule ThamaniDawaWeb.Portals do
 
   defp role_default_path(%Scope{} = scope) do
     cond do
-      Scope.admin?(scope) -> @org_dashboard
-      Scope.distributor_access?(scope) and distributor_organization?(scope) -> @distributor_root
-      Scope.pharmacist?(scope) and Scope.lab_technician?(scope) -> @pharmacy_root
-      Scope.pharmacist?(scope) -> @pharmacy_root
-      Scope.lab_technician?(scope) -> @lab_root
-      true -> @app_root
+      Scope.admin?(scope) ->
+        @org_dashboard
+
+      Scope.distributor_access?(scope) and distributor_organization?(scope) ->
+        @distributor_root
+
+      Scope.manufacturer_access?(scope) and manufacturer_organization?(scope) ->
+        @manufacturer_root
+
+      Scope.pharmacist?(scope) and Scope.lab_technician?(scope) ->
+        @pharmacy_root
+
+      Scope.pharmacist?(scope) ->
+        @pharmacy_root
+
+      Scope.lab_technician?(scope) ->
+        @lab_root
+
+      true ->
+        @app_root
     end
   end
 
@@ -109,9 +130,10 @@ defmodule ThamaniDawaWeb.Portals do
   """
   def site_usable?(%Scope{} = scope, %Site{} = site) do
     Scope.admin?(scope) or
-      Enum.any?([:pharmacy, :lab, :distributor], fn portal ->
+      Enum.any?([:pharmacy, :lab, :distributor, :manufacturer], fn portal ->
         site_offers_portal?(site, portal) and portal_role?(scope, portal) and
-          (portal != :distributor or distributor_organization?(scope))
+          (portal != :distributor or distributor_organization?(scope)) and
+          (portal != :manufacturer or manufacturer_organization?(scope))
       end)
   end
 
@@ -120,11 +142,13 @@ defmodule ThamaniDawaWeb.Portals do
   def portal_role?(scope, :pharmacy), do: Scope.pharmacy_access?(scope)
   def portal_role?(scope, :lab), do: Scope.lab_access?(scope)
   def portal_role?(scope, :distributor), do: Scope.distributor_access?(scope)
+  def portal_role?(scope, :manufacturer), do: Scope.manufacturer_access?(scope)
 
   @doc "Which of a site's activity panels the given portal maps to."
   def site_offers_portal?(%Site{} = site, :pharmacy), do: Site.pharmacy?(site)
   def site_offers_portal?(%Site{} = site, :lab), do: Site.lab?(site)
   def site_offers_portal?(%Site{} = site, :distributor), do: Site.distribution?(site)
+  def site_offers_portal?(%Site{} = site, :manufacturer), do: Site.manufacturer?(site)
   def site_offers_portal?(_site, :org), do: true
 
   @doc """
@@ -135,6 +159,7 @@ defmodule ThamaniDawaWeb.Portals do
   def portal_label(:pharmacy), do: "Pharmacy"
   def portal_label(:lab), do: "Lab"
   def portal_label(:distributor), do: "Distributor"
+  def portal_label(:manufacturer), do: "Manufacturer"
 
   @doc """
   Whether the scope's organization operates as a distributor — the
@@ -150,6 +175,20 @@ defmodule ThamaniDawaWeb.Portals do
   end
 
   def distributor_organization?(_scope), do: false
+
+  @doc """
+  Whether the scope's organization operates as a manufacturer. Demoting an
+  organization out of the manufacturer model locks its users out of the
+  manufacturer workflow.
+  """
+  def manufacturer_organization?(%Scope{organization_id: organization_id})
+      when is_integer(organization_id) do
+    organization_id
+    |> ThamaniDawa.Organizations.get_organization!()
+    |> ThamaniDawa.Organizations.Organization.manufacturer?()
+  end
+
+  def manufacturer_organization?(_scope), do: false
 
   # The scope's current site as a %Site{}, or nil when unset/unknown.
   # Used by the nav builder and guards; staff always have their current

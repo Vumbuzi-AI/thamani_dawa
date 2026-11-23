@@ -1,49 +1,46 @@
 defmodule ThamaniDawa.Grp.PrefixVerificationWorker do
   @moduledoc """
-  Oban worker verifying an organization's GS1 company prefix against the GS1
-  GRP licences API after signup (docs/PPB_TNT_INTEGRATION.md §9). Signup never
-  waits on this call — account creation proceeds while the job runs, and a
-  registry outage only delays the verdict (transient errors retry via Oban).
+  Oban worker verifying one of an organization's GS1 company prefixes
+  against the GS1 GRP licences API (docs/PPB_TNT_INTEGRATION.md §9). Enqueued
+  whenever a prefix is added from the settings page — adding the prefix
+  never waits on this call, a registry outage only delays the verdict
+  (transient errors retry via Oban).
   """
 
   use Oban.Worker, queue: :gs1, max_attempts: 10
 
-  import Ecto.Query, warn: false
-
   alias ThamaniDawa.Grp
-  alias ThamaniDawa.Organizations.Organization
+  alias ThamaniDawa.Organizations.OrganizationGs1Prefix
   alias ThamaniDawa.Repo
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"organization_id" => organization_id}}) do
-    organization = Repo.get!(Organization, organization_id)
+  def perform(%Oban.Job{args: %{"organization_gs1_prefix_id" => id}}) do
+    case Repo.get(OrganizationGs1Prefix, id) do
+      nil ->
+        :ok
 
-    if blank?(organization.gs1_company_prefix) do
-      :ok
-    else
-      case Grp.verify_prefix(organization.gs1_company_prefix) do
-        {:ok, :verified, _licence} ->
-          update_status(organization, :verified)
+      prefix ->
+        case Grp.verify_prefix(prefix.prefix) do
+          {:ok, :verified, _licence} ->
+            update_status(prefix, :verified)
 
-        {:ok, :inactive, _licence} ->
-          update_status(organization, :failed)
+          {:ok, :inactive, _licence} ->
+            update_status(prefix, :failed)
 
-        {:ok, :not_verified} ->
-          update_status(organization, :failed)
+          {:ok, :not_verified} ->
+            update_status(prefix, :failed)
 
-        {:error, _reason} ->
-          {:error, :grp_unavailable}
-      end
+          {:error, _reason} ->
+            {:error, :grp_unavailable}
+        end
     end
   end
 
-  defp update_status(%Organization{} = organization, status) do
-    organization
-    |> Ecto.Changeset.change(gs1_prefix_verification_status: status)
+  defp update_status(%OrganizationGs1Prefix{} = prefix, status) do
+    now = if status == :verified, do: DateTime.utc_now(:second)
+
+    prefix
+    |> Ecto.Changeset.change(verification_status: status, verified_at: now)
     |> Repo.update()
   end
-
-  defp blank?(nil), do: true
-  defp blank?(""), do: true
-  defp blank?(_prefix), do: false
 end

@@ -20,12 +20,17 @@ defmodule ThamaniDawa.Epcis do
   alias ThamaniDawa.Epcis.Outbox
   alias ThamaniDawa.Epcis.OutboxEvent
   alias ThamaniDawa.GoodsReceipts.GoodsReceipt
+  alias ThamaniDawa.Manufacturing.Batch, as: ManufacturerBatch
+  alias ThamaniDawa.Manufacturing.Serial, as: ManufacturerSerial
+  alias ThamaniDawa.Manufacturing.ShipperSscc
   alias ThamaniDawa.Organizations.Organization
+  alias ThamaniDawa.Organizations.OrganizationGs1Prefix
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
   @distributor "distributor"
   @facility "facility"
+  @manufacturer "manufacturer"
 
   @doc """
   Records a D1 Receiving event (distributor tier) for a completed customer
@@ -128,6 +133,9 @@ defmodule ThamaniDawa.Epcis do
     end
   end
 
+  defp shipment_tier(%Shipment{participant_tier: "manufacturer"}), do: @manufacturer
+  defp shipment_tier(%Shipment{}), do: @distributor
+
   @doc """
   Records a D4 unpack of `source_batch` (only when that batch itself has an
   SSCC — loose stock has nothing to disaggregate), one D2-shaped packing
@@ -187,7 +195,14 @@ defmodule ThamaniDawa.Epcis do
         if emptied?, do: enqueue_unit_decommission(unit, prefix)
 
       {:error, reason} ->
-        block_event(unit.organization_id, "unpacking", "logistic_unit", unit.id, reason, @distributor)
+        block_event(
+          unit.organization_id,
+          "unpacking",
+          "logistic_unit",
+          unit.id,
+          reason,
+          @distributor
+        )
 
         if emptied? do
           block_event(
@@ -228,7 +243,14 @@ defmodule ThamaniDawa.Epcis do
         })
 
       {:error, reason} ->
-        block_event(unit.organization_id, "unpacking", "logistic_unit", unit.id, reason, @distributor)
+        block_event(
+          unit.organization_id,
+          "unpacking",
+          "logistic_unit",
+          unit.id,
+          reason,
+          @distributor
+        )
     end
   end
 
@@ -707,6 +729,249 @@ defmodule ThamaniDawa.Epcis do
   end
 
   @doc """
+  Records a manufacturer Commission ObjectEvent (ADD/`commissioning`/
+  `active`) for a batch of freshly serialised units — the first EPCIS event
+  a serial number ever gets, marking its entry into circulation.
+  """
+  def record_manufacturer_commission(
+        organization_id,
+        product,
+        %ManufacturerBatch{} = batch,
+        serials,
+        biz_location_gln \\ nil
+      ) do
+    case org_prefix(organization_id) do
+      {:ok, prefix} ->
+        args = %{
+          event_id: Ecto.UUID.generate(),
+          event_time: now(),
+          org_prefix: prefix,
+          biz_location_gln: biz_location_gln || org_gln(organization_id),
+          epcs: Enum.map(serials, &%{gtin: product.gtin, serial: &1.serial})
+        }
+
+        case Event.commission(args) do
+          {:ok, payload} ->
+            Outbox.enqueue(%{
+              organization_id: organization_id,
+              event_type: "commissioning",
+              participant_tier: @manufacturer,
+              payload: payload,
+              occurred_at: args.event_time,
+              source_type: "manufacturer_batch",
+              source_id: batch.id
+            })
+
+          {:error, reason} ->
+            block_event(
+              organization_id,
+              "commissioning",
+              "manufacturer_batch",
+              batch.id,
+              reason,
+              @manufacturer
+            )
+        end
+
+      {:error, reason} ->
+        block_event(
+          organization_id,
+          "commissioning",
+          "manufacturer_batch",
+          batch.id,
+          reason,
+          @manufacturer
+        )
+    end
+  end
+
+  @doc """
+  Records a manufacturer Pack AggregationEvent for a shipper SSCC minted
+  around `batches`. Packed at lot level (`quantityList`) — the member API
+  mints the SSCC and its serials independently, so this platform does not
+  yet know which specific serials landed in which shipper.
+  """
+  def record_manufacturer_pack(organization_id, product, %ShipperSscc{} = shipper_sscc, batches)
+      when is_list(batches) do
+    case org_prefix(organization_id) do
+      {:ok, prefix} ->
+        args = %{
+          event_id: Ecto.UUID.generate(),
+          event_time: now(),
+          org_prefix: prefix,
+          biz_location_gln: org_gln(organization_id),
+          parent_sscc: shipper_sscc.code,
+          children: [],
+          quantities:
+            Enum.map(batches, fn batch ->
+              %{gtin: product.gtin, lot: batch.batch_no, quantity: serial_count(batch), uom: "EA"}
+            end)
+        }
+
+        case Event.packing(args) do
+          {:ok, payload} ->
+            Outbox.enqueue(%{
+              organization_id: organization_id,
+              event_type: "packing",
+              participant_tier: @manufacturer,
+              payload: payload,
+              occurred_at: args.event_time,
+              source_type: "manufacturer_shipper_sscc",
+              source_id: shipper_sscc.id
+            })
+
+          {:error, reason} ->
+            block_event(
+              organization_id,
+              "packing",
+              "manufacturer_shipper_sscc",
+              shipper_sscc.id,
+              reason,
+              @manufacturer
+            )
+        end
+
+      {:error, reason} ->
+        block_event(
+          organization_id,
+          "packing",
+          "manufacturer_shipper_sscc",
+          shipper_sscc.id,
+          reason,
+          @manufacturer
+        )
+    end
+  end
+
+  @doc """
+  Records a manufacturer Pack AggregationEvent for a shipper SSCC minted
+  around a specific split of primary serials (the make-to-order path,
+  where several shippers share one source batch) — `childEPCs` carry only
+  the serials assigned to this shipper, not the whole batch's quantity.
+  """
+  def record_manufacturer_serial_pack(
+        organization_id,
+        product,
+        %ShipperSscc{} = shipper_sscc,
+        serials,
+        biz_location_gln
+      )
+      when is_list(serials) do
+    case org_prefix(organization_id) do
+      {:ok, prefix} ->
+        args = %{
+          event_id: Ecto.UUID.generate(),
+          event_time: now(),
+          org_prefix: prefix,
+          biz_location_gln: biz_location_gln || org_gln(organization_id),
+          parent_sscc: shipper_sscc.code,
+          children: Enum.map(serials, &%{gtin: product.gtin, serial: &1.serial}),
+          quantities: []
+        }
+
+        case Event.packing(args) do
+          {:ok, payload} ->
+            Outbox.enqueue(%{
+              organization_id: organization_id,
+              event_type: "packing",
+              participant_tier: @manufacturer,
+              payload: payload,
+              occurred_at: args.event_time,
+              source_type: "manufacturer_shipper_sscc",
+              source_id: shipper_sscc.id
+            })
+
+          {:error, reason} ->
+            block_event(
+              organization_id,
+              "packing",
+              "manufacturer_shipper_sscc",
+              shipper_sscc.id,
+              reason,
+              @manufacturer
+            )
+        end
+
+      {:error, reason} ->
+        block_event(
+          organization_id,
+          "packing",
+          "manufacturer_shipper_sscc",
+          shipper_sscc.id,
+          reason,
+          @manufacturer
+        )
+    end
+  end
+
+  @doc """
+  Records a manufacturer Ship ObjectEvent for one or more shipper/pallet
+  SSCCs dispatched to `destination_gln`. Pass every shipper SSCC under a
+  pallet to report an SSCC-to-SSCC shipment.
+  """
+  def record_manufacturer_ship(
+        organization_id,
+        shipment_id,
+        sscc_codes,
+        origin_gln,
+        destination_gln,
+        order_number,
+        occurred_at \\ now()
+      )
+      when is_list(sscc_codes) do
+    case org_prefix(organization_id) do
+      {:ok, prefix} ->
+        args = %{
+          event_id: Ecto.UUID.generate(),
+          event_time: occurred_at,
+          org_prefix: prefix,
+          biz_location_gln: origin_gln,
+          destination_gln: destination_gln,
+          order_number: order_number,
+          disposition: "in_transit",
+          ssccs: sscc_codes
+        }
+
+        case Event.shipping(args) do
+          {:ok, payload} ->
+            Outbox.enqueue(%{
+              organization_id: organization_id,
+              event_type: "shipping",
+              participant_tier: @manufacturer,
+              payload: payload,
+              occurred_at: args.event_time,
+              source_type: "manufacturer_shipment",
+              source_id: shipment_id
+            })
+
+          {:error, reason} ->
+            block_event(
+              organization_id,
+              "shipping",
+              "manufacturer_shipment",
+              shipment_id,
+              reason,
+              @manufacturer
+            )
+        end
+
+      {:error, reason} ->
+        block_event(
+          organization_id,
+          "shipping",
+          "manufacturer_shipment",
+          shipment_id,
+          reason,
+          @manufacturer
+        )
+    end
+  end
+
+  defp serial_count(%ManufacturerBatch{id: id}) do
+    Repo.aggregate(from(s in ManufacturerSerial, where: s.manufacturer_batch_id == ^id), :count)
+  end
+
+  @doc """
   Voids or corrects an already-stored EPCIS event (docs/PPB_TNT_INTEGRATION.md
   §7): clones the stored payload, injects an `errorDeclaration`, and enqueues
   a fresh outbox row reusing the original `event_id` — the only legal
@@ -875,7 +1140,7 @@ defmodule ThamaniDawa.Epcis do
         Outbox.enqueue(%{
           organization_id: shipment.organization_id,
           event_type: "packing",
-          participant_tier: @distributor,
+          participant_tier: shipment_tier(shipment),
           payload: payload,
           occurred_at: occurred_at,
           source_type: "shipper",
@@ -911,7 +1176,7 @@ defmodule ThamaniDawa.Epcis do
         Outbox.enqueue(%{
           organization_id: shipment.organization_id,
           event_type: "shipping",
-          participant_tier: @distributor,
+          participant_tier: shipment_tier(shipment),
           payload: payload,
           occurred_at: occurred_at,
           source_type: "shipment",
@@ -961,7 +1226,12 @@ defmodule ThamaniDawa.Epcis do
   defp source_ref(_other), do: {nil, nil}
 
   defp org_prefix(organization_id) do
-    case Repo.get!(Organization, organization_id).gs1_company_prefix do
+    query =
+      from p in OrganizationGs1Prefix,
+        where: p.organization_id == ^organization_id and p.is_primary,
+        select: p.prefix
+
+    case Repo.one(query) do
       prefix when prefix in [nil, ""] -> {:error, :missing_gs1_company_prefix}
       prefix -> {:ok, prefix}
     end

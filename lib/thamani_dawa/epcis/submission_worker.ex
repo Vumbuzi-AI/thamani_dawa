@@ -24,6 +24,7 @@ defmodule ThamaniDawa.Epcis.SubmissionWorker do
 
   alias ThamaniDawa.Epcis.Client
   alias ThamaniDawa.Epcis.Outbox
+  alias ThamaniDawa.Epcis.OutboxEvent
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Organizations.Organization
 
@@ -32,6 +33,17 @@ defmodule ThamaniDawa.Epcis.SubmissionWorker do
     %{organization_id: organization_id, forced: true}
     |> new()
     |> Oban.insert!()
+  end
+
+  @doc """
+  Submits one pending event directly to PPB, independent of its position in
+  the outbox queue. Unlike `enqueue_now/1`, this does not drain in
+  `occurred_at` order — it's the per-event "send now" admin action, a
+  deliberate, operator-requested exception to the usual ordering guarantee.
+  """
+  def submit_now(%OutboxEvent{status: "pending"} = event) do
+    organization = Organizations.get_organization!(event.organization_id)
+    submit_event(event, organization)
   end
 
   @impl Oban.Worker
@@ -57,24 +69,20 @@ defmodule ThamaniDawa.Epcis.SubmissionWorker do
   end
 
   defp submit(event, rest, organization) do
-    api_key_override = api_key_override(organization, event.participant_tier)
-
-    case Client.submit(event.payload, event.participant_tier, api_key_override) do
-      {:accepted, status, body} ->
-        Outbox.mark_accepted(event, status, body)
+    case submit_event(event, organization) do
+      {:accepted, _updated} ->
         drain(rest, organization)
 
-      {:duplicate, status, body} ->
-        Outbox.mark_accepted(event, status, body)
+      {:duplicate, _updated} ->
         drain(rest, organization)
 
-      {:rejected, status, body} ->
-        Outbox.mark_rejected(event, status, body)
+      {:rejected, _updated} ->
         :ok
 
-      {:retry, reason} ->
-        updated = Outbox.mark_retry(event, reason)
+      {:blocked, _updated} ->
+        drain(rest, organization)
 
+      {:retry, updated} ->
         case updated.status do
           "pending" -> {:snooze, max(wait_seconds(updated), 1)}
           _dead -> :ok
@@ -82,8 +90,23 @@ defmodule ThamaniDawa.Epcis.SubmissionWorker do
     end
   end
 
+  defp submit_event(event, organization) do
+    api_key_override = api_key_override(organization, event.participant_tier)
+
+    case Client.submit(event.payload, event.participant_tier, api_key_override) do
+      {:accepted, status, body} -> {:accepted, Outbox.mark_accepted(event, status, body)}
+      {:duplicate, status, body} -> {:duplicate, Outbox.mark_accepted(event, status, body)}
+      {:rejected, status, body} -> {:rejected, Outbox.mark_rejected(event, status, body)}
+      {:retry, reason} -> {:retry, Outbox.mark_retry(event, reason)}
+      {:blocked, reason} -> {:blocked, Outbox.mark_blocked(event, reason)}
+    end
+  end
+
   defp api_key_override(%Organization{} = organization, "distributor"),
     do: organization.epcis_distributor_api_key
+
+  defp api_key_override(%Organization{} = organization, "manufacturer"),
+    do: organization.epcis_manufacturer_api_key
 
   defp api_key_override(%Organization{} = organization, _tier),
     do: organization.epcis_facility_api_key

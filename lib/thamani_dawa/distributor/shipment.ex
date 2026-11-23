@@ -29,6 +29,7 @@ defmodule ThamaniDawa.Distributor.Shipment do
     field :reference, :string
     field :order_number, :string
     field :status, :string, default: "draft"
+    field :participant_tier, :string, default: "distributor"
 
     field :origin_gln, :string
     field :origin_company, :string

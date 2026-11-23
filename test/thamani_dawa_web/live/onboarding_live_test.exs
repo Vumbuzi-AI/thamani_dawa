@@ -26,6 +26,11 @@ defmodule ThamaniDawaWeb.OnboardingLiveTest do
 
       product_fixture(%{organization_id: organization.id})
 
+      {:ok, organization} = ThamaniDawa.Organizations.set_gs1_api_key(organization, "gs1-secret")
+
+      {:ok, _organization} =
+        ThamaniDawa.Organizations.set_epcis_api_key(organization, "facility", "facility-secret")
+
       assert {:error, {:live_redirect, %{to: "/org/dashboard?tour=1"}}} =
                live(log_in_user(conn, admin), ~p"/onboarding")
     end
@@ -64,6 +69,11 @@ defmodule ThamaniDawaWeb.OnboardingLiveTest do
       site_fixture(%{organization_id: organization.id})
       product_fixture(%{organization_id: organization.id})
 
+      {:ok, organization} = ThamaniDawa.Organizations.set_gs1_api_key(organization, "gs1-secret")
+
+      {:ok, _organization} =
+        ThamaniDawa.Organizations.set_epcis_api_key(organization, "facility", "facility-secret")
+
       {:ok, view, _html} =
         live(log_in_user(conn, admin), ~p"/onboarding?complete=1")
 
@@ -78,6 +88,11 @@ defmodule ThamaniDawaWeb.OnboardingLiveTest do
       user_fixture(%{organization_id: organization.id})
       site_fixture(%{organization_id: organization.id})
       site_fixture(%{organization_id: organization.id})
+
+      {:ok, organization} = ThamaniDawa.Organizations.set_gs1_api_key(organization, "gs1-secret")
+
+      {:ok, _organization} =
+        ThamaniDawa.Organizations.set_epcis_api_key(organization, "facility", "facility-secret")
 
       {:ok, view, _html} =
         live(log_in_user(conn, admin), ~p"/onboarding?skip=first_product&complete=1")
@@ -162,6 +177,11 @@ defmodule ThamaniDawaWeb.OnboardingLiveTest do
 
       {:ok, _site} =
         Sites.update_site(site, %{address: "12 Market Street", activities: [:laboratory]})
+
+      {:ok, organization} = ThamaniDawa.Organizations.set_gs1_api_key(organization, "gs1-secret")
+
+      {:ok, _organization} =
+        ThamaniDawa.Organizations.set_epcis_api_key(organization, "facility", "facility-secret")
 
       {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/onboarding")
 

@@ -57,7 +57,8 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLiveTest do
     refute has_element?(index, "#receipt-open-lines-#{receipt.id}")
   end
 
-  test "lost and stolen stay open until an investigation reference is given", %{conn: conn} = ctx do
+  test "lost and stolen stay open until an investigation reference is given",
+       %{conn: conn} = ctx do
     receipt = receipt_fixture(ctx)
     discrepancy = discrepancy_fixture(ctx, receipt)
 

@@ -10,6 +10,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
         "add_branch" -> [:add_branch]
         "invite_team" -> [:invite_team]
         "first_product" -> [:first_product]
+        "connect_keys" -> [:connect_keys]
         _other -> []
       end
 

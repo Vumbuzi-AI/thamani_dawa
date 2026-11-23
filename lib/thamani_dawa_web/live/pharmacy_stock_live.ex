@@ -51,7 +51,8 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
      |> assign(:filters, @default_filters)
      |> assign(:view, "batches")
      |> assign(:page, 1)
-     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0, page_size: 10})}
+     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0, page_size: 10})
+     |> reload()}
   end
 
   def handle_params(params, _url, socket) do

@@ -108,15 +108,15 @@ defmodule ThamaniDawa.Batches.Batch do
   end
 
   @doc """
-  Changeset for recording a batch received directly into a site's stock.
-  `site_id` is now required — all batches must be site-bound from receipt.
-  This replaces the old two-step org→site flow.
+  Changeset for recording a batch as org-level stock — received by the
+  organization but not yet assigned to a site. `site_id` is intentionally
+  not cast here; a batch becomes site-bound only via `dispatch_to_site/2`,
+  which produces a separate `Batch` row via `changeset/2`.
   """
   def org_intake_changeset(batch, attrs) do
     batch
     |> cast(attrs, [
       :product_id,
-      :site_id,
       :gtin,
       :batch_no,
       :serial,
@@ -135,7 +135,6 @@ defmodule ThamaniDawa.Batches.Batch do
     ])
     |> validate_required([
       :product_id,
-      :site_id,
       :gtin,
       :batch_no,
       :expiry_date,
@@ -147,12 +146,11 @@ defmodule ThamaniDawa.Batches.Batch do
     |> validate_number(:remaining_quantity, greater_than_or_equal_to: 0)
     |> validate_inbound_sscc()
     |> foreign_key_constraint(:product_id)
-    |> foreign_key_constraint(:site_id)
     |> foreign_key_constraint(:supplier_id)
     |> foreign_key_constraint(:logistic_unit_id)
     |> unique_constraint(:batch_no,
-      name: :batches_org_product_site_batch_no_status_index,
-      message: "has already been dispatched to this site in this status"
+      name: :batches_org_product_batch_no_undispatched_index,
+      message: "already recorded as org stock for this product"
     )
   end
 

@@ -26,6 +26,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Invoice do
        |> assign(:page_title, "Invoice #{payment.invoice_number}")
        |> assign(:payment, payment)
        |> assign(:organization, Organizations.get_organization!(organization_id))
+       |> assign(:gs1_company_prefix, gs1_company_prefix(organization_id))
        |> assign(:issuer, issuer())}
     else
       {:ok,
@@ -38,6 +39,13 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Invoice do
   defp issuer do
     configured = Application.get_env(:thamani_dawa, :distributor_invoice_issuer, %{})
     Map.merge(@empty_issuer, Map.new(configured))
+  end
+
+  defp gs1_company_prefix(organization_id) do
+    case Organizations.primary_gs1_prefix(organization_id) do
+      nil -> nil
+      prefix -> prefix.prefix
+    end
   end
 
   defp description("prepay"), do: "Serialisation bundle (prepay)"
@@ -116,8 +124,8 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Invoice do
           <div id="invoice-bill-to" class="min-w-0">
             <p class="text-xs font-semibold uppercase tracking-wide text-thamani-pewter">Bill to</p>
             <p class="mt-1 font-medium text-thamani-ink">{@organization.name}</p>
-            <p :if={@organization.gs1_company_prefix} class="text-sm text-thamani-pewter">
-              GS1 prefix {@organization.gs1_company_prefix}
+            <p :if={@gs1_company_prefix} class="text-sm text-thamani-pewter">
+              GS1 prefix {@gs1_company_prefix}
             </p>
           </div>
           <div id="invoice-payment-details" class="min-w-0 sm:text-right">

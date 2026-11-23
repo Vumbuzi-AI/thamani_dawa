@@ -96,6 +96,26 @@ defmodule ThamaniDawaWeb.UserAuth do
   end
 
   @doc """
+  Plug counterpart of `on_mount(:require_manufacturer_access, ...)` for plain
+  controller routes (e.g. a manufacturer CSV export).
+  """
+  def require_manufacturer_user(conn, _opts) do
+    scope = conn.assigns[:current_scope]
+
+    if scope && Portals.portal_access?(scope, :manufacturer) do
+      conn
+    else
+      conn
+      |> Phoenix.Controller.put_flash(
+        :error,
+        "You don't have access to the manufacturer portal."
+      )
+      |> Phoenix.Controller.redirect(to: ~p"/")
+      |> halt()
+    end
+  end
+
+  @doc """
   `on_mount` callback assigning `current_scope` from the LiveView session.
   Usage: `live_session :foo, on_mount: [{ThamaniDawaWeb.UserAuth, :mount_current_scope}]`.
   Also supports `:require_authenticated` (halts unless a user is signed in),
@@ -281,6 +301,43 @@ defmodule ThamaniDawaWeb.UserAuth do
     end
   end
 
+  def on_mount(:require_manufacturer_access, params, session, socket) do
+    case on_mount(:require_authenticated, params, session, socket) do
+      {:cont, socket} ->
+        scope = socket.assigns.current_scope
+
+        if Portals.portal_access?(scope, :manufacturer) do
+          {:cont, socket}
+        else
+          {:halt, deny_portal(socket, scope, :manufacturer)}
+        end
+
+      {:halt, socket} ->
+        {:halt, socket}
+    end
+  end
+
+  # Admin-only pages within the manufacturer portal, same composition the
+  # distributor portal uses for its own admin-only pages.
+  def on_mount(:require_manufacturer_admin_access, params, session, socket) do
+    case on_mount(:require_manufacturer_access, params, session, socket) do
+      {:cont, socket} ->
+        if Scope.admin?(socket.assigns.current_scope) do
+          {:cont, socket}
+        else
+          socket =
+            socket
+            |> Phoenix.LiveView.put_flash(:error, "You must be an admin to access this page.")
+            |> Phoenix.LiveView.redirect(to: ~p"/manufacturer")
+
+          {:halt, socket}
+        end
+
+      {:halt, socket} ->
+        {:halt, socket}
+    end
+  end
+
   @doc """
   Whether the scope's organization operates as a distributor — the
   equivalent of ErpLive's "Healthcare Distributor" sector check. Demoting an
@@ -289,6 +346,12 @@ defmodule ThamaniDawaWeb.UserAuth do
   `ThamaniDawaWeb.Portals`, the single source of truth for portal access.
   """
   def distributor_organization?(scope), do: Portals.distributor_organization?(scope)
+
+  @doc """
+  Whether the scope's organization operates as a manufacturer. Delegates to
+  `ThamaniDawaWeb.Portals`, the single source of truth for portal access.
+  """
+  def manufacturer_organization?(scope), do: Portals.manufacturer_organization?(scope)
 
   # Denied portal access lands the user on the portal their scope *can*
   # reach (the other side of a combined site, their own site's panel, or

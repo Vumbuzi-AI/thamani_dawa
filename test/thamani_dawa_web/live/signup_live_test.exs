@@ -3,12 +3,13 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.OrganizationsFixtures
 
   alias ThamaniDawa.Organizations.Organization
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
-  @gs1_prefix "0614141"
+  @org_name "Afya Test Org"
   @site_gln "0614141000784"
   @unique_pharmacy_ppb %{ppb_facility_name: "Unique Pharmacy", license_number: "AB1XXXX9999"}
 
@@ -22,14 +23,13 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
   end
 
   describe "signup" do
-    test "creates an organization, admin, and selected first site in four steps",
+    test "creates an organization, admin, and selected first site in three steps",
          %{
            conn: conn
          } do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["pharmacy"])
-      complete_regulatory_details_step(view, ["pharmacy"])
 
       assert has_element?(view, "#site-setup-form")
 
@@ -54,10 +54,8 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       assert has_element?(view, "#signup-form[phx-trigger-action][action='/login']")
 
-      organization = Repo.get_by!(Organization, gs1_company_prefix: @gs1_prefix)
-      assert organization.name == "Test Licensee"
+      organization = Repo.get_by!(Organization, name: @org_name)
       assert organization.operating_models == [:pharmacy]
-      assert organization.gs1_company_prefix == @gs1_prefix
       assert is_nil(organization.license_number)
 
       site = Repo.get_by!(Site, organization_id: organization.id)
@@ -88,13 +86,42 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
              )
     end
 
+    test "requires an organization name before continuing", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/signup")
+
+      html =
+        view
+        |> form("#organization-setup-form",
+          organization: %{operating_models: ["pharmacy"], name: ""}
+        )
+        |> render_submit()
+
+      assert html =~ "Please enter your organization name"
+      refute has_element?(view, "#site-setup-form")
+    end
+
+    test "blocks continue when the organization name is already taken", %{conn: conn} do
+      organization_fixture(%{name: @org_name})
+
+      {:ok, view, _html} = live(conn, ~p"/signup")
+
+      html =
+        view
+        |> form("#organization-setup-form",
+          organization: %{operating_models: ["pharmacy"], name: @org_name}
+        )
+        |> render_submit()
+
+      assert html =~ "already exists"
+      refute has_element?(view, "#site-setup-form")
+    end
+
     test "shows the error on the admin form when the email is already taken", %{conn: conn} do
       existing = user_fixture()
 
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["pharmacy"])
-      complete_regulatory_details_step(view, ["pharmacy"])
 
       view |> complete_site_step(Map.merge(%{gln: @site_gln}, @unique_pharmacy_ppb))
 
@@ -112,35 +139,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
         |> render_submit()
 
       assert html =~ "This email is already registered"
-      refute Repo.get_by(Organization, gs1_company_prefix: @gs1_prefix)
-    end
-
-    test "requires a GS1 company prefix for organizations that dispense", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/signup")
-
-      view = complete_operating_model_step(view, ["pharmacy"])
-
-      html =
-        submit_regulatory_details(view, %{
-          operating_models: ["pharmacy"],
-          gs1_company_prefix: ""
-        })
-
-      assert html =~ "Please enter your GS1 company prefix"
-      refute has_element?(view, "#site-setup-form")
-    end
-
-    test "explains the GS1 company prefix and links to GS1 Kenya", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/signup")
-
-      view = complete_operating_model_step(view, ["pharmacy"])
-
-      assert has_element?(view, "#gs1-prefix-help", "Not sure what this is?")
-
-      assert has_element?(
-               view,
-               "#gs1-prefix-registration-link[href='https://gs1kenya.org/membership'][target='_blank'][rel='noopener noreferrer']"
-             )
+      refute Repo.get_by(Organization, name: @org_name)
     end
 
     test "restores a saved onboarding step and reverifies its registry data", %{conn: conn} do
@@ -151,8 +150,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
         "step" => "main_location",
         "organization" => %{
           "operating_models" => ["pharmacy", "laboratory", "distributor"],
-          "gs1_company_prefix" => @gs1_prefix,
-          "name" => "Untrusted saved name"
+          "name" => @org_name
         },
         "site" => %{
           "activities" => ["pharmacy", "laboratory", "distribution"],
@@ -166,10 +164,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       render_async(view, 5_000)
       view |> element("#main-location-back") |> render_click()
 
-      assert has_element?(view, "p", "Verified · matches Test Licensee")
-      refute render(view) =~ "Untrusted saved name"
-
-      view |> element("#regulatory-details-back") |> render_click()
+      assert has_element?(view, "input[name='organization[name]'][value='#{@org_name}']")
 
       for model <- ~w(pharmacy laboratory distributor) do
         assert has_element?(
@@ -187,7 +182,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
         "step" => "administrator",
         "organization" => %{
           "operating_models" => ["pharmacy"],
-          "gs1_company_prefix" => @gs1_prefix
+          "name" => @org_name
         },
         "site" => %{"activities" => ["pharmacy"], "gln" => @site_gln},
         "user" => %{
@@ -203,81 +198,13 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       refute has_element?(view, "input[name='user[accepted_legal_terms]'][checked]")
     end
 
-    test "keeps the user on the regulatory details step when GS1 does not know the prefix", %{
-      conn: conn
-    } do
-      {:ok, view, _html} = live(conn, ~p"/signup")
-
-      view = complete_operating_model_step(view, ["pharmacy"])
-
-      attrs = %{
-        operating_models: ["pharmacy"],
-        gs1_company_prefix: "0000000"
-      }
-
-      submit_regulatory_details(view, attrs)
-      html = render_async(view, 5_000)
-
-      assert html =~ "couldn&#39;t find this prefix in the GS1 registry"
-
-      html = submit_regulatory_details(view, attrs)
-
-      assert html =~ "couldn&#39;t find this GS1 company prefix"
-      refute has_element?(view, "#site-setup-form")
-    end
-
-    test "blocks continue when the GS1 company prefix is found but no longer active", %{
-      conn: conn
-    } do
-      {:ok, view, _html} = live(conn, ~p"/signup")
-
-      view = complete_operating_model_step(view, ["pharmacy"])
-
-      attrs = %{
-        operating_models: ["pharmacy"],
-        # Sentinel prefix the test stub answers with a withdrawn licence for.
-        gs1_company_prefix: "9996141"
-      }
-
-      submit_regulatory_details(view, attrs)
-      html = render_async(view, 5_000)
-
-      assert html =~ "not currently active in the GS1 registry"
-
-      html = submit_regulatory_details(view, attrs)
-
-      assert html =~ "isn&#39;t currently active"
-      refute has_element?(view, "#site-setup-form")
-    end
-
-    test "keeps organization name registry-controlled when GS1 cannot resolve one", %{
-      conn: conn
-    } do
-      {:ok, view, _html} = live(conn, ~p"/signup")
-
-      view = complete_operating_model_step(view, ["pharmacy"])
-
-      refute has_element?(view, "input[type='text'][name='organization[name]']")
-
-      submit_regulatory_details(view, %{
-        operating_models: ["pharmacy"],
-        gs1_company_prefix: "0000000"
-      })
-
-      render_async(view, 5_000)
-
-      refute has_element?(view, "input[type='text'][name='organization[name]']")
-    end
-
     test "blocks continue when the location GLN is found but no longer active", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["pharmacy"])
-      complete_regulatory_details_step(view, ["pharmacy"])
 
       assert has_element?(view, "#site-setup-form")
 
-      # Valid GLN under the verified prefix that the test stub marks withdrawn.
       inactive_gln = "0614141000456"
 
       view
@@ -302,8 +229,6 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       view = complete_operating_model_step(view, ["pharmacy"])
 
-      complete_regulatory_details_step(view, ["pharmacy"])
-
       html =
         view
         |> form("#site-setup-form", site: %{})
@@ -324,27 +249,10 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       assert html =~ "Please enter a valid email"
     end
 
-    test "does not look up a location GLN outside the verified company prefix", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/signup")
-
-      view = complete_operating_model_step(view, ["pharmacy"])
-      complete_regulatory_details_step(view, ["pharmacy"])
-      submit_site(view, %{gln: "6160001000004"})
-
-      assert has_element?(
-               view,
-               "#site-gln-prefix-mismatch",
-               "This GLN does not belong to your verified GS1 company prefix."
-             )
-
-      refute has_element?(view, "#site-setup-form", "Checking GS1 registry")
-    end
-
     test "selecting a single operating model forces the matching site activity", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["laboratory"])
-      complete_regulatory_details_step(view, ["laboratory"])
       submit_site(view, %{gln: @site_gln})
       render_async(view, 5_000)
 
@@ -354,7 +262,6 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["distributor"])
-      complete_regulatory_details_step(view, ["distributor"])
       submit_site(view, %{gln: @site_gln})
       render_async(view, 5_000)
 
@@ -368,7 +275,6 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["pharmacy", "laboratory", "distributor"])
-      complete_regulatory_details_step(view, ["pharmacy", "laboratory", "distributor"])
       submit_site(view, %{gln: @site_gln})
       render_async(view, 5_000)
 
@@ -381,7 +287,6 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["pharmacy", "laboratory"])
-      complete_regulatory_details_step(view, ["pharmacy", "laboratory"])
       submit_site(view, %{gln: @site_gln})
       render_async(view, 5_000)
 
@@ -426,7 +331,6 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["pharmacy"])
-      complete_regulatory_details_step(view, ["pharmacy"])
 
       view |> complete_site_step(Map.merge(%{gln: @site_gln}, @unique_pharmacy_ppb))
 
@@ -448,7 +352,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
         })
 
       assert html =~ "You must accept the Terms of Service and Privacy Policy"
-      refute Repo.get_by(Organization, gs1_company_prefix: @gs1_prefix)
+      refute Repo.get_by(Organization, name: @org_name)
 
       view
       |> form("#signup-form",
@@ -476,22 +380,17 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       refute has_element?(view, "input[name='organization[ppb_facility_name]']")
       refute has_element?(view, "input[name='organization[license_number]']")
 
-      complete_regulatory_details_step(view, ["pharmacy", "distributor"])
-
       assert has_element?(view, "#site-setup-form")
     end
 
-    test "back preserves regulatory and operating-model data across steps", %{conn: conn} do
+    test "back preserves organization data across steps", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["laboratory", "distributor"])
-      complete_regulatory_details_step(view, ["laboratory", "distributor"])
 
       view |> element("#main-location-back") |> render_click()
 
-      assert has_element?(view, "p", "Verified · matches Test Licensee")
-
-      view |> element("#regulatory-details-back") |> render_click()
+      assert has_element?(view, "input[name='organization[name]'][value='#{@org_name}']")
 
       assert has_element?(
                view,
@@ -510,44 +409,18 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
     end
   end
 
-  # Completes the operating-model step (step 1): ticks the given models and
-  # submits, advancing straight to the regulatory-details step.
-  defp complete_operating_model_step(view, models) do
+  # Completes the operating-model step (step 1): ticks the given models,
+  # fills in the organization name, and submits, advancing straight to the
+  # main-location step.
+  defp complete_operating_model_step(view, models, name \\ @org_name) do
     view
-    |> form("#organization-setup-form", organization: %{operating_models: models})
+    |> form("#organization-setup-form", organization: %{operating_models: models, name: name})
     |> render_submit()
 
     view
   end
 
-  # The real form carries `operating_models` forward via hidden inputs set in
-  # step 1, so direct event submissions must include them explicitly too.
-  defp submit_regulatory_details(view, attrs) do
-    render_submit(view, "continue_regulatory_details", %{
-      "organization" => stringify_keys(attrs)
-    })
-  end
-
   defp stringify_keys(attrs), do: Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
-
-  # Completes the GS1-only regulatory-details step. The first submit starts
-  # the registry lookup; the second carries the resolved organization name in
-  # the form's hidden field and advances to site setup.
-  defp complete_regulatory_details_step(view, models, attrs \\ %{}) do
-    gs1_prefix = Map.get(attrs, :gs1_company_prefix, @gs1_prefix)
-
-    submit_regulatory_details(view, %{operating_models: models, gs1_company_prefix: gs1_prefix})
-    render_async(view, 5_000)
-
-    full_attrs =
-      attrs
-      |> Map.put(:operating_models, models)
-      |> Map.put_new(:gs1_company_prefix, gs1_prefix)
-
-    view |> form("#regulatory-details-form", organization: full_attrs) |> render_submit()
-
-    view
-  end
 
   # Raw event dispatch rather than `form/3`, since some of these fields
   # (activity_choice, ppb_facility_name, license_number, kmlttb_*) don't

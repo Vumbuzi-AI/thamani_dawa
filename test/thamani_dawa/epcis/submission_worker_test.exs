@@ -34,6 +34,8 @@ defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
       DistributorFixtures.distributor_organization_fixture()
       |> Organizations.update_epcis_submission_mode("automatic")
 
+    {:ok, organization} = Organizations.set_epcis_api_key(organization, "distributor", "org-key")
+
     EpcisClientStub.expect([])
     %{organization: organization}
   end

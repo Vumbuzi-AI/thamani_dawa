@@ -165,7 +165,9 @@ defmodule ThamaniDawa.PlatformMonitoring do
   defp maybe_filter_action(query, action), do: where(query, [log], log.action == ^action)
 
   defp maybe_filter_table(query, nil), do: query
-  defp maybe_filter_table(query, table_name), do: where(query, [log], log.table_name == ^table_name)
+
+  defp maybe_filter_table(query, table_name),
+    do: where(query, [log], log.table_name == ^table_name)
 
   defp maybe_filter_user(query, nil), do: query
   defp maybe_filter_user(query, user_id), do: where(query, [log], log.user_id == ^user_id)

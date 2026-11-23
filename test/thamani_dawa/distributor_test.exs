@@ -6,6 +6,7 @@ defmodule ThamaniDawa.DistributorTest do
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.Distributor
   alias ThamaniDawa.Distributor.{Billing, SerialReservation, ShipmentItem, Shipper}
+  alias ThamaniDawa.Organizations
 
   setup do
     organization = distributor_organization_fixture()
@@ -379,9 +380,9 @@ defmodule ThamaniDawa.DistributorTest do
     test "issues an SSCC from GS1 without a local company prefix", ctx do
       before = ctx.organization.next_sscc_serial
 
-      ctx.organization
-      |> Ecto.Changeset.change(gs1_company_prefix: nil)
-      |> Repo.update!()
+      ctx.organization.id
+      |> Organizations.list_gs1_prefixes()
+      |> Enum.each(&Organizations.delete_gs1_prefix/1)
 
       shipment =
         submitted_shipment_fixture(ctx.organization.id, ctx.user, [unit(ctx)], %{

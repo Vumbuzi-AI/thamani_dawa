@@ -968,7 +968,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           </.link>
           <.link
             id="onboarding-product-skip"
-            navigate={~p"/onboarding?skip=first_product"}
+            navigate={~p"/onboarding?skip=first_product&complete=1"}
             class="inline-flex min-h-11 items-center rounded-full px-2 text-sm font-medium text-[var(--thamani-pewter)] underline decoration-[color-mix(in_srgb,var(--thamani-pewter)_45%,transparent)] underline-offset-4 transition-colors hover:text-[var(--thamani-forest)]"
           >
             Skip this step

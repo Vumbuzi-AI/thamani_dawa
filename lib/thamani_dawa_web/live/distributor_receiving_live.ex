@@ -451,7 +451,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
       socket.assigns.distributor_org? and not match?({:matched, _}, socket.assigns.origin_check) ->
         {:noreply,
-         put_flash(socket, :error, "Enter a valid, verified origin GLN before finishing.")}
+         socket
+         |> put_flash(:error, "Enter a valid, verified origin GLN before finishing.")
+         |> push_event("scroll-into-view", %{id: "origin-gln"})}
 
       uploads_in_progress?(socket) ->
         {:noreply,
@@ -944,19 +946,28 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         }
       end)
 
-    socket
-    |> assign(:pending_shipper, %{
+    pending = %{
       sscc: shipper.sscc,
       site_id: site_id,
       groups: groups,
       scanned_serials: MapSet.new(),
       reviewed_serials: MapSet.new(),
       review_unscanned?: false
-    })
-    |> assign(:receipt_step, :confirm_shipper)
-    |> assign(:entry_sscc_form, to_form(%{"sscc" => ""}, as: :sscc_entry))
-    |> assign(:entry_sscc_check, :idle)
-    |> assign_serial_confirm()
+    }
+
+    socket =
+      socket
+      |> assign(:entry_sscc_form, to_form(%{"sscc" => ""}, as: :sscc_entry))
+      |> assign(:entry_sscc_check, :idle)
+      |> assign_serial_confirm()
+
+    if serialized_case?(pending) do
+      socket
+      |> assign(:pending_shipper, pending)
+      |> assign(:receipt_step, :confirm_shipper)
+    else
+      settle_pending_shipper_socket(socket, pending)
+    end
   end
 
   defp update_pending_group(socket, key, fun) do
@@ -976,7 +987,11 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     |> assign(:last_scanned_serial, nil)
   end
 
-  defp settle_pending_shipper(socket, %{sscc: sscc, site_id: site_id, groups: groups}) do
+  defp settle_pending_shipper(socket, pending) do
+    {:noreply, settle_pending_shipper_socket(socket, pending)}
+  end
+
+  defp settle_pending_shipper_socket(socket, %{sscc: sscc, site_id: site_id, groups: groups}) do
     {items, discrepancies} =
       Enum.reduce(groups, {[], []}, fn group, {items_acc, discrepancies_acc} ->
         {group_items, group_discrepancies} = settle_group(group, sscc, site_id)
@@ -990,7 +1005,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     |> assign(:add_item_open, false)
     |> assign(:receipt_step, :sscc)
     |> assign_serial_confirm()
-    |> then(&{:noreply, &1})
   end
 
   # A scan or a typed serial marks that unit present and accepted. The silent
@@ -1161,14 +1175,25 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     good_quantity = group.received_quantity - group.damaged_quantity
     missing_quantity = group.expected_quantity - group.received_quantity
 
+    {good_serials, rest_serials} = Enum.split(group.serials, good_quantity)
+    {damaged_serials, _rest_serials} = Enum.split(rest_serials, group.damaged_quantity)
+
     good_item =
       if good_quantity > 0,
-        do: quantity_only_batch_item(group, sscc, site_id, :active, good_quantity),
+        do: quantity_only_batch_item(group, sscc, site_id, :active, good_quantity, good_serials),
         else: nil
 
     damaged_item =
       if group.damaged_quantity > 0,
-        do: quantity_only_batch_item(group, sscc, site_id, :quarantined, group.damaged_quantity),
+        do:
+          quantity_only_batch_item(
+            group,
+            sscc,
+            site_id,
+            :quarantined,
+            group.damaged_quantity,
+            damaged_serials
+          ),
         else: nil
 
     items = Enum.filter([good_item, damaged_item], & &1)
@@ -1187,7 +1212,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     quantity_only_batch_item(group, sscc, site_id, status, length(serials), serials)
   end
 
-  defp quantity_only_batch_item(group, sscc, site_id, status, quantity, serials \\ []) do
+  defp quantity_only_batch_item(group, sscc, site_id, status, quantity, serials) do
     attrs = %{
       "product_id" => group.product && group.product.id,
       "gtin" => group.gtin,
@@ -1433,64 +1458,14 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end)
   end
 
-  defp delivery_serial_cards(items) do
-    Enum.flat_map(items, fn item ->
-      case item_serials(item) do
-        [] ->
-          [%{item: item, serial: nil, dom_id: "delivery-item-#{item.id}", actions?: true}]
-
-        serials ->
-          Enum.with_index(serials, fn serial, index ->
-            %{
-              item: item,
-              serial: serial,
-              dom_id:
-                if(index == 0,
-                  do: "delivery-item-#{item.id}",
-                  else: "delivery-item-#{item.id}-#{index}"
-                ),
-              actions?: index == 0
-            }
-          end)
-      end
-    end)
-  end
-
-  defp delivery_expiry_yymmdd(%Date{} = date), do: Calendar.strftime(date, "%y%m%d")
-  defp delivery_expiry_yymmdd(nil), do: nil
-
-  defp delivery_expiry_yymmdd(other) do
-    case Date.from_iso8601(to_string(other)) do
-      {:ok, date} -> Calendar.strftime(date, "%y%m%d")
-      _ -> nil
-    end
-  end
-
-  defp delivery_ai_pairs(card) do
-    item = card.item
-
-    [
-      {"01", item.attrs["gtin"]},
-      {"17", delivery_expiry_yymmdd(item.attrs["expiry_date"])},
-      {"10", item.batch_no},
-      {"21", card.serial}
-    ]
-    |> Enum.filter(fn {_ai, value} -> is_binary(value) and value != "" end)
-  end
-
-  defp delivery_gs1_text(card) do
-    card |> delivery_ai_pairs() |> Enum.map_join(fn {ai, value} -> "(#{ai})#{value}" end)
-  end
-
   defp shipper_units(items), do: items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()
 
   attr :batch, :map, required: true
 
   defp delivery_batch(assigns) do
     assigns =
-      assigns
-      |> assign(:cards, delivery_serial_cards(assigns.batch.items))
-      |> assign(
+      assign(
+        assigns,
         :missing_catalog_item,
         Enum.find(assigns.batch.items, &is_nil(&1.attrs["product_id"]))
       )
@@ -1539,62 +1514,65 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         </div>
       </div>
 
-      <ul class="flex flex-wrap items-start gap-2 border-t border-thamani-stone bg-thamani-canvas/60 px-4 py-3 sm:px-5">
-        <li
-          :for={card <- @cards}
-          id={card.dom_id}
-          class="flex w-fit max-w-full items-start gap-2 rounded-xl border border-thamani-stone bg-white p-2"
-        >
-          <canvas
-            :if={card.serial && card.item.attrs["gtin"]}
-            id={"delivery-unit-code-#{card.dom_id}"}
-            phx-hook="DataMatrix"
-            phx-update="ignore"
-            data-gs1-text={delivery_gs1_text(card)}
-            class="size-16 shrink-0"
-          ></canvas>
-          <p :if={card.serial} class="text-xs leading-4 tabular-nums tracking-tight">
-            <span :for={{ai, value} <- delivery_ai_pairs(card)} class="block whitespace-nowrap">
-              <span class="text-thamani-pewter">({ai})</span>
-              <span class="font-medium text-thamani-evergreen">{value}</span>
-            </span>
-          </p>
-          <p :if={is_nil(card.serial)} class="text-sm font-medium text-thamani-evergreen">
-            {Products.format_unit_count(card.item.quantity)}
-            <span class="mt-0.5 block text-xs font-normal text-thamani-pewter">No serial recorded</span>
-          </p>
+      <div
+        :for={item <- @batch.items}
+        class="border-t border-thamani-stone bg-thamani-canvas/60 px-4 py-3 sm:px-5"
+      >
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span
+            :if={item[:flagged_damaged?]}
+            class="inline-flex items-center rounded-full bg-amber-900 px-2 py-0.5 text-xs font-medium text-amber-50"
+          >
+            Damaged
+          </span>
           <div class="flex shrink-0 items-center">
-            <span
-              :if={card.item[:flagged_damaged?]}
-              class="mr-1 inline-flex items-center rounded-full bg-amber-900 px-2 py-0.5 text-xs font-medium text-amber-50"
-            >
-              Damaged
-            </span>
             <button
-              :if={card.actions?}
               type="button"
               phx-click="edit_delivery_item"
-              phx-value-id={card.item.id}
-              aria-label={"Edit #{card.item.batch_no}"}
+              phx-value-id={item.id}
+              aria-label={"Edit #{item.batch_no}"}
               title="Edit"
               class="inline-flex size-8 items-center justify-center rounded-full text-thamani-pewter transition-colors hover:bg-thamani-canvas hover:text-thamani-evergreen focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
             >
               <.icon name="hero-pencil-square" class="size-4" />
             </button>
             <button
-              :if={card.actions?}
               type="button"
               phx-click="remove_delivery_item"
-              phx-value-id={card.item.id}
-              aria-label={"Remove #{card.item.batch_no}"}
+              phx-value-id={item.id}
+              aria-label={"Remove #{item.batch_no}"}
               title="Remove"
               class="inline-flex size-8 items-center justify-center rounded-full text-thamani-pewter transition-colors hover:bg-rose-50 hover:text-thamani-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
             >
               <.icon name="hero-trash" class="size-4" />
             </button>
           </div>
-        </li>
-      </ul>
+        </div>
+
+        <p :if={item_serials(item) == []} class="mt-2 text-xs text-thamani-pewter">
+          {Products.format_unit_count(item.quantity)} · No serial recorded
+        </p>
+
+        <details :if={item_serials(item) != []} class="mt-2 group">
+          <summary class="w-fit cursor-pointer list-none text-xs font-medium text-thamani-pewter hover:text-thamani-evergreen">
+            <span class="inline-flex items-center gap-1">
+              <.icon
+                name="hero-chevron-right"
+                class="size-3.5 transition-transform group-open:rotate-90"
+              />
+              {length(item_serials(item))} serial(s)
+            </span>
+          </summary>
+          <ul class="mt-2 flex flex-wrap gap-1.5">
+            <li
+              :for={serial <- item_serials(item)}
+              class="rounded-lg border border-thamani-stone bg-white px-2 py-1 text-xs font-medium tabular-nums tracking-tight text-thamani-evergreen"
+            >
+              {serial}
+            </li>
+          </ul>
+        </details>
+      </div>
     </div>
     """
   end
@@ -2474,7 +2452,11 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                       >
                         Expires {format_group_expiry(group.expiry_date)}
                       </p>
-                      <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                      <form
+                        id={"pending-group-quantities-#{group.key}"}
+                        class="mt-3 grid gap-3 sm:grid-cols-2"
+                        phx-value-key={group.key}
+                      >
                         <label class="block">
                           <span class="text-xs font-medium text-thamani-pewter">Received</span>
                           <input
@@ -2483,7 +2465,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                             max={group.expected_quantity}
                             value={group.received_quantity}
                             phx-change="set_group_received_quantity"
-                            phx-value-key={group.key}
                             name="value"
                             class="thamani-input mt-1 w-full"
                           />
@@ -2498,7 +2479,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                             max={group.received_quantity}
                             value={group.damaged_quantity}
                             phx-change="set_group_damaged_quantity"
-                            phx-value-key={group.key}
                             name="value"
                             class="thamani-input mt-1 w-full"
                           />
@@ -2509,7 +2489,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                         >
                           {group.expected_quantity - group.received_quantity} not received. These are flagged missing without serials.
                         </p>
-                      </div>
+                      </form>
                     </div>
                   </div>
                 </section>
@@ -2600,16 +2580,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 <.input field={@new_product_form[:generic_name]} label="Generic name" />
                 <.input field={@new_product_form[:brand_name]} label="Brand name" />
                 <.input
-                  field={@new_product_form[:net_content_quantity]}
-                  type="number"
-                  label="Each pack contains (optional)"
-                  placeholder="e.g. 20"
-                  min="1"
-                />
-                <.input
                   field={@new_product_form[:net_content_uom]}
                   type="select"
-                  label="What's inside"
+                  label="Unit of measure (UOM)"
                   prompt="Tablets, capsules, ml"
                   options={[
                     {"Tablets", "U2"},
@@ -2617,6 +2590,13 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                     {"Millilitres", "MLT"},
                     {"Pieces", "H87"}
                   ]}
+                />
+                <.input
+                  field={@new_product_form[:net_content_quantity]}
+                  type="number"
+                  label="Qty (optional)"
+                  placeholder="e.g. 20"
+                  min="1"
                 />
                 <.input field={@new_product_form[:category]} label="Category" />
                 <.input

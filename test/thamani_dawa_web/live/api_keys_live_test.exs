@@ -46,4 +46,21 @@ defmodule ThamaniDawaWeb.ApiKeysLiveTest do
     assert has_element?(view, "#epcis-api-key-settings", "TNT API key")
     assert has_element?(view, "#gs1-api-key-settings", "GS1 API key")
   end
+
+  test "renders inside the onboarding shell when return_to=onboarding", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/distributor/api-keys?return_to=onboarding")
+
+    assert has_element?(view, "#keys-onboarding-continue")
+    assert has_element?(view, "#keys-onboarding-back")
+    assert has_element?(view, "#keys-onboarding-skip")
+  end
+
+  test "continue navigates back to onboarding on completion", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/distributor/api-keys?return_to=onboarding")
+
+    {:error, {:live_redirect, %{to: to}}} =
+      view |> element("#keys-onboarding-continue") |> render_click()
+
+    assert to == ~p"/onboarding?complete=1"
+  end
 end

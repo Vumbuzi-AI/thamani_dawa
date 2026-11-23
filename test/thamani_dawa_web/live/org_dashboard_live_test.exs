@@ -73,6 +73,11 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
 
     site_fixture(%{organization_id: organization.id, activities: [:laboratory]})
 
+    {:ok, organization} = ThamaniDawa.Organizations.set_gs1_api_key(organization, "gs1-secret")
+
+    {:ok, _organization} =
+      ThamaniDawa.Organizations.set_epcis_api_key(organization, "facility", "facility-secret")
+
     {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
 
     # A lab-only org has no product checklist item (that belongs to

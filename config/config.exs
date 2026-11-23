@@ -68,6 +68,8 @@ config :thamani_dawa, ThamaniDawa.Epcis.Client,
   capture_path: "/api/integration/facility/events",
   distributor_capture_path: "/api/integration/supplier/events",
   distributor_api_key: nil,
+  manufacturer_capture_path: "/api/integration/manufacturer/events",
+  manufacturer_api_key: nil,
   enabled: false
 
 config :thamani_dawa, ThamaniDawa.Epcis.Urn, default_prefix_length: 7

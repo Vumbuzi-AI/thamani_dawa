@@ -335,6 +335,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           class="hidden"
           disabled={@rest[:disabled]}
           form={@rest[:form]}
+          {@rest}
         >
           <option :if={@prompt} value="">{@prompt}</option>
           <option

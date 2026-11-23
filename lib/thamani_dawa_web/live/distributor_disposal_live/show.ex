@@ -331,9 +331,7 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
             icon={
               if @disposal.kind == :expiry, do: "hero-calendar-days", else: "hero-arrow-uturn-left"
             }
-            title={
-              if(@no_lots_to_add, do: "No expired stock", else: "No batches added yet")
-            }
+            title={if(@no_lots_to_add, do: "No expired stock", else: "No batches added yet")}
           >
             {cond do
               @no_lots_to_add -> "This warehouse has no lot past its date."

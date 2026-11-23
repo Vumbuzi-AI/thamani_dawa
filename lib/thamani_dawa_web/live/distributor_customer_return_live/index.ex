@@ -226,23 +226,32 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
     with {return_id, ""} <- Integer.parse(return_id_str) do
       customer_return = CustomerReturns.get_return!(scope.organization_id, return_id)
 
-      attrs = %{
-        "product_id" => product_id_str,
-        "quantity" => quantity_str,
-        "batch_no" => batch_no,
-        "expiry_date" => expiry_date_str,
-        "matched" => false
-      }
+      if customer_return.shipment_id do
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "This return is linked to a shipment — only packs from that shipment can be added."
+         )}
+      else
+        attrs = %{
+          "product_id" => product_id_str,
+          "quantity" => quantity_str,
+          "batch_no" => batch_no,
+          "expiry_date" => expiry_date_str,
+          "matched" => false
+        }
 
-      case CustomerReturns.add_item(customer_return, attrs) do
-        {:ok, _item} ->
-          {:noreply, socket |> put_flash(:info, "Item added.") |> load_returns()}
+        case CustomerReturns.add_item(customer_return, attrs) do
+          {:ok, _item} ->
+            {:noreply, socket |> put_flash(:info, "Item added.") |> load_returns()}
 
-        {:error, :not_draft} ->
-          {:noreply, put_flash(socket, :error, "This return is no longer a draft.")}
+          {:error, :not_draft} ->
+            {:noreply, put_flash(socket, :error, "This return is no longer a draft.")}
 
-        {:error, changeset} ->
-          {:noreply, put_flash(socket, :error, item_error(changeset))}
+          {:error, changeset} ->
+            {:noreply, put_flash(socket, :error, item_error(changeset))}
+        end
       end
     else
       _ -> {:noreply, socket}
@@ -301,6 +310,29 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
               {:noreply, put_flash(socket, :error, item_error(changeset))}
           end
       end
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_event(
+        "add_all_shipment_items",
+        %{"customer_return_id" => return_id_str},
+        socket
+      ) do
+    scope = socket.assigns.current_scope
+
+    with {return_id, ""} <- Integer.parse(return_id_str) do
+      customer_return = CustomerReturns.get_return!(scope.organization_id, return_id)
+
+      {added, skipped} =
+        customer_return
+        |> pending_shipment_lines()
+        |> Enum.reduce({0, 0}, fn line, {added, skipped} ->
+          add_pending_shipment_line(customer_return, line, added, skipped)
+        end)
+
+      {:noreply, socket |> put_flash(:info, bulk_add_message(added, skipped)) |> load_returns()}
     else
       _ -> {:noreply, socket}
     end
@@ -694,6 +726,33 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
 
   defp pending_shipment_lines(_customer_return), do: []
 
+  defp add_pending_shipment_line(customer_return, line, added, skipped) do
+    if is_nil(line.product_id) or is_nil(line.batch) or is_nil(line.expiry_date) do
+      {added, skipped + 1}
+    else
+      attrs = %{
+        "product_id" => line.product_id,
+        "quantity" => 1,
+        "batch_no" => line.batch,
+        "expiry_date" => Date.to_iso8601(line.expiry_date),
+        "serial" => line.serial,
+        "shipment_item_id" => line.id,
+        "matched" => true
+      }
+
+      case CustomerReturns.add_item(customer_return, attrs) do
+        {:ok, _item} -> {added + 1, skipped}
+        _ -> {added, skipped + 1}
+      end
+    end
+  end
+
+  defp bulk_add_message(added, 0), do: "Added #{added} pack(s) to the return."
+
+  defp bulk_add_message(added, skipped) do
+    "Added #{added} pack(s); #{skipped} need manual details and were skipped."
+  end
+
   defp different_origin?(sites, scope, shipment) do
     case locked_site(sites, scope) do
       nil -> false
@@ -708,6 +767,50 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
       true -> item.gtin || "Unknown pack"
     end
   end
+
+  @return_steps [:draft, :received, :inspected, :completed]
+
+  attr :status, :atom, required: true
+
+  defp return_status_stepper(assigns) do
+    assigns = assign(assigns, :steps, @return_steps)
+
+    ~H"""
+    <ol class="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+      <li :for={{step, index} <- Enum.with_index(@steps)} class="flex items-center gap-1.5">
+        <span :if={index > 0} class="h-px w-4 shrink-0 bg-thamani-stone" aria-hidden="true"></span>
+        <span class={[
+          "flex items-center gap-1.5 text-xs font-medium",
+          return_step_reached?(@status, step) && "text-thamani-forest",
+          !return_step_reached?(@status, step) && "text-thamani-pewter"
+        ]}>
+          <span class={[
+            "flex size-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
+            return_step_passed?(@status, step) && "bg-thamani-forest text-white",
+            return_step_current?(@status, step) &&
+              "border-2 border-thamani-forest text-thamani-forest",
+            !return_step_reached?(@status, step) && "border border-thamani-stone"
+          ]}>
+            <.icon
+              :if={return_step_passed?(@status, step)}
+              name="hero-check"
+              class="size-2.5"
+            /> {if !return_step_passed?(@status, step), do: index + 1}
+          </span>
+          {Phoenix.Naming.humanize(step)}
+        </span>
+      </li>
+    </ol>
+    """
+  end
+
+  defp return_step_index(step), do: Enum.find_index(@return_steps, &(&1 == step))
+
+  defp return_step_reached?(status, step),
+    do: return_step_index(status) >= return_step_index(step)
+
+  defp return_step_current?(status, step), do: status == step
+  defp return_step_passed?(status, step), do: return_step_index(status) > return_step_index(step)
 
   defp detail_return(_returns, nil), do: nil
   defp detail_return(returns, id), do: Enum.find(returns, &(&1.id == id))
@@ -759,28 +862,54 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
       </div>
     </div>
 
-    <div class={["space-y-4", @heading && "mt-4 border-t border-thamani-stone pt-4"]}>
-      <p :if={@customer_return.shipment} class="text-sm text-thamani-pewter">
-        Shipment
-        <span class="font-medium tracking-tight text-thamani-forest tabular-nums">
-          {@customer_return.shipment.reference}
-        </span>
-      </p>
-      <ul
-        :if={@customer_return.attachments != []}
-        id={"return-attachments-#{@customer_return.id}"}
-        class="space-y-1"
+    <div class={["space-y-5", @heading && "mt-4 border-t border-thamani-stone pt-4"]}>
+      <.return_status_stepper status={@customer_return.status} />
+
+      <div
+        :if={@customer_return.shipment || @customer_return.attachments != []}
+        class="rounded-xl bg-thamani-canvas px-3 py-2.5"
       >
-        <li :for={attachment <- @customer_return.attachments} class="text-sm text-thamani-pewter">
-          {attachment.filename}
-        </li>
-      </ul>
+        <p :if={@customer_return.shipment} class="text-sm text-thamani-pewter">
+          Shipment
+          <span class="font-medium tracking-tight text-thamani-forest tabular-nums">
+            {@customer_return.shipment.reference}
+          </span>
+        </p>
+        <ul
+          :if={@customer_return.attachments != []}
+          id={"return-attachments-#{@customer_return.id}"}
+          class={["space-y-0.5", @customer_return.shipment && "mt-1.5"]}
+        >
+          <li
+            :for={attachment <- @customer_return.attachments}
+            class="flex items-center gap-1.5 text-sm text-thamani-pewter"
+          >
+            <.icon name="hero-paper-clip" class="size-3.5 shrink-0" />
+            <span class="truncate">{attachment.filename}</span>
+          </li>
+        </ul>
+      </div>
+
       <div
         :if={@customer_return.status == :draft and @customer_return.shipment}
         id="shipment-return-lines"
         class="space-y-2"
       >
-        <h3 class="text-sm font-semibold text-thamani-forest">Packs on this shipment</h3>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h3 class="text-xs font-semibold uppercase tracking-wide text-thamani-pewter">
+            Packs on this shipment
+          </h3>
+          <button
+            :if={length(pending_shipment_lines(@customer_return)) > 1}
+            type="button"
+            id="add-all-shipment-items"
+            phx-click="add_all_shipment_items"
+            phx-value-customer_return_id={@customer_return.id}
+            class="text-xs font-semibold text-thamani-forest underline decoration-thamani-forest/40 underline-offset-2 hover:decoration-thamani-forest"
+          >
+            All packs came back
+          </button>
+        </div>
         <p
           :if={pending_shipment_lines(@customer_return) == []}
           class="text-sm text-thamani-pewter"
@@ -811,17 +940,11 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
         </div>
       </div>
       <form
-        :if={@customer_return.status == :draft}
+        :if={@customer_return.status == :draft and is_nil(@customer_return.shipment)}
         id="add-return-item-form"
         phx-submit="add_item"
         class="grid gap-3 sm:grid-cols-5 sm:items-end"
       >
-        <p
-          :if={@customer_return.shipment}
-          class="text-sm font-semibold text-thamani-forest sm:col-span-5"
-        >
-          Not on this shipment
-        </p>
         <input type="hidden" name="customer_return_id" value={@customer_return.id} />
         <div class="sm:col-span-2 [&>div]:mb-0">
           <.input
@@ -848,6 +971,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
       </form>
 
       <div :if={@customer_return.items != []} class="space-y-2">
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-thamani-pewter">
+          Items on this return
+        </h3>
         <div
           :for={item <- @customer_return.items}
           class="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-thamani-canvas px-3 py-2"
@@ -868,18 +994,25 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
 
           <div class="flex items-center gap-2">
             <%= if @customer_return.status == :received do %>
-              <.input
-                type="select"
-                name="condition"
-                value={item.condition}
-                options={
-                  Enum.map(CustomerReturnItem.conditions(), &{Phoenix.Naming.humanize(&1), &1})
-                }
-                prompt="Condition"
-                phx-change="set_condition"
+              <form
+                id={"condition-form-#{item.id}"}
+                class="[&>div]:mb-0"
                 phx-value-item_id={item.id}
                 phx-value-customer_return_id={@customer_return.id}
-              />
+              >
+                <.input
+                  type="select"
+                  id={"condition-#{item.id}"}
+                  name="condition"
+                  label="Condition"
+                  value={item.condition}
+                  options={
+                    Enum.map(CustomerReturnItem.conditions(), &{Phoenix.Naming.humanize(&1), &1})
+                  }
+                  prompt="Needs a condition"
+                  phx-change="set_condition"
+                />
+              </form>
             <% else %>
               <span :if={item.condition} class="text-sm font-medium text-thamani-forest">
                 {Phoenix.Naming.humanize(item.condition)}
@@ -900,9 +1033,19 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
         </div>
       </div>
 
-      <div class="flex justify-end gap-3">
+      <div :if={@customer_return.status == :draft} class="flex items-center justify-end gap-3">
+        <p
+          :if={@customer_return.items == []}
+          id="mark-received-needs-items"
+          class="text-xs font-medium text-amber-800"
+        >
+          <%= if @customer_return.shipment do %>
+            Click "Came back" on a pack above before marking this return received.
+          <% else %>
+            Add at least one item above before marking this return received.
+          <% end %>
+        </p>
         <.button
-          :if={@customer_return.status == :draft}
           variant="primary"
           type="button"
           phx-click="mark_received"
@@ -911,15 +1054,29 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
         >
           Mark received
         </.button>
+      </div>
+      <div
+        :if={@customer_return.status == :received}
+        class="flex items-center justify-end gap-3"
+      >
+        <p
+          :if={Enum.any?(@customer_return.items, &is_nil(&1.condition))}
+          id="mark-inspected-needs-conditions"
+          class="text-xs font-medium text-amber-800"
+        >
+          Set a condition for every item above before marking this return inspected.
+        </p>
         <.button
-          :if={@customer_return.status == :received}
           variant="primary"
           type="button"
           phx-click="mark_inspected"
           phx-value-id={@customer_return.id}
+          disabled={Enum.any?(@customer_return.items, &is_nil(&1.condition))}
         >
           Mark inspected
         </.button>
+      </div>
+      <div class="flex justify-end gap-3">
         <.button
           :if={@customer_return.status == :inspected}
           variant="primary"
@@ -956,17 +1113,14 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
             </.button>
           </:actions>
         </.header>
-        <section
-          id="customer-return-detail"
-          class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6"
-        >
+        <section id="customer-return-detail" class="mt-5 rounded-2xl ff-surface-card p-5 sm:p-6">
           <.return_panel customer_return={@customer_return} products={@products} />
         </section>
       <% else %>
         <.header icon="hero-arrow-uturn-left">
           Returns
           <:subtitle>
-            Stock physically coming back from a customer — damaged, wrong item, or overstock.
+            Stock moving back to suppliers or in from customers, tracked through to approval.
           </:subtitle>
           <:actions>
             <.button
@@ -1175,8 +1329,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
                     PDF, JPG, or PNG, up to 5MB each. Up to 8 files.
                   </p>
                 </div>
-                <label class="inline-flex cursor-pointer items-center rounded-full border border-thamani-forest bg-white px-4 py-1.5 text-xs font-semibold text-thamani-forest transition-colors hover:bg-thamani-forest hover:text-white">
-                  Choose files <.live_file_input upload={@uploads.return_documents} class="sr-only" />
+                <label class="group inline-flex cursor-pointer items-center rounded-full border border-thamani-forest bg-white px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-thamani-forest">
+                  <span class="text-thamani-forest group-hover:text-white">Choose files</span>
+                  <.live_file_input upload={@uploads.return_documents} class="sr-only" />
                 </label>
               </div>
               <div :if={@uploads.return_documents.entries != []} class="mt-3 space-y-2">
@@ -1224,6 +1379,13 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
               prompt="Choose a reason"
             />
             <.input field={@form[:notes]} type="textarea" label="Notes" rows="3" />
+            <p
+              :if={@return_source == "shipment" and is_nil(@selected_shipment)}
+              id="return-needs-shipment"
+              class="mt-3 text-xs font-medium text-amber-800"
+            >
+              Select a shipment from the matches above to continue.
+            </p>
             <.button
               variant="primary"
               class="mt-3 w-full"

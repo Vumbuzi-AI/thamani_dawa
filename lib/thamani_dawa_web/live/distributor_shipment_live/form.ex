@@ -140,6 +140,8 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
 
   defp selected(records, gln), do: Enum.find(records, &(&1.gln == gln))
 
+  defp other_origins(origins, origin_gln), do: Enum.reject(origins, &(&1.gln == origin_gln))
+
   defp destination_record({:matched, company, address}, gln),
     do: %{name: company, address: address, po_box: nil, gln: gln}
 
@@ -259,10 +261,18 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
                 type="select"
                 label="Destination site"
                 prompt="Choose one of your sites"
-                options={Enum.map(@origins, &{"#{&1.name} · #{&1.gln}", &1.gln})}
+                options={
+                  Enum.map(other_origins(@origins, @form[:origin_gln].value), &{"#{&1.name} · #{&1.gln}", &1.gln})
+                }
                 phx-debounce="0"
                 required
               />
+              <p
+                :if={@transfer_mode and other_origins(@origins, @form[:origin_gln].value) == []}
+                class="text-xs leading-5 text-thamani-pewter"
+              >
+                No other sites with a GLN yet.
+              </p>
               <.input
                 :if={!@transfer_mode}
                 field={@form[:destination_gln]}

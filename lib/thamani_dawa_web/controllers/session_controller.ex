@@ -153,5 +153,7 @@ defmodule ThamaniDawaWeb.SessionController do
   defp demo_account_icon("lab"), do: "hero-beaker"
   defp demo_account_icon("pharma-lab"), do: "hero-user-group"
   defp demo_account_icon("distributor"), do: "hero-cube"
+  defp demo_account_icon("manufacturer"), do: "hero-cog-8-tooth"
+  defp demo_account_icon("manufacturer-distributor"), do: "hero-cog-8-tooth"
   defp demo_account_icon(_), do: "hero-user"
 end

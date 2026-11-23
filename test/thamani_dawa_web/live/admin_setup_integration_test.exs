@@ -18,27 +18,15 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     # Step 1: sign up the organization admin
     {:ok, signup_view, _html} = live(conn, ~p"/signup")
 
-    # Step 1: operating models alone.
+    # Step 1: operating models and organization name. GS1 company prefixes
+    # are no longer collected at signup — they're added later from the
+    # settings page. PPB/KMLTTB licensing is a property of a specific
+    # premises, not the organization as a whole, so it lives on the site
+    # step below.
     signup_view
     |> form("#organization-setup-form",
-      organization: %{operating_models: ["pharmacy", "laboratory"]}
+      organization: %{operating_models: ["pharmacy", "laboratory"], name: "Test Licensee"}
     )
-    |> render_submit()
-
-    # Step 2: regulatory details — just the GS1 company prefix. The
-    # organization name itself is no longer typed in — it comes back from
-    # the GS1 registry lookup (the test stub always answers with
-    # "Test Licensee" for a known prefix). PPB/KMLTTB licensing moved to
-    # the site step below, since a license is a property of a specific
-    # premises, not the organization as a whole.
-    signup_view
-    |> form("#regulatory-details-form", organization: %{gs1_company_prefix: "0614141"})
-    |> render_submit()
-
-    render_async(signup_view, 5_000)
-
-    signup_view
-    |> form("#regulatory-details-form", organization: %{gs1_company_prefix: "0614141"})
     |> render_submit()
 
     # The main-location GLN is mandatory and checked against the registry
@@ -115,21 +103,21 @@ defmodule ThamaniDawaWeb.AdminSetupIntegrationTest do
     # Step 2: create a combined-capability (pharmacy + lab) site
     {:ok, site_view, _html} = live(admin_conn, ~p"/org/sites/new")
 
-    site_view |> form("#site-form", site: %{gln: "0614141000456"}) |> render_submit()
+    site_view |> form("#site-form", site: %{gln: "0614141000128"}) |> render_submit()
     render_async(site_view, 5_000)
 
     site_view
-    |> form("#site-form", site: %{gln: "0614141000456", activity_choice: "pharmacy_laboratory"})
+    |> form("#site-form", site: %{gln: "0614141000128", activity_choice: "pharmacy_laboratory"})
     |> render_submit()
 
     assert_patch(site_view, ~p"/org/sites")
 
-    site = Enum.find(Sites.list_sites(organization.id), &(&1.gln == "0614141000456"))
+    site = Enum.find(Sites.list_sites(organization.id), &(&1.gln == "0614141000128"))
     assert site
     assert site.activities == [:pharmacy, :laboratory]
     # The GLN is the one GS1 issued to the location, resolved and verified
     # against the registry rather than hand-typed alongside the name.
-    assert site.gln == "0614141000456"
+    assert site.gln == "0614141000128"
 
     # Step 3: invite staff to that site
     staff_email = "pharmacist-#{System.unique_integer([:positive])}@example.com"

@@ -213,6 +213,31 @@ defmodule ThamaniDawa.Epcis.Event do
   end
 
   @doc """
+  Manufacturer commissioning — ObjectEvent ADD/`commissioning`/`active` for
+  freshly serialised units entering circulation for the first time. Always
+  SGTIN `epcList` — commissioning is inherently a per-serial act.
+  """
+  def commission(args) do
+    with {:ok, biz_location} <- sgln(args, :biz_location_gln),
+         {:ok, epcs} <- sgtin_urns(args, :epcs, :epc),
+         :ok <- require_content(epcs, []) do
+      {:ok,
+       %{
+         "type" => "ObjectEvent",
+         "eventID" => event_id(args),
+         "eventTime" => event_time(args),
+         "eventTimeZoneOffset" => @time_zone_offset,
+         "epcList" => epcs,
+         "action" => "ADD",
+         "bizStep" => "commissioning",
+         "disposition" => "active",
+         "readPoint" => %{"id" => biz_location},
+         "bizLocation" => %{"id" => biz_location}
+       }}
+    end
+  end
+
+  @doc """
   Batch status-transition events (docs/PPB_TNT_INTEGRATION.md §4.3/§4.4):
   damaged, expired, stolen, lost, exported, recalled, destroyed. Always
   lot-level (`quantityList`) — this platform does not track per-unit

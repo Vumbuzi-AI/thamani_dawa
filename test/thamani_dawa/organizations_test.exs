@@ -164,17 +164,6 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert %{name: ["An organization with a similar name already exists"]} =
                errors_on(changeset)
     end
-
-    test "rejects a malformed GS1 company prefix" do
-      assert {:error, changeset} =
-               Organizations.create_organization(%{
-                 name: "Acme Pharmacy",
-                 license_number: "LIC-1",
-                 gs1_company_prefix: "abc123"
-               })
-
-      assert %{gs1_company_prefix: ["must be 6 to 10 digits"]} = errors_on(changeset)
-    end
   end
 
   describe "get_organization!/1" do
@@ -189,7 +178,6 @@ defmodule ThamaniDawa.OrganizationsTest do
       org_attrs = %{
         name: "Acme Pharmacy",
         license_number: "LIC-1",
-        gs1_company_prefix: "6160001",
         ppb_facility_name: "Acme Pharmacy"
       }
 
@@ -200,8 +188,7 @@ defmodule ThamaniDawa.OrganizationsTest do
 
       assert organization.name == "Acme Pharmacy"
       assert organization.license_number == "LIC-1"
-      assert organization.gs1_company_prefix == "6160001"
-      assert organization.gs1_prefix_verification_status == :pending
+      assert Organizations.list_gs1_prefixes(organization.id) == []
       assert organization.slug == "acme-pharmacy"
       assert site.organization_id == organization.id
       assert site.name == organization.name
@@ -212,22 +199,10 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert user.name == "Jane Admin"
     end
 
-    test "requires a GS1 company prefix for a pharmacy organization" do
-      assert {:error, changeset} =
-               Organizations.signup(
-                 %{name: "Acme Pharmacy", license_number: "LIC-1"},
-                 valid_user_attributes()
-               )
-
-      assert %{gs1_company_prefix: ["Please enter your GS1 company prefix"]} =
-               errors_on(changeset)
-    end
-
     test "derives a combined site for pharmacy and laboratory legacy signup" do
       org_attrs = %{
         name: "Acme Health",
         license_number: "LIC-H",
-        gs1_company_prefix: "6160001",
         ppb_facility_name: "Acme Health",
         kmlttb_facility_name: "Acme Health",
         kmlttb_license_number: "L 01234/26",
@@ -240,7 +215,7 @@ defmodule ThamaniDawa.OrganizationsTest do
 
     test "rolls back the whole signup if the admin user is invalid" do
       site_count_before = Repo.aggregate(Site, :count)
-      org_attrs = %{name: "Acme Pharmacy", license_number: "LIC-1", gs1_company_prefix: "6160001"}
+      org_attrs = %{name: "Acme Pharmacy", license_number: "LIC-1"}
 
       assert {:error, %Ecto.Changeset{}} = Organizations.signup(org_attrs, %{})
       refute Repo.get_by(Organization, name: "Acme Pharmacy")
@@ -259,8 +234,7 @@ defmodule ThamaniDawa.OrganizationsTest do
 
       org_attrs = %{
         name: "Brand New Pharmacy",
-        license_number: "LIC-9",
-        gs1_company_prefix: "6160001"
+        license_number: "LIC-9"
       }
 
       admin_attrs = valid_user_attributes(%{email: existing.email})
@@ -276,8 +250,7 @@ defmodule ThamaniDawa.OrganizationsTest do
 
       org_attrs = %{
         name: "Existing Pharmacy",
-        license_number: "LIC-9",
-        gs1_company_prefix: "6160001"
+        license_number: "LIC-9"
       }
 
       admin_attrs = valid_user_attributes()
@@ -300,7 +273,6 @@ defmodule ThamaniDawa.OrganizationsTest do
       org_attrs = %{
         name: "Acme Distribution",
         license_number: "LIC-D",
-        gs1_company_prefix: "0614141",
         ppb_facility_name: "Acme Distribution",
         operating_models: [:distributor]
       }
@@ -322,53 +294,10 @@ defmodule ThamaniDawa.OrganizationsTest do
       assert site.address == "Industrial Area"
     end
 
-    test "requires a GS1 company prefix for a distributor organization" do
-      org_attrs = %{
-        name: "Acme Distribution",
-        license_number: "LIC-D",
-        operating_models: [:distributor]
-      }
-
-      assert {:error, changeset} =
-               Organizations.signup(
-                 org_attrs,
-                 %{
-                   name: "Central Warehouse",
-                   activities: [:distribution]
-                 },
-                 valid_user_attributes()
-               )
-
-      assert %{gs1_company_prefix: ["Please enter your GS1 company prefix"]} =
-               errors_on(changeset)
-    end
-
-    test "requires a GS1 company prefix for a laboratory-only organization" do
+    test "creates a laboratory-only organization with no GS1 prefix needed up front" do
       org_attrs = %{
         name: "Acme Labs",
         license_number: "LIC-L",
-        operating_models: [:laboratory]
-      }
-
-      assert {:error, changeset} =
-               Organizations.signup(
-                 org_attrs,
-                 %{
-                   name: "Acme Labs Main",
-                   activities: [:laboratory]
-                 },
-                 valid_user_attributes()
-               )
-
-      assert %{gs1_company_prefix: ["Please enter your GS1 company prefix"]} =
-               errors_on(changeset)
-    end
-
-    test "creates a laboratory-only organization once its GS1 company prefix is given" do
-      org_attrs = %{
-        name: "Acme Labs",
-        license_number: "LIC-L",
-        gs1_company_prefix: "6160001",
         operating_models: [:laboratory]
       }
 
@@ -384,37 +313,14 @@ defmodule ThamaniDawa.OrganizationsTest do
                  valid_user_attributes()
                )
 
-      assert organization.gs1_company_prefix == "6160001"
-      assert organization.gs1_prefix_verification_status == :pending
+      assert Organizations.list_gs1_prefixes(organization.id) == []
       assert site.activities == [:laboratory]
-    end
-
-    test "rejects a malformed GS1 company prefix" do
-      org_attrs = %{
-        name: "Acme Distribution",
-        license_number: "LIC-D",
-        gs1_company_prefix: "xyz",
-        operating_models: [:distributor]
-      }
-
-      assert {:error, changeset} =
-               Organizations.signup(
-                 org_attrs,
-                 %{
-                   name: "Central Warehouse",
-                   activities: [:distribution]
-                 },
-                 valid_user_attributes()
-               )
-
-      assert %{gs1_company_prefix: ["must be 6 to 10 digits"]} = errors_on(changeset)
     end
 
     test "persists the entered site GLN as unverified" do
       org_attrs = %{
         name: "Acme Pharmacy",
         license_number: "LIC-1",
-        gs1_company_prefix: "6160001",
         ppb_facility_name: "Acme Pharmacy"
       }
 
@@ -437,8 +343,7 @@ defmodule ThamaniDawa.OrganizationsTest do
     test "does not require premises-level PPB details during organization signup" do
       org_attrs = %{
         name: "Acme Pharmacy",
-        license_number: "LIC-1",
-        gs1_company_prefix: "6160001"
+        license_number: "LIC-1"
       }
 
       site_attrs = %{
@@ -456,7 +361,6 @@ defmodule ThamaniDawa.OrganizationsTest do
       org_attrs = %{
         name: "Acme Labs",
         license_number: "LIC-L",
-        gs1_company_prefix: "6160001",
         operating_models: [:laboratory]
       }
 
@@ -471,11 +375,10 @@ defmodule ThamaniDawa.OrganizationsTest do
                Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
     end
 
-    test "enqueues prefix and GLN verification jobs when identifiers are entered" do
+    test "enqueues GLN verification jobs when GLNs are entered" do
       org_attrs = %{
         name: "Acme Pharmacy",
         license_number: "LIC-1",
-        gs1_company_prefix: "6160001",
         ppb_facility_name: "Acme Pharmacy"
       }
 
@@ -487,13 +390,12 @@ defmodule ThamaniDawa.OrganizationsTest do
         license_number: "LIC-1"
       }
 
-      assert {:ok, %{organization: organization, site: site}} =
+      assert {:ok, %{site: site}} =
                Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
 
       jobs = Repo.all(Oban.Job)
       args = Enum.map(jobs, & &1.args)
 
-      assert %{"organization_id" => organization.id} in args
       assert %{"record" => "site", "id" => site.id} in args
     end
 
@@ -501,7 +403,6 @@ defmodule ThamaniDawa.OrganizationsTest do
       org_attrs = %{
         name: "Acme Pharmacy",
         license_number: "LIC-1",
-        gs1_company_prefix: "6160001",
         ppb_facility_name: "Acme Pharmacy"
       }
 
@@ -512,12 +413,115 @@ defmodule ThamaniDawa.OrganizationsTest do
         license_number: "LIC-1"
       }
 
-      assert {:ok, %{organization: organization}} =
+      assert {:ok, %{organization: _organization}} =
                Organizations.signup(org_attrs, site_attrs, valid_user_attributes())
 
       args = Enum.map(Repo.all(Oban.Job), & &1.args)
-      assert %{"organization_id" => organization.id} in args
       refute Enum.any?(args, &match?(%{"record" => _}, &1))
+    end
+  end
+
+  describe "onboarding_checklist/2 :connect_keys" do
+    test "is not done when the org has no keys set" do
+      organization = organization_fixture(%{operating_models: [:distributor]})
+
+      item = find_checklist_item(organization)
+      assert item.done? == false
+    end
+
+    test "is done when GS1 and every required EPCIS tier key are set" do
+      organization = organization_fixture(%{operating_models: [:pharmacy, :distributor]})
+
+      {:ok, organization} = Organizations.set_gs1_api_key(organization, "gs1-secret")
+
+      {:ok, organization} =
+        Organizations.set_epcis_api_key(organization, "distributor", "dist-secret")
+
+      {:ok, organization} =
+        Organizations.set_epcis_api_key(organization, "facility", "facility-secret")
+
+      item = find_checklist_item(organization)
+      assert item.done? == true
+    end
+
+    test "is not done when one required EPCIS tier key is missing" do
+      organization = organization_fixture(%{operating_models: [:pharmacy, :distributor]})
+
+      {:ok, organization} = Organizations.set_gs1_api_key(organization, "gs1-secret")
+
+      {:ok, organization} =
+        Organizations.set_epcis_api_key(organization, "facility", "facility-secret")
+
+      item = find_checklist_item(organization)
+      assert item.done? == false
+    end
+
+    defp find_checklist_item(organization) do
+      organization
+      |> Organizations.onboarding_checklist(nil)
+      |> Enum.find(&(&1.key == :connect_keys))
+    end
+  end
+
+  describe "add_gs1_prefix/2" do
+    test "the first prefix added becomes primary and gets enqueued for verification" do
+      organization = organization_fixture()
+
+      assert {:ok, prefix} = Organizations.add_gs1_prefix(organization, %{prefix: "6160001"})
+      assert prefix.is_primary
+      assert prefix.verification_status == :pending
+
+      assert [%{"organization_gs1_prefix_id" => id}] =
+               Enum.map(Repo.all(Oban.Job), & &1.args)
+
+      assert id == prefix.id
+    end
+
+    test "a second prefix is added as secondary" do
+      organization = organization_fixture()
+      {:ok, _first} = Organizations.add_gs1_prefix(organization, %{prefix: "6160001"})
+
+      assert {:ok, second} = Organizations.add_gs1_prefix(organization, %{prefix: "0614141"})
+      refute second.is_primary
+    end
+
+    test "rejects a malformed prefix" do
+      organization = organization_fixture()
+
+      assert {:error, changeset} = Organizations.add_gs1_prefix(organization, %{prefix: "abc"})
+      assert %{prefix: ["must be 6 to 10 digits"]} = errors_on(changeset)
+    end
+
+    test "rejects adding the same prefix twice to the same organization" do
+      organization = organization_fixture()
+      {:ok, _first} = Organizations.add_gs1_prefix(organization, %{prefix: "6160001"})
+
+      assert {:error, changeset} =
+               Organizations.add_gs1_prefix(organization, %{prefix: "6160001"})
+
+      assert %{prefix: ["already added to this organization"]} = errors_on(changeset)
+    end
+  end
+
+  describe "set_primary_gs1_prefix/1" do
+    test "promotes the given prefix and demotes the previous primary" do
+      organization = organization_fixture()
+      {:ok, first} = Organizations.add_gs1_prefix(organization, %{prefix: "6160001"})
+      {:ok, second} = Organizations.add_gs1_prefix(organization, %{prefix: "0614141"})
+
+      assert {:ok, promoted} = Organizations.set_primary_gs1_prefix(second)
+      assert promoted.is_primary
+      refute Repo.reload!(first).is_primary
+    end
+  end
+
+  describe "delete_gs1_prefix/1" do
+    test "removes a prefix from an organization" do
+      organization = organization_fixture()
+      {:ok, prefix} = Organizations.add_gs1_prefix(organization, %{prefix: "6160001"})
+
+      assert {:ok, _} = Organizations.delete_gs1_prefix(prefix)
+      assert Organizations.list_gs1_prefixes(organization.id) == []
     end
   end
 end

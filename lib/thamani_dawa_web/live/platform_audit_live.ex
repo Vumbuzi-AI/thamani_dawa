@@ -215,16 +215,34 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
       </.header>
 
       <div class="dashboard-stat-grid">
-        <.stat_tile id="audit-stat-total" icon="hero-clipboard-document-list" label="Total changes" value={@stats.total} />
-        <.stat_tile id="audit-stat-insert" icon="hero-plus-circle" label="Created" value={@stats.insert} />
-        <.stat_tile id="audit-stat-update" icon="hero-pencil-square" label="Updated" value={@stats.update} />
+        <.stat_tile
+          id="audit-stat-total"
+          icon="hero-clipboard-document-list"
+          label="Total changes"
+          value={@stats.total}
+        />
+        <.stat_tile
+          id="audit-stat-insert"
+          icon="hero-plus-circle"
+          label="Created"
+          value={@stats.insert}
+        />
+        <.stat_tile
+          id="audit-stat-update"
+          icon="hero-pencil-square"
+          label="Updated"
+          value={@stats.update}
+        />
         <.stat_tile id="audit-stat-delete" icon="hero-trash" label="Deleted" value={@stats.delete} />
       </div>
 
-      <.table id="platform-audit-logs" rows={@page_info.entries}>
+      <.table id="platform-audit-list" rows={@page_info.entries}>
         <:col :let={log} label="Action">
           <div class="flex items-center gap-2">
-            <span class={["inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", action_classes(log.action)]}>
+            <span class={[
+              "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+              action_classes(log.action)
+            ]}>
               <.icon name={action_icon(log.action)} class="size-3.5" /> {action_label(log.action)}
             </span>
           </div>

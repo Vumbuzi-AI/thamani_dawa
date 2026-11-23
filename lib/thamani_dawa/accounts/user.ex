@@ -2,7 +2,7 @@ defmodule ThamaniDawa.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
-  @staff_roles [:admin, :pharmacist, :lab_technician, :distributor]
+  @staff_roles [:admin, :pharmacist, :lab_technician, :distributor, :manufacturer]
   @roles @staff_roles ++ [:pharma_lab, :superadmin]
   @legal_policy_version "2026-10-29"
 
@@ -248,6 +248,7 @@ defmodule ThamaniDawa.Accounts.User do
   defp role_compatible?(:pharmacist, models), do: :pharmacy in models
   defp role_compatible?(:lab_technician, models), do: :laboratory in models
   defp role_compatible?(:distributor, models), do: :distributor in models
+  defp role_compatible?(:manufacturer, models), do: :manufacturer in models
 
   @doc "Humanized, comma-joined display of a user's roles, e.g. \"Admin, Pharmacist\"."
   def humanize_roles(%__MODULE__{roles: roles}), do: humanize_roles(roles)

@@ -35,6 +35,33 @@ defmodule ThamaniDawaWeb.DistributorComponents do
     """
   end
 
+  @doc "Badge for an aggregation status (`draft`, `submitted`, `approved`, `rejected`)."
+  attr :status, :string, required: true
+  attr :class, :any, default: nil
+
+  def aggregation_status_badge(assigns) do
+    assigns = assign(assigns, :atom, Map.get(@shipment_statuses, assigns.status, :unknown))
+
+    ~H"""
+    <.status_badge status={@atom} class={@class} />
+    """
+  end
+
+  @doc "Badge for a scanned aggregation item; `ok` is green, anything else is a warning."
+  attr :status, :string, required: true
+  attr :class, :any, default: nil
+
+  def aggregation_validation_badge(assigns) do
+    assigns =
+      assigns
+      |> assign(:atom, if(assigns.status == "ok", do: :ok, else: :unknown_serial))
+      |> assign(:label, Phoenix.Naming.humanize(assigns.status))
+
+    ~H"""
+    <.status_badge status={@atom} label={@label} class={@class} />
+    """
+  end
+
   @doc """
   Badge for a scanned unit's validation status. Renders nothing for `"ok"`
   — the expected case for every normal scan — and only calls out units

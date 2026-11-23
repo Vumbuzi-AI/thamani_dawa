@@ -319,19 +319,12 @@ defmodule ThamaniDawaWeb.Router do
       live "/distributor/products/new", DistributorProductLive.Index, :new
       live "/distributor/products/:id", DistributorProductLive.Show, :show
       live "/distributor/batches/:id", DistributorBatchLive, :show
+      live "/distributor/cases/:id", DistributorCaseLive, :show
       live "/distributor/stock", DistributorStockLive.Index, :index
       live "/distributor/expiring", DistributorStockLive.Index, :expiry
       live "/distributor/receiving", DistributorReceivingLive, :distributor_index
       live "/distributor/receiving/new", DistributorReceivingLive, :distributor_new
       live "/distributor/receiving/:id", DistributorGoodsReceiptLive, :distributor_show
-
-      live "/distributor/stock-takes", DistributorStockTakeLive.Index, :index
-      live "/distributor/stock-takes/new", DistributorStockTakeLive.Index, :new
-      live "/distributor/stock-takes/:id", DistributorStockTakeLive.Show, :show
-
-      live "/distributor/expiry-write-offs", DistributorDisposalLive.Index, :index
-      live "/distributor/expiry-write-offs/new", DistributorDisposalLive.Index, :new
-      live "/distributor/expiry-write-offs/:id", DistributorDisposalLive.Show, :show
 
       live "/distributor/returns", DistributorSupplierReturnLive.Index, :index
       live "/distributor/returns/new", DistributorSupplierReturnLive.Index, :new
@@ -367,12 +360,53 @@ defmodule ThamaniDawaWeb.Router do
       live "/distributor/settings", OrganizationSettingsLive, :index
       live "/distributor/epcis", DistributorEpcisLive, :index
     end
+
+    live_session :manufacturer,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :require_manufacturer_access}] do
+      live "/manufacturer", ManufacturerDashboardLive, :index
+
+      live "/manufacturer/products", ManufacturerProductLive.Index, :index
+      live "/manufacturer/products/new", ManufacturerProductLive.Index, :new
+      live "/manufacturer/products/:gtin/serials", ManufacturerProductLive.Serials, :index
+
+      live "/manufacturer/products/:gtin/serials/new",
+           ManufacturerProductLive.Index,
+           :new_serial
+
+      live "/manufacturer/products/:gtin/ssccs", ManufacturerProductLive.Ssccs, :index
+      live "/manufacturer/products/:id", ManufacturerProductLive.Show, :show
+
+      live "/manufacturer/inventory", ManufacturerInventoryLive, :index
+      live "/manufacturer/shipments", ManufacturerShipmentLive.List, :index
+      live "/manufacturer/shipments/new", ManufacturerShipmentLive.Form, :new
+      live "/manufacturer/shipments/:id", ManufacturerShipmentLive.Review, :show
+
+      live "/manufacturer/sscc/:id/serials", ManufacturerSsccLive.Serials, :show
+      live "/manufacturer/sscc/:id/label", ManufacturerSsccLive.Label, :show
+      live "/manufacturer/epcis", ManufacturerEpcisLive, :index
+    end
+
+    live_session :manufacturer_admin,
+      on_mount: [{ThamaniDawaWeb.UserAuth, :require_manufacturer_admin_access}] do
+      live "/manufacturer/api-keys", ApiKeysLive, :index
+      live "/manufacturer/settings", OrganizationSettingsLive, :index
+    end
   end
 
   scope "/", ThamaniDawaWeb do
     pipe_through [:browser, :require_distributor_user]
 
     get "/distributor/shipments/:id/export", DistributorShipmentExportController, :show
+  end
+
+  scope "/", ThamaniDawaWeb do
+    pipe_through [:browser, :require_manufacturer_user]
+
+    get "/manufacturer/sscc/:id/export", ManufacturerSsccExportController, :show
+
+    get "/manufacturer/products/:gtin/batches/:batch_id/serials/export",
+        ManufacturerSerialExportController,
+        :show
   end
 
   scope "/", ThamaniDawaWeb do

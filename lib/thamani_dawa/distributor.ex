@@ -199,6 +199,7 @@ defmodule ThamaniDawa.Distributor do
   def list_shipments(organization_id, opts \\ %{}) do
     query =
       from(s in Shipment, as: :shipment, where: s.organization_id == ^organization_id)
+      |> filter_participant_tier(opts[:participant_tier])
       |> filter_status(opts[:status])
       |> search(opts[:search])
       |> filter_mobile_user(opts[:mobile_user_id])
@@ -296,6 +297,11 @@ defmodule ThamaniDawa.Distributor do
 
   defp filter_status(query, _status), do: query
 
+  defp filter_participant_tier(query, tier) when tier in ["distributor", "manufacturer"],
+    do: from(s in query, where: s.participant_tier == ^tier)
+
+  defp filter_participant_tier(query, _tier), do: query
+
   defp filter_mobile_user(query, id) when is_integer(id),
     do:
       from(s in query,
@@ -327,6 +333,17 @@ defmodule ThamaniDawa.Distributor do
   def get_shipment!(organization_id, id) do
     Shipment
     |> Repo.get_by!(id: id, organization_id: organization_id)
+    |> preload_shipment()
+  end
+
+  def get_shipment!(organization_id, id, participant_tier)
+      when participant_tier in ["distributor", "manufacturer"] do
+    Shipment
+    |> Repo.get_by!(
+      id: id,
+      organization_id: organization_id,
+      participant_tier: participant_tier
+    )
     |> preload_shipment()
   end
 
@@ -374,9 +391,18 @@ defmodule ThamaniDawa.Distributor do
   Creates a draft shipment, snapshotting the resolved origin site and
   destination customer onto the row.
   """
-  def create_shipment(organization_id, user, attrs) do
+  def create_shipment(organization_id, user, attrs),
+    do: create_shipment(organization_id, user, attrs, "distributor")
+
+  def create_shipment(organization_id, user, attrs, participant_tier)
+      when participant_tier in ["distributor", "manufacturer"] do
     changeset =
-      %Shipment{organization_id: organization_id, status: "draft", created_by_id: user.id}
+      %Shipment{
+        organization_id: organization_id,
+        status: "draft",
+        participant_tier: participant_tier,
+        created_by_id: user.id
+      }
       |> Shipment.changeset(attrs)
       |> resolve_glns(organization_id)
       |> Ecto.Changeset.put_change(:reference, generate_reference())

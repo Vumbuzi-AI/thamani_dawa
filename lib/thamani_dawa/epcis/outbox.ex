@@ -79,6 +79,16 @@ defmodule ThamaniDawa.Epcis.Outbox do
     update!(event, status: "rejected", http_status: http_status, response: response)
   end
 
+  @doc """
+  Returns a pending event to `blocked` because the organization has no API
+  key configured for the event's tier — never submitted, unlike `rejected`
+  (which the Hub itself turned down). Fixed the same way as a build-time
+  `block/2`: add the key, then `resubmit/1`.
+  """
+  def mark_blocked(%OutboxEvent{} = event, reason) do
+    update!(event, status: "blocked", blocked_reason: reason)
+  end
+
   def mark_retry(%OutboxEvent{} = event, reason) do
     attempts = event.attempts + 1
 
@@ -120,12 +130,18 @@ defmodule ThamaniDawa.Epcis.Outbox do
     Repo.get_by!(OutboxEvent, id: id, organization_id: organization_id)
   end
 
-  @doc "Count of outbox events per status for an organization — the admin view's summary chips."
-  def count_by_status(organization_id) do
+  @doc """
+  Count of outbox events per status for an organization — the admin view's
+  summary chips. Pass `:tier` to scope to one participant tier (e.g. the
+  manufacturer portal's own queue, distinct from distributor/facility
+  events reported by the same organization).
+  """
+  def count_by_status(organization_id, opts \\ []) do
     counts =
       Repo.all(
         from e in OutboxEvent,
           where: e.organization_id == ^organization_id,
+          where: ^tier_filter(opts),
           group_by: e.status,
           select: {e.status, count(e.id)}
       )
@@ -139,9 +155,17 @@ defmodule ThamaniDawa.Epcis.Outbox do
     Repo.all(
       from e in OutboxEvent,
         where: e.organization_id == ^organization_id,
+        where: ^tier_filter(opts),
         order_by: [desc: e.occurred_at, desc: e.id],
         limit: ^limit
     )
+  end
+
+  defp tier_filter(opts) do
+    case Keyword.get(opts, :tier) do
+      nil -> dynamic(true)
+      tier -> dynamic([e], e.participant_tier == ^tier)
+    end
   end
 
   @doc """

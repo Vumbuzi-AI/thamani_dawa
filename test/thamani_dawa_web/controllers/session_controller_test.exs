@@ -20,7 +20,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       assert html_response(conn, 200) =~ "Welcome back"
     end
 
-    test "renders one-click login forms with the seeded credentials for all six roles", %{
+    test "renders one-click login forms with the seeded credentials for all eight roles", %{
       conn: conn
     } do
       document =
@@ -29,9 +29,10 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
         |> html_response(200)
         |> LazyHTML.from_document()
 
-      assert Enum.count(LazyHTML.query(document, "#demo-login-accounts form")) == 6
+      assert Enum.count(LazyHTML.query(document, "#demo-login-accounts form")) == 8
 
-      for id <- ~w(superadmin admin pharmacist lab pharma-lab distributor) do
+      for id <-
+            ~w(superadmin admin pharmacist lab pharma-lab distributor manufacturer manufacturer-distributor) do
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id}")) == 1
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id} input[name=email]")) == 1
         assert Enum.count(LazyHTML.query(document, "#demo-login-#{id} input[name=password]")) == 1
@@ -140,6 +141,11 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
         phone: "0700000000",
         email: "supplier@example.com"
       })
+
+      {:ok, organization} = ThamaniDawa.Organizations.set_gs1_api_key(organization, "gs1-secret")
+
+      {:ok, _organization} =
+        ThamaniDawa.Organizations.set_epcis_api_key(organization, "facility", "facility-secret")
 
       conn =
         post(conn, ~p"/login", %{

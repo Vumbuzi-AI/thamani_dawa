@@ -12,11 +12,10 @@ defmodule ThamaniDawaWeb.SignupLive do
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
 
-  @steps [:operating_model, :regulatory_details, :main_location, :administrator]
-  @operating_models ~w(pharmacy laboratory distributor)
+  @steps [:operating_model, :main_location, :administrator]
+  @operating_models ~w(pharmacy laboratory distributor manufacturer)
   @step_labels %{
     operating_model: "Organization",
-    regulatory_details: "Organization identity",
     main_location: "Main location",
     administrator: "Administrator"
   }
@@ -45,7 +44,7 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> assign(:step, :operating_model)
       |> assign(:organization_params, nil)
       |> assign(:site_params, nil)
-      |> assign(:prefix_check, :idle)
+      |> assign(:name_taken, false)
       |> assign(:gln_check, :idle)
       |> assign(:ppb_check, :idle)
       |> assign(:kmlttb_check, :idle)
@@ -81,7 +80,8 @@ defmodule ThamaniDawaWeb.SignupLive do
     {:noreply,
      socket
      |> assign(:org_form, to_form(org_changeset, as: :organization))
-     |> assign(:site_form, site_form)}
+     |> assign(:site_form, site_form)
+     |> maybe_check_organization_name(params, org_params)}
   end
 
   def handle_event("restore_signup_draft", draft, socket) do
@@ -105,7 +105,6 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> assign(:site_params, if(step == :administrator, do: site_params, else: nil))
       |> assign(:org_form, to_form(org_changeset, as: :organization))
       |> assign(:site_form, to_form(site_changeset, as: :site))
-      |> reverify_restored_prefix(organization_params, step)
       |> reverify_restored_gln(site_params, step)
       |> reverify_restored_ppb(site_params, step)
       |> reverify_restored_kmlttb(site_params, step)
@@ -122,103 +121,17 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> Organization.changeset(org_params)
       |> Map.put(:action, :validate)
 
-    if Enum.empty?(Map.get(org_params, "operating_models", [])) do
-      {:noreply, assign(socket, :org_form, to_form(org_changeset, as: :organization))}
-    else
-      site_changeset =
-        socket
-        |> site_base()
-        |> Site.default_changeset(%{
-          "activities" => preserved_or_suggested_site_activities(socket, org_params)
-        })
-        |> Map.put(:action, :validate)
-
-      {:noreply,
-       socket
-       |> assign(:step, :regulatory_details)
-       |> assign(:organization_params, org_params)
-       |> assign(:org_form, to_form(org_changeset, as: :organization))
-       |> assign(:site_form, to_form(site_changeset, as: :site))}
-    end
-  end
-
-  def handle_event("validate_regulatory_details", params, socket) do
-    org_params = Map.get(params, "organization", %{})
-
-    org_changeset =
-      %Organization{}
-      |> Organization.signup_changeset(org_params)
-      |> Map.put(:action, :validate)
-
-    {:noreply,
-     socket
-     |> assign(:org_form, to_form(org_changeset, as: :organization))
-     |> maybe_check_gs1_prefix(params, org_params)}
-  end
-
-  def handle_event("continue_regulatory_details", %{"organization" => org_params}, socket) do
-    org_changeset = Organization.signup_changeset(%Organization{}, org_params)
+    name = Map.get(org_params, "name", "")
 
     cond do
-      blocking_regulatory_errors?(org_changeset) ->
-        {:noreply,
-         assign(
-           socket,
-           :org_form,
-           to_form(%{org_changeset | action: :validate}, as: :organization)
-         )}
+      Enum.empty?(Map.get(org_params, "operating_models", [])) or blank?(name) ->
+        {:noreply, assign(socket, :org_form, to_form(org_changeset, as: :organization))}
 
-      socket.assigns.prefix_check == :checking ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "Still checking the GS1 registry. Press Continue again in a moment."
-         )}
-
-      socket.assigns.prefix_check == :idle ->
+      not blank?(name) and Organizations.organization_name_taken?(String.trim(name)) ->
         {:noreply,
          socket
-         |> maybe_check_gs1_prefix(
-           %{"_target" => ["organization", "gs1_company_prefix"]},
-           org_params
-         )
-         |> put_flash(
-           :error,
-           "Checking your GS1 company prefix with the GS1 registry. Press Continue again in a moment."
-         )}
-
-      match?({:inactive, _}, socket.assigns.prefix_check) ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "This GS1 company prefix was found in the registry but isn't currently active. Please check its status with GS1 Kenya before continuing."
-         )}
-
-      match?({:name_taken, _}, socket.assigns.prefix_check) ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "An organization with this registered name already exists. If this is your organization, log in instead — otherwise this GS1 prefix may be registered to a different company."
-         )}
-
-      not gs1_name_verified?(socket.assigns.prefix_check) ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "We couldn't find this GS1 company prefix in the registry. Please double-check the number before continuing."
-         )}
-
-      not org_changeset.valid? ->
-        {:noreply,
-         assign(
-           socket,
-           :org_form,
-           to_form(%{org_changeset | action: :validate}, as: :organization)
-         )}
+         |> assign(:name_taken, true)
+         |> assign(:org_form, to_form(org_changeset, as: :organization))}
 
       true ->
         site_changeset =
@@ -290,14 +203,6 @@ defmodule ThamaniDawaWeb.SignupLive do
          |> put_flash(
            :error,
            "Checking the site GLN with the GS1 registry. Press Continue again in a moment."
-         )}
-
-      socket.assigns.gln_check == :prefix_mismatch ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "This GLN does not belong to your verified GS1 company prefix."
          )}
 
       match?({:inactive, _, _}, socket.assigns.gln_check) ->
@@ -440,15 +345,9 @@ defmodule ThamaniDawaWeb.SignupLive do
     site_kmlttb_required = Site.kmlttb_required?(site_activities)
 
     cond do
-      socket.assigns.prefix_check == :checking or socket.assigns.gln_check == :checking ->
+      socket.assigns.gln_check == :checking ->
         {:noreply,
          put_flash(socket, :error, "We’re rechecking your GS1 details. Try again in a moment.")}
-
-      not gs1_name_verified?(socket.assigns.prefix_check) ->
-        {:noreply,
-         socket
-         |> assign(:step, :regulatory_details)
-         |> put_flash(:error, "Please verify your GS1 company prefix again before continuing.")}
 
       not match?({:matched, _, _}, socket.assigns.gln_check) ->
         {:noreply,
@@ -500,7 +399,7 @@ defmodule ThamaniDawaWeb.SignupLive do
       {:error, %Ecto.Changeset{data: %Organization{}} = changeset} ->
         {:noreply,
          socket
-         |> assign(:step, :regulatory_details)
+         |> assign(:step, :operating_model)
          |> assign(:org_form, to_form(changeset, as: :organization))
          |> put_flash(:error, changeset_error_flash(changeset, "organization"))}
 
@@ -567,38 +466,6 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   defp humanize_field(field),
     do: field |> to_string() |> String.replace("_", " ")
-
-  def handle_async(:gs1_prefix_lookup, {:ok, {:ok, :verified, licence}}, socket) do
-    name = licensee_name(licence)
-
-    if is_binary(name) and name != "" and Organizations.organization_name_taken?(name) do
-      {:noreply, socket |> clear_flash(:error) |> assign(:prefix_check, {:name_taken, name})}
-    else
-      {:noreply,
-       socket
-       |> clear_flash(:error)
-       |> assign(:prefix_check, {:matched, name})
-       |> maybe_autofill_org_name(name)
-       |> maybe_autofill_organization_params_name(name)}
-    end
-  end
-
-  def handle_async(:gs1_prefix_lookup, {:ok, {:ok, :inactive, licence}}, socket) do
-    {:noreply,
-     socket |> clear_flash(:error) |> assign(:prefix_check, {:inactive, licensee_name(licence)})}
-  end
-
-  def handle_async(:gs1_prefix_lookup, {:ok, {:ok, :not_verified}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:prefix_check, :not_found)}
-  end
-
-  def handle_async(:gs1_prefix_lookup, {:ok, {:error, _reason}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:prefix_check, :unavailable)}
-  end
-
-  def handle_async(:gs1_prefix_lookup, {:exit, _reason}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:prefix_check, :unavailable)}
-  end
 
   def handle_async(:gln_lookup, {:ok, {:ok, :verified, licence}}, socket) do
     name = licensee_name(licence)
@@ -694,17 +561,9 @@ defmodule ThamaniDawaWeb.SignupLive do
     {:noreply, socket |> clear_flash(:error) |> assign(:kmlttb_check, :unavailable)}
   end
 
-  # The organization name is supplied by the asynchronous GS1 lookup, so it
-  # cannot block the initial submit that starts that lookup.
-  defp blocking_regulatory_errors?(changeset) do
-    changeset.errors
-    |> Keyword.keys()
-    |> Enum.any?(&(&1 != :name))
-  end
-
-  # Step 1's form only submits operating_models, so rebasing on a bare
-  # %Organization{} here would silently drop fields (e.g. gs1_company_prefix)
-  # already entered on a later step before the user went "back".
+  # Step 1's form only submits operating_models and name, so rebasing on a
+  # bare %Organization{} here would silently drop whichever of those two
+  # fields isn't present in the params currently being validated.
   defp organization_base(socket) do
     Ecto.Changeset.apply_changes(socket.assigns.org_form.source)
   end
@@ -732,15 +591,13 @@ defmodule ThamaniDawaWeb.SignupLive do
         |> Map.get("operating_models", [])
         |> List.wrap()
         |> Enum.filter(&(&1 in @operating_models)),
-      "gs1_company_prefix" => restored_string(params, "gs1_company_prefix", 10),
-      # Registry-owned names are deliberately re-derived after restoration.
-      "name" => ""
+      "name" => restored_string(params, "name", 200)
     }
   end
 
   defp restore_organization_params(_params), do: restore_organization_params(%{})
 
-  @site_activity_choices ~w(pharmacy laboratory pharmacy_laboratory distribution)
+  @site_activity_choices ~w(pharmacy laboratory pharmacy_laboratory distribution manufacturing manufacturing_distribution)
 
   defp restore_site_params(params) when is_map(params) do
     %{
@@ -778,26 +635,15 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   defp restorable_step(step, organization_params, site_params) do
     models_present? = Map.get(organization_params, "operating_models", []) != []
-
-    identity_present? =
-      models_present? and Map.get(organization_params, "gs1_company_prefix") != ""
-
-    site_present? = identity_present? and Map.get(site_params, "gln") != ""
+    name_present? = not blank?(Map.get(organization_params, "name", ""))
+    site_present? = models_present? and name_present? and Map.get(site_params, "gln") != ""
 
     case step do
       "administrator" when site_present? -> :administrator
-      "main_location" when identity_present? -> :main_location
-      "regulatory_details" when models_present? -> :regulatory_details
+      "main_location" when models_present? and name_present? -> :main_location
       _ -> :operating_model
     end
   end
-
-  defp reverify_restored_prefix(socket, organization_params, step)
-       when step in [:main_location, :administrator] do
-    check_gs1_prefix(socket, organization_params)
-  end
-
-  defp reverify_restored_prefix(socket, _organization_params, _step), do: socket
 
   defp reverify_restored_gln(socket, site_params, step)
        when step in [:main_location, :administrator] do
@@ -851,61 +697,18 @@ defmodule ThamaniDawaWeb.SignupLive do
   defp activities_for_choice("distribution"), do: ["distribution"]
   defp activities_for_choice(_choice), do: []
 
-  defp maybe_check_gs1_prefix(socket, params, org_params) do
-    if Map.get(params, "_target") == ["organization", "gs1_company_prefix"] do
-      check_gs1_prefix(socket, org_params)
-    else
-      socket
-    end
-  end
-
-  defp check_gs1_prefix(socket, org_params) do
-    prefix = org_params |> Map.get("gs1_company_prefix", "") |> to_string() |> String.trim()
-
-    if Regex.match?(~r/^\d{6,10}$/, prefix) do
-      socket
-      |> assign(:prefix_check, :checking)
-      |> start_async(:gs1_prefix_lookup, fn -> Grp.verify_prefix(prefix) end)
-    else
-      assign(socket, :prefix_check, :idle)
-    end
-  end
-
   defp licensee_name(licence), do: Licence.name(licence)
   defp licensee_address(licence), do: Licence.address(licence)
 
-  defp maybe_autofill_org_name(socket, name) do
-    autofill_field(socket, :org_form, :organization, :name, name)
-  end
-
-  # `organization_params` (the payload that actually reaches
-  # `Organizations.signup/3`) is only captured once, at
-  # `continue_regulatory_details` time — or set with a deliberately blank
-  # name on draft restore (see `restore_organization_params/1`). Unlike
-  # `@org_form`, nothing re-syncs it once this async lookup resolves, so a
-  # restored session that lands past this step (main_location or
-  # administrator) carried a blank name all the way to the final submit,
-  # failing with "Please enter your organization name" despite the UI
-  # showing a resolved, verified prefix the whole time.
-  defp maybe_autofill_organization_params_name(socket, name)
-       when is_binary(name) and name != "" do
-    case socket.assigns.organization_params do
-      %{} = params ->
-        if blank?(Map.get(params, "name")) do
-          assign(socket, :organization_params, Map.put(params, "name", name))
-        else
-          socket
-        end
-
-      _params ->
-        socket
+  defp maybe_check_organization_name(socket, params, org_params) do
+    if Map.get(params, "_target") == ["organization", "name"] do
+      name = org_params |> Map.get("name", "") |> to_string() |> String.trim()
+      taken? = name != "" and Organizations.organization_name_taken?(name)
+      assign(socket, :name_taken, taken?)
+    else
+      socket
     end
   end
-
-  defp maybe_autofill_organization_params_name(socket, _name), do: socket
-
-  defp gs1_name_verified?({:matched, name}) when is_binary(name), do: String.trim(name) != ""
-  defp gs1_name_verified?(_prefix_check), do: false
 
   defp maybe_autofill_site_fields(socket, licence) do
     socket
@@ -953,9 +756,6 @@ defmodule ThamaniDawaWeb.SignupLive do
       not gln_check_digit_valid?(gln) ->
         assign(socket, :gln_check, :invalid_check_digit)
 
-      not gln_matches_verified_prefix?(gln, socket.assigns.organization_params) ->
-        assign(socket, :gln_check, :prefix_mismatch)
-
       true ->
         socket
         |> assign(:gln_check, :checking)
@@ -966,16 +766,6 @@ defmodule ThamaniDawaWeb.SignupLive do
   defp gln_check_digit_valid?(gln) do
     {payload, check} = String.split_at(gln, -1)
     Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(payload)) == check
-  end
-
-  defp gln_matches_verified_prefix?(gln, organization_params) do
-    prefix =
-      organization_params
-      |> Map.get("gs1_company_prefix", "")
-      |> to_string()
-      |> String.trim()
-
-    prefix != "" and String.starts_with?(gln, prefix)
   end
 
   defp maybe_check_ppb(socket, params, site_params) do
@@ -1159,12 +949,13 @@ defmodule ThamaniDawaWeb.SignupLive do
       "pharmacy" -> ["pharmacy"]
       "laboratory" -> ["laboratory"]
       "distributor" -> ["distribution"]
+      "manufacturer" -> ["manufacturing"]
       _ -> []
     end)
   end
 
-  # `continue_operating_model`/`continue_regulatory_details` rebuild the
-  # site changeset every time they run — including a second time, if the
+  # `continue_operating_model` rebuilds the
+  # site changeset every time it runs — including a second time, if the
   # user goes back and continues again without changing anything upstream.
   # Unconditionally defaulting to `suggested_site_activities/1` there would
   # silently discard whatever the user explicitly picked on the site-setup
@@ -1197,7 +988,9 @@ defmodule ThamaniDawaWeb.SignupLive do
       {"laboratory", "Diagnostic laboratory", "Collect specimens and perform diagnostic tests",
        "hero-beaker"},
       {"distributor", "Pharmaceutical distributor",
-       "Supply medicines to pharmacies, hospitals, and other authorized buyers", "hero-truck"}
+       "Supply medicines to pharmacies, hospitals, and other authorized buyers", "hero-truck"},
+      {"manufacturer", "Pharmaceutical manufacturer",
+       "Produce and serialize medicines for distribution", "hero-cog-8-tooth"}
     ]
   end
 
@@ -1237,6 +1030,20 @@ defmodule ThamaniDawaWeb.SignupLive do
         description: "Supply medicines to pharmacies, hospitals, and other authorized buyers",
         icon: "hero-truck",
         activities: ["distribution"]
+      },
+      %{
+        key: "manufacturing",
+        label: "Pharmaceutical manufacturer",
+        description: "Produce and serialize medicines for distribution",
+        icon: "hero-cog-8-tooth",
+        activities: ["manufacturing"]
+      },
+      %{
+        key: "manufacturing_distribution",
+        label: "Manufacturer + distributor",
+        description: "Produce medicines and also supply them onward from the same organization",
+        icon: "hero-cog-8-tooth",
+        activities: ["manufacturing", "distribution"]
       }
     ]
     |> Enum.filter(fn choice -> Enum.all?(choice.activities, &(&1 in allowed)) end)
@@ -1330,7 +1137,6 @@ defmodule ThamaniDawaWeb.SignupLive do
             draft.expiresAt = Date.now() + lifetime
             draft.organization = this.formValues("organization", [
               "operating_models",
-              "gs1_company_prefix",
               "name"
             ], draft.organization)
             draft.site = this.formValues("site", [
@@ -1507,7 +1313,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                       <% end %>
                     </div>
                     <input type="hidden" name="organization[operating_models][]" value="" />
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <%= for {value, label, description, icon} <- operating_model_options() do %>
                         <.activity_card
                           name="organization[operating_models][]"
@@ -1524,147 +1330,24 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <% end %>
                   </fieldset>
 
-                  <.thamani_btn id="onboarding-continue" type="submit" variant="primary">
-                    Continue <.icon name="hero-arrow-right" class="ml-2 size-4" />
-                  </.thamani_btn>
-                </.form>
-              <% :regulatory_details -> %>
-                <h1 class="mb-3 text-[32px] font-light leading-tight tracking-[-0.4px] text-[var(--thamani-forest)]">
-                  Verify your organization
-                </h1>
-                <p class="mb-10 max-w-3xl text-[15px] leading-6 text-[var(--thamani-pewter)]">
-                  Enter your GS1 company prefix to confirm your organization's identity and
-                  registered name.
-                </p>
-
-                <.form
-                  for={@org_form}
-                  id="regulatory-details-form"
-                  phx-change="validate_regulatory_details"
-                  phx-submit="continue_regulatory_details"
-                >
-                  <input
-                    :for={model <- operating_model_values(@org_form)}
-                    type="hidden"
-                    name="organization[operating_models][]"
-                    value={model}
-                  />
-                  <input
-                    type="hidden"
-                    name="organization[name]"
-                    value={@org_form[:name].value}
-                  />
-
-                  <div class="mb-8">
+                  <div class="mb-6">
                     <.thamani_input
-                      field={@org_form[:gs1_company_prefix]}
-                      label="GS1 company prefix"
-                      placeholder="e.g. 6160001"
+                      field={@org_form[:name]}
+                      label="Organization name"
+                      placeholder="e.g. Afya Pharmacy Ltd"
                       phx-debounce="500"
                       required
                     />
-                    <%= case @prefix_check do %>
-                      <% :checking -> %>
-                        <p class="mb-2 -mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--thamani-pewter)]">
-                          <.icon name="hero-arrow-path" class="size-3.5 animate-spin" />
-                          Checking with the GS1 registry&hellip;
-                        </p>
-                      <% {:matched, name} when is_binary(name) -> %>
-                        <p class="mb-2 -mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2 text-xs font-semibold text-[var(--thamani-forest)]">
-                          <.icon name="hero-check-circle" class="size-4" /> Verified · matches {name}
-                        </p>
-                      <% {:matched, nil} -> %>
-                        <p class="mb-2 -mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2 text-xs font-semibold text-[var(--thamani-forest)]">
-                          <.icon name="hero-check-circle" class="size-4" /> Verified with GS1
-                        </p>
-                      <% {:inactive, name} when is_binary(name) -> %>
-                        <p class="mb-2 -mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
-                          Found · matches {name} · not currently active in the GS1 registry.
-                        </p>
-                      <% {:inactive, nil} -> %>
-                        <p class="mb-2 -mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
-                          Found in the GS1 registry, but not currently active.
-                        </p>
-                      <% :not_found -> %>
-                        <p class="mb-2 -mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
-                          We couldn't find this prefix in the GS1 registry. Double-check the number before continuing.
-                        </p>
-                      <% {:name_taken, _name} -> %>
-                        <div class="mb-2 -mt-4 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                          <.icon name="hero-exclamation-triangle" class="mt-0.5 size-4 shrink-0" />
-                          <div>
-                            <p>An organization is already registered with this GS1 company prefix.</p>
-                            <p class="mt-1">
-                              If that's you, <a href="/login" class="underline">log in</a> instead.
-                            </p>
-                          </div>
-                        </div>
-                      <% _ -> %>
-                        <p class="mb-2 -mt-4 text-xs text-[var(--thamani-pewter)]">
-                          We verify this with the GS1 registry as soon as you enter it.
-                        </p>
-                    <% end %>
-
-                    <aside
-                      :if={not match?({:matched, _}, @prefix_check)}
-                      id="gs1-prefix-help"
-                      class="mt-5 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_14%,white)] bg-[color-mix(in_srgb,var(--thamani-forest)_4%,white)] px-5 py-5"
-                    >
-                      <div class="flex items-start gap-4">
-                        <.icon
-                          name="hero-information-circle"
-                          class="mt-0.5 size-5 shrink-0 text-[var(--thamani-forest)]"
-                        />
-                        <div>
-                          <p class="text-sm font-semibold text-[var(--thamani-forest)]">
-                            Not sure what this is?
-                          </p>
-                          <p class="mt-1.5 max-w-2xl text-xs leading-5 text-[var(--thamani-pewter)]">
-                            A GS1 company prefix identifies your organization and is used to create
-                            GS1 identifiers for your locations and products.
-                          </p>
-                          <a
-                            id="gs1-prefix-registration-link"
-                            href="https://gs1kenya.org/membership"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--thamani-forest)] underline decoration-[color-mix(in_srgb,var(--thamani-forest)_35%,transparent)] underline-offset-4 transition hover:decoration-[var(--thamani-forest)]"
-                          >
-                            Don’t have one? Get a prefix from GS1 Kenya
-                            <.icon name="hero-arrow-up-right" class="size-3.5" />
-                          </a>
-                        </div>
-                      </div>
-                    </aside>
+                    <p :if={@name_taken} class="mt-2 text-xs text-red-700">
+                      An organization with this name already exists. If this is your organization,
+                      <a href="/login" class="underline">log in</a>
+                      instead.
+                    </p>
                   </div>
 
-                  <div class="flex items-center gap-4">
-                    <button
-                      id="regulatory-details-back"
-                      type="button"
-                      phx-click="back"
-                      phx-value-from="regulatory_details"
-                      class="inline-flex h-11 items-center justify-center rounded-full border border-[var(--thamani-stone)] bg-white px-5 text-sm font-medium text-[var(--thamani-forest)] transition hover:border-[var(--thamani-forest)]"
-                    >
-                      <.icon name="hero-arrow-left" class="mr-2 size-4" /> Back
-                    </button>
-                    <.thamani_btn
-                      id="regulatory-details-continue"
-                      type="submit"
-                      variant="primary"
-                      disabled={@prefix_check == :checking}
-                    >
-                      <%= if @prefix_check == :checking do %>
-                        <.icon name="hero-arrow-path" class="mr-2 size-4 animate-spin" />
-                        Checking GS1&hellip;
-                      <% else %>
-                        Continue <.icon name="hero-arrow-right" class="ml-2 size-4" />
-                      <% end %>
-                    </.thamani_btn>
-                  </div>
+                  <.thamani_btn id="onboarding-continue" type="submit" variant="primary">
+                    Continue <.icon name="hero-arrow-right" class="ml-2 size-4" />
+                  </.thamani_btn>
                 </.form>
               <% :main_location -> %>
                 <h1 class="mb-2 text-[32px] font-light leading-tight tracking-[-0.4px] text-[var(--thamani-forest)]">
@@ -1758,14 +1441,6 @@ defmodule ThamaniDawaWeb.SignupLive do
                           <.icon name="hero-exclamation-triangle" class="size-4" />
                           That doesn't look like a valid GLN. Double-check the digits.
                         </p>
-                      <% :prefix_mismatch -> %>
-                        <p
-                          id="site-gln-prefix-mismatch"
-                          class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
-                        >
-                          <.icon name="hero-exclamation-triangle" class="size-4" />
-                          This GLN does not belong to your verified GS1 company prefix.
-                        </p>
                       <% :unavailable -> %>
                         <p class="-mt-4 text-xs text-[var(--thamani-pewter)]">
                           We couldn't reach the GS1 registry to verify this GLN. Try again in a
@@ -1850,12 +1525,17 @@ defmodule ThamaniDawaWeb.SignupLive do
                           PPB facility license
                         </h2>
                         <p class="mb-4 text-xs leading-5 text-[var(--thamani-pewter)]">
-                          <%= if ftype == "retail" do %>
-                            Retail pharmacy premises are licensed by PPB separately from
-                            wholesale ones — verify this location's facility license below.
-                          <% else %>
-                            Wholesale distribution premises are licensed by PPB separately
-                            from retail ones — verify this location's facility license below.
+                          <%= cond do %>
+                            <% ftype == "retail" -> %>
+                              Retail pharmacy premises are licensed by PPB separately from
+                              wholesale ones — verify this location's facility license below.
+                            <% ftype == "manufacturer" -> %>
+                              Manufacturing premises are licensed by PPB separately from
+                              retail and wholesale ones — verify this location's facility
+                              license below.
+                            <% true -> %>
+                              Wholesale distribution premises are licensed by PPB separately
+                              from retail ones — verify this location's facility license below.
                           <% end %>
                         </p>
 

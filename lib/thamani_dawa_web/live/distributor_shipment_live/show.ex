@@ -175,7 +175,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
     {:noreply,
      socket
      |> assign(:saving_customer?, true)
-     |> assign(:customer_form, to_form(Customers.change_customer(%Customer{}, attrs), as: :customer))}
+     |> assign(
+       :customer_form,
+       to_form(Customers.change_customer(%Customer{}, attrs), as: :customer)
+     )}
   end
 
   def handle_event("close_save_customer", _params, socket) do
@@ -393,64 +396,62 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
             )}
           </:subtitle>
           <:actions>
-            <div>
-              <div class="grid w-full grid-cols-1 gap-2 md:w-[28rem] md:grid-cols-2 md:[&>*]:w-full">
-                <.button
-                  :if={@shipment.status == "draft"}
-                  id="edit-distributor-shipment"
-                  navigate={~p"/distributor/shipments/#{@shipment.id}/edit"}
-                >
-                  <.icon name="hero-pencil-square" class="size-4" /> Edit
-                </.button>
-                <.button
-                  :if={@shipment.status == "approved"}
-                  id="delivery-note"
-                  variant="primary"
-                  navigate={~p"/distributor/shipments/#{@shipment.id}/delivery-note"}
-                >
-                  <.icon name="hero-document-text" class="size-4" /> View delivery note
-                </.button>
-                <.button
-                  :if={@shipment.status == "approved"}
-                  id="packing-list"
-                  navigate={~p"/distributor/shipments/#{@shipment.id}/packing-list"}
-                >
-                  <.icon name="hero-queue-list" class="size-4" /> View packing list
-                </.button>
-                <.button
-                  :if={@unit_count > 0}
-                  id="export-distributor-shipment"
-                  href={~p"/distributor/shipments/#{@shipment.id}/export"}
-                >
-                  <.icon name="hero-arrow-down-tray" class="size-4" /> Export units CSV
-                </.button>
-                <.button
-                  :if={@labels != []}
-                  id="print-distributor-labels"
-                  type="button"
-                  phx-hook="PrintAllLabels"
-                >
-                  <.icon name="hero-printer" class="size-4" /> Print case labels
-                </.button>
-                <.button
-                  :if={@shipment.status == "submitted"}
-                  id="reject-distributor-shipment"
-                  variant="destructive"
-                  phx-click="open_reject"
-                >
-                  Reject
-                </.button>
-                <.button
-                  :if={@shipment.status == "submitted"}
-                  id="approve-distributor-shipment"
-                  variant="primary"
-                  phx-click="open_approve"
-                  disabled={@approving?}
-                >
-                  <.icon :if={!@approving?} name="hero-check-badge" class="size-4" />
-                  {if @approving?, do: "Approving…", else: "Approve & issue SSCCs"}
-                </.button>
-              </div>
+            <div class="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap md:w-auto md:justify-end md:[&>*]:w-auto">
+              <.button
+                :if={@shipment.status == "draft"}
+                id="edit-distributor-shipment"
+                navigate={~p"/distributor/shipments/#{@shipment.id}/edit"}
+              >
+                <.icon name="hero-pencil-square" class="size-4" /> Edit
+              </.button>
+              <.button
+                :if={@shipment.status == "approved"}
+                id="delivery-note"
+                variant="primary"
+                navigate={~p"/distributor/shipments/#{@shipment.id}/delivery-note"}
+              >
+                <.icon name="hero-document-text" class="size-4" /> View delivery note
+              </.button>
+              <.button
+                :if={@shipment.status == "approved"}
+                id="packing-list"
+                navigate={~p"/distributor/shipments/#{@shipment.id}/packing-list"}
+              >
+                <.icon name="hero-queue-list" class="size-4" /> View packing list
+              </.button>
+              <.button
+                :if={@unit_count > 0}
+                id="export-distributor-shipment"
+                href={~p"/distributor/shipments/#{@shipment.id}/export"}
+              >
+                <.icon name="hero-arrow-down-tray" class="size-4" /> Export units CSV
+              </.button>
+              <.button
+                :if={@labels != []}
+                id="print-distributor-labels"
+                type="button"
+                phx-hook="PrintAllLabels"
+              >
+                <.icon name="hero-printer" class="size-4" /> Print case labels
+              </.button>
+              <.button
+                :if={@shipment.status == "submitted"}
+                id="reject-distributor-shipment"
+                variant="destructive"
+                phx-click="open_reject"
+              >
+                Reject
+              </.button>
+              <.button
+                :if={@shipment.status == "submitted"}
+                id="approve-distributor-shipment"
+                variant="primary"
+                phx-click="open_approve"
+                disabled={@approving?}
+              >
+                <.icon :if={!@approving?} name="hero-check-badge" class="size-4" />
+                {if @approving?, do: "Approving…", else: "Approve & issue SSCCs"}
+              </.button>
             </div>
           </:actions>
         </.header>
@@ -515,7 +516,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
                   compact
                 />
               </div>
-              <p :for={error <- @customer_form[:customer_type].errors} class="mt-2 text-xs text-red-700">
+              <p
+                :for={error <- @customer_form[:customer_type].errors}
+                class="mt-2 text-xs text-red-700"
+              >
                 {translate_error(error)}
               </p>
             </fieldset>

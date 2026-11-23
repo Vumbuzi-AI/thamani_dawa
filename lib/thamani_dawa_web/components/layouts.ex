@@ -268,6 +268,36 @@ defmodule ThamaniDawaWeb.Layouts do
     """
   end
 
+  @doc """
+  Renders the authenticated manufacturer shell: the shared sidebar with links
+  to the manufacturer's product catalogue, serialisation/SSCC generation, and
+  EPCIS reporting.
+  """
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, default: ""
+  attr :back, :any, default: nil
+  attr :back_label, :string, default: nil
+
+  slot :inner_block, required: true
+
+  def manufacturer_shell(assigns) do
+    ~H"""
+    <.sidebar_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      back={@back}
+      back_label={@back_label}
+      title="Thamani Dawa"
+      section_label="Manufacturer"
+      base_path="/manufacturer"
+    >
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
   attr :current_path, :string, required: true
@@ -778,6 +808,9 @@ defmodule ThamaniDawaWeb.Layouts do
         [{:distributor, _items}] ->
           distributor_item_groups()
 
+        [{:manufacturer, _items}] ->
+          manufacturer_item_groups()
+
         [{_portal, items}] ->
           [{"Operations", items}]
 
@@ -801,6 +834,11 @@ defmodule ThamaniDawaWeb.Layouts do
       ops_visible?(scope, :distributor, site),
       distributor_items()
     )
+    |> put_ops_group(
+      :manufacturer,
+      ops_visible?(scope, :manufacturer, site),
+      manufacturer_items()
+    )
     |> put_ops_group(:org, org_ops_visible?(scope, site), org_items(multi_site?))
   end
 
@@ -810,6 +848,11 @@ defmodule ThamaniDawaWeb.Layouts do
   defp ops_visible?(scope, :distributor, site) do
     Portals.portal_role?(scope, :distributor) and Portals.distributor_organization?(scope) and
       in_context?(scope, :distributor, site)
+  end
+
+  defp ops_visible?(scope, :manufacturer, site) do
+    Portals.portal_role?(scope, :manufacturer) and Portals.manufacturer_organization?(scope) and
+      in_context?(scope, :manufacturer, site)
   end
 
   defp ops_visible?(scope, portal, site) do
@@ -868,15 +911,36 @@ defmodule ThamaniDawaWeb.Layouts do
       {"Inventory",
        [
          {"Receiving", "hero-arrow-down-tray", ~p"/distributor/receiving"},
-         {"Inventory", "hero-archive-box", ~p"/distributor/products"},
-         {"Expiry write-off", "hero-calendar-days", ~p"/distributor/expiry-write-offs"},
-         {"Stock takes", "hero-clipboard-document-list", ~p"/distributor/stock-takes"}
+         {"Inventory", "hero-archive-box", ~p"/distributor/products"}
        ]},
       {"Sales & distribution",
        [
          {"Shipments", "hero-truck", ~p"/distributor/shipments"},
          {"Customers", "hero-user-group", ~p"/distributor/customers"},
          {"Returns", "hero-arrow-uturn-left", ~p"/distributor/returns"}
+       ]}
+    ]
+  end
+
+  defp manufacturer_items do
+    Enum.flat_map(manufacturer_item_groups(), fn {_label, items} -> items end)
+  end
+
+  defp manufacturer_item_groups do
+    [
+      {"Overview",
+       [
+         {"Dashboard", "hero-squares-2x2", ~p"/manufacturer"}
+       ]},
+      {"Products",
+       [
+         {"Products", "hero-archive-box", ~p"/manufacturer/products"},
+         {"Inventory", "hero-cube", ~p"/manufacturer/inventory"},
+         {"Shipments", "hero-truck", ~p"/manufacturer/shipments"}
+       ]},
+      {"Compliance",
+       [
+         {"EPCIS events", "hero-signal", ~p"/manufacturer/epcis"}
        ]}
     ]
   end
@@ -904,8 +968,24 @@ defmodule ThamaniDawaWeb.Layouts do
     cond do
       not Scope.admin?(scope) or not is_nil(site) -> []
       Enum.any?(ops_groups, &match?({:distributor, _}, &1)) -> distributor_admin_groups()
+      Enum.any?(ops_groups, &match?({:manufacturer, _}, &1)) -> manufacturer_admin_groups()
       true -> org_management_groups()
     end
+  end
+
+  defp manufacturer_admin_groups do
+    [
+      {"Reference data",
+       [
+         {"Sites", "hero-building-office-2", ~p"/org/sites"}
+       ]},
+      {"Account",
+       [
+         {"API keys", "hero-key", ~p"/manufacturer/api-keys"},
+         {"TNT reporting", "hero-globe-alt", ~p"/manufacturer/epcis"},
+         {"Org settings", "hero-cog-6-tooth", ~p"/manufacturer/settings"}
+       ]}
+    ]
   end
 
   defp distributor_admin_groups do
@@ -1400,6 +1480,7 @@ defmodule ThamaniDawaWeb.Layouts do
   defp product_tour_path("/pharmacy"), do: ~p"/pharmacy?tour=1"
   defp product_tour_path("/lab"), do: ~p"/lab?tour=1"
   defp product_tour_path("/distributor"), do: ~p"/distributor?tour=1"
+  defp product_tour_path("/manufacturer"), do: ~p"/manufacturer?tour=1"
 
   @doc """
   Provides dark vs light theme toggle based on themes defined in app.css.

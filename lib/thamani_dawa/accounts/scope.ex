@@ -72,6 +72,21 @@ defmodule ThamaniDawa.Accounts.Scope do
 
   def distributor_access?(_scope), do: false
 
+  @doc "Whether the signed-in user is a manufacturer."
+  def manufacturer?(scope), do: role?(scope, :manufacturer)
+
+  @doc """
+  Whether the signed-in user can enter the manufacturer portal: an active
+  user holding the manufacturer role — admins are exempt (they administer
+  every operation of the organization, §7). The organization's operating
+  model is checked separately by `ThamaniDawaWeb.Portals` since it needs a
+  database read.
+  """
+  def manufacturer_access?(%__MODULE__{user: %User{is_active: true}} = scope),
+    do: manufacturer?(scope) or admin?(scope)
+
+  def manufacturer_access?(_scope), do: false
+
   @doc """
   Whether the signed-in user can enter the pharmacy portal: an admin or a
   pharmacist (combined pharmacy/lab staff hold the pharmacist role too).

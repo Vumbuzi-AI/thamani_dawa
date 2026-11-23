@@ -113,6 +113,20 @@ config :thamani_dawa, :demo_login_accounts, [
     role: "Distributor",
     email: "distributor@gmail.com",
     password: "password"
+  },
+  %{
+    id: "manufacturer",
+    name: "Esther Wanjiru",
+    role: "Manufacturer",
+    email: "manufacturer@gmail.com",
+    password: "password"
+  },
+  %{
+    id: "manufacturer-distributor",
+    name: "Samuel Kiptoo",
+    role: "Manufacturer + distributor",
+    email: "manufacturer-distributor@gmail.com",
+    password: "password"
   }
 ]
 

@@ -16,8 +16,6 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
      |> assign(:split_open, false)
      |> assign(:split_groups, [])
      |> assign(:minted_mini_ssccs, [])
-     |> assign(:status_target, nil)
-     |> assign(:status_form, to_form(%{"reference" => ""}, as: :status))
      |> assign_case_lines(batch)
      |> load_trail(batch)}
   end
@@ -80,56 +78,6 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
     end
   end
 
-  def handle_event("open_status", %{"target" => target}, socket) do
-    {:noreply,
-     socket
-     |> assign(:status_target, String.to_existing_atom(target))
-     |> assign(:status_form, to_form(%{"reference" => ""}, as: :status))}
-  end
-
-  def handle_event("close_status", _params, socket) do
-    {:noreply, assign(socket, :status_target, nil)}
-  end
-
-  def handle_event("validate_status_reference", %{"status" => attrs}, socket) do
-    {:noreply, assign(socket, :status_form, to_form(attrs, as: :status))}
-  end
-
-  def handle_event("save_status", params, socket) do
-    attrs = Map.get(params, "status", %{})
-    user = socket.assigns.current_scope.user
-    reference = String.trim(Map.get(attrs, "reference", ""))
-
-    if socket.assigns.status_target != :expired and reference == "" do
-      {:noreply,
-       put_flash(socket, :error, "Enter a reference before confirming this status change.")}
-    else
-      case apply_status_transition(
-             socket.assigns.batch,
-             socket.assigns.status_target,
-             reference,
-             user
-           ) do
-        {:ok, batch} ->
-          batch = load_batch(socket, batch.id)
-
-          {:noreply,
-           socket
-           |> assign(:status_target, nil)
-           |> load_trail(batch)
-           |> put_flash(:info, "Status updated.")}
-
-        {:error, _changeset} ->
-          {:noreply,
-           put_flash(
-             socket,
-             :error,
-             "That status change isn't allowed from the batch's current state."
-           )}
-      end
-    end
-  end
-
   def handle_event("break_into_mini_ssccs", params, socket) do
     batch = socket.assigns.batch
     form_groups = form_groups(Map.get(params, "groups", %{}))
@@ -177,7 +125,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
   defp load_batch(socket, id) do
     socket.assigns.current_scope.organization_id
     |> Batches.get_batch_with_details!(id)
-    |> Repo.preload([:source_batch, :logistic_unit])
+    |> Repo.preload(:logistic_unit)
   end
 
   defp assign_case_lines(socket, %{logistic_unit_id: nil}) do
@@ -198,38 +146,6 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
     |> assign(:trail_shipments, Batches.list_shipments_from_batch(batch))
     |> assign(:trail_events, Outbox.list_events_for_source(organization_id, "batch", batch.id))
   end
-
-  defp apply_status_transition(batch, :damaged, reference, user),
-    do: Batches.mark_damaged(batch, reference, user)
-
-  defp apply_status_transition(batch, :expired, _reference, user),
-    do: Batches.mark_expired(batch, user)
-
-  defp apply_status_transition(batch, :stolen, reference, user),
-    do: Batches.mark_stolen(batch, reference, user)
-
-  defp apply_status_transition(batch, :inactive, reference, user),
-    do: Batches.mark_lost(batch, reference, user)
-
-  defp apply_status_transition(batch, :non_sellable_other, reference, user),
-    do: Batches.mark_exported(batch, reference, user)
-
-  defp apply_status_transition(batch, :recalled, reference, user),
-    do: Batches.mark_recalled(batch, reference, user)
-
-  defp apply_status_transition(batch, :destroyed, reference, user),
-    do: Batches.mark_destroyed(batch, reference, user)
-
-  defp valid_status_targets(:active),
-    do: [:damaged, :expired, :stolen, :inactive, :non_sellable_other, :recalled]
-
-  defp valid_status_targets(:quarantined), do: [:damaged, :recalled]
-
-  defp valid_status_targets(status) when status in [:damaged, :expired],
-    do: [:destroyed, :recalled]
-
-  defp valid_status_targets(:recalled), do: [:destroyed]
-  defp valid_status_targets(_status), do: []
 
   defp status_label(:inactive), do: "Lost"
   defp status_label(:non_sellable_other), do: "Exported"
@@ -508,7 +424,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
         <:subtitle>{product_name(@batch.product)} batch details and receiving record.</:subtitle>
         <:actions>
           <.button
-            :if={@batch.remaining_quantity > 0}
+            :if={@batch.remaining_quantity > 0 and is_nil(@batch.logistic_unit_id)}
             id="break-bulk-button"
             variant="primary"
             type="button"
@@ -527,16 +443,6 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
         </:actions>
       </.header>
 
-      <p :if={@batch.source_batch} id="split-from" class="mt-3 text-sm text-thamani-subtle">
-        Split from
-        <.link
-          navigate={~p"/distributor/batches/#{@batch.source_batch.id}"}
-          class="font-semibold text-thamani-forest hover:underline"
-        >
-          {@batch.source_batch.batch_no}
-        </.link>
-      </p>
-
       <section
         :if={@batch.logistic_unit && length(@case_lines) > 1}
         id="case-contents"
@@ -547,8 +453,14 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
           <p class="font-mono text-xs text-thamani-subtle">SSCC {@batch.logistic_unit.sscc}</p>
         </div>
         <p class="mt-1 text-sm text-thamani-subtle">
-          This case holds {count_phrase(length(@case_lines), "product")}. Break each line into
-          its own mini-SSCCs; the case SSCC is retired once its last line is broken.
+          This case holds {count_phrase(length(@case_lines), "product")}.
+          <.link
+            navigate={~p"/distributor/cases/#{@batch.logistic_unit_id}"}
+            class="font-semibold text-thamani-forest hover:underline"
+          >
+            Break the whole case
+          </.link>
+          to split every line into mini-SSCCs at once and retire its SSCC.
         </p>
         <ul class="mt-4 divide-y divide-thamani-stone">
           <li
@@ -704,11 +616,11 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
         <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">GTIN</dt>
-            <dd class="mt-1 font-mono text-sm text-thamani-ink">{@batch.gtin}</dd>
+            <dd class="mt-1 text-sm text-thamani-ink">{@batch.gtin}</dd>
           </div>
           <div :if={@batch.sscc}>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">SSCC</dt>
-            <dd id="batch-sscc" class="mt-1 font-mono text-sm text-thamani-ink">{@batch.sscc}</dd>
+            <dd id="batch-sscc" class="mt-1 text-sm text-thamani-ink">{@batch.sscc}</dd>
           </div>
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
@@ -788,21 +700,6 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
             <span class="text-xs font-medium text-thamani-pewter">Status</span>
             <.status_badge status={@batch.status} label={status_label(@batch.status)} />
           </div>
-          <div :if={valid_status_targets(@batch.status) != []} class="mt-3">
-            <p class="text-xs font-medium text-thamani-pewter">Change to</p>
-            <div class="mt-2 flex flex-wrap gap-2">
-              <button
-                :for={target <- valid_status_targets(@batch.status)}
-                type="button"
-                id={"status-target-#{target}"}
-                phx-click="open_status"
-                phx-value-target={target}
-                class="inline-flex h-8 items-center rounded-full border border-thamani-stone bg-white px-3 text-sm font-medium text-thamani-forest transition-colors hover:bg-thamani-canvas"
-              >
-                {status_label(target)}
-              </button>
-            </div>
-          </div>
         </div>
 
         <div
@@ -881,28 +778,6 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
           </.trail_step>
         </ol>
       </section>
-
-      <.modal :if={@status_target} id="status-modal" show on_cancel={JS.push("close_status")}>
-        <h2 class="text-xl font-medium text-thamani-forest">
-          Mark as {status_label(@status_target)}
-        </h2>
-        <p class="mt-1 text-sm text-thamani-pewter">{@batch.batch_no}</p>
-        <.form
-          for={@status_form}
-          id="status-form"
-          phx-change="validate_status_reference"
-          phx-submit="save_status"
-          class="mt-4"
-        >
-          <.input
-            :if={@status_target != :expired}
-            field={@status_form[:reference]}
-            label="Reference (incident/recall number)"
-            required
-          />
-          <.button class="mt-3 w-full" variant="primary">Confirm</.button>
-        </.form>
-      </.modal>
     </Layouts.distributor_shell>
     """
   end

@@ -23,7 +23,16 @@ defmodule ThamaniDawa.Customers.Customer do
   @doc false
   def changeset(customer, attrs) do
     customer
-    |> cast(attrs, [:name, :gln, :address, :customer_type, :contact_name, :contact_email, :contact_phone, :organization_id])
+    |> cast(attrs, [
+      :name,
+      :gln,
+      :address,
+      :customer_type,
+      :contact_name,
+      :contact_email,
+      :contact_phone,
+      :organization_id
+    ])
     |> validate_required([:name, :customer_type, :organization_id],
       message: "can't be blank"
     )

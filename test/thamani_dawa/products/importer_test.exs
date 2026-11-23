@@ -21,6 +21,7 @@ defmodule ThamaniDawa.Products.ImporterTest do
       assert Importer.auto_map_columns(headers) == %{
                generic_name: "Medicine / Product",
                brand_name: "Trade label",
+               strength: nil,
                gtin: "Barcode (GTIN)",
                price: "Retail price (KES)",
                uom: "Selling unit",

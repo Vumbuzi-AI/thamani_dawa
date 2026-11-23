@@ -24,6 +24,13 @@ defmodule ThamaniDawa.Batches do
     Repo.all(from b in Batch, where: b.organization_id == ^organization_id)
   end
 
+  @doc "Fetches a logistic unit (case/SSCC) scoped to an organization, with its site preloaded."
+  def get_logistic_unit!(organization_id, id) do
+    LogisticUnit
+    |> Repo.get_by!(id: id, organization_id: organization_id)
+    |> Repo.preload(:site)
+  end
+
   @doc "Active, in-stock batch lines belonging to a logistic unit (a case's contents)."
   def list_case_lines(organization_id, logistic_unit_id) do
     Repo.all(
@@ -190,6 +197,43 @@ defmodule ThamaniDawa.Batches do
 
   defp filter_by_site_ids(query, nil), do: query
   defp filter_by_site_ids(query, site_ids), do: where(query, [b], b.site_id in ^site_ids)
+
+  @doc """
+  Lists org-level batches (received by the organization but not yet
+  dispatched to a site) for a product, preloaded with `supplier` (scoped to
+  the organization), ordered by soonest expiry.
+  """
+  def list_undispatched_batches_for_product(organization_id, product_id) do
+    supplier_query = from s in Supplier, where: s.organization_id == ^organization_id
+
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: b.product_id == ^product_id,
+        where: is_nil(b.site_id),
+        where: b.remaining_quantity > 0,
+        order_by: [asc: b.expiry_date],
+        preload: [supplier: ^supplier_query]
+    )
+  end
+
+  @doc """
+  Lists all available organization warehouse batches, preloaded with their
+  product and supplier, ordered by soonest expiry.
+  """
+  def list_organization_warehouse_batches(organization_id) do
+    product_query = from p in Product, where: p.organization_id == ^organization_id
+    supplier_query = from s in Supplier, where: s.organization_id == ^organization_id
+
+    Repo.all(
+      from b in Batch,
+        where: b.organization_id == ^organization_id,
+        where: is_nil(b.site_id),
+        where: b.remaining_quantity > 0,
+        order_by: [asc: b.expiry_date, asc: b.id],
+        preload: [product: ^product_query, supplier: ^supplier_query]
+    )
+  end
 
   @doc "Lists batches dispatched to a site but not yet received by staff."
   def list_pending_batches(organization_id) do
@@ -585,36 +629,31 @@ defmodule ThamaniDawa.Batches do
   end
 
   @doc """
-  Records a batch as site-bound stock. `site_id` is now required — all
-  batches must be assigned to a destination site at the moment of receipt.
-  This replaces the old siteless org-level intake flow.
+  Records a batch as org-level stock — received by the organization but not
+  yet assigned to any site. This is the first step of intake; stock becomes
+  dispatchable to a site via `dispatch_to_site/2`.
   """
   def receive_into_org_stock(organization_id, attrs) when is_integer(organization_id) do
     %Batch{}
     |> Batch.org_intake_changeset(default_remaining_quantity(attrs))
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> validate_belongs_to_org(:product_id, Product, organization_id)
-    |> validate_belongs_to_org(:site_id, Site, organization_id)
     |> validate_belongs_to_org(:supplier_id, Supplier, organization_id)
     |> Repo.audited_insert()
   end
 
   @doc """
-  Dispatches a batch to a site. This now works as a genuine inter-site
-  transfer mechanism — it moves stock from one site to another (or assigns
-  the first site to a newly-received batch if source_batch.site_id is nil,
-  for backward compatibility with any pre-migration data).
+  Dispatches an org-level batch (one with no `site_id`) to a site. The
+  two-argument form dispatches its full remaining quantity. Use the
+  three-argument form to dispatch part of the stock, leaving the balance in
+  the organization warehouse for another site.
 
-  The two-argument form dispatches its full remaining quantity. Use the
-  three-argument form to dispatch part of the stock, leaving the balance at
-  the source site for another transfer.
-
-  Each dispatch creates a separate destination `Batch` (pending receipt, as
-  with `create_batch/2`) linked back through `source_batch_id`.
+  Each dispatch creates a separate site `Batch` (pending receipt, as with
+  `create_batch/2`) linked back through `source_batch_id`.
   """
-  def dispatch_to_site(%Batch{} = source_batch, site_id) when is_integer(site_id) do
-    if source_batch.remaining_quantity > 0 do
-      dispatch_to_site(source_batch, site_id, source_batch.remaining_quantity)
+  def dispatch_to_site(%Batch{} = org_batch, site_id) when is_integer(site_id) do
+    if org_batch.remaining_quantity > 0 do
+      dispatch_to_site(org_batch, site_id, org_batch.remaining_quantity)
     else
       {:error, :nothing_to_dispatch}
     end
@@ -625,48 +664,46 @@ defmodule ThamaniDawa.Batches do
     {:error, :invalid_dispatch_quantity}
   end
 
-  def dispatch_to_site(%Batch{} = source_batch, site_id, quantity)
+  def dispatch_to_site(%Batch{} = org_batch, site_id, quantity)
       when is_integer(site_id) and is_integer(quantity) do
-    Repo.transaction(fn -> execute_dispatch(source_batch, site_id, quantity) end)
+    Repo.transaction(fn -> execute_dispatch(org_batch, site_id, quantity) end)
   end
 
-  defp execute_dispatch(source_batch, site_id, quantity) do
-    current_source_batch = lock_source_batch(source_batch)
+  defp execute_dispatch(org_batch, site_id, quantity) do
+    current_org_batch = lock_source_batch(org_batch)
 
-    with :ok <- validate_dispatch(current_source_batch, site_id, quantity),
-         {:ok, _} <- debit_source_batch(current_source_batch, quantity),
-         {:ok, dispatched} <- create_dispatched_batch(current_source_batch, site_id, quantity) do
+    with :ok <- validate_dispatch(current_org_batch, quantity),
+         {:ok, _} <- debit_org_batch(current_org_batch, quantity),
+         {:ok, dispatched} <- create_dispatched_batch(current_org_batch, site_id, quantity) do
       dispatched
     else
       {:error, reason} -> Repo.rollback(reason)
     end
   end
 
-  defp lock_source_batch(source_batch) do
+  defp lock_source_batch(org_batch) do
     Repo.one(
       from b in Batch,
-        where: b.id == ^source_batch.id and b.organization_id == ^source_batch.organization_id,
+        where: b.id == ^org_batch.id and b.organization_id == ^org_batch.organization_id,
         lock: "FOR UPDATE"
     )
   end
 
-  defp validate_dispatch(nil, _site_id, _quantity), do: {:error, :not_found}
+  defp validate_dispatch(nil, _quantity), do: {:error, :not_found}
 
-  defp validate_dispatch(%Batch{site_id: source_site_id}, destination_site_id, _quantity)
-       when not is_nil(source_site_id) and source_site_id == destination_site_id,
-       do: {:error, :same_site}
+  defp validate_dispatch(%Batch{site_id: site_id}, _quantity) when not is_nil(site_id),
+    do: {:error, :already_dispatched}
 
-  defp validate_dispatch(%Batch{remaining_quantity: remaining}, _site_id, _quantity)
-       when remaining <= 0,
-       do: {:error, :nothing_to_dispatch}
+  defp validate_dispatch(%Batch{remaining_quantity: remaining}, _quantity) when remaining <= 0,
+    do: {:error, :nothing_to_dispatch}
 
-  defp validate_dispatch(%Batch{remaining_quantity: remaining}, _site_id, quantity)
+  defp validate_dispatch(%Batch{remaining_quantity: remaining}, quantity)
        when quantity > remaining,
        do: {:error, :insufficient_quantity}
 
-  defp validate_dispatch(_batch, _site_id, _quantity), do: :ok
+  defp validate_dispatch(_batch, _quantity), do: :ok
 
-  defp debit_source_batch(batch, quantity) do
+  defp debit_org_batch(batch, quantity) do
     set_remaining_quantity(batch, batch.remaining_quantity - quantity)
   end
 

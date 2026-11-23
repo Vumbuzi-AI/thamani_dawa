@@ -106,7 +106,10 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           }
         end)
 
-      %{sscc: sscc, batches: batches}
+      logistic_unit_id =
+        lines |> Enum.map(& &1[:logistic_unit_id]) |> Enum.find(&(&1 != nil))
+
+      %{sscc: sscc, logistic_unit_id: logistic_unit_id, batches: batches}
     end)
   end
 
@@ -122,6 +125,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
       uom: batch.product && batch.product.uom,
       condition: batch_condition(batch.status),
       sscc: batch.sscc,
+      logistic_unit_id: batch.logistic_unit_id,
       discrepancy_id: nil,
       resolvable: false,
       resolution_reference: nil
@@ -141,6 +145,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
       uom: discrepancy.product && discrepancy.product.uom,
       condition: discrepancy_condition(discrepancy),
       sscc: discrepancy.sscc,
+      logistic_unit_id: nil,
       discrepancy_id: discrepancy.id,
       resolvable: discrepancy.status == :open,
       resolution_reference: discrepancy.resolution_reference
@@ -189,37 +194,9 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   defp received_lines(lines), do: Enum.reject(lines, & &1.discrepancy_id)
   defp follow_up_lines(lines), do: Enum.filter(lines, & &1.discrepancy_id)
 
-  defp receipt_ai_pairs(card) do
-    line = card.line
-
-    [
-      {"01", line.gtin},
-      {"17", match?(%Date{}, line.expiry) && Calendar.strftime(line.expiry, "%y%m%d")},
-      {"10", line.batch_no},
-      {"21", card.serial}
-    ]
-    |> Enum.filter(fn {_ai, value} -> value not in [nil, false, ""] end)
-  end
-
-  defp receipt_gs1_text(card) do
-    card |> receipt_ai_pairs() |> Enum.map_join(fn {ai, value} -> "(#{ai})#{value}" end)
-  end
-
-  defp serial_cards(lines) do
+  defp serial_entries(lines) do
     Enum.flat_map(lines, fn line ->
-      line.serials
-      |> Enum.with_index()
-      |> Enum.map(fn {serial, index} ->
-        %{
-          line: line,
-          serial: serial,
-          dom_id:
-            if(index == 0,
-              do: "goods-receipt-line-#{line.id}",
-              else: "goods-receipt-line-#{line.id}-#{index}"
-            )
-        }
-      end)
+      Enum.map(line.serials, fn serial -> %{serial: serial, condition: line.condition} end)
     end)
   end
 
@@ -230,7 +207,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
 
     assigns =
       assigns
-      |> assign(:serial_cards, serial_cards(Enum.filter(received, &(&1.serials != []))))
+      |> assign(:serial_entries, serial_entries(Enum.filter(received, &(&1.serials != []))))
       |> assign(:quantity_lines, Enum.filter(received, &(&1.serials == [])))
       |> assign(:follow_up, follow_up_lines(assigns.batch.lines))
 
@@ -241,7 +218,10 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           <p class="truncate text-sm font-semibold text-thamani-evergreen" title={@batch.product_name}>
             {@batch.product_name}
           </p>
-          <p :if={@batch.gtin} class="mt-0.5 truncate text-xs tabular-nums tracking-tight text-thamani-pewter">
+          <p
+            :if={@batch.gtin}
+            class="mt-0.5 truncate text-xs tabular-nums tracking-tight text-thamani-pewter"
+          >
             {@batch.gtin}
           </p>
         </div>
@@ -265,46 +245,42 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
         </div>
       </div>
 
-      <ul
-        :if={@serial_cards != []}
-        class="flex flex-wrap items-start gap-2 border-t border-thamani-stone bg-thamani-canvas/60 px-4 py-3 sm:px-5"
+      <details
+        :if={@serial_entries != []}
+        class="group border-t border-thamani-stone bg-thamani-canvas/60 px-4 py-3 sm:px-5"
       >
-        <li
-          :for={card <- @serial_cards}
-          id={card.dom_id}
-          class="flex w-fit max-w-full items-start gap-2 rounded-xl border border-thamani-stone bg-white p-2"
-        >
-          <canvas
-            :if={card.line.gtin}
-            id={"receipt-unit-code-#{card.dom_id}"}
-            phx-hook="DataMatrix"
-            phx-update="ignore"
-            data-gs1-text={receipt_gs1_text(card)}
-            class="size-16 shrink-0"
-          >
-          </canvas>
-          <p class="text-xs leading-4 tabular-nums tracking-tight">
-            <span
-              :for={{ai, value} <- receipt_ai_pairs(card)}
-              class="block whitespace-nowrap"
-            >
-              <span class="text-thamani-pewter">({ai})</span>
-              <span class="font-medium text-thamani-evergreen">{value}</span>
-            </span>
-          </p>
-          <span
-            :if={card.line.condition}
-            class={[
-              "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium",
-              condition_classes(card.line.condition)
-            ]}
-          >
-            {condition_label(card.line.condition)}
+        <summary class="w-fit cursor-pointer list-none text-xs font-medium text-thamani-pewter hover:text-thamani-evergreen">
+          <span class="inline-flex items-center gap-1">
+            <.icon
+              name="hero-chevron-right"
+              class="size-3.5 transition-transform group-open:rotate-90"
+            />
+            {length(@serial_entries)} serial(s)
           </span>
-        </li>
-      </ul>
+        </summary>
+        <ul class="mt-2 flex flex-wrap gap-1.5">
+          <li
+            :for={entry <- @serial_entries}
+            class="inline-flex items-center gap-1.5 rounded-lg border border-thamani-stone bg-white px-2 py-1 text-xs font-medium tabular-nums tracking-tight text-thamani-evergreen"
+          >
+            {entry.serial}
+            <span
+              :if={entry.condition}
+              class={[
+                "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                condition_classes(entry.condition)
+              ]}
+            >
+              {condition_label(entry.condition)}
+            </span>
+          </li>
+        </ul>
+      </details>
 
-      <ul :if={@quantity_lines != []} class="grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 xl:grid-cols-3">
+      <ul
+        :if={@quantity_lines != []}
+        class="grid gap-3 px-4 py-4 sm:grid-cols-2 sm:px-5 xl:grid-cols-3"
+      >
         <li
           :for={line <- @quantity_lines}
           id={"goods-receipt-line-#{line.id}"}
@@ -350,7 +326,10 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
                 {condition_label(line.condition)}
               </span>
             </div>
-            <p :if={line.resolution_reference not in [nil, ""]} class="mt-2 text-xs text-thamani-pewter">
+            <p
+              :if={line.resolution_reference not in [nil, ""]}
+              class="mt-2 text-xs text-thamani-pewter"
+            >
               Reference
               <span class="font-medium text-thamani-evergreen">{line.resolution_reference}</span>
             </p>
@@ -482,12 +461,14 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
                   </p>
                 </div>
               </div>
-              <span
-                :if={group.sscc}
-                class="rounded-lg bg-thamani-lime px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
-              >
-                SSCC {group.sscc}
-              </span>
+              <div class="flex items-center gap-2">
+                <span
+                  :if={group.sscc}
+                  class="rounded-lg bg-thamani-lime px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
+                >
+                  SSCC {group.sscc}
+                </span>
+              </div>
             </header>
 
             <.receipt_batch :for={batch <- group.batches} batch={batch} />

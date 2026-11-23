@@ -187,7 +187,9 @@ defmodule ThamaniDawa.GoodsReceiptsTest do
   end
 
   test "groups a cased delivery into one logistic unit and leaves loose stock unlinked", ctx do
-    product_b = ProductsFixtures.product_fixture(%{organization_id: ctx.organization.id, uom: "U2"})
+    product_b =
+      ProductsFixtures.product_fixture(%{organization_id: ctx.organization.id, uom: "U2"})
+
     sscc = "006141411234567890"
 
     items = [

@@ -26,19 +26,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
      |> assign(:batch_count, length(batches))
      |> assign(:remaining_stock, Enum.sum(Enum.map(batches, & &1.remaining_quantity)))
      |> assign(:page_number, 1)
-     |> assign(:expanded_batches, MapSet.new())
      |> stream(:batches, [])}
-  end
-
-  def handle_event("toggle_batch_serials", %{"batch" => batch_id}, socket) do
-    expanded = socket.assigns.expanded_batches
-
-    expanded =
-      if MapSet.member?(expanded, batch_id),
-        do: MapSet.delete(expanded, batch_id),
-        else: MapSet.put(expanded, batch_id)
-
-    {:noreply, assign(socket, :expanded_batches, expanded)}
   end
 
   def handle_params(params, _url, socket) do
@@ -135,7 +123,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
             </dt><dd class="mt-1 text-sm text-thamani-ink">{@product.manufacturer || "—"}</dd>
           </div>
           <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">GTIN</dt><dd class="mt-1 font-mono text-sm text-thamani-ink">
+            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">GTIN</dt><dd class="mt-1 text-sm text-thamani-ink">
               {@product.gtin || "—"}
             </dd>
           </div>
@@ -176,36 +164,25 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
           <span class="font-mono">{batch.batch_no}</span>
         </:col>
         <:col :let={{_id, batch}} label="Serials">
-          <button
-            type="button"
-            phx-click={batch.serials != [] && "toggle_batch_serials"}
-            phx-value-batch={batch.id}
-            disabled={batch.serials == []}
-            class="flex items-center gap-1 text-sm font-semibold text-thamani-forest disabled:cursor-default"
-            aria-expanded={to_string(MapSet.member?(@expanded_batches, to_string(batch.id)))}
-          >
-            {if batch.serials == [], do: "—", else: length(batch.serials)}
-            <.icon
-              :if={batch.serials != []}
-              name="hero-chevron-down"
-              class={[
-                "size-3.5 transition-transform duration-200",
-                MapSet.member?(@expanded_batches, to_string(batch.id)) && "rotate-180"
-              ]}
-            />
-          </button>
-          <div
-            :if={batch.serials != [] and MapSet.member?(@expanded_batches, to_string(batch.id))}
-            class="mt-1.5 grid gap-1.5 sm:grid-cols-2"
-          >
-            <span
-              :for={serial <- batch.serials}
-              class="truncate rounded border border-thamani-stone bg-white px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
-              title={serial}
-            >
-              {serial}
-            </span>
-          </div>
+          <span :if={batch.serials == []} class="text-sm text-thamani-subtle">—</span>
+          <details :if={batch.serials != []} class="group">
+            <summary class="flex w-fit cursor-pointer list-none items-center gap-1 text-sm font-semibold text-thamani-forest">
+              {length(batch.serials)}
+              <.icon
+                name="hero-chevron-down"
+                class="size-3.5 transition-transform duration-200 group-open:rotate-180"
+              />
+            </summary>
+            <div class="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+              <span
+                :for={serial <- batch.serials}
+                class="truncate rounded border border-thamani-stone bg-white px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
+                title={serial}
+              >
+                {serial}
+              </span>
+            </div>
+          </details>
         </:col>
         <:col :let={{_id, batch}} label="Manufactured">{date_or_dash(batch.manufacture_date)}</:col>
         <:col :let={{_id, batch}} label="Expires">{date_or_dash(batch.expiry_date)}</:col>

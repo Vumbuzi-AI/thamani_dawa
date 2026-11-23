@@ -5,7 +5,7 @@ defmodule ThamaniDawa.Organizations.Organization do
   @similar_name_message "An organization with a similar name already exists"
   @slug_index :organizations_slug_index
   @name_key_index :organizations_name_key_index
-  @operating_models [:pharmacy, :laboratory, :distributor]
+  @operating_models [:pharmacy, :laboratory, :distributor, :manufacturer]
 
   schema "organizations" do
     field :name, :string
@@ -20,11 +20,6 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :is_active, :boolean, default: true
     field :is_subscription_active, :boolean, default: false
     field :next_requisition_number, :integer, default: 0
-    field :gs1_company_prefix, :string
-
-    field :gs1_prefix_verification_status, Ecto.Enum,
-      values: [:pending, :verified, :failed],
-      default: :pending
 
     field :gln, :string
     field :gln_verified_at, :utc_datetime
@@ -43,12 +38,15 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :epcis_distributor_api_key_last4, :string
     field :epcis_facility_api_key, ThamaniDawa.Encrypted.Binary
     field :epcis_facility_api_key_last4, :string
+    field :epcis_manufacturer_api_key, ThamaniDawa.Encrypted.Binary
+    field :epcis_manufacturer_api_key_last4, :string
 
     field :gs1_api_key, ThamaniDawa.Encrypted.Binary
     field :gs1_api_key_last4, :string
 
     field :onboarding_checklist_dismissed_at, :utc_datetime
 
+    has_many :gs1_prefixes, ThamaniDawa.Organizations.OrganizationGs1Prefix
     has_many :sites, ThamaniDawa.Sites.Site
     has_many :users, ThamaniDawa.Accounts.User
     has_many :products, ThamaniDawa.Products.Product
@@ -78,16 +76,14 @@ defmodule ThamaniDawa.Organizations.Organization do
 
   defp base_changeset(organization, attrs) do
     organization
-    |> cast(attrs, [:name, :slug, :license_number, :operating_models, :gs1_company_prefix])
+    |> cast(attrs, [:name, :slug, :license_number, :operating_models])
     |> trim_change(:name)
     |> trim_change(:license_number)
-    |> trim_change(:gs1_company_prefix)
     |> validate_required([:name], message: "Please enter your organization name")
     |> validate_length(:operating_models,
       min: 1,
       message: "Select at least one operating model"
     )
-    |> validate_format(:gs1_company_prefix, ~r/^\d{6,10}$/, message: "must be 6 to 10 digits")
     |> maybe_generate_slug()
     |> put_name_key()
     |> unique_constraint(:name, message: "An organization with this name already exists")
@@ -96,17 +92,13 @@ defmodule ThamaniDawa.Organizations.Organization do
   end
 
   @doc """
-  Changeset for onboarding: organization identity plus a GS1 company prefix,
-  always required. Premises licenses are verified separately at site setup.
-  Dispensing (pharmacy) and distribution
-  (distributor) events build org-prefixed identifiers directly, but even a
-  laboratory-only organization needs it: goods receiving (`Epcis.record_goods_receipt/1`)
-  requires the org's GS1 prefix regardless of operating model.
+  Changeset for onboarding: organization name, license, and operating
+  models. GS1 company prefixes are no longer collected at signup — an
+  organization can have none, one, or several, added and verified later
+  from the settings page.
   """
   def signup_changeset(organization, attrs) do
-    organization
-    |> base_changeset(attrs)
-    |> validate_gs1_company_prefix()
+    base_changeset(organization, attrs)
   end
 
   @doc "The operating models an organization may enable during onboarding."
@@ -118,23 +110,11 @@ defmodule ThamaniDawa.Organizations.Organization do
 
   def distributor?(_organization), do: false
 
-  @doc """
-  Whether a GS1 company prefix must be present. Always true — every
-  operating model eventually posts a goods receipt, which requires it
-  regardless of operating model.
-  """
-  def gs1_prefix_required?(_organization), do: true
+  @doc "Whether the organization operates as a manufacturer."
+  def manufacturer?(%__MODULE__{operating_models: models}) when is_list(models),
+    do: :manufacturer in models
 
-  @doc "Changeset for the organization's GS1 identifiers (company prefix and GLN)."
-  def gs1_settings_changeset(organization, attrs) do
-    organization
-    |> cast(attrs, [:gs1_company_prefix, :gln])
-    |> trim_change(:gs1_company_prefix)
-    |> trim_change(:gln)
-    |> validate_format(:gs1_company_prefix, ~r/^\d{6,10}$/, message: "must be 6 to 10 digits")
-    |> validate_format(:gln, ~r/^\d{13}$/, message: "must be a 13-digit GLN")
-    |> validate_gln_check_digit()
-  end
+  def manufacturer?(_organization), do: false
 
   @doc "Changeset for the organization details editable from the settings page (licence, VAT status)."
   def details_changeset(organization, attrs) do
@@ -144,12 +124,7 @@ defmodule ThamaniDawa.Organizations.Organization do
     |> validate_required([:license_number], message: "Please enter your license number")
   end
 
-  @doc """
-  Changeset for the organization settings editable from the settings page.
-  The GS1 company prefix is deliberately excluded — it's baked into every
-  GTIN/SSCC already issued under it, so changing it after the fact would
-  desync those identifiers from the org record. It's set once at onboarding.
-  """
+  @doc "Changeset for the organization settings editable from the settings page (licence, VAT status, GLN)."
   def settings_changeset(organization, attrs) do
     organization
     |> cast(attrs, [:license_number, :vat_registered, :gln])
@@ -175,7 +150,8 @@ defmodule ThamaniDawa.Organizations.Organization do
   Blanking the key (empty string) clears both columns, which makes
   `Epcis.Client` fall back to the platform-wide key for that tier.
   """
-  def epcis_api_key_changeset(organization, tier, key) when tier in ["distributor", "facility"] do
+  def epcis_api_key_changeset(organization, tier, key)
+      when tier in ["distributor", "facility", "manufacturer"] do
     key = if is_binary(key), do: String.trim(key), else: key
     key_field = :"epcis_#{tier}_api_key"
     last4_field = :"epcis_#{tier}_api_key_last4"
@@ -242,18 +218,6 @@ defmodule ThamaniDawa.Organizations.Organization do
     {payload, check} = String.split_at(gln, -1)
     Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(payload)) == check
   end
-
-  defp validate_gs1_company_prefix(changeset) do
-    if prefix_blank?(get_field(changeset, :gs1_company_prefix)) do
-      add_error(changeset, :gs1_company_prefix, "Please enter your GS1 company prefix")
-    else
-      changeset
-    end
-  end
-
-  defp prefix_blank?(nil), do: true
-  defp prefix_blank?(""), do: true
-  defp prefix_blank?(_prefix), do: false
 
   defp trim_change(changeset, field) do
     update_change(changeset, field, fn

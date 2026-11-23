@@ -360,21 +360,19 @@ defmodule ThamaniDawa.GoodsReceipts do
         sscc -> Map.put(attrs, "logistic_unit_id", Map.get(units, sscc))
       end
 
-    # site_id is now mandatory for all batches — receiving always requires
-    # a destination site
-    if attrs["site_id"] in [nil, ""] do
-      Repo.rollback(:site_required)
-    else
-      result =
+    result =
+      if attrs["site_id"] in [nil, ""] do
+        Batches.receive_into_org_stock(organization_id, Map.delete(attrs, "site_id"))
+      else
         case Batches.create_batch(organization_id, attrs) do
           {:ok, batch} -> Batches.receive_batch(batch, user_id)
           error -> error
         end
-
-      case result do
-        {:ok, _batch} -> :ok
-        {:error, changeset} -> Repo.rollback(changeset)
       end
+
+    case result do
+      {:ok, _batch} -> :ok
+      {:error, changeset} -> Repo.rollback(changeset)
     end
   end
 

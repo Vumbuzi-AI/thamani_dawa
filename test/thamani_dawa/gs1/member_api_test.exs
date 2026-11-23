@@ -18,7 +18,8 @@ defmodule ThamaniDawa.GS1.MemberApiTest do
 
     assert {:error, {:invalid, "Missing required parameters. Please provide batch_info."}} =
              MemberApi.decode_create_response(
-               {:ok, 400, %{"result" => "Missing required parameters. Please provide batch_info."}}
+               {:ok, 400,
+                %{"result" => "Missing required parameters. Please provide batch_info."}}
              )
 
     assert {:ok, %{"sscc" => "061600000000000019", "products" => []}} =

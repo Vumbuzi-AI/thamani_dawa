@@ -9,6 +9,7 @@ defmodule ThamaniDawa.Organizations do
   alias ThamaniDawa.Grp.GlnVerificationWorker
   alias ThamaniDawa.Grp.PrefixVerificationWorker
   alias ThamaniDawa.Organizations.Organization
+  alias ThamaniDawa.Organizations.OrganizationGs1Prefix
   alias ThamaniDawa.Kmlttb.VerificationWorker, as: KmlttbVerificationWorker
   alias ThamaniDawa.Ppb.VerificationWorker, as: PpbVerificationWorker
   alias ThamaniDawa.Products
@@ -71,6 +72,16 @@ defmodule ThamaniDawa.Organizations do
       done?: &(Products.list_products(&1) != []),
       path: "/org/products/new"
     )
+    |> maybe_add_checklist_item(
+      organization,
+      :connect_keys,
+      [:pharmacy, :laboratory, :distributor, :manufacturer],
+      label: "Connect your tracing keys",
+      description: "Add your GS1 and EPCIS keys so serials, SSCCs and PPB reporting work.",
+      cta: "Add API keys",
+      done?: fn _ -> keys_ready?(organization) end,
+      path: "/org/api-keys?return_to=onboarding"
+    )
   end
 
   @doc """
@@ -106,10 +117,6 @@ defmodule ThamaniDawa.Organizations do
     end
   end
 
-  def change_organization_gs1_settings(%Organization{} = organization, attrs \\ %{}) do
-    Organization.gs1_settings_changeset(organization, attrs)
-  end
-
   def change_organization_details(%Organization{} = organization, attrs \\ %{}) do
     Organization.details_changeset(organization, attrs)
   end
@@ -137,13 +144,80 @@ defmodule ThamaniDawa.Organizations do
     |> Repo.update()
   end
 
-  @doc "Marks the organization's GS1 company prefix verification status directly (skips Oban)."
-  def mark_prefix_verification_status(%Organization{} = organization, status)
+  @doc "Marks a GS1 company prefix's verification status directly (skips Oban)."
+  def mark_prefix_verification_status(%OrganizationGs1Prefix{} = prefix, status)
       when status in [:verified, :failed] do
-    organization
-    |> Ecto.Changeset.change(gs1_prefix_verification_status: status)
+    now = if status == :verified, do: DateTime.utc_now(:second)
+
+    prefix
+    |> Ecto.Changeset.change(verification_status: status, verified_at: now)
     |> Repo.update()
   end
+
+  @doc "Lists an organization's GS1 company prefixes, primary first."
+  def list_gs1_prefixes(organization_id) do
+    Repo.all(
+      from p in OrganizationGs1Prefix,
+        where: p.organization_id == ^organization_id,
+        order_by: [desc: p.is_primary, asc: p.inserted_at]
+    )
+  end
+
+  @doc "The organization's primary GS1 company prefix record, or `nil` if it has none."
+  def primary_gs1_prefix(organization_id) do
+    Repo.one(
+      from p in OrganizationGs1Prefix,
+        where: p.organization_id == ^organization_id and p.is_primary
+    )
+  end
+
+  def change_gs1_prefix(%OrganizationGs1Prefix{} = prefix \\ %OrganizationGs1Prefix{}, attrs) do
+    OrganizationGs1Prefix.changeset(prefix, attrs)
+  end
+
+  @doc """
+  Adds a new GS1 company prefix to an organization and enqueues its
+  verification against the GS1 registry. The first prefix an organization
+  adds automatically becomes its primary one (used for building
+  GTINs/SSCCs); later prefixes are added as secondary unless the caller
+  explicitly promotes one with `set_primary_gs1_prefix/1`.
+  """
+  def add_gs1_prefix(%Organization{} = organization, attrs) do
+    is_primary = is_nil(primary_gs1_prefix(organization.id))
+
+    attrs =
+      attrs
+      |> Map.new(fn {k, v} -> {to_string(k), v} end)
+      |> Map.put("organization_id", organization.id)
+      |> Map.put_new("is_primary", is_primary)
+
+    with {:ok, prefix} <-
+           %OrganizationGs1Prefix{} |> OrganizationGs1Prefix.changeset(attrs) |> Repo.insert() do
+      Oban.insert(PrefixVerificationWorker.new(%{organization_gs1_prefix_id: prefix.id}))
+      {:ok, prefix}
+    end
+  end
+
+  @doc """
+  Promotes `prefix` to be the organization's primary GS1 company prefix
+  (the one used to build GTINs/SSCCs), demoting whichever prefix held that
+  role before.
+  """
+  def set_primary_gs1_prefix(%OrganizationGs1Prefix{} = prefix) do
+    Repo.transaction(fn ->
+      from(p in OrganizationGs1Prefix,
+        where: p.organization_id == ^prefix.organization_id and p.is_primary
+      )
+      |> Repo.update_all(set: [is_primary: false])
+
+      prefix
+      |> Ecto.Changeset.change(is_primary: true)
+      |> Repo.update!()
+    end)
+  end
+
+  @doc "Removes a GS1 company prefix from an organization."
+  def delete_gs1_prefix(%OrganizationGs1Prefix{} = prefix), do: Repo.delete(prefix)
 
   @doc "Marks the organization's GLN as verified directly (skips Oban)."
   def mark_gln_verified(%Organization{} = organization) do
@@ -152,19 +226,6 @@ defmodule ThamaniDawa.Organizations do
     organization
     |> Ecto.Changeset.change(gln_verified_at: now)
     |> Repo.update()
-  end
-
-  def update_organization_gs1_settings(%Organization{} = organization, attrs) do
-    changeset = Organization.gs1_settings_changeset(organization, attrs)
-    gln_changed? = Ecto.Changeset.get_change(changeset, :gln) not in [nil, ""]
-
-    with {:ok, updated} <- Repo.update(changeset) do
-      if gln_changed? do
-        Oban.insert(GlnVerificationWorker.new(%{record: "organization", id: updated.id}))
-      end
-
-      {:ok, updated}
-    end
   end
 
   @doc "Whether this org's EPCIS events send automatically as they're enqueued, or wait for a manual trigger."
@@ -177,17 +238,17 @@ defmodule ThamaniDawa.Organizations do
 
   @doc """
   Sets (or, given `""`/`nil`, clears) this org's own PPB API key for one
-  tier. Clearing falls back to the platform-wide key configured on
-  `ThamaniDawa.Epcis.Client` for that tier.
+  tier. There is no platform-wide fallback: an org with no key for a tier
+  gets its EPCIS submissions blocked until one is added.
   """
   def set_epcis_api_key(%Organization{} = organization, tier, key)
-      when tier in ["distributor", "facility"] do
+      when tier in ["distributor", "facility", "manufacturer"] do
     organization
     |> Organization.epcis_api_key_changeset(tier, key)
     |> Repo.update()
   end
 
-  @doc "Clears an org's own PPB API key for one tier, falling back to the platform-wide key."
+  @doc "Clears an org's own PPB API key for one tier. EPCIS submissions block until a new one is added."
   def clear_epcis_api_key(%Organization{} = organization, tier) do
     set_epcis_api_key(organization, tier, nil)
   end
@@ -195,7 +256,8 @@ defmodule ThamaniDawa.Organizations do
   @doc """
   The organization's GS1 member API token, or `nil` when none is saved.
   Callers pass this when creating an SSCC or fetching case contents; `nil`
-  means use the platform token.
+  means the call is refused with `{:error, :unconfigured}` — there is no
+  platform-wide token to fall back to.
   """
   def gs1_api_key(%Organization{gs1_api_key: key}) when is_binary(key) and key != "", do: key
   def gs1_api_key(%Organization{}), do: nil
@@ -244,9 +306,10 @@ defmodule ThamaniDawa.Organizations do
   first site, and first admin in one transaction. The site's GLN (there is
   only ever one site at this point) is also copied onto the organization
   itself, since org-level events with no site attached — such as org-portal
-  receiving — fall back to the organization's own GLN. Verification of the
-  entered GS1 company prefix and GLN(s) is enqueued as background jobs and
-  never blocks or fails the account itself.
+  receiving — fall back to the organization's own GLN. GS1 company prefixes
+  are not collected at signup; they're added afterward from the settings
+  page via `add_gs1_prefix/2`. Verification of the GLN(s) is enqueued as a
+  background job and never blocks or fails the account itself.
   """
   def signup(org_attrs, site_attrs, admin_attrs) do
     Repo.transaction(fn ->
@@ -273,10 +336,6 @@ defmodule ThamaniDawa.Organizations do
   defp copy_site_gln(organization, _site), do: {:ok, organization}
 
   defp enqueue_verifications(organization, site) do
-    if organization.gs1_company_prefix not in [nil, ""] do
-      Oban.insert(PrefixVerificationWorker.new(%{organization_id: organization.id}))
-    end
-
     if site.gln not in [nil, ""] do
       Oban.insert(GlnVerificationWorker.new(%{record: "site", id: site.id}))
     end
@@ -336,4 +395,33 @@ defmodule ThamaniDawa.Organizations do
 
     if activities == [], do: ["pharmacy"], else: activities
   end
+
+  defp keys_ready?(%Organization{} = organization) do
+    gs1_key_set?(organization) and
+      Enum.all?(relevant_epcis_tiers(organization), &epcis_key_set?(organization, &1))
+  end
+
+  defp relevant_epcis_tiers(%Organization{operating_models: models}) do
+    models = models || []
+
+    [
+      :distributor in models && "distributor",
+      :manufacturer in models && "manufacturer",
+      Enum.any?(models, &(&1 in [:pharmacy, :laboratory])) && "facility"
+    ]
+    |> Enum.filter(& &1)
+  end
+
+  defp gs1_key_set?(organization), do: present?(organization.gs1_api_key_last4)
+
+  defp epcis_key_set?(organization, "distributor"),
+    do: present?(organization.epcis_distributor_api_key_last4)
+
+  defp epcis_key_set?(organization, "manufacturer"),
+    do: present?(organization.epcis_manufacturer_api_key_last4)
+
+  defp epcis_key_set?(organization, "facility"),
+    do: present?(organization.epcis_facility_api_key_last4)
+
+  defp present?(value), do: value not in [nil, ""]
 end

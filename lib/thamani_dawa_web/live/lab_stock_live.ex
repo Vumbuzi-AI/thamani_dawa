@@ -47,7 +47,8 @@ defmodule ThamaniDawaWeb.LabStockLive do
      |> assign(:filters, @default_filters)
      |> assign(:view, "batches")
      |> assign(:page, 1)
-     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0, page_size: 10})}
+     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0, page_size: 10})
+     |> reload()}
   end
 
   def handle_params(params, _url, socket) do
@@ -179,6 +180,8 @@ defmodule ThamaniDawaWeb.LabStockLive do
     summary =
       Batches.stock_summary_by_product(org_id, product_ids, socket.assigns.allowed_site_ids)
 
+    undispatched = Batches.undispatched_summary_by_product(org_id, product_ids)
+
     rows =
       Enum.map(products, fn product ->
         total_remaining = get_in(summary, [product.id, :total_remaining]) || 0
@@ -188,6 +191,7 @@ defmodule ThamaniDawaWeb.LabStockLive do
           product: product,
           batch_count: get_in(summary, [product.id, :batch_count]) || 0,
           total_remaining: total_remaining,
+          awaiting_dispatch: Map.get(undispatched, product.id, 0),
           stock_level: stock_level(total_remaining, product.reorder_level)
         }
       end)

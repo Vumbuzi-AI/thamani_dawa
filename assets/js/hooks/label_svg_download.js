@@ -175,12 +175,23 @@ function labelFromDataset(d) {
 }
 
 export function downloadLabelSvg(d, bw) {
-  if (!d.sscc || !d.gs1Text) return
+  if (!d.gs1Text || (!d.sscc && !d.serial)) return
 
   let svg
+  let filename
 
   try {
-    svg = buildLabelSvg(labelFromDataset(d), `SSCC ${d.sscc}`, bw)
+    if (d.serial) {
+      const barcodeSvg = bw.toSVG({bcid: "gs1datamatrix", text: d.gs1Text, parse: true, scale: 4})
+      const inner = barcodeSvg.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "")
+      const viewBox = barcodeSvg.match(/viewBox="([^"]+)"/)?.[1] || "0 0 200 200"
+      const title = escapeSvgText(`GTIN ${d.gtin} · Batch ${d.batch} · Serial ${d.serial}`)
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="430" viewBox="0 0 360 430"><rect width="360" height="430" rx="20" fill="#fff" stroke="#000" stroke-width="2"/><svg x="55" y="35" width="250" height="250" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet">${inner}</svg><text x="180" y="325" text-anchor="middle" font-family="${LABEL_FONT}" font-size="14" fill="#000">${title}</text><text x="180" y="360" text-anchor="middle" font-family="${LABEL_FONT}" font-size="12" fill="#000">${escapeSvgText(d.gs1Text)}</text></svg>`
+      filename = `serial-label-${d.serial}.svg`
+    } else {
+      svg = buildLabelSvg(labelFromDataset(d), `SSCC ${d.sscc}`, bw)
+      filename = `sscc-label-${d.sscc}.svg`
+    }
   } catch (error) {
     console.error("GS1 DataMatrix SVG generation failed:", error)
     return
@@ -190,7 +201,7 @@ export function downloadLabelSvg(d, bw) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = `sscc-label-${d.sscc}.svg`
+  a.download = filename
   document.body.appendChild(a)
   a.click()
   a.remove()

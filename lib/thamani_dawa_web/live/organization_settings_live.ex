@@ -4,15 +4,21 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Grp
   alias ThamaniDawa.Organizations
+  alias ThamaniDawa.Organizations.OrganizationGs1Prefix
+  alias ThamaniDawaWeb.Portals
 
   def mount(_params, _session, socket) do
     org_id = socket.assigns.current_scope.organization_id
     organization = Organizations.get_organization!(org_id)
 
-    portal = if Scope.admin?(socket.assigns.current_scope), do: :organization, else: :distributor
+    portal = resolve_portal(socket.assigns.current_scope)
 
     current_path =
-      if portal == :organization, do: ~p"/org/settings", else: ~p"/distributor/settings"
+      case portal do
+        :organization -> ~p"/org/settings"
+        :manufacturer -> ~p"/manufacturer/settings"
+        :distributor -> ~p"/distributor/settings"
+      end
 
     {:ok,
      socket
@@ -25,7 +31,25 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
      |> assign(
        :form,
        to_form(Organizations.change_organization_settings(organization), as: :organization)
+     )
+     |> assign_gs1_prefixes()
+     |> assign(
+       :add_prefix_form,
+       to_form(Organizations.change_gs1_prefix(%{}), as: :organization_gs1_prefix)
      )}
+  end
+
+  defp resolve_portal(scope) do
+    cond do
+      Scope.admin?(scope) and is_nil(scope.current_site_id) ->
+        :organization
+
+      Scope.manufacturer_access?(scope) and Portals.manufacturer_organization?(scope) ->
+        :manufacturer
+
+      true ->
+        :distributor
+    end
   end
 
   def handle_event("validate", %{"organization" => params} = raw_params, socket) do
@@ -57,6 +81,52 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
 
       {:error, changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset, as: :organization))}
+    end
+  end
+
+  def handle_event("add_gs1_prefix", %{"organization_gs1_prefix" => params}, socket) do
+    case Organizations.add_gs1_prefix(socket.assigns.organization, params) do
+      {:ok, _prefix} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "GS1 company prefix added.")
+         |> assign_gs1_prefixes()
+         |> assign(
+           :add_prefix_form,
+           to_form(Organizations.change_gs1_prefix(%{}), as: :organization_gs1_prefix)
+         )}
+
+      {:error, changeset} ->
+        {:noreply,
+         assign(socket, :add_prefix_form, to_form(changeset, as: :organization_gs1_prefix))}
+    end
+  end
+
+  def handle_event("set_primary_gs1_prefix", %{"id" => id}, socket) do
+    case find_prefix(socket, id) do
+      %OrganizationGs1Prefix{} = prefix ->
+        {:ok, _updated} = Organizations.set_primary_gs1_prefix(prefix)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Primary GS1 company prefix updated.")
+         |> assign_gs1_prefixes()}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("delete_gs1_prefix", %{"id" => id}, socket) do
+    case find_prefix(socket, id) do
+      %OrganizationGs1Prefix{} = prefix ->
+        {:ok, _} = Organizations.delete_gs1_prefix(prefix)
+
+        {:noreply,
+         socket |> put_flash(:info, "GS1 company prefix removed.") |> assign_gs1_prefixes()}
+
+      nil ->
+        {:noreply, socket}
     end
   end
 
@@ -146,9 +216,21 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
     Enum.map_join(organization.operating_models, ", ", &Phoenix.Naming.humanize/1)
   end
 
-  defp prefix_status(%{gs1_prefix_verification_status: :verified}), do: :verified
-  defp prefix_status(%{gs1_prefix_verification_status: :failed}), do: :not_found
-  defp prefix_status(_organization), do: :pending
+  defp assign_gs1_prefixes(socket) do
+    assign(
+      socket,
+      :organization_gs1_prefixes,
+      Organizations.list_gs1_prefixes(socket.assigns.organization.id)
+    )
+  end
+
+  defp find_prefix(socket, id) do
+    Enum.find(socket.assigns.organization_gs1_prefixes, &(to_string(&1.id) == to_string(id)))
+  end
+
+  defp prefix_status(%{verification_status: :verified}), do: :verified
+  defp prefix_status(%{verification_status: :failed}), do: :not_found
+  defp prefix_status(_prefix), do: :pending
 
   defp gln_status(_organization, :checking), do: :checking
   defp gln_status(_organization, {:matched, _value, _name}), do: :verified
@@ -195,6 +277,18 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={@current_path}>
       {render_slot(@inner_block)}
     </Layouts.org_shell>
+    """
+  end
+
+  defp settings_shell(%{portal: :manufacturer} = assigns) do
+    ~H"""
+    <Layouts.manufacturer_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+    >
+      {render_slot(@inner_block)}
+    </Layouts.manufacturer_shell>
     """
   end
 
@@ -288,12 +382,6 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
             </div>
 
             <div class="grid gap-x-7 lg:grid-cols-2">
-              <div>
-                <span class="thamani-label">GS1 company prefix</span>
-                <div class="flex min-h-11 items-center rounded-lg border border-thamani-border-nav bg-thamani-canvas px-3.5 text-sm font-medium text-thamani-forest">
-                  {@organization.gs1_company_prefix || "—"}
-                </div>
-              </div>
               <div class="relative">
                 <.input
                   field={@form[:gln]}
@@ -319,12 +407,6 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
               id="gs1-verification-status"
               class="mt-3 grid gap-1.5 rounded-xl bg-thamani-canvas px-4 py-3 text-xs leading-5 sm:grid-cols-2"
             >
-              <p :if={@organization.gs1_company_prefix not in [nil, ""]}>
-                <span class={status_class(prefix_status(@organization))}>
-                  {status_label(prefix_status(@organization))}
-                </span>
-                <span class="text-thamani-pewter"> · {@organization.next_sscc_serial} SSCC(s) issued</span>
-              </p>
               <p>
                 Organization GLN:
                 <span class={status_class(gln_status(@organization, @gln_check))}>
@@ -342,6 +424,91 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
           <.button id="save-organization-settings" variant="primary" class="min-w-40">Save changes</.button>
         </div>
       </.form>
+
+      <section
+        class="mt-6 overflow-hidden rounded-2xl border border-thamani-stone bg-white shadow-sm"
+        aria-labelledby="gs1-prefixes-heading"
+      >
+        <div class="p-6 lg:p-8">
+          <div class="mb-5">
+            <h2 id="gs1-prefixes-heading" class="text-base font-semibold text-thamani-forest">
+              GS1 company prefixes
+            </h2>
+            <p class="mt-1 text-sm leading-5 text-thamani-pewter">
+              Used to build GTINs and SSCCs. The primary prefix is the one new identifiers are issued under.
+            </p>
+          </div>
+
+          <ul
+            :if={@organization_gs1_prefixes != []}
+            id="gs1-prefixes-list"
+            class="divide-y divide-thamani-stone rounded-xl border border-thamani-stone"
+          >
+            <li
+              :for={prefix <- @organization_gs1_prefixes}
+              class="flex items-center justify-between gap-4 px-4 py-3"
+            >
+              <div>
+                <p class="font-mono text-sm font-medium text-thamani-forest">
+                  {prefix.prefix}
+                  <span
+                    :if={prefix.is_primary}
+                    class="ml-2 rounded-full bg-thamani-lime px-2 py-0.5 text-xs font-semibold text-thamani-forest"
+                  >
+                    Primary
+                  </span>
+                </p>
+                <p class="mt-0.5 text-xs">
+                  <span class={status_class(prefix_status(prefix))}>
+                    {status_label(prefix_status(prefix))}
+                  </span>
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                <.button
+                  :if={!prefix.is_primary}
+                  type="button"
+                  variant="ghost-edit"
+                  phx-click="set_primary_gs1_prefix"
+                  phx-value-id={prefix.id}
+                >
+                  Make primary
+                </.button>
+                <.button
+                  type="button"
+                  variant="ghost-delete"
+                  phx-click="delete_gs1_prefix"
+                  phx-value-id={prefix.id}
+                  data-confirm="Remove this GS1 company prefix?"
+                >
+                  Remove
+                </.button>
+              </div>
+            </li>
+          </ul>
+          <p :if={@organization_gs1_prefixes == []} class="text-sm text-thamani-pewter">
+            No GS1 company prefixes yet.
+          </p>
+
+          <.form
+            for={@add_prefix_form}
+            id="add-gs1-prefix-form"
+            phx-submit="add_gs1_prefix"
+            class="mt-5 flex items-end gap-3"
+          >
+            <div class="flex-1">
+              <.input
+                field={@add_prefix_form[:prefix]}
+                label="Add a GS1 company prefix"
+                placeholder="e.g. 0614141"
+                maxlength="10"
+                inputmode="numeric"
+              />
+            </div>
+            <.button variant="primary" class="h-11">Add prefix</.button>
+          </.form>
+        </div>
+      </section>
     </.settings_shell>
     """
   end

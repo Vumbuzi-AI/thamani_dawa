@@ -24,7 +24,7 @@ defmodule ThamaniDawa.Epcis.OutboxEvent do
   use Ecto.Schema
 
   @statuses ~w(pending blocked accepted warning rejected dead)
-  @tiers ~w(distributor facility)
+  @tiers ~w(distributor facility manufacturer)
 
   schema "epcis_outbox_events" do
     field :event_id, Ecto.UUID

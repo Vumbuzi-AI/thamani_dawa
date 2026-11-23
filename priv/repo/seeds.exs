@@ -172,13 +172,37 @@ organization =
   |> Ecto.Changeset.change(
     operating_models:
       Enum.uniq(
-        (org_result.organization.operating_models || []) ++ [:pharmacy, :laboratory, :distributor]
+        (org_result.organization.operating_models || []) ++
+          [:pharmacy, :laboratory, :distributor, :manufacturer]
       )
   )
   |> Repo.update!()
 
 organization_id = organization.id
 primary_admin = org_result.user
+
+seed_api_key = fn present_key, setter ->
+  case present_key do
+    value when is_binary(value) and value != "" -> setter.(value)
+    _blank -> :ok
+  end
+end
+
+seed_api_key.(System.get_env("GS1_MEMBER_API_TOKEN"), fn key ->
+  {:ok, _organization} = Organizations.set_gs1_api_key(organization, key)
+end)
+
+seed_api_key.(System.get_env("PPB_TNT_API_KEY"), fn key ->
+  {:ok, _organization} = Organizations.set_epcis_api_key(organization, "facility", key)
+end)
+
+seed_api_key.(System.get_env("PPB_TNT_DISTRIBUTOR_API_KEY"), fn key ->
+  {:ok, _organization} = Organizations.set_epcis_api_key(organization, "distributor", key)
+end)
+
+seed_api_key.(System.get_env("PPB_TNT_MANUFACTURER_API_KEY"), fn key ->
+  {:ok, _organization} = Organizations.set_epcis_api_key(organization, "manufacturer", key)
+end)
 
 pharmacy_site =
   org_result.site
@@ -313,6 +337,62 @@ mombasa_warehouse_site =
     license_number: "PPB/WH/DEMO/002"
   })
 
+manufacturing_site =
+  insert_or_get.(
+    Site,
+    %{organization_id: organization_id, name: "Demo Care Manufacturing Plant"},
+    %{
+      activities: [:manufacturing],
+      gln: gln.("616000100005"),
+      address: "Athi River EPZ, Nairobi",
+      lat: -1.4567,
+      long: 36.9777,
+      ppb_facility_name: "Demo Care Manufacturing Plant",
+      license_number: "PPB/MF/DEMO/001"
+    },
+    fn attrs -> Sites.create_site(organization_id, attrs) end
+  )
+
+{:ok, manufacturing_site} =
+  Sites.update_site(manufacturing_site, %{
+    activities: [:manufacturing],
+    gln: gln.("616000100005"),
+    address: "Athi River EPZ, Nairobi",
+    lat: -1.4567,
+    long: 36.9777,
+    is_active: true,
+    ppb_facility_name: "Demo Care Manufacturing Plant",
+    license_number: "PPB/MF/DEMO/001"
+  })
+
+manufacturing_distribution_site =
+  insert_or_get.(
+    Site,
+    %{organization_id: organization_id, name: "Demo Care Manufacturing & Distribution Hub"},
+    %{
+      activities: [:manufacturing, :distribution],
+      gln: gln.("616000100006"),
+      address: "Nakuru Industrial Park",
+      lat: -0.2827,
+      long: 36.0667,
+      ppb_facility_name: "Demo Care Manufacturing & Distribution Hub",
+      license_number: "PPB/MF/DEMO/002"
+    },
+    fn attrs -> Sites.create_site(organization_id, attrs) end
+  )
+
+{:ok, manufacturing_distribution_site} =
+  Sites.update_site(manufacturing_distribution_site, %{
+    activities: [:manufacturing, :distribution],
+    gln: gln.("616000100006"),
+    address: "Nakuru Industrial Park",
+    lat: -0.2827,
+    long: 36.0667,
+    is_active: true,
+    ppb_facility_name: "Demo Care Manufacturing & Distribution Hub",
+    license_number: "PPB/MF/DEMO/002"
+  })
+
 organization =
   organization
   |> Ecto.Changeset.change(
@@ -324,7 +404,15 @@ organization =
   )
   |> Repo.update!()
 
-for site <- [pharmacy_site, lab_site, combined_site, warehouse_site, mombasa_warehouse_site] do
+for site <- [
+      pharmacy_site,
+      lab_site,
+      combined_site,
+      warehouse_site,
+      mombasa_warehouse_site,
+      manufacturing_site,
+      manufacturing_distribution_site
+    ] do
   site
   |> Ecto.Changeset.change(
     gln_verified_at: verified_at,
@@ -385,7 +473,10 @@ account_specs = [
   {"lab@gmail.com", "Laban Omondi", [:lab_technician], [lab_site]},
   {"pharmalab@gmail.com", "Zawadi Muthoni", [:pharmacist, :lab_technician], [combined_site]},
   {"distributor@gmail.com", "David Mwangi", [:distributor],
-   [warehouse_site, mombasa_warehouse_site]}
+   [warehouse_site, mombasa_warehouse_site]},
+  {"manufacturer@gmail.com", "Esther Wanjiru", [:manufacturer], [manufacturing_site]},
+  {"manufacturer-distributor@gmail.com", "Samuel Kiptoo", [:manufacturer, :distributor],
+   [manufacturing_distribution_site]}
 ]
 
 accounts =
@@ -1643,7 +1734,11 @@ build_data_matrix = fn gtin, manufacture_date, expiry_date, batch_no, serial ->
 end
 
 ensure_lot_batch = fn product, batch_no, serials ->
-  case Repo.get_by(Batch, organization_id: organization_id, site_id: warehouse_site.id, batch_no: batch_no) do
+  case Repo.get_by(Batch,
+         organization_id: organization_id,
+         site_id: warehouse_site.id,
+         batch_no: batch_no
+       ) do
     nil ->
       {:ok, batch} =
         Batches.create_batch(organization_id, %{
@@ -1702,7 +1797,10 @@ ensure_demo_shipper_sscc = fn order_number, lots ->
         end)
 
         {:ok, _} = Distributor.submit_shipment(mobile_user, shipment.id)
-        {:ok, approved} = Distributor.approve_shipment(organization_id, primary_distributor, shipment.id)
+
+        {:ok, approved} =
+          Distributor.approve_shipment(organization_id, primary_distributor, shipment.id)
+
         approved
 
       existing ->
@@ -1748,7 +1846,8 @@ discrepancy_source_shipper =
 #    "received at the depot, shipped from the central warehouse".
 unless Repo.exists?(
          from d in GoodsReceipts.ReceivingDiscrepancy,
-           where: d.organization_id == ^organization_id and d.sscc == ^discrepancy_source_shipper.sscc
+           where:
+             d.organization_id == ^organization_id and d.sscc == ^discrepancy_source_shipper.sscc
        ) do
   good_serials = for n <- 1..7, do: "SN-DISC-#{n}"
   damaged_serials = ["SN-DISC-8"]
@@ -1846,7 +1945,10 @@ ensure_disposal_batch = fn batch_no, product, quantity, opts ->
   end
 end
 
-unless Repo.exists?(from d in InventoryDisposals.InventoryDisposal, where: d.organization_id == ^organization_id and d.notes == "SEED-DISPOSAL-PENDING") do
+unless Repo.exists?(
+         from d in InventoryDisposals.InventoryDisposal,
+           where: d.organization_id == ^organization_id and d.notes == "SEED-DISPOSAL-PENDING"
+       ) do
   pending_disposal_batch =
     ensure_disposal_batch.("DISPOSAL-PENDING-001", disposal_demo_product, 50, %{
       "expiry_date" => Date.add(today, -1)
@@ -1862,10 +1964,20 @@ unless Repo.exists?(from d in InventoryDisposals.InventoryDisposal, where: d.org
     })
 
   {:ok, _item} = InventoryDisposals.add_item(pending_disposal, pending_disposal_batch, 50)
-  {:ok, _pending_disposal} = InventoryDisposals.submit_disposal(organization_id, pending_disposal.id, primary_distributor.id)
+
+  {:ok, _pending_disposal} =
+    InventoryDisposals.submit_disposal(
+      organization_id,
+      pending_disposal.id,
+      primary_distributor.id
+    )
 end
 
-unless Repo.exists?(from d in InventoryDisposals.InventoryDisposal, where: d.organization_id == ^organization_id and d.notes == "SEED-DISPOSAL-APPROVED-EXPIRY") do
+unless Repo.exists?(
+         from d in InventoryDisposals.InventoryDisposal,
+           where:
+             d.organization_id == ^organization_id and d.notes == "SEED-DISPOSAL-APPROVED-EXPIRY"
+       ) do
   approved_expiry_batch =
     ensure_disposal_batch.("DISPOSAL-APPROVED-EXPIRY-001", disposal_demo_product, 12, %{
       "expiry_date" => Date.add(today, -1)
@@ -1881,10 +1993,20 @@ unless Repo.exists?(from d in InventoryDisposals.InventoryDisposal, where: d.org
     })
 
   {:ok, _item} = InventoryDisposals.add_item(approved_expiry_disposal, approved_expiry_batch, 12)
-  {:ok, _approved} = InventoryDisposals.approve_disposal(organization_id, approved_expiry_disposal.id, primary_distributor.id)
+
+  {:ok, _approved} =
+    InventoryDisposals.approve_disposal(
+      organization_id,
+      approved_expiry_disposal.id,
+      primary_distributor.id
+    )
 end
 
-unless Repo.exists?(from d in InventoryDisposals.InventoryDisposal, where: d.organization_id == ^organization_id and d.notes == "SEED-DISPOSAL-APPROVED-RETURN") do
+unless Repo.exists?(
+         from d in InventoryDisposals.InventoryDisposal,
+           where:
+             d.organization_id == ^organization_id and d.notes == "SEED-DISPOSAL-APPROVED-RETURN"
+       ) do
   disposal_supplier = hd(suppliers)
 
   approved_return_batch =
@@ -1902,12 +2024,21 @@ unless Repo.exists?(from d in InventoryDisposals.InventoryDisposal, where: d.org
     })
 
   {:ok, _item} = InventoryDisposals.add_item(approved_return_disposal, approved_return_batch, 8)
-  {:ok, _approved} = InventoryDisposals.approve_disposal(organization_id, approved_return_disposal.id, primary_distributor.id)
+
+  {:ok, _approved} =
+    InventoryDisposals.approve_disposal(
+      organization_id,
+      approved_return_disposal.id,
+      primary_distributor.id
+    )
 end
 
 # Stock takes: a pending count (submitted, awaiting admin review, with a
 # genuine variance on one line) and an approved one, at the same warehouse.
-unless Repo.exists?(from st in StockTakes.StockTake, where: st.organization_id == ^organization_id and st.notes == "SEED-STOCKTAKE-PENDING") do
+unless Repo.exists?(
+         from st in StockTakes.StockTake,
+           where: st.organization_id == ^organization_id and st.notes == "SEED-STOCKTAKE-PENDING"
+       ) do
   {:ok, pending_stock_take} =
     StockTakes.create_stock_take(organization_id, %{
       "site_id" => warehouse_site.id,
@@ -1935,7 +2066,10 @@ unless Repo.exists?(from st in StockTakes.StockTake, where: st.organization_id =
     StockTakes.submit_stock_take(organization_id, pending_stock_take.id, primary_distributor.id)
 end
 
-unless Repo.exists?(from st in StockTakes.StockTake, where: st.organization_id == ^organization_id and st.notes == "SEED-STOCKTAKE-APPROVED") do
+unless Repo.exists?(
+         from st in StockTakes.StockTake,
+           where: st.organization_id == ^organization_id and st.notes == "SEED-STOCKTAKE-APPROVED"
+       ) do
   {:ok, approved_stock_take} =
     StockTakes.create_stock_take(organization_id, %{
       "site_id" => warehouse_site.id,
@@ -1945,7 +2079,11 @@ unless Repo.exists?(from st in StockTakes.StockTake, where: st.organization_id =
     })
 
   approved_stock_take = Repo.preload(approved_stock_take, :items, force: true)
-  Enum.each(approved_stock_take.items, &StockTakes.record_count(&1, &1.expected_quantity, primary_distributor.id))
+
+  Enum.each(
+    approved_stock_take.items,
+    &StockTakes.record_count(&1, &1.expected_quantity, primary_distributor.id)
+  )
 
   {:ok, _approved_stock_take} =
     StockTakes.approve_stock_take(organization_id, approved_stock_take.id, primary_distributor.id)
@@ -1965,7 +2103,9 @@ quarantine_return_shipment =
 
 unless Repo.exists?(
          from cr in CustomerReturns.CustomerReturn,
-           where: cr.organization_id == ^organization_id and cr.document_reference == "SEED-RETURN-AWAITING-DECISION"
+           where:
+             cr.organization_id == ^organization_id and
+               cr.document_reference == "SEED-RETURN-AWAITING-DECISION"
        ) do
   {:ok, awaiting_return} =
     CustomerReturns.create_return(organization_id, %{
@@ -1991,7 +2131,9 @@ end
 
 unless Repo.exists?(
          from cr in CustomerReturns.CustomerReturn,
-           where: cr.organization_id == ^organization_id and cr.document_reference == "SEED-RETURN-QUARANTINED"
+           where:
+             cr.organization_id == ^organization_id and
+               cr.document_reference == "SEED-RETURN-QUARANTINED"
        ) do
   {:ok, quarantined_return} =
     CustomerReturns.create_return(organization_id, %{
@@ -2010,10 +2152,18 @@ unless Repo.exists?(
       "quantity" => 6
     })
 
-  {:ok, quarantined_return} = CustomerReturns.mark_received(quarantined_return, primary_distributor.id)
+  {:ok, quarantined_return} =
+    CustomerReturns.mark_received(quarantined_return, primary_distributor.id)
+
   {:ok, _quarantined_item} = CustomerReturns.set_item_condition(quarantined_item, :quarantine)
   {:ok, quarantined_return} = CustomerReturns.mark_inspected(quarantined_return)
-  {:ok, _quarantined_return} = CustomerReturns.complete_return(organization_id, quarantined_return.id, primary_distributor.id)
+
+  {:ok, _quarantined_return} =
+    CustomerReturns.complete_return(
+      organization_id,
+      quarantined_return.id,
+      primary_distributor.id
+    )
 end
 
 expected_account_roles =
@@ -2069,6 +2219,14 @@ Distributor account:
 Distributor mobile app user:
   username packer.demo, PIN #{mobile_pin}
   Bound to #{warehouse_site.name}
+
+Manufacturer account:
+  manufacturer@gmail.com
+  Assigned to #{manufacturing_site.name}
+
+Manufacturer + distributor account:
+  manufacturer-distributor@gmail.com
+  Assigned to #{manufacturing_distribution_site.name}
 
 Receiving test SSCCs (warehouse_site -> mombasa_warehouse_site, Demo Care only):
   Mixed-content case:        #{mixed_shipper.sscc}

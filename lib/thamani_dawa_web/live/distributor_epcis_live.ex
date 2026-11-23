@@ -83,6 +83,46 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
     end
   end
 
+  def handle_event("send_event", %{"id" => id}, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+    event = Outbox.get_event!(organization_id, id)
+
+    case event.status do
+      "pending" ->
+        case SubmissionWorker.submit_now(event) do
+          {status, _updated} when status in [:accepted, :duplicate] ->
+            {:noreply,
+             socket
+             |> reload()
+             |> put_flash(:info, "Event #{short_id(event.event_id)} sent to PPB.")}
+
+          {:rejected, _updated} ->
+            {:noreply,
+             socket
+             |> reload()
+             |> put_flash(:error, "PPB rejected event #{short_id(event.event_id)}.")}
+
+          {:retry, _updated} ->
+            {:noreply,
+             socket
+             |> reload()
+             |> put_flash(
+               :error,
+               "Couldn't reach PPB for event #{short_id(event.event_id)} — it will retry automatically."
+             )}
+
+          {:blocked, updated} ->
+            {:noreply,
+             socket
+             |> reload()
+             |> put_flash(:error, updated.blocked_reason)}
+        end
+
+      _ ->
+        {:noreply, put_flash(socket, :error, "Only pending events can be sent individually.")}
+    end
+  end
+
   def handle_event("set_submission_mode", %{"mode" => mode}, socket)
       when mode in ["automatic", "manual"] do
     organization = socket.assigns.organization
@@ -126,6 +166,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
 
   defp key_last4(organization, "distributor"), do: organization.epcis_distributor_api_key_last4
   defp key_last4(organization, "facility"), do: organization.epcis_facility_api_key_last4
+  defp key_last4(organization, "manufacturer"), do: organization.epcis_manufacturer_api_key_last4
 
   defp tnt_keys_missing?(organization) do
     organization
@@ -587,6 +628,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
 
     [
       :distributor in models && "distributor",
+      :manufacturer in models && "manufacturer",
       Enum.any?(models, &(&1 in [:pharmacy, :laboratory])) && "facility"
     ]
     |> Enum.filter(& &1)
@@ -657,6 +699,16 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
             data-confirm="Resubmit this event to the PPB Hub with its original eventID?"
           >
             Resubmit
+          </.button>
+          <.button
+            :if={@event.status == "pending"}
+            id={"send-epcis-event-#{@event.id}"}
+            variant="primary"
+            phx-click="send_event"
+            phx-value-id={@event.id}
+            data-confirm="Send this event to the PPB Hub now, ahead of its place in the queue?"
+          >
+            Send
           </.button>
         </div>
       </div>

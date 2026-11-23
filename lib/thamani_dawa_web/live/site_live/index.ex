@@ -42,6 +42,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     |> assign(:back_path, back_path(params, ~p"/org/sites"))
     |> assign(:gln_check, :idle)
     |> assign(:operating_models, organization.operating_models)
+    |> assign(:gs1_company_prefixes, org_prefixes(organization.id))
     |> assign(:onboarding_progress, Organizations.onboarding_progress(organization))
   end
 
@@ -103,6 +104,14 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
          |> put_flash(
            :error,
            "Checking the GLN with the GS1 registry. Press Save again in a moment."
+         )}
+
+      socket.assigns.gln_check == :prefix_mismatch ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "This GLN does not belong to your verified GS1 company prefix."
          )}
 
       match?({:inactive, _, _}, socket.assigns.gln_check) ->
@@ -347,12 +356,30 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
       not gln_check_digit_valid?(gln) ->
         assign(socket, :gln_check, :invalid_check_digit)
 
+      Sites.gln_taken?(gln) ->
+        assign(socket, :gln_check, {:taken, nil, nil})
+
+      not gln_matches_verified_prefix?(gln, socket.assigns[:gs1_company_prefixes] || []) ->
+        assign(socket, :gln_check, :prefix_mismatch)
+
       true ->
         socket
         |> assign(:gln_check, :checking)
         |> start_async(:gln_lookup, fn -> Grp.verify_gln(gln) end)
     end
   end
+
+  defp org_prefixes(organization_id) do
+    organization_id |> Organizations.list_gs1_prefixes() |> Enum.map(& &1.prefix)
+  end
+
+  # An organization with no GS1 company prefix yet (none added, or none
+  # verified) has nothing to mismatch a GLN against, so any GLN passes this
+  # gate — the registry lookup below is still the real check.
+  defp gln_matches_verified_prefix?(_gln, []), do: true
+
+  defp gln_matches_verified_prefix?(gln, prefixes),
+    do: Enum.any?(prefixes, &String.starts_with?(gln, &1))
 
   defp gln_check_digit_valid?(gln) do
     {payload, check} = String.split_at(gln, -1)
@@ -431,8 +458,8 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
       },
       %{
         key: "distribution",
-        label: "Pharmaceutical wholesale",
-        description: "Supply branches, pharmacies, hospitals and other licensed facilities",
+        label: "Pharmaceutical distributor",
+        description: "Supply medicines to pharmacies, hospitals, and other authorized buyers",
         icon: "hero-truck",
         activities: ["distribution"]
       }
@@ -499,6 +526,14 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               We couldn't find this GLN in the GS1 registry. Double-check the number before continuing.
             </p>
           <% :invalid_check_digit -> %>
+          <% :prefix_mismatch -> %>
+            <p
+              id="site-gln-prefix-mismatch"
+              class="mb-4 mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
+            >
+              <.icon name="hero-exclamation-triangle" class="size-4" />
+              This GLN does not belong to your verified GS1 company prefix.
+            </p>
           <% :unavailable -> %>
             <p class="mb-4 mt-2 text-xs text-thamani-pewter">
               We couldn't reach the GS1 registry to verify this GLN. Try again in a moment.
@@ -536,11 +571,17 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
                 No site activities are available for this organization's operating models.
               </p>
             <% [only] -> %>
-              <input type="hidden" name="site[activity_choice]" value={only.key} />
-              <div class="mb-4 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_18%,white)] bg-[color-mix(in_srgb,var(--thamani-lime)_12%,white)] px-4 py-3">
-                <p class="text-xs font-medium text-thamani-pewter">Activity at this location</p>
-                <p class="mt-1 text-sm font-semibold text-thamani-forest">{only.label}</p>
-                <p class="mt-0.5 text-xs text-thamani-pewter">{only.description}</p>
+              <div class="mb-4">
+                <.activity_card
+                  type="radio"
+                  name="site[activity_choice]"
+                  value={only.key}
+                  label={only.label}
+                  description={only.description}
+                  icon={only.icon}
+                  selected
+                  compact
+                />
               </div>
             <% choices -> %>
               <fieldset class="mb-4">
@@ -588,11 +629,17 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               No site activities are available for this organization's operating models.
             </p>
           <% [only] -> %>
-            <input type="hidden" name="site[activity_choice]" value={only.key} />
-            <div class="mb-4 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_18%,white)] bg-[color-mix(in_srgb,var(--thamani-lime)_12%,white)] px-4 py-3">
-              <p class="text-xs font-medium text-thamani-pewter">Activity at this location</p>
-              <p class="mt-1 text-sm font-semibold text-thamani-forest">{only.label}</p>
-              <p class="mt-0.5 text-xs text-thamani-pewter">{only.description}</p>
+            <div class="mb-4">
+              <.activity_card
+                type="radio"
+                name="site[activity_choice]"
+                value={only.key}
+                label={only.label}
+                description={only.description}
+                icon={only.icon}
+                selected
+                compact
+              />
             </div>
           <% choices -> %>
             <fieldset class="mb-4">
