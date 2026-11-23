@@ -657,51 +657,45 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
         </div>
       <% else %>
       <.td_back_link id="receipt-back" to={@back_path} label={ThamaniDawaWeb.ReturnTo.label(@back_path, "Back to Receiving")} />
-      <.header icon="hero-document-check">
-        {@receipt.number}
-        <:subtitle>Complete record of this received delivery.</:subtitle>
-        <:actions>
-          <.button variant="ghost" navigate={@receiving_index_path}><.icon
-            name="hero-arrow-left"
-            class="size-4"
-          /> Receiving</.button>
-        </:actions>
-      </.header>
-
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
-        <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Received</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {Calendar.strftime(@receipt.received_at, "%d %b %Y, %H:%M UTC")}
-            </dd>
+      <div class="td-recipe td-detail-page" id="distributor-receipt">
+        <header class="td-idh">
+          <div class="td-idh-text">
+            <h1 class="td-idh-title">
+              <span>{@receipt.number}</span>
+              <.td_badge
+                :if={open_count(@receipt) > 0}
+                tone="warning"
+                label={"#{open_count(@receipt)} open #{if open_count(@receipt) == 1, do: "discrepancy", else: "discrepancies"}"}
+              />
+              <.td_badge :if={open_count(@receipt) == 0} tone="success" label="Received" />
+            </h1>
+            <p class="td-idh-sub">
+              Accepted by {received_by_label(@receipt)} on {ThamaniDawaWeb.TimeFormat.datetime(@receipt.received_at)} EAT
+            </p>
           </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Supplier</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {supplier_summary(@receipt)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Warehouse</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {warehouse_summary(@receipt.items)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Received by
-            </dt><dd class="mt-1 text-sm text-thamani-ink">
-              {if @receipt.received_by, do: @receipt.received_by.email, else: "—"}
-            </dd>
-          </div>
-        </dl>
-      </section>
-
-      <section class="mt-6">
-        <div class="mb-3">
-          <h2 class="text-base font-semibold text-thamani-evergreen">Received items</h2>
-          <p class="mt-1 text-sm text-thamani-pewter">
-            Confirmed units sit with their case. Anything still missing is listed under them.
-          </p>
+        </header>
+        <section class="td-card" id="receipt-summary">
+          <dl class="td-kv-grid is-pad is-6">
+            <div class="td-kv"><dt class="td-kv-label">Received from</dt><dd class="td-kv-value">{supplier_summary(@receipt)}</dd></div>
+            <div class="td-kv"><dt class="td-kv-label">Supplier GLN</dt><dd class="td-kv-value td-mono">{@receipt.origin_gln || "—"}</dd></div>
+            <div class="td-kv"><dt class="td-kv-label">Warehouse</dt><dd class="td-kv-value">{warehouse_summary(@receipt.items)}</dd></div>
+            <div class="td-kv"><dt class="td-kv-label">Received by</dt><dd class="td-kv-value">{received_by_label(@receipt)}</dd></div>
+            <div class="td-kv"><dt class="td-kv-label">Received (EAT)</dt><dd class="td-kv-value">{ThamaniDawaWeb.TimeFormat.datetime(@receipt.received_at)}</dd></div>
+            <div class="td-kv"><dt class="td-kv-label">Units</dt><dd class="td-kv-value">{ThamaniDawaWeb.DistributorComponents.number(Enum.sum(Enum.map(@receipt.items, &(&1.quantity || 0))))}</dd></div>
+          </dl>
+        </section>
+        <div :if={open_count(@receipt) > 0} class="td-ban is-warning" id="receipt-open-banner">
+          <.td_icon name="warning" class="size-4" />
+          <span>Resolve each open line once you have agreed it with the supplier.</span>
         </div>
+      </div>
+
+      <section class="mt-6 td-card" id="receipt-items-card">
+        <.td_card_header
+          title="Items received"
+          subtitle="Confirmed units sit with their shipper. Anything still missing is listed under it."
+        />
+        <div class="td-pad">
 
         <.blank_state
           :if={@receipt_groups == []}
@@ -743,6 +737,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
 
             <.receipt_batch :for={batch <- group.batches} batch={batch} />
           </article>
+        </div>
         </div>
       </section>
 
@@ -853,6 +848,8 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
     </.receipt_shell>
     """
   end
+
+  defp open_count(receipt), do: Enum.count(receipt.discrepancies, &(&1.status == :open))
 
   defp blank_to_nil(value) when value in [nil, ""], do: nil
   defp blank_to_nil(value), do: value

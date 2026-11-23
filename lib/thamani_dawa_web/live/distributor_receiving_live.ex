@@ -1045,6 +1045,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     |> assign(:pending_shipper, nil)
     |> assign(:add_item_open, false)
     |> assign(:receipt_step, :sscc)
+    |> assign(:entry_sscc_form, to_form(%{"sscc" => ""}, as: :sscc_entry))
+    |> assign(:entry_sscc_check, :idle)
     |> assign_serial_confirm()
   end
 
@@ -1176,6 +1178,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       "serial" => serial,
       "quantity" => quantity,
       "product_id" => group.product && group.product.id,
+      "product_name" => group.product_name,
       "site_id" => site_id,
       "expiry_date" => group.expiry_date
     }
@@ -1413,6 +1416,207 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   defp blank_dash(value), do: value
 
   defp shipper_units(items), do: items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()
+
+  defp inline_scanner(assigns) do
+    ~H"""
+    <div class="td-pad td-scan" id="inline-scanner">
+      <%= if @receipt_step == :confirm_shipper and @pending_shipper do %>
+        <div class="td-scan-confirm" id="inline-confirm-shipper">
+          <.add_item_steps {assigns} />
+        </div>
+      <% else %>
+        <.form
+          for={@entry_sscc_form}
+          id="distributor-entry-sscc-form"
+          phx-change="validate_entry_sscc"
+          phx-submit="validate_entry_sscc"
+          class="td-scan-form"
+        >
+          <label class="td-scan-field" data-state={scan_state(@entry_sscc_check)}>
+            <span class="td-scan-label">Shipper SSCC or product barcode</span>
+            <span class="td-scan-row">
+              <.td_icon name="barcode" class="size-4" />
+              <input
+                type="text"
+                name={@entry_sscc_form[:sscc].name}
+                id="inline-sscc"
+                value={@entry_sscc_form[:sscc].value}
+                placeholder="Scan or type an 18-digit SSCC"
+                autocomplete="off"
+                inputmode="numeric"
+                phx-debounce="350"
+                phx-mounted={JS.focus()}
+                class="td-mono"
+              />
+              <span class="td-scan-status">{scan_status_label(@entry_sscc_check)}</span>
+            </span>
+          </label>
+        </.form>
+        <div :if={match?(:not_found, @entry_sscc_check) or match?(:unavailable, @entry_sscc_check)} class="td-ban is-warning mt-3" id="inline-scan-error">
+          <.td_icon name="warning" class="size-4" />
+          <span>
+            {if @entry_sscc_check == :not_found,
+              do: "GS1 has no record of this SSCC. Check the label, or add the item by hand.",
+              else: "GS1 could not be reached for this SSCC. Try again, or add the item by hand."}
+          </span>
+          <.td_button id="inline-add-by-hand" phx-click={JS.push("open_add_item") |> JS.push("skip_to_manual_entry")} label="Add item by hand" />
+        </div>
+        <div :if={match?({:duplicate, _}, @entry_sscc_check)} class="td-ban is-warning mt-3">
+          <.td_icon name="warning" class="size-4" />
+          <span>This shipper is already on this delivery.</span>
+        </div>
+      <% end %>
+    </div>
+    """
+  end
+
+  defp scan_state(:checking), do: "checking"
+  defp scan_state({:matched, _}), do: "matched"
+  defp scan_state(:not_found), do: "error"
+  defp scan_state(:unavailable), do: "error"
+  defp scan_state({:duplicate, _}), do: "error"
+  defp scan_state(_), do: "ready"
+
+  defp scan_status_label(:checking), do: "Looking up…"
+  defp scan_status_label({:matched, _}), do: "Matched"
+  defp scan_status_label(:not_found), do: "Unknown SSCC"
+  defp scan_status_label(:unavailable), do: "GS1 unavailable"
+  defp scan_status_label({:duplicate, _}), do: "Already added"
+  defp scan_status_label(_), do: "Ready to scan"
+
+  attr :items, :list, required: true
+  attr :discrepancies, :list, required: true
+
+  defp expected_vs_received(assigns) do
+    ~H"""
+    <div class="td-list-table">
+      <table class="td-rows is-static" id="expected-vs-received">
+        <thead>
+          <tr>
+            <th>SSCC</th>
+            <th>Product</th>
+            <th>Batch</th>
+            <th class="is-num">Expected</th>
+            <th class="is-num">Received</th>
+            <th class="is-num">Damaged</th>
+            <th>Check</th>
+            <th><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody
+          :for={{shipper, index} <- Enum.with_index(delivery_item_groups(@items), 1)}
+          id={"delivery-shipper-#{index}"}
+        >
+          <tr :for={{line, line_index} <- Enum.with_index(receiving_lines(shipper, @discrepancies))}>
+            <td>
+              <span :if={line_index == 0} class="td-mono">
+                {if shipper.sscc == "manual", do: "No case label", else: shipper.sscc}
+              </span>
+            </td>
+            <td>
+              {line.product_name}
+              <span :if={line.gtin} class="td-sub td-mono td-s12">{line.gtin}</span>
+              <button
+                :if={line.missing_catalog_item}
+                type="button"
+                id={"add-to-catalog-#{line.missing_catalog_item.id}"}
+                phx-click="edit_delivery_item"
+                phx-value-id={line.missing_catalog_item.id}
+                class="td-link td-s12"
+              >
+                Not in your catalog. Add it.
+              </button>
+              <details :if={line.serials != []} class="td-s12 mt-1">
+                <summary class="td-sub">{length(line.serials)} serial(s)</summary>
+                <span :for={serial <- line.serials} class="td-mono td-chip">{serial}</span>
+              </details>
+            </td>
+            <td>
+              <span class="td-mono">{line.batch_no}</span>
+              <span class="td-sub td-s12">Exp {format_group_expiry(line.expiry)}</span>
+            </td>
+            <td class="is-num">{if shipper.sscc == "manual", do: "—", else: line.expected}</td>
+            <td class="is-num">{Products.format_unit_count(line.received)}</td>
+            <td class="is-num">{line.damaged}</td>
+            <td>
+              <.td_badge :if={line.missing == 0 and line.damaged == 0} tone="success" label="Matches" />
+              <.td_badge :if={line.missing > 0} tone="warning" label={"#{line.missing} short"} />
+              <.td_badge :if={line.damaged > 0} tone="warning" label={"#{line.damaged} damaged"} />
+            </td>
+            <td class="td-row-actions">
+              <span :for={item <- line.items} class="inline-flex">
+                <button type="button" class="td-icon-btn" phx-click="edit_delivery_item" phx-value-id={item.id} aria-label={"Edit #{item.batch_no}"} title="Edit">
+                  <.td_icon name="pencil-simple" class="size-4" />
+                </button>
+                <button type="button" class="td-icon-btn" phx-click="remove_delivery_item" phx-value-id={item.id} aria-label={"Remove #{item.batch_no}"} title="Remove">
+                  <.td_icon name="trash" class="size-4" />
+                </button>
+              </span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    """
+  end
+
+  defp receiving_lines(shipper, discrepancies) do
+    sscc = if shipper.sscc == "manual", do: nil, else: shipper.sscc
+
+    shipper.items
+    |> delivery_batch_groups()
+    |> Enum.map(fn batch ->
+      damaged = batch.items |> Enum.filter(& &1[:flagged_damaged?]) |> shipper_units()
+
+      missing =
+        discrepancies
+        |> Enum.filter(&(&1["sscc"] == sscc and &1["gtin"] == batch.gtin and &1["batch_no"] == batch.batch_no))
+        |> Enum.map(&(&1["quantity"] || 0))
+        |> Enum.sum()
+
+      %{
+        product_name: batch.product_name,
+        gtin: batch.gtin,
+        batch_no: batch.batch_no,
+        expiry: batch.expiry,
+        items: batch.items,
+        serials: Enum.flat_map(batch.items, &item_serials/1),
+        missing_catalog_item: Enum.find(batch.items, &is_nil(&1.attrs["product_id"])),
+        received: batch.quantity,
+        damaged: damaged,
+        missing: missing,
+        expected: batch.quantity + missing
+      }
+    end)
+    |> Kernel.++(missing_only_lines(shipper, sscc, discrepancies))
+  end
+
+  # Lines that were sent but none of it arrived have no delivery item, only
+  # a pending discrepancy; show them so the table covers what was expected.
+  defp missing_only_lines(shipper, sscc, discrepancies) do
+    present = MapSet.new(shipper.items, &{&1.attrs["gtin"], &1.batch_no})
+
+    discrepancies
+    |> Enum.filter(&(&1["sscc"] == sscc and not MapSet.member?(present, {&1["gtin"], &1["batch_no"]})))
+    |> Enum.group_by(&{&1["gtin"], &1["batch_no"], &1["expiry_date"]})
+    |> Enum.map(fn {{gtin, batch_no, expiry}, rows} ->
+      missing = rows |> Enum.map(&(&1["quantity"] || 0)) |> Enum.sum()
+
+      %{
+        product_name: Map.get(hd(rows), "product_name") || gtin,
+        gtin: gtin,
+        batch_no: batch_no,
+        expiry: expiry,
+        items: [],
+        serials: [],
+        missing_catalog_item: nil,
+        received: 0,
+        damaged: 0,
+        missing: missing,
+        expected: missing
+      }
+    end)
+  end
 
   attr :batch, :map, required: true
 
@@ -2193,11 +2397,15 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               variant="secondary"
               glyph="plus"
               phx-click="open_add_item"
-              label={if @receiving_portal == :organization, do: "Add item", else: "Scan shipper"}
+              label={if @receiving_portal == :organization, do: "Add item", else: "Add item by hand"}
             />
           </:actions>
         </.td_card_header>
-        <div :if={@delivery_items == []} class="td-pad td-empty-wrap">
+        <.inline_scanner
+          :if={@receiving_portal != :organization and not @add_item_open and @receipt_step in [:sscc, :confirm_shipper]}
+          {assigns}
+        />
+        <div :if={@delivery_items == [] and @receipt_step != :confirm_shipper} class="td-pad td-empty-wrap">
           <div class="td-empty-card">
             <p class="td-empty-title">
               {if @receiving_portal == :organization, do: "No items added yet", else: "Scan the first shipper"}
@@ -2209,10 +2417,10 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             </p>
             <.td_button
               id="open-add-item-empty"
-              variant="primary"
-              glyph="barcode"
+              glyph={if @receiving_portal == :organization, do: "barcode", else: "plus"}
+              variant={if @receiving_portal == :organization, do: "primary", else: "secondary"}
               phx-click="open_add_item"
-              label={if @receiving_portal == :organization, do: "Add item", else: "Scan shipper SSCC"}
+              label={if @receiving_portal == :organization, do: "Add item", else: "Add item by hand"}
             />
           </div>
         </div>
@@ -2223,7 +2431,12 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               {length(@pending_discrepancies)} {if length(@pending_discrepancies) == 1, do: "line doesn't", else: "lines don't"} match what was sent. They will be recorded as discrepancies on the receipt for you to resolve.
             </span>
           </div>
-          <div class="mt-3 space-y-4">
+          <.expected_vs_received
+            :if={@receiving_portal != :organization}
+            items={@delivery_items}
+            discrepancies={@pending_discrepancies}
+          />
+          <div :if={@receiving_portal == :organization} class="mt-3 space-y-4">
             <article
               :for={{shipper, index} <- Enum.with_index(delivery_item_groups(@delivery_items), 1)}
               id={"delivery-shipper-#{index}"}
