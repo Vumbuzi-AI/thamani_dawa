@@ -140,6 +140,52 @@ defmodule ThamaniDawaWeb.Router do
       post "/customer-returns/:id/complete", DistributorController, :complete_return
     end
 
+    # Manufacturer portal. GS1 prefixes are admin-only, like the settings
+    # page that shows them on the web.
+    scope "/manufacturer" do
+      get "/dashboard", ManufacturerController, :dashboard
+      get "/inventory", ManufacturerController, :inventory
+      get "/gs1-prefixes", ManufacturerController, :gs1_prefixes
+
+      get "/products", ManufacturerController, :products
+      post "/products", ManufacturerController, :create_product
+      get "/products/gtin/:gtin", ManufacturerController, :show_product_by_gtin
+      get "/products/:id", ManufacturerController, :show_product
+      get "/products/:id/batches", ManufacturerController, :batches
+      get "/products/:id/batches/:batch_id/serials", ManufacturerController, :serials
+
+      get "/products/:id/batches/:batch_id/serials/export",
+          ManufacturerController,
+          :export_serials
+
+      post "/products/:id/serials", ManufacturerController, :generate_serials
+      get "/products/:id/ssccs", ManufacturerController, :ssccs
+
+      get "/ssccs/:id", ManufacturerController, :show_sscc
+      get "/ssccs/:id/serials", ManufacturerController, :sscc_serials
+      get "/ssccs/:id/label", ManufacturerController, :sscc_label
+      get "/ssccs/:id/export", ManufacturerController, :export_sscc
+
+      get "/aggregations", ManufacturerPackingController, :aggregations
+      get "/aggregations/ssccs", ManufacturerPackingController, :aggregation_ssccs
+      post "/aggregations/classify", ManufacturerPackingController, :classify
+      post "/aggregations", ManufacturerPackingController, :create_aggregation
+      get "/aggregations/:id", ManufacturerPackingController, :show_aggregation
+      post "/aggregations/:id/items", ManufacturerPackingController, :scan
+      post "/aggregations/:id/submit", ManufacturerPackingController, :submit_aggregation
+      post "/aggregations/:id/approve", ManufacturerPackingController, :approve_aggregation
+      post "/aggregations/:id/reject", ManufacturerPackingController, :reject_aggregation
+
+      get "/shipments", ManufacturerPackingController, :shipments
+      post "/shipments", ManufacturerPackingController, :create_shipment
+      get "/shipments/:id", ManufacturerPackingController, :show_shipment
+      post "/shipments/:id/approve", ManufacturerPackingController, :approve_shipment
+
+      get "/epcis/status", ManufacturerEpcisController, :status
+      get "/epcis/events", ManufacturerEpcisController, :events
+      get "/epcis/events/:id", ManufacturerEpcisController, :event
+    end
+
     # Stock takes and disposals; the stock type comes from the portal.
     scope "/pharmacy", assigns: %{inventory_type: :medicine} do
       get "/stock-takes", StockTakeController, :index

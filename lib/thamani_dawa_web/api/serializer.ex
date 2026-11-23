@@ -14,6 +14,8 @@ defmodule ThamaniDawaWeb.Api.Serializer do
   alias ThamaniDawa.Distributor.Shipment
   alias ThamaniDawa.Distributor.ShipmentItem
   alias ThamaniDawa.Distributor.Shipper
+  alias ThamaniDawa.Epcis.Outbox
+  alias ThamaniDawa.Epcis.OutboxEvent
   alias ThamaniDawa.GoodsReceipts.GoodsReceipt
   alias ThamaniDawa.GoodsReceipts.ReceivingDiscrepancy
   alias ThamaniDawa.GS1Encoder
@@ -21,6 +23,12 @@ defmodule ThamaniDawaWeb.Api.Serializer do
   alias ThamaniDawa.InventoryDisposals.InventoryDisposalItem
   alias ThamaniDawa.LabOrders.LabOrder
   alias ThamaniDawa.LabTests.LabTest
+  alias ThamaniDawa.Manufacturing
+  alias ThamaniDawa.Manufacturing.Aggregation
+  alias ThamaniDawa.Manufacturing.AggregationItem
+  alias ThamaniDawa.Manufacturing.Pallet
+  alias ThamaniDawa.Manufacturing.ShipperSscc
+  alias ThamaniDawa.Organizations.OrganizationGs1Prefix
   alias ThamaniDawa.Patients.Patient
   alias ThamaniDawa.Payments.Payment
   alias ThamaniDawa.Prescriptions.Prescription
@@ -577,6 +585,151 @@ defmodule ThamaniDawaWeb.Api.Serializer do
       scanned_at: item.scanned_at
     })
   end
+
+  # Manufacturer portal
+
+  # The GS1 licence key stays out of the API.
+  def manufacturer_product(%Manufacturing.Product{} = product) do
+    json_safe(%{
+      id: product.id,
+      gtin: product.gtin,
+      name: product.name,
+      description: product.description,
+      brand_owner: product.brand_owner,
+      brand_owner_address: product.brand_owner_address,
+      licence_type: product.licence_type,
+      status: product.status,
+      inserted_at: product.inserted_at
+    })
+  end
+
+  def manufacturer_batch(%Manufacturing.Batch{} = batch, serial_count \\ nil) do
+    json_safe(%{
+      id: batch.id,
+      product_id: batch.manufacturer_product_id,
+      batch_no: batch.batch_no,
+      production_date: batch.production_date,
+      expiry_date: batch.expiry_date,
+      serial_count: serial_count,
+      inserted_at: batch.inserted_at
+    })
+  end
+
+  def manufacturer_serial(%Manufacturing.Serial{} = serial, gs1_text \\ nil) do
+    json_safe(%{
+      id: serial.id,
+      serial: serial.serial,
+      product_id: serial.manufacturer_product_id,
+      batch_id: serial.manufacturer_batch_id,
+      sscc_id: serial.manufacturer_shipper_sscc_id,
+      gs1_text: gs1_text
+    })
+  end
+
+  def pallet(%Pallet{} = pallet) do
+    json_safe(%{
+      id: pallet.id,
+      code: pallet.code,
+      from_gln: pallet.from_gln,
+      from_company_name: pallet.from_company_name,
+      from_address: pallet.from_address,
+      to_gln: pallet.to_gln,
+      to_company_name: pallet.to_company_name,
+      to_address: pallet.to_address
+    })
+  end
+
+  def sscc(%ShipperSscc{} = sscc) do
+    json_safe(%{
+      id: sscc.id,
+      code: sscc.code,
+      gtin: sscc.gtin,
+      batch: sscc.batch,
+      production_date: sscc.production_date,
+      expiry_date: sscc.expiry_date,
+      count_of_trade_items: sscc.count_of_trade_items,
+      from_gln: sscc.from_gln,
+      from_company_name: sscc.from_company_name,
+      from_address: sscc.from_address,
+      to_gln: sscc.to_gln,
+      to_company_name: sscc.to_company_name,
+      to_address: sscc.to_address,
+      pallet: maybe(sscc.pallet, &pallet/1),
+      batches: loaded(sscc.batches, &manufacturer_batch/1),
+      inserted_at: sscc.inserted_at
+    })
+  end
+
+  def aggregation(%Aggregation{} = aggregation) do
+    json_safe(%{
+      id: aggregation.id,
+      reference: aggregation.reference,
+      status: aggregation.status,
+      sscc_id: aggregation.manufacturer_shipper_sscc_id,
+      sscc: maybe(aggregation.shipper_sscc, &sscc/1),
+      item_count: aggregation.item_count || loaded_count(aggregation.items),
+      items: loaded(aggregation.items, &aggregation_item/1),
+      created_by_id: aggregation.created_by_id,
+      approved_by_id: aggregation.approved_by_id,
+      rejected_by_id: aggregation.rejected_by_id,
+      submitted_at: aggregation.submitted_at,
+      approved_at: aggregation.approved_at,
+      rejected_at: aggregation.rejected_at,
+      rejection_reason: aggregation.rejection_reason,
+      updated_at: aggregation.updated_at
+    })
+  end
+
+  def aggregation_item(%AggregationItem{} = item) do
+    json_safe(%{
+      id: item.id,
+      serial: item.serial,
+      gtin: item.gtin,
+      raw_data_matrix: item.raw_data_matrix,
+      validation_status: item.validation_status,
+      serial_id: item.manufacturer_serial_id,
+      scanned_at: item.scanned_at
+    })
+  end
+
+  # The payload and PPB's response are only sent when asked for, since a
+  # list of events would otherwise be large.
+  def outbox_event(%OutboxEvent{} = event, opts \\ []) do
+    data = %{
+      id: event.id,
+      event_id: event.event_id,
+      event_type: event.event_type,
+      participant_tier: event.participant_tier,
+      status: event.status,
+      detail: Outbox.event_detail(event),
+      occurred_at: event.occurred_at,
+      http_status: event.http_status,
+      attempts: event.attempts,
+      next_attempt_at: event.next_attempt_at,
+      source_type: event.source_type,
+      source_id: event.source_id
+    }
+
+    data =
+      if Keyword.get(opts, :payload, false),
+        do: Map.merge(data, %{payload: event.payload, response: event.response}),
+        else: data
+
+    json_safe(data)
+  end
+
+  def gs1_prefix(%OrganizationGs1Prefix{} = prefix) do
+    json_safe(%{
+      id: prefix.id,
+      prefix: prefix.prefix,
+      is_primary: prefix.is_primary,
+      verification_status: prefix.verification_status,
+      verified_at: prefix.verified_at
+    })
+  end
+
+  defp loaded_count(list) when is_list(list), do: length(list)
+  defp loaded_count(_not_loaded), do: nil
 
   defp label(batch) do
     %{datamatrix: GS1Encoder.encode_raw(batch), hri: GS1Encoder.human_readable(batch)}

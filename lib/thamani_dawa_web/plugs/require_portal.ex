@@ -6,7 +6,9 @@ defmodule ThamaniDawaWeb.Plugs.RequirePortal do
   alias ThamaniDawaWeb.Api.Access
   alias ThamaniDawaWeb.Api.Response
 
-  def init(portal) when portal in [:org, :pharmacy, :lab, :distributor], do: portal
+  def init(portal)
+      when portal in [:org, :pharmacy, :lab, :distributor, :manufacturer, :manufacturer_admin],
+      do: portal
 
   def call(conn, portal) do
     if Access.portal?(conn.assigns.current_scope, portal) do

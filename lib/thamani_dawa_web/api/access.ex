@@ -22,10 +22,18 @@ defmodule ThamaniDawaWeb.Api.Access do
   # model, so it uses the web's check as-is.
   def portal?(%Scope{} = scope, :distributor), do: Portals.portal_access?(scope, :distributor)
 
+  # Like the distributor portal, the manufacturer portal also checks the
+  # organization's operating model.
+  def portal?(%Scope{} = scope, :manufacturer), do: Portals.portal_access?(scope, :manufacturer)
+
+  # The manufacturer portal's admin pages (`require_manufacturer_admin_access`).
+  def portal?(%Scope{} = scope, :manufacturer_admin),
+    do: portal?(scope, :manufacturer) and Scope.admin?(scope)
+
   def portal?(_scope, _portal), do: false
 
   def portals(%Scope{} = scope) do
-    Enum.filter([:org, :pharmacy, :lab, :distributor], &portal?(scope, &1))
+    Enum.filter([:org, :pharmacy, :lab, :distributor, :manufacturer], &portal?(scope, &1))
   end
 
   def same_site?(%Scope{} = scope, site_id) do
