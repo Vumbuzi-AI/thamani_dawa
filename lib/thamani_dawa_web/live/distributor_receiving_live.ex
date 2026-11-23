@@ -401,23 +401,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
      end)}
   end
 
-  def handle_event("validate_serial_confirm", %{"serial_confirm" => %{"serial" => raw}}, socket) do
-    raw = to_string(raw)
-
-    socket =
-      if String.trim(raw) == "" do
-        assign(socket, :serial_confirm_form, to_form(%{"serial" => raw}, as: :serial_confirm))
-      else
-        confirm_unit_serial(socket, raw)
-      end
-
-    {:noreply, socket}
-  end
-
-  def handle_event("confirm_serial", %{"serial_confirm" => params}, socket) do
-    {:noreply, confirm_unit_serial(socket, to_string(Map.get(params, "serial", "")))}
-  end
-
   def handle_event("cancel_pending_shipper", _params, socket) do
     {:noreply,
      socket
@@ -427,16 +410,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   end
 
   def handle_event("confirm_pending_shipper", _params, socket) do
-    pending = socket.assigns.pending_shipper
-
-    if unreviewed_serials(pending) == [] do
-      settle_pending_shipper(socket, pending)
-    else
-      {:noreply,
-       socket
-       |> update(:pending_shipper, &%{&1 | review_unscanned?: true})
-       |> assign(:serial_confirm_notice, nil)}
-    end
+    settle_pending_shipper(socket, socket.assigns.pending_shipper)
   end
 
   def handle_event("finish_delivery", _params, socket) do
@@ -1007,117 +981,14 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     |> assign_serial_confirm()
   end
 
-  # A scan or a typed serial marks that unit present and accepted. The silent
-  # default of accepted does not count for units that were never scanned: each
-  # of those needs an explicit accepted, damaged, or missing choice.
-  defp confirm_unit_serial(socket, raw) do
-    trimmed = String.trim(raw)
-
-    if trimmed == "" or is_nil(socket.assigns.pending_shipper) do
-      assign_serial_confirm(socket)
-    else
-      case resolve_unit_serial(trimmed) do
-        {:error, message} ->
-          put_serial_notice(socket, raw, {:error, message})
-
-        {:ok, serial} ->
-          apply_scanned_serial(socket, serial)
-      end
-    end
-  end
-
-  defp resolve_unit_serial(trimmed) do
-    case ThamaniDawa.GS1Decoder.parse(trimmed) do
-      {:ok, %{serial: serial}} when is_binary(serial) and serial != "" ->
-        {:ok, serial}
-
-      {:ok, %{sscc: sscc}} when is_binary(sscc) ->
-        {:error, "That's the case SSCC. Scan a unit data matrix from inside the case."}
-
-      {:ok, _decoded} ->
-        {:error,
-         "That scan has no unit serial. Scan the unit data matrix, or enter its serial number."}
-
-      {:error, _} ->
-        {:ok, trimmed}
-    end
-  end
-
-  defp apply_scanned_serial(socket, serial) do
-    pending = socket.assigns.pending_shipper
-
-    cond do
-      match_case_serial(pending.groups, serial) == nil ->
-        put_serial_notice(socket, serial, {:error, "That serial isn't in this case."})
-
-      MapSet.member?(scanned_serials(pending), serial) ->
-        acknowledge_scanned_serial(socket, serial, {:ok, "#{serial} is already marked accepted."})
-
-      true ->
-        groups =
-          Enum.map(pending.groups, fn group ->
-            if serial in group.serials do
-              %{group | serial_conditions: Map.put(group.serial_conditions, serial, :accepted)}
-            else
-              group
-            end
-          end)
-
-        pending = %{
-          pending
-          | groups: groups,
-            scanned_serials: MapSet.put(scanned_serials(pending), serial),
-            reviewed_serials: MapSet.delete(reviewed_serials(pending), serial)
-        }
-
-        socket
-        |> assign(:pending_shipper, pending)
-        |> acknowledge_scanned_serial(serial, {:ok, "#{serial} marked accepted."})
-    end
-  end
-
-  defp put_serial_notice(socket, form_serial, notice) do
-    tick = Map.get(socket.assigns, :serial_confirm_tick, 0) + 1
-
-    socket
-    |> assign(:serial_confirm_form, to_form(%{"serial" => form_serial}, as: :serial_confirm))
-    |> assign(:serial_confirm_notice, notice)
-    |> assign(:serial_confirm_tick, tick)
-  end
-
-  defp acknowledge_scanned_serial(socket, serial, notice) do
-    socket
-    |> put_serial_notice("", notice)
-    |> assign(:last_scanned_serial, serial)
-  end
-
-  defp match_case_serial(groups, serial) do
-    Enum.find_value(groups, fn group ->
-      if serial in group.serials, do: serial
-    end)
-  end
-
-  defp scanned_serials(pending), do: Map.get(pending, :scanned_serials, MapSet.new())
-  defp reviewed_serials(pending), do: Map.get(pending, :reviewed_serials, MapSet.new())
-
-  defp unreviewed_serials(pending) do
-    scanned = scanned_serials(pending)
-    reviewed = reviewed_serials(pending)
-
-    pending.groups
-    |> Enum.filter(& &1.small_group?)
-    |> Enum.flat_map(& &1.serials)
-    |> Enum.filter(&is_binary/1)
-    |> Enum.uniq()
-    |> Enum.reject(&MapSet.member?(scanned, &1))
-    |> Enum.reject(&MapSet.member?(reviewed, &1))
-  end
-
   defp serialized_case?(pending) do
     Enum.any?(pending.groups, fn group ->
       group.small_group? and Enum.any?(group.serials, &is_binary/1)
     end)
   end
+
+  defp scanned_serials(pending), do: Map.get(pending, :scanned_serials, MapSet.new())
+  defp reviewed_serials(pending), do: Map.get(pending, :reviewed_serials, MapSet.new())
 
   defp serial_scanned?(pending, serial), do: MapSet.member?(scanned_serials(pending), serial)
 
@@ -1125,14 +996,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     Map.get(pending, :review_unscanned?, false) and
       not serial_scanned?(pending, serial) and
       not MapSet.member?(reviewed_serials(pending), serial)
-  end
-
-  defp unscanned_confirm_message(1) do
-    "1 unit wasn't scanned. Confirm whether it is accepted, damaged, or missing."
-  end
-
-  defp unscanned_confirm_message(count) do
-    "#{count} units weren't scanned. Confirm each one: accepted, damaged, or missing."
   end
 
   defp serial_dom_id(serial) do
@@ -2201,13 +2064,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               @receipt_step == :sscc ->
                 "Scan or type the case label's SSCC to pull in its contents."
 
-              @receipt_step == :confirm_shipper and @pending_shipper.review_unscanned? and
-                  unreviewed_serials(@pending_shipper) != [] ->
-                "These units weren't scanned. Confirm each one as accepted, damaged, or missing."
-
-              @receipt_step == :confirm_shipper and serialized_case?(@pending_shipper) ->
-                "Scan each unit's data matrix, or enter its serial number. Unmarked units stay accepted until you mark them damaged or missing."
-
               @receipt_step == :confirm_shipper ->
                 "Unmarked contents stay accepted. Flag anything damaged or missing before adding it."
 
@@ -2281,70 +2137,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             </button>
           <% @receipt_step == :confirm_shipper -> %>
             <div class="mt-5">
-              <.form
-                :if={serialized_case?(@pending_shipper)}
-                for={@serial_confirm_form}
-                id="serial-confirm-form"
-                phx-change="validate_serial_confirm"
-                phx-submit="confirm_serial"
-              >
-                <div class="flex items-end gap-2">
-                  <div class="min-w-0 flex-1">
-                    <.input
-                      field={@serial_confirm_form[:serial]}
-                      id="serial-confirm-input"
-                      type="text"
-                      label="Scan data matrix or enter serial number"
-                      placeholder="Scan the unit data matrix, or type the serial"
-                      autocomplete="off"
-                      autofocus
-                      phx-hook="ScanField"
-                      phx-debounce="150"
-                      class="font-medium tabular-nums tracking-tight"
-                    />
-                  </div>
-                  <button
-                    type="submit"
-                    id="mark-serial-accepted"
-                    class="mb-3 inline-flex shrink-0 items-center rounded-full bg-thamani-forest px-4 py-[11px] text-sm font-semibold text-td-on-accent transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
-                  >
-                    Mark accepted
-                  </button>
-                </div>
-              </.form>
-              <div
-                :if={@serial_confirm_notice}
-                id="serial-confirm-notice"
-                role={if(elem(@serial_confirm_notice, 0) == :error, do: "alert", else: "status")}
-              >
-                <p
-                  id={"serial-confirm-notice-body-#{@serial_confirm_tick}"}
-                  class={[
-                    "serial-confirm-notice mt-1 mb-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold",
-                    elem(@serial_confirm_notice, 0) == :error && "bg-rose-50 text-thamani-error",
-                    elem(@serial_confirm_notice, 0) == :ok && "bg-td-accent-tint text-thamani-forest"
-                  ]}
-                >
-                  <span
-                    :if={elem(@serial_confirm_notice, 0) == :ok}
-                    class="serial-confirm-check"
-                    aria-hidden="true"
-                  >
-                    <.icon name="hero-check" class="size-3.5" />
-                  </span>
-                  {elem(@serial_confirm_notice, 1)}
-                </p>
-              </div>
-              <p
-                :if={
-                  @pending_shipper.review_unscanned? and unreviewed_serials(@pending_shipper) != []
-                }
-                id="unscanned-confirm"
-                role="alert"
-                class="mb-3 rounded-xl bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-950"
-              >
-                {unscanned_confirm_message(length(unreviewed_serials(@pending_shipper)))}
-              </p>
               <div class="mt-4 max-h-[min(28rem,55vh)] overflow-y-auto overscroll-contain rounded-2xl border border-thamani-frosted bg-td-surface">
                 <section
                   :for={section <- product_sections(@pending_shipper.groups)}
@@ -2510,7 +2302,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                   phx-click="confirm_pending_shipper"
                   class="flex-1 rounded-full bg-thamani-forest px-4 py-2.5 text-sm font-semibold text-td-on-accent transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
                 >
-                  Yes, add to delivery
+                  Accept all and add to delivery
                 </button>
               </div>
             </div>

@@ -511,6 +511,7 @@ defmodule ThamaniDawa.Manufacturing do
           %{
             # `barcode` is ignored by GS1; it scopes the request for clarity.
             "barcode" => product.gtin,
+            "material_description" => shipper_material_description(product),
             "serials" => serials,
             "from" => %{"gln" => from_gln},
             "to" => %{"gln" => to_gln}
@@ -612,6 +613,8 @@ defmodule ThamaniDawa.Manufacturing do
         Enum.map(serials, &%{serial: &1}),
         opts[:site_gln]
       )
+
+      record_dispatch_shipment!(organization_id, [shipper_sscc])
 
       shipper_sscc
     end)
@@ -800,7 +803,15 @@ defmodule ThamaniDawa.Manufacturing do
                  site_gln,
                  api_token
                ) do
-          %{batch: batch, serials: serials, pallet: pallet, shippers: shippers}
+          shipment = record_dispatch_shipment!(organization_id, shippers)
+
+          %{
+            batch: batch,
+            serials: serials,
+            pallet: pallet,
+            shippers: shippers,
+            shipment: shipment
+          }
         else
           {:error, reason} -> Repo.rollback(reason)
         end
@@ -888,6 +899,7 @@ defmodule ThamaniDawa.Manufacturing do
     shipper_params =
       %{
         "barcode" => product.gtin,
+        "material_description" => shipper_material_description(product),
         "serials" => Enum.map(serials, & &1.serial),
         "from" => %{"gln" => parties["from_gln"]},
         "to" => %{"gln" => parties["to_gln"]}
@@ -999,7 +1011,60 @@ defmodule ThamaniDawa.Manufacturing do
     )
   end
 
+  @doc """
+  Creates a pallet SSCC grouping the given shipper SSCCs, which may span
+  products and batches. Shippers already on a shipment can't be moved.
+  The pallet inherits its parties from the first selected shipper.
+  """
+  def create_pallet_from_shippers(organization_id, shipper_ids) when is_list(shipper_ids) do
+    wanted = MapSet.new(shipper_ids, &to_string/1)
+
+    shippers =
+      organization_id
+      |> list_available_ssccs()
+      |> Enum.filter(&MapSet.member?(wanted, to_string(&1.id)))
+
+    case shippers do
+      [] ->
+        {:error, :no_shippers}
+
+      [first | _] ->
+        parties =
+          first
+          |> Map.take([
+            :from_gln,
+            :from_company_name,
+            :from_address,
+            :to_gln,
+            :to_company_name,
+            :to_address
+          ])
+          |> Map.new(fn {k, v} -> {Atom.to_string(k), v} end)
+
+        Repo.transaction(fn ->
+          case create_order_pallet(organization_id, parties) do
+            {:ok, pallet} ->
+              from(s in ShipperSscc, where: s.id in ^Enum.map(shippers, & &1.id))
+              |> Repo.update_all(set: [manufacturer_pallet_id: pallet.id])
+
+              pallet
+
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
+        end)
+    end
+  end
+
   # Shipper SSCCs
+
+  # A shipper's material description defaults to the product's description,
+  # falling back to its name when GS1 has no description for the GTIN.
+  defp shipper_material_description(%Product{description: description, name: name}) do
+    if is_binary(description) and String.trim(description) != "",
+      do: String.trim(description),
+      else: name
+  end
 
   @doc "Creates a manually supplied shipper SSCC, inheriting pallet parties when present."
   def create_manual_sscc(organization_id, pallet, attrs) do
@@ -1486,6 +1551,52 @@ defmodule ThamaniDawa.Manufacturing do
 
   defp resolve_party(changeset, side, {:error, :not_found}),
     do: Ecto.Changeset.add_error(changeset, :"#{side}_gln", "could not be verified")
+
+  # Minting shipper SSCCs for dispatch (make-to-order, or packing stock
+  # into a shipper) is itself the shipment: record an already-approved
+  # shipment over those shippers and enqueue its EPCIS Ship event. Parties
+  # come from the first shipper's label fields, so no GLN lookup is needed.
+  defp record_dispatch_shipment!(organization_id, [%ShipperSscc{} = first | _] = shippers) do
+    shipped_at = DateTime.utc_now() |> DateTime.truncate(:second)
+    reference = shipment_reference()
+
+    shipment =
+      %Shipment{organization_id: organization_id}
+      |> Ecto.Changeset.change(%{
+        reference: reference,
+        order_number: blank_default(first.order_number, reference),
+        status: "approved",
+        shipped_at: shipped_at,
+        origin_gln: first.from_gln,
+        origin_company: blank_default(first.from_company_name, first.from_gln),
+        origin_address: first.from_address,
+        destination_gln: first.to_gln,
+        destination_company: blank_default(first.to_company_name, first.to_gln),
+        destination_address: first.to_address
+      })
+      |> Repo.insert!()
+
+    Enum.each(shippers, fn sscc ->
+      %ShipmentItem{}
+      |> ShipmentItem.changeset(%{
+        manufacturer_shipment_id: shipment.id,
+        manufacturer_shipper_sscc_id: sscc.id
+      })
+      |> Repo.insert!()
+    end)
+
+    Epcis.record_manufacturer_ship(
+      organization_id,
+      shipment.id,
+      Enum.map(shippers, & &1.code),
+      shipment.origin_gln,
+      shipment.destination_gln,
+      shipment.order_number,
+      shipped_at
+    )
+
+    shipment
+  end
 
   defp shipment_reference,
     do: "MSH-" <> Base.encode32(:crypto.strong_rand_bytes(5), padding: false)

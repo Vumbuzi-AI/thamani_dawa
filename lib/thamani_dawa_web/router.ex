@@ -395,6 +395,10 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer/aggregations", ManufacturerAggregationLive.Dashboard, :index
       live "/manufacturer/aggregations/new", ManufacturerAggregationLive.Wizard, :new
 
+      live "/manufacturer/aggregations/pallets/new",
+           ManufacturerAggregationLive.PalletNew,
+           :new
+
       live "/manufacturer/aggregations/pallets/:pallet_id/ssccs/new",
            ManufacturerAggregationLive.Wizard,
            :new_on_pallet

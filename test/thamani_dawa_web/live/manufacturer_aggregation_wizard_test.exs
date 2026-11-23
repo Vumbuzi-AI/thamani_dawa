@@ -22,7 +22,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationWizardTest do
     site: site
   } do
     {:ok, dashboard, _html} = live(conn, ~p"/manufacturer/aggregations")
-    assert has_element?(dashboard, "#add-aggregation-sscc")
+    assert has_element?(dashboard, "#create-pallet")
 
     {:ok, wizard, _html} = live(conn, ~p"/manufacturer/aggregations/new")
     assert has_element?(wizard, "#aggregation-type-pallet")

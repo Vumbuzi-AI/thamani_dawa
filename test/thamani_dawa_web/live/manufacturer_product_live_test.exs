@@ -266,6 +266,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert length(pack_requests) == 2
     assert Enum.all?(pack_requests, &(length(&1["serials"]) == 2))
     assert Enum.all?(pack_requests, &(&1["order_number"] == "PO-2026-0142"))
+    assert Enum.all?(pack_requests, &is_binary(&1["material_description"]))
     assert Enum.all?(pack_requests, &(&1["to"] == %{"gln" => site.gln}))
     assert Enum.all?(pack_requests, &(&1["from"] == %{"gln" => other_facility.gln}))
     assert sscc.manufacturer_pallet_id
@@ -286,10 +287,19 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert commission_event
     assert length(commission_event.payload["epcList"]) == 4
 
-    refute Enum.any?(
-             ThamaniDawa.Epcis.Outbox.list_events(organization.id),
-             &(&1.event_type == "shipping")
-           )
+    # Minting shippers for an order is the shipment: one approved shipment
+    # covering every shipper, with a single EPCIS Ship event.
+    assert [ship_event] =
+             Enum.filter(
+               ThamaniDawa.Epcis.Outbox.list_events(organization.id),
+               &(&1.event_type == "shipping")
+             )
+
+    assert ship_event.source_type == "manufacturer_shipment"
+
+    shipment = Manufacturing.get_shipment!(organization.id, ship_event.source_id)
+    assert shipment.status == "approved"
+    assert length(shipment.shipper_ssccs) == 2
 
     assert Enum.count(Manufacturing.list_serials(organization.id, batch.id)) == 4
 
@@ -398,6 +408,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert request["to"] == %{"gln" => "0614141000784"}
     assert request["order_number"] == "PO-77"
 
+    assert request["material_description"] ==
+             if(product.description not in [nil, ""], do: product.description, else: product.name)
+
     assert [%{sscc: shipper}] = Manufacturing.list_sscc_groups(organization.id, product.id)
     assert shipper.batch == batch.batch_no
     assert shipper.count_of_trade_items == 2
@@ -450,7 +463,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
       expiry_date: batch.expiry_date
     }
 
-    assert {:ok, _} =
+    assert {:ok, packed} =
              Manufacturing.pack_serials_into_shipper(
                organization.id,
                product,
@@ -458,6 +471,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
                ["0002"],
                %{"from_gln" => manufacturer_session_gln(user), "to_gln" => "0614141000784"}
              )
+
+    # Packing stock into a shipper dispatches it: a shipment plus a Ship event.
+    assert Enum.any?(
+             ThamaniDawa.Epcis.Outbox.list_events(organization.id),
+             &(&1.event_type == "shipping" and &1.source_type == "manufacturer_shipment")
+           )
+
+    refute Enum.any?(Manufacturing.list_available_ssccs(organization.id), &(&1.id == packed.id))
 
     {:ok, lv, _html} =
       live(conn, ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch.batch_no}")

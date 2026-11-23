@@ -84,6 +84,26 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
     end
   end
 
+  def handle_event("set_submission_mode", %{"mode" => mode}, socket)
+      when mode in ["automatic", "manual"] do
+    case Organizations.update_epcis_submission_mode(socket.assigns.organization, mode) do
+      {:ok, organization} ->
+        {:noreply,
+         socket
+         |> assign(:organization, organization)
+         |> put_flash(
+           :info,
+           if(mode == "automatic",
+             do: "EPCIS events will now be sent to PPB automatically.",
+             else: "EPCIS events will now wait as pending until you approve and send them."
+           )
+         )}
+
+      {:error, _changeset} ->
+        {:noreply, put_flash(socket, :error, "Couldn't update the EPCIS submission mode.")}
+    end
+  end
+
   def handle_event("add_gs1_prefix", %{"organization_gs1_prefix" => params}, socket) do
     case Organizations.add_gs1_prefix(socket.assigns.organization, params) do
       {:ok, _prefix} ->
@@ -510,6 +530,52 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
             </div>
             <.button variant="primary" class="h-11">Add prefix</.button>
           </.form>
+        </div>
+      </section>
+      <section
+        id="epcis-submission-settings"
+        class="mt-6 overflow-hidden rounded-2xl border border-[var(--color-td-hairline)] bg-[var(--color-td-surface)]"
+        aria-labelledby="epcis-submission-heading"
+      >
+        <div class="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between lg:p-8">
+          <div>
+            <h2 id="epcis-submission-heading" class="text-base font-semibold text-thamani-forest">
+              EPCIS event reporting
+            </h2>
+            <p class="mt-1 text-sm leading-5 text-thamani-pewter">
+              {if @organization.epcis_submission_mode == :automatic,
+                do: "Events are sent to PPB as soon as they are recorded.",
+                else: "Events stay pending until someone approves and sends them."}
+            </p>
+          </div>
+          <div
+            role="group"
+            aria-label="EPCIS submission mode"
+            class="inline-flex shrink-0 items-center gap-1 self-start rounded-full bg-thamani-stone p-1 lg:self-auto"
+          >
+            <button
+              :for={
+                {mode, label, icon} <- [
+                  {:automatic, "Automatic", "hero-bolt"},
+                  {:manual, "Manual approval", "hero-hand-raised"}
+                ]
+              }
+              type="button"
+              id={"settings-epcis-mode-#{mode}"}
+              phx-click="set_submission_mode"
+              phx-value-mode={mode}
+              aria-pressed={to_string(@organization.epcis_submission_mode == mode)}
+              class={[
+                "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent",
+                if(@organization.epcis_submission_mode == mode,
+                  do: "bg-thamani-forest text-td-on-accent shadow-sm",
+                  else: "text-thamani-pewter hover:text-thamani-forest"
+                )
+              ]}
+            >
+              <.icon name={icon} class="size-4" /> {label}
+            </button>
+          </div>
         </div>
       </section>
     </.settings_shell>
