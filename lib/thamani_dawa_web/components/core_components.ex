@@ -2947,6 +2947,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
     doc: "form = 560px, confirm = 480px, wide = 640px (multi-step flows)"
 
   slot :inner_block, required: true
+  slot :header_actions, doc: "optional actions in the title row, before close"
   slot :footer, doc: "right-aligned actions: secondary Cancel, then the primary"
 
   def modal(assigns) do
@@ -2990,14 +2991,19 @@ defmodule ThamaniDawaWeb.CoreComponents do
                   <h2 id={"#{@id}-title"}>{@title}</h2>
                   <p :if={@subtitle} id={"#{@id}-description"}>{@subtitle}</p>
                 </div>
-                <button
-                  phx-click={JS.exec(@on_cancel, "phx-remove")}
-                  type="button"
-                  class="td-icon-btn td-modal-close"
-                  aria-label="Close"
-                >
-                  <.icon name="x" class="size-4" />
-                </button>
+                <div class="td-modal-hd-end">
+                  <div :if={@header_actions != []} class="td-modal-hd-actions">
+                    {render_slot(@header_actions)}
+                  </div>
+                  <button
+                    phx-click={JS.exec(@on_cancel, "phx-remove")}
+                    type="button"
+                    class="td-icon-btn td-modal-close"
+                    aria-label="Close"
+                  >
+                    <.icon name="x" class="size-4" />
+                  </button>
+                </div>
               </div>
               <%!-- Legacy dialogs without a title keep their in-body heading
                    until each is rebuilt to its Doop frame; they get only a
