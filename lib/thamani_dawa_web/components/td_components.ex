@@ -662,7 +662,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :selected, :boolean, default: false
   attr :title, :string, required: true
   attr :body, :string, default: nil
-  attr :rest, :global, include: ~w(type phx-click id phx-target phx-value-mode phx-value-index)
+  attr :rest, :global, include: ~w(type phx-click id phx-target phx-value-mode phx-value-index phx-value-type)
 
   def td_option_card(assigns) do
     ~H"""
