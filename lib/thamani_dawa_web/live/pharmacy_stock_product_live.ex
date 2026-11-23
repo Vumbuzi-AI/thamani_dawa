@@ -1,8 +1,9 @@
 defmodule ThamaniDawaWeb.PharmacyStockProductLive do
   @moduledoc """
-  Read-only list of a single product's batches, reached by drilling into
-  `PharmacyStockLive`'s products view. Organization-wide like its parent —
-  shows batches at every site, not just the pharmacist's home site.
+  One product's batches at the viewer's sites (Doop k6in9fJ2Ub; pharma-lab
+  MS7rEsXApn), reached from `PharmacyStockLive`. Admins without a picked
+  site see every site; everyone else sees their current site. Read-only;
+  rendered by `ThamaniDawaWeb.SiteStock`.
   """
 
   use ThamaniDawaWeb, :live_view
@@ -10,25 +11,21 @@ defmodule ThamaniDawaWeb.PharmacyStockProductLive do
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
   alias ThamaniDawa.Products
+  alias ThamaniDawaWeb.SiteStock
 
   def mount(%{"id" => id}, _session, socket) do
     scope = socket.assigns.current_scope
     org_id = scope.organization_id
     product = Products.get_product!(org_id, id)
     allowed_site_ids = if Scope.admin?(scope), do: nil, else: [scope.current_site_id]
-    batches = Batches.list_batches_for_product(org_id, id, allowed_site_ids)
 
     {:ok,
      socket
+     |> assign(:page_title, SiteStock.product_name(product))
      |> assign(:product, product)
-     |> stream(:batches, batches)}
+     |> assign(:batches, Batches.list_batches_for_product(org_id, id, allowed_site_ids))
+     |> assign(:today, ThamaniDawa.BusinessDate.today())}
   end
-
-  defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
-  defp site_name(nil), do: "(unknown site)"
-  defp site_name(site), do: site.name
-  defp supplier_name(nil), do: "—"
-  defp supplier_name(supplier), do: supplier.name
 
   def render(assigns) do
     ~H"""
@@ -36,32 +33,18 @@ defmodule ThamaniDawaWeb.PharmacyStockProductLive do
       flash={@flash}
       current_scope={@current_scope}
       current_path="/pharmacy/stock"
-      back={~p"/pharmacy/stock"}
+      crumb_parent="Stock"
+      crumb={SiteStock.product_name(@product)}
     >
-      <.header icon="hero-cube">
-        {product_name(@product)}
-        <:subtitle>Batches available at your permitted site.</:subtitle>
-      </.header>
-
-      <.table
-        id="batches"
-        rows={@streams.batches}
-        row_click={fn {_id, batch} -> JS.navigate(~p"/pharmacy/stock/batches/#{batch.id}") end}
-      >
-        <:col :let={{_id, batch}} label="Site">{site_name(batch.site)}</:col>
-        <:col :let={{_id, batch}} label="Batch no.">{batch.batch_no}</:col>
-        <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
-        <:col :let={{_id, batch}} label="Remaining">{batch.remaining_quantity}</:col>
-        <:col :let={{_id, batch}} label="Supplier">{supplier_name(batch.supplier)}</:col>
-        <:col :let={{_id, batch}} label="Status">
-          <.status_badge status={if batch.approver_id, do: :active, else: :pending_receipt} />
-        </:col>
-        <:empty_state>
-          <.blank_state icon="hero-cube" title="No batches for this product yet">
-            Batches dispatched to any site will appear here.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+      <SiteStock.product_detail
+        product={@product}
+        batches={@batches}
+        today={@today}
+        back_path={~p"/pharmacy/stock"}
+        scan_path={~p"/pharmacy/scan"}
+        requisition_path={~p"/pharmacy/requisitions/new"}
+        batch_path={fn id -> ~p"/pharmacy/stock/batches/#{id}" end}
+      />
     </Layouts.pharmacy_shell>
     """
   end

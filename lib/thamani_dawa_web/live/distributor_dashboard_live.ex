@@ -107,10 +107,34 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
     socket
     |> assign(:pipeline_total, counts |> Map.values() |> Enum.sum())
     |> assign(:pipeline_stages, [
-      {"Draft", "bg-td-ink-3", counts["draft"]},
-      {"Submitted", "bg-amber-700", counts["submitted"]},
-      {"Approved", "bg-thamani-forest", counts["approved"]},
-      {"Rejected", "bg-red-600", counts["rejected"]}
+      %{
+        status: "draft",
+        label: "Draft",
+        caption: "Being packed",
+        tone: "neutral",
+        count: counts["draft"] || 0
+      },
+      %{
+        status: "submitted",
+        label: "Submitted",
+        caption: "Awaiting review",
+        tone: "warning",
+        count: counts["submitted"] || 0
+      },
+      %{
+        status: "approved",
+        label: "Approved",
+        caption: "SSCCs issued",
+        tone: "success",
+        count: counts["approved"] || 0
+      },
+      %{
+        status: "rejected",
+        label: "Rejected",
+        caption: "Returned for changes",
+        tone: "danger",
+        count: counts["rejected"] || 0
+      }
     ])
   end
 
@@ -176,7 +200,29 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
   defp product_name(nil), do: "Unknown product"
   defp product_name(product), do: product.generic_name || product.brand_name || "Unnamed product"
 
+  defp plan_caption(nil), do: "Choose a serialisation plan"
+  defp plan_caption(%SerialUsage{type: "prepay"}), do: "Prepay bundle"
+  defp plan_caption(%SerialUsage{}), do: "Flex plan"
+
+  defp shipment_tone("submitted"), do: "warning"
+  defp shipment_tone("approved"), do: "success"
+  defp shipment_tone("rejected"), do: "danger"
+  defp shipment_tone(_status), do: "neutral"
+
+  defp shipment_label(nil), do: "Unknown"
+  defp shipment_label(status), do: status |> to_string() |> Phoenix.Naming.humanize()
+
+  defp phrase(count, singular, plural),
+    do: "#{number(count || 0)} #{if count == 1, do: singular, else: plural}"
+
   def render(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :pipeline_max,
+        assigns.pipeline_stages |> Enum.map(fn stage -> stage.count end) |> Enum.max(fn -> 0 end)
+      )
+
     ~H"""
     <Layouts.distributor_shell
       flash={@flash}
@@ -185,240 +231,205 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
       crumb="Dashboard"
     >
       <:tools>
-        <.button
-          id="distributor-receive-stock"
-          variant="ghost"
-          navigate={~p"/distributor/receiving/new"}
-        >
-          Receive stock
-        </.button>
-        <.button
+        <.td_button
           id="distributor-new-shipment"
           variant="primary"
+          label="New shipment"
+          glyph="plus"
           navigate={~p"/distributor/shipments/new"}
-        >
-          New shipment
-        </.button>
+        />
       </:tools>
-      <p class="td-note">
-        Shipments awaiting review, SSCC issuance, and inventory health across your organization.
-      </p>
 
-      <div
-        :if={!@plan_selected?}
-        id="distributor-plan-required"
-        class="td-notice"
+      <.td_dashboard
+        id="distributor-dashboard"
+        title="Distributor dashboard"
+        subtitle="Shipments awaiting review, SSCC issuance, and inventory health across your organization."
       >
-        <div>
-          <p class="td-notice-title">Choose a serialisation plan</p>
-          <p class="td-note">
-            Shipments can't be created or approved until you pick a prepay bundle or flex pay-as-you-go.
-          </p>
-        </div>
-        <.button
-          id="distributor-choose-plan"
-          variant="primary"
-          navigate={~p"/distributor/billing/options"}
-        >
-          Choose a plan
-        </.button>
-      </div>
-
-      <p class="dashboard-section-label mt-6">Needs attention</p>
-      <div class="dashboard-stat-grid mt-2">
-        <.stat_tile
-          id="stat-shipments-submitted"
-          icon="hero-inbox-arrow-down"
-          label="Awaiting review"
-          value={@analytics.status_counts["submitted"]}
-          sublabel="Submitted shipments to approve or reject"
-        />
-        <.stat_tile
-          id="stat-shipments-draft"
-          icon="hero-pencil-square"
-          label="Drafts"
-          value={@analytics.status_counts["draft"]}
-          sublabel="Being packed on the mobile app"
-        />
-        <.link
-          id="stat-near-expiry-link"
-          navigate={~p"/distributor/products?#{%{view: "batches", expiry: "near"}}"}
-          class="block"
-        >
-          <.stat_tile
-            icon="hero-exclamation-triangle"
-            label="Near-expiry batches"
-            value={length(@near_expiry_all)}
-            sublabel="Within the current 90-day review window"
+        <:actions>
+          <.td_button
+            id="distributor-receive-stock"
+            label="Receive stock"
+            glyph="tray-arrow-down"
+            navigate={~p"/distributor/receiving/new"}
           />
-        </.link>
-        <.stat_tile
-          icon="hero-arrow-down-circle"
-          label="Below reorder"
-          value={@below_reorder_count}
-          sublabel="Products needing replenishment"
-        />
-      </div>
-
-      <p class="dashboard-section-label mt-6">Overview</p>
-      <div class="dashboard-stat-grid mt-2">
-        <.stat_tile
-          id="stat-shipments-approved-month"
-          icon="hero-check-badge"
-          label="Approved this month"
-          value={@analytics.approved_this_month}
-          sublabel={"#{@analytics.units_shipped} units shipped in total"}
-        />
-        <.stat_tile
-          id="stat-ssccs-issued"
-          icon="hero-qr-code"
-          label="SSCCs issued"
-          value={@analytics.ssccs_issued}
-          sublabel={allowance_label(@usage)}
-        />
-        <.stat_tile
-          icon="hero-cube-transparent"
-          label="Products in stock"
-          value={@products_in_stock_count}
-          sublabel="Distinct products with usable stock"
-        />
-        <.stat_tile
-          icon="hero-archive-box"
-          label="Active batches"
-          value={@available_batch_count}
-          sublabel="Usable, unexpired batches with stock"
-        />
-      </div>
-
-      <div class="dashboard-chart-grid mt-6">
-        <section class="dashboard-chart-card">
-          <div class="flex items-start justify-between gap-4">
+        </:actions>
+        <:notice>
+          <div :if={!@plan_selected?} id="distributor-plan-required" class="td-notice">
             <div>
-              <h2 class="dashboard-chart-title">Stock by product</h2>
-              <p class="dashboard-chart-subtitle">Top products by current units on hand</p>
+              <p class="td-notice-title">Choose a serialisation plan</p>
+              <p class="td-note">
+                Shipments can't be created or approved until you pick a prepay bundle or flex pay-as-you-go.
+              </p>
             </div>
-            <span class="dashboard-stat-tile-icon"><.icon name="hero-chart-bar" class="size-4" /></span>
+            <.td_button
+              id="distributor-choose-plan"
+              variant="primary"
+              label="Choose a plan"
+              navigate={~p"/distributor/billing/options"}
+            />
           </div>
-          <div class="mt-5 space-y-4">
-            <div
-              :for={{product, units} <- @top_products}
-              class="grid grid-cols-[minmax(7rem,1fr)_minmax(4rem,2fr)_auto] items-center gap-3 text-sm"
-            >
-              <span class="truncate">{product_name(product)}</span>
-              <span class="h-2.5 overflow-hidden rounded-full bg-thamani-stone">
-                <span
-                  class="block h-full rounded-full bg-thamani-forest"
-                  style={"width: #{if(@top_product_units > 0, do: round(units / @top_product_units * 100), else: 0)}%"}
-                ></span>
-              </span>
-              <span class="whitespace-nowrap text-right text-xs font-semibold text-thamani-forest">{units} {Products.unit_label(
-                product.uom
-              )}</span>
-            </div>
-            <p :if={@top_products == []} class="py-6 text-center text-sm text-thamani-pewter">
-              No stock on hand yet.
-            </p>
-          </div>
-        </section>
+        </:notice>
+        <:strip id="distributor-attention">
+          <.td_glance_cell
+            id="stat-shipments-submitted"
+            navigate={~p"/distributor/shipments?#{%{status: "submitted"}}"}
+            tone="warning"
+            value={"#{number(@analytics.status_counts["submitted"] || 0)} awaiting review"}
+            caption="Shipments to approve or reject"
+          >
+            <:icon><.td_icon name="hourglass" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="stat-shipments-draft"
+            navigate={~p"/distributor/shipments?#{%{status: "draft"}}"}
+            tone="neutral"
+            value={phrase(@analytics.status_counts["draft"], "draft", "drafts")}
+            caption="Being packed on the mobile app"
+          >
+            <:icon><.td_icon name="package" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="stat-near-expiry-link"
+            navigate={~p"/distributor/products?#{%{view: "batches", expiry: "near"}}"}
+            tone="expiry"
+            value={phrase(length(@near_expiry_all), "near-expiry batch", "near-expiry batches")}
+            caption={"Expiring within #{@near_expiry_days} days"}
+          >
+            <:icon><.td_icon name="calendar-x" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="stat-below-reorder"
+            navigate={~p"/distributor/products"}
+            tone="danger"
+            value={"#{number(@below_reorder_count)} below reorder"}
+            caption="Products to restock"
+          >
+            <:icon><.td_icon name="trend-down" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+        </:strip>
+        <:strip id="distributor-overview">
+          <.td_glance_cell
+            id="stat-shipments-approved-month"
+            tone="success"
+            value={"#{number(@analytics.approved_this_month)} approved this month"}
+            caption={"#{number(@analytics.ssccs_issued)} SSCCs issued"}
+          >
+            <:icon><.td_icon name="check-circle" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="stat-products-in-stock"
+            navigate={~p"/distributor/products"}
+            tone="neutral"
+            value={phrase(@products_in_stock_count, "product in stock", "products in stock")}
+            caption="Distinct products with usable stock"
+          >
+            <:icon><.td_icon name="link" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="stat-active-batches"
+            navigate={~p"/distributor/products?#{%{view: "batches"}}"}
+            tone="neutral"
+            value={phrase(@available_batch_count, "active batch", "active batches")}
+            caption="Usable, unexpired batches with stock"
+          >
+            <:icon><.td_icon name="stack" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="stat-ssccs-issued"
+            navigate={~p"/distributor/billing"}
+            tone="info"
+            value={allowance_label(@usage)}
+            caption={plan_caption(@usage)}
+          >
+            <:icon><.td_icon name="barcode" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+        </:strip>
 
-        <section class="dashboard-chart-card">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <h2 class="dashboard-chart-title">Shipment pipeline</h2>
-              <p class="dashboard-chart-subtitle">Shipments by their current lifecycle stage</p>
-            </div>
-            <span class="dashboard-stat-tile-icon"><.icon name="hero-chart-pie" class="size-4" /></span>
-          </div>
-          <div class="mt-5 space-y-4">
-            <div
-              :for={{label, color, count} <- @pipeline_stages}
-              class="grid grid-cols-[5.5rem_minmax(0,1fr)_1rem] items-center gap-3 text-sm"
-            >
-              <span>{label}</span>
-              <span class="h-2.5 overflow-hidden rounded-full bg-thamani-stone">
-                <span
-                  class={["block h-full rounded-full", color]}
-                  style={"width: #{if(count > 0, do: max(round(count / max(@pipeline_total, 1) * 100), 8), else: 0)}%"}
-                ></span>
-              </span>
-              <span class="text-right font-semibold text-thamani-forest">{count}</span>
-            </div>
-          </div>
-        </section>
-      </div>
+        <.td_dash_row>
+          <.td_dash_card
+            id="distributor-recent-shipments"
+            title="Recent shipments"
+            subtitle="Latest activity across all statuses"
+          >
+            <:actions>
+              <.td_button label="View all" navigate={~p"/distributor/shipments"} />
+            </:actions>
+            <table :if={@analytics.recent_shipments != []} class="td-rows is-tight">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Status</th>
+                  <th>To</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  :for={shipment <- @analytics.recent_shipments}
+                  id={"recent-shipment-#{shipment.id}"}
+                  class="is-link"
+                  phx-click={JS.navigate(~p"/distributor/shipments/#{shipment.id}")}
+                >
+                  <td class="td-mono">{shipment.order_number || shipment.reference}</td>
+                  <td>
+                    <.td_badge
+                      tone={shipment_tone(shipment.status)}
+                      label={shipment_label(shipment.status)}
+                    />
+                  </td>
+                  <td>{shipment.destination_company}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p :if={@analytics.recent_shipments == []} class="td-dash-empty">No shipments yet.</p>
+          </.td_dash_card>
 
-      <div class="dashboard-chart-grid mt-6">
-        <section class="dashboard-chart-card" id="distributor-recent-shipments">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <h2 class="dashboard-chart-title">Recent shipments</h2>
-              <p class="dashboard-chart-subtitle">Latest activity across all statuses</p>
-            </div>
-            <.link
-              navigate={~p"/distributor/shipments"}
-              class="text-xs font-semibold text-thamani-forest hover:underline"
-            >
-              View all
-            </.link>
-          </div>
-          <ul class="mt-4 divide-y divide-thamani-stone">
-            <li :for={shipment <- @analytics.recent_shipments} class="py-3">
-              <.link
-                navigate={~p"/distributor/shipments/#{shipment.id}"}
-                class="group flex items-center justify-between gap-3 text-sm"
-              >
-                <div class="min-w-0">
-                  <p class="truncate font-medium text-thamani-forest group-hover:underline">
-                    {shipment.order_number}
-                  </p>
-                  <p class="truncate text-xs text-thamani-pewter">
-                    {shipment.reference} · {shipment.destination_company}
-                  </p>
-                </div>
-                <.shipment_status_badge status={shipment.status} />
-              </.link>
-            </li>
-            <li
-              :if={@analytics.recent_shipments == []}
-              class="py-6 text-center text-sm text-thamani-pewter"
-            >
-              No shipments yet.
-            </li>
-          </ul>
-        </section>
+          <.td_dash_card
+            id="distributor-shipment-pipeline"
+            title="Shipment pipeline"
+            subtitle="Shipments by their current lifecycle stage"
+            width={320}
+          >
+            <.td_tick_row
+              :for={stage <- @pipeline_stages}
+              label={stage.label}
+              caption={stage.caption}
+              count={stage.count}
+              max={@pipeline_max}
+              tone={stage.tone}
+              navigate={~p"/distributor/shipments?#{%{status: stage.status}}"}
+            />
+          </.td_dash_card>
 
-        <section class="dashboard-chart-card" id="distributor-top-shipped">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <h2 class="dashboard-chart-title">Top shipped products</h2>
-              <p class="dashboard-chart-subtitle">Units in approved shipments</p>
-            </div>
-            <span class="dashboard-stat-tile-icon"><.icon name="hero-truck" class="size-4" /></span>
-          </div>
-          <ul class="mt-4 divide-y divide-thamani-stone">
-            <li
-              :for={product <- @analytics.top_products}
-              class="flex items-center justify-between gap-3 py-3 text-sm"
-            >
-              <div class="min-w-0">
-                <p class="truncate font-medium text-thamani-ink">
-                  {product.product_name || "Unverified product"}
-                </p>
-                <p class="font-mono text-xs text-thamani-pewter">{product.gtin}</p>
-              </div>
-              <span class="whitespace-nowrap font-semibold text-thamani-forest">
-                {product.units} units
-              </span>
-            </li>
-            <li
-              :if={@analytics.top_products == []}
-              class="py-6 text-center text-sm text-thamani-pewter"
-            >
-              Nothing shipped yet.
-            </li>
-          </ul>
-        </section>
-      </div>
+          <.td_dash_card
+            id="distributor-stock-by-product"
+            title="Stock by product"
+            subtitle="Top products by current units on hand"
+            width={360}
+          >
+            <table :if={@top_products != []} class="td-rows is-tight">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th class="is-num">Units</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  :for={{product, units} <- @top_products}
+                  class="is-link"
+                  phx-click={JS.navigate(~p"/distributor/products/#{product.id}")}
+                >
+                  <td>{product_name(product)}</td>
+                  <td class="is-num">
+                    <.td_ticks count={units} max={@top_product_units} tone="neutral" />{number(units)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p :if={@top_products == []} class="td-dash-empty">No stock on hand yet.</p>
+          </.td_dash_card>
+        </.td_dash_row>
+      </.td_dashboard>
 
       <Layouts.product_tour
         id="distributor-product-tour"

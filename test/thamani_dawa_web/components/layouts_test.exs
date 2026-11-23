@@ -106,7 +106,15 @@ defmodule ThamaniDawaWeb.LayoutsTest do
     test "groups help and personal actions in the sidebar footer", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
-      assert has_element?(lv, "#sidebar-footer #start-product-tour", "Product tour")
+      assert has_element?(lv, "#sidebar-account-dropdown #start-product-tour", "Product tour")
+      assert has_element?(lv, "#sidebar-account-dropdown #account-theme-dark[role=menuitemradio]")
+
+      assert has_element?(
+               lv,
+               "#sidebar-account-dropdown #account-org-settings[href='/org/settings']"
+             )
+
+      refute has_element?(lv, "#dark-mode-switch")
       assert has_element?(lv, "#sidebar-account-card[aria-label='Open account menu']")
       assert has_element?(lv, "#sidebar-profile", "Test User")
       assert has_element?(lv, "#sidebar-account-dropdown #sidebar-logout", "Log out")

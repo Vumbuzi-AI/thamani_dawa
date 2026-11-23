@@ -1757,6 +1757,69 @@ defmodule ThamaniDawa.Manufacturing do
     }
   end
 
+  @doc """
+  Data for the manufacturer dashboard (Doop ssU7S65tZF): the latest batches
+  with their serial counts ("Recent serial jobs") and the aggregation
+  pipeline (open aggregations, SSCCs not yet on a shipment, shipments
+  shipped in the last 7 days).
+  """
+  def dashboard_summary(organization_id, limit \\ 5) do
+    serial_counts =
+      from s in Serial,
+        where: s.organization_id == ^organization_id,
+        group_by: s.manufacturer_batch_id,
+        select: %{batch_id: s.manufacturer_batch_id, count: count(s.id)}
+
+    recent_jobs =
+      Repo.all(
+        from b in Batch,
+          join: p in assoc(b, :product),
+          left_join: c in subquery(serial_counts),
+          on: c.batch_id == b.id,
+          where: b.organization_id == ^organization_id,
+          order_by: [desc: b.inserted_at, desc: b.id],
+          limit: ^limit,
+          select: %{
+            batch_id: b.id,
+            batch_no: b.batch_no,
+            product_id: p.id,
+            product_name: p.name,
+            gtin: p.gtin,
+            serials: coalesce(c.count, 0)
+          }
+      )
+
+    used = from i in ShipmentItem, select: i.manufacturer_shipper_sscc_id
+    week_ago = DateTime.add(DateTime.utc_now(), -7 * 24 * 60 * 60, :second)
+
+    %{
+      recent_jobs: recent_jobs,
+      open_aggregations:
+        Repo.aggregate(
+          from(a in Aggregation,
+            where: a.organization_id == ^organization_id and a.status in ["draft", "submitted"]
+          ),
+          :count
+        ),
+      ready_to_ship:
+        Repo.aggregate(
+          from(s in ShipperSscc,
+            where: s.organization_id == ^organization_id and s.id not in subquery(used)
+          ),
+          :count
+        ),
+      shipped_this_week:
+        Repo.aggregate(
+          from(s in Shipment,
+            where:
+              s.organization_id == ^organization_id and not is_nil(s.shipped_at) and
+                s.shipped_at >= ^week_ago
+          ),
+          :count
+        )
+    }
+  end
+
   defp count(schema, organization_id) do
     Repo.aggregate(from(r in schema, where: r.organization_id == ^organization_id), :count)
   end

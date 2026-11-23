@@ -124,17 +124,13 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
               value={@filters["status"]}
               options={Enum.map(@tabs, fn {value, label} -> {label, value} end)}
             />
-            <.date_picker
-              id="filter-date-from"
-              name="filters[date_from]"
-              label="From"
-              value={@filters["date_from"]}
-            />
-            <.date_picker
-              id="filter-date-to"
-              name="filters[date_to]"
-              label="To"
-              value={@filters["date_to"]}
+            <.date_range_picker
+              id="filter-dates"
+              label="Dates"
+              from_name="filters[date_from]"
+              from_value={@filters["date_from"]}
+              to_name="filters[date_to]"
+              to_value={@filters["date_to"]}
             />
           </form>
         </:filters>
@@ -148,7 +144,10 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
             <.td_key_value label={shipment.order_number} value={shipment.reference} mono />
           </:col>
           <:col :let={{_id, shipment}} label="Status">
-            <.td_badge tone={status_tone(shipment.status)} label={Phoenix.Naming.humanize(shipment.status)} />
+            <.td_badge
+              tone={status_tone(shipment.status)}
+              label={Phoenix.Naming.humanize(shipment.status)}
+            />
           </:col>
           <:col :let={{_id, shipment}} label="From">{shipment.origin_company}</:col>
           <:col :let={{_id, shipment}} label="To">{shipment.destination_company}</:col>
@@ -167,7 +166,10 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
             />
           </:action>
           <:empty>
-            <.td_empty title="No shipments here" hint="Nothing matches this status and filter combination yet." />
+            <.td_empty
+              title="No shipments here"
+              hint="Nothing matches this status and filter combination yet."
+            />
           </:empty>
         </.td_data_table>
       </.td_list_page>

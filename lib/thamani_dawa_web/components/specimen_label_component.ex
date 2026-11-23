@@ -87,38 +87,90 @@ defmodule ThamaniDawaWeb.SpecimenLabelComponent do
   end
 
   @doc """
-  Renders a modal dialog containing the GS1 Data Matrix specimen label and
-  print controls.
+  Renders the Print specimen label dialog (Doop 5O8udg27kd): a label preview
+  with the GS1 Data Matrix, label size and copies, and Cancel / Print label.
   """
   attr :specimen, :map, required: true
   attr :patient, Patient, required: true
+  attr :lab_order, :map, default: nil
   attr :on_close, :any, required: true
 
   def specimen_label_modal(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :gs1_text,
+        GS1Encoder.specimen_label_text(assigns.patient, assigns.specimen)
+      )
+
     ~H"""
-    <.modal id="specimen-label-modal" show on_cancel={@on_close}>
-      <div class="no-print mb-4">
-        <h2 class="text-lg font-semibold text-base-content">Specimen GS1 Data Matrix Label</h2>
-        <p class="text-xs text-base-content/60">
-          Ready to scan & print for specimen {@specimen.specimen_number}
-        </p>
+    <.modal
+      id="specimen-label-modal"
+      show
+      title="Print specimen label"
+      subtitle="A GS1 label for this tube, ready for your label printer."
+      on_cancel={@on_close}
+    >
+      <div class="td-modal-form">
+        <div id={"specimen-label-#{@specimen.id}"} class="td-label-preview printable-batch-label">
+          <canvas
+            id={"datamatrix-canvas-specimen-#{@specimen.id}"}
+            phx-hook="DataMatrix"
+            data-text={@gs1_text}
+          ></canvas>
+          <div class="td-label-preview-body">
+            <span class="td-label-preview-title">
+              {@patient.full_name} · {Phoenix.Naming.humanize(@specimen.specimen_type)}
+            </span>
+            <span class="td-mono">
+              (8018){@patient.gsrn}(21){@specimen.specimen_number}
+            </span>
+            <span>
+              <span :if={@lab_order}>{ThamaniDawa.LabOrders.reference(@lab_order)} · </span>collected {collected_text(
+                @specimen
+              )}
+            </span>
+          </div>
+        </div>
+        <div class="td-fgrid is-2 no-print">
+          <.input
+            type="select"
+            id="specimen-label-size"
+            name="label_size"
+            label="Label size"
+            value="38x19"
+            options={[{"38 × 19 mm tube label", "38x19"}]}
+          />
+          <.input
+            type="number"
+            id="specimen-label-copies"
+            name="copies"
+            label="Copies"
+            value="1"
+            min="1"
+          />
+        </div>
       </div>
-
-      <.specimen_label_card specimen={@specimen} patient={@patient} />
-
-      <div class="no-print mt-6 pt-4">
-        <.button
+      <:footer>
+        <.td_button type="button" phx-click={@on_close}>Cancel</.td_button>
+        <.td_button
+          id="print-specimen-label"
           type="button"
           variant="primary"
+          glyph="printer"
           onclick="window.print()"
-          class="w-full flex items-center justify-center gap-1.5"
         >
-          <.icon name="hero-printer" class="w-4 h-4" /> Print Label
-        </.button>
-      </div>
+          Print label
+        </.td_button>
+      </:footer>
     </.modal>
     """
   end
+
+  defp collected_text(%{collected_at: %DateTime{} = at}),
+    do: ThamaniDawaWeb.TimeFormat.date(at)
+
+  defp collected_text(_), do: "—"
 
   defp specimen_test_names(specimen) do
     Enum.map_join(specimen.lab_order_results, ", ", fn result ->

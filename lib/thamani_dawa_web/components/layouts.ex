@@ -377,6 +377,8 @@ defmodule ThamaniDawaWeb.Layouts do
       |> assign(:organization_picker_option, Enum.find(site_picker_options, &(&1.value == "")))
       |> assign(:site_picker_options, Enum.reject(site_picker_options, &(&1.value == "")))
       |> assign(:current_picker_option, current_picker_option(scope, site_picker_options))
+      |> assign(:account_context, account_context(scope))
+      |> assign(:org_settings_path, org_settings_path(scope, assigns.base_path))
 
     ~H"""
     <.td_app_shell
@@ -521,61 +523,152 @@ defmodule ThamaniDawaWeb.Layouts do
           </div>
         </div>
 
-        <%!-- Sidebar bottom (brief 4.5): Dark mode row, Product tour row,
-             hairline, account chip. --%>
+        <%!-- Sidebar bottom (SHELL-ACCOUNT, Doop cgzlu47zzw): just the
+             account chip. Its upward menu holds the theme, the product tour
+             and log out; the old Dark mode and Product tour rows are gone. --%>
         <div id="sidebar-footer" class="td-sd-foot">
-          <div class="td-urow td-dark-row">
-            <.td_icon name="moon" />
-            <span class="nav-label">Dark mode</span>
-            <button
-              type="button"
-              id="dark-mode-switch"
-              class="td-switch-ui"
-              role="switch"
-              aria-checked="false"
-              aria-label="Dark mode"
-              phx-update="ignore"
-              phx-click={JS.dispatch("phx:set-theme")}
-              data-phx-theme="toggle"
-              data-theme-switch
-            >
-              <span></span>
-            </button>
-          </div>
-          <.link
-            :if={@show_product_tour}
-            id="start-product-tour"
-            class="td-urow"
-            navigate={product_tour_path(@base_path)}
-          >
-            <.td_icon name="signpost" />
-            <span class="nav-label">Product tour</span>
-          </.link>
-          <div class="td-hr"></div>
           <.td_account_chip
             name={@current_scope.user.name}
             role={account_role_label(@current_scope, @section_label)}
             seed={@current_scope.user.email}
           >
             <:menu>
+              <div class="td-am-hd" role="presentation">
+                <.td_orb seed={@current_scope.user.email} size={32} />
+                <div>
+                  <span class="td-am-name">{@current_scope.user.name}</span>
+                  <span class="td-am-role">{account_role_label(@current_scope, @section_label)}</span>
+                  <span :if={@account_context} class="td-am-ctx">{@account_context}</span>
+                </div>
+              </div>
+              <.td_menu_item
+                :if={@org_settings_path}
+                id="account-org-settings"
+                role="menuitem"
+                label="Org settings"
+                icon="gear"
+                navigate={@org_settings_path}
+              />
+              <div class="td-am-div" role="separator"></div>
+              <.td_menu_item
+                :if={@show_product_tour}
+                id="start-product-tour"
+                role="menuitem"
+                label="Product tour"
+                icon="signpost"
+                navigate={product_tour_path(@base_path)}
+              />
+              <.td_menu_item
+                id="account-mobile-app"
+                role="menuitem"
+                label="Get the mobile app"
+                icon="device-mobile"
+                phx-click={
+                  JS.hide(to: "#sidebar-account-dropdown")
+                  |> ThamaniDawaWeb.CoreComponents.show_modal("mobile-app-modal")
+                }
+              />
+              <button
+                type="button"
+                id="account-shortcuts"
+                class="td-menu-item"
+                role="menuitem"
+                phx-click={
+                  JS.hide(to: "#sidebar-account-dropdown") |> JS.focus(to: "#td-global-search")
+                }
+              >
+                <.td_icon name="keyboard" />
+                <span>Keyboard shortcuts</span>
+                <kbd class="td-am-kbd">⌘K</kbd>
+              </button>
+              <div class="td-am-div" role="separator"></div>
+              <span class="td-am-label" role="presentation">Appearance</span>
+              <div id="account-theme" phx-update="ignore" role="group" aria-label="Appearance">
+                <button
+                  :for={
+                    {pref, label, icon} <- [
+                      {"system", "System", "desktop"},
+                      {"light", "Light", "sun"},
+                      {"dark", "Dark", "moon"}
+                    ]
+                  }
+                  type="button"
+                  id={"account-theme-#{pref}"}
+                  class="td-menu-item td-am-theme"
+                  role="menuitemradio"
+                  aria-checked="false"
+                  data-phx-theme={pref}
+                  phx-click={JS.dispatch("phx:set-theme")}
+                >
+                  <.td_icon name={icon} />
+                  <span>{label}</span>
+                  <span class="td-am-check"><.td_icon name="check" /></span>
+                </button>
+              </div>
+              <div class="td-am-div" role="separator"></div>
               <.td_menu_item
                 id="sidebar-logout"
+                role="menuitem"
                 tone="danger"
                 label="Log out"
                 icon="sign-out"
-                phx-click={JS.toggle(to: "#sidebar-logout-confirm")}
+                phx-click={
+                  JS.hide(to: "#sidebar-account-dropdown")
+                  |> ThamaniDawaWeb.CoreComponents.show_modal("sidebar-logout-confirm")
+                }
               />
-              <div id="sidebar-logout-confirm" hidden>
-                <.td_button
-                  id="sidebar-logout-confirm-link"
-                  variant="danger-confirm"
-                  label="Log out"
-                  href={~p"/logout"}
-                  method="delete"
-                />
-              </div>
             </:menu>
           </.td_account_chip>
+          <.td_modal
+            id="sidebar-logout-confirm"
+            title="Log out?"
+            on_cancel={ThamaniDawaWeb.CoreComponents.hide_modal("sidebar-logout-confirm")}
+          >
+            <:body>
+              <p class="td-note">You will need to sign in again to continue.</p>
+            </:body>
+            <:footer>
+              <.td_button
+                type="button"
+                variant="secondary"
+                label="Cancel"
+                phx-click={ThamaniDawaWeb.CoreComponents.hide_modal("sidebar-logout-confirm")}
+              />
+              <.td_button
+                id="sidebar-logout-confirm-link"
+                variant="danger-confirm"
+                label="Log out"
+                href={~p"/logout"}
+                method="delete"
+              />
+            </:footer>
+          </.td_modal>
+          <.td_modal
+            id="mobile-app-modal"
+            title="Get the mobile app"
+            subtitle="For the team that packs and scans shipments."
+            on_cancel={ThamaniDawaWeb.CoreComponents.hide_modal("mobile-app-modal")}
+          >
+            <:body>
+              <div class="td-mobile-app">
+                <.td_icon name="qr-code" class="size-10" />
+                <div>
+                  <p class="td-mobile-app-tt">Scan with the phone camera</p>
+                  <p class="td-note">
+                    Opens the Thamani Dawa app listing. Mobile users sign in with the PIN you set for them.
+                  </p>
+                </div>
+              </div>
+            </:body>
+            <:footer>
+              <.td_button
+                type="button"
+                variant="primary"
+                label="Done"
+                phx-click={ThamaniDawaWeb.CoreComponents.hide_modal("mobile-app-modal")}
+              />
+            </:footer>
+          </.td_modal>
         </div>
       </:side>
       <:content>
@@ -1000,6 +1093,31 @@ defmodule ThamaniDawaWeb.Layouts do
   end
 
   defp account_role_label(_scope, section_label), do: section_label
+
+  # "Org · Site" under the name in the account menu.
+  defp account_context(%Scope{organization_id: nil}), do: nil
+
+  defp account_context(%Scope{} = scope) do
+    org = Organizations.get_organization!(scope.organization_id).name
+
+    case scope.current_site_id do
+      nil -> org
+      _ -> "#{org} · #{current_site_name(scope)}"
+    end
+  rescue
+    Ecto.NoResultsError -> nil
+  end
+
+  defp org_settings_path(%Scope{organization_id: nil}, _base_path), do: nil
+
+  defp org_settings_path(%Scope{} = scope, base_path) do
+    cond do
+      not Scope.admin?(scope) -> nil
+      base_path in ["/distributor", "/manufacturer"] -> base_path <> "/settings"
+      base_path == "/org" -> "/org/settings"
+      true -> nil
+    end
+  end
 
   defp active_nav_label(nav_groups, current_path, base_path) do
     Enum.find_value(nav_groups, fn {_group, items} ->

@@ -146,18 +146,14 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
     end)
   end
 
-  defp tick_on?(index, count, max) do
-    filled = if max == 0, do: 0, else: round(count / max * 12)
-    index < filled
-  end
-
   defp status_tone(:pending), do: "warning"
   defp status_tone(:in_progress), do: "info"
   defp status_tone(:completed), do: "success"
   defp status_tone(:cancelled), do: "neutral"
   defp status_tone(_), do: "neutral"
 
-  defp status_label(status), do: status |> to_string() |> String.replace("_", " ") |> String.capitalize()
+  defp status_label(status),
+    do: status |> to_string() |> String.replace("_", " ") |> String.capitalize()
 
   defp short_dt(%DateTime{} = dt), do: Calendar.strftime(dt, "%d %b, %H:%M")
   defp short_dt(_), do: ""
@@ -187,127 +183,111 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
         </.td_button>
       </:tools>
 
-      <div class="td-dash">
-        <.td_page_header
-          title="Lab dashboard"
-          subtitle="Pending orders and incomplete reports at your site."
-        >
-          <:actions>
-            <.td_button variant="secondary" navigate={~p"/lab/scan"} label="Scan">
-              <:icon><.td_icon name="scan" /></:icon>
-            </.td_button>
-          </:actions>
-        </.td_page_header>
+      <.td_dashboard
+        id="lab-dashboard"
+        title="Lab dashboard"
+        subtitle="Pending orders and incomplete reports at your site."
+      >
+        <:actions>
+          <.td_button variant="secondary" navigate={~p"/lab/scan"} label="Scan">
+            <:icon><.td_icon name="scan" /></:icon>
+          </.td_button>
+        </:actions>
+        <:strip>
+          <.td_glance_cell
+            navigate={~p"/lab/orders"}
+            tone="warning"
+            value={phrase(length(@pending), "pending order", "pending orders")}
+            caption="Awaiting collection or results"
+          >
+            <:icon><.td_icon name="hourglass" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            navigate={~p"/lab/orders"}
+            tone="info"
+            value={phrase(@in_progress_count, "in progress", "in progress")}
+            caption="Currently being processed"
+          >
+            <:icon><.td_icon name="flask" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            tone="success"
+            value={phrase(@completed_this_month, "completed this month", "completed this month")}
+            caption="Reports finalized"
+          >
+            <:icon><.td_icon name="check-circle" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            navigate={~p"/lab/transactions"}
+            tone="neutral"
+            value={"#{money(@stats.revenue_this_month)} this month"}
+            caption="Wallet credits collected"
+          >
+            <:icon><.td_icon name="wallet" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+        </:strip>
+        <:strip>
+          <.td_glance_cell
+            navigate={~p"/lab/orders"}
+            tone="danger"
+            value={phrase(@unpaid_count, "unpaid order", "unpaid orders")}
+            caption="Active orders awaiting payment"
+          >
+            <:icon><.td_icon name="coins" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            navigate={~p"/lab/orders"}
+            tone="info"
+            value={
+              phrase(@stats.tests_awaiting_results, "test awaiting results", "tests awaiting results")
+            }
+            caption="Samples collected, results not finalized"
+          >
+            <:icon><.td_icon name="eyedropper" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            navigate={~p"/lab/orders"}
+            tone="expiry"
+            value={phrase(@overdue_count, "overdue order", "overdue orders")}
+            caption="Open for more than 24 hours"
+          >
+            <:icon><.td_icon name="clock" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            tone="neutral"
+            value={phrase(@cancelled_count, "cancelled", "cancelled")}
+            caption="Cancelled at this site"
+          >
+            <:icon><.td_icon name="x-circle" class="size-[18px]" /></:icon>
+          </.td_glance_cell>
+        </:strip>
 
-        <div class="td-glances">
-          <.td_glance_strip>
-            <.td_glance_cell
-              navigate={~p"/lab/orders"}
-              tone="warning"
-              value={phrase(length(@pending), "pending order", "pending orders")}
-              caption="Awaiting collection or results"
-            >
-              <:icon><.td_icon name="hourglass" class="size-[18px]" /></:icon>
-            </.td_glance_cell>
-            <.td_glance_cell
-              navigate={~p"/lab/orders"}
-              tone="info"
-              value={phrase(@in_progress_count, "in progress", "in progress")}
-              caption="Currently being processed"
-            >
-              <:icon><.td_icon name="flask" class="size-[18px]" /></:icon>
-            </.td_glance_cell>
-            <.td_glance_cell
-              tone="success"
-              value={phrase(@completed_this_month, "completed this month", "completed this month")}
-              caption="Reports finalized"
-            >
-              <:icon><.td_icon name="check-circle" class="size-[18px]" /></:icon>
-            </.td_glance_cell>
-            <.td_glance_cell
-              navigate={~p"/lab/transactions"}
-              tone="neutral"
-              value={"#{money(@stats.revenue_this_month)} this month"}
-              caption="Wallet credits collected"
-            >
-              <:icon><.td_icon name="wallet" class="size-[18px]" /></:icon>
-            </.td_glance_cell>
-          </.td_glance_strip>
-
-          <.td_glance_strip>
-            <.td_glance_cell
-              navigate={~p"/lab/orders"}
-              tone="danger"
-              value={phrase(@unpaid_count, "unpaid order", "unpaid orders")}
-              caption="Active orders awaiting payment"
-            >
-              <:icon><.td_icon name="coins" class="size-[18px]" /></:icon>
-            </.td_glance_cell>
-            <.td_glance_cell
-              navigate={~p"/lab/orders"}
-              tone="info"
-              value={phrase(@stats.tests_awaiting_results, "test awaiting results", "tests awaiting results")}
-              caption="Samples collected, results not finalized"
-            >
-              <:icon><.td_icon name="eyedropper" class="size-[18px]" /></:icon>
-            </.td_glance_cell>
-            <.td_glance_cell
-              navigate={~p"/lab/orders"}
-              tone="expiry"
-              value={phrase(@overdue_count, "overdue order", "overdue orders")}
-              caption="Open for more than 24 hours"
-            >
-              <:icon><.td_icon name="clock" class="size-[18px]" /></:icon>
-            </.td_glance_cell>
-            <.td_glance_cell
-              tone="neutral"
-              value={phrase(@cancelled_count, "cancelled", "cancelled")}
-              caption="Cancelled at this site"
-            >
-              <:icon><.td_icon name="x-circle" class="size-[18px]" /></:icon>
-            </.td_glance_cell>
-          </.td_glance_strip>
-        </div>
-
-        <div class="td-dash-row">
-          <section class="td-dash-card">
-            <.td_card_header title="Lab orders" subtitle="Orders created per day, last 30 days" />
+        <.td_dash_row>
+          <.td_dash_card title="Lab orders" subtitle="Orders created per day, last 30 days">
             <div class="td-bars" aria-label="Lab orders over the last 30 days">
               <i :for={bar <- @bars} class={bar.recent && "is-now"} style={"height: #{bar.height}%"}></i>
             </div>
             <div :if={@bars != []} class="td-axis">
               <span :for={label <- axis_labels(@bars)}>{label}</span>
             </div>
-          </section>
-          <section class="td-dash-card">
-            <.td_card_header title="Orders by status" subtitle="All lab orders at your site" />
-            <div :for={row <- @statuses} class="td-status-row">
-              <div class="td-status-copy">
-                <b>{row.label}</b>
-                <span>{row.caption}</span>
-              </div>
-              <span class="td-ticks" aria-hidden="true">
-                <i
-                  :for={index <- 0..11}
-                  class={[
-                    tick_on?(index, row.count, status_max(@statuses)) && "is-on",
-                    "is-#{row.tone}"
-                  ]}
-                >
-                </i>
-              </span>
-              <span class="td-status-n">{row.count}</span>
-            </div>
-          </section>
-        </div>
+          </.td_dash_card>
+          <.td_dash_card title="Orders by status" subtitle="All lab orders at your site" width={380}>
+            <.td_tick_row
+              :for={row <- @statuses}
+              label={row.label}
+              caption={row.caption}
+              count={row.count}
+              max={status_max(@statuses)}
+              tone={row.tone}
+            />
+          </.td_dash_card>
+        </.td_dash_row>
 
-        <div class="td-dash-row">
-          <section class="td-dash-card">
-            <.td_card_header title="Pending orders" subtitle="Newest first">
-              <:actions>
-                <.td_button variant="secondary" navigate={~p"/lab/orders"} label="View all" />
-              </:actions>
-            </.td_card_header>
+        <.td_dash_row>
+          <.td_dash_card title="Pending orders" subtitle="Newest first">
+            <:actions>
+              <.td_button variant="secondary" navigate={~p"/lab/orders"} label="View all" />
+            </:actions>
             <table class="td-rows">
               <thead>
                 <tr>
@@ -333,7 +313,10 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
                   </td>
                   <td>{short_dt(lab_order.inserted_at)}</td>
                   <td>
-                    <.td_badge tone={status_tone(lab_order.status)} label={status_label(lab_order.status)} />
+                    <.td_badge
+                      tone={status_tone(lab_order.status)}
+                      label={status_label(lab_order.status)}
+                    />
                   </td>
                 </tr>
                 <tr :if={@pending_rows == []}>
@@ -341,9 +324,8 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
                 </tr>
               </tbody>
             </table>
-          </section>
-          <section class="td-dash-card">
-            <.td_card_header title="Incomplete reports" subtitle="Results still to finalize" />
+          </.td_dash_card>
+          <.td_dash_card title="Incomplete reports" subtitle="Results still to finalize" width={380}>
             <table class="td-rows">
               <thead>
                 <tr>
@@ -359,7 +341,10 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
                     </.link>
                   </td>
                   <td>
-                    <.td_badge tone={status_tone(lab_order.status)} label={status_label(lab_order.status)} />
+                    <.td_badge
+                      tone={status_tone(lab_order.status)}
+                      label={status_label(lab_order.status)}
+                    />
                   </td>
                 </tr>
                 <tr :if={@incomplete_rows == []}>
@@ -367,9 +352,9 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
                 </tr>
               </tbody>
             </table>
-          </section>
-        </div>
-      </div>
+          </.td_dash_card>
+        </.td_dash_row>
+      </.td_dashboard>
 
       <Layouts.product_tour
         id="lab-product-tour"

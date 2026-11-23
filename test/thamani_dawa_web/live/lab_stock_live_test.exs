@@ -124,7 +124,10 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
       assert html =~ "Lab stock"
       assert has_element?(view, "#lab-stock-toolbar")
       assert has_element?(view, "#lab-stock-toolbar #search-form")
-      assert has_element?(view, "#lab-stock-toolbar button", "Filters")
+      assert has_element?(view, "#lab-stock-chip-category", "Category")
+      assert has_element?(view, "#lab-stock-chip-status", "Status")
+      assert has_element?(view, "#lab-stock-chip-expiry", "Expiry")
+      assert has_element?(view, "#products-tab.is-active")
       assert html =~ "Reagent Alpha"
       assert html =~ "Reagent Beta"
     end
@@ -158,13 +161,12 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
 
       view |> element("#batches-tab") |> render_click()
 
-      view
-      |> form("#stock-filters-form", filters: %{status: "active"})
-      |> render_submit()
+      view |> element("#lab-stock-status-pending") |> render_click()
 
       html = render(view)
-      assert html =~ "LAB-BATCH-001"
-      refute html =~ "LAB-BATCH-002"
+      assert html =~ "LAB-BATCH-002"
+      refute html =~ "LAB-BATCH-001"
+      assert has_element?(view, "#lab-stock-chip-status", "Pending receipt")
     end
 
     test "drilling down to product details lists product batches at lab sites", %{
@@ -172,9 +174,11 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
       tech: tech,
       product1: product1
     } do
-      {:ok, _view, html} = live(log_in_user(conn, tech), ~p"/lab/stock/products/#{product1.id}")
+      {:ok, view, html} = live(log_in_user(conn, tech), ~p"/lab/stock/products/#{product1.id}")
 
       assert html =~ "Reagent Alpha"
+      assert has_element?(view, "#stock-product-scan", "Scan lookup")
+      assert has_element?(view, "#stock-product-requisition", "Add to requisition")
       assert html =~ "LAB-BATCH-001"
       refute html =~ "PHARMA-BATCH-999"
     end
@@ -184,18 +188,21 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
       tech: tech,
       batch_active: batch_active
     } do
-      {:ok, _view, html} =
+      {:ok, view, html} =
         live(log_in_user(conn, tech), ~p"/lab/stock/batches/#{batch_active.id}")
 
       assert html =~ "Batch LAB-BATCH-001"
       assert html =~ "Usage history"
+      assert has_element?(view, ".td-back-link", "Back to product")
+
+      view |> element("#print-data-matrix") |> render_click()
+      assert has_element?(view, "#data-matrix-modal", "Print Data Matrix")
+      assert has_element?(view, "#print-data-matrix-labels", "Print labels")
     end
   end
 
   describe "Products tab" do
-    test "a product with a dispatched lab batch also shows its Awaiting dispatch figure", %{
-      conn: conn
-    } do
+    test "lists only stock held at lab sites, not undispatched warehouse stock", %{conn: conn} do
       admin = user_fixture()
       org_id = admin.organization_id
       lab_site = site_fixture(%{organization_id: org_id, activities: [:laboratory]})
@@ -203,15 +210,71 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
       product =
         product_fixture(%{organization_id: org_id, generic_name: "Awaiting Dispatch Reagent"})
 
-      batch_fixture(%{organization_id: org_id, site_id: lab_site.id, product_id: product.id})
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: lab_site.id,
+        product_id: product.id,
+        quantity: 7,
+        remaining_quantity: 7
+      })
+
       org_batch_fixture(%{organization_id: org_id, product_id: product.id, quantity: 40})
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/stock")
 
-      html = render_click(lv, "set_view", %{"view" => "products"})
+      assert has_element?(lv, "#products-#{product.id}", "Awaiting Dispatch Reagent")
+      assert has_element?(lv, "#products-#{product.id} .td-remaining", "7")
+      refute has_element?(lv, "#products-#{product.id} .td-remaining", "47")
+    end
 
-      assert html =~ "Awaiting Dispatch Reagent"
-      assert html =~ "40"
+    test "the stat strip counts out-of-stock and low products and links to them", %{conn: conn} do
+      admin = user_fixture()
+      org_id = admin.organization_id
+      lab_site = site_fixture(%{organization_id: org_id, activities: [:laboratory]})
+
+      empty =
+        product_fixture(%{
+          organization_id: org_id,
+          generic_name: "Empty Reagent",
+          price: 100,
+          reorder_level: 10
+        })
+
+      batch_fixture(%{
+        organization_id: org_id,
+        site_id: lab_site.id,
+        product_id: empty.id,
+        quantity: 10,
+        remaining_quantity: 0
+      })
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/stock")
+
+      assert has_element?(lv, "#lab-stock-stat-out", "1 out of stock")
+      assert has_element?(lv, "#lab-stock-stat-reorder", "KSh 1,000 to reorder")
+
+      lv |> element("#lab-stock-stat-out") |> render_click()
+      assert_patch(lv, ~p"/lab/stock?status=out")
+      assert has_element?(lv, "#products-#{empty.id}", "Out of stock")
+    end
+
+    test "Export CSV downloads the filtered rows", %{conn: conn} do
+      admin = user_fixture()
+      org_id = admin.organization_id
+      lab_site = site_fixture(%{organization_id: org_id, activities: [:laboratory]})
+      product = product_fixture(%{organization_id: org_id, generic_name: "Csv Reagent"})
+      batch_fixture(%{organization_id: org_id, site_id: lab_site.id, product_id: product.id})
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/stock")
+
+      lv |> element("#lab-stock-export") |> render_click()
+      assert has_element?(lv, "#lab-stock-export-modal", "Export CSV")
+
+      lv |> form("#lab-stock-export-modal-form", %{columns: "visible"}) |> render_submit()
+      assert_push_event(lv, "td:csv", %{filename: "lab-stock-products-" <> _, content: content})
+      assert content =~ "Product,GTIN,Category"
+      assert content =~ "Csv Reagent"
+      refute has_element?(lv, "#lab-stock-export-modal")
     end
 
     test "a product at or below reorder_level shows the Low stock badge", %{conn: conn} do

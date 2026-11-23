@@ -1,324 +1,56 @@
 defmodule ThamaniDawaWeb.PharmacyStockLive do
   @moduledoc """
-  Read-only view of batch/product stock. Admins see every site in the
-  organization, with a site filter to narrow down. Non-admin staff
-  (pharmacist, lab technician, pharma_lab) are restricted to the sites
-  they're assigned to (`user.sites`) — both the underlying data and the
-  Site filter's options are limited to that set, so they can never browse
-  or filter into another site's stock. Nothing here mutates a batch —
-  receiving/dispensing stay on `ReceiveStockLive`/`PrescriptionLive`, both
-  still site-locked as before.
+  Read-only stock for pharmacy and combined pharmacy-lab sites (Doop
+  puMtQXqNOq products, fO2XgZ8Xir all batches; pharma-lab c3EiqRelu0,
+  fiY29WINlP). Admins see every site in the organization, with a Site
+  filter to narrow down. Other staff see only their assigned sites (or the
+  picked current site): both the data and the Site filter's options are
+  limited to that set, and a hand-crafted site value outside it is dropped.
+  Nothing here mutates a batch — receiving and dispensing stay on
+  `ReceiveStockLive` and `PrescriptionLive`.
 
-  Two views, toggled without a full page navigation: "Products" (paginated,
-  one row per product with a batch/stock roll-up) and "Batches" (paginated,
-  the flat batch-level table this screen originally was). Clicking a product
-  navigates to `PharmacyStockProductLive`, which lists that product's
-  batches; clicking a batch there (or in the flat batches view) navigates to
-  `PharmacyStockBatchLive`, which shows who has drawn stock from it.
+  Same page as `LabStockLive`, rendered and filtered by
+  `ThamaniDawaWeb.SiteStock`.
   """
 
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Batches
-  alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
-  alias ThamaniDawa.StockAlerts
-  alias ThamaniDawa.Suppliers
-
-  @default_filters %{site: "", status: ""}
-  @near_expiry_days 30
+  alias ThamaniDawaWeb.SiteStock
 
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
     org_id = scope.organization_id
     sites = if Scope.admin?(scope), do: Sites.list_sites(org_id), else: scope.user.sites
 
-    site_ids =
+    allowed_site_ids =
       case scope.current_site_id do
-        nil -> if Scope.admin?(scope), do: nil, else: Enum.map(sites, & &1.id)
+        nil -> Enum.map(sites, & &1.id)
         current_id -> [current_id]
       end
 
+    site_options = for site <- sites, site.id in allowed_site_ids, do: {site.name, site.id}
+
     {:ok,
      socket
-     |> assign(:products_by_id, org_id |> Products.list_products() |> Map.new(&{&1.id, &1}))
-     |> assign(:sites_by_id, Map.new(sites, &{&1.id, &1}))
-     |> assign(:suppliers_by_id, org_id |> Suppliers.list_suppliers() |> Map.new(&{&1.id, &1}))
-     |> assign(:site_options, Enum.map(sites, &{&1.name, &1.id}))
-     |> assign(:allowed_site_ids, site_ids)
-     |> assign(:search, "")
-     |> assign(:filters, @default_filters)
-     |> assign(:view, "batches")
-     |> assign(:page, 1)
-     |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0, page_size: 10})
-     |> reload()}
+     |> assign(:page_title, "Stock")
+     |> assign(:admin_wide?, Scope.admin?(scope) and is_nil(scope.current_site_id))
+     |> SiteStock.init(Batches.list_site_stock(org_id, allowed_site_ids), allowed_site_ids,
+       sites: site_options,
+       base_path: "/pharmacy/stock",
+       export_prefix: "pharmacy-stock"
+     )}
   end
 
-  def handle_params(params, _url, socket) do
-    view = Map.get(params, "view", socket.assigns.view)
-    page = if p = Map.get(params, "page"), do: String.to_integer(p), else: socket.assigns.page
-    search = Map.get(params, "search", socket.assigns.search)
-    allowed_site_ids = socket.assigns.allowed_site_ids
+  def handle_params(params, _url, socket), do: {:noreply, SiteStock.apply_params(socket, params)}
 
-    site_val =
-      if site_str = Map.get(params, "site"),
-        do: sanitize_site_filter(site_str, allowed_site_ids),
-        else: socket.assigns.filters.site
+  def handle_event(event, params, socket), do: SiteStock.handle_event(event, params, socket)
 
-    status_val = Map.get(params, "status", socket.assigns.filters.status)
-
-    filters = %{
-      site: site_val,
-      status: status_val
-    }
-
-    {:noreply,
-     socket
-     |> assign(:view, view)
-     |> assign(:page, page)
-     |> assign(:search, search)
-     |> assign(:filters, filters)
-     |> reload()}
-  end
-
-  def handle_event("set_view", %{"view" => view}, socket) do
-    {:noreply,
-     socket
-     |> assign(:view, view)
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, socket |> assign(:search, search) |> assign(:page, 1) |> reload()}
-  end
-
-  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
-    filters = %{
-      site:
-        sanitize_site_filter(Map.get(filter_params, "site", ""), socket.assigns.allowed_site_ids),
-      status: Map.get(filter_params, "status", "")
-    }
-
-    {:noreply,
-     socket
-     |> assign(:view, "batches")
-     |> assign(:filters, filters)
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("clear_filters", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:view, "batches")
-     |> assign(:filters, @default_filters)
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("clear_chip", %{"field" => "site"}, socket) do
-    {:noreply,
-     socket
-     |> assign(:view, "batches")
-     |> assign(:filters, %{socket.assigns.filters | site: ""})
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("clear_chip", %{"field" => "status"}, socket) do
-    {:noreply,
-     socket
-     |> assign(:view, "batches")
-     |> assign(:filters, %{socket.assigns.filters | status: ""})
-     |> assign(:page, 1)
-     |> reload()}
-  end
-
-  def handle_event("go_to_page", %{"page" => page}, socket) do
-    {:noreply, socket |> assign(:page, String.to_integer(page)) |> reload()}
-  end
-
-  defp pagination_path(view, search, filters) do
-    search = String.trim(search || "")
-    site = Map.get(filters, :site, "")
-    status = Map.get(filters, :status, "")
-
-    params =
-      %{}
-      |> then(fn m -> if view != "products", do: Map.put(m, "view", view), else: m end)
-      |> then(fn m -> if search != "", do: Map.put(m, "search", search), else: m end)
-      |> then(fn m -> if site != "", do: Map.put(m, "site", site), else: m end)
-      |> then(fn m -> if status != "", do: Map.put(m, "status", status), else: m end)
-
-    if map_size(params) > 0 do
-      ~p"/pharmacy/stock?#{params}"
-    else
-      ~p"/pharmacy/stock"
-    end
-  end
-
-  defp reload(socket) do
-    socket = assign_stock_alerts(socket)
-
-    case socket.assigns.view do
-      "products" -> reload_products(socket)
-      "batches" -> reload_batches(socket)
-    end
-  end
-
-  defp assign_stock_alerts(socket) do
-    org_id = socket.assigns.current_scope.organization_id
-
-    batches =
-      org_id
-      |> Batches.list_batches()
-      |> Enum.filter(&(not is_nil(&1.approver_id)))
-      |> filter_by_sites(alert_site_ids(socket))
-
-    {out_of_stock, low_stock} = StockAlerts.stock_alerts(batches, socket.assigns.products_by_id)
-
-    socket
-    |> assign(:out_of_stock_count, length(out_of_stock))
-    |> assign(:low_stock_count, length(low_stock))
-    |> assign(:near_expiry_count, length(StockAlerts.near_expiry(batches, @near_expiry_days)))
-    |> assign(:near_expiry_days, @near_expiry_days)
-    |> assign(
-      :low_stock_value,
-      StockAlerts.low_stock_replenishment_value(low_stock ++ out_of_stock, batches)
-    )
-  end
-
-  defp alert_site_ids(socket) do
-    case socket.assigns.filters.site do
-      "" ->
-        socket.assigns.allowed_site_ids
-
-      site_id_str ->
-        case Integer.parse(site_id_str) do
-          {site_id, ""} -> [site_id]
-          _ -> socket.assigns.allowed_site_ids
-        end
-    end
-  end
-
-  defp filter_by_sites(batches, nil), do: batches
-  defp filter_by_sites(batches, site_ids), do: Enum.filter(batches, &(&1.site_id in site_ids))
-
-  defp reload_products(socket) do
-    org_id = socket.assigns.current_scope.organization_id
-
-    page_result =
-      Products.list_products_with_site_batches_paginated(
-        org_id,
-        socket.assigns.allowed_site_ids,
-        socket.assigns.page,
-        search: socket.assigns.search
-      )
-
-    products = page_result.entries
-
-    product_ids = Enum.map(products, & &1.id)
-
-    summary =
-      Batches.stock_summary_by_product(org_id, product_ids, socket.assigns.allowed_site_ids)
-
-    rows =
-      Enum.map(products, fn product ->
-        total_remaining = get_in(summary, [product.id, :total_remaining]) || 0
-
-        %{
-          id: product.id,
-          product: product,
-          batch_count: get_in(summary, [product.id, :batch_count]) || 0,
-          total_remaining: total_remaining,
-          stock_level: stock_level(total_remaining, product.reorder_level)
-        }
-      end)
-
-    socket
-    |> assign(:page_info, page_result)
-    |> stream(:products, rows, reset: true)
-  end
-
-  defp reload_batches(socket) do
-    org_id = socket.assigns.current_scope.organization_id
-
-    page_result =
-      Batches.list_batches_paginated(
-        org_id,
-        socket.assigns.page,
-        socket.assigns.allowed_site_ids,
-        search: socket.assigns.search,
-        site: socket.assigns.filters.site,
-        status: socket.assigns.filters.status
-      )
-
-    socket
-    |> assign(:page_info, page_result)
-    |> stream(:batches, page_result.entries, reset: true)
-  end
-
-  defp sanitize_site_filter(site_id_str, nil), do: site_id_str
-  defp sanitize_site_filter("", _allowed_site_ids), do: ""
-
-  defp sanitize_site_filter(site_id_str, allowed_site_ids) do
-    case Integer.parse(site_id_str) do
-      {site_id, ""} -> if site_id in allowed_site_ids, do: site_id_str, else: ""
-      _ -> ""
-    end
-  end
-
-  defp active_filter_count(filters) do
-    Enum.count([filters.site != "", filters.status != ""], & &1)
-  end
-
-  defp filter_chips(filters, sites_by_id) do
-    [
-      filters.site != "" &&
-        %{label: "Site: #{site_label(filters.site, sites_by_id)}", field: "site"},
-      filters.status != "" &&
-        %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"}
-    ]
-    |> Enum.filter(& &1)
-  end
-
-  defp site_label(site_id_str, sites_by_id) do
-    case Integer.parse(site_id_str) do
-      {site_id, ""} -> if site = sites_by_id[site_id], do: site.name, else: site_id_str
-      _ -> site_id_str
-    end
-  end
-
-  defp stock_level(_total, nil), do: nil
-  defp stock_level(total, _reorder_level) when total <= 0, do: :out_of_stock
-  defp stock_level(total, reorder_level) when total <= reorder_level, do: :low_stock
-  defp stock_level(_total, _reorder_level), do: nil
-
-  defp product_name(nil), do: "(unknown product)"
-  defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
-
-  defp site_name(nil), do: "(unknown site)"
-  defp site_name(site), do: site.name
-
-  defp supplier_name(nil), do: "—"
-  defp supplier_name(supplier), do: supplier.name
-
-  defp stock_subtitle(nil), do: "Every batch across every site in your organization, read-only."
-  defp stock_subtitle(_site_ids), do: "Every batch across your assigned sites, read-only."
-
-  defp money(amount) do
-    grouped =
-      amount
-      |> round()
-      |> Integer.to_string()
-      |> String.reverse()
-      |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
-      |> String.reverse()
-
-    "KSh " <> grouped
-  end
+  defp subtitle(true, _ids), do: "Every batch across every site in your organization, read-only."
+  defp subtitle(false, [_one]), do: "Every batch across your site, read-only."
+  defp subtitle(false, _ids), do: "Every batch across your assigned sites, read-only."
 
   def render(assigns) do
     ~H"""
@@ -326,169 +58,45 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
       flash={@flash}
       current_scope={@current_scope}
       current_path="/pharmacy/stock"
+      crumb="Stock"
     >
-      <.header icon="hero-cube">
-        Organization stock
-        <:subtitle>{stock_subtitle(@allowed_site_ids)}</:subtitle>
-      </.header>
-
-      <div class="dashboard-stat-grid mb-5">
-        <.stat_tile
-          id="out-of-stock-card"
-          icon="hero-x-circle"
-          label="Out of stock"
-          value={@out_of_stock_count}
-          sublabel="Products with no remaining stock"
+      <:tools>
+        <.td_button
+          id="pharmacy-stock-receive"
+          variant="primary"
+          label="Receive stock"
+          glyph="tray-arrow-down"
+          navigate={~p"/pharmacy/receive-stock"}
         />
-        <.stat_tile
-          id="low-stock-card"
-          icon="hero-exclamation-triangle"
-          label="Low stock"
-          value={@low_stock_count}
-          sublabel="At or below reorder level"
-        />
-        <.stat_tile
-          id="near-expiry-card"
-          icon="hero-calendar-days"
-          label="Near-expiry"
-          value={@near_expiry_count}
-          sublabel={"Expiring within #{@near_expiry_days} days"}
-        />
-        <.stat_tile
-          id="low-stock-value-card"
-          icon="hero-currency-dollar"
-          label="Low stock value"
-          value={money(@low_stock_value)}
-          sublabel="Estimated cost to reach reorder levels"
-        />
-      </div>
+      </:tools>
 
-      <div class="mb-5 grid grid-cols-1 items-start gap-3 rounded-2xl ff-surface-card p-4 sm:p-5 min-[480px]:grid-cols-[minmax(0,1fr)_auto]">
-        <div class="flex min-w-0 items-center gap-3">
-          <.tab_group>
-            <:tab
-              id="products-tab"
-              active={@view == "products"}
-              phx_click="set_view"
-              phx_value_view="products"
-            >
-              Products
-            </:tab>
-            <:tab
-              id="batches-tab"
-              active={@view == "batches"}
-              phx_click="set_view"
-              phx_value_view="batches"
-            >
-              All batches
-            </:tab>
-          </.tab_group>
-
-          <form phx-change="search" class="min-w-0 flex-1" id="search-form">
-            <.search_input
-              name="search"
-              value={@search}
-              placeholder={
-                if @view == "products",
-                  do: "Search by product, GTIN, or category",
-                  else: "Search by product, GTIN, or batch no."
-              }
-            />
-          </form>
-        </div>
-
-        <.filter_drawer
-          id="stock-filters"
-          title="Filter stock"
-          apply_event="apply_filters"
-          active_count={active_filter_count(@filters)}
-        >
-          <:group label="Status">
-            <.input
-              type="select"
-              name="filters[status]"
-              value={@filters.status}
-              options={[{"Active", "active"}, {"Pending receipt", "pending"}]}
-              prompt="All statuses"
-            />
-          </:group>
-          <:chip
-            :for={chip <- filter_chips(@filters, @sites_by_id)}
-            label={chip.label}
-            clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-          />
-        </.filter_drawer>
-      </div>
-
-      <div :if={@view == "products"}>
-        <.table
-          id="products"
-          rows={@streams.products}
-          row_click={fn {_id, row} -> JS.navigate(~p"/pharmacy/stock/products/#{row.product.id}") end}
-        >
-          <:col :let={{_id, row}} label="Product">{product_name(row.product)}</:col>
-          <:col :let={{_id, row}} label="Category">{row.product.category || "—"}</:col>
-          <:col :let={{_id, row}} label="GTIN">{row.product.gtin}</:col>
-          <:col :let={{_id, row}} label="Price">
-            {row.product.price && "KES #{row.product.price}"}
-          </:col>
-          <:col :let={{_id, row}} label="Batches">{row.batch_count}</:col>
-          <:col :let={{_id, row}} label="Remaining">
-            <span class="tabular-nums">{row.total_remaining}</span>
-            <.status_badge :if={row.stock_level} status={row.stock_level} class="ml-2" />
-          </:col>
-          <:empty_state>
-            <.blank_state
-              icon="hero-cube"
-              title={if @search != "", do: "No products match your search", else: "No products yet"}
-            >
-              {if @search != "",
-                do: "Try a different search term.",
-                else: "Products with stock will appear here."}
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
-
-      <div :if={@view == "batches"}>
-        <.table
-          id="stock"
-          rows={@streams.batches}
-          row_click={fn {_id, batch} -> JS.navigate(~p"/pharmacy/stock/batches/#{batch.id}") end}
-        >
-          <:col :let={{_id, batch}} label="Product">
-            {product_name(@products_by_id[batch.product_id])}
-          </:col>
-          <:col :let={{_id, batch}} label="Site">{site_name(@sites_by_id[batch.site_id])}</:col>
-          <:col :let={{_id, batch}} label="Batch no.">{batch.batch_no}</:col>
-          <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
-          <:col :let={{_id, batch}} label="Manufacture date">{batch.manufacture_date || "—"}</:col>
-          <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
-          <:col :let={{_id, batch}} label="Remaining">{batch.remaining_quantity}</:col>
-          <:col :let={{_id, batch}} label="Supplier">
-            {supplier_name(@suppliers_by_id[batch.supplier_id])}
-          </:col>
-          <:col :let={{_id, batch}} label="Status">
-            <.status_badge status={if batch.approver_id, do: :active, else: :pending_receipt} />
-          </:col>
-          <:empty_state>
-            <.blank_state
-              icon="hero-cube"
-              title={
-                if @search != "" or active_filter_count(@filters) > 0,
-                  do: "No batches match your search or filters",
-                  else: "No stock yet"
-              }
-            >
-              {if @search != "",
-                do: "Try a different search term.",
-                else: "Batches dispatched to any site will appear here."}
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
-
-      <.pagination page={@page_info} path={pagination_path(@view, @search, @filters)} />
+      <SiteStock.stock_page
+        id="pharmacy-stock"
+        title="Stock"
+        subtitle={subtitle(@admin_wide?, @allowed_site_ids)}
+        base_path="/pharmacy/stock"
+        view={@view}
+        entries={@entries}
+        total={@total}
+        page={@page}
+        last_page={@last_page}
+        search={@search}
+        filters={@filters}
+        sites={@site_options}
+        categories={@categories}
+        stats={@stats}
+        tick_max={@tick_max}
+        today={@today}
+        filtered?={@filtered?}
+        exporting={@exporting}
+        stock_takes_path={~p"/pharmacy/stock-takes"}
+        disposals_path={~p"/pharmacy/disposals"}
+        scan_path={~p"/pharmacy/scan"}
+        requisition_path={~p"/pharmacy/requisitions/new"}
+        product_path={fn id -> ~p"/pharmacy/stock/products/#{id}" end}
+        batch_path={fn id -> ~p"/pharmacy/stock/batches/#{id}" end}
+        empty_hint="Batches received at your site appear here."
+      />
     </Layouts.pharmacy_shell>
     """
   end
