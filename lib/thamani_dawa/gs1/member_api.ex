@@ -40,6 +40,9 @@ defmodule ThamaniDawa.GS1.MemberApi do
   @callback post_batch_serials(String.t(), String.t()) :: {:ok, [map()]} | {:error, term()}
   @callback post_unpacked_serials(String.t(), String.t() | nil) ::
               {:ok, [map()]} | {:error, term()}
+  @callback post_mobile_users(String.t(), map()) :: {:ok, map()} | {:error, term()}
+
+  @mobile_user_actions ~w(list create update resend_pin set_active)
 
   @doc """
   Mints an SSCC. `params` is the member-API body: `batch_info` and `address`
@@ -126,6 +129,77 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def unpacked_serials(gtin, batch \\ nil, opts \\ []) when is_binary(gtin) and is_list(opts) do
     dispatch(:post_unpacked_serials, [gtin, batch], opts)
   end
+
+  @doc """
+  Healthcare mobile users on the member account, via
+  `POST /list_healthcare_mobile_users`. Each is the API's JSON map: `id`
+  (a UUID), `name`, `username`, `email`, `phone`, `active`, `role`
+  (`"distribution"`/`"manufacturing"`), `access_scope`
+  (`"full"`/`"aggregation_only"`), `last_login_at`.
+  """
+  def list_mobile_users(opts \\ []) when is_list(opts) do
+    with {:ok, body} <- dispatch(:post_mobile_users, ["list", %{}], opts) do
+      {:ok, List.wrap(body["mobile_users"])}
+    end
+  end
+
+  @doc "Creates a mobile user; GS1 generates and emails the PIN."
+  def create_mobile_user(params, opts \\ []) when is_map(params) and is_list(opts) do
+    dispatch(:post_mobile_users, ["create", params], opts)
+  end
+
+  def update_mobile_user(id, params, opts \\ [])
+      when is_binary(id) and is_map(params) and is_list(opts) do
+    dispatch(:post_mobile_users, ["update", Map.put(params, "id", id)], opts)
+  end
+
+  @doc "Generates a new PIN, emails it, and signs the user out everywhere."
+  def resend_mobile_user_pin(id, opts \\ []) when is_binary(id) and is_list(opts) do
+    dispatch(:post_mobile_users, ["resend_pin", %{"id" => id}], opts)
+  end
+
+  def set_mobile_user_active(id, active, opts \\ [])
+      when is_binary(id) and is_boolean(active) and is_list(opts) do
+    dispatch(:post_mobile_users, ["set_active", %{"id" => id, "active" => active}], opts)
+  end
+
+  def post_mobile_users(action, params, opts \\ []) when action in @mobile_user_actions do
+    params
+    |> post(mobile_users_path(action), opts)
+    |> decode_mobile_users_response()
+  end
+
+  defp mobile_users_path("list"), do: "/list_healthcare_mobile_users"
+  defp mobile_users_path("create"), do: "/create_healthcare_mobile_user"
+  defp mobile_users_path("update"), do: "/update_healthcare_mobile_user"
+  defp mobile_users_path("resend_pin"), do: "/resend_healthcare_mobile_user_pin"
+  defp mobile_users_path("set_active"), do: "/set_healthcare_mobile_user_active"
+
+  @doc false
+  def decode_mobile_users_response({:ok, status, body}) when status in 200..299,
+    do: {:ok, body}
+
+  def decode_mobile_users_response({:ok, 422, %{"errors" => errors}}) when is_map(errors),
+    do: {:error, {:validation, errors}}
+
+  def decode_mobile_users_response({:ok, 404, _body}), do: {:error, :not_found}
+
+  # A 403 with a message means the key is valid but the member isn't a
+  # healthcare account; without one it's an auth failure.
+  def decode_mobile_users_response({:ok, 403, %{"result" => message}})
+      when is_binary(message),
+      do: {:error, {:invalid, message}}
+
+  def decode_mobile_users_response({:ok, status, _body}) when status in [401, 403],
+    do: {:error, :unauthorized}
+
+  def decode_mobile_users_response({:ok, status, %{"result" => message}})
+      when status in 400..499 and is_binary(message),
+      do: {:error, {:invalid, message}}
+
+  def decode_mobile_users_response({:ok, _status, _body}), do: {:error, :unavailable}
+  def decode_mobile_users_response({:error, :unconfigured}), do: {:error, :unconfigured}
+  def decode_mobile_users_response({:error, _reason}), do: {:error, :unavailable}
 
   def post_unpacked_serials(gtin, batch, opts \\ []) when is_binary(gtin) and is_list(opts) do
     %{"barcode" => gtin, "limit" => 1_000}

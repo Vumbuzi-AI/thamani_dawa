@@ -278,8 +278,87 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
       serial_creates: [],
       shipper_sscc_creates: [],
       prefixes: @default_prefixes,
-      glns: @default_glns
+      glns: @default_glns,
+      mobile_users: %{}
     }
+  end
+
+  @impl true
+  def post_mobile_users("list", _params) do
+    ensure_started()
+
+    users =
+      __MODULE__ |> Agent.get(& &1.mobile_users) |> Map.values() |> Enum.sort_by(& &1["name"])
+
+    {:ok, %{"result" => "success", "count" => length(users), "mobile_users" => users}}
+  end
+
+  def post_mobile_users("create", params) do
+    ensure_started()
+
+    with :ok <- validate_mobile_user(params) do
+      id = Ecto.UUID.generate()
+      user = params |> mobile_user_fields(%{"id" => id, "active" => true}) |> mobile_user_json()
+      Agent.update(__MODULE__, &put_in(&1, [:mobile_users, id], user))
+      {:ok, %{"result" => "success", "mobile_user" => user, "pin_delivery" => "sent"}}
+    end
+  end
+
+  def post_mobile_users("update", %{"id" => id} = params) do
+    with {:ok, existing} <- fetch_mobile_user(id),
+         :ok <- validate_mobile_user(Map.merge(existing, params)) do
+      user = params |> mobile_user_fields(existing) |> mobile_user_json()
+      Agent.update(__MODULE__, &put_in(&1, [:mobile_users, id], user))
+      {:ok, %{"result" => "success", "mobile_user" => user}}
+    end
+  end
+
+  def post_mobile_users("resend_pin", %{"id" => id}) do
+    with {:ok, user} <- fetch_mobile_user(id),
+         do: {:ok, %{"result" => "success", "mobile_user" => user, "pin_delivery" => "sent"}}
+  end
+
+  def post_mobile_users("set_active", %{"id" => id, "active" => active}) do
+    with {:ok, user} <- fetch_mobile_user(id) do
+      user = Map.put(user, "active", active)
+      Agent.update(__MODULE__, &put_in(&1, [:mobile_users, id], user))
+      {:ok, %{"result" => "success", "mobile_user" => user}}
+    end
+  end
+
+  defp fetch_mobile_user(id) do
+    ensure_started()
+
+    case Agent.get(__MODULE__, &get_in(&1, [:mobile_users, id])) do
+      nil -> {:error, :not_found}
+      user -> {:ok, user}
+    end
+  end
+
+  defp validate_mobile_user(params) do
+    errors =
+      for field <- ~w(name username email), params[field] in [nil, ""], into: %{} do
+        {field, ["can't be blank"]}
+      end
+
+    if errors == %{}, do: :ok, else: {:error, {:validation, errors}}
+  end
+
+  defp mobile_user_fields(params, base) do
+    Map.merge(base, Map.take(params, ~w(name username email phone role aggregation_only)))
+  end
+
+  # Mirrors the GS1 API: aggregation-only applies to manufacturing users.
+  defp mobile_user_json(user) do
+    role = if user["role"] == "distribution", do: "distribution", else: "manufacturing"
+    aggregation? = role == "manufacturing" and user["aggregation_only"] in [true, "true"]
+
+    user
+    |> Map.drop(["aggregation_only"])
+    |> Map.merge(%{
+      "role" => role,
+      "access_scope" => if(aggregation?, do: "aggregation_only", else: "full")
+    })
   end
 
   defp build_serialisation(params) do

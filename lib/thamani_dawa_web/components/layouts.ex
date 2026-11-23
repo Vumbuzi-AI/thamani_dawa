@@ -861,7 +861,8 @@ defmodule ThamaniDawaWeb.Layouts do
          {"Sites", "hero-building-office-2", ~p"/org/sites"},
          {"Products", "hero-cube", ~p"/org/products"},
          {"Suppliers", "hero-truck", ~p"/org/suppliers"},
-         {"Team", "hero-user-group", ~p"/org/team"}
+         {"Team", "hero-user-group", ~p"/org/team"},
+         {"Mobile users", "hero-device-phone-mobile", ~p"/org/mobile-users"}
        ]},
       {"Account",
        [

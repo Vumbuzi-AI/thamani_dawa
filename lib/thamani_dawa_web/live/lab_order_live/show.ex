@@ -1051,7 +1051,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
               <.status_pill kind={:order} status={@lab_order.status} />
             </h1>
             <p class="td-idh-sub">
-              <span :if={@patient.gsrn}>GSRN <span class="td-mono">{@patient.gsrn}</span>   · </span><span :if={
+              <span :if={@patient.gsrn}>GSRN <span class="td-mono">{@patient.gsrn}</span>    · </span><span :if={
                 @patient.phone
               }>{@patient.phone} · </span>created {ThamaniDawaWeb.TimeFormat.datetime(
                 @lab_order.inserted_at

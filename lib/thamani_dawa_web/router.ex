@@ -170,6 +170,10 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/team/new", TeamLive.Index, :new
       live "/org/team/:id/edit", TeamLive.Index, :edit
 
+      live "/org/mobile-users", OrgMobileUserLive.Index, :index
+      live "/org/mobile-users/new", OrgMobileUserLive.Index, :new
+      live "/org/mobile-users/:id/edit", OrgMobileUserLive.Index, :edit
+
       live "/org/sites", SiteLive.Index, :index
       live "/org/sites/new", SiteLive.Index, :new
       live "/org/sites/:id", SiteLive.Show, :show
