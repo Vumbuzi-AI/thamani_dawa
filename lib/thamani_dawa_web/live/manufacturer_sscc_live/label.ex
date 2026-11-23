@@ -19,7 +19,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
      |> assign(:sscc, sscc)}
   end
 
-  defp gs1_text(sscc), do: "(00)#{sscc.code}"
+  defp gs1_text(sscc), do: Manufacturing.sscc_gs1_text(sscc)
 
   def render(assigns) do
     ~H"""

@@ -672,6 +672,46 @@ defmodule ThamaniDawa.Manufacturing do
 
   defp persist_serials(_organization_id, _product, _batch, _result), do: []
 
+  @doc """
+  The GS1 element string a primary serial's DataMatrix encodes:
+  GTIN (01), batch (10), production (11), expiry (17), serial (21).
+  """
+  def gs1_text(%Product{} = product, %Batch{} = batch, %Serial{} = serial) do
+    "(01)#{String.pad_leading(product.gtin, 14, "0")}(10)#{batch.batch_no}(11)#{date_ai(batch.production_date)}(17)#{date_ai(batch.expiry_date)}(21)#{serial.serial}"
+  end
+
+  defp date_ai(date), do: Calendar.strftime(date, "%y%m%d")
+
+  @doc "The GS1 element string an SSCC label's DataMatrix encodes."
+  def sscc_gs1_text(%ShipperSscc{code: code}), do: "(00)#{code}"
+
+  @doc """
+  What an SSCC label prints. From/To come from the pallet when the SSCC
+  sits on one, else from the SSCC itself. Expects `:pallet` preloaded, as
+  `get_sscc_group!/2` returns it.
+  """
+  def sscc_label(%ShipperSscc{} = sscc) do
+    parties =
+      Map.new(
+        [:from_company_name, :from_address, :to_company_name, :to_address],
+        &{&1, label_party(sscc, &1)}
+      )
+
+    Map.merge(parties, %{
+      sscc: sscc.code,
+      gs1_text: sscc_gs1_text(sscc),
+      gtin: sscc.gtin,
+      batch: sscc.batch,
+      production_date: sscc.production_date,
+      expiry_date: sscc.expiry_date
+    })
+  end
+
+  defp label_party(%ShipperSscc{pallet: %Pallet{} = pallet} = sscc, field),
+    do: Map.get(pallet, field) || Map.get(sscc, field)
+
+  defp label_party(%ShipperSscc{} = sscc, field), do: Map.get(sscc, field)
+
   # Pallets
 
   @doc "Changeset for building or editing a pallet form."
@@ -1093,8 +1133,9 @@ defmodule ThamaniDawa.Manufacturing do
     }
   end
 
-  defp filter_aggregation_status(query, status) when status in ~w(draft submitted approved rejected),
-    do: where(query, [a], a.status == ^status)
+  defp filter_aggregation_status(query, status)
+       when status in ~w(draft submitted approved rejected),
+       do: where(query, [a], a.status == ^status)
 
   defp filter_aggregation_status(query, _status), do: query
 
@@ -1109,7 +1150,7 @@ defmodule ThamaniDawa.Manufacturing do
   def get_aggregation!(organization_id, id) do
     Aggregation
     |> Repo.get_by!(id: id, organization_id: organization_id)
-    |> Repo.preload([shipper_sscc: :batches, items: [], created_by: [], approved_by: []])
+    |> Repo.preload(shipper_sscc: :batches, items: [], created_by: [], approved_by: [])
   end
 
   def change_aggregation(aggregation \\ %Aggregation{}, attrs \\ %{}),
@@ -1243,9 +1284,7 @@ defmodule ThamaniDawa.Manufacturing do
       capacity = sscc.count_of_trade_items || 0
 
       if linked + adding > capacity do
-        Repo.rollback(
-          {:over_capacity, %{capacity: capacity, linked: linked, adding: adding}}
-        )
+        Repo.rollback({:over_capacity, %{capacity: capacity, linked: linked, adding: adding}})
       end
 
       Repo.update_all(

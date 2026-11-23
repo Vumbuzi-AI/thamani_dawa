@@ -149,6 +149,51 @@ defmodule ThamaniDawa.Epcis.Outbox do
     Map.new(counts)
   end
 
+  @doc """
+  `count_by_status/2` with every status present, zero when none: what the
+  TNT reporting page's filter chips show.
+  """
+  def status_summary(organization_id, opts \\ []) do
+    Map.merge(
+      %{
+        "pending" => 0,
+        "blocked" => 0,
+        "accepted" => 0,
+        "warning" => 0,
+        "rejected" => 0,
+        "dead" => 0
+      },
+      count_by_status(organization_id, opts)
+    )
+  end
+
+  @doc """
+  A one-line explanation of why an event is blocked, warned, rejected or
+  dead, or `nil` when there is nothing to explain.
+  """
+  def event_detail(%OutboxEvent{status: "blocked", blocked_reason: reason})
+      when is_binary(reason),
+      do: reason
+
+  def event_detail(%OutboxEvent{status: "warning", response: %{"warnings" => warnings}})
+      when is_list(warnings),
+      do: Enum.map_join(warnings, " · ", &warning_message/1)
+
+  def event_detail(%OutboxEvent{status: status, response: response})
+      when status in ["rejected", "dead"] and is_map(response) do
+    cond do
+      response["error"] -> response["error"]
+      response["raw"] -> response["raw"]
+      true -> inspect(response)
+    end
+  end
+
+  def event_detail(_event), do: nil
+
+  defp warning_message(%{"message" => message}) when is_binary(message), do: message
+  defp warning_message(message) when is_binary(message), do: message
+  defp warning_message(warning), do: inspect(warning)
+
   def list_events(organization_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, 100)
 
