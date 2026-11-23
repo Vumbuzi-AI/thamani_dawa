@@ -3342,3 +3342,30 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-stack-pad .td-card .td-data { border-top: 1px solid var(--color-td-hairline); }
 .td-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .td-idh-sub.td-mono { font-size: 12px; }
+.td-role-card {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--color-td-border);
+  border-radius: 10px; cursor: pointer; background: var(--color-td-surface);
+}
+.td-role-card.is-selected {
+  border-color: var(--color-td-accent);
+  background: var(--color-td-accent-tint);
+}
+.td-role-card b { display: block; font-size: 14px; font-weight: 500; }
+.td-role-card span { display: block; font-size: 12px; color: var(--color-td-ink-2); margin-top: 2px; }
+.td-access-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-td-hairline);
+}
+.td-access-row p { margin: 0; font-size: 12px; color: var(--color-td-ink-2); }
+.td-access-row b { display: block; font-size: 14px; font-weight: 500; color: var(--color-td-ink); margin-bottom: 4px; }
+.td-member-hd { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.td-member-hd .td-am-name { display: block; font-size: 14px; font-weight: 500; }
+.td-member-hd .td-am-role { display: block; font-size: 12px; color: var(--color-td-ink-2); }
+.td-member-hd .td-status { margin-left: auto; }
+.td-row-menu { position: relative; }
+.td-row-menu-list {
+  position: absolute; right: 0; top: 100%; z-index: 20; min-width: 160px;
+  padding: 4px; border: 1px solid var(--color-td-border); border-radius: 12px;
+  background: var(--color-td-surface);
+}

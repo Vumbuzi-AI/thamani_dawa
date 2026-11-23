@@ -15,6 +15,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
      |> assign(:search, "")
      |> assign(:filters, @default_filters)
      |> assign(:editing_user, nil)
+     |> assign(:confirming_user, nil)
      |> assign(:selected_roles, [])
      |> assign(:onboarding_invited, [])
      |> assign(:onboarding_progress, {0, 0})
@@ -171,10 +172,24 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       {:ok, updated_user} ->
         action = if updated_user.is_active, do: "reactivated", else: "deactivated"
 
-        {:noreply,
-         socket
-         |> put_flash(:info, "#{updated_user.name} #{action}.")
-         |> assign_lists()}
+        socket =
+          socket
+          |> assign(:confirming_user, nil)
+          |> put_flash(:info, "#{updated_user.name} #{action}.")
+          |> assign_lists()
+
+        socket =
+          if socket.assigns.live_action == :edit do
+            if updated_user.is_active do
+              assign(socket, :editing_user, updated_user)
+            else
+              push_patch(socket, to: ~p"/org/team")
+            end
+          else
+            socket
+          end
+
+        {:noreply, socket}
 
       {:error, :cannot_deactivate_self} ->
         {:noreply, put_flash(socket, :error, "You cannot deactivate your own account.")}
@@ -190,6 +205,15 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       {:error, :unauthorized} ->
         {:noreply, put_flash(socket, :error, "You are not allowed to change account access.")}
     end
+  end
+
+  def handle_event("prompt_deactivate", %{"id" => id}, socket) do
+    user = Accounts.get_user!(socket.assigns.current_scope.organization_id, String.to_integer(id))
+    {:noreply, assign(socket, :confirming_user, user)}
+  end
+
+  def handle_event("cancel_deactivate", _params, socket) do
+    {:noreply, assign(socket, :confirming_user, nil)}
   end
 
   defp invite_user(socket, organization_id, admin, attrs) do
@@ -376,6 +400,14 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   defp site_matches_role?(site, "distributor"), do: Site.distribution?(site)
   defp site_matches_role?(_site, _role), do: true
 
+  defp role_copy(role) when not is_binary(role), do: role_copy(to_string(role))
+  defp role_copy("pharmacist"), do: "Dispense and sell at pharmacy sites."
+  defp role_copy("lab_technician"), do: "Run orders at lab sites."
+  defp role_copy("admin"), do: "Every site in the organization."
+  defp role_copy("distributor"), do: "Receive, pack, and ship at warehouse sites."
+  defp role_copy("manufacturer"), do: "Commission, pack, and ship from manufacturing sites."
+  defp role_copy(_role), do: nil
+
   attr :selected_roles, :list, required: true
   attr :errors, :list, default: []
   attr :organization, :map, required: true
@@ -383,23 +415,24 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   defp role_checkboxes(assigns) do
     ~H"""
     <div class="mt-3">
-      <label class="block text-sm font-medium mb-2 text-thamani-forest">
-        Role<span class="text-red-600">&nbsp;*</span>
-      </label>
+      <label class="block text-sm font-medium mb-2">Roles</label>
       <input type="hidden" name="user[roles][]" value="" />
-      <div class="grid grid-cols-2 gap-1.5">
+      <div class="grid gap-1.5">
         <label
           :for={role <- User.assignable_roles(@organization.operating_models)}
-          class="flex items-center gap-2 rounded-lg border border-thamani-stone bg-thamani-canvas px-3 py-2 text-sm text-thamani-forest cursor-pointer hover:bg-thamani-stone/50 transition-colors"
+          class={["td-role-card", to_string(role) in @selected_roles && "is-selected"]}
         >
           <input
             type="checkbox"
             name="user[roles][]"
             value={role}
             checked={to_string(role) in @selected_roles}
-            class="size-4 shrink-0 rounded accent-thamani-forest cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+            class="size-4 shrink-0 rounded accent-[var(--color-td-accent)] cursor-pointer mt-0.5"
           />
-          <span class="font-medium truncate min-w-0">{Phoenix.Naming.humanize(role)}</span>
+          <span>
+            <b>{Phoenix.Naming.humanize(role)}</b>
+            <span>{role_copy(role)}</span>
+          </span>
         </label>
       </div>
       <p :for={error <- @errors} class="mt-2 text-xs text-red-700">{translate_error(error)}</p>
@@ -524,12 +557,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
               </.link>
 
               <div id="onboarding-invite-user" class="flex min-w-0 items-center gap-3">
-                <span
-                  class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-on-accent)] shadow-sm"
-                  aria-hidden="true"
-                >
-                  {String.first(@current_scope.user.name || "U")}
-                </span>
+                <.td_orb seed={@current_scope.user.email} size={36} />
                 <span class="max-w-44 truncate text-sm font-medium text-[var(--thamani-forest)]">
                   {@current_scope.user.name}
                 </span>
@@ -550,7 +578,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           <main class="mx-auto grid w-full max-w-6xl flex-1 items-start gap-10 px-5 pb-16 pt-10 sm:px-8 sm:pt-12 md:grid-cols-[0.7fr_1.3fr] md:gap-10 md:pt-16 lg:gap-16 lg:pt-20">
             <section class="thamani-step-enter flex flex-col items-center text-center md:block md:text-left">
               <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] text-[var(--thamani-forest)]">
-                <.icon name="hero-user-group" class="size-6" />
+                <.td_icon name="users-three" class="size-6" />
               </div>
               <h1 class="w-full max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
                 Invite your team
@@ -623,7 +651,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
                           :if={status(user) == :invited}
                           class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900"
                         >
-                          <.icon name="hero-clock" class="size-3.5" /> Pending
+                          Invited
                         </span>
                         <span
                           :if={status(user) == :active}
@@ -732,15 +760,12 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       </Layouts.app>
     <% else %>
       <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/team"}>
-        <.header icon="hero-users">
-          Team
-          <:subtitle>Search, filter, and manage your team.</:subtitle>
+        <.td_page_header title="Team" subtitle="Search, filter, and manage your team.">
           <:actions>
-            <.button variant="primary" patch={~p"/org/team/new"}>
-              <.icon name="hero-plus" class="size-4" /> Invite staff
-            </.button>
+            <.td_button variant="primary" label="Invite staff" glyph="plus" patch={~p"/org/team/new"} />
           </:actions>
-          <:toolbar>
+        </.td_page_header>
+        <div class="flex items-center gap-3" style="margin: 0 0 16px">
             <form phx-change="search" class="flex-1" id="search-form">
               <.search_input name="search" value={@search} placeholder="Search by name or email" />
             </form>
@@ -784,8 +809,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
                 clear={JS.push("clear_chip", value: %{"field" => chip.field})}
               />
             </.filter_drawer>
-          </:toolbar>
-        </.header>
+        </div>
 
         <.modal
           :if={@live_action == :new}
@@ -828,25 +852,23 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
           </form>
         </.modal>
 
-        <.modal :if={@live_action == :edit} id="edit-modal" show on_cancel={JS.patch(~p"/org/team")}>
-          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-            Edit team member
-          </h2>
-          <form id="edit-form" phx-submit="save_edit" phx-change="form_change">
-            <div class="space-y-4">
-              <div class="grid grid-cols-2 gap-4">
+        <.td_modal
+          :if={@live_action == :edit}
+          id="edit-modal"
+          show
+          title="Edit team member"
+          subtitle="Change roles and site access."
+          on_cancel={JS.patch(~p"/org/team")}
+        >
+          <:body>
+            <form id="edit-form" phx-submit="save_edit" phx-change="form_change">
+              <div class="td-member-hd">
+                <.td_orb seed={@editing_user.email} size={32} />
                 <div>
-                  <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle mb-1">
-                    Name
-                  </p>
-                  <p class="text-sm font-semibold text-thamani-forest">{@editing_user.name}</p>
+                  <span class="td-am-name">{@editing_user.name}</span>
+                  <span class="td-am-role">{@editing_user.email}</span>
                 </div>
-                <div>
-                  <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle mb-1">
-                    Email
-                  </p>
-                  <p class="text-sm font-semibold text-thamani-forest">{@editing_user.email}</p>
-                </div>
+                <.status_badge status={status(@editing_user)} class="td-status" />
               </div>
               <.role_checkboxes
                 selected_roles={@selected_roles}
@@ -862,19 +884,57 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
               />
               <div
                 :if={"admin" in @selected_roles}
-                class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
+                class="flex items-center gap-2.5 text-xs text-thamani-pewter mt-3"
               >
-                <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
+                <.td_icon name="info" />
                 <span>Admins automatically have organization-wide access across all sites.</span>
               </div>
-            </div>
-            <div class="mt-4">
-              <.button variant="primary" class="w-full">Save changes</.button>
-            </div>
-          </form>
-        </.modal>
+              <div class="td-access-row">
+                <%= if @editing_user.id == @current_scope.user.id do %>
+                  <p>This is your account. You cannot deactivate your own account.</p>
+                <% else %>
+                  <%= if status(@editing_user) == :inactive do %>
+                    <div>
+                      <b>Account deactivated</b>
+                      <p>Reactivate to restore access.</p>
+                    </div>
+                    <.td_button
+                      id={"btn-toggle-active-user-#{@editing_user.id}"}
+                      type="button"
+                      variant="secondary"
+                      label="Reactivate"
+                      phx-click="toggle_active"
+                      phx-value-id={@editing_user.id}
+                    />
+                  <% else %>
+                    <div>
+                      <b>Deactivate account</b>
+                      <p>
+                        {if status(@editing_user) == :invited,
+                          do: "Not accepted yet. Deactivate to stop them joining.",
+                          else: "They lose access straight away. You can reactivate later."}
+                      </p>
+                    </div>
+                    <.td_button
+                      id={"btn-prompt-deactivate-#{@editing_user.id}"}
+                      type="button"
+                      variant="danger"
+                      label="Deactivate"
+                      phx-click="prompt_deactivate"
+                      phx-value-id={@editing_user.id}
+                    />
+                  <% end %>
+                <% end %>
+              </div>
+            </form>
+          </:body>
+          <:footer>
+            <.td_button variant="secondary" label="Cancel" patch={~p"/org/team"} />
+            <.td_button variant="primary" label="Save changes" glyph="check" form="edit-form" type="submit" />
+          </:footer>
+        </.td_modal>
 
-        <.table id="users" rows={@users}>
+        <.table id="users" rows={@users} row_click={fn user -> JS.patch(~p"/org/team/#{user.id}/edit") end}>
           <:col :let={user} label="Name">{user.name}</:col>
           <:col :let={user} label="Email">{user.email}</:col>
           <:col :let={user} label="Role">
@@ -891,36 +951,41 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             <.status_badge status={status(user)} />
           </:col>
           <:action :let={user}>
-            <.button
-              variant="ghost-edit"
-              patch={~p"/org/team/#{user.id}/edit"}
-              class="px-3 py-1.5 text-xs"
-              id={"btn-edit-user-#{user.id}"}
-            >
-              Edit
-            </.button>
-          </:action>
-          <:action :let={user}>
-            <.button
-              :if={user.id != @current_scope.user.id}
-              type="button"
-              variant={if user.is_active, do: "ghost-delete", else: "ghost"}
-              phx-click="toggle_active"
-              phx-value-id={user.id}
-              data-confirm={
-                if user.is_active,
-                  do: "Deactivate #{user.name}? They will immediately lose access.",
-                  else: nil
-              }
-              id={"btn-toggle-active-user-#{user.id}"}
-              class="px-3 py-1.5 text-xs"
-            >
-              {if user.is_active, do: "Deactivate", else: "Reactivate"}
-            </.button>
+            <div class="td-row-menu">
+              <.td_icon_button
+                id={"btn-row-menu-#{user.id}"}
+                label="Row actions"
+                phx-click={JS.toggle(to: "#team-row-menu-#{user.id}")}
+              >
+                <:icon><.td_icon name="dots-three" /></:icon>
+              </.td_icon_button>
+              <div id={"team-row-menu-#{user.id}"} class="td-row-menu-list" hidden>
+                <.td_menu_item
+                  id={"btn-edit-user-#{user.id}"}
+                  label="Edit"
+                  patch={~p"/org/team/#{user.id}/edit"}
+                />
+                <.td_menu_item
+                  :if={user.id != @current_scope.user.id and user.is_active}
+                  id={"btn-prompt-deactivate-row-#{user.id}"}
+                  label="Deactivate"
+                  tone="danger"
+                  phx-click="prompt_deactivate"
+                  phx-value-id={user.id}
+                />
+                <.td_menu_item
+                  :if={user.id != @current_scope.user.id and not user.is_active}
+                  id={"btn-toggle-active-user-#{user.id}"}
+                  label="Reactivate"
+                  phx-click="toggle_active"
+                  phx-value-id={user.id}
+                />
+              </div>
+            </div>
           </:action>
           <:empty_state>
             <.blank_state
-              icon="hero-users"
+              icon="users-three"
               title={
                 if @search != "" or active_filter_count(@filters) > 0,
                   do: "No team members match your search or filters",
@@ -935,6 +1000,32 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
         </.table>
 
         <.pagination page={@page_info} path={~p"/org/team"} />
+
+        <.td_modal
+          :if={@confirming_user}
+          id="deactivate-confirm"
+          show
+          title="Deactivate this account?"
+          subtitle={@confirming_user.name}
+          on_cancel={JS.push("cancel_deactivate")}
+        >
+          <:body>
+            <p class="td-note">
+              They lose access straight away. You can reactivate later.
+            </p>
+          </:body>
+          <:footer>
+            <.td_button type="button" variant="secondary" label="Cancel" phx-click="cancel_deactivate" />
+            <.td_button
+              id={"btn-toggle-active-user-#{@confirming_user.id}"}
+              type="button"
+              variant="danger-confirm"
+              label="Deactivate"
+              phx-click="toggle_active"
+              phx-value-id={@confirming_user.id}
+            />
+          </:footer>
+        </.td_modal>
       </Layouts.org_shell>
     <% end %>
     """
