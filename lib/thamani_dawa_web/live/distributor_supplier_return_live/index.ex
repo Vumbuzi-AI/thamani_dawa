@@ -28,7 +28,8 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
     {:ok,
      socket
      |> assign(:sites, sites)
-     |> assign(:sites_by_id, scope.organization_id |> Sites.list_sites() |> Map.new(&{&1.id, &1}))}
+     |> assign(:sites_by_id, scope.organization_id |> Sites.list_sites() |> Map.new(&{&1.id, &1}))
+     |> assign(:return_count, 0)}
   end
 
   def handle_params(_params, _url, socket) do
@@ -98,7 +99,7 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
           {:noreply,
            socket
            |> put_flash(:info, "Supplier return started.")
-           |> push_navigate(to: ~p"/distributor/returns/#{disposal.id}")}
+           |> push_navigate(to: ThamaniDawaWeb.ReturnTo.with_query(~p"/distributor/returns/#{disposal.id}", ~p"/distributor/returns"))}
 
         {:error, changeset} ->
           {:noreply, assign(socket, form: to_form(changeset, as: :disposal))}
@@ -140,7 +141,9 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
           InventoryDisposals.list_disposals_for_site(org_id, site_id, @kind, @inventory_type)
       end
 
-    stream(socket, :supplier_returns, returns, reset: true)
+    socket
+    |> assign(:return_count, length(returns))
+    |> stream(:supplier_returns, returns, reset: true)
   end
 
   defp locked_site(sites, scope) do
@@ -179,7 +182,7 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
         <:subtitle>
           Stock moving back to suppliers or in from customers, tracked through to approval.
         </:subtitle>
-        <:actions>
+        <:actions :if={@return_count > 0}>
           <.button id="new-supplier-return" variant="primary" patch={~p"/distributor/returns/new"}>
             <.icon name="hero-plus" class="size-4" /> New supplier return
           </.button>
@@ -240,7 +243,7 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
           {Calendar.strftime(d.inserted_at, "%d %b %Y")}
         </:col>
         <:action :let={{_id, d}}>
-          <.button variant="ghost" navigate={~p"/distributor/returns/#{d.id}"} class="gap-2">
+          <.button variant="ghost" navigate={ThamaniDawaWeb.ReturnTo.with_query(~p"/distributor/returns/#{d.id}", ~p"/distributor/returns")} class="gap-2">
             <.icon
               name={if d.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
               class="size-4"
@@ -249,9 +252,19 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
           </.button>
         </:action>
         <:empty_state>
-          <.blank_state icon="hero-arrow-uturn-left" title="No supplier returns yet">
-            Start one when stock is going back to the supplier.
-          </.blank_state>
+          <div class="td-empty-state">
+            <.td_icon name="arrow-u-up-left" class="td-empty-state-icon" />
+            <p class="td-empty-state-title">No supplier returns yet</p>
+            <p class="td-empty-state-text">Start one when stock is going back to the supplier.</p>
+            <div class="td-empty-state-actions">
+              <.td_button
+                id="new-supplier-return"
+                variant="primary"
+                label="Start a supplier return"
+                patch={~p"/distributor/returns/new"}
+              />
+            </div>
+          </div>
         </:empty_state>
       </.table>
     </Layouts.distributor_shell>

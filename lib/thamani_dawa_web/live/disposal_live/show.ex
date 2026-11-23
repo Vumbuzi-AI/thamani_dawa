@@ -15,7 +15,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
 
   @base_path "/pharmacy/disposals"
 
-  def mount(%{"id" => id}, _session, socket) do
+  def mount(%{"id" => id} = params, _session, socket) do
     scope = socket.assigns.current_scope
     org_id = scope.organization_id
 
@@ -29,7 +29,8 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
      |> assign(:site, site)
      |> assign(:products_by_id, products_by_id)
      |> assign(:addable_batches, addable_batches(org_id, disposal))
-     |> assign(:confirm_submit, false)}
+     |> assign(:confirm_submit, false)
+     |> assign(:return_to, ThamaniDawaWeb.ReturnTo.safe(params["return_to"], @base_path))}
   end
 
   defp addable_batches(org_id, disposal) do
@@ -206,7 +207,10 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
     assigns = assign(assigns, :base_path, @base_path)
 
     ~H"""
-    <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path={@base_path}>
+    <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path={@base_path}
+      back={@return_to}
+      back_label="Back to list"
+    >
       <div class="space-y-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
