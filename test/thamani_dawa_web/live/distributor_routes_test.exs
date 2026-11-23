@@ -120,6 +120,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       assert_patch(view, ~p"/distributor/receiving/new")
       assert has_element?(view, "#open-add-item-empty")
       refute has_element?(view, "#distributor-receipts")
+      assert has_element?(view, "#inline-scanner #distributor-entry-sscc-form")
       assert has_element?(view, "#accept-delivery[disabled]")
       assert has_element?(view, "#accept-delivery-modal #finish-distributor-delivery")
       assert has_element?(view, "#receive-back[href='/distributor/receiving']")
@@ -685,7 +686,9 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       refute has_element?(view, "#confirm-pending-shipper")
       assert has_element?(view, "#delivery-shipper-1", "SN10001")
       assert has_element?(view, "#delivery-shipper-1", "SN10002")
-      refute has_element?(view, "#delivery-shipper-1", "SN10003")
+      refute has_element?(view, "#delivery-shipper-1 .td-chip", "SN10003")
+      assert has_element?(view, "#delivery-shipper-1", "1 short")
+      assert has_element?(view, "#delivery-shipper-1", "1 damaged")
       assert has_element?(view, "#delivery-shipper-1", "1 unit")
       refute has_element?(view, "#delivery-shipper-1", "tablet")
 

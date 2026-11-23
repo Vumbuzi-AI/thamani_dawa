@@ -3615,3 +3615,19 @@ a.td-pid { cursor: pointer; }
 .td-kv-list dd { margin: 0; font-weight: 500; text-align: right; }
 .td-rows tr.is-selected > td { background: var(--color-td-selected); }
 #customer-recent-orders .td-li:hover { background: var(--color-td-hover); }
+
+/* Distributor flagship: inline receiving scanner (Doop td scanner field) */
+.td-scan-field { display: grid; gap: 6px; }
+.td-scan-label { font-size: 12px; color: var(--color-td-ink-2); font-weight: 500; }
+.td-scan-row { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border-radius: 8px; background: var(--color-td-surface); box-shadow: inset 0 0 0 1px var(--color-td-hairline); color: var(--color-td-ink-2); transition: box-shadow .15s ease, background-color .15s ease; }
+.td-scan-row:focus-within { box-shadow: inset 0 0 0 1px var(--color-td-accent), 0 0 0 3px var(--color-td-focus); }
+.td-scan-row input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 14px; color: var(--color-td-ink); }
+.td-scan-status { font-size: 12px; font-weight: 500; white-space: nowrap; }
+.td-scan-field[data-state="matched"] .td-scan-status { color: var(--color-td-success); }
+.td-scan-field[data-state="checking"] .td-scan-status { color: var(--color-td-ink-2); }
+.td-scan-field[data-state="error"] .td-scan-row { box-shadow: inset 0 0 0 1px var(--color-td-warning); }
+.td-scan-field[data-state="error"] .td-scan-status { color: var(--color-td-warning); }
+.td-scan-confirm { border-radius: 8px; }
+.td-rows.is-static tbody + tbody tr:first-child td { border-top: 1px solid var(--color-td-hairline); }
+.td-chip { display: inline-block; margin: 4px 4px 0 0; padding: 2px 6px; border-radius: 6px; background: var(--color-td-wash); font-size: 12px; }
+.td-row-actions { white-space: nowrap; text-align: right; }
