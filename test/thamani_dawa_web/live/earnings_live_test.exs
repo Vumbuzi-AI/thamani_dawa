@@ -51,7 +51,7 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
 
       {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/earnings")
 
-      assert html =~ "KES 500"
+      assert html =~ "KSh 500"
       refute has_element?(lv, "th", "Site")
       refute has_element?(lv, "select[name='filters[site]']")
     end
@@ -118,7 +118,7 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
 
       {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/earnings")
 
-      refute html =~ "KES 5000"
+      refute html =~ "KSh 5,000"
       assert html =~ "No transactions yet"
     end
   end
@@ -138,7 +138,7 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
 
       {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/earnings")
 
-      assert html =~ "KES 400"
+      assert html =~ "KSh 400"
       assert html =~ "Cash"
 
       assert has_element?(

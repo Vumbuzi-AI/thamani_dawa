@@ -276,7 +276,7 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
             id="onboarding-open-supplier"
             type="button"
             phx-click="open_onboarding_supplier"
-            class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-md"
+            class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
           >
             <.icon name="hero-plus" class="mr-2 size-4" /> Add a supplier
           </button>
@@ -287,7 +287,7 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
           id="onboarding-suppliers-empty"
           class="mt-8 flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--thamani-stone)] bg-transparent px-6 text-center"
         >
-          <span class="flex size-12 items-center justify-center rounded-2xl bg-white text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
+          <span class="flex size-12 items-center justify-center rounded-2xl bg-td-surface text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
             <.icon name="hero-truck" class="size-6" />
           </span>
           <h3 class="mt-4 text-base font-semibold text-thamani-forest">No suppliers yet</h3>
@@ -346,7 +346,7 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
           id="onboarding-supplier-continue"
           type="button"
           phx-click="continue_onboarding"
-          class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg"
+          class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
         >
           Continue <.icon name="hero-arrow-right" class="ml-3 size-4" />
         </button>

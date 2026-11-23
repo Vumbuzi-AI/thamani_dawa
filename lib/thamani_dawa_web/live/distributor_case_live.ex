@@ -194,7 +194,7 @@ defmodule ThamaniDawaWeb.DistributorCaseLive do
           {count_phrase(length(@minted), "new carton")} — print and label each one
         </h2>
         <ul class="mt-4 grid gap-3 sm:grid-cols-2">
-          <li :for={child <- @minted} class="rounded-xl border border-thamani-stone bg-white p-4">
+          <li :for={child <- @minted} class="rounded-xl border border-thamani-stone bg-td-surface p-4">
             <p class="font-mono text-sm font-semibold tracking-wide text-thamani-ink">{child.sscc}</p>
             <p class="mt-1 text-sm text-thamani-subtle">
               {child.batch_no} · {Products.format_unit_count(child.quantity)}
@@ -212,7 +212,7 @@ defmodule ThamaniDawaWeb.DistributorCaseLive do
       <section
         :if={@unit.status == :disaggregated}
         id="case-retired"
-        class="mt-5 flex items-center gap-2 rounded-2xl border border-thamani-stone bg-white px-5 py-4 text-sm text-thamani-subtle sm:px-6"
+        class="mt-5 flex items-center gap-2 rounded-2xl border border-thamani-stone bg-td-surface px-5 py-4 text-sm text-thamani-subtle sm:px-6"
       >
         <.icon name="hero-check-circle" class="size-4 text-thamani-forest" />
         This case is now closed — its stock lives in the cartons above.
@@ -221,10 +221,10 @@ defmodule ThamaniDawaWeb.DistributorCaseLive do
       <section
         :if={@unit.status == :active and @lines != []}
         id="sscc-contents"
-        class="mt-5 overflow-hidden rounded-2xl border border-thamani-stone bg-white"
+        class="mt-5 overflow-hidden rounded-2xl border border-thamani-stone bg-td-surface"
       >
         <div class="border-b border-thamani-stone px-5 py-5 sm:px-6">
-          <p class="text-xs font-semibold uppercase tracking-[0.14em] text-thamani-lime-dark">
+          <p class="text-xs font-semibold uppercase tracking-[0.14em] text-td-accent">
             Inside SSCC {@unit.sscc}
           </p>
           <h2 class="mt-1 text-base font-semibold text-thamani-forest">Batches and serials</h2>
@@ -265,7 +265,7 @@ defmodule ThamaniDawaWeb.DistributorCaseLive do
       <section
         :if={@unit.status == :active and @lines != []}
         id="break-case-panel"
-        class="mt-5 overflow-hidden rounded-2xl border border-thamani-stone bg-white"
+        class="mt-5 overflow-hidden rounded-2xl border border-thamani-stone bg-td-surface"
       >
         <div class="border-b border-thamani-stone px-5 py-5 sm:px-6">
           <h2 class="text-base font-semibold text-thamani-forest">Build sub-shippers</h2>
@@ -338,14 +338,14 @@ defmodule ThamaniDawaWeb.DistributorCaseLive do
                     <div class="mt-2 max-h-44 space-y-1.5 overflow-y-auto pr-1">
                       <label
                         :for={serial <- line.serials}
-                        class="flex cursor-pointer items-center gap-2 rounded-lg border border-thamani-stone bg-white px-3 py-2 text-xs text-thamani-ink transition hover:border-thamani-forest/40"
+                        class="flex cursor-pointer items-center gap-2 rounded-lg border border-thamani-stone bg-td-surface px-3 py-2 text-xs text-thamani-ink transition hover:border-thamani-forest/40"
                       >
                         <input
                           type="checkbox"
                           name={"allocations[#{line.id}][#{row.id}][serials][]"}
                           value={serial}
                           checked={serial in row.serials}
-                          class="size-4 rounded border-thamani-stone text-thamani-forest focus:ring-thamani-lime"
+                          class="size-4 rounded border-thamani-stone text-thamani-forest focus:ring-td-focus"
                         />
                         <span class="font-mono">{serial}</span>
                       </label>

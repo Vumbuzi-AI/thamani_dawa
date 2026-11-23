@@ -459,7 +459,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
         <div
           :if={@prompt_save_customer}
           id="save-customer-prompt"
-          class="mb-5 flex gap-3 rounded-2xl border border-thamani-lime/50 bg-thamani-lime/20 p-4"
+          class="mb-5 flex gap-3 rounded-2xl border border-transparent bg-td-accent-tint p-4"
         >
           <.icon name="hero-star" class="mt-0.5 size-5 shrink-0 text-thamani-forest" />
           <div class="flex flex-1 flex-col gap-2 text-sm sm:flex-row sm:items-center">
@@ -524,7 +524,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
               </p>
             </fieldset>
 
-            <div class="space-y-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3.5">
+            <div class="space-y-4 rounded-xl border border-td-hairline bg-td-wash/50 p-3.5">
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <.input field={@customer_form[:contact_name]} label="Contact person" />
                 <.input field={@customer_form[:contact_email]} label="Contact email" />
@@ -561,7 +561,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
         <div
           :if={@problems != []}
           id="distributor-approval-problems"
-          class="mb-5 rounded-2xl border border-rose-200 bg-white p-4"
+          class="mb-5 rounded-2xl border border-rose-200 bg-td-surface p-4"
         >
           <p class="flex items-center gap-2 text-sm font-semibold text-rose-800">
             <.icon name="hero-exclamation-circle" class="size-5" /> Can't approve yet
@@ -666,7 +666,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
               </div>
               <span
                 :if={shipper.sscc}
-                class="rounded-lg bg-thamani-lime px-3 py-1 font-mono text-xs font-semibold text-thamani-forest"
+                class="rounded-lg bg-td-accent-tint px-3 py-1 font-mono text-xs font-semibold text-thamani-forest"
               >
                 SSCC {shipper.sscc}
               </span>
@@ -726,7 +726,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
                 <li
                   :for={item <- group.items}
                   id={"shipment-item-#{item.id}"}
-                  class="relative flex gap-3 rounded-xl border border-thamani-stone bg-white p-3"
+                  class="relative flex gap-3 rounded-xl border border-thamani-stone bg-td-surface p-3"
                 >
                   <canvas
                     id={"unit-datamatrix-#{item.id}"}
@@ -805,7 +805,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
           >
             <div
               id={"sscc-label-content-#{label.id}"}
-              class="printable-sscc-label box-border flex h-[6in] w-[4in] flex-col overflow-hidden border-2 border-black bg-white text-black"
+              class="printable-sscc-label box-border flex h-[6in] w-[4in] flex-col overflow-hidden border-2 border-black bg-td-surface text-black"
               style="font-family: Arial, Helvetica, sans-serif"
             >
               <div class="grid grid-cols-2 border-b-2 border-black">
@@ -951,7 +951,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
             placeholder="e.g. Shipper 2 contains expired units, repack without them."
             required
           />
-          <.button id="confirm-reject-shipment" variant="destructive" class="mt-2 w-full">
+          <.button id="confirm-reject-shipment" variant="danger-confirm" class="mt-2 w-full">
             Reject shipment
           </.button>
         </.form>
@@ -972,7 +972,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Show do
         <p id="distributor-approve-modal-description" class="mb-4 text-sm text-thamani-pewter">
           Review the serialisation usage before issuing SSCCs.
         </p>
-        <dl class="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-thamani-snow p-4 text-sm">
+        <dl class="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-thamani-surface p-4 text-sm">
           <dt class="text-thamani-pewter">Shipment / order</dt>
           <dd id="approval-order-number" class="text-right font-semibold text-thamani-forest">
             {@shipment.order_number}

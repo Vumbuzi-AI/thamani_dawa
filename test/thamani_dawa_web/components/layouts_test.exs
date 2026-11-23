@@ -61,8 +61,6 @@ defmodule ThamaniDawaWeb.LayoutsTest do
 
       assert has_element?(lv, "#sidebar-backdrop[aria-label='Close navigation']")
       assert has_element?(lv, "#sidebar-aside[aria-label='Organization navigation']")
-      assert has_element?(lv, "#sidebar-backdrop.z-\\[80\\]")
-      assert has_element?(lv, "#sidebar-aside.z-\\[90\\]")
       assert has_element?(lv, "#sidebar-brand-link[aria-label='Thamani Dawa home']")
       assert has_element?(lv, "#sidebar-brand-logo[src='/images/logo-transparent.png']")
 
@@ -71,8 +69,7 @@ defmodule ThamaniDawaWeb.LayoutsTest do
                "#sidebar-toggle[aria-controls='sidebar-aside'][aria-expanded='true'][aria-label='Collapse sidebar']"
              )
 
-      assert has_element?(lv, "#sidebar-toggle-collapse-icon .hero-arrow-left-end-on-rectangle")
-      assert has_element?(lv, "#sidebar-toggle-expand-icon .hero-arrow-right-end-on-rectangle")
+      assert has_element?(lv, "#sidebar-toggle svg")
       assert has_element?(lv, "a[aria-current='page']", "Sites")
     end
 
@@ -109,7 +106,7 @@ defmodule ThamaniDawaWeb.LayoutsTest do
     test "groups help and personal actions in the sidebar footer", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
-      assert has_element?(lv, "#sidebar-account-dropdown #start-product-tour", "Product tour")
+      assert has_element?(lv, "#sidebar-footer #start-product-tour", "Product tour")
       assert has_element?(lv, "#sidebar-account-card[aria-label='Open account menu']")
       assert has_element?(lv, "#sidebar-profile", "Test User")
       assert has_element?(lv, "#sidebar-account-dropdown #sidebar-logout", "Log out")

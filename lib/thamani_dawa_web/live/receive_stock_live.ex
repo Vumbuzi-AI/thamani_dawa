@@ -163,7 +163,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
         <dl class="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Product</dt>
-            <dd class="mt-0.5 font-medium text-slate-900">
+            <dd class="mt-0.5 font-medium text-td-ink">
               {product_name(@products_by_id, @receive_batch.product_id)}
             </dd>
           </div>

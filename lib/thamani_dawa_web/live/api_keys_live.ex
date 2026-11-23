@@ -404,7 +404,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
           id="keys-onboarding-continue"
           type="button"
           phx-click="continue_onboarding"
-          class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg"
+          class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
         >
           Continue <.icon name="hero-arrow-right" class="ml-3 size-4" />
         </button>
@@ -430,17 +430,15 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
       current_path={@current_path}
     >
       <div class="space-y-5">
-        <.header icon="hero-key">
-          API keys
-          <:subtitle>
-            Credentials this organization uses with PPB Track &amp; Trace and GS1.
-          </:subtitle>
-        </.header>
+        <.td_page_header
+          title="API keys"
+          subtitle="Credentials this organization uses with PPB Track & Trace and GS1."
+        />
 
         <section
           id="epcis-api-key-settings"
           class={[
-            "rounded-2xl border bg-white p-5 sm:p-6",
+            "rounded-2xl border bg-td-surface p-5 sm:p-6",
             if(@keys_needed?, do: "border-thamani-forest", else: "border-thamani-frosted")
           ]}
         >
@@ -483,7 +481,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
 
         <section
           id="gs1-api-key-settings"
-          class="rounded-2xl border border-thamani-frosted bg-white p-5 sm:p-6"
+          class="rounded-2xl border border-thamani-frosted bg-td-surface p-5 sm:p-6"
         >
           <div class="max-w-2xl">
             <h2 class="text-base font-semibold text-thamani-forest">GS1 API key</h2>

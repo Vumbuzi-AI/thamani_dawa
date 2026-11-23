@@ -16,7 +16,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
   alias ThamaniDawa.Repo
 
   defp stat_value(html, label) do
-    [_, value] = Regex.run(~r/#{Regex.escape(label)}.*?dashboard-stat-tile-value">(\d+)</s, html)
+    [_, value] = Regex.run(~r/#{Regex.escape(label)}.*?td-stat-value">(\d+)</s, html)
     value
   end
 

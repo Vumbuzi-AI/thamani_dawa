@@ -442,14 +442,14 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         <div class="flex items-start justify-between gap-4">
           <div class="min-w-0">
             <div class="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-              <h1 class="text-xl font-semibold tracking-tight text-slate-900 sm:text-3xl">
+              <h1 class="text-xl font-semibold tracking-tight text-td-ink sm:text-3xl">
                 {@site.name}
               </h1>
-              <span class="px-3 py-1 text-xs font-medium bg-thamani-lime text-thamani-forest rounded-full border border-thamani-forest/10 capitalize">
+              <span class="px-3 py-1 text-xs font-medium bg-td-accent-tint text-thamani-forest rounded-full border border-thamani-forest/10 capitalize">
                 {activity_labels(@site)}
               </span>
             </div>
-            <p class="text-xs sm:text-sm text-slate-500 font-normal mt-1.5">
+            <p class="text-xs sm:text-sm text-td-ink-2 font-normal mt-1.5">
               {@site.address || "No address specified"} · {format_range_dates(@dates)}
             </p>
           </div>
@@ -554,7 +554,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
                       <p class="text-xs text-thamani-pewter truncate">{item.subtitle}</p>
                     </div>
                   </div>
-                  <span class="px-2.5 py-1 text-xs font-medium bg-thamani-lime text-thamani-forest rounded-full shrink-0">
+                  <span class="px-2.5 py-1 text-xs font-medium bg-td-accent-tint text-thamani-forest rounded-full shrink-0">
                     {item.badge}
                   </span>
                 </div>
@@ -573,7 +573,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           <button
             type="button"
             phx-click="toggle_filters"
-            class="inline-flex h-[42px] w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full bg-thamani-forest px-5 text-sm font-normal text-thamani-snow transition-colors hover:opacity-90 min-[480px]:w-auto"
+            class="inline-flex h-[42px] w-full shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full bg-thamani-forest px-5 text-sm font-normal text-thamani-on-accent transition-colors hover:opacity-90 min-[480px]:w-auto"
           >
             <.icon name="hero-adjustments-horizontal" class="size-4" /> Filters
           </button>
@@ -632,17 +632,17 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
               </div>
             </div>
 
-            <div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+            <div class="flex items-center justify-end gap-3 border-t border-td-wash pt-4">
               <button
                 type="button"
                 phx-click="clear_filters"
-                class="px-4 py-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer"
+                class="px-4 py-2 text-xs sm:text-sm font-medium text-td-ink-2 hover:text-td-ink border border-td-hairline rounded-xl hover:bg-td-wash transition-colors cursor-pointer"
               >
                 Clear filters
               </button>
               <button
                 type="submit"
-                class="px-5 py-2 text-xs sm:text-sm font-medium text-thamani-snow bg-thamani-forest hover:opacity-90 rounded-full transition-colors cursor-pointer"
+                class="px-5 py-2 text-xs sm:text-sm font-medium text-thamani-on-accent bg-thamani-forest hover:opacity-90 rounded-full transition-colors cursor-pointer"
               >
                 Apply filters
               </button>

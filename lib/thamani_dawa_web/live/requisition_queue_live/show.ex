@@ -71,7 +71,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Show do
         </:actions>
       </.header>
 
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6">
+      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Status</dt>
@@ -132,7 +132,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Show do
         </div>
       </section>
 
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6">
+      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-subtle">Items</h2>
 
         <%= if @requisition.lines == [] do %>

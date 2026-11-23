@@ -171,7 +171,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
         <section class="rounded-2xl ff-surface-card p-5 sm:p-6">
           <%= if @pending_payment do %>
             <div id="distributor-payment-pending" class="py-6 text-center">
-              <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-thamani-lime">
+              <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-td-accent-tint">
                 <.icon
                   name={
                     if @pending_payment.method == "manual",
@@ -216,7 +216,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
                     class={[
                       "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors duration-150",
                       if(@params["method"] == value,
-                        do: "border-thamani-forest bg-thamani-lime/40 text-thamani-forest",
+                        do: "border-thamani-forest bg-td-accent-tint text-thamani-forest",
                         else: "border-thamani-stone hover:border-thamani-forest/40"
                       )
                     ]}

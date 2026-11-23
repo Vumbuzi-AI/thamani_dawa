@@ -85,7 +85,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         </:actions>
       </.header>
 
-      <div class="mt-6 flex gap-3 rounded-2xl border border-thamani-stone bg-white p-3">
+      <div class="mt-6 flex gap-3 rounded-2xl border border-thamani-stone bg-td-surface p-3">
         <form id="manufacturer-serial-search" phx-change="search" class="flex-1">
           <.input
             type="search"
@@ -113,13 +113,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             class={[
               "block rounded-2xl border p-4 transition",
               @selected_batch && @selected_batch.id == batch.id &&
-                "border-thamani-forest bg-thamani-mist",
+                "border-thamani-forest bg-td-wash",
               (!@selected_batch || @selected_batch.id != batch.id) &&
-                "border-thamani-stone bg-white hover:border-thamani-sage"
+                "border-thamani-stone bg-td-surface hover:border-td-hairline"
             ]}
           >
             <div class="flex items-start justify-between gap-3">
-              <span class="font-semibold text-thamani-forest">Batch {batch.batch_no}</span><span class="rounded-full bg-white px-2 py-1 text-xs font-bold text-thamani-forest">{count}</span>
+              <span class="font-semibold text-thamani-forest">Batch {batch.batch_no}</span><span class="rounded-full bg-td-surface px-2 py-1 text-xs font-bold text-thamani-forest">{count}</span>
             </div>
             <dl class="mt-3 space-y-1 text-xs text-thamani-pewter">
               <div class="flex justify-between">
@@ -134,7 +134,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         <section
           :if={@selected_batch}
           id="selected-serial-batch"
-          class="rounded-2xl border border-thamani-stone bg-white p-5 shadow-sm"
+          class="rounded-2xl border border-thamani-stone bg-td-surface p-5 shadow-sm"
         >
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -156,14 +156,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             <article
               :for={serial <- @serial_page.entries}
               id={"manufacturer-serial-#{serial.id}"}
-              class="rounded-xl border border-thamani-stone bg-thamani-snow p-4"
+              class="rounded-xl border border-thamani-stone bg-thamani-surface p-4"
             >
               <canvas
                 id={"serial-datamatrix-#{serial.id}"}
                 phx-hook="DataMatrix"
                 phx-update="ignore"
                 data-gs1-text={gs1_text(@product, @selected_batch, serial)}
-                class="mx-auto size-32 bg-white"
+                class="mx-auto size-32 bg-td-surface"
               ></canvas>
               <p class="mt-3 truncate text-center font-mono text-xs text-thamani-forest">
                 {serial.serial}
@@ -177,7 +177,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                 data-gs1-text={gs1_text(@product, @selected_batch, serial)}
                 data-gtin={@product.gtin}
                 data-batch={@selected_batch.batch_no}
-                class="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-thamani-stone bg-white px-3 py-2 text-xs font-semibold text-thamani-forest transition hover:bg-thamani-mist"
+                class="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-thamani-stone bg-td-surface px-3 py-2 text-xs font-semibold text-thamani-forest transition hover:bg-td-wash"
               ><.icon name="hero-arrow-down-tray" class="size-4" /> SVG</button>
             </article>
           </div>

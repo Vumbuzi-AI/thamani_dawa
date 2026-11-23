@@ -324,7 +324,7 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
 
       lv |> element("#cash-tender-50") |> render_click()
 
-      assert has_element?(lv, "#cash-tender-50[aria-pressed='true'].bg-thamani-lime")
+      assert has_element?(lv, "#cash-tender-50[aria-pressed='true'].ring-thamani-forest")
       refute has_element?(lv, "#cash-tender-exact[aria-pressed='true']")
     end
 

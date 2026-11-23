@@ -116,19 +116,21 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :class, :any, default: nil
 
   attr :variant, :string,
-    values: ~w(primary ghost ghost-edit ghost-delete destructive),
+    values: ~w(primary ghost ghost-edit ghost-delete destructive danger-confirm),
     default: "ghost"
 
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
+    # One button implementation: map the legacy variants onto the TD kit
+    # (Doop TD Button nvEn_C--z3): ghost/ghost-edit -> secondary,
+    # ghost-delete/destructive -> danger.
     base =
       case assigns[:variant] do
-        "primary" -> "thamani-btn-primary"
-        "ghost-edit" -> "thamani-btn-ghost-edit"
-        "ghost-delete" -> "thamani-btn-ghost-delete"
-        "destructive" -> "thamani-btn-destructive"
-        _ -> "thamani-btn-ghost"
+        "primary" -> "td-btn is-primary is-md"
+        v when v in ["ghost-delete", "destructive"] -> "td-btn is-danger is-md"
+        "danger-confirm" -> "td-btn is-danger-confirm is-md"
+        _ -> "td-btn is-secondary is-md"
       end
 
     # Merge any caller-supplied class onto the variant base rather than
@@ -255,6 +257,36 @@ defmodule ThamaniDawaWeb.CoreComponents do
     |> input()
   end
 
+  # Every date field in the app is the TD date picker; the browser's native
+  # calendar is never rendered.
+  def input(%{type: "date"} = assigns) do
+    rest = assigns.rest
+
+    assigns =
+      assigns
+      |> assign(:dp_required, !!rest[:required])
+      |> assign(:dp_disabled, !!rest[:disabled])
+      |> assign(:dp_max, rest[:max] && to_string(rest[:max]))
+      |> assign(:dp_min, rest[:min] && to_string(rest[:min]))
+      |> assign(:dp_placeholder, rest[:placeholder] || "Choose a date")
+
+    ~H"""
+    <.date_picker
+      id={@id}
+      name={@name}
+      label={@label}
+      value={assigns[:value]}
+      errors={@errors}
+      required={@dp_required}
+      disabled={@dp_disabled}
+      max={@dp_max}
+      min={@dp_min}
+      placeholder={@dp_placeholder}
+      class={@class}
+    />
+    """
+  end
+
   def input(%{type: "hidden"} = assigns) do
     ~H"""
     <input type="hidden" id={assigns[:id]} name={@name} value={assigns[:value]} {@rest} />
@@ -317,7 +349,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #C21F17; margin-left: 2px;"
+            style="color: var(--color-td-danger); margin-left: 2px;"
           >*</span>
         </span>
       </label>
@@ -354,45 +386,35 @@ defmodule ThamaniDawaWeb.CoreComponents do
           aria-expanded="false"
           disabled={@rest[:disabled]}
           class={[
-            "w-full flex items-center justify-between gap-2 px-3 py-[9px] text-left rounded-lg",
-            "border-2 bg-thamani-snow text-sm transition-colors cursor-pointer select-none",
-            "focus:outline-none",
-            @errors != [] && (@error_class || "border-red-600"),
-            @errors == [] &&
-              "border-[#bfceb7] hover:border-thamani-forest/50 focus:border-thamani-forest",
+            "td-select-trigger",
+            @errors != [] && (@error_class || "is-error"),
             @rest[:disabled] && "cursor-not-allowed opacity-60",
             @class
           ]}
         >
-          <span data-cs-display class="truncate" style="color: #707371;">{@prompt || "Select..."}</span>
+          <span data-cs-display class="truncate">{@prompt || "Select..."}</span>
           <svg
             data-cs-chevron
             xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            class="size-4 shrink-0 transition-transform duration-150 text-thamani-pewter"
+            viewBox="0 0 256 256"
+            class="size-4 shrink-0 transition-transform duration-150"
             aria-hidden="true"
-          ><path d="M6 9l6 6 6-6" /></svg>
+          ><path fill="currentColor" d="m213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80a8 8 0 0 1 11.32-11.32L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32" /></svg>
         </button>
         <div
           data-cs-dropdown
           role="listbox"
-          class="absolute z-[70] w-full mt-1 rounded-xl overflow-hidden hidden ff-surface-popover"
+          class="td-select-pop hidden"
         >
-          <div class="px-2 pt-2 pb-1.5 border-b border-thamani-stone/50">
+          <div class="td-select-pop-search">
             <input
               data-cs-search
               type="text"
               placeholder="Search…"
               autocomplete="off"
-              class="w-full px-2.5 py-1.5 text-sm rounded-lg bg-thamani-stone/40 border-0 outline-none placeholder:text-thamani-pewter/50 text-thamani-forest"
             />
           </div>
-          <div data-cs-list class="max-h-52 overflow-y-auto py-1"></div>
+          <div data-cs-list class="td-select-pop-list"></div>
         </div>
       </div>
       <.error :for={msg <- @errors}>{msg}</.error>
@@ -451,7 +473,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             if (filtered.length === 0) {
               const empty = document.createElement("div")
               empty.textContent = "No matches"
-              empty.style.cssText = "padding:8px 12px;font-size:13px;color:#9ba89e;text-align:center;"
+              empty.style.cssText = "padding:8px 12px;font-size:13px;color:var(--color-td-ink-3);text-align:center;"
               this.list.appendChild(empty)
               return
             }
@@ -465,14 +487,15 @@ defmodule ThamaniDawaWeb.CoreComponents do
             b.dataset.csVal = val
             b.textContent = label
             b.tabIndex = 0
-            b.style.cssText = "display:block;width:100%;text-align:left;padding:8px 12px;font-size:14px;cursor:pointer;background:transparent;border:0;transition:background 80ms;outline:none;"
+            b.className = "td-select-opt"
+            b.style.cssText = "background:transparent;"
             if (active) {
-              b.style.background = "#aff0d3"
-              b.style.color = "#17302a"
+              b.style.background = "var(--color-td-hover)"
+              b.style.color = "var(--color-td-ink)"
               b.style.fontWeight = "500"
             } else {
-              b.style.color = isPrompt ? "#707371" : "#17302a"
-              b.onmouseenter = () => { b.style.background = "#eeece5" }
+              b.style.color = isPrompt ? "var(--color-td-ink-2)" : "var(--color-td-ink)"
+              b.onmouseenter = () => { b.style.background = "var(--color-td-hover)" }
               b.onmouseleave = () => { b.style.background = "transparent" }
             }
             b.addEventListener("mousedown", (e) => { e.preventDefault() })
@@ -503,10 +526,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
             const match = this.opts().find(([, v]) => String(v) === val)
             if (match) {
               this.display.textContent = match[0]
-              this.display.style.color = "#17302a"
+              this.display.style.color = "var(--color-td-ink)"
             } else {
               this.display.textContent = this.prompt() || "Select..."
-              this.display.style.color = "#707371"
+              this.display.style.color = "var(--color-td-ink-3)"
             }
           },
           toggle() { this.dropdown.classList.contains("hidden") ? this.open() : this.close() },
@@ -514,6 +537,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
             if (this.search) this.search.value = ""
             this.renderList("")
             this.dropdown.classList.remove("hidden")
+            // Flip above the trigger when the viewport has no room below
+            // (selects near a modal footer or the bottom of the screen).
+            this.dropdown.classList.remove("is-up")
+            const r = this.trigger.getBoundingClientRect()
+            const h = this.dropdown.offsetHeight
+            if (window.innerHeight - r.bottom < h + 12 && r.top > h + 12) this.dropdown.classList.add("is-up")
             this.trigger.setAttribute("aria-expanded", "true")
             if (this.chevron) this.chevron.style.transform = "rotate(180deg)"
             setTimeout(() => { if (this.search) this.search.focus() }, 10)
@@ -548,7 +577,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #C21F17; margin-left: 2px;"
+            style="color: var(--color-td-danger); margin-left: 2px;"
           >*</span>
         </span>
       </label>
@@ -575,9 +604,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
         <div
           data-cb-dropdown
           role="listbox"
-          class="absolute z-[70] w-full mt-1 rounded-xl overflow-hidden hidden ff-surface-popover"
+          class="td-select-pop hidden"
         >
-          <div data-cb-list class="max-h-56 overflow-y-auto py-1"></div>
+          <div data-cb-list class="td-select-pop-list"></div>
         </div>
       </div>
       <.error :for={msg <- @errors}>{msg}</.error>
@@ -616,7 +645,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               if (q !== "") {
                 const empty = document.createElement("div")
                 empty.textContent = "No matches. Press Enter to add"
-                empty.style.cssText = "padding:8px 12px;font-size:13px;color:#9ba89e;text-align:center;"
+                empty.style.cssText = "padding:8px 12px;font-size:13px;color:var(--color-td-ink-3);text-align:center;"
                 this.list.appendChild(empty)
                 this.open()
               } else {
@@ -631,8 +660,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
               b.dataset.cbVal = val
               b.textContent = label
               b.tabIndex = 0
-              b.style.cssText = "display:block;width:100%;text-align:left;padding:8px 12px;font-size:14px;cursor:pointer;background:transparent;border:0;color:#17302a;transition:background 80ms;outline:none;"
-              b.onmouseenter = () => { b.style.background = "#eeece5" }
+              b.style.cssText = "display:block;width:100%;text-align:left;padding:8px 12px;font-size:14px;cursor:pointer;background:transparent;border:0;color:var(--color-td-accent);transition:background 80ms;outline:none;"
+              b.onmouseenter = () => { b.style.background = "var(--color-td-hover)" }
               b.onmouseleave = () => { b.style.background = "transparent" }
               b.addEventListener("mousedown", (e) => { e.preventDefault() })
               b.addEventListener("click", () => {
@@ -674,7 +703,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #C21F17; margin-left: 2px;"
+            style="color: var(--color-td-danger); margin-left: 2px;"
           >*</span>
         </span>
         <textarea
@@ -705,7 +734,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           {@label}<span
             :if={@rest[:required]}
             aria-hidden="true"
-            style="color: #C21F17; margin-left: 2px;"
+            style="color: var(--color-td-danger); margin-left: 2px;"
           >*</span>
         </span>
         <input
@@ -751,15 +780,28 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   @doc """
-  A Thamani-styled date picker: a pill-shaped trigger that opens a flat,
-  shadowless calendar popover (Snow White surface, Forest Depths ink, Lime
-  Pulse accents). Writes the selected date as an ISO-8601 string into a hidden
-  input, so it works inside a `<.form>` exactly like `<.input type="date">`.
+  The one date field for the whole app (Doop TD DatePicker anatomy): a 32px
+  TD trigger showing `23 Nov 2026`, and a month calendar popover with Phosphor
+  carets, today and selected states, and Clear / Today text actions. The value
+  is submitted as ISO `yyyy-mm-dd` in a hidden input, so changesets, `phx-change`
+  and `phx-submit` keep working unchanged. `<.input>` and `<.td_input>` with the
+  date type render this component too, so the browser's native calendar never
+  appears (guarded by `NoNativeDateInputsTest`).
+
+  Keyboard: Enter, Space or ArrowDown on the trigger opens it; arrows move a day
+  or a week, PageUp/PageDown a month (Shift for a year), Home/End the week,
+  Enter selects, Escape closes and returns focus to the trigger.
+
+  The popover is absolutely positioned inside the field (like `.td-select-pop`),
+  flips above the trigger when there is no room below, and sits in the layer
+  above modal content, so it is never clipped inside a modal. All visuals come
+  from `--td-dp-*` custom properties in `app.css`.
 
   ## Examples
 
   ```heex
   <.date_picker field={@patient_form[:date_of_birth]} label="Date of birth" max="today" />
+  <.date_picker field={@form[:expiry_date]} label="Expiry date" min="today" />
   ```
   """
   attr :id, :any, default: nil
@@ -768,15 +810,21 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :value, :any, default: nil
   attr :placeholder, :string, default: "Choose a date"
   attr :required, :boolean, default: false
+  attr :disabled, :boolean, default: false
 
   attr :max, :string,
     default: nil,
-    doc: ~S(pass "today" to disable future dates — useful for dates of birth)
+    doc: ~S(latest selectable date: "today" or an ISO date)
+
+  attr :min, :string,
+    default: nil,
+    doc: ~S(earliest selectable date: "today" or an ISO date)
 
   attr :align, :string,
     default: "left",
-    doc: "alignment of date picker popover relative to trigger button: 'left' or 'right'"
+    doc: "popover alignment relative to the trigger: 'left' or 'right'"
 
+  attr :class, :any, default: nil
   attr :errors, :list, default: []
   attr :field, Phoenix.HTML.FormField, doc: "a form field struct, e.g. @form[:date_of_birth]"
 
@@ -796,20 +844,32 @@ defmodule ThamaniDawaWeb.CoreComponents do
       assigns
       |> ensure_id("dp")
       |> assign_new(:max, fn -> nil end)
+      |> assign_new(:min, fn -> nil end)
       |> assign_new(:label, fn -> nil end)
       |> assign_new(:required, fn -> false end)
-      |> assign_new(:placeholder, fn -> nil end)
+      |> assign_new(:disabled, fn -> false end)
+      |> assign_new(:placeholder, fn -> "Choose a date" end)
       |> assign_new(:errors, fn -> [] end)
       |> assign_new(:name, fn -> nil end)
+      |> assign_new(:class, fn -> nil end)
+      |> assign_new(:align, fn -> "left" end)
       |> assign(:iso_value, date_iso(assigns[:value]))
 
+    assigns = assign(assigns, :display, display_date(assigns.iso_value))
+
     ~H"""
-    <div id={"#{@id}-dp"} class="mb-3 relative" phx-hook=".DatePicker" data-max={@max}>
-      <label :if={@label} for={@id} class="thamani-label">
+    <div
+      id={"#{@id}-dp"}
+      class={["td-dp", @align == "right" && "is-right", @errors != [] && "is-error", @class]}
+      phx-hook=".DatePicker"
+      data-max={@max}
+      data-min={@min}
+    >
+      <label :if={@label} for={"#{@id}-trigger"} class="thamani-label">
         {@label}<span
           :if={@required}
           aria-hidden="true"
-          style="color: #b91c1c; margin-left: 2px;"
+          style="color: var(--color-td-danger); margin-left: 2px;"
         >*</span>
       </label>
 
@@ -819,36 +879,42 @@ defmodule ThamaniDawaWeb.CoreComponents do
         id={@id}
         value={@iso_value}
         data-dp-input
-        class="hidden"
-        style="display: none !important;"
+        required={@required}
+        tabindex="-1"
+        aria-hidden="true"
+        class="td-dp-value"
       />
 
       <button
         type="button"
+        id={"#{@id}-trigger"}
         data-dp-trigger
-        class={[
-          "thamani-input w-full flex items-center justify-between gap-2 text-left cursor-pointer",
-          @errors != [] && "border-red-600"
-        ]}
+        class="td-dp-trigger"
+        aria-haspopup="dialog"
+        aria-expanded="false"
+        aria-controls={"#{@id}-dp-pop"}
+        aria-invalid={@errors != [] && "true"}
+        disabled={@disabled}
       >
-        <span data-dp-display data-placeholder={@placeholder}>
-          {display_date(@iso_value) || @placeholder}
+        <span
+          data-dp-display
+          data-placeholder={@placeholder}
+          class={["td-dp-display", is_nil(@display) && "is-placeholder"]}
+        >
+          {@display || @placeholder}
         </span>
-        <span style="color: var(--thamani-pewter);">
-          <.icon name="hero-calendar-days" class="size-4 shrink-0" />
-        </span>
+        <ThamaniDawaWeb.TDComponents.td_icon name="calendar-blank" class="td-dp-icon" />
       </button>
 
       <div
         data-dp-pop
         id={"#{@id}-dp-pop"}
+        class="td-dp-pop"
+        role="dialog"
+        aria-modal="false"
+        aria-label={if @label, do: "Choose #{String.downcase(@label)}", else: "Choose a date"}
         phx-update="ignore"
         hidden
-        class={[
-          "absolute top-full z-[60] mt-1.5 w-72 p-3.5 rounded-2xl ff-surface-popover",
-          Map.get(assigns, :align, "left") == "right" && "right-0",
-          Map.get(assigns, :align, "left") != "right" && "left-0"
-        ]}
       >
       </div>
 
@@ -856,221 +922,235 @@ defmodule ThamaniDawaWeb.CoreComponents do
     </div>
 
     <script :type={Phoenix.LiveView.ColocatedHook} name=".DatePicker">
-        const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
-      const DOW = ["S","M","T","W","T","F","S"]
+      const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
+      const SHORT = MONTHS.map(m => m.slice(0, 3))
+      const DOW = ["Mo","Tu","We","Th","Fr","Sa","Su"]
+      const CARET_L = '<svg aria-hidden="true" viewBox="0 0 256 256" width="14" height="14"><path fill="currentColor" d="M165.66 202.34a8 8 0 0 1-11.32 11.32l-80-80a8 8 0 0 1 0-11.32l80-80a8 8 0 0 1 11.32 11.32L91.31 128Z"/></svg>'
+      const CARET_R = '<svg aria-hidden="true" viewBox="0 0 256 256" width="14" height="14"><path fill="currentColor" d="m181.66 133.66l-80 80a8 8 0 0 1-11.32-11.32L164.69 128L90.34 53.66a8 8 0 0 1 11.32-11.32l80 80a8 8 0 0 1 0 11.32"/></svg>'
+      const CARET_D = '<svg aria-hidden="true" viewBox="0 0 256 256" width="12" height="12"><path fill="currentColor" d="m213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80a8 8 0 0 1 11.32-11.32L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32"/></svg>'
+
+      const sameDay = (a, b) => a && b && a.getTime() === b.getTime()
+      const parseIso = (v) => {
+        if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null
+        const [y, m, d] = v.split("-").map(Number)
+        return new Date(y, m - 1, d)
+      }
 
       export default {
         mounted() { this.setup() },
         updated() { this.syncFromInput() },
         destroyed() {
-          document.removeEventListener("click", this.onDocClick)
-          document.removeEventListener("keydown", this.onKey)
+          document.removeEventListener("click", this.onDocClick, true)
         },
-        minYear() { return this.today.getFullYear() - 120 },
-        maxYear() { return this.max ? this.max.getFullYear() : this.today.getFullYear() + 10 },
         setup() {
           this.input = this.el.querySelector("[data-dp-input]")
           this.trigger = this.el.querySelector("[data-dp-trigger]")
           this.display = this.el.querySelector("[data-dp-display]")
           this.pop = this.el.querySelector("[data-dp-pop]")
-          this.today = new Date(); this.today.setHours(0,0,0,0)
-          this.max = this.el.dataset.max === "today" ? this.today : null
+          this.today = new Date(); this.today.setHours(0, 0, 0, 0)
+          this.readBounds()
           this.parseValue()
-          this.onTrigger = (e) => { e.preventDefault(); e.stopPropagation(); this.toggle() }
-          this.onDocClick = (e) => { if (!this.el.contains(e.target) && !this.pop.contains(e.target)) this.close() }
-          this.onKey = (e) => { if (e.key === "Escape") this.close() }
-          this.onPopClick = (e) => this.handlePopClick(e)
-
-          this.trigger.addEventListener("click", this.onTrigger)
-          this.pop.addEventListener("click", this.onPopClick)
-          document.addEventListener("click", this.onDocClick)
-          document.addEventListener("keydown", this.onKey)
+          this.onDocClick = (e) => { if (!this.el.contains(e.target)) this.close(false) }
+          this.trigger.addEventListener("click", (e) => { e.preventDefault(); this.toggle() })
+          this.trigger.addEventListener("keydown", (e) => {
+            if (e.key === "ArrowDown" || ((e.key === "Enter" || e.key === " ") && this.isClosed())) {
+              e.preventDefault(); this.open()
+            }
+          })
+          this.pop.addEventListener("click", (e) => this.handleClick(e))
+          this.pop.addEventListener("keydown", (e) => this.handleKey(e))
+          document.addEventListener("click", this.onDocClick, true)
+        },
+        readBounds() {
+          const b = (v) => v === "today" ? this.today : parseIso(v)
+          this.max = b(this.el.dataset.max)
+          this.min = b(this.el.dataset.min)
         },
         syncFromInput() {
           this.input = this.el.querySelector("[data-dp-input]")
           this.display = this.el.querySelector("[data-dp-display]")
+          this.trigger = this.el.querySelector("[data-dp-trigger]")
+          this.readBounds()
           this.parseValue()
-          this.renderDisplay()
+          if (!this.isClosed()) this.trigger.setAttribute("aria-expanded", "true")
         },
         parseValue() {
-          const v = this.input ? this.input.value : ""
-          if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
-            const [y,m,d] = v.split("-").map(Number)
-            this.selected = new Date(y, m-1, d)
-          } else {
-            this.selected = null
-          }
+          this.selected = parseIso(this.input ? this.input.value : "")
           this.renderDisplay()
         },
         iso(date) {
-          const y = date.getFullYear()
-          const m = String(date.getMonth()+1).padStart(2,"0")
-          const d = String(date.getDate()).padStart(2,"0")
-          return `${y}-${m}-${d}`
+          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
         },
-        fmt(date) {
-          return date.toLocaleDateString(undefined, {day:"numeric", month:"short", year:"numeric"})
-        },
+        fmt(date) { return `${date.getDate()} ${SHORT[date.getMonth()]} ${date.getFullYear()}` },
         renderDisplay() {
           if (!this.display) return
-          if (this.selected) {
-            this.display.textContent = this.fmt(this.selected)
-            this.display.style.color = "var(--color-base-content)"
-          } else {
-            this.display.textContent = this.display.dataset.placeholder || "Choose a date"
-            this.display.style.color = "var(--thamani-pewter)"
-          }
+          const has = !!this.selected
+          this.display.textContent = has ? this.fmt(this.selected) : (this.display.dataset.placeholder || "Choose a date")
+          this.display.classList.toggle("is-placeholder", !has)
         },
-        toggle() { this.pop.hasAttribute("hidden") ? this.open() : this.close() },
+        disabledDay(d) {
+          return (this.max && d.getTime() > this.max.getTime()) || (this.min && d.getTime() < this.min.getTime())
+        },
+        isClosed() { return this.pop.hasAttribute("hidden") },
+        toggle() { this.isClosed() ? this.open() : this.close(true) },
         open() {
-          const base = this.selected || this.today
-          this.viewYear = base.getFullYear()
-          this.viewMonth = base.getMonth()
+          this.focusDate = new Date((this.selected || this.clampToBounds(this.today)).getTime())
           this.mode = "days"
-          const css = `
-            [data-dp-body] button { transition: background 120ms ease; }
-            [data-dp-body] button[data-dp-day]:not(:disabled):hover,
-            [data-dp-body] button[data-dp-month]:not(:disabled):hover,
-            [data-dp-body] button[data-dp-year]:hover,
-            [data-dp-body] button[data-dp-nav]:hover,
-            [data-dp-body] button[data-dp-open]:hover { background: var(--thamani-stone); }`
-          this.pop.innerHTML = `<style>${css}</style><div data-dp-body></div>`
-          this.body = this.pop.querySelector("[data-dp-body]")
-          this.renderCalendar()
+          this.render()
           this.pop.removeAttribute("hidden")
+          this.el.classList.add("is-open")
+          this.trigger.setAttribute("aria-expanded", "true")
+          this.place()
+          this.focusActive()
         },
-        close() { this.pop.setAttribute("hidden", "") },
-        handlePopClick(e) {
-          e.stopPropagation()
-          const nav = e.target.closest("[data-dp-nav]")
-          if (nav) {
-            e.preventDefault()
-            this.viewMonth += parseInt(nav.dataset.dpNav, 10)
-            if (this.viewMonth < 0) { this.viewMonth = 11; this.viewYear-- }
-            if (this.viewMonth > 11) { this.viewMonth = 0; this.viewYear++ }
-            this.renderCalendar()
-            return
-          }
-          const open = e.target.closest("[data-dp-open]")
-          if (open) {
-            e.preventDefault()
-            this.mode = open.dataset.dpOpen
-            this.renderCalendar()
-            return
-          }
-          const yr = e.target.closest("[data-dp-year]")
-          if (yr && !yr.disabled) {
-            e.preventDefault()
-            this.viewYear = parseInt(yr.dataset.dpYear, 10)
-            if (this.viewMonth > this.maxMonthFor(this.viewYear)) this.viewMonth = this.maxMonthFor(this.viewYear)
-            this.mode = "days"
-            this.renderCalendar()
-            return
-          }
-          const mo = e.target.closest("[data-dp-month]")
-          if (mo && !mo.disabled) {
-            e.preventDefault()
-            this.viewMonth = parseInt(mo.dataset.dpMonth, 10)
-            this.mode = "days"
-            this.renderCalendar()
-            return
-          }
-          const day = e.target.closest("[data-dp-day]")
-          if (day && !day.disabled) {
-            e.preventDefault()
-            this.selected = new Date(this.viewYear, this.viewMonth, parseInt(day.dataset.dpDay, 10))
-            this.input.value = this.iso(this.selected)
-            this.input.dispatchEvent(new Event("input", {bubbles: true}))
-            this.input.dispatchEvent(new Event("change", {bubbles: true}))
-            this.renderDisplay()
-            this.close()
-          }
+        close(returnFocus) {
+          if (this.isClosed()) return
+          this.pop.setAttribute("hidden", "")
+          this.el.classList.remove("is-open", "is-up")
+          this.trigger.setAttribute("aria-expanded", "false")
+          if (returnFocus) this.trigger.focus()
         },
-        maxMonthFor(year) {
-          return (this.max && year === this.max.getFullYear()) ? this.max.getMonth() : 11
+        clampToBounds(d) {
+          if (this.max && d > this.max) return new Date(this.max.getTime())
+          if (this.min && d < this.min) return new Date(this.min.getTime())
+          return d
         },
-        renderCalendar() {
-          if (this.mode === "years") return this.renderYears()
+        // Flip above the trigger when the viewport has no room below (same rule as .td-select-pop).
+        place() {
+          this.el.classList.remove("is-up")
+          const t = this.trigger.getBoundingClientRect()
+          const h = this.pop.offsetHeight
+          if (t.bottom + h + 8 > window.innerHeight && t.top - h - 8 > 0) this.el.classList.add("is-up")
+        },
+        choose(d) {
+          if (d && this.disabledDay(d)) return
+          this.selected = d
+          this.input.value = d ? this.iso(d) : ""
+          this.input.dispatchEvent(new Event("input", { bubbles: true }))
+          this.input.dispatchEvent(new Event("change", { bubbles: true }))
+          this.renderDisplay()
+          this.close(true)
+        },
+        shift(days, months) {
+          const d = new Date(this.focusDate.getTime())
+          if (months) {
+            const day = d.getDate()
+            d.setDate(1); d.setMonth(d.getMonth() + months)
+            d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()))
+          }
+          if (days) d.setDate(d.getDate() + days)
+          this.focusDate = d
+          this.render(); this.focusActive()
+        },
+        handleKey(e) {
+          if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); this.close(true); return }
+          if (this.mode !== "days" || !e.target.matches("[data-dp-day]")) return
+          const dow = (this.focusDate.getDay() + 6) % 7
+          const map = {
+            ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [-7, 0], ArrowDown: [7, 0],
+            Home: [-dow, 0], End: [6 - dow, 0],
+            PageUp: [0, e.shiftKey ? -12 : -1], PageDown: [0, e.shiftKey ? 12 : 1]
+          }
+          if (map[e.key]) { e.preventDefault(); this.shift(...map[e.key]); return }
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this.choose(new Date(this.focusDate.getTime())) }
+        },
+        handleClick(e) {
+          const t = e.target.closest("button")
+          if (!t || t.disabled) return
+          e.preventDefault()
+          const a = t.dataset
+          if (a.dpNav) {
+            const n = parseInt(a.dpNav, 10)
+            if (this.mode === "days") return this.shift(0, n)
+            this.focusDate.setFullYear(this.focusDate.getFullYear() + n * (this.mode === "years" ? 12 : 1))
+            return this.render()
+          }
+          if (a.dpView) { this.mode = a.dpView; this.render(); return this.focusActive() }
+          if (a.dpMonth) {
+            this.focusDate = new Date(this.focusDate.getFullYear(), parseInt(a.dpMonth, 10), 1)
+            this.mode = "days"; this.render(); return this.focusActive()
+          }
+          if (a.dpYear) {
+            this.focusDate = new Date(parseInt(a.dpYear, 10), this.focusDate.getMonth(), 1)
+            this.mode = "months"; this.render(); return this.focusActive()
+          }
+          if (a.dpDay) return this.choose(parseIso(a.dpDay))
+          if (a.dpAction === "today") return this.choose(new Date(this.today.getTime()))
+          if (a.dpAction === "clear") return this.choose(null)
+        },
+        focusActive() {
+          const el = this.pop.querySelector('[tabindex="0"]')
+          if (el) el.focus({ preventScroll: true })
+        },
+        header(label, view, prevLabel, nextLabel) {
+          return `<div class="td-dp-hd">
+              <button type="button" class="td-dp-title" data-dp-view="${view}" aria-live="polite">${label}${CARET_D}</button>
+              <span class="td-dp-nv">
+                <button type="button" class="td-dp-nb" data-dp-nav="-1" aria-label="${prevLabel}">${CARET_L}</button>
+                <button type="button" class="td-dp-nb" data-dp-nav="1" aria-label="${nextLabel}">${CARET_R}</button>
+              </span>
+            </div>`
+        },
+        footer() {
+          const todayOff = this.disabledDay(this.today)
+          return `<div class="td-dp-ft">
+              <button type="button" class="td-dp-text" data-dp-action="clear" ${this.selected ? "" : "disabled"}>Clear</button>
+              <button type="button" class="td-dp-text" data-dp-action="today" ${todayOff ? "disabled" : ""}>Today</button>
+            </div>`
+        },
+        render() {
           if (this.mode === "months") return this.renderMonths()
+          if (this.mode === "years") return this.renderYears()
           this.renderDays()
         },
-        listHeader(label) {
-          const back = "width:32px;height:32px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:18px;"
-          return `<div style="display:flex;align-items:center;gap:4px;margin-bottom:12px;">
-              <button type="button" data-dp-open="days" aria-label="Back to days" style="${back}">&#8249;</button>
-              <span style="flex:1;text-align:center;font-size:14px;font-weight:600;color:var(--thamani-forest);">${label}</span>
-              <span style="width:32px;"></span>
-            </div>`
-        },
         renderDays() {
-          const first = new Date(this.viewYear, this.viewMonth, 1)
-          const startDow = first.getDay()
-          const daysInMonth = new Date(this.viewYear, this.viewMonth + 1, 0).getDate()
-          const pillBtn = "width:32px;height:32px;border-radius:1000px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--thamani-forest);flex-shrink:0;border:none;font-size:18px;"
-          const ctrl = "border:1px solid var(--thamani-stone);border-radius:8px;color:var(--thamani-forest);font-size:13px;font-weight:500;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:6px;"
-
-          let head = `
-            <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;">
-              <button type="button" data-dp-nav="-1" aria-label="Previous month" style="${pillBtn}">&#8249;</button>
-              <button type="button" data-dp-open="months" style="${ctrl}flex:1;">
-                <span>${MONTHS[this.viewMonth]}</span><span style="color:var(--thamani-pewter);">&#9662;</span>
-              </button>
-              <button type="button" data-dp-open="years" style="${ctrl}">
-                <span>${this.viewYear}</span><span style="color:var(--thamani-pewter);">&#9662;</span>
-              </button>
-              <button type="button" data-dp-nav="1" aria-label="Next month" style="${pillBtn}">&#8250;</button>
-            </div>`
-
-          let dow = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">`
-          DOW.forEach(d => { dow += `<span style="text-align:center;font-size:12px;font-weight:500;color:var(--thamani-pewter);">${d}</span>` })
-          dow += `</div>`
-
-          let grid = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">`
-          for (let i = 0; i < startDow; i++) grid += `<span></span>`
-          for (let d = 1; d <= daysInMonth; d++) {
-            const cur = new Date(this.viewYear, this.viewMonth, d)
-            const isSel = this.selected && cur.getTime() === this.selected.getTime()
-            const isToday = cur.getTime() === this.today.getTime()
-            const disabled = this.max && cur.getTime() > this.max.getTime()
-            let style = "width:34px;height:34px;border-radius:1000px;display:flex;align-items:center;justify-content:center;font-size:13px;margin:0 auto;border:none;color:var(--thamani-forest);cursor:pointer;"
-            if (disabled) style += "color:#a9abaa;cursor:not-allowed;"
-            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:600;"
-            else if (isToday) style += "border:1.5px solid var(--thamani-lime);"
-            grid += `<button type="button" data-dp-day="${d}" ${disabled ? "disabled" : ""} style="${style}">${d}</button>`
+          const y = this.focusDate.getFullYear(), m = this.focusDate.getMonth()
+          const first = new Date(y, m, 1)
+          const start = new Date(y, m, 1 - ((first.getDay() + 6) % 7))
+          let grid = ""
+          for (let i = 0; i < 42; i++) {
+            const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
+            if (i === 35 && d.getMonth() !== m) break
+            const cls = ["td-dp-day"]
+            if (d.getMonth() !== m) cls.push("is-outside")
+            if (sameDay(d, this.today)) cls.push("is-today")
+            if (sameDay(d, this.selected)) cls.push("is-selected")
+            const off = this.disabledDay(d)
+            const focus = sameDay(d, this.focusDate)
+            grid += `<button type="button" role="gridcell" class="${cls.join(" ")}" data-dp-day="${this.iso(d)}"
+              tabindex="${focus ? 0 : -1}" aria-selected="${sameDay(d, this.selected)}"
+              ${sameDay(d, this.today) ? 'aria-current="date"' : ""}
+              aria-label="${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}" ${off ? "disabled" : ""}>${d.getDate()}</button>`
           }
-          grid += `</div>`
-
-          this.body.innerHTML = head + dow + grid
+          this.pop.innerHTML = this.header(`${MONTHS[m]} ${y}`, "months", "Previous month", "Next month") +
+            `<div class="td-dp-wk" aria-hidden="true">${DOW.map(d => `<span>${d}</span>`).join("")}</div>` +
+            `<div class="td-dp-gr" role="grid">${grid}</div>` + this.footer()
         },
         renderMonths() {
-          let head = this.listHeader("Select month")
-          let grid = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">`
-          const maxMonth = this.maxMonthFor(this.viewYear)
-          MONTHS.forEach((name, i) => {
-            const isSel = i === this.viewMonth
-            const disabled = i > maxMonth
-            let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:var(--thamani-forest);cursor:pointer;text-align:center;"
-            if (disabled) style += "color:#a9abaa;cursor:not-allowed;"
-            else if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:600;"
-            grid += `<button type="button" data-dp-month="${i}" ${disabled ? "disabled" : ""} style="${style}">${name.slice(0,3)}</button>`
-          })
-          grid += `</div>`
-          this.body.innerHTML = head + grid
+          const y = this.focusDate.getFullYear()
+          const cells = SHORT.map((name, i) => {
+            const lastDay = new Date(y, i + 1, 0), firstDay = new Date(y, i, 1)
+            const off = (this.max && firstDay > this.max) || (this.min && lastDay < this.min)
+            const sel = this.selected && this.selected.getFullYear() === y && this.selected.getMonth() === i
+            return `<button type="button" class="td-dp-cell${sel ? " is-selected" : ""}" data-dp-month="${i}"
+              tabindex="${i === this.focusDate.getMonth() ? 0 : -1}" ${off ? "disabled" : ""}>${name}</button>`
+          }).join("")
+          this.pop.innerHTML = this.header(`${y}`, "years", "Previous year", "Next year") +
+            `<div class="td-dp-cells">${cells}</div>` + this.footer()
         },
         renderYears() {
-          let head = this.listHeader("Select year")
-          let grid = `<div data-dp-years style="position:relative;max-height:220px;overflow-y:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:2px;">`
-          for (let y = this.maxYear(); y >= this.minYear(); y--) {
-            const isSel = y === this.viewYear
-            let style = "padding:10px 0;border:none;border-radius:1000px;font-size:13px;color:var(--thamani-forest);cursor:pointer;text-align:center;"
-            if (isSel) style += "background:var(--thamani-forest);color:var(--thamani-snow);font-weight:600;"
-            grid += `<button type="button" data-dp-year="${y}" style="${style}">${y}</button>`
+          const y = this.focusDate.getFullYear()
+          const start = y - (y % 12)
+          let cells = ""
+          for (let i = 0; i < 12; i++) {
+            const yr = start + i
+            const off = (this.max && yr > this.max.getFullYear()) || (this.min && yr < this.min.getFullYear())
+            const sel = this.selected && this.selected.getFullYear() === yr
+            cells += `<button type="button" class="td-dp-cell${sel ? " is-selected" : ""}" data-dp-year="${yr}"
+              tabindex="${yr === y ? 0 : -1}" ${off ? "disabled" : ""}>${yr}</button>`
           }
-          grid += `</div>`
-          this.body.innerHTML = head + grid
-          const container = this.pop.querySelector("[data-dp-years]")
-          const sel = this.pop.querySelector(`[data-dp-year="${this.viewYear}"]`)
-          if (container && sel) container.scrollTop = sel.offsetTop - container.clientHeight / 2 + sel.clientHeight / 2
+          this.pop.innerHTML = this.header(`${start} to ${start + 11}`, "days", "Previous years", "Next years") +
+            `<div class="td-dp-cells">${cells}</div>` + this.footer()
         }
       }
     </script>
@@ -1078,6 +1158,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   defp date_iso(%Date{} = date), do: Date.to_iso8601(date)
+  defp date_iso(%DateTime{} = dt), do: dt |> DateTime.to_date() |> Date.to_iso8601()
+  defp date_iso(%NaiveDateTime{} = dt), do: dt |> NaiveDateTime.to_date() |> Date.to_iso8601()
   defp date_iso(value) when is_binary(value), do: value
   defp date_iso(_), do: ""
 
@@ -1186,17 +1268,17 @@ defmodule ThamaniDawaWeb.CoreComponents do
     <label
       :if={@compact}
       class={[
-        "group block cursor-pointer rounded-xl border-2 px-3.5 py-3 transition-all hover:border-[var(--thamani-forest)] focus-within:ring-2 focus-within:ring-[var(--thamani-lime)] focus-within:ring-offset-2",
+        "group block cursor-pointer rounded-xl border-2 px-3.5 py-3 transition-all hover:border-[var(--thamani-forest)] focus-within:ring-2 focus-within:ring-[var(--color-td-accent-tint)] focus-within:ring-offset-2",
         @selected &&
-          "border-[var(--thamani-forest)] bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)]",
-        !@selected && "border-[var(--thamani-stone)] bg-white"
+          "border-[var(--thamani-forest)] bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)]",
+        !@selected && "border-[var(--thamani-stone)] bg-td-surface"
       ]}
     >
       <input type={@type} name={@name} value={@value} checked={@selected} class="peer sr-only" />
       <div class="flex items-center gap-3">
         <span
           :if={@icon}
-          class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_20%,white)] text-[var(--thamani-forest)]"
+          class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_20%,white)] text-[var(--thamani-forest)]"
         >
           <.icon name={@icon} class="size-5" />
         </span>
@@ -1212,7 +1294,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           "flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
           @selected && "border-[var(--thamani-forest)] bg-[var(--thamani-forest)] text-white",
           !@selected &&
-            "border-[var(--thamani-stone)] bg-white group-hover:border-[var(--thamani-forest)]"
+            "border-[var(--thamani-stone)] bg-td-surface group-hover:border-[var(--thamani-forest)]"
         ]}>
           <.icon :if={@selected} name="hero-check" class="size-3.5" />
         </span>
@@ -1222,10 +1304,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
     <label
       :if={!@compact}
       class={[
-        "group cursor-pointer rounded-xl border-2 p-4 transition-all hover:-translate-y-0.5 hover:border-[var(--thamani-forest)] focus-within:ring-2 focus-within:ring-[var(--thamani-lime)] focus-within:ring-offset-2",
+        "group cursor-pointer rounded-xl border-2 p-4 transition-all hover:-translate-y-0.5 hover:border-[var(--thamani-forest)] focus-within:ring-2 focus-within:ring-[var(--color-td-accent-tint)] focus-within:ring-offset-2",
         @selected &&
-          "border-[var(--thamani-forest)] bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] shadow-md",
-        !@selected && "border-[var(--thamani-stone)] bg-white"
+          "border-[var(--thamani-forest)] bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] shadow-md",
+        !@selected && "border-[var(--thamani-stone)] bg-td-surface"
       ]}
     >
       <input type="checkbox" name={@name} value={@value} checked={@selected} class="peer sr-only" />
@@ -1239,7 +1321,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           "flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
           @selected && "border-[var(--thamani-forest)] bg-[var(--thamani-forest)] text-white",
           !@selected &&
-            "border-[var(--thamani-stone)] bg-white group-hover:border-[var(--thamani-forest)]"
+            "border-[var(--thamani-stone)] bg-td-surface group-hover:border-[var(--thamani-forest)]"
         ]}>
           <.icon :if={@selected} name="hero-check" class="size-3.5" />
         </span>
@@ -1306,62 +1388,31 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def header(assigns) do
     ~H"""
-    <div class={[
-      @variant == "card" && "mb-5",
-      @class
-    ]}>
-      <header class={[
-        "flex flex-col items-stretch gap-4 md:flex-row md:flex-wrap md:items-center md:justify-between md:gap-x-6 md:gap-y-4",
-        @variant == "card" && "p-4 sm:p-5",
-        @toolbar != [] && "border-b border-thamani-stone"
-      ]}>
-        <div class="flex min-w-0 items-center gap-3">
-          <.link
-            :if={is_binary(@back)}
-            navigate={@back}
-            aria-label="Go back"
-            class="flex size-9 items-center justify-center rounded-xl border border-thamani-stone bg-thamani-snow text-thamani-forest hover:bg-thamani-stone transition-all shrink-0 cursor-pointer"
-          >
-            <.icon name="hero-arrow-left" class="size-4" />
+    <div class={["td-header", @variant == "plain" && "is-plain", @class]}>
+      <header class="td-header-row">
+        <div class="td-header-title">
+          <.link :if={is_binary(@back)} navigate={@back} aria-label="Go back" class="td-icon-btn">
+            <.icon name="arrow-left" class="size-4" />
           </.link>
           <button
             :if={@back == true}
             type="button"
             aria-label="Go back"
             onclick="window.history.back()"
-            class="flex size-9 items-center justify-center rounded-xl border border-thamani-stone bg-thamani-snow text-thamani-forest hover:bg-thamani-stone transition-all shrink-0 cursor-pointer"
+            class="td-icon-btn"
           >
-            <.icon name="hero-arrow-left" class="size-4" />
+            <.icon name="arrow-left" class="size-4" />
           </button>
-          <div
-            :if={@icon}
-            class="flex size-9 items-center justify-center rounded-xl border border-thamani-stone bg-thamani-canvas text-thamani-forest shrink-0"
-          >
-            <.icon name={@icon} class="size-5" />
-          </div>
-          <div class="min-w-0 flex-1">
-            <h1 class="text-xl font-medium leading-tight tracking-tight text-thamani-forest sm:text-2xl">
-              {render_slot(@inner_block)}
-            </h1>
-            <p :if={@subtitle != []} class="mt-0.5 text-sm leading-6 text-thamani-pewter">
-              {render_slot(@subtitle)}
-            </p>
+          <div>
+            <h1>{render_slot(@inner_block)}</h1>
+            <p :if={@subtitle != []}>{render_slot(@subtitle)}</p>
           </div>
         </div>
-        <div
-          :if={@actions != []}
-          class="flex flex-col gap-2 md:ml-auto md:w-auto md:flex-row md:flex-wrap md:items-center md:justify-end [&>*]:w-full md:[&>*]:w-auto"
-        >
+        <div :if={@actions != []} class="td-header-actions">
           {render_slot(@actions)}
         </div>
       </header>
-      <div
-        :if={@toolbar != []}
-        class={[
-          "grid grid-cols-1 items-start gap-3 min-[480px]:grid-cols-[minmax(0,1fr)_auto] [&>*]:min-w-0",
-          @variant == "card" && "p-4 sm:p-5"
-        ]}
-      >
+      <div :if={@toolbar != []} class="td-header-tools">
         {render_slot(@toolbar)}
       </div>
     </div>
@@ -1412,7 +1463,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       end
 
     ~H"""
-    <div class="responsive-table relative sm:overflow-hidden sm:rounded-xl sm:border sm:border-slate-200 sm:bg-white">
+    <div class="td-table responsive-table">
       <div class="sm:overflow-x-auto sm:overscroll-x-contain">
         <table class="block w-full text-left sm:table sm:min-w-[42rem]">
           <thead class="sr-only sm:not-sr-only sm:table-header-group sm:bg-thamani-table-head sm:text-left sm:text-thamani-forest">
@@ -1421,7 +1472,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
                 :for={col <- @col}
                 scope="col"
                 class={[
-                  "whitespace-nowrap px-4 py-2 text-xs font-medium text-slate-600 sm:border-b sm:border-slate-200 sm:px-4 sm:py-2.5 sm:text-sm sm:font-semibold sm:leading-5 sm:text-thamani-forest",
+                  "whitespace-nowrap px-4 py-2 text-xs font-medium text-td-ink-2 sm:border-b sm:border-td-hairline sm:px-4 sm:py-2.5 sm:text-sm sm:font-semibold sm:leading-5 sm:text-thamani-forest",
                   col[:tablet] == "hidden" && "sm:max-lg:hidden"
                 ]}
               >
@@ -1430,7 +1481,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <th
                 :if={@action != []}
                 scope="col"
-                class="px-4 py-2 text-right sm:border-b sm:border-slate-200 sm:py-2.5"
+                class="px-4 py-2 text-right sm:border-b sm:border-td-hairline sm:py-2.5"
               >
                 <span class="sr-only">{gettext("Actions")}</span>
               </th>
@@ -1439,7 +1490,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           <tbody
             id={@id}
             phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}
-            class="block space-y-2 sm:table-row-group sm:space-y-0 sm:text-sm sm:leading-6 sm:text-zinc-700"
+            class="block space-y-2 sm:table-row-group sm:space-y-0 sm:text-sm sm:leading-6 sm:text-td-ink"
           >
             <tr
               :if={@empty_state != []}
@@ -1457,10 +1508,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
               :for={row <- @rows}
               id={@row_id && @row_id.(row)}
               class={[
-                "group relative grid overflow-visible rounded-2xl border border-thamani-stone bg-thamani-snow shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-colors duration-150 sm:table-row sm:rounded-none sm:border-0 sm:bg-white sm:shadow-none sm:even:bg-slate-50/40 sm:hover:bg-slate-50",
+                "td-table-row group relative grid overflow-visible transition-colors duration-150 sm:table-row",
                 if(@mobile_columns == 3, do: "grid-cols-3", else: "grid-cols-2"),
-                @row_click &&
-                  "hover:border-thamani-forest/20 hover:shadow-[0_8px_24px_rgba(28,58,19,0.07)] focus-within:border-thamani-forest/20 cursor-pointer sm:focus-within:bg-zinc-50 sm:hover:shadow-none"
+                @row_click && "cursor-pointer"
               ]}
             >
               <td
@@ -1468,7 +1518,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
                 phx-click={@row_click && @row_click.(row)}
                 data-label={col[:label]}
                 class={[
-                  "responsive-table-cell flex min-w-0 flex-col items-start gap-1 border-b border-thamani-stone/60 px-4 py-2 text-left text-sm leading-5 text-slate-900 before:block before:text-sm before:font-normal before:text-thamani-pewter before:content-[attr(data-label)] first:col-span-full first:block first:bg-thamani-canvas/70 first:px-4 first:py-2.5 first:text-base first:font-semibold first:leading-6 first:text-thamani-forest first:before:hidden [&:nth-child(even)]:border-r [&:nth-child(even)]:border-thamani-stone/60 sm:table-cell sm:align-middle sm:border-r-0 sm:border-b sm:border-slate-200 sm:bg-transparent sm:px-4 sm:py-2 sm:text-left sm:text-sm sm:font-normal sm:leading-5 sm:text-slate-700 sm:before:hidden sm:first:bg-transparent sm:first:text-sm sm:first:font-semibold sm:first:leading-5 sm:first:text-slate-950 sm:first:whitespace-nowrap sm:[&:nth-child(even)]:border-r-0",
+                  "responsive-table-cell flex min-w-0 flex-col items-start gap-1 border-b border-thamani-stone/60 px-4 py-2 text-left text-sm leading-5 text-td-ink before:block before:text-sm before:font-normal before:text-thamani-pewter before:content-[attr(data-label)] first:col-span-full first:block first:bg-thamani-canvas/70 first:px-4 first:py-2.5 first:text-base first:font-semibold first:leading-6 first:text-thamani-forest first:before:hidden [&:nth-child(even)]:border-r [&:nth-child(even)]:border-thamani-stone/60 sm:table-cell sm:align-middle sm:border-r-0 sm:border-b sm:border-td-hairline sm:bg-transparent sm:px-4 sm:py-2 sm:text-left sm:text-sm sm:font-normal sm:leading-5 sm:text-td-ink sm:before:hidden sm:first:bg-transparent sm:first:text-sm sm:first:font-semibold sm:first:leading-5 sm:first:text-td-ink sm:first:whitespace-nowrap sm:[&:nth-child(even)]:border-r-0",
                   @mobile_columns == 3 &&
                     "max-sm:[&:nth-child(3)]:border-r max-sm:[&:nth-child(3)]:border-thamani-stone/60",
                   col[:mobile] == "hidden" && "max-sm:hidden",
@@ -1483,7 +1533,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <td
                 :if={@action != []}
                 data-label={gettext("Actions")}
-                class="responsive-table-cell col-span-full flex items-center justify-end bg-thamani-canvas/60 px-3 py-3 text-right text-sm sm:table-cell sm:w-px sm:whitespace-nowrap sm:align-middle sm:border-b sm:border-slate-200 sm:bg-transparent sm:px-4 sm:py-2"
+                class="responsive-table-cell col-span-full flex items-center justify-end bg-thamani-canvas/60 px-3 py-3 text-right text-sm sm:table-cell sm:w-px sm:whitespace-nowrap sm:align-middle sm:border-b sm:border-td-hairline sm:bg-transparent sm:px-4 sm:py-2"
               >
                 <div class="flex w-full min-w-0 flex-wrap items-center justify-end gap-2 [&>*]:flex-1 sm:w-max sm:flex-nowrap sm:gap-2 sm:[&>*]:flex-none sm:[&>*]:text-sm">
                   <%= for action <- @action do %>
@@ -1523,7 +1573,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
     ~H"""
     <span class={[
-      "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold",
+      "td-badge",
       badge_classes(@semantic),
       @class
     ]}>
@@ -1580,7 +1630,6 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def status_semantic(status)
       when status in [
-             :cancelled,
              :rejected,
              :flagged,
              :out_of_stock,
@@ -1594,13 +1643,15 @@ defmodule ThamaniDawaWeb.CoreComponents do
            ],
       do: :danger
 
+  # Brief 2: Cancelled reads as neutral, not as an error.
+  def status_semantic(:cancelled), do: :neutral
   def status_semantic(_status), do: :neutral
 
-  defp badge_classes(:success), do: "bg-thamani-lime text-thamani-forest"
-  defp badge_classes(:warning), do: "bg-amber-100 text-amber-900"
-  defp badge_classes(:info), do: "bg-thamani-stone text-thamani-forest"
-  defp badge_classes(:danger), do: "bg-rose-100 text-rose-800"
-  defp badge_classes(:neutral), do: "bg-thamani-stone text-thamani-pewter"
+  defp badge_classes(:success), do: "is-success"
+  defp badge_classes(:warning), do: "is-warning"
+  defp badge_classes(:info), do: "is-info"
+  defp badge_classes(:danger), do: "is-danger"
+  defp badge_classes(:neutral), do: "is-neutral"
 
   @doc """
   Renders an empty-state placeholder for a list/table with no rows, in Thamani's
@@ -1619,17 +1670,20 @@ defmodule ThamaniDawaWeb.CoreComponents do
   slot :actions
 
   def blank_state(assigns) do
+    glyph =
+      case phosphor_name(assigns.icon) do
+        "question" -> "tray"
+        name -> name
+      end
+
+    assigns = assign(assigns, :glyph, glyph)
+
     ~H"""
-    <div class={[
-      "rounded-lg border border-dashed border-thamani-stone bg-thamani-canvas py-8 text-center",
-      @class
-    ]}>
-      <.icon name={@icon} class="mx-auto size-12 text-thamani-subtle" />
-      <p class="mt-2 text-sm font-medium text-thamani-forest">{@title}</p>
-      <p :if={@inner_block != []} class="mt-1 text-sm text-thamani-pewter">
-        {render_slot(@inner_block)}
-      </p>
-      <div :if={@actions != []} class="mt-4">{render_slot(@actions)}</div>
+    <div class={["td-empty-state", @class]}>
+      <ThamaniDawaWeb.TDComponents.td_icon name={@glyph} class="td-empty-state-icon" />
+      <p class="td-empty-state-title">{@title}</p>
+      <p :if={@inner_block != []} class="td-empty-state-text">{render_slot(@inner_block)}</p>
+      <div :if={@actions != []} class="td-empty-state-actions">{render_slot(@actions)}</div>
     </div>
     """
   end
@@ -1712,7 +1766,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
   def onboarding_task_shell(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} navigation={false}>
-      <div class="flex min-h-svh flex-col bg-[var(--thamani-snow)]">
+      <div class="flex min-h-svh flex-col bg-[var(--thamani-surface)]">
         <header class="border-b border-[color-mix(in_srgb,var(--thamani-stone)_70%,transparent)]">
           <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-5 sm:px-8 lg:px-12">
             <.link
@@ -1725,7 +1779,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
             <div class="flex min-w-0 items-center gap-3">
               <span
-                class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-snow)] shadow-sm"
+                class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-on-accent)] shadow-sm"
                 aria-hidden="true"
               >
                 {String.first(@current_scope.user.name || "U")}
@@ -1746,7 +1800,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
         <main class="mx-auto grid w-full max-w-6xl flex-1 items-start gap-10 px-5 pb-16 pt-10 sm:px-8 sm:pt-12 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] md:gap-10 md:pt-16 lg:gap-16 lg:pt-20">
           <section class="thamani-step-enter flex flex-col items-center text-center md:block md:text-left">
-            <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
+            <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] text-[var(--thamani-forest)]">
               <.icon name={@icon} class="size-6" />
             </div>
             <h1 class="w-full max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
@@ -1780,7 +1834,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
     ~H"""
     <div
       role="tablist"
-      class="mb-5 inline-flex rounded-lg border border-thamani-stone bg-thamani-snow p-1"
+      class="mb-5 inline-flex rounded-lg border border-thamani-stone bg-thamani-surface p-1"
     >
       <.link
         id="returns-tab-supplier"
@@ -1789,9 +1843,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
         aria-selected={to_string(@active == :supplier)}
         class={[
           "rounded-md px-3 py-2 text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
-          @active == :supplier && "bg-thamani-lime text-thamani-forest",
+          @active == :supplier && "bg-td-accent-tint text-thamani-forest",
           @active != :supplier &&
-            "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+            "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
         ]}
       >
         Supplier returns
@@ -1803,9 +1857,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
         aria-selected={to_string(@active == :customer)}
         class={[
           "rounded-md px-3 py-2 text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
-          @active == :customer && "bg-thamani-lime text-thamani-forest",
+          @active == :customer && "bg-td-accent-tint text-thamani-forest",
           @active != :customer &&
-            "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+            "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
         ]}
       >
         Customer returns
@@ -1845,7 +1899,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
     <div
       role="tablist"
       class={[
-        "border border-thamani-stone bg-thamani-snow",
+        "border border-thamani-stone bg-thamani-surface",
         @variant == "compact" && "inline-flex rounded-lg p-1",
         @variant == "prominent" &&
           "grid w-full grid-cols-2 gap-1 rounded-xl bg-thamani-canvas p-1 shadow-sm",
@@ -1864,13 +1918,13 @@ defmodule ThamaniDawaWeb.CoreComponents do
           "cursor-pointer rounded-md text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
           @variant == "compact" && "px-3 py-2",
           @variant == "prominent" && "min-w-0 px-3 py-2.5 text-left sm:px-4",
-          tab[:active] && @variant == "compact" && "bg-thamani-lime text-thamani-forest",
+          tab[:active] && @variant == "compact" && "bg-td-accent-tint text-thamani-forest",
           tab[:active] && @variant == "prominent" &&
-            "bg-white text-thamani-forest shadow-sm ring-1 ring-thamani-stone",
+            "bg-td-surface text-thamani-forest shadow-sm ring-1 ring-thamani-stone",
           !tab[:active] && @variant == "compact" &&
-            "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest",
+            "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest",
           !tab[:active] && @variant == "prominent" &&
-            "text-thamani-pewter hover:bg-white/70 hover:text-thamani-forest"
+            "text-thamani-pewter hover:bg-td-surface/70 hover:text-thamani-forest"
         ]}
         phx-click={tab[:phx_click]}
         phx-value-tab={tab[:phx_value_tab]}
@@ -1902,7 +1956,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         class="grid gap-1 px-4 py-3 sm:grid-cols-[minmax(8rem,0.4fr)_minmax(0,1fr)] sm:gap-5 sm:px-5"
       >
         <dt class="text-xs font-medium text-thamani-subtle">{item.title}</dt>
-        <dd class="min-w-0 break-words text-sm text-slate-900">{render_slot(item)}</dd>
+        <dd class="min-w-0 break-words text-sm text-td-ink">{render_slot(item)}</dd>
       </div>
     </dl>
     """
@@ -1926,14 +1980,170 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <.icon name="hero-x-mark" />
       <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
   """
+  # Product UI draws Phosphor. Names that are not real Heroicons stay as
+  # class hooks for the few custom marks that are not glyphs.
+  @hero_to_phosphor %{
+    "adjustments-horizontal" => "faders-horizontal",
+    "archive-box" => "archive",
+    "arrow-down-circle" => "arrow-circle-down",
+    "arrow-down-tray" => "download-simple",
+    "arrow-left" => "arrow-left",
+    "arrow-left-end-on-rectangle" => "sign-in",
+    "arrow-path" => "arrows-clockwise",
+    "arrow-right" => "arrow-right",
+    "arrow-right-end-on-rectangle" => "sign-in",
+    "arrow-right-start-on-rectangle" => "sign-out",
+    "arrow-top-right-on-square" => "arrow-square-out",
+    "arrow-trending-up" => "trend-up",
+    "arrow-up-right" => "arrow-up-right",
+    "arrow-up-tray" => "upload-simple",
+    "arrow-uturn-left" => "arrow-u-up-left",
+    "banknotes" => "money",
+    "bars-3" => "list",
+    "beaker" => "flask",
+    "bolt" => "lightning",
+    "bookmark-square" => "bookmark-simple",
+    "building-library" => "bank",
+    "building-office-2" => "buildings",
+    "building-storefront" => "storefront",
+    "calendar-days" => "calendar-blank",
+    "chart-bar" => "chart-bar",
+    "chart-bar-square" => "chart-bar",
+    "chart-pie" => "chart-pie",
+    "check" => "check",
+    "check-badge" => "seal-check",
+    "check-circle" => "check-circle",
+    "check-square" => "check-square",
+    "chevron-down" => "caret-down",
+    "chevron-left" => "caret-left",
+    "chevron-right" => "caret-right",
+    "clipboard-document-check" => "clipboard-text",
+    "clipboard-document-list" => "clipboard-text",
+    "clock" => "clock",
+    "code-bracket" => "code",
+    "cog-6-tooth" => "gear",
+    "cog-8-tooth" => "gear",
+    "copy" => "copy",
+    "credit-card" => "credit-card",
+    "cube" => "cube",
+    "cube-transparent" => "cube",
+    "currency-dollar" => "currency-dollar",
+    "device-phone-mobile" => "device-mobile",
+    "document" => "file",
+    "document-check" => "file-text",
+    "document-text" => "file-text",
+    "ellipsis-vertical" => "dots-three-vertical",
+    "envelope" => "envelope",
+    "exclamation-circle" => "warning-circle",
+    "exclamation-triangle" => "warning",
+    "eye" => "eye",
+    "eye-slash" => "eye-slash",
+    "globe-alt" => "globe",
+    "hand-raised" => "hand-palm",
+    "identification" => "identification-card",
+    "inbox" => "tray",
+    "inbox-arrow-down" => "tray",
+    "information-circle" => "info",
+    "key" => "key",
+    "light-bulb" => "lightbulb",
+    "list-bullet" => "list-bullets",
+    "lock-closed" => "lock",
+    "magnifying-glass" => "magnifying-glass",
+    "map" => "map-trifold",
+    "minus" => "minus",
+    "no-symbol" => "prohibit",
+    "paper-airplane" => "paper-plane-tilt",
+    "paper-clip" => "paperclip",
+    "pencil" => "pencil-simple",
+    "pencil-square" => "note-pencil",
+    "phone" => "phone",
+    "photo" => "image",
+    "plus" => "plus",
+    "plus-circle" => "plus-circle",
+    "printer" => "printer",
+    "qr-code" => "qr-code",
+    "queue-list" => "queue",
+    "rocket-launch" => "rocket",
+    "shield-check" => "shield-check",
+    "shield-exclamation" => "shield-warning",
+    "shopping-cart" => "shopping-cart",
+    "signal" => "broadcast",
+    "sparkles" => "circle",
+    "square-2-stack" => "stack",
+    "squares-2x2" => "squares-four",
+    "squares-plus" => "plus-square",
+    "star" => "star",
+    "table-cells" => "table",
+    "tag" => "tag",
+    "trash" => "trash",
+    "truck" => "truck",
+    "user" => "user",
+    "user-group" => "users",
+    "users" => "users",
+    "x-circle" => "x-circle",
+    "x-mark" => "x"
+  }
+
   attr :name, :string, required: true
   attr :class, :any, default: "size-4"
 
-  def icon(%{name: "hero-" <> _} = assigns) do
+  def icon(%{name: "hero-" <> rest} = assigns) do
+    case Map.get(@hero_to_phosphor, icon_key(rest)) do
+      nil ->
+        ~H"""
+        <span class={[@name, @class]} />
+        """
+
+      phosphor ->
+        render_phosphor(assigns, phosphor)
+    end
+  end
+
+  def icon(assigns) do
+    render_phosphor(assigns, assigns.name)
+  end
+
+  @doc "Resolves a legacy `hero-*` name to its Phosphor name; Phosphor names pass through."
+  def phosphor_name("hero-" <> rest), do: Map.get(@hero_to_phosphor, icon_key(rest), "question")
+  def phosphor_name(name), do: name
+
+  defp icon_key(rest) do
+    rest
+    |> String.replace_suffix("-solid", "")
+    |> String.replace_suffix("-mini", "")
+  end
+
+  defp render_phosphor(assigns, name) do
+    weight = if String.contains?(to_string(assigns.name), "-solid"), do: "fill", else: "regular"
+
+    assigns =
+      assigns
+      |> assign(:phosphor_name, name)
+      |> assign(:phosphor_weight, weight)
+      |> assign(:phosphor_class, icon_class(assigns.class))
+
     ~H"""
-    <span class={[@name, @class]} />
+    <Phosphor.icon
+      name={@phosphor_name}
+      weight={@phosphor_weight}
+      class={@phosphor_class}
+    />
     """
   end
+
+  defp icon_class(class) when is_list(class) do
+    class
+    |> List.flatten()
+    |> Enum.filter(&is_binary/1)
+    |> Enum.join(" ")
+    |> icon_class()
+  end
+
+  defp icon_class(class) when is_binary(class) and class != "" do
+    "inline-block shrink-0 " <> class
+  end
+
+  defp icon_class(_class), do: "inline-block size-4 shrink-0"
 
   @doc """
   Renders a Thamani design-system pill button.
@@ -1994,24 +2204,19 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   # Each clause maps a variant name to its Tailwind token classes.
   # Colors resolve from the @theme block in app.css — change there, updates everywhere.
-  @btn_focus "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
   @btn_loading "phx-submit-loading:opacity-75 phx-click-loading:opacity-75"
 
   defp thamani_btn_classes("primary"),
-    do:
-      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-forest text-thamani-snow text-[15px] font-normal no-underline border-0 cursor-pointer transition-all duration-[160ms] ease-[cubic-bezier(0.23,1,0.32,1)] hover:bg-[#10221e] hover:scale-[1.01] hover:-translate-y-0.5 active:scale-[0.97] active:translate-y-0 w-full #{@btn_focus} #{@btn_loading}"
+    do: "td-btn is-primary is-lg w-full #{@btn_loading}"
 
   defp thamani_btn_classes("ghost"),
-    do:
-      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-transparent text-thamani-forest text-[15px] font-normal no-underline border-[1.5px] border-thamani-forest cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] #{@btn_focus} #{@btn_loading}"
+    do: "td-btn is-secondary is-lg w-full #{@btn_loading}"
 
   defp thamani_btn_classes("ghost_inv"),
-    do:
-      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-transparent text-thamani-snow text-[15px] font-normal no-underline border-[1.5px] border-thamani-snow cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] #{@btn_focus} #{@btn_loading}"
+    do: "td-btn is-secondary is-lg w-full #{@btn_loading}"
 
   defp thamani_btn_classes("lime"),
-    do:
-      "inline-flex items-center justify-center min-h-11 sm:min-h-10 px-6 py-[11px] rounded-full bg-thamani-lime text-thamani-forest text-[15px] font-medium no-underline border-0 cursor-pointer transition-transform duration-[160ms] ease-out active:scale-[0.96] #{@btn_focus} #{@btn_loading}"
+    do: "td-btn is-primary is-lg w-full #{@btn_loading}"
 
   @doc """
   Renders a Thamani-styled auth-page form field with label and inline error.
@@ -2077,7 +2282,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         placeholder={@placeholder}
         required={@required}
         class={[
-          "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
+          "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-surface",
           "border-[1.5px] rounded-lg outline-none",
           "transition-[border-color,box-shadow] duration-150 ease-in-out",
           "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
@@ -2131,7 +2336,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           autocomplete={@autocomplete}
           required={@required}
           class={[
-            "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
+            "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-surface",
             "border-[1.5px] rounded-lg outline-none",
             "transition-[border-color,box-shadow] duration-150 ease-in-out",
             "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
@@ -2180,7 +2385,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :on_cancel, JS, default: %JS{}
   attr :close_on_click_away, :boolean, default: true
   attr :class, :any, default: nil
+  attr :title, :string, default: nil, doc: "dialog title (Doop TD Modal HtFGl5-GrG); every converted dialog sets it"
+  attr :subtitle, :string, default: nil
+  attr :size, :string, values: ~w(form confirm wide), default: "form", doc: "form = 560px, confirm = 480px, wide = 640px (multi-step flows)"
   slot :inner_block, required: true
+  slot :footer, doc: "right-aligned actions: secondary Cancel, then the primary"
 
   def modal(assigns) do
     ~H"""
@@ -2191,7 +2400,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
       data-cancel={JS.exec(@on_cancel, "phx-remove")}
       class="relative z-50 hidden"
     >
-      <div id={"#{@id}-bg"} class="bg-black/50 fixed inset-0 transition-opacity" aria-hidden="true" />
+      <div
+        id={"#{@id}-bg"}
+        class="fixed inset-0"
+        style="background: var(--color-td-scrim);"
+        aria-hidden="true"
+      />
       <div
         class="fixed inset-0 overflow-y-auto"
         aria-labelledby={"#{@id}-title"}
@@ -2200,8 +2414,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
         aria-modal="true"
         tabindex="0"
       >
-        <div class="flex min-h-full items-center justify-center">
-          <div class={["w-full max-w-2xl p-4 sm:p-6 lg:py-8", @class]}>
+        <div class="td-modal-stage">
+          <div class={["td-modal-slot", "is-#{@size}", @class]}>
             <.focus_wrap
               id={"#{@id}-container"}
               phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
@@ -2211,22 +2425,38 @@ defmodule ThamaniDawaWeb.CoreComponents do
                   do: JS.exec("data-cancel", to: "##{@id}"),
                   else: nil
               }
-              class="hidden relative rounded-2xl ff-surface-modal p-6 transition"
+              class="td-modal hidden"
             >
-              <div class="absolute top-4 right-4">
+              <div :if={@title} class="td-modal-hd">
+                <div class="td-modal-tt">
+                  <h2 id={"#{@id}-title"}>{@title}</h2>
+                  <p :if={@subtitle} id={"#{@id}-description"}>{@subtitle}</p>
+                </div>
                 <button
                   phx-click={JS.exec(@on_cancel, "phx-remove")}
                   type="button"
-                  data-tooltip="Cancel"
-                  class="flex size-8 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-[background-color,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
-                  aria-label="Cancel"
+                  class="td-icon-btn td-modal-close"
+                  aria-label="Close"
                 >
-                  <.icon name="hero-x-mark-solid" class="h-5 w-5" />
+                  <.icon name="x" class="size-4" />
                 </button>
               </div>
-              <div id={"#{@id}-content"}>
+              <%!-- Legacy dialogs without a title keep their in-body heading
+                   until each is rebuilt to its Doop frame; they get only a
+                   floating close button, never an empty header band. --%>
+              <button
+                :if={!@title}
+                phx-click={JS.exec(@on_cancel, "phx-remove")}
+                type="button"
+                class="td-icon-btn td-modal-close is-floating"
+                aria-label="Cancel"
+              >
+                <.icon name="x" class="size-4" />
+              </button>
+              <div id={"#{@id}-content"} class="td-modal-bd">
                 {render_slot(@inner_block)}
               </div>
+              <div :if={@footer != []} class="td-modal-ft">{render_slot(@footer)}</div>
             </.focus_wrap>
           </div>
         </div>
@@ -2341,25 +2571,29 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   def filter_drawer(assigns) do
     ~H"""
-    <div class="relative block w-full min-[480px]:inline-block min-[480px]:w-auto">
+    <div
+      id={"#{@id}-wrap"}
+      class="td-fd relative block w-full min-[480px]:inline-block min-[480px]:w-auto"
+      phx-hook=".FilterDrawerAlign"
+    >
       <button
         type="button"
         phx-click={show_filter_drawer(@id)}
         class={[
           "flex h-[40px] w-full items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium whitespace-nowrap transition min-[480px]:w-auto",
           @active_count > 0 &&
-            "border-thamani-lime bg-thamani-lime text-thamani-forest hover:bg-thamani-lime/70",
+            "border-transparent bg-td-accent-tint text-thamani-forest hover:bg-td-accent-tint",
           @active_count == 0 && @variant == "outline" &&
-            "border-slate-300 text-slate-700 hover:bg-slate-50",
+            "border-transparent bg-[var(--color-td-control)] text-[var(--color-td-ink)] hover:bg-[var(--color-td-selected)]",
           @active_count == 0 && @variant == "solid" &&
-            "border-thamani-forest bg-thamani-forest text-white hover:bg-thamani-forest/90"
+            "border-thamani-forest bg-thamani-forest text-thamani-on-accent hover:bg-thamani-forest/90"
         ]}
       >
         <.icon name="hero-adjustments-horizontal" class="h-4 w-4" />
         {@trigger_label}
         <span
           :if={@active_count > 0}
-          class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-thamani-forest text-xs font-semibold text-white"
+          class="inline-flex h-5 w-5 items-center justify-center rounded-full bg-thamani-forest text-xs font-semibold text-thamani-on-accent"
         >
           {@active_count}
         </span>
@@ -2368,7 +2602,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <div id={@id} class="relative z-50 hidden" phx-remove={hide_filter_drawer(@id)}>
         <div
           id={"#{@id}-panel"}
-          class="absolute top-full right-0 z-50 mt-2 hidden w-[min(30rem,calc(100vw-2rem))] sm:w-[34rem] max-w-2xl origin-top-right scale-95 transform flex-col rounded-2xl ff-surface-modal opacity-0 transition shadow-2xl border border-thamani-stone bg-white overflow-visible"
+          class="td-fd-panel absolute top-full z-50 mt-2 hidden w-[min(30rem,calc(100vw-2rem))] sm:w-[34rem] max-w-2xl scale-95 transform flex-col rounded-2xl ff-surface-modal opacity-0 transition shadow-2xl border border-thamani-stone bg-[var(--color-td-raised)] overflow-visible"
           role="dialog"
           aria-modal="true"
           aria-labelledby={"#{@id}-title"}
@@ -2392,7 +2626,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <button
                 type="button"
                 phx-click={hide_filter_drawer(@id)}
-                class="rounded-md p-2 text-slate-400 hover:bg-slate-50 hover:text-slate-600"
+                class="rounded-md p-2 text-td-ink-3 hover:bg-td-wash hover:text-td-ink-2"
                 aria-label={gettext("close")}
               >
                 <.icon name="hero-x-mark-solid" class="h-5 w-5" />
@@ -2415,7 +2649,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             <div class="flex-1 overflow-visible px-5 py-5 sm:px-6 min-h-[16rem]">
               <div class={["grid grid-cols-1 gap-6", length(@group) > 1 && "sm:grid-cols-2"]}>
                 <div :for={group <- @group} class="overflow-visible">
-                  <h3 class="mb-3 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                  <h3 class="mb-3 text-xs font-semibold tracking-wide text-td-ink-2 uppercase">
                     {group.label}
                   </h3>
                   <div class="overflow-visible">
@@ -2429,14 +2663,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <button
                 type="button"
                 phx-click={JS.push(@clear_event) |> hide_filter_drawer(@id)}
-                class="rounded-md bg-thamani-snow px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100"
+                class="rounded-md bg-thamani-surface px-4 py-2 text-sm font-medium text-td-ink ring-1 ring-td-hairline hover:bg-td-wash"
               >
                 Clear filters
               </button>
               <button
                 :if={!@instant}
                 type="submit"
-                class="rounded-md bg-thamani-forest px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-thamani-forest/90"
+                class="rounded-md bg-thamani-forest px-4 py-2 text-sm font-medium text-td-on-accent shadow-sm hover:bg-thamani-forest/90"
               >
                 Apply filters
               </button>
@@ -2452,7 +2686,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
     >
       <span
         :for={chip <- @chip}
-        class="inline-flex items-center gap-1.5 rounded-full bg-thamani-lime px-3 py-1 text-sm font-medium text-thamani-forest"
+        class="inline-flex items-center gap-1.5 rounded-full bg-td-accent-tint px-3 py-1 text-sm font-medium text-thamani-forest"
       >
         {chip.label}
         <button
@@ -2472,6 +2706,24 @@ defmodule ThamaniDawaWeb.CoreComponents do
         Clear all
       </button>
     </div>
+
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".FilterDrawerAlign">
+      // The panel opens toward the side with room, so it never slides under the sidebar
+      // or off the right edge of the content area.
+      export default {
+        mounted() { this.align(); this.onResize = () => this.align(); window.addEventListener("resize", this.onResize); this.el.addEventListener("click", () => this.align(), true) },
+        updated() { this.align() },
+        destroyed() { window.removeEventListener("resize", this.onResize) },
+        align() {
+          const panel = this.el.querySelector(".td-fd-panel")
+          if (!panel) return
+          const r = this.el.getBoundingClientRect()
+          const area = (this.el.closest("main") || document.body).getBoundingClientRect()
+          const w = Math.min(544, window.innerWidth - 32)
+          this.el.classList.toggle("is-left", r.right - w < area.left && r.left + w <= area.right)
+        }
+      }
+    </script>
     """
   end
 

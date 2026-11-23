@@ -131,9 +131,9 @@ defmodule ThamaniDawaWeb.DistributorComponents do
   @doc "Formats a date as `04 Nov 2026`, or an em dash."
   def short_date(nil), do: "—"
   def short_date(%Date{} = date), do: Calendar.strftime(date, "%d %b %Y")
-  def short_date(%DateTime{} = datetime), do: Calendar.strftime(datetime, "%d %b %Y")
+  def short_date(%DateTime{} = datetime), do: ThamaniDawaWeb.TimeFormat.date(datetime)
 
-  @doc "Formats a timestamp as `04 Nov 2026, 14:05`, or an em dash."
+  @doc "Formats a timestamp as `4 Nov 2026, 14:05` in EAT, or an em dash."
   def date_time(nil), do: "—"
-  def date_time(%DateTime{} = datetime), do: Calendar.strftime(datetime, "%d %b %Y, %H:%M")
+  def date_time(datetime), do: ThamaniDawaWeb.TimeFormat.datetime(datetime)
 end

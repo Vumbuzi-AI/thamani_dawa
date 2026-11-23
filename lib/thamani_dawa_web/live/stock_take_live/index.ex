@@ -175,7 +175,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
             <.input field={@form[:site_id]} type="hidden" value={site.id} />
             <div class="mb-3">
               <span class="thamani-label">Site</span>
-              <p class="text-sm font-medium text-slate-800">{site.name}</p>
+              <p class="text-sm font-medium text-td-ink">{site.name}</p>
             </div>
           <% else %>
             <.input

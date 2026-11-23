@@ -491,14 +491,12 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
             </:group>
             <:group label="Requested between">
               <div class="grid grid-cols-2 gap-2">
-                <.input
-                  type="date"
+                <.date_picker
                   id="filter-date-from"
                   name="filters[date_from]"
                   value={@filters["date_from"]}
                 />
-                <.input
-                  type="date"
+                <.date_picker
                   id="filter-date-to"
                   name="filters[date_to]"
                   value={@filters["date_to"]}
@@ -582,7 +580,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
             label="Reason"
             required
           />
-          <.button variant="destructive" phx-disable-with="Rejecting…" class="w-full">
+          <.button variant="danger-confirm" phx-disable-with="Rejecting…" class="w-full">
             Reject requisition
           </.button>
         </.form>

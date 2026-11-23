@@ -207,7 +207,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
               readonly={show_organization_badge?(@live_action, @gln_check)}
               class={
                 show_organization_badge?(@live_action, @gln_check) &&
-                  "bg-slate-50 text-thamani-pewter"
+                  "bg-td-wash text-thamani-pewter"
               }
             />
             <%= case @gln_check do %>
@@ -217,7 +217,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
                   Looking up this GLN&hellip;
                 </p>
               <% {:matched, company, address} -> %>
-                <div class="mt-2 flex items-start gap-3 rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
+                <div class="mt-2 flex items-start gap-3 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
                   <.icon name="hero-check-circle" class="mt-0.5 size-4 flex-none" />
                   <div class="min-w-0">
                     <p>{company}</p>
@@ -282,7 +282,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
 
             <div
               :if={!show_organization_badge?(@live_action, @gln_check)}
-              class="mb-6 space-y-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3.5"
+              class="mb-6 space-y-4 rounded-xl border border-td-hairline bg-td-wash/50 p-3.5"
             >
               <p class="flex items-center gap-2 text-xs font-semibold text-thamani-forest">
                 <.icon name="hero-building-office-2" class="size-4" /> Organization details
@@ -301,7 +301,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
               type="hidden"
             />
 
-            <div class="mb-2 space-y-4 rounded-xl border border-slate-200 bg-slate-50/50 p-3.5">
+            <div class="mb-2 space-y-4 rounded-xl border border-td-hairline bg-td-wash/50 p-3.5">
               <p class="flex items-center gap-2 text-xs font-semibold text-thamani-forest">
                 <.icon name="hero-user" class="size-4" /> Contact details
               </p>

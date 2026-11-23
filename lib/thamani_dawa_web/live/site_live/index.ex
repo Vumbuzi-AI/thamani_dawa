@@ -497,7 +497,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               Checking with the GS1 registry&hellip;
             </p>
           <% {:matched, _name, _address} -> %>
-            <div class="mb-4 mt-2 rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
+            <div class="mb-4 mt-2 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
               <p class="inline-flex items-center gap-1.5">
                 <.icon name="hero-check-circle" class="size-4" /> Verified with GS1
               </p>
@@ -559,7 +559,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               />
             <% {:matched, name, address} -> %>
               <input type="hidden" name="site[name]" value={@form[:name].value} />
-              <div class="mb-4 rounded-xl border border-thamani-stone bg-slate-50/60 p-3">
+              <div class="mb-4 rounded-xl border border-thamani-stone bg-td-wash/60 p-3">
                 <p class="text-sm font-medium text-thamani-forest">{name}</p>
                 <p :if={address} class="text-xs text-thamani-pewter">{address}</p>
               </div>
@@ -713,7 +713,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             id="onboarding-open-site"
             type="button"
             phx-click="open_onboarding_site"
-            class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-md"
+            class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
           >
             <.icon name="hero-plus" class="mr-2 size-4" /> Add a branch
           </button>
@@ -724,7 +724,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           id="onboarding-sites-empty"
           class="mt-8 flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--thamani-stone)] bg-transparent px-6 text-center"
         >
-          <span class="flex size-12 items-center justify-center rounded-2xl bg-white text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
+          <span class="flex size-12 items-center justify-center rounded-2xl bg-td-surface text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
             <.icon name="hero-building-office-2" class="size-6" />
           </span>
           <h3 class="mt-4 text-base font-semibold text-thamani-forest">No branches yet</h3>
@@ -785,7 +785,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           id="onboarding-site-continue"
           type="button"
           phx-click="continue_onboarding"
-          class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg"
+          class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
         >
           Continue <.icon name="hero-arrow-right" class="ml-3 size-4" />
         </button>
@@ -882,11 +882,11 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
         <article
           :for={site <- @sites}
           id={"site-card-#{site.id}"}
-          class="group overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-snow shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200"
+          class="group overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200"
         >
           <div class="p-4">
             <div class="flex items-start gap-3.5">
-              <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest ring-1 ring-thamani-stone transition-colors duration-200 group-hover:bg-thamani-lime/40">
+              <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest ring-1 ring-thamani-stone transition-colors duration-200 group-hover:bg-td-accent-tint">
                 <.icon name="hero-building-office-2" class="size-6" />
               </div>
               <div class="min-w-0 flex-1 pt-0.5">
@@ -906,13 +906,13 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             <dl class="mt-4 grid grid-cols-2 border-t border-thamani-stone/80 pt-4">
               <div class="min-w-0 pr-4">
                 <dt class="text-sm text-thamani-pewter">GLN</dt>
-                <dd class="mt-1 truncate text-sm font-medium tabular-nums text-slate-900">
+                <dd class="mt-1 truncate text-sm font-medium tabular-nums text-td-ink">
                   {site.gln}
                 </dd>
               </div>
               <div class="min-w-0 border-l border-thamani-stone/80 pl-4">
                 <dt class="text-sm text-thamani-pewter">Address</dt>
-                <dd class="mt-1 line-clamp-2 text-sm font-medium leading-5 text-slate-900">
+                <dd class="mt-1 line-clamp-2 text-sm font-medium leading-5 text-td-ink">
                   {site.address}
                 </dd>
               </div>

@@ -77,97 +77,90 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.List do
     end
   end
 
-  defp active_filter_count(filters),
-    do: Enum.count(["status"], &(filters[&1] not in [nil, ""]))
-
   def render(assigns) do
     ~H"""
     <Layouts.manufacturer_shell
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/aggregations"}
+      crumb="Aggregations"
     >
-      <.header icon="hero-squares-plus">
-        Aggregations
-        <:subtitle>
-          Bind scanned serials to an existing shipper SSCC, then review and approve the pack.
-        </:subtitle>
+      <.td_list_page
+        title="Aggregations"
+        subtitle="Bind scanned serials to an existing shipper SSCC, then review and approve the pack."
+      >
         <:actions>
-          <.button
+          <.td_button
             id="new-manufacturer-aggregation"
             variant="primary"
+            label="New aggregation"
             navigate={~p"/manufacturer/aggregations/new"}
-          ><.icon name="hero-plus" class="size-4" /> New aggregation</.button>
+          />
         </:actions>
-        <:toolbar>
+        <:filters>
           <form id="manufacturer-aggregation-search" phx-change="search" phx-submit="search">
-            <.search_input
+            <.td_search
               name="search"
               value={@filters["search"]}
               placeholder="Search aggregation reference"
+              phx-debounce="300"
             />
           </form>
-          <div class="flex flex-wrap items-center gap-2">
-            <.filter_drawer
-              id="manufacturer-aggregation-filters"
-              title="Filter aggregations"
-              apply_event="apply_filters"
-              active_count={active_filter_count(@filters)}
-            >
-              <:group label="Status">
-                <.input
-                  type="select"
-                  id="filter-status"
-                  name="filters[status]"
-                  value={@filters["status"]}
-                  options={Enum.map(@tabs, fn {value, label} -> {label, value} end)}
-                />
-              </:group>
-              <:chip
-                :if={@filters["status"] != ""}
-                label={"Status: #{Phoenix.Naming.humanize(@filters["status"])}"}
-                clear={JS.push("clear_filter", value: %{filter: "status"})}
-              />
-            </.filter_drawer>
-          </div>
-        </:toolbar>
-      </.header>
+          <form id="manufacturer-aggregation-filters" phx-change="apply_filters">
+            <.td_select
+              id="filter-status"
+              name="filters[status]"
+              label="Status"
+              value={@filters["status"]}
+              options={Enum.map(@tabs, fn {value, label} -> {label, value} end)}
+            />
+          </form>
+        </:filters>
 
-      <.table
-        id="manufacturer-aggregations"
-        rows={@streams.aggregations}
-        row_click={fn {_id, aggregation} ->
-          JS.navigate(~p"/manufacturer/aggregations/#{aggregation.id}")
-        end}
-      >
-        <:col :let={{_id, aggregation}} label="Reference">
-          <p class="font-medium text-thamani-forest">{aggregation.reference}</p>
-        </:col>
-        <:col :let={{_id, aggregation}} label="Status" mobile="aside">
-          <.aggregation_status_badge status={aggregation.status} />
-        </:col>
-        <:col :let={{_id, aggregation}} label="Target SSCC code">
-          <span class="font-mono text-xs text-thamani-pewter">
-            {(aggregation.shipper_sscc && aggregation.shipper_sscc.code) || "—"}
-          </span>
-        </:col>
-        <:col :let={{_id, aggregation}} label="Items count">
-          {aggregation.item_count || 0}
-        </:col>
-        <:col :let={{_id, aggregation}} label="Created by">
-          {(aggregation.created_by && aggregation.created_by.name) || "—"}
-        </:col>
-        <:col :let={{_id, aggregation}} label="Updated" mobile="hidden">
-          <span class="text-xs text-thamani-pewter">{date_time(aggregation.updated_at)}</span>
-        </:col>
-        <:empty_state>
-          <.blank_state icon="hero-squares-plus" title="No aggregations here">
-            Nothing matches this status and filter combination yet.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        <.td_data_table
+          id="manufacturer-aggregations"
+          rows={@streams.aggregations}
+          row_id={fn {id, _aggregation} -> id end}
+        >
+          <:col :let={{_id, aggregation}} label="Reference">{aggregation.reference}</:col>
+          <:col :let={{_id, aggregation}} label="Status">
+            <.td_badge
+              tone={status_tone(aggregation.status)}
+              label={Phoenix.Naming.humanize(aggregation.status)}
+            />
+          </:col>
+          <:col :let={{_id, aggregation}} label="Target SSCC code">
+            <span class="td-kv-value is-mono">
+              {(aggregation.shipper_sscc && aggregation.shipper_sscc.code) || "—"}
+            </span>
+          </:col>
+          <:col :let={{_id, aggregation}} label="Items count">{aggregation.item_count || 0}</:col>
+          <:col :let={{_id, aggregation}} label="Created by">
+            {(aggregation.created_by && aggregation.created_by.name) || "—"}
+          </:col>
+          <:col :let={{_id, aggregation}} label="Updated">{date_time(aggregation.updated_at)}</:col>
+          <:action :let={{_id, aggregation}}>
+            <.td_button
+              variant="secondary"
+              label="Review"
+              navigate={~p"/manufacturer/aggregations/#{aggregation.id}"}
+            />
+          </:action>
+          <:empty>
+            <.td_empty
+              title="No aggregations here"
+              hint="Nothing matches this status and filter combination yet."
+            />
+          </:empty>
+        </.td_data_table>
+      </.td_list_page>
       <.pagination page={@page_info} path={pagination_path(@filters)} />
     </Layouts.manufacturer_shell>
     """
   end
+
+  defp status_tone("approved"), do: "success"
+  defp status_tone("submitted"), do: "warning"
+  defp status_tone("rejected"), do: "danger"
+  defp status_tone(_), do: "neutral"
 end

@@ -355,14 +355,22 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path="/org/dashboard">
+    <Layouts.org_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/org/dashboard"
+      crumb="Dashboard"
+    >
+      <:tools>
+        <.button variant="primary" navigate={~p"/org/sites/new"}>Add site</.button>
+      </:tools>
       <%!-- Fixed backdrop blur overlay when search popover is active --%>
       <div
         :if={
           not @setup_required? and @search_query != "" and String.trim(@search_query) != "" and
             Map.get(assigns, :search_active, true)
         }
-        class="fixed inset-0 z-30 bg-black/15 backdrop-blur-sm transition-opacity"
+        class="fixed inset-0 z-30" style="background: var(--color-td-scrim);"
         phx-click="dismiss_search"
       />
 
@@ -453,7 +461,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
                       <p class="text-xs text-thamani-pewter truncate">{item.subtitle}</p>
                     </div>
                   </div>
-                  <span class="px-2.5 py-1 text-xs font-medium bg-thamani-lime text-thamani-forest rounded-full shrink-0">
+                  <span class="px-2.5 py-1 text-xs font-medium bg-td-accent-tint text-thamani-forest rounded-full shrink-0">
                     {item.badge}
                   </span>
                 </div>
@@ -476,13 +484,13 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               class={[
                 "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-normal transition-all shrink-0 cursor-pointer w-full sm:w-auto border",
                 @show_filters &&
-                  "bg-thamani-forest text-thamani-snow border-thamani-forest shadow-sm",
+                  "bg-thamani-forest text-thamani-on-accent border-thamani-forest shadow-sm",
                 !@show_filters &&
-                  "bg-thamani-snow text-thamani-forest border-thamani-stone hover:bg-thamani-stone/60"
+                  "bg-thamani-surface text-thamani-forest border-thamani-stone hover:bg-thamani-stone/60"
               ]}
             >
               <.icon name="hero-adjustments-horizontal" class="size-4" /> Filters
-              <span :if={@range == "custom"} class="size-2 rounded-full bg-thamani-lime"></span>
+              <span :if={@range == "custom"} class="size-2 rounded-full bg-td-accent-tint"></span>
             </button>
 
             <%!-- Backdrop to dismiss filter popover when clicking outside --%>
@@ -561,7 +569,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
                   </button>
                   <button
                     type="submit"
-                    class="px-5 py-2 text-xs sm:text-sm font-normal text-thamani-snow bg-thamani-forest hover:opacity-90 rounded-full transition-colors cursor-pointer shadow-sm"
+                    class="px-5 py-2 text-xs sm:text-sm font-normal text-thamani-on-accent bg-thamani-forest hover:opacity-90 rounded-full transition-colors cursor-pointer shadow-sm"
                   >
                     Apply filters
                   </button>
@@ -575,7 +583,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
       <section
         :if={@setup_required?}
         id="organization-onboarding-welcome"
-        class="rounded-2xl border border-thamani-stone bg-white px-6 py-7 shadow-sm sm:px-8"
+        class="rounded-2xl border border-thamani-stone bg-td-surface px-6 py-7 shadow-sm sm:px-8"
       >
         <h1 class="text-3xl font-medium tracking-tight text-thamani-forest sm:text-4xl">
           Welcome to {@organization.name}
@@ -586,7 +594,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
         <.link
           id="complete-primary-site"
           navigate={primary_site_path(@primary_site)}
-          class="mt-5 inline-flex items-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
+          class="mt-5 inline-flex items-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-semibold text-td-on-accent shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
         >
           Complete your primary site
         </.link>
@@ -595,7 +603,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
       <section
         :if={@show_checklist?}
         id="organization-onboarding"
-        class="rounded-2xl border border-thamani-lime/70 bg-thamani-lime/15 p-5 shadow-sm"
+        class="rounded-2xl border border-transparent bg-td-accent-tint p-5 shadow-sm"
       >
         <div class="mb-4 flex items-center justify-between gap-3">
           <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-forest">
@@ -604,7 +612,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           <div class="flex items-center gap-2">
             <span
               id="onboarding-checklist-progress"
-              class="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-thamani-forest"
+              class="rounded-full bg-td-surface px-2.5 py-1 text-[11px] font-semibold text-thamani-forest"
             >
               {Enum.count(@checklist_items, & &1.done?)} of {length(@checklist_items)} complete
             </span>
@@ -614,7 +622,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               phx-click="dismiss_onboarding_checklist"
               title="Dismiss"
               aria-label="Dismiss getting started checklist"
-              class="flex size-6 items-center justify-center rounded-full text-thamani-pewter transition-colors hover:bg-white hover:text-thamani-forest"
+              class="flex size-6 items-center justify-center rounded-full text-thamani-pewter transition-colors hover:bg-td-surface hover:text-thamani-forest"
             >
               <.icon name="hero-x-mark" class="size-4" />
             </button>
@@ -624,13 +632,13 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           <li
             :for={item <- @checklist_items}
             id={"onboarding-item-#{item.key}"}
-            class="flex items-start justify-between gap-3 rounded-xl bg-white p-4 shadow-sm"
+            class="flex items-start justify-between gap-3 rounded-xl bg-td-surface p-4 shadow-sm"
           >
             <div class="flex min-w-0 items-start gap-3">
               <div class={[
                 "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg",
-                item.done? && "bg-thamani-lime/30 text-thamani-forest",
-                !item.done? && "bg-thamani-forest text-thamani-snow"
+                item.done? && "bg-td-accent-tint text-thamani-forest",
+                !item.done? && "bg-thamani-forest text-thamani-on-accent"
               ]}>
                 <.icon
                   name={if item.done?, do: "hero-check", else: "hero-rocket-launch"}
@@ -654,7 +662,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               :if={!item.done?}
               id={"onboarding-item-#{item.key}-cta"}
               navigate={item.path}
-              class="shrink-0 rounded-full bg-thamani-forest px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
+              class="shrink-0 rounded-full bg-thamani-forest px-4 py-2 text-xs font-semibold text-td-on-accent shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
             >
               {item.cta}
             </.link>
@@ -741,14 +749,14 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           type="button"
           data-tour-dismiss
           aria-label="Close product tour"
-          class="fixed inset-0 z-40 cursor-default bg-slate-950/45 backdrop-blur-[1px]"
+          class="fixed inset-0 z-40 cursor-default bg-td-ink/45 backdrop-blur-[1px]"
         ></button>
         <section
           data-tour-card
           role="dialog"
           aria-modal="true"
           aria-labelledby="product-tour-title"
-          class="fixed z-[100] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-white/20 bg-thamani-forest p-5 text-white shadow-2xl transition-[top,left] duration-200"
+          class="fixed z-[100] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-white/20 bg-thamani-forest p-5 text-td-on-accent shadow-2xl transition-[top,left] duration-200"
         >
           <span
             data-tour-arrow
@@ -758,7 +766,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
             <div>
               <p
                 data-tour-progress
-                class="text-xs font-semibold uppercase tracking-[0.16em] text-thamani-lime"
+                class="text-xs font-semibold uppercase tracking-[0.16em] text-td-on-accent"
               >
               </p>
               <h2 id="product-tour-title" data-tour-title class="mt-2 text-xl font-semibold"></h2>
@@ -767,7 +775,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               type="button"
               data-tour-dismiss
               aria-label="Close product tour"
-              class="rounded-lg p-1 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              class="rounded-lg p-1 text-white/70 transition-colors hover:bg-td-surface/10 hover:text-white"
             >
               <.icon name="hero-x-mark" class="size-5" />
             </button>
@@ -782,21 +790,21 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
             <button
               type="button"
               data-tour-back
-              class="rounded-full px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 disabled:invisible"
+              class="rounded-full px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-td-surface/10 disabled:invisible"
             >
               Back
             </button>
             <button
               type="button"
               data-tour-dismiss
-              class="rounded-full px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              class="rounded-full px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-td-surface/10 hover:text-white"
             >
               Skip tour
             </button>
             <button
               type="button"
               data-tour-next
-              class="rounded-full bg-thamani-lime px-5 py-2 text-sm font-semibold text-thamani-forest transition-all hover:brightness-95 active:scale-[0.98]"
+              class="rounded-full bg-td-accent-tint px-5 py-2 text-sm font-semibold text-thamani-forest transition-all hover:brightness-95 active:scale-[0.98]"
             >
               Next
             </button>

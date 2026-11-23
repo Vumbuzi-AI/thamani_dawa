@@ -214,8 +214,8 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
     <div class="flex items-center gap-2.5">
       <span class={[
         "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-        @state == :done && "bg-thamani-forest text-thamani-snow",
-        @state == :current && "bg-thamani-forest text-thamani-snow",
+        @state == :done && "bg-thamani-forest text-thamani-on-accent",
+        @state == :current && "bg-thamani-forest text-thamani-on-accent",
         @state == :upcoming && "bg-thamani-stone text-thamani-pewter"
       ]}>
         <.icon :if={@state == :done} name="hero-check" class="size-4" />
@@ -264,10 +264,10 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
               class="flex flex-1 flex-col gap-4"
             >
               <div
-                class="group relative flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-thamani-stone bg-thamani-snow px-8 py-12 text-center transition-colors hover:border-thamani-forest/40 hover:bg-thamani-canvas"
+                class="group relative flex flex-1 flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-thamani-stone bg-thamani-surface px-8 py-12 text-center transition-colors hover:border-thamani-forest/40 hover:bg-thamani-canvas"
                 phx-drop-target={@uploads.csv_file.ref}
               >
-                <span class="flex size-12 items-center justify-center rounded-full bg-thamani-lime/30 text-thamani-forest">
+                <span class="flex size-12 items-center justify-center rounded-full bg-td-accent-tint text-thamani-forest">
                   <.icon name="hero-arrow-up-tray" class="size-6" />
                 </span>
                 <div>
@@ -284,7 +284,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
                 />
 
                 <div :for={entry <- @uploads.csv_file.entries} class="w-full text-left">
-                  <div class="flex items-center justify-between rounded-lg border border-thamani-stone bg-white px-3 py-2">
+                  <div class="flex items-center justify-between rounded-lg border border-thamani-stone bg-td-surface px-3 py-2">
                     <span class="flex items-center gap-2 truncate text-sm text-thamani-forest">
                       <.icon
                         name="hero-document-text"
@@ -323,7 +323,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
 
             <div class="mt-auto flex items-center justify-between gap-4 rounded-xl bg-thamani-stone/40 p-4">
               <div class="flex items-center gap-3">
-                <span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white text-thamani-forest ring-1 ring-thamani-stone">
+                <span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-td-surface text-thamani-forest ring-1 ring-thamani-stone">
                   <.icon name="hero-table-cells" class="size-5" />
                 </span>
                 <div>
@@ -362,7 +362,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
               </ul>
             </div>
 
-            <div class="rounded-xl bg-thamani-lime/15 p-4">
+            <div class="rounded-xl bg-td-accent-tint p-4">
               <p class="flex items-center gap-2 text-sm font-semibold text-thamani-forest">
                 <.icon name="hero-light-bulb" class="size-4.5 text-thamani-forest/70" /> Tip
               </p>
@@ -393,7 +393,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
                 {length(@rows)} rows &bull; {length(@headers)} columns
               </p>
 
-              <div class="mt-3 overflow-x-auto rounded-lg border border-thamani-stone bg-white">
+              <div class="mt-3 overflow-x-auto rounded-lg border border-thamani-stone bg-td-surface">
                 <table class="text-xs">
                   <thead class="bg-thamani-stone/40 text-left font-medium text-thamani-forest">
                     <tr>
@@ -428,7 +428,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
                       <th class="px-4 py-2.5">Column from your file</th>
                     </tr>
                   </thead>
-                  <tbody class="divide-y divide-thamani-stone bg-white">
+                  <tbody class="divide-y divide-thamani-stone bg-td-surface">
                     <tr :for={field <- Importer.fields()}>
                       <td class="px-4 py-2.5 text-sm font-medium text-thamani-forest">
                         {field.label}
@@ -531,7 +531,7 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
                     <th class="px-3 py-2">Issue</th>
                   </tr>
                 </thead>
-                <tbody id="import-issue-rows" class="divide-y divide-red-100 bg-white">
+                <tbody id="import-issue-rows" class="divide-y divide-red-100 bg-td-surface">
                   <tr :for={row <- issue_rows(@preview)}>
                     <td class="px-3 py-2 tabular-nums text-thamani-pewter">{row.index + 1}</td>
                     <td class="px-3 py-2 text-thamani-forest">{row_name(row.attrs)}</td>

@@ -28,6 +28,7 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
      |> assign(:page_title, "Mobile users")
      |> assign(:app_download_url, app_download_url())
      |> assign(:sites, sites)
+     |> assign(:deactivate_user, nil)
      |> load_users()}
   end
 
@@ -100,16 +101,33 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
      |> load_users()}
   end
 
-  def handle_event("toggle_active", %{"id" => id}, socket) do
+  def handle_event("ask_deactivate", %{"id" => id}, socket) do
     mobile_user = Distributor.get_mobile_user!(socket.assigns.current_scope.organization_id, id)
-    {:ok, mobile_user} = Distributor.set_mobile_user_active(mobile_user, !mobile_user.active)
+    {:noreply, assign(socket, :deactivate_user, mobile_user)}
+  end
 
-    message =
-      if mobile_user.active,
-        do: "#{mobile_user.name} can sign in to the app again.",
-        else: "#{mobile_user.name} has been deactivated and signed out."
+  def handle_event("cancel_deactivate", _params, socket) do
+    {:noreply, assign(socket, :deactivate_user, nil)}
+  end
 
-    {:noreply, socket |> put_flash(:info, message) |> load_users()}
+  def handle_event("confirm_deactivate", _params, socket) do
+    {:ok, mobile_user} = Distributor.set_mobile_user_active(socket.assigns.deactivate_user, false)
+
+    {:noreply,
+     socket
+     |> assign(:deactivate_user, nil)
+     |> put_flash(:info, "#{mobile_user.name} has been deactivated and signed out.")
+     |> load_users()}
+  end
+
+  def handle_event("activate", %{"id" => id}, socket) do
+    mobile_user = Distributor.get_mobile_user!(socket.assigns.current_scope.organization_id, id)
+    {:ok, mobile_user} = Distributor.set_mobile_user_active(mobile_user, true)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "#{mobile_user.name} can sign in to the app again.")
+     |> load_users()}
   end
 
   defp load_users(socket) do
@@ -207,6 +225,30 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
         </.form>
       </.modal>
 
+      <.modal
+        :if={@deactivate_user}
+        id="deactivate-distributor-mobile-user"
+        show
+        on_cancel={JS.push("cancel_deactivate")}
+      >
+        <h2 class="mb-1 pr-10 text-base font-medium" style="color: var(--color-td-ink);">
+          Deactivate {@deactivate_user.name}
+        </h2>
+        <p class="mb-4 text-sm" style="color: var(--color-td-ink-2);">
+          They will be signed out of the app and cannot sign in until you activate them again.
+        </p>
+        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <.button type="button" variant="ghost" phx-click="cancel_deactivate">Cancel</.button>
+          <.button
+            id="confirm-deactivate-distributor-mobile-user"
+            variant="danger-confirm"
+            phx-click="confirm_deactivate"
+          >
+            Deactivate
+          </.button>
+        </div>
+      </.modal>
+
       <.table id="distributor-mobile-users" rows={@streams.mobile_users}>
         <:col :let={{_id, mobile_user}} label="Name">
           <div class="min-w-0 max-w-full">
@@ -256,13 +298,24 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
               Resend PIN
             </.button>
             <.button
-              id={"toggle-mobile-user-#{mobile_user.id}"}
-              variant={if mobile_user.active, do: "ghost-delete", else: "ghost"}
+              :if={mobile_user.active}
+              id={"deactivate-mobile-user-#{mobile_user.id}"}
+              variant="ghost-delete"
               class="shrink-0 whitespace-nowrap"
-              phx-click="toggle_active"
+              phx-click="ask_deactivate"
               phx-value-id={mobile_user.id}
             >
-              {if mobile_user.active, do: "Deactivate", else: "Activate"}
+              Deactivate
+            </.button>
+            <.button
+              :if={!mobile_user.active}
+              id={"activate-mobile-user-#{mobile_user.id}"}
+              variant="ghost"
+              class="shrink-0 whitespace-nowrap"
+              phx-click="activate"
+              phx-value-id={mobile_user.id}
+            >
+              Activate
             </.button>
           </div>
         </:action>

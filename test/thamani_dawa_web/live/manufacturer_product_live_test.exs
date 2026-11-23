@@ -79,6 +79,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     lv |> element("#serial-wizard-mode-stock") |> render_click()
 
     assert has_element?(lv, "#manufacturer-serial-generation-form")
+    # Step 2 dates are the TD date picker, never the browser's native calendar.
+    assert has_element?(lv, ~s(.td-dp [data-dp-input][name="serial_generation[production_date]"]))
+    assert has_element?(lv, ~s(.td-dp [data-dp-input][name="serial_generation[expiry_date]"]))
+    refute has_element?(lv, ~s(input[type="date"]))
     refute has_element?(lv, ~s([name="serial_generation[shipper_quantity]"]))
     refute has_element?(lv, ~s([name="serial_generation[from_gln]"]))
 
@@ -97,6 +101,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert [serial | _] = Manufacturing.list_serials(organization.id, batch.id)
     assert serial.serial != nil
     assert Manufacturing.list_sscc_groups(organization.id, product.id) == []
+    assert batch.production_date == ~D[2026-11-20]
+    assert batch.expiry_date == ~D[2027-11-20]
 
     request =
       Enum.find(ThamaniDawa.GS1.MemberApiStub.serial_requests(), &(&1["barcode"] == product.gtin))

@@ -51,7 +51,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
         <div class="flex flex-wrap items-center gap-2">
           <nav
             aria-label="Shipment document"
-            class="inline-flex rounded-lg border border-thamani-stone bg-thamani-snow p-1"
+            class="inline-flex rounded-lg border border-thamani-stone bg-thamani-surface p-1"
           >
             <.link
               id="switch-delivery-note"
@@ -59,9 +59,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
               aria-current={@live_action == :delivery_note && "page"}
               class={[
                 "inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                @live_action == :delivery_note && "bg-thamani-lime text-thamani-forest",
+                @live_action == :delivery_note && "bg-td-accent-tint text-thamani-forest",
                 @live_action != :delivery_note &&
-                  "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+                  "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
               ]}
             >
               Delivery note
@@ -72,9 +72,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
               aria-current={@live_action == :packing_list && "page"}
               class={[
                 "inline-flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                @live_action == :packing_list && "bg-thamani-lime text-thamani-forest",
+                @live_action == :packing_list && "bg-td-accent-tint text-thamani-forest",
                 @live_action != :packing_list &&
-                  "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+                  "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
               ]}
             >
               Packing list
@@ -94,7 +94,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
 
       <article
         id={document_id(@live_action)}
-        class="printable-shipment-doc relative mx-auto max-w-4xl rounded-xl bg-white p-6 shadow-sm ring-1 ring-thamani-stone sm:p-10"
+        class="printable-shipment-doc relative mx-auto max-w-4xl rounded-xl bg-td-surface p-6 shadow-sm ring-1 ring-thamani-stone sm:p-10"
       >
         <header class="grid gap-6 border-b border-thamani-stone pb-6 sm:grid-cols-[minmax(0,1fr)_auto]">
           <div>

@@ -56,7 +56,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
       refute has_element?(lv, "#low-stock", "Pending Only Drug")
       refute has_element?(lv, "#near-expiry", "Pending Only Drug")
       refute has_element?(lv, "#out-of-stock", "Pending Only Drug")
-      assert has_element?(lv, "a[href='/pharmacy/receive-stock'] .bg-warning", "1")
+      assert has_element?(lv, "a[href='/pharmacy/receive-stock'] .td-count", "1")
     end
 
     test "distinguishes out-of-stock from low-stock", %{conn: conn} do
@@ -262,7 +262,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
 
       assert has_element?(lv, "a[href='/pharmacy/receive-stock']", "Receive stock")
-      assert has_element?(lv, "a[href='/pharmacy/receive-stock'] .bg-warning", "1")
+      assert has_element?(lv, "a[href='/pharmacy/receive-stock'] .td-count", "1")
     end
 
     test "shows no badge when there are no pending batches", %{conn: conn} do
@@ -272,7 +272,7 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
 
-      refute has_element?(lv, "a[href='/pharmacy/receive-stock'] .bg-warning")
+      refute has_element?(lv, "a[href='/pharmacy/receive-stock'] .td-count")
     end
   end
 end

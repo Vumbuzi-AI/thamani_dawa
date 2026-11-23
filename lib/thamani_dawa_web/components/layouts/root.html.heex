@@ -13,8 +13,10 @@
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <%!-- Product UI: Inter 400/500 and JetBrains Mono 400/500 (Doop --font-sans, --font-mono).
+         Rethink Sans is only for the public landing page (Doop --font-landing). --%>
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Rethink+Sans:wght@400..600&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Rethink+Sans:wght@400..600&display=swap"
       rel="stylesheet"
     />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js">
@@ -23,38 +25,69 @@
     </script>
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
-    <style>
-      body {
-        font-family: 'Rethink Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif !important;
-      }
-    </style>
+    <%!-- Body font and background are set in app.css (Inter for the app and auth,
+         Rethink Sans for the landing pages only). --%>
     <script>
+      // One theme switch for the whole app. The preference is "system", "light"
+      // or "dark", stored in localStorage under "phx:theme" ("system" = no key).
+      // <html data-theme> always holds the resolved "light" or "dark", set here
+      // before first paint so there is no flash.
       (() => {
-        const systemTheme = () => matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        const KEY = "phx:theme";
+        const PREFS = ["system", "light", "dark"];
+        const root = document.documentElement;
+        const media = matchMedia("(prefers-color-scheme: dark)");
+        const systemTheme = () => (media.matches ? "dark" : "light");
 
-        const setTheme = (theme) => {
-          if (theme === "system") {
-            localStorage.removeItem("phx:theme");
-            document.documentElement.setAttribute("data-theme", systemTheme());
-            document.documentElement.setAttribute("data-theme-source", "system");
-          } else {
-            localStorage.setItem("phx:theme", theme);
-            document.documentElement.setAttribute("data-theme", theme);
-            document.documentElement.setAttribute("data-theme-source", "user");
-          }
+        const readPref = () => {
+          let pref = null;
+          try { pref = localStorage.getItem(KEY); } catch (_e) {}
+          if (PREFS.includes(pref)) return pref;
+          // Drop anything else, e.g. the literal "toggle" an older switch stored.
+          if (pref !== null) { try { localStorage.removeItem(KEY); } catch (_e) {} }
+          return "system";
         };
-        if (!document.documentElement.hasAttribute("data-theme")) {
-          setTheme(localStorage.getItem("phx:theme") || "system");
-        }
-        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue || "system"));
-        
-        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
 
-        matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-          if (document.documentElement.getAttribute("data-theme-source") === "system") {
-            document.documentElement.setAttribute("data-theme", systemTheme());
-          }
-        });
+        const syncControls = () => {
+          const pref = root.getAttribute("data-theme-pref") || "system";
+          const dark = root.getAttribute("data-theme") === "dark";
+          document.querySelectorAll("[data-theme-switch]").forEach((el) => {
+            el.setAttribute("aria-checked", String(dark));
+            el.classList.toggle("is-on", dark);
+          });
+          document.querySelectorAll("[data-phx-theme]:not([data-theme-switch])").forEach((el) => {
+            el.setAttribute("aria-pressed", String(el.dataset.phxTheme === pref));
+          });
+        };
+
+        const apply = (pref) => {
+          const theme = pref === "system" ? systemTheme() : pref;
+          root.setAttribute("data-theme", theme);
+          root.setAttribute("data-theme-pref", pref);
+          root.setAttribute("data-theme-source", pref === "system" ? "system" : "user");
+          syncControls();
+        };
+
+        const setTheme = (requested) => {
+          let pref = requested;
+          // The sidebar switch asks to flip whatever is showing now.
+          if (pref === "toggle") pref = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+          if (!PREFS.includes(pref)) return;
+          try {
+            if (pref === "system") localStorage.removeItem(KEY);
+            else localStorage.setItem(KEY, pref);
+          } catch (_e) {}
+          apply(pref);
+        };
+
+        apply(readPref());
+
+        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+        window.addEventListener("storage", (e) => e.key === KEY && apply(readPref()));
+        media.addEventListener("change", () => readPref() === "system" && apply("system"));
+        // Re-sync controls after LiveView renders or navigates.
+        document.addEventListener("DOMContentLoaded", syncControls);
+        window.addEventListener("phx:page-loading-stop", syncControls);
       })();
     </script>
   </head>

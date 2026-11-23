@@ -174,13 +174,13 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   defp condition_label(status), do: Phoenix.Naming.humanize(status)
 
   defp condition_classes(:damaged), do: "bg-amber-900 text-amber-50"
-  defp condition_classes(:missing), do: "bg-thamani-error text-white"
+  defp condition_classes(:missing), do: "bg-thamani-error text-td-on-danger"
   defp condition_classes(:found), do: "bg-emerald-100 text-emerald-800"
   defp condition_classes(:lost), do: "bg-amber-100 text-amber-800"
   defp condition_classes(:expired), do: "bg-amber-900 text-amber-50"
 
   defp condition_classes(status) when status in [:stolen, :destroyed, :recalled],
-    do: "bg-thamani-error text-white"
+    do: "bg-thamani-error text-td-on-danger"
 
   defp condition_classes(_status), do: "bg-thamani-stone text-thamani-forest"
 
@@ -261,7 +261,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
         <ul class="mt-2 flex flex-wrap gap-1.5">
           <li
             :for={entry <- @serial_entries}
-            class="inline-flex items-center gap-1.5 rounded-lg border border-thamani-stone bg-white px-2 py-1 text-xs font-medium tabular-nums tracking-tight text-thamani-evergreen"
+            class="inline-flex items-center gap-1.5 rounded-lg border border-thamani-stone bg-td-surface px-2 py-1 text-xs font-medium tabular-nums tracking-tight text-thamani-evergreen"
           >
             {entry.serial}
             <span
@@ -284,7 +284,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
         <li
           :for={line <- @quantity_lines}
           id={"goods-receipt-line-#{line.id}"}
-          class="rounded-xl border border-thamani-stone bg-white p-3"
+          class="rounded-xl border border-thamani-stone bg-td-surface p-3"
         >
           <p class="text-sm font-medium text-thamani-evergreen">
             {line.quantity} {Products.unit_label(line.uom)}
@@ -308,7 +308,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           <li
             :for={line <- @follow_up}
             id={"goods-receipt-line-#{line.id}"}
-            class="rounded-xl border border-thamani-stone bg-white p-3"
+            class="rounded-xl border border-thamani-stone bg-td-surface p-3"
           >
             <div class="flex items-start justify-between gap-3">
               <p class="min-w-0 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]">
@@ -346,7 +346,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
                 phx-value-id={line.discrepancy_id}
                 phx-value-status={status}
                 class={[
-                  "inline-flex h-8 items-center rounded-full border border-thamani-frosted bg-white px-3 text-xs font-semibold transition-colors hover:bg-thamani-canvas",
+                  "inline-flex h-8 items-center rounded-full border border-thamani-frosted bg-td-surface px-3 text-xs font-semibold transition-colors hover:bg-thamani-canvas",
                   status == "stolen" && "text-thamani-error",
                   status != "stolen" && "text-thamani-evergreen"
                 ]}
@@ -398,7 +398,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
         </:actions>
       </.header>
 
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6">
+      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Received</dt><dd class="mt-1 text-sm text-thamani-ink">
@@ -464,7 +464,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
               <div class="flex items-center gap-2">
                 <span
                   :if={group.sscc}
-                  class="rounded-lg bg-thamani-lime px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
+                  class="rounded-lg bg-td-accent-tint px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
                 >
                   SSCC {group.sscc}
                 </span>
@@ -485,7 +485,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           <li
             :for={attachment <- @receipt.attachments}
             id={"goods-receipt-document-#{attachment.id}"}
-            class="group flex min-w-0 flex-col rounded-2xl border border-thamani-stone bg-white p-4 shadow-[0_1px_2px_rgba(23,48,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--thamani-forest)_28%,white)] hover:shadow-md"
+            class="group flex min-w-0 flex-col rounded-2xl border border-thamani-stone bg-td-surface p-4 shadow-[0_1px_2px_rgba(23,48,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--thamani-forest)_28%,white)] hover:shadow-md"
           >
             <div class="flex min-w-0 items-start gap-3">
               <span class={[
@@ -516,7 +516,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
                 target="_blank"
                 rel="noopener"
                 aria-label={"Preview #{attachment.filename}"}
-                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-lime"
+                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-td-focus"
               >
                 <.icon name="hero-eye" class="size-4" /> Preview
               </a>
@@ -524,7 +524,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
                 href={attachment.path}
                 download={attachment.filename}
                 aria-label={"Download #{attachment.filename}"}
-                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-thamani-forest px-3 text-xs font-semibold text-white transition-all hover:-translate-y-px hover:bg-[#10221e] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-lime focus-visible:ring-offset-2"
+                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-thamani-forest px-3 text-xs font-semibold text-td-on-accent transition-all hover:-translate-y-px hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-td-focus focus-visible:ring-offset-2"
               >
                 <.icon name="hero-arrow-down-tray" class="size-4" /> Download
               </a>

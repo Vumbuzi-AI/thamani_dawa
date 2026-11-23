@@ -13,6 +13,9 @@ defmodule ThamaniDawaWeb.EarningsLive do
 
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.LabOrders
+  alias ThamaniDawa.PatientVisits
+  alias ThamaniDawa.Patients
   alias ThamaniDawa.PaymentMethods
   alias ThamaniDawa.Payments
   alias ThamaniDawa.Payments.Payment
@@ -41,11 +44,68 @@ defmodule ThamaniDawaWeb.EarningsLive do
      |> assign(:filters, @default_filters)}
   end
 
-  def handle_params(_params, _url, socket) do
-    {:noreply,
-     socket
-     |> assign(:portal, portal_for(socket.assigns.live_action))
-     |> reload_transactions()}
+  def handle_params(params, _url, socket) do
+    socket =
+      socket
+      |> assign(:portal, portal_for(socket.assigns.live_action))
+      |> reload_transactions()
+
+    {:noreply, load_selected(socket, socket.assigns.live_action, params)}
+  end
+
+  # Lab transaction detail (Doop 45FlJvpVyi) and receipt (VRY0p3ZE2z). The payment is looked
+  # up through the same organization, site and portal scoping as the list, so an id from
+  # another organization, site or portal is treated as not found.
+  defp load_selected(socket, action, %{"id" => id}) when action in [:lab_show, :lab_receipt] do
+    case Enum.find(scoped_transactions(socket), &(to_string(&1.id) == id)) do
+      nil ->
+        socket
+        |> put_flash(:error, "That transaction could not be found.")
+        |> push_navigate(to: ~p"/lab/transactions")
+
+      payment ->
+        assign(socket, :selected, transaction_detail(socket, payment))
+    end
+  end
+
+  defp load_selected(socket, _action, _params), do: assign(socket, :selected, nil)
+
+  defp scoped_transactions(socket) do
+    socket.assigns.current_scope.organization_id
+    |> Payments.list_transactions()
+    |> SiteScoping.for_current_site(socket.assigns.current_scope)
+    |> filter_by_portal(socket.assigns.portal)
+  end
+
+  defp transaction_detail(socket, payment) do
+    organization_id = socket.assigns.current_scope.organization_id
+    lab_order = payment.lab_order_id && LabOrders.get_lab_order!(organization_id, payment.lab_order_id)
+
+    patient =
+      lab_order &&
+        organization_id
+        |> PatientVisits.get_patient_visit!(lab_order.patient_visit_id)
+        |> then(&Patients.get_patient!(organization_id, &1.patient_id))
+
+    items =
+      if lab_order do
+        organization_id
+        |> LabOrders.list_lab_order_results_for_order(lab_order.id)
+        |> Enum.map(fn result ->
+          %{name: (result.lab_test && result.lab_test.name) || "Lab test", qty: 1, amount: result.lab_test && result.lab_test.price}
+        end)
+      else
+        []
+      end
+
+    %{
+      payment: payment,
+      lab_order: lab_order,
+      patient: patient,
+      items: items,
+      site: Map.get(socket.assigns.sites_by_id, payment.site_id),
+      time: payment.paid_at || payment.inserted_at
+    }
   end
 
   def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
@@ -110,6 +170,8 @@ defmodule ThamaniDawaWeb.EarningsLive do
 
   defp portal_for(:pharmacy), do: :pharmacy
   defp portal_for(:lab), do: :lab
+  defp portal_for(:lab_show), do: :lab
+  defp portal_for(:lab_receipt), do: :lab
   defp portal_for(_), do: :organization
 
   defp portal_path(:pharmacy), do: "/pharmacy/transactions"
@@ -297,6 +359,215 @@ defmodule ThamaniDawaWeb.EarningsLive do
 
   defp order_link(%Payment{id: id}), do: {"Payment ##{id}", nil}
 
+  defp method_label(%{payment_type: type}) when is_binary(type) and type != "",
+    do: Phoenix.Naming.humanize(type)
+
+  defp method_label(_), do: "Payment"
+
+  defp reference_label(%{payment_type: type}) when is_binary(type) do
+    if String.contains?(String.downcase(type), ["mpesa", "m-pesa", "mobile"]),
+      do: "M-Pesa reference",
+      else: "Reference"
+  end
+
+  defp reference_label(_), do: "Reference"
+
+  defp receipt_number(%{provider_reference: ref}) when is_binary(ref) and ref != "",
+    do: "TD-R-" <> String.slice(String.upcase(ref), -6, 6)
+
+  defp receipt_number(%{id: id}), do: "TD-R-" <> String.pad_leading(to_string(id), 6, "0")
+
+  defp status_tone(:completed), do: "success"
+  defp status_tone(:failed), do: "danger"
+  defp status_tone(_), do: "warning"
+
+  attr :selected, :map, required: true
+
+  defp transaction_modal(assigns) do
+    ~H"""
+    <.modal
+      id="transaction-modal"
+      show
+      title={"Payment #{ThamaniDawaWeb.Money.ksh(@selected.payment.amount)}"}
+      subtitle={"#{method_label(@selected.payment)} · #{ThamaniDawaWeb.TimeFormat.datetime(@selected.time)}"}
+      on_cancel={JS.patch(~p"/lab/transactions")}
+    >
+      <div class="td-modal-form">
+        <div class="td-amt">
+          <div class="flex flex-col gap-2">
+            <span class="td-s12">Amount paid</span>
+            <b class="td-amt-value">{ThamaniDawaWeb.Money.ksh(@selected.payment.amount)}</b>
+          </div>
+          <div class="pb-1">
+            <.td_badge
+              tone={status_tone(@selected.payment.status)}
+              label={Phoenix.Naming.humanize(@selected.payment.status)}
+            />
+          </div>
+        </div>
+
+        <div :if={@selected.patient} class="td-card td-txn-party">
+          <span class="td-person">
+            <.td_orb seed={to_string(@selected.patient.id)} size={28} />
+            <span class="flex flex-col gap-1">
+              <b class="font-medium">{@selected.patient.full_name}</b>
+              <span class="td-s12">Patient<span :if={@selected.patient.phone}> · {@selected.patient.phone}</span></span>
+            </span>
+          </span>
+          <span class="flex-1"></span>
+          <.link
+            :if={@selected.lab_order}
+            id="transaction-order-link"
+            navigate={~p"/lab/orders/#{@selected.lab_order.id}"}
+            class="td-link inline-flex items-center gap-1.5"
+          >
+            <span class="td-mono">{LabOrders.reference(@selected.lab_order)}</span>
+            <.td_icon name="arrow-up-right" class="size-3.5" />
+          </.link>
+        </div>
+
+        <dl class="td-kv-grid">
+          <div class="td-kv">
+            <dt class="td-kv-label">{reference_label(@selected.payment)}</dt>
+            <dd class="td-kv-value is-mono">{@selected.payment.provider_reference || "—"}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Method</dt>
+            <dd class="td-kv-value">{method_label(@selected.payment)}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Phone</dt>
+            <dd class="td-kv-value">{(@selected.patient && @selected.patient.phone) || "—"}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Site</dt>
+            <dd class="td-kv-value">{(@selected.site && @selected.site.name) || "—"}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Status</dt>
+            <dd class="td-kv-value">{Phoenix.Naming.humanize(@selected.payment.status)}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Time</dt>
+            <dd class="td-kv-value">{ThamaniDawaWeb.TimeFormat.datetime(@selected.time)}</dd>
+          </div>
+        </dl>
+
+        <div :if={@selected.items != []} class="td-card">
+          <table class="td-mini-table">
+            <thead>
+              <tr><th>Item</th><th class="is-num">Qty</th><th class="is-num">Amount</th></tr>
+            </thead>
+            <tbody>
+              <tr :for={item <- @selected.items}>
+                <td>{item.name}</td>
+                <td class="is-num">{item.qty}</td>
+                <td class="is-num">{ThamaniDawaWeb.Money.ksh(item.amount)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <:footer>
+        <div class="td-txn-more">
+          <.td_icon_button
+            id="transaction-more"
+            label="More actions"
+            aria-haspopup="menu"
+            phx-click={JS.toggle(to: "#transaction-more-menu")}
+          >
+            <:icon><.td_icon name="dots-three" /></:icon>
+          </.td_icon_button>
+          <div
+            id="transaction-more-menu"
+            class="td-popover td-txn-menu"
+            role="menu"
+            hidden
+            phx-click-away={JS.hide(to: "#transaction-more-menu")}
+          >
+            <button
+              id="transaction-refund"
+              type="button"
+              role="menuitem"
+              class="td-menu-item is-danger"
+              disabled
+              aria-disabled="true"
+              title="Refunds are not available yet"
+            >
+              <.td_icon name="arrow-counter-clockwise" /> Refund
+            </button>
+            <p class="td-note px-2 pb-1">Refunds are not available yet.</p>
+          </div>
+        </div>
+        <span class="flex-1"></span>
+        <.td_button type="button" phx-click={JS.patch(~p"/lab/transactions")}>Close</.td_button>
+        <.td_button
+          id="print-receipt-button"
+          variant="primary"
+          type="button"
+          glyph="printer"
+          patch={~p"/lab/transactions/#{@selected.payment.id}/receipt"}
+        >
+          Print receipt
+        </.td_button>
+      </:footer>
+    </.modal>
+    """
+  end
+
+  attr :selected, :map, required: true
+
+  defp receipt_sheet(assigns) do
+    ~H"""
+    <.modal
+      id="receipt-modal"
+      show
+      size="confirm"
+      class="td-receipt-modal"
+      on_cancel={JS.patch(~p"/lab/transactions/#{@selected.payment.id}")}
+    >
+      <div id="lab-receipt" class="td-receipt">
+        <div class="flex items-center justify-between">
+          <img src={~p"/images/logo-transparent.png"} alt="Thamani Dawa" class="h-3.5" />
+          <span class="td-s12">{(@selected.site && @selected.site.name) || ""}</span>
+        </div>
+        <div class="td-rc-ln">
+          <span class="td-rc-muted">Receipt</span><span class="td-mono">{receipt_number(@selected.payment)}</span>
+        </div>
+        <div :if={@selected.lab_order} class="td-rc-ln">
+          <span class="td-rc-muted">Order</span><span class="td-mono">{LabOrders.reference(@selected.lab_order)}</span>
+        </div>
+        <div :if={@selected.patient} class="td-rc-ln">
+          <span class="td-rc-muted">Patient</span><span>{@selected.patient.full_name}</span>
+        </div>
+        <div class="td-rc-ln">
+          <span class="td-rc-muted">Time</span><span>{ThamaniDawaWeb.TimeFormat.datetime(@selected.time)}</span>
+        </div>
+        <div class="td-rc-dash"></div>
+        <div :for={item <- @selected.items} class="td-rc-ln">
+          <span>{item.name} × {item.qty}</span><span>{ThamaniDawaWeb.Money.ksh(item.amount)}</span>
+        </div>
+        <div :if={@selected.items != []} class="td-rc-dash"></div>
+        <div class="td-rc-ln is-total">
+          <span>Total paid</span><span>{ThamaniDawaWeb.Money.ksh(@selected.payment.amount)}</span>
+        </div>
+        <div :if={@selected.payment.provider_reference} class="td-rc-ln">
+          <span class="td-rc-muted">{method_label(@selected.payment)}</span><span class="td-mono">{@selected.payment.provider_reference}</span>
+        </div>
+        <span class="td-s12 td-rc-foot">Powered by Thamani Dawa</span>
+      </div>
+      <:footer>
+        <.td_button type="button" phx-click={JS.patch(~p"/lab/transactions/#{@selected.payment.id}")}>
+          Close
+        </.td_button>
+        <.td_button id="print-receipt" variant="primary" type="button" glyph="printer" onclick="window.print()">
+          Print
+        </.td_button>
+      </:footer>
+    </.modal>
+    """
+  end
+
   def render(assigns) do
     ~H"""
     <.portal_shell portal={@portal} flash={@flash} current_scope={@current_scope}>
@@ -347,10 +618,10 @@ defmodule ThamaniDawaWeb.EarningsLive do
               />
             </:group>
             <:group label="From date">
-              <.input type="date" name="filters[date_from]" value={@filters.date_from} />
+              <.date_picker name="filters[date_from]" value={@filters.date_from} />
             </:group>
             <:group label="To date">
-              <.input type="date" name="filters[date_to]" value={@filters.date_to} />
+              <.date_picker name="filters[date_to]" value={@filters.date_to} />
             </:group>
             <:chip
               :for={chip <- filter_chips(@filters, @sites_by_id)}
@@ -361,15 +632,22 @@ defmodule ThamaniDawaWeb.EarningsLive do
         </:toolbar>
       </.header>
 
-      <.table id="transactions" rows={@streams.transactions}>
+      <.table
+        id="transactions"
+        rows={@streams.transactions}
+        row_click={
+          if @portal == :lab,
+            do: fn {_id, payment} -> JS.patch(~p"/lab/transactions/#{payment.id}") end
+        }
+      >
         <:col :let={{_id, payment}} label="Date">
-          {Calendar.strftime(payment.inserted_at, "%Y-%m-%d %H:%M")}
+          {ThamaniDawaWeb.TimeFormat.datetime(payment.inserted_at)}
         </:col>
         <:col :let={{_id, payment}} :if={@multi_site?} label="Site">
           {site_name(@sites_by_id, payment.site_id)}
         </:col>
         <:col :let={{_id, payment}} label="Method">{payment.payment_type}</:col>
-        <:col :let={{_id, payment}} label="Amount">KES {payment.amount}</:col>
+        <:col :let={{_id, payment}} label="Amount">{ThamaniDawaWeb.Money.ksh(payment.amount)}</:col>
         <:col :let={{_id, payment}} label="Status">
           <.status_badge status={payment.status} />
         </:col>
@@ -396,6 +674,9 @@ defmodule ThamaniDawaWeb.EarningsLive do
           </.blank_state>
         </:empty_state>
       </.table>
+
+      <.transaction_modal :if={@live_action == :lab_show && @selected} selected={@selected} />
+      <.receipt_sheet :if={@live_action == :lab_receipt && @selected} selected={@selected} />
     </.portal_shell>
     """
   end

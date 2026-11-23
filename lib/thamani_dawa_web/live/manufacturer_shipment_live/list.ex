@@ -84,9 +84,6 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
     end
   end
 
-  defp active_filter_count(filters),
-    do: Enum.count(["status", "date_from", "date_to"], &(filters[&1] not in [nil, ""]))
-
   defp unit_count(shipment),
     do: shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum()
 
@@ -96,116 +93,91 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/shipments"}
+      crumb="Shipments"
     >
-      <.header icon="hero-truck">
-        Shipments
-        <:subtitle>
-          Create shipments, then review packed SSCCs and approve them for dispatch.
-        </:subtitle>
+      <.td_list_page
+        title="Shipments"
+        subtitle="Create shipments, then review packed SSCCs and approve them for dispatch."
+      >
         <:actions>
-          <.button
+          <.td_button
             id="new-manufacturer-shipment"
             variant="primary"
+            label="New shipment"
             navigate={~p"/manufacturer/shipments/new"}
-          ><.icon name="hero-plus" class="size-4" /> New shipment</.button>
+          />
         </:actions>
-        <:toolbar>
+        <:filters>
           <form id="manufacturer-shipment-search" phx-change="search" phx-submit="search">
-            <.search_input
+            <.td_search
               name="search"
               value={@filters["search"]}
               placeholder="Search order, reference, GLN, customer, GTIN or SSCC"
+              phx-debounce="300"
             />
           </form>
-          <div class="flex flex-wrap items-center gap-2">
-            <.filter_drawer
-              id="manufacturer-shipment-filters"
-              title="Filter shipments"
-              apply_event="apply_filters"
-              active_count={active_filter_count(@filters)}
-            >
-              <:group label="Status">
-                <.input
-                  type="select"
-                  id="filter-status"
-                  name="filters[status]"
-                  value={@filters["status"]}
-                  options={Enum.map(@tabs, fn {value, label} -> {label, value} end)}
-                />
-              </:group>
-              <:group label="Created between">
-                <div class="grid grid-cols-2 gap-2">
-                  <.input
-                    type="date"
-                    id="filter-date-from"
-                    name="filters[date_from]"
-                    value={@filters["date_from"]}
-                  /><.input
-                    type="date"
-                    id="filter-date-to"
-                    name="filters[date_to]"
-                    value={@filters["date_to"]}
-                  />
-                </div>
-              </:group>
-              <:chip
-                :if={@filters["status"] != ""}
-                label={"Status: #{Phoenix.Naming.humanize(@filters["status"])}"}
-                clear={JS.push("clear_filter", value: %{filter: "status"})}
-              />
-              <:chip
-                :if={@filters["date_from"] != ""}
-                label={"From #{@filters["date_from"]}"}
-                clear={JS.push("clear_filter", value: %{filter: "date_from"})}
-              />
-              <:chip
-                :if={@filters["date_to"] != ""}
-                label={"To #{@filters["date_to"]}"}
-                clear={JS.push("clear_filter", value: %{filter: "date_to"})}
-              />
-            </.filter_drawer>
-          </div>
-        </:toolbar>
-      </.header>
+          <form id="manufacturer-shipment-filters" phx-change="apply_filters" class="td-filter-row">
+            <.td_select
+              id="filter-status"
+              name="filters[status]"
+              label="Status"
+              value={@filters["status"]}
+              options={Enum.map(@tabs, fn {value, label} -> {label, value} end)}
+            />
+            <.date_picker
+              id="filter-date-from"
+              name="filters[date_from]"
+              label="From"
+              value={@filters["date_from"]}
+            />
+            <.date_picker
+              id="filter-date-to"
+              name="filters[date_to]"
+              label="To"
+              value={@filters["date_to"]}
+            />
+          </form>
+        </:filters>
 
-      <.table
-        id="manufacturer-shipments"
-        rows={@streams.shipments}
-        row_click={fn {_id, shipment} -> JS.navigate(~p"/manufacturer/shipments/#{shipment.id}") end}
-      >
-        <:col :let={{_id, shipment}} label="Order">
-          <div class="min-w-0">
-            <p class="font-medium text-thamani-forest">{shipment.order_number}</p><p class="font-mono text-xs text-thamani-pewter">
-              {shipment.reference}
-            </p>
-          </div>
-        </:col>
-        <:col :let={{_id, shipment}} label="Status" mobile="aside">
-          <.shipment_status_badge status={shipment.status} />
-        </:col>
-        <:col :let={{_id, shipment}} label="From">
-          <span class="text-sm">{shipment.origin_company}</span>
-        </:col>
-        <:col :let={{_id, shipment}} label="To">
-          <span class="text-sm">{shipment.destination_company}</span>
-        </:col>
-        <:col :let={{_id, shipment}} label="Shippers / units">
-          {length(shipment.shippers)} / {unit_count(shipment)}
-        </:col>
-        <:col :let={{_id, shipment}} label="Mobile user" tablet="hidden">
-          {(shipment.assigned_to && shipment.assigned_to.name) || "Unclaimed"}
-        </:col>
-        <:col :let={{_id, shipment}} label="Updated" mobile="hidden">
-          <span class="text-xs text-thamani-pewter">{date_time(shipment.updated_at)}</span>
-        </:col>
-        <:empty_state>
-          <.blank_state icon="hero-truck" title="No shipments here">
-            Nothing matches this status and filter combination yet.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        <.td_data_table
+          id="manufacturer-shipments"
+          rows={@streams.shipments}
+          row_id={fn {id, _shipment} -> id end}
+        >
+          <:col :let={{_id, shipment}} label="Order">
+            <.td_key_value label={shipment.order_number} value={shipment.reference} mono />
+          </:col>
+          <:col :let={{_id, shipment}} label="Status">
+            <.td_badge tone={status_tone(shipment.status)} label={Phoenix.Naming.humanize(shipment.status)} />
+          </:col>
+          <:col :let={{_id, shipment}} label="From">{shipment.origin_company}</:col>
+          <:col :let={{_id, shipment}} label="To">{shipment.destination_company}</:col>
+          <:col :let={{_id, shipment}} label="Shippers / units">
+            {length(shipment.shippers)} / {unit_count(shipment)}
+          </:col>
+          <:col :let={{_id, shipment}} label="Mobile user">
+            {(shipment.assigned_to && shipment.assigned_to.name) || "Unclaimed"}
+          </:col>
+          <:col :let={{_id, shipment}} label="Updated">{date_time(shipment.updated_at)}</:col>
+          <:action :let={{_id, shipment}}>
+            <.td_button
+              variant="secondary"
+              label="Review"
+              navigate={~p"/manufacturer/shipments/#{shipment.id}"}
+            />
+          </:action>
+          <:empty>
+            <.td_empty title="No shipments here" hint="Nothing matches this status and filter combination yet." />
+          </:empty>
+        </.td_data_table>
+      </.td_list_page>
       <.pagination page={@page_info} path={pagination_path(@filters)} />
     </Layouts.manufacturer_shell>
     """
   end
+
+  defp status_tone("approved"), do: "success"
+  defp status_tone("submitted"), do: "warning"
+  defp status_tone("rejected"), do: "danger"
+  defp status_tone(_), do: "neutral"
 end

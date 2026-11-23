@@ -27,15 +27,13 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/products"}
+      crumb="Products"
     >
-      <.header icon="hero-cube-transparent">
-        SSCC label
-        <:subtitle><span class="font-mono">{@sscc.code}</span></:subtitle>
-      </.header>
+      <.td_page_header title="Case label" subtitle={@sscc.code} />
 
       <div
         id={"sscc-label-content-#{@sscc.id}"}
-        class="printable-sscc-label mt-6 box-border flex h-[6in] w-[4in] flex-col overflow-hidden border-2 border-black bg-white text-black"
+        class="printable-sscc-label mt-6 box-border flex h-[6in] w-[4in] flex-col overflow-hidden border-2 border-black bg-td-surface text-black"
         style="font-family: Arial, Helvetica, sans-serif"
       >
         <div class="grid grid-cols-2 border-b-2 border-black">
@@ -88,18 +86,20 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
         </div>
       </div>
 
-      <div class="no-print mt-4 flex flex-wrap gap-2">
-        <.button
+      <div class="no-print td-header-actions">
+        <.td_button
           id="print-manufacturer-label"
           type="button"
+          variant="secondary"
+          label="Print"
           phx-hook="LabelPrint"
           data-print-target={"#sscc-label-content-#{@sscc.id}"}
-        >
-          <.icon name="hero-printer" class="size-4" /> Print
-        </.button>
-        <.button
+        />
+        <.td_button
           id="download-manufacturer-label-svg"
           type="button"
+          variant="secondary"
+          label="Download SVG"
           phx-hook="LabelSvgDownload"
           data-role="download-label-svg"
           data-sscc={@sscc.code}
@@ -108,9 +108,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
           data-batch={@sscc.batch}
           data-production={@sscc.production_date}
           data-expiry={@sscc.expiry_date}
-        >
-          <.icon name="hero-arrow-down-tray" class="size-4" /> Download SVG
-        </.button>
+        />
       </div>
     </Layouts.manufacturer_shell>
     """

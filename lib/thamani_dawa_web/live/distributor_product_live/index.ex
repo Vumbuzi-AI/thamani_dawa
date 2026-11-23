@@ -371,7 +371,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
                   id="hold-filters"
                   role="radiogroup"
                   aria-labelledby="hold-filters-label"
-                  class="inline-flex rounded-lg border border-thamani-stone bg-thamani-snow p-1"
+                  class="inline-flex rounded-lg border border-thamani-stone bg-thamani-surface p-1"
                 >
                   <button
                     :for={hold <- ["all", "quarantine"]}
@@ -383,9 +383,9 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
                     phx-value-hold={hold}
                     class={[
                       "cursor-pointer rounded-md px-3 py-2 text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
-                      @hold_filter == hold && "bg-thamani-lime text-thamani-forest",
+                      @hold_filter == hold && "bg-td-accent-tint text-thamani-forest",
                       @hold_filter != hold &&
-                        "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+                        "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
                     ]}
                   >
                     {if hold == "all", do: "All stock", else: "Quarantine"}
@@ -398,7 +398,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
                   id="expiry-filters"
                   role="radiogroup"
                   aria-labelledby="expiry-filters-label"
-                  class="inline-flex max-w-full flex-wrap rounded-lg border border-thamani-stone bg-thamani-snow p-1"
+                  class="inline-flex max-w-full flex-wrap rounded-lg border border-thamani-stone bg-thamani-surface p-1"
                 >
                   <button
                     :for={expiry <- ["all", "critical", "near", "expired"]}
@@ -410,9 +410,9 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
                     phx-value-expiry={expiry}
                     class={[
                       "cursor-pointer rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
-                      @expiry_filter == expiry && "bg-thamani-lime text-thamani-forest",
+                      @expiry_filter == expiry && "bg-td-accent-tint text-thamani-forest",
                       @expiry_filter != expiry &&
-                        "text-thamani-pewter hover:bg-white/60 hover:text-thamani-forest"
+                        "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
                     ]}
                   >
                     {expiry_filter_label(expiry)}

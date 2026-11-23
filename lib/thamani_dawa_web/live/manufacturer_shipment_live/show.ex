@@ -86,7 +86,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
       <div class="mt-4"><.shipment_status_badge status={@shipment.status} /></div>
 
       <div id="manufacturer-shipment-detail" class="mt-6 grid gap-5 lg:grid-cols-2">
-        <section class="rounded-2xl border border-thamani-sage/30 bg-white p-6 shadow-sm">
+        <section class="rounded-2xl border border-td-hairline bg-td-surface p-6 shadow-sm">
           <h2 class="font-semibold text-thamani-forest">Route</h2>
           <dl class="mt-4 space-y-4 text-sm">
             <div>
@@ -101,9 +101,9 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
             </div>
           </dl>
         </section>
-        <section class="rounded-2xl border border-thamani-sage/30 bg-white p-6 shadow-sm">
+        <section class="rounded-2xl border border-td-hairline bg-td-surface p-6 shadow-sm">
           <h2 class="font-semibold text-thamani-forest">Packed logistics units</h2>
-          <ul id="manufacturer-shipment-items" class="mt-4 divide-y divide-thamani-sage/20">
+          <ul id="manufacturer-shipment-items" class="mt-4 divide-y divide-td-hairline">
             <li :for={sscc <- @shipment.shipper_ssccs} id={"shipment-sscc-#{sscc.id}"} class="py-3">
               <p class="font-mono text-sm font-semibold">{sscc.code}</p>
               <p class="text-xs text-thamani-pewter">

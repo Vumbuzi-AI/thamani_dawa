@@ -69,7 +69,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Options do
           class="group flex flex-col rounded-2xl ff-surface-card p-6 transition-shadow duration-200 hover:shadow-lg"
         >
           <div class="flex items-center gap-3">
-            <span class="flex size-10 items-center justify-center rounded-xl bg-thamani-lime text-thamani-forest">
+            <span class="flex size-10 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
               <.icon name="hero-cube" class="size-5" />
             </span>
             <div>

@@ -203,7 +203,7 @@ defmodule ThamaniDawaWeb.LabStockTakeLive.Show do
         <section
           :if={@stock_take.status == :draft}
           id="add-batch-panel"
-          class="rounded-2xl border border-thamani-frosted bg-white p-4 sm:p-5"
+          class="rounded-2xl border border-thamani-frosted bg-td-surface p-4 sm:p-5"
         >
           <h2 class="text-sm font-semibold text-thamani-forest">Add a batch</h2>
           <p class="mt-1 text-sm text-thamani-pewter">
@@ -254,7 +254,7 @@ defmodule ThamaniDawaWeb.LabStockTakeLive.Show do
           <div
             :if={@stock_take.items != []}
             id="stock-take-items"
-            class="overflow-hidden rounded-2xl border border-thamani-frosted bg-white"
+            class="overflow-hidden rounded-2xl border border-thamani-frosted bg-td-surface"
           >
             <article
               :for={item <- @stock_take.items}
@@ -373,7 +373,7 @@ defmodule ThamaniDawaWeb.LabStockTakeLive.Show do
 
         <aside
           :if={@stock_take.status == :approved}
-          class="flex items-start gap-3 rounded-2xl border border-thamani-frosted bg-thamani-lime px-4 py-4 sm:px-5"
+          class="flex items-start gap-3 rounded-2xl border border-thamani-frosted bg-td-accent-tint px-4 py-4 sm:px-5"
         >
           <.icon name="hero-check-circle" class="mt-0.5 size-5 shrink-0 text-thamani-forest" />
           <div>

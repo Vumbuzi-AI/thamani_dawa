@@ -88,6 +88,7 @@ defmodule ThamaniDawaWeb do
       import Phoenix.HTML
       # Core UI components
       import ThamaniDawaWeb.CoreComponents
+      import ThamaniDawaWeb.TDComponents
       # Marketing & legal page layout components
       import ThamaniDawaWeb.PageComponents
       # Stat tiles, chart cards, and range filters for role dashboards

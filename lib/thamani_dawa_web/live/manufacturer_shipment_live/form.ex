@@ -100,13 +100,12 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/shipments"}
+      crumb="Shipments"
     >
-      <.header icon="hero-truck" back={~p"/manufacturer/shipments"}>
-        New shipment
-        <:subtitle>
-          The mobile team finds this shipment by its order number, then scans units into shippers.
-        </:subtitle>
-      </.header>
+      <.td_page_header
+        title="New shipment"
+        subtitle="The mobile team finds this shipment by its order number, then scans units into shippers."
+      />
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section class="rounded-2xl ff-surface-card p-5 sm:p-6">
@@ -117,16 +116,15 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
             phx-submit="save"
             class="space-y-6"
           >
-            <.input
+            <.td_input
               field={@form[:order_number]}
               label="Order number"
               placeholder="e.g. MO-2026-0142"
               required
             />
             <div class="space-y-3 border-t border-thamani-stone pt-5">
-              <.input
+              <.td_select
                 field={@form[:origin_gln]}
-                type="select"
                 label="Origin (ship from)"
                 prompt="Choose one of your sites"
                 options={Enum.map(@origins, &{"#{&1.name} · #{&1.gln}", &1.gln})}
@@ -134,23 +132,22 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
               />
             </div>
             <div class="space-y-3 border-t border-thamani-stone pt-5">
-              <p class="text-sm font-medium text-thamani-forest">Destination</p>
-              <label class="mt-2 flex min-h-8 w-fit cursor-pointer items-center gap-2.5 text-sm font-medium text-thamani-forest"><input
-                type="checkbox"
-                checked={@transfer_mode}
+              <p class="td-note">Destination</p>
+              <.td_switch
+                id="manufacturer-shipment-transfer"
+                on={@transfer_mode}
+                label="Destination is one of your sites"
                 phx-click="toggle_transfer_mode"
-                class="size-4 rounded border-thamani-stone accent-thamani-forest"
-              /> Destination is one of your sites</label>
-              <.input
+              />
+              <.td_select
                 :if={@transfer_mode}
                 field={@form[:destination_gln]}
-                type="select"
                 label="Destination site"
                 prompt="Choose one of your sites"
                 options={Enum.map(@origins, &{"#{&1.name} · #{&1.gln}", &1.gln})}
                 required
               />
-              <.input
+              <.td_input
                 :if={!@transfer_mode}
                 field={@form[:destination_gln]}
                 label="Destination GLN (ship to)"
@@ -165,7 +162,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
               </p>
               <p
                 :if={match?({:matched, _, _}, @destination_check)}
-                class="rounded-lg bg-thamani-lime/30 px-3 py-2 text-xs font-semibold text-thamani-forest"
+                class="rounded-lg bg-td-accent-tint px-3 py-2 text-xs font-semibold text-thamani-forest"
               >
                 <.icon name="hero-check-circle" class="inline size-4" /> Verified
               </p>
@@ -176,16 +173,20 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
                 We couldn't verify this GLN.
               </p>
             </div>
-            <div class="flex flex-col-reverse gap-3 border-t border-thamani-stone pt-6 sm:flex-row sm:justify-end">
-              <.button
+            <div class="td-header-actions">
+              <.td_button
                 id="cancel-manufacturer-shipment"
-                variant="ghost"
+                variant="secondary"
+                label="Cancel"
                 navigate={~p"/manufacturer/shipments"}
-              >Cancel</.button><.button
+              />
+              <.td_button
                 id="save-manufacturer-shipment"
+                type="submit"
                 variant="primary"
+                label="Create draft shipment"
                 phx-disable-with="Saving…"
-              >Create draft shipment</.button>
+              />
             </div>
           </.form>
         </section>
@@ -215,7 +216,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
     <div class={[
       "rounded-2xl border p-4",
       if(@record,
-        do: "border-thamani-forest/30 bg-thamani-lime/30",
+        do: "border-thamani-forest/30 bg-td-accent-tint",
         else: "border-dashed border-thamani-stone bg-thamani-canvas"
       )
     ]}>

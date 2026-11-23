@@ -437,10 +437,9 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
             label="Batch / lot number"
             required
           />
-          <.input
+          <.date_picker
             field={@form[:expiry_date]}
             id="direct-lab-expiry-date"
-            type="date"
             label="Expiry date"
             required
           />
@@ -461,10 +460,9 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
             prompt="Choose supplier"
           />
           <.input field={@form[:serial]} id="direct-lab-serial" label="Serial number (optional)" />
-          <.input
+          <.date_picker
             field={@form[:manufacture_date]}
             id="direct-lab-manufacture-date"
-            type="date"
             label="Manufacture date (optional)"
           />
           <.input
@@ -507,7 +505,7 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         <dl class="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Product</dt>
-            <dd class="mt-0.5 font-medium text-slate-900">
+            <dd class="mt-0.5 font-medium text-td-ink">
               {product_display(@receive_batch, @products_by_id)}
             </dd>
           </div>

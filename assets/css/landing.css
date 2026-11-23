@@ -1,4 +1,14 @@
 :root {
+    /* Landing tokens (moved from app.css) */
+  --brand: #1c3a13;
+    --ld-bg: #fcfcf7;
+    --ld-surface: #eeeee9;
+    --ld-text: #1c3a13;
+    --ld-text-muted: #666666;
+    --ld-text-subtle: #b3b3b3;
+    --ld-border: rgba(28, 58, 19, 0.12);
+    --ld-marquee-dur: 28s;
+    --ld-answer: #373896;
     --forest: #143d31;
     --deep: #082a21;
     --lime: #cdf06d;
@@ -29,7 +39,7 @@ body {
     margin: 0;
     color: var(--ink);
     background: var(--paper);
-    font-family: "Rethink Sans", Inter, Arial, sans-serif;
+    font-family: var(--font-landing);
     font-size: 16px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
@@ -2450,9 +2460,7 @@ button {
     border: 0;
     border-inline-end: 1px solid rgba(255, 255, 255, 0.12);
     font:
-        500 13px/1.2 "Rethink Sans",
-        Inter,
-        sans-serif;
+        500 13px/1.2 var(--font-landing);
     cursor: pointer;
     transition:
         color 150ms ease-out,

@@ -265,12 +265,12 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
   defp status_label("dead"), do: "Dead"
   defp status_label(status), do: String.capitalize(status)
 
-  defp status_class("accepted"), do: "bg-thamani-lime text-thamani-forest"
+  defp status_class("accepted"), do: "bg-td-accent-tint text-thamani-forest"
   defp status_class("warning"), do: "bg-amber-900 text-amber-50"
   defp status_class("pending"), do: "bg-thamani-stone text-thamani-forest"
   defp status_class("blocked"), do: "bg-amber-900 text-amber-50"
-  defp status_class("rejected"), do: "bg-thamani-error text-white"
-  defp status_class("dead"), do: "bg-thamani-error text-white"
+  defp status_class("rejected"), do: "bg-thamani-error text-td-on-danger"
+  defp status_class("dead"), do: "bg-thamani-error text-td-on-danger"
   defp status_class(_status), do: "bg-thamani-stone text-thamani-forest"
 
   defp event_detail(%OutboxEvent{status: "blocked", blocked_reason: reason})
@@ -331,7 +331,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
       <div
         :if={!@submission_enabled?}
         id="epcis-submission-disabled"
-        class="flex items-start gap-3 rounded-2xl border border-thamani-frosted bg-white px-4 py-3 text-sm text-thamani-pewter"
+        class="flex items-start gap-3 rounded-2xl border border-thamani-frosted bg-td-surface px-4 py-3 text-sm text-thamani-pewter"
       >
         <.icon name="hero-information-circle" class="mt-0.5 size-5 flex-none text-thamani-pewter" />
         <p>
@@ -368,7 +368,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
 
       {epcis_settings(assigns)}
 
-      <section class="overflow-hidden rounded-2xl border border-thamani-frosted bg-white">
+      <section class="overflow-hidden rounded-2xl border border-thamani-frosted bg-td-surface">
         <div class="flex flex-col gap-4 border-b border-thamani-frosted px-4 py-4 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 class="text-base font-semibold text-thamani-forest">Events</h2>
@@ -390,7 +390,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
                 JS.toggle(to: "#status-filter-dropdown-menu")
                 |> JS.toggle_class("rotate-180", to: "#status-dropdown-chevron")
               }
-              class="inline-flex w-full items-center justify-between gap-2 rounded-full border border-thamani-frosted bg-white px-4 py-2 text-sm font-medium text-thamani-forest transition hover:border-thamani-forest focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent sm:w-auto"
+              class="inline-flex w-full items-center justify-between gap-2 rounded-full border border-thamani-frosted bg-td-surface px-4 py-2 text-sm font-medium text-thamani-forest transition hover:border-thamani-forest focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent sm:w-auto"
               aria-haspopup="true"
               aria-expanded="false"
             >
@@ -402,7 +402,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
 
             <div
               id="status-filter-dropdown-menu"
-              class="absolute left-0 z-10 mt-2 hidden w-64 rounded-xl border border-thamani-frosted bg-white py-1"
+              class="absolute left-0 z-10 mt-2 hidden w-64 rounded-xl border border-thamani-frosted bg-td-surface py-1"
               role="menu"
               aria-labelledby="status-filter-dropdown-button"
             >
@@ -518,11 +518,11 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
         </div>
         <pre
           :if={@inspection_tab == :request}
-          class="mt-4 max-h-[55vh] overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100"
+          class="mt-4 max-h-[55vh] overflow-auto rounded-lg bg-td-ink p-4 text-xs text-td-wash"
         ><code>{Jason.encode!(@inspecting_event.payload, pretty: true)}</code></pre>
         <pre
           :if={@inspection_tab == :response and @inspecting_event.response}
-          class="mt-4 max-h-[55vh] overflow-auto rounded-lg bg-slate-900 p-4 text-xs text-slate-100"
+          class="mt-4 max-h-[55vh] overflow-auto rounded-lg bg-td-ink p-4 text-xs text-td-wash"
         ><code>{Jason.encode!(@inspecting_event.response, pretty: true)}</code></pre>
         <p
           :if={@inspection_tab == :response and is_nil(@inspecting_event.response)}
@@ -553,7 +553,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
     ~H"""
     <section
       id="epcis-reporting-controls"
-      class="rounded-2xl border border-thamani-frosted bg-white p-5 sm:p-6"
+      class="rounded-2xl border border-thamani-frosted bg-td-surface p-5 sm:p-6"
     >
       <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -576,7 +576,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
               class={[
                 "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent",
                 if(@organization.epcis_submission_mode == :automatic,
-                  do: "bg-white text-thamani-forest",
+                  do: "bg-td-surface text-thamani-forest",
                   else: "text-thamani-pewter hover:text-thamani-forest"
                 )
               ]}
@@ -592,7 +592,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
               class={[
                 "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent",
                 if(@organization.epcis_submission_mode == :manual,
-                  do: "bg-thamani-forest text-white",
+                  do: "bg-thamani-forest text-td-on-accent",
                   else: "text-thamani-pewter hover:text-thamani-forest"
                 )
               ]}
@@ -735,7 +735,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
       role="menuitem"
       aria-pressed={to_string(@selected_status == @status)}
       class={[
-        "flex w-full items-center gap-3 px-4 py-2 text-sm transition hover:bg-slate-50",
+        "flex w-full items-center gap-3 px-4 py-2 text-sm transition hover:bg-td-wash",
         if(@selected_status == @status,
           do: "bg-thamani-forest/5 text-thamani-forest",
           else: "text-thamani-pewter"
@@ -747,8 +747,8 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
       <span class={[
         "flex-none rounded-full px-2 py-0.5 text-xs font-semibold",
         if(@selected_status == @status,
-          do: "bg-thamani-forest text-white",
-          else: "bg-slate-100 text-slate-600"
+          do: "bg-thamani-forest text-td-on-accent",
+          else: "bg-td-wash text-td-ink-2"
         )
       ]}>
         {@count}

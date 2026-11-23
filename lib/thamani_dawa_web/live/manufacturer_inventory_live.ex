@@ -31,28 +31,27 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLive do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/inventory"}
+      crumb="Inventory"
     >
-      <.header icon="hero-cube">
-        Inventory
-        <:subtitle>Batches grouped by product, with the serials generated for each.</:subtitle>
-      </.header>
-
-      <div class="mt-4 space-y-5">
-        <section
-          :for={{product, batches} <- @groups}
-          class="rounded-2xl border border-thamani-frosted bg-white p-5"
-        >
-          <div class="flex items-center justify-between gap-4">
-            <div>
-              <h2 class="text-sm font-semibold text-thamani-forest">{product.name}</h2>
-              <p class="font-mono text-xs text-thamani-pewter">{product.gtin}</p>
-            </div>
-            <.button variant="ghost" navigate={~p"/manufacturer/products/#{product.id}"}>
-              View product
-            </.button>
-          </div>
-
-          <.table id={"manufacturer-inventory-#{product.id}"} rows={batches}>
+      <.td_list_page
+        title="Inventory"
+        subtitle="Batches grouped by product, with the serials generated for each."
+      >
+        <section :for={{product, batches} <- @groups} id={"manufacturer-inventory-#{product.id}"}>
+          <.td_card_header title={product.name} subtitle={product.gtin}>
+            <:actions>
+              <.td_button
+                variant="secondary"
+                label="View product"
+                navigate={~p"/manufacturer/products/#{product.id}"}
+              />
+            </:actions>
+          </.td_card_header>
+          <.td_data_table
+            id={"manufacturer-inventory-rows-#{product.id}"}
+            rows={batches}
+            row_id={fn {batch, _} -> "inventory-batch-#{batch.id}" end}
+          >
             <:col :let={{batch, _count}} label="Batch no.">{batch.batch_no}</:col>
             <:col :let={{batch, _count}} label="Production">
               {Calendar.strftime(batch.production_date, "%d %b %Y")}
@@ -61,13 +60,14 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLive do
               {Calendar.strftime(batch.expiry_date, "%d %b %Y")}
             </:col>
             <:col :let={{_batch, count}} label="Serials">{count}</:col>
-          </.table>
+          </.td_data_table>
         </section>
-
-        <.blank_state :if={@groups == []} icon="hero-cube" title="No batches yet">
-          Add a product and a batch to start tracking inventory.
-        </.blank_state>
-      </div>
+        <.td_empty
+          :if={@groups == []}
+          title="No batches yet"
+          hint="Add a product and a batch to start tracking inventory."
+        />
+      </.td_list_page>
     </Layouts.manufacturer_shell>
     """
   end

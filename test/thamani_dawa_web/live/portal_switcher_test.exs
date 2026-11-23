@@ -76,8 +76,8 @@ defmodule ThamaniDawaWeb.PortalSwitcherTest do
     } do
       {:ok, view, _html} = live(conn, ~p"/org/sites")
 
-      assert has_element?(view, "#site-switch-org .hero-check")
-      refute has_element?(view, "#site-switch-option-#{lab_site.id} .hero-check")
+      assert has_element?(view, "#site-switch-org .td-ss-check")
+      refute has_element?(view, "#site-switch-option-#{lab_site.id} .td-ss-check")
     end
 
     test "after picking a site, that site's entry is marked active", %{
@@ -89,8 +89,8 @@ defmodule ThamaniDawaWeb.PortalSwitcherTest do
 
       {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
-      assert has_element?(view, "#site-switch-option-#{lab_site.id} .hero-check")
-      refute has_element?(view, "#site-switch-org .hero-check")
+      assert has_element?(view, "#site-switch-option-#{lab_site.id} .td-ss-check")
+      refute has_element?(view, "#site-switch-org .td-ss-check")
     end
   end
 

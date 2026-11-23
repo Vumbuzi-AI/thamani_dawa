@@ -786,7 +786,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
         ]}>
           <span class={[
             "flex size-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold",
-            return_step_passed?(@status, step) && "bg-thamani-forest text-white",
+            return_step_passed?(@status, step) && "bg-thamani-forest text-td-on-accent",
             return_step_current?(@status, step) &&
               "border-2 border-thamani-forest text-thamani-forest",
             !return_step_reached?(@status, step) && "border border-thamani-stone"
@@ -933,7 +933,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
             phx-click="add_shipment_item"
             phx-value-shipment_item_id={line.id}
             phx-value-customer_return_id={@customer_return.id}
-            class="rounded-full bg-white px-3 py-1.5 text-sm font-medium text-thamani-forest ring-1 ring-thamani-stone"
+            class="rounded-full bg-td-surface px-3 py-1.5 text-sm font-medium text-thamani-forest ring-1 ring-thamani-stone"
           >
             Came back
           </button>
@@ -963,7 +963,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
           <.input type="text" name="batch_no" label="Batch no." required />
         </div>
         <div class="[&>div]:mb-0">
-          <.input type="date" name="expiry_date" label="Expiry date" required />
+          <.date_picker name="expiry_date" label="Expiry date" required />
         </div>
         <div class="sm:col-span-5">
           <.button variant="primary" phx-disable-with="Adding…">Add item</.button>
@@ -1158,7 +1158,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
               phx-value-source="shipment"
               class={[
                 "inline-flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent",
-                @return_source == "shipment" && "bg-thamani-forest text-white",
+                @return_source == "shipment" && "bg-thamani-forest text-td-on-accent",
                 @return_source != "shipment" && "text-thamani-pewter hover:text-thamani-forest"
               ]}
             >
@@ -1173,7 +1173,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
               phx-value-source="customer"
               class={[
                 "inline-flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent",
-                @return_source == "customer" && "bg-thamani-forest text-white",
+                @return_source == "customer" && "bg-thamani-forest text-td-on-accent",
                 @return_source != "customer" && "text-thamani-pewter hover:text-thamani-forest"
               ]}
             >
@@ -1197,7 +1197,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
             <div
               :if={@shipment_matches != []}
               id="shipment-matches"
-              class="mt-1 overflow-hidden rounded-lg border border-thamani-stone bg-white"
+              class="mt-1 overflow-hidden rounded-lg border border-thamani-stone bg-td-surface"
             >
               <button
                 :for={shipment <- @shipment_matches}
@@ -1268,7 +1268,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
               <div
                 :if={@customer_matches != []}
                 id="customer-matches"
-                class="mt-1 overflow-hidden rounded-lg border border-thamani-stone bg-white"
+                class="mt-1 overflow-hidden rounded-lg border border-thamani-stone bg-td-surface"
               >
                 <button
                   :for={customer <- @customer_matches}
@@ -1319,7 +1319,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
             <% end %>
             <div
               id="return-documents"
-              class="mb-3 rounded-xl border border-dashed border-thamani-mist bg-white px-3 py-3"
+              class="mb-3 rounded-xl border border-dashed border-td-hairline bg-td-surface px-3 py-3"
               phx-drop-target={@uploads.return_documents.ref}
             >
               <div class="flex flex-wrap items-center justify-between gap-3">
@@ -1329,7 +1329,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
                     PDF, JPG, or PNG, up to 5MB each. Up to 8 files.
                   </p>
                 </div>
-                <label class="group inline-flex cursor-pointer items-center rounded-full border border-thamani-forest bg-white px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-thamani-forest">
+                <label class="group inline-flex cursor-pointer items-center rounded-full border border-thamani-forest bg-td-surface px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-thamani-forest">
                   <span class="text-thamani-forest group-hover:text-white">Choose files</span>
                   <.live_file_input upload={@uploads.return_documents} class="sr-only" />
                 </label>

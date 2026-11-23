@@ -72,7 +72,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Invoice do
 
       <article
         id="distributor-serial-invoice"
-        class="printable-invoice print-document relative mx-auto max-w-4xl rounded-xl bg-white p-6 text-thamani-ink shadow-sm ring-1 ring-thamani-stone sm:p-10"
+        class="printable-invoice print-document relative mx-auto max-w-4xl rounded-xl bg-td-surface p-6 text-thamani-ink shadow-sm ring-1 ring-thamani-stone sm:p-10"
       >
         <span
           id="invoice-paid-stamp"
@@ -191,7 +191,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Invoice do
 
         <footer
           id="invoice-remittance"
-          class="mt-8 rounded-lg border border-thamani-stone bg-thamani-snow p-4 text-xs text-thamani-pewter"
+          class="mt-8 rounded-lg border border-thamani-stone bg-thamani-surface p-4 text-xs text-thamani-pewter"
         >
           <p class="font-semibold text-thamani-ink">Remittance</p>
           <p>M-Pesa paybill {@issuer.paybill} · {@issuer.bank}</p>

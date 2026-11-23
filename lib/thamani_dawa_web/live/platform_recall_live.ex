@@ -163,7 +163,7 @@ defmodule ThamaniDawaWeb.PlatformRecallLive do
                 name="reference"
                 value={@reference}
                 required
-                class="mt-1 block w-full rounded-lg border-2 border-[#bfceb7] bg-thamani-snow px-3 py-[9px] text-sm text-thamani-forest transition-colors placeholder:text-thamani-pewter focus:border-thamani-forest focus:outline-none"
+                class="mt-1 block w-full rounded-lg border-2 border-td-hairline bg-thamani-surface px-3 py-[9px] text-sm text-thamani-forest transition-colors placeholder:text-thamani-pewter focus:border-thamani-forest focus:outline-none"
               />
             </div>
             <div>
@@ -173,7 +173,7 @@ defmodule ThamaniDawaWeb.PlatformRecallLive do
               <select
                 id="recall-classification"
                 name="classification"
-                class="mt-1 block w-full appearance-none rounded-lg border-2 border-[#bfceb7] bg-thamani-snow bg-[linear-gradient(45deg,transparent_50%,#38594b_50%),linear-gradient(135deg,#38594b_50%,transparent_50%)] bg-[position:calc(100%-18px)_calc(50%-2px),calc(100%-13px)_calc(50%-2px)] bg-[size:5px_5px,5px_5px] bg-no-repeat px-3 py-[9px] pr-9 text-sm text-thamani-forest transition-colors focus:border-thamani-forest focus:outline-none"
+                class="mt-1 block w-full appearance-none rounded-lg border-2 border-td-hairline bg-thamani-surface bg-[linear-gradient(45deg,transparent_50%,#38594b_50%),linear-gradient(135deg,#38594b_50%,transparent_50%)] bg-[position:calc(100%-18px)_calc(50%-2px),calc(100%-13px)_calc(50%-2px)] bg-[size:5px_5px,5px_5px] bg-no-repeat px-3 py-[9px] pr-9 text-sm text-thamani-forest transition-colors focus:border-thamani-forest focus:outline-none"
               >
                 <option value="class_i" selected={@classification == "class_i"}>
                   Class I — serious risk
@@ -194,7 +194,7 @@ defmodule ThamaniDawaWeb.PlatformRecallLive do
                 type="text"
                 name="reason"
                 value={@reason}
-                class="mt-1 block w-full rounded-lg border-2 border-[#bfceb7] bg-thamani-snow px-3 py-[9px] text-sm text-thamani-forest transition-colors placeholder:text-thamani-pewter focus:border-thamani-forest focus:outline-none"
+                class="mt-1 block w-full rounded-lg border-2 border-td-hairline bg-thamani-surface px-3 py-[9px] text-sm text-thamani-forest transition-colors placeholder:text-thamani-pewter focus:border-thamani-forest focus:outline-none"
               />
             </div>
             <.button variant="primary" class="w-full whitespace-nowrap xl:w-auto">

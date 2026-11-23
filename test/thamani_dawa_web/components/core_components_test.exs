@@ -26,7 +26,7 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
     end
 
     test "maps danger statuses" do
-      assert status_semantic(:cancelled) == :danger
+      assert status_semantic(:cancelled) == :neutral
       assert status_semantic(:rejected) == :danger
       assert status_semantic(:flagged) == :danger
     end
@@ -42,14 +42,15 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
       html = render_component(&status_badge/1, status: :partially_dispensed)
 
       assert html =~ "Partially dispensed"
-      assert html =~ "bg-thamani-stone"
+      assert html =~ "td-badge"
+      assert html =~ "is-info"
     end
 
     test "renders success styling for a success-mapped status" do
       html = render_component(&status_badge/1, status: :verified)
 
       assert html =~ "Verified"
-      assert html =~ "bg-thamani-lime"
+      assert html =~ "is-success"
     end
   end
 
@@ -66,7 +67,7 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
 
       assert html =~ "No prescriptions yet"
       assert html =~ "Prescriptions appear here"
-      assert html =~ "border-dashed"
+      assert html =~ "td-empty-state"
     end
   end
 
@@ -116,7 +117,7 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
 
       assert html =~ "Product catalog"
       assert html =~ "toolbar content"
-      assert html =~ "border-b border-thamani-stone"
+      assert html =~ "td-header-tools"
       refute html =~ "ff-surface-card"
       refute html =~ "rounded-2xl"
     end
@@ -171,18 +172,14 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
       assert html =~ "before:content-[attr(data-label)]"
       assert html =~ "first:before:hidden"
       assert html =~ "responsive-table"
+      assert html =~ "td-table"
       assert html =~ "responsive-table-cell"
       assert html =~ "grid-cols-2"
       assert html =~ "first:col-span-full"
       assert html =~ "max-sm:hidden"
       assert html =~ "max-sm:absolute"
-      assert html =~ "sm:rounded-xl"
-      assert html =~ "sm:border-slate-200"
-      assert html =~ "sm:hover:bg-slate-50"
-      assert html =~ "sm:even:bg-slate-50/40"
       assert html =~ "sm:first:bg-transparent"
       assert html =~ "sm:first:text-sm"
-      assert html =~ "sm:first:text-slate-950"
       assert html =~ "sm:align-middle"
       assert html =~ "sm:first:whitespace-nowrap"
       assert html =~ "sm:[&amp;:nth-child(even)]:border-r-0"
@@ -205,9 +202,9 @@ defmodule ThamaniDawaWeb.CoreComponentsTest do
         """)
 
       assert html =~ "Filters"
-      assert html =~ "rounded-full bg-thamani-forest text-xs font-semibold text-white"
+      assert html =~ "rounded-full bg-thamani-forest text-xs font-semibold text-thamani-on-accent"
       assert html =~ "Category"
-      assert html =~ "bg-thamani-lime"
+      assert html =~ "bg-td-accent-tint"
     end
 
     test "renders chips with a clear-all link when chips are given" do

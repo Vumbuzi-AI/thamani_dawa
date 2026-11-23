@@ -1066,13 +1066,34 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   defp step_index(step), do: Enum.find_index(@steps, &(&1 == step)) + 1
   defp step_label(step), do: Map.fetch!(@step_labels, step)
-  defp total_steps, do: length(@steps)
+  defp steps, do: @steps
+
+  defp step_state(current, step) do
+    cond do
+      step_index(step) < step_index(current) -> "done"
+      step == current -> "current"
+      true -> "upcoming"
+    end
+  end
+
+  defp signup_title(:operating_model), do: "Tell us about your organization"
+  defp signup_title(:main_location), do: "Set up your main location"
+  defp signup_title(:administrator), do: "Create your administrator"
+
+  defp signup_subtitle(:operating_model),
+    do: "Select all the services you operate. You can choose more than one."
+
+  defp signup_subtitle(:main_location),
+    do: "Verify this location first, then choose what this specific premises is licensed to do."
+
+  defp signup_subtitle(:administrator),
+    do: "Add the administrator who will manage your sites, team, and organization settings."
 
   def render(assigns) do
     ~H"""
     <div
       id="signup-onboarding"
-      class="auth-shell lg:h-svh lg:overflow-hidden"
+      class="td-auth"
       data-step={@step}
       data-signup-complete={to_string(@trigger_login)}
       phx-hook=".SignupDraft"
@@ -1212,10 +1233,10 @@ defmodule ThamaniDawaWeb.SignupLive do
         aria-live="polite"
         phx-update="ignore"
         hidden
-        class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-[var(--thamani-snow)]"
+        class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-[var(--thamani-surface)]"
       >
         <div class="flex flex-col items-center px-6 text-center">
-          <span class="flex size-12 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--thamani-lime)_22%,white)] text-[var(--thamani-forest)]">
+          <span class="flex size-12 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--color-td-accent-tint)_22%,white)] text-[var(--thamani-forest)]">
             <.icon name="hero-arrow-path" class="size-6 animate-spin" />
           </span>
           <p class="mt-4 text-base font-semibold text-[var(--thamani-forest)]">
@@ -1227,72 +1248,30 @@ defmodule ThamaniDawaWeb.SignupLive do
         </div>
       </div>
 
-      <div class="auth-aside hidden lg:flex lg:h-svh">
-        <div class="auth-aside-main">
-          <.link navigate={~p"/"} aria-label="Thamani Dawa home" class="auth-aside-logo">
-            <img src="/images/logo-transparent.png" alt="" class="h-auto w-full brightness-0 invert" />
-          </.link>
-
-          <div>
-            <span
-              class="thamani-badge"
-              style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                aria-hidden="true"
-                style="stroke: currentColor; stroke-width: 1.6; fill: none;"
-              >
-                <path d="M4 5v14M8 5v14M11 5v14M15 5v14M17 5v14M20 5v14" />
-              </svg>
-              GS1 Compliant · Built for Kenya
-            </span>
-            <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
-              Start with clarity. Scale with confidence.
-            </h2>
-            <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
-              Configure a pharmacy, laboratory, distribution business, or a combination, then invite your team and start operating.
-            </p>
-          </div>
-        </div>
-
-        <div style="border-top: 1px solid rgba(252,252,247,0.1); padding-top: 28px;">
-          <p style="font-size: 15px; font-weight: 350; color: rgba(252,252,247,0.75); line-height: 1.55; font-style: italic; margin-bottom: 16px;">
-            "We were up and running in a single afternoon: stock, prescriptions, everything."
-          </p>
-          <p style="font-size: 13px; font-weight: 500; color: rgba(252,252,247,0.45);">
-            Jane Mwangi · Owner, MedPoint Pharmacy, Nakuru
-          </p>
-        </div>
+      <div class="td-auth-corner">
+        <.td_button variant="secondary" label="Log in" navigate={~p"/login"} />
       </div>
 
-      <div class="auth-form-panel lg:h-svh lg:overflow-y-auto">
-        <div class="auth-form-inner">
-          <.link navigate={~p"/"} class="auth-back-link">
-            <.icon name="hero-arrow-left" class="size-3.5" /> Back to website
-          </.link>
+      <div class="td-auth-col">
+        <a href="/" aria-label="Thamani Dawa home" class="td-auth-logo">
+          <img src="/images/logo-transparent.png" alt="Thamani Dawa" />
+        </a>
 
-          <ThamaniDawaWeb.Layouts.flash_group flash={@flash} />
+        <ThamaniDawaWeb.Layouts.flash_group flash={@flash} />
 
-          <.progress_bar
-            current={step_index(@step)}
-            total={total_steps()}
-            label={step_label(@step)}
-            class="mb-7"
-          />
+        <.td_auth_card title={signup_title(@step)} subtitle={signup_subtitle(@step)}>
+          <:steps>
+            <.td_step
+              :for={step <- steps()}
+              number={step_index(step)}
+              label={step_label(step)}
+              state={step_state(@step, step)}
+            />
+          </:steps>
 
           <div id={"step-panel-#{@step}"} class="thamani-step-enter">
             <%= case @step do %>
               <% :operating_model -> %>
-                <h1 class="mb-2 text-[32px] font-light leading-tight tracking-[-0.4px] text-[var(--thamani-forest)]">
-                  Tell us about your organization
-                </h1>
-                <p class="mb-8 text-[15px] leading-6 text-[var(--thamani-pewter)]">
-                  Select all the services you operate. You can choose more than one.
-                </p>
-
                 <.form
                   for={@org_form}
                   id="organization-setup-form"
@@ -1306,7 +1285,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                       <%= if selected_operating_model_count(@org_form) > 0 do %>
                         <span
                           id="operating-model-selection-count"
-                          class="rounded-full bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-2.5 py-1 text-[11px] font-semibold text-[var(--thamani-forest)]"
+                          class="rounded-full bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-2.5 py-1 text-[11px] font-semibold text-[var(--thamani-forest)]"
                         >
                           {selected_operating_model_count(@org_form)} selected
                         </span>
@@ -1331,7 +1310,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                   </fieldset>
 
                   <div class="mb-6">
-                    <.thamani_input
+                    <.td_input
                       field={@org_form[:name]}
                       label="Organization name"
                       placeholder="e.g. Afya Pharmacy Ltd"
@@ -1345,19 +1324,9 @@ defmodule ThamaniDawaWeb.SignupLive do
                     </p>
                   </div>
 
-                  <.thamani_btn id="onboarding-continue" type="submit" variant="primary">
-                    Continue <.icon name="hero-arrow-right" class="ml-2 size-4" />
-                  </.thamani_btn>
+                  <.td_button id="onboarding-continue" type="submit" variant="primary" size="lg" label="Continue" />
                 </.form>
               <% :main_location -> %>
-                <h1 class="mb-2 text-[32px] font-light leading-tight tracking-[-0.4px] text-[var(--thamani-forest)]">
-                  Set up your main location
-                </h1>
-                <p class="mb-8 text-[15px] leading-6 text-[var(--thamani-pewter)]">
-                  Verify this location first, then choose what this specific premises is licensed
-                  to do. You can add other branches and wholesale locations later.
-                </p>
-
                 <.form
                   for={@site_form}
                   id="site-setup-form"
@@ -1373,7 +1342,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                   <input type="hidden" name="site[address]" value={@site_form[:address].value} />
 
                   <div class="mb-8">
-                    <.thamani_input
+                    <.td_input
                       field={@site_form[:gln]}
                       label="Location GLN"
                       placeholder="13-digit GS1 Global Location Number"
@@ -1387,7 +1356,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                           Checking with the GS1 registry&hellip;
                         </p>
                       <% {:matched, name, address} when is_binary(name) -> %>
-                        <div class="-mt-4 mb-2 rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
+                        <div class="-mt-4 mb-2 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
                           <p class="inline-flex items-center gap-1.5">
                             <.icon name="hero-check-circle" class="size-4" /> Verified · {name}
                           </p>
@@ -1396,7 +1365,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                           </p>
                         </div>
                       <% {:matched, nil, address} -> %>
-                        <div class="-mt-4 mb-2 rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
+                        <div class="-mt-4 mb-2 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
                           <p class="inline-flex items-center gap-1.5">
                             <.icon name="hero-check-circle" class="size-4" /> Verified with GS1
                           </p>
@@ -1404,7 +1373,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                             {address}
                           </p>
                         </div>
-                        <.thamani_input
+                        <.td_input
                           field={@site_form[:name]}
                           label="Site name"
                           placeholder="e.g. Afya CBD"
@@ -1539,14 +1508,14 @@ defmodule ThamaniDawaWeb.SignupLive do
                           <% end %>
                         </p>
 
-                        <.thamani_input
+                        <.td_input
                           field={@site_form[:ppb_facility_name]}
                           label="Facility name (as licensed with PPB)"
                           placeholder="e.g. Afya CBD Pharmacy"
                           phx-debounce="900"
                           required
                         />
-                        <.thamani_input
+                        <.td_input
                           field={@site_form[:license_number]}
                           label="PPB license number"
                           placeholder="e.g. RD1234"
@@ -1561,7 +1530,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                               Checking with the PPB registry&hellip;
                             </p>
                           <% {:matched, detail} -> %>
-                            <div class="-mt-3 rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
+                            <div class="-mt-3 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
                               <p class="inline-flex items-center gap-1.5">
                                 <.icon name="hero-check-circle" class="size-4" /> Verified with PPB
                               </p>
@@ -1588,19 +1557,14 @@ defmodule ThamaniDawaWeb.SignupLive do
                                 <.icon name="hero-exclamation-triangle" class="size-4" />
                                 Multiple facilities matched — pick the correct one:
                               </p>
-                              <div class="flex flex-col gap-2">
+                              <div class="td-mode-grid">
                                 <%= for {candidate, index} <- Enum.with_index(candidates) do %>
-                                  <button
-                                    type="button"
+                                  <.td_option_card
+                                    title={candidate[:name]}
+                                    body={candidate[:county]}
                                     phx-click="select_ppb_candidate"
                                     phx-value-index={index}
-                                    class="rounded-lg border border-amber-200 bg-white px-3 py-2 text-left font-medium text-amber-900 hover:border-amber-400"
-                                  >
-                                    {candidate[:name]}
-                                    <span :if={candidate[:county]} class="font-normal text-amber-700">
-                                      · {candidate[:county]}
-                                    </span>
-                                  </button>
+                                  />
                                 <% end %>
                               </div>
                             </div>
@@ -1636,14 +1600,14 @@ defmodule ThamaniDawaWeb.SignupLive do
                           this location's lab license below.
                         </p>
 
-                        <.thamani_input
+                        <.td_input
                           field={@site_form[:kmlttb_facility_name]}
                           label="Facility name (as licensed with KMLTTB)"
                           placeholder="e.g. Afya CBD Diagnostics"
                           phx-debounce="900"
                           required
                         />
-                        <.thamani_input
+                        <.td_input
                           field={@site_form[:kmlttb_license_number]}
                           label="KMLTTB license number"
                           placeholder="e.g. L 01234/26"
@@ -1658,7 +1622,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                               Checking with the KMLTTB registry&hellip;
                             </p>
                           <% {:matched, detail} -> %>
-                            <div class="-mt-3 rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
+                            <div class="-mt-3 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
                               <p class="inline-flex items-center gap-1.5">
                                 <.icon name="hero-check-circle" class="size-4" /> Verified with KMLTTB
                               </p>
@@ -1685,19 +1649,14 @@ defmodule ThamaniDawaWeb.SignupLive do
                                 <.icon name="hero-exclamation-triangle" class="size-4" />
                                 Multiple labs matched — pick the correct one:
                               </p>
-                              <div class="flex flex-col gap-2">
+                              <div class="td-mode-grid">
                                 <%= for {candidate, index} <- Enum.with_index(candidates) do %>
-                                  <button
-                                    type="button"
+                                  <.td_option_card
+                                    title={candidate[:name]}
+                                    body={candidate[:county]}
                                     phx-click="select_kmlttb_candidate"
                                     phx-value-index={index}
-                                    class="rounded-lg border border-amber-200 bg-white px-3 py-2 text-left font-medium text-amber-900 hover:border-amber-400"
-                                  >
-                                    {candidate[:name]}
-                                    <span :if={candidate[:county]} class="font-normal text-amber-700">
-                                      · {candidate[:county]}
-                                    </span>
-                                  </button>
+                                  />
                                 <% end %>
                               </div>
                             </div>
@@ -1724,20 +1683,21 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <% end %>
                   <% end %>
 
-                  <div class="flex items-center gap-3">
-                    <button
+                  <div class="td-header-actions">
+                    <.td_button
                       id="main-location-back"
                       type="button"
+                      variant="secondary"
+                      label="Back"
                       phx-click="back"
                       phx-value-from="main_location"
-                      class="inline-flex h-11 items-center justify-center rounded-full border border-[var(--thamani-stone)] bg-white px-5 text-sm font-medium text-[var(--thamani-forest)] transition hover:border-[var(--thamani-forest)]"
-                    >
-                      <.icon name="hero-arrow-left" class="mr-2 size-4" /> Back
-                    </button>
-                    <.thamani_btn
+                    />
+                    <.td_button
                       id="main-location-continue"
                       type="submit"
                       variant="primary"
+                      size="lg"
+                      label={if @gln_check == :checking, do: "Checking GS1 registry…", else: "Continue"}
                       disabled={
                         not match?({:matched, _, _}, @gln_check) or
                           (current_site_ftype(@site_form) != nil and
@@ -1745,24 +1705,10 @@ defmodule ThamaniDawaWeb.SignupLive do
                           (current_site_lab_required?(@site_form) and
                              not match?({:matched, _}, @kmlttb_check))
                       }
-                    >
-                      <%= if @gln_check == :checking do %>
-                        <.icon name="hero-arrow-path" class="mr-2 size-4 animate-spin" />
-                        Checking GS1 registry&hellip;
-                      <% else %>
-                        Continue <.icon name="hero-arrow-right" class="ml-2 size-4" />
-                      <% end %>
-                    </.thamani_btn>
+                    />
                   </div>
                 </.form>
               <% :administrator -> %>
-                <h1 class="mb-2 text-[32px] font-light leading-tight tracking-[-0.4px] text-[var(--thamani-forest)]">
-                  Create your administrator
-                </h1>
-                <p class="mb-8 text-[15px] leading-6 text-[var(--thamani-pewter)]">
-                  Add the administrator who will manage your sites, team, and organization settings. Nothing is created until you complete setup.
-                </p>
-
                 <.form
                   for={@admin_form}
                   phx-submit="save"
@@ -1792,7 +1738,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                         autocomplete="given-name"
                         phx-debounce="blur"
                         required
-                        class="w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow border-[1.5px] rounded-lg outline-none transition-[border-color,box-shadow] duration-150 ease-in-out focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)] border-thamani-stone"
+                        class="w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-surface border-[1.5px] rounded-lg outline-none transition-[border-color,box-shadow] duration-150 ease-in-out focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)] border-thamani-stone"
                       />
                     </div>
                     <div class="mb-5">
@@ -1813,7 +1759,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                         autocomplete="family-name"
                         phx-debounce="blur"
                         required
-                        class="w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow border-[1.5px] rounded-lg outline-none transition-[border-color,box-shadow] duration-150 ease-in-out focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)] border-thamani-stone"
+                        class="w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-surface border-[1.5px] rounded-lg outline-none transition-[border-color,box-shadow] duration-150 ease-in-out focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)] border-thamani-stone"
                       />
                     </div>
                   </div>
@@ -1824,7 +1770,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                     {translate_error(error)}
                   </p>
 
-                  <.thamani_input
+                  <.td_input
                     field={@admin_form[:email]}
                     type="email"
                     label="Email address"
@@ -1834,13 +1780,12 @@ defmodule ThamaniDawaWeb.SignupLive do
                     required
                   />
 
-                  <.thamani_input
+                  <.td_input
                     field={@admin_form[:password]}
                     type="password"
                     label="Password"
                     placeholder="••••••••"
                     autocomplete="new-password"
-                    class="mb-8"
                     phx-debounce="blur"
                     required
                   />
@@ -1859,7 +1804,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                         value="true"
                         checked={@admin_form[:accepted_legal_terms].value in [true, "true"]}
                         required
-                        class="mt-0.5 size-4 shrink-0 rounded border-[var(--thamani-stone)] bg-transparent text-[var(--thamani-forest)] accent-[var(--thamani-forest)] focus:ring-2 focus:ring-[var(--thamani-lime)]"
+                        class="mt-0.5 size-4 shrink-0 rounded border-[var(--thamani-stone)] bg-transparent text-[var(--thamani-forest)] accent-[var(--thamani-forest)] focus:ring-2 focus:ring-[var(--color-td-accent-tint)]"
                       />
                       <span class="text-xs leading-5 text-[var(--thamani-pewter)]">
                         I agree to the
@@ -1882,34 +1827,26 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <% end %>
                   </div>
 
-                  <div class="flex items-center gap-3">
-                    <button
+                  <div class="td-header-actions">
+                    <.td_button
                       id="onboarding-back"
                       type="button"
+                      variant="secondary"
+                      label="Back"
                       phx-click="back"
                       phx-value-from="administrator"
-                      class="inline-flex h-11 items-center justify-center rounded-full border border-[var(--thamani-stone)] bg-white px-5 text-sm font-medium text-[var(--thamani-forest)] transition hover:border-[var(--thamani-forest)]"
-                    >
-                      <.icon name="hero-arrow-left" class="mr-2 size-4" /> Back
-                    </button>
-                    <.thamani_btn id="signup-submit" type="submit" variant="primary">
-                      Create account
-                    </.thamani_btn>
+                    />
+                    <.td_button id="signup-submit" type="submit" variant="primary" size="lg" label="Create account" />
                   </div>
                 </.form>
             <% end %>
           </div>
 
-          <p style="text-align: center; font-size: 14px; color: var(--thamani-pewter); margin-top: 28px;">
+          <:footer>
             Already have an account?
-            <.link
-              navigate={~p"/login"}
-              style="color: var(--thamani-forest); text-decoration: underline; text-underline-offset: 3px; font-weight: 500;"
-            >
-              Log in here
-            </.link>
-          </p>
-        </div>
+            <.link navigate={~p"/login"}>Log in here</.link>
+          </:footer>
+        </.td_auth_card>
       </div>
     </div>
     """

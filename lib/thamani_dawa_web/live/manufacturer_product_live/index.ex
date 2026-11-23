@@ -110,26 +110,45 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
     end
   end
 
-  def handle_info({:serial_generation_complete, count}, socket) do
+  def handle_info({:serials_issued, :inventory, count}, socket) do
     {:noreply,
      socket
-     |> put_flash(:info, "#{count} primary serial#{if count == 1, do: "", else: "s"} generated.")
+     |> put_flash(:info, issued_stock_flash(count))
+     |> push_navigate(to: ~p"/manufacturer/inventory")}
+  end
+
+  def handle_info({:serials_issued, :products, count}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:info, issued_stock_flash(count))
      |> push_patch(to: ~p"/manufacturer/products")}
   end
 
-  def handle_info({:serial_generation_complete, serial_count, shipper_count}, socket) do
+  def handle_info({:serials_issued, :aggregations, serial_count, shipper_count}, socket) do
     {:noreply,
      socket
-     |> put_flash(
-       :info,
-       "#{serial_count} primary serial#{if serial_count == 1, do: "", else: "s"} and " <>
-         "#{shipper_count} shipper SSCC#{if shipper_count == 1, do: "", else: "s"} generated."
-     )
-     |> push_patch(to: ~p"/manufacturer/products")}
+     |> put_flash(:info, issued_order_flash(serial_count, shipper_count))
+     |> push_navigate(to: ~p"/manufacturer/aggregations")}
+  end
+
+  def handle_info({:serials_issued, :shipment, serial_count, shipper_count}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:info, issued_order_flash(serial_count, shipper_count))
+     |> push_navigate(to: ~p"/manufacturer/shipments/new")}
   end
 
   def handle_info({:serial_generation_failed, reason}, socket) do
     {:noreply, put_flash(socket, :error, generation_error(reason))}
+  end
+
+  defp issued_stock_flash(count) do
+    "#{count} primary serial#{if count == 1, do: "", else: "s"} generated."
+  end
+
+  defp issued_order_flash(serial_count, shipper_count) do
+    "#{serial_count} primary serial#{if serial_count == 1, do: "", else: "s"} and " <>
+      "#{shipper_count} shipper SSCC#{if shipper_count == 1, do: "", else: "s"} generated."
   end
 
   defp load_products(socket) do
@@ -193,84 +212,61 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/products"}
+      crumb="Products"
     >
-      <.header icon="hero-archive-box">
-        Products
-        <:subtitle>GTINs registered to this organization and their serialisation activity.</:subtitle>
+      <.td_list_page
+        title="Products"
+        subtitle="GTINs registered to this organization and their serialisation activity."
+      >
         <:actions>
-          <.button id="sync-manufacturer-products" phx-click="sync_products"><.icon
-            name="hero-arrow-path"
-            class="size-4"
-          /> Sync from GS1</.button>
-          <.button
+          <.td_button id="sync-manufacturer-products" variant="secondary" label="Sync from GS1" phx-click="sync_products" />
+          <.td_button
             id="add-manufacturer-product"
             variant="primary"
+            label="Add product"
             patch={~p"/manufacturer/products/new"}
-          ><.icon name="hero-plus" class="size-4" /> Add product</.button>
-        </:actions>
-      </.header>
-
-      <div class="dashboard-stat-grid mt-6 sm:grid-cols-2">
-        <.stat_tile
-          id="manufacturer-number-generated"
-          icon="hero-qr-code"
-          label="Number generated"
-          value={@number_generated}
-          sublabel="Primary serials and shipping SSCCs"
-        />
-        <.stat_tile
-          id="manufacturer-maximum"
-          icon="hero-chart-bar-square"
-          label="Maximum"
-          value={@maximum}
-          sublabel="Current serialisation quota"
-        />
-      </div>
-
-      <div class="mt-6 flex flex-col gap-3 rounded-2xl border border-thamani-stone bg-white p-3 shadow-sm sm:flex-row sm:items-center">
-        <form id="manufacturer-product-search" phx-change="search" class="min-w-0 flex-1">
-          <.input
-            type="search"
-            name="search"
-            value={@search}
-            placeholder="Search GTIN, brand or description"
-            phx-debounce="300"
-            class="w-full"
           />
-        </form>
-        <div class="flex items-center gap-2">
-          <div class="flex rounded-xl border border-thamani-stone bg-thamani-snow p-1">
-            <button
+        </:actions>
+        <:filters>
+          <div class="td-stats">
+            <.td_stat id="manufacturer-number-generated" caption="Number generated" value={@number_generated} />
+            <.td_stat id="manufacturer-maximum" caption="Maximum" value={@maximum} />
+          </div>
+          <form id="manufacturer-product-search" phx-change="search">
+            <.td_search
+              name="search"
+              value={@search}
+              placeholder="Search GTIN, brand or description"
+              phx-debounce="300"
+            />
+          </form>
+          <.td_segmented>
+            <.td_segment
               id="manufacturer-list-view"
-              type="button"
+              label="List"
+              active={@view_mode == "list"}
               phx-click="set_view"
               phx-value-view="list"
-              class={[
-                "rounded-lg px-3 py-2 transition",
-                @view_mode == "list" && "bg-white text-thamani-forest shadow-sm"
-              ]}
-              aria-label="List view"
-            ><.icon name="hero-list-bullet" class="size-4" /></button>
-            <button
+            />
+            <.td_segment
               id="manufacturer-grid-view"
-              type="button"
+              label="Grid"
+              active={@view_mode == "grid"}
               phx-click="set_view"
               phx-value-view="grid"
-              class={[
-                "rounded-lg px-3 py-2 transition",
-                @view_mode == "grid" && "bg-white text-thamani-forest shadow-sm"
-              ]}
-              aria-label="Grid view"
-            ><.icon name="hero-squares-2x2" class="size-4" /></button>
-          </div>
-          <.button id="reset-manufacturer-products" type="button" phx-click="reset">Reset</.button>
-        </div>
-      </div>
+            />
+          </.td_segmented>
+          <.td_button id="reset-manufacturer-products" variant="secondary" label="Reset" phx-click="reset" />
+        </:filters>
 
-      <div :if={@view_mode == "list"} class="mt-5">
-        <.table id="manufacturer-products" rows={@rows}>
+        <.td_data_table
+          :if={@view_mode == "list"}
+          id="manufacturer-products"
+          rows={@rows}
+          row_id={fn %{product: product} -> "manufacturer-product-#{product.id}" end}
+        >
           <:col :let={%{product: product}} label="GTIN">
-            <span class="font-mono text-sm">{product.gtin}</span>
+            <span class="td-kv-value is-mono">{product.gtin}</span>
           </:col>
           <:col :let={%{product: product}} label="Product">{product.name}</:col>
           <:col :let={%{product: product}} label="Description">{product.description || "—"}</:col>
@@ -278,71 +274,59 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
             {Calendar.strftime(product.inserted_at, "%d %b %Y")}
           </:col>
           <:col :let={%{product: product, sscc_count: count}} label="SSCC">
-            <div class="flex items-center gap-2">
-              <.link
-                id={"product-#{product.id}-ssccs"}
-                navigate={~p"/manufacturer/products/#{product.gtin}/ssccs"}
-                class="rounded-lg p-2 text-thamani-pewter transition hover:bg-thamani-mist hover:text-thamani-forest"
-                aria-label={"View SSCCs for #{product.name}"}
-              ><.icon name="hero-eye" class="size-4" /></.link><span>{count}</span>
-            </div>
+            {count}
+            <.td_button
+              id={"product-#{product.id}-ssccs"}
+              variant="secondary"
+              label="View"
+              navigate={~p"/manufacturer/products/#{product.gtin}/ssccs"}
+            />
           </:col>
           <:col :let={%{product: product, serial_count: count}} label="Serials">
-            <div class="flex items-center gap-2">
-              <.link
-                id={"product-#{product.id}-serials"}
-                navigate={~p"/manufacturer/products/#{product.gtin}/serials"}
-                class="rounded-lg p-2 text-thamani-pewter transition hover:bg-thamani-mist hover:text-thamani-forest"
-                aria-label={"View serials for #{product.name}"}
-              ><.icon name="hero-eye" class="size-4" /></.link><span>{count}</span>
-            </div>
+            {count}
+            <.td_button
+              id={"product-#{product.id}-serials"}
+              variant="secondary"
+              label="View"
+              navigate={~p"/manufacturer/products/#{product.gtin}/serials"}
+            />
           </:col>
           <:action :let={%{product: product}}>
-            <.button
+            <.td_button
               id={"product-#{product.id}-add-serial"}
               variant="primary"
+              label="Serial"
               patch={~p"/manufacturer/products/#{product.gtin}/serials/new"}
-            ><.icon name="hero-plus" class="size-4" /> Serial</.button>
+            />
           </:action>
-          <:empty_state>
-            <.blank_state icon="hero-archive-box" title="No products found">
-              Add or sync a GTIN to start generating primary serials.
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
+          <:empty>
+            <.td_empty
+              title="No products found"
+              hint="Add or sync a GTIN to start generating primary serials."
+            />
+          </:empty>
+        </.td_data_table>
 
-      <div
-        :if={@view_mode == "grid"}
-        id="manufacturer-products-grid"
-        class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3"
-      >
-        <article
-          :for={row <- @rows}
-          id={"manufacturer-product-card-#{row.product.id}"}
-          class="rounded-2xl border border-thamani-stone bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+        <div
+          :if={@view_mode == "grid"}
+          id="manufacturer-products-grid"
+          class="td-stats"
         >
-          <p class="font-mono text-xs text-thamani-pewter">{row.product.gtin}</p><h3 class="mt-2 text-lg font-semibold text-thamani-forest">
-            {row.product.name}
-          </h3><p class="mt-1 min-h-10 text-sm text-thamani-pewter">
-            {row.product.description || "No description"}
-          </p>
-          <div class="mt-5 grid grid-cols-2 gap-2">
-            <.link
-              navigate={~p"/manufacturer/products/#{row.product.gtin}/ssccs"}
-              class="rounded-xl bg-thamani-snow p-3 text-sm transition hover:bg-thamani-mist"
-            ><span class="block text-xs text-thamani-pewter">SSCC</span><span class="font-semibold">{row.sscc_count}</span></.link><.link
-              navigate={~p"/manufacturer/products/#{row.product.gtin}/serials"}
-              class="rounded-xl bg-thamani-snow p-3 text-sm transition hover:bg-thamani-mist"
-            ><span class="block text-xs text-thamani-pewter">Serials</span><span class="font-semibold">{row.serial_count}</span></.link>
-          </div>
-          <.button
-            class="mt-4 w-full"
-            variant="primary"
-            patch={~p"/manufacturer/products/#{row.product.gtin}/serials/new"}
-          ><.icon name="hero-plus" class="size-4" /> Serial</.button>
-        </article>
-      </div>
+          <article :for={row <- @rows} id={"manufacturer-product-card-#{row.product.id}"} class="td-stat">
+            <span class="td-kv-value is-mono">{row.product.gtin}</span>
+            <span class="td-stat-value">{row.product.name}</span>
+            <span class="td-stat-sub">{row.product.description || "No description"}</span>
+            <.td_key_value label="SSCC" value={row.sscc_count} />
+            <.td_key_value label="Serials" value={row.serial_count} />
+            <.td_button
+              variant="primary"
+              label="Serial"
+              patch={~p"/manufacturer/products/#{row.product.gtin}/serials/new"}
+            />
+          </article>
+          <.td_empty :if={@rows == []} title="No products found" hint="Add or sync a GTIN to start generating primary serials." />
+        </div>
+      </.td_list_page>
 
       <.pagination
         :if={@page_info.total_entries > 0}
@@ -350,47 +334,44 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
         path={~p"/manufacturer/products?#{%{search: @search, view: @view_mode}}"}
       />
 
-      <.modal
+      <.td_overlay_form
         :if={@live_action == :new}
-        id="manufacturer-product-modal"
-        show
+        id="manufacturer-product"
+        title="Add product"
+        submit="Save product"
         on_cancel={JS.patch(~p"/manufacturer/products")}
       >
-        <h2 class="mb-4 text-2xl font-medium tracking-tight text-thamani-forest">Add product</h2>
-        <.form for={@form} id="manufacturer-product-form" phx-change="validate" phx-submit="save">
-          <div class="space-y-4">
-            <.input field={@form[:gtin]} label="GTIN" placeholder="8 to 14 digits" required /><.input
-              field={@form[:name]}
-              label="Product name"
-              required
-            /><.input field={@form[:description]} label="Description" /><.input
-              field={@form[:brand_owner]}
-              label="Brand owner"
-            />
-          </div><div class="mt-6 flex justify-end gap-3">
-            <.button type="button" phx-click={JS.patch(~p"/manufacturer/products")}>Cancel</.button><.button variant="primary">Save product</.button>
-          </div>
+        <.form
+          for={@form}
+          id="manufacturer-product-form"
+          phx-change="validate"
+          phx-submit="save"
+        >
+          <.td_input field={@form[:gtin]} label="GTIN" placeholder="8 to 14 digits" required />
+          <.td_input field={@form[:name]} label="Product name" required />
+          <.td_input field={@form[:description]} label="Description" />
+          <.td_input field={@form[:brand_owner]} label="Brand owner" />
         </.form>
-      </.modal>
+      </.td_overlay_form>
 
-      <.modal
+      <.td_modal
         :if={@live_action == :new_serial}
         id="manufacturer-serial-modal"
         show
+        title="Generate primary serials"
         on_cancel={JS.patch(~p"/manufacturer/products")}
       >
-        <h2 class="mb-6 text-2xl font-medium tracking-tight text-thamani-forest">
-          Generate primary serials
-        </h2>
-        <.live_component
-          module={ThamaniDawaWeb.ManufacturerProductLive.SerialWizard}
-          id={"serial-wizard-#{@product.id}"}
-          product={@product}
-          organization_id={@current_scope.organization_id}
-          site={@site}
-          facilities={@facilities}
-        />
-      </.modal>
+        <:body>
+          <.live_component
+            module={ThamaniDawaWeb.ManufacturerProductLive.SerialWizard}
+            id={"serial-wizard-#{@product.id}"}
+            product={@product}
+            organization_id={@current_scope.organization_id}
+            site={@site}
+            facilities={@facilities}
+          />
+        </:body>
+      </.td_modal>
     </Layouts.manufacturer_shell>
     """
   end

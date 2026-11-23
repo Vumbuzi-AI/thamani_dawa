@@ -364,11 +364,11 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
             :for={serial <- @batch.serials}
             class={[
               "flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-mono text-xs transition",
-              serial in @group.serials && "border-thamani-forest bg-white text-thamani-forest",
+              serial in @group.serials && "border-thamani-forest bg-td-surface text-thamani-forest",
               serial not in @group.serials && serial not in @taken_elsewhere &&
-                "border-thamani-stone bg-white text-thamani-ink hover:border-thamani-forest/40",
+                "border-thamani-stone bg-td-surface text-thamani-ink hover:border-thamani-forest/40",
               serial in @taken_elsewhere &&
-                "cursor-not-allowed border-thamani-stone bg-white/40 text-thamani-subtle"
+                "cursor-not-allowed border-thamani-stone bg-td-surface/40 text-thamani-subtle"
             ]}
           >
             <input
@@ -397,7 +397,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
     ~H"""
     <li class="flex gap-3">
       <div class="flex w-8 shrink-0 flex-col items-center">
-        <span class="flex size-8 items-center justify-center rounded-full bg-thamani-lime text-thamani-forest">
+        <span class="flex size-8 items-center justify-center rounded-full bg-td-accent-tint text-thamani-forest">
           <.icon name={@icon} class="size-4" />
         </span>
         <span :if={!@last?} class="mt-1 w-px flex-1 bg-thamani-stone"></span>
@@ -446,7 +446,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
       <section
         :if={@batch.logistic_unit && length(@case_lines) > 1}
         id="case-contents"
-        class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6"
+        class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6"
       >
         <div class="flex flex-wrap items-baseline justify-between gap-2">
           <h2 class="text-sm font-semibold text-thamani-forest">Case contents</h2>
@@ -497,7 +497,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
         <ul class="mt-4 grid gap-3 sm:grid-cols-2">
           <li
             :for={child <- @minted_mini_ssccs}
-            class="rounded-xl border border-thamani-stone bg-white p-4"
+            class="rounded-xl border border-thamani-stone bg-td-surface p-4"
           >
             <p class="font-mono text-sm font-semibold tracking-wide text-thamani-ink">{child.sscc}</p>
             <p class="mt-1 text-sm text-thamani-subtle">
@@ -516,7 +516,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
       <section
         :if={@split_open}
         id="mini-sscc-panel"
-        class="mt-5 overflow-hidden rounded-2xl border border-thamani-stone bg-white"
+        class="mt-5 overflow-hidden rounded-2xl border border-thamani-stone bg-td-surface"
       >
         <% claimed = claimed_units(@split_groups) %>
         <div class="border-b border-thamani-stone px-5 py-5 sm:px-6">
@@ -601,7 +601,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
               type="button"
               id="add-split-group"
               phx-click="add_group"
-              class="thamani-btn-ghost inline-flex items-center gap-1.5"
+              class="td-btn is-secondary is-md"
             >
               <.icon name="hero-plus" class="size-4" /> Add carton
             </button>
@@ -612,7 +612,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
         </.form>
       </section>
 
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6">
+      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">GTIN</dt>
@@ -708,7 +708,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
         >
           <span
             :for={serial <- @batch.serials}
-            class="truncate rounded border border-thamani-stone bg-white px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
+            class="truncate rounded border border-thamani-stone bg-td-surface px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
             title={serial}
           >
             {serial}
@@ -718,7 +718,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
 
       <section
         id="batch-trail"
-        class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6"
+        class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6"
       >
         <h2 class="text-base font-medium tracking-tight text-thamani-forest">Trail</h2>
         <ol class="mt-4">

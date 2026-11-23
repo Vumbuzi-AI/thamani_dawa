@@ -13,6 +13,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
      |> assign_new(:mode, fn -> nil end)
      |> assign_new(:step, fn -> 1 end)
      |> assign_new(:submitting, fn -> false end)
+     |> assign_new(:issued, fn -> nil end)
      |> assign_new(:to_gln_check, fn -> :idle end)
      |> assign_new(:form_params, fn -> default_params(assigns.site) end)
      |> assign_new(:form, fn -> to_form(default_params(assigns.site), as: :serial_generation) end)}
@@ -40,6 +41,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
 
   def handle_event("next_step", _params, socket) do
     {:noreply, assign(socket, :step, 3)}
+  end
+
+  def handle_event("issued_next", %{"to" => to}, socket) do
+    issued = socket.assigns.issued
+
+    message =
+      case to do
+        "inventory" -> {:serials_issued, :inventory, issued.count}
+        "aggregations" -> {:serials_issued, :aggregations, issued.count, issued.shippers}
+        "shipment" -> {:serials_issued, :shipment, issued.count, issued.shippers}
+        _ -> {:serials_issued, :products, issued.count}
+      end
+
+    send(self(), message)
+    {:noreply, socket}
   end
 
   def handle_event("prev_step", _params, socket) do
@@ -147,8 +163,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
            socket.assigns.site.gln
          ) do
       {:ok, %{serials: serials}} ->
-        send(self(), {:serial_generation_complete, length(serials)})
-        {:noreply, assign(socket, :submitting, false)}
+        {:noreply,
+         assign(socket,
+           submitting: false,
+           issued: %{
+             kind: "stock",
+             count: length(serials),
+             batch: params["batch_no"]
+           }
+         )}
 
       {:error, reason} ->
         send(self(), {:serial_generation_failed, reason})
@@ -172,8 +195,17 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
            parties
          ) do
       {:ok, %{serials: serials, shippers: shippers}} ->
-        send(self(), {:serial_generation_complete, length(serials), length(shippers)})
-        {:noreply, assign(socket, :submitting, false)}
+        {:noreply,
+         assign(socket,
+           submitting: false,
+           issued: %{
+             kind: "order",
+             count: length(serials),
+             shippers: length(shippers),
+             batch: params["batch_no"],
+             destination: params["to_company_name"]
+           }
+         )}
 
       {:error, reason} ->
         send(self(), {:serial_generation_failed, reason})
@@ -284,75 +316,97 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
   def render(assigns) do
     ~H"""
     <div id="manufacturer-serial-wizard">
-      <div class="mb-8 flex items-center gap-3" aria-label="Serial generation progress">
-        <div :for={n <- 1..total_steps(@mode)} class="flex flex-1 items-center gap-2">
-          <span class={[
-            "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-            if(@step >= n,
-              do: "bg-thamani-forest text-white",
-              else: "bg-thamani-mist text-thamani-pewter"
-            )
-          ]}>{n}</span>
-          <span class={[
-            "text-sm font-semibold",
-            if(@step >= n, do: "text-thamani-forest", else: "text-thamani-pewter")
-          ]}>{step_label(n)}</span>
-          <div :if={n < total_steps(@mode)} class="h-px flex-1 bg-thamani-stone"></div>
-        </div>
-      </div>
-
-      <%= if @step == 1 do %>
-        <section
-          id="serial-wizard-product"
-          class="rounded-2xl border border-thamani-stone bg-thamani-snow p-6"
-        >
-          <p class="text-xs font-bold uppercase tracking-[0.18em] text-thamani-pewter">
-            Selected product
+      <%= if @issued do %>
+        <div id="serials-issued">
+          <p :if={@issued.kind == "stock"} class="td-note">
+            {@issued.batch} now holds {@issued.count} DataMatrix codes for {@product.name}. They sit in inventory until you pack them into shippers.
           </p>
-          <p class="mt-3 text-xl font-semibold text-thamani-forest">{@product.name}</p>
-          <p class="mt-1 font-mono text-sm text-thamani-pewter">GTIN {@product.gtin}</p>
-        </section>
-
-        <div class="mt-6 grid gap-4 sm:grid-cols-2">
-          <button
-            id="serial-wizard-mode-order"
-            type="button"
-            phx-click="choose_mode"
-            phx-value-mode="order"
-            phx-target={@myself}
-            class="rounded-2xl border border-thamani-stone bg-white p-5 text-left transition hover:border-thamani-forest hover:bg-thamani-mist"
-          >
-            <p class="text-sm font-semibold text-thamani-forest">Make to order</p>
-            <p class="mt-1 text-xs text-thamani-pewter">
-              Create the shipper SSCCs now, with a From/To party for the labels.
-            </p>
-          </button>
-          <button
-            id="serial-wizard-mode-stock"
-            type="button"
-            phx-click="choose_mode"
-            phx-value-mode="stock"
-            phx-target={@myself}
-            class="rounded-2xl border border-thamani-stone bg-white p-5 text-left transition hover:border-thamani-forest hover:bg-thamani-mist"
-          >
-            <p class="text-sm font-semibold text-thamani-forest">Make to stock</p>
-            <p class="mt-1 text-xs text-thamani-pewter">
-              Store as groups of batches — no SSCC is created yet.
-            </p>
-          </button>
+          <p :if={@issued.kind == "order"} class="td-note">
+            {@issued.batch} packed {@issued.count} units into {@issued.shippers} shippers for {@issued.destination}. A mobile user can find this work by the order number on the shipment.
+          </p>
+          <div class="td-header-actions">
+            <%= if @issued.kind == "stock" do %>
+              <.td_button
+                id="serials-issued-back"
+                variant="secondary"
+                label="Back to product"
+                phx-click="issued_next"
+                phx-value-to="products"
+                phx-target={@myself}
+              />
+              <.td_button
+                id="serials-issued-inventory"
+                variant="primary"
+                label="Open inventory"
+                phx-click="issued_next"
+                phx-value-to="inventory"
+                phx-target={@myself}
+              />
+            <% else %>
+              <.td_button
+                id="serials-issued-aggregation"
+                variant="secondary"
+                label="Open aggregation"
+                phx-click="issued_next"
+                phx-value-to="aggregations"
+                phx-target={@myself}
+              />
+              <.td_button
+                id="serials-issued-shipment"
+                variant="primary"
+                label="New shipment"
+                phx-click="issued_next"
+                phx-value-to="shipment"
+                phx-target={@myself}
+              />
+            <% end %>
+          </div>
         </div>
       <% else %>
-        <.form
-          for={@form}
-          id="manufacturer-serial-generation-form"
-          phx-change="validate"
-          phx-submit="save"
-          phx-target={@myself}
-        >
-          <%= if @step == 2 do %>
-            <div class="grid gap-5 sm:grid-cols-2">
-              <.input field={@form[:batch_no]} label="Batch #" required />
-              <.input
+        <div class="td-steps" aria-label="Serial generation progress">
+          <.td_step
+            :for={n <- 1..total_steps(@mode)}
+            number={n}
+            label={step_label(n)}
+            state={if @step > n, do: "done", else: if(@step == n, do: "current", else: "upcoming")}
+          />
+        </div>
+
+        <%= if @step == 1 do %>
+          <div id="serial-wizard-product" class="td-kv-grid">
+            <.td_key_value label="Selected product" value={@product.name} />
+            <.td_key_value label="GTIN" value={@product.gtin} mono />
+          </div>
+          <.td_mode_picker title="How should these serials be issued?">
+            <.td_option_card
+              id="serial-wizard-mode-order"
+              title="Make to order"
+              body="Create the shipper SSCCs now, with a From/To party for the labels."
+              phx-click="choose_mode"
+              phx-value-mode="order"
+              phx-target={@myself}
+            />
+            <.td_option_card
+              id="serial-wizard-mode-stock"
+              title="Make to stock"
+              body="Store as groups of batches. No SSCC is created yet."
+              phx-click="choose_mode"
+              phx-value-mode="stock"
+              phx-target={@myself}
+            />
+          </.td_mode_picker>
+        <% else %>
+          <.form
+            for={@form}
+            id="manufacturer-serial-generation-form"
+            phx-change="validate"
+            phx-submit="save"
+            phx-target={@myself}
+            class="td-auth-form"
+          >
+            <%= if @step == 2 do %>
+              <.td_input field={@form[:batch_no]} label="Batch #" required />
+              <.td_input
                 field={@form[:primary_quantity]}
                 type="number"
                 min="1"
@@ -360,67 +414,52 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                 label="Primary quantity"
                 required
               />
-              <.input field={@form[:production_date]} type="date" label="Production date" required />
-              <.input field={@form[:expiry_date]} type="date" label="Expiry date" required />
-              <.input
+              <.date_picker field={@form[:production_date]} label="Production date" required />
+              <.date_picker field={@form[:expiry_date]} label="Expiry date" required />
+              <.td_input
                 :if={@mode == "order"}
                 field={@form[:shipper_quantity]}
                 type="number"
                 min="1"
-                label="Shipper quantity (boxes to split primaries across)"
+                label="Shipper quantity"
                 required
               />
-            </div>
-            <div class="mt-8 flex items-center justify-between gap-3">
-              <.button
-                id="serial-wizard-prev"
-                type="button"
-                phx-click="prev_step"
-                phx-target={@myself}
-              >
-                <.icon name="hero-arrow-left" class="size-4" /> Prev
-              </.button>
-              <%= if @mode == "order" do %>
-                <.button
-                  id="serial-wizard-next"
+              <div class="td-header-actions">
+                <.td_button
+                  id="serial-wizard-prev"
                   type="button"
-                  variant="primary"
-                  phx-click="next_step"
+                  variant="secondary"
+                  label="Prev"
+                  phx-click="prev_step"
                   phx-target={@myself}
-                >
-                  Next <.icon name="hero-arrow-right" class="size-4" />
-                </.button>
-              <% else %>
-                <.button id="serial-wizard-submit" variant="primary" phx-disable-with="Generating…">
-                  <.icon name="hero-qr-code" class="size-4" /> Generate serials
-                </.button>
-              <% end %>
-            </div>
-          <% else %>
-            <input type="hidden" name="serial_generation[batch_no]" value={@form[:batch_no].value} />
-            <input
-              type="hidden"
-              name="serial_generation[production_date]"
-              value={@form[:production_date].value}
-            />
-            <input
-              type="hidden"
-              name="serial_generation[expiry_date]"
-              value={@form[:expiry_date].value}
-            />
-            <input
-              type="hidden"
-              name="serial_generation[primary_quantity]"
-              value={@form[:primary_quantity].value}
-            />
-            <input
-              type="hidden"
-              name="serial_generation[shipper_quantity]"
-              value={@form[:shipper_quantity].value}
-            />
-            <div class="grid gap-5 sm:grid-cols-2">
-              <div class="space-y-4 rounded-2xl border border-thamani-stone p-4">
-                <p class="text-xs font-bold uppercase tracking-[0.18em] text-thamani-pewter">From</p>
+                />
+                <%= if @mode == "order" do %>
+                  <.td_button
+                    id="serial-wizard-next"
+                    type="button"
+                    variant="primary"
+                    label="Next"
+                    phx-click="next_step"
+                    phx-target={@myself}
+                  />
+                <% else %>
+                  <.td_button
+                    id="serial-wizard-submit"
+                    type="submit"
+                    variant="primary"
+                    label="Generate serials"
+                    phx-disable-with="Generating…"
+                  />
+                <% end %>
+              </div>
+            <% else %>
+              <input type="hidden" name="serial_generation[batch_no]" value={@form[:batch_no].value} />
+              <input type="hidden" name="serial_generation[production_date]" value={@form[:production_date].value} />
+              <input type="hidden" name="serial_generation[expiry_date]" value={@form[:expiry_date].value} />
+              <input type="hidden" name="serial_generation[primary_quantity]" value={@form[:primary_quantity].value} />
+              <input type="hidden" name="serial_generation[shipper_quantity]" value={@form[:shipper_quantity].value} />
+              <div>
+                <p class="td-note">From</p>
                 <.input
                   field={@form[:from_gln]}
                   type="combobox"
@@ -429,11 +468,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                   placeholder="Search your facilities"
                   required
                 />
-                <.input field={@form[:from_company_name]} label="From company name" required />
-                <.input field={@form[:from_address]} label="From address" required />
+                <.td_input field={@form[:from_company_name]} label="From company name" required />
+                <.td_input field={@form[:from_address]} label="From address" required />
               </div>
-              <div class="space-y-4 rounded-2xl border border-thamani-stone p-4">
-                <p class="text-xs font-bold uppercase tracking-[0.18em] text-thamani-pewter">To</p>
+              <div>
+                <p class="td-note">To</p>
                 <.input
                   field={@form[:to_gln]}
                   type="combobox"
@@ -443,35 +482,31 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                   phx-debounce="500"
                   required
                 />
-                <p :if={@to_gln_check == :checking} class="text-xs text-thamani-pewter">
-                  <.icon name="hero-arrow-path" class="inline size-3.5 motion-safe:animate-spin" />
-                  Looking up company…
-                </p>
-                <p
-                  :if={@to_gln_check == :not_found}
-                  class="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
-                >
-                  We couldn't verify this GLN.
-                </p>
-                <.input field={@form[:to_company_name]} label="To company name" readonly required />
-                <.input field={@form[:to_address]} label="To address" readonly required />
+                <p :if={@to_gln_check == :checking} class="td-note">Looking up company…</p>
+                <p :if={@to_gln_check == :not_found} class="td-note">We couldn't verify this GLN.</p>
+                <.td_input field={@form[:to_company_name]} label="To company name" readonly required />
+                <.td_input field={@form[:to_address]} label="To address" readonly required />
               </div>
-            </div>
-            <div class="mt-8 flex items-center justify-between gap-3">
-              <.button
-                id="serial-wizard-prev"
-                type="button"
-                phx-click="prev_step"
-                phx-target={@myself}
-              >
-                <.icon name="hero-arrow-left" class="size-4" /> Prev
-              </.button>
-              <.button id="serial-wizard-submit" variant="primary" phx-disable-with="Generating…">
-                <.icon name="hero-qr-code" class="size-4" /> Generate serials & SSCCs
-              </.button>
-            </div>
-          <% end %>
-        </.form>
+              <div class="td-header-actions">
+                <.td_button
+                  id="serial-wizard-prev"
+                  type="button"
+                  variant="secondary"
+                  label="Prev"
+                  phx-click="prev_step"
+                  phx-target={@myself}
+                />
+                <.td_button
+                  id="serial-wizard-submit"
+                  type="submit"
+                  variant="primary"
+                  label="Generate serials & SSCCs"
+                  phx-disable-with="Generating…"
+                />
+              </div>
+            <% end %>
+          </.form>
+        <% end %>
       <% end %>
     </div>
     """

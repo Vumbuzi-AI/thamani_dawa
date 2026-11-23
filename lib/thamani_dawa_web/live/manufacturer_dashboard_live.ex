@@ -19,54 +19,31 @@ defmodule ThamaniDawaWeb.ManufacturerDashboardLive do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer"}
+      crumb="Dashboard"
     >
-      <.header icon="hero-squares-2x2">
-        Manufacturer dashboard
-        <:subtitle>
-          Products, serialisation activity, and SSCC issuance across your organization.
-        </:subtitle>
-        <:actions>
-          <.button
-            id="manufacturer-new-product"
-            variant="primary"
-            navigate={~p"/manufacturer/products/new"}
-          >
-            <.icon name="hero-plus" class="size-4" /> Add product
-          </.button>
-        </:actions>
-      </.header>
+      <:tools>
+        <.td_button
+          id="manufacturer-new-product"
+          variant="primary"
+          label="Add product"
+          navigate={~p"/manufacturer/products/new"}
+        />
+      </:tools>
 
-      <p class="dashboard-section-label mt-6">Overview</p>
-      <div class="dashboard-stat-grid mt-2">
-        <.stat_tile
-          id="stat-manufacturer-products"
-          icon="hero-archive-box"
-          label="Products"
-          value={@counts.products}
-          sublabel="GTINs registered to this organization"
-        />
-        <.stat_tile
-          id="stat-manufacturer-batches"
-          icon="hero-cube"
-          label="Batches"
-          value={@counts.batches}
-          sublabel="Production batches recorded"
-        />
-        <.stat_tile
-          id="stat-manufacturer-serials"
-          icon="hero-qr-code"
-          label="Serials generated"
-          value={@counts.serials}
-          sublabel="Serialised DataMatrix codes issued"
-        />
-        <.stat_tile
-          id="stat-manufacturer-ssccs"
-          icon="hero-cube-transparent"
-          label="SSCCs issued"
-          value={@counts.ssccs}
-          sublabel="Shipper cases packed and labeled"
-        />
-      </div>
+      <.td_list_page
+        title="Manufacturer dashboard"
+        subtitle="Products, serialisation activity, and SSCC issuance across your organization."
+      >
+        <:actions>
+          <.td_button variant="secondary" label="View products" navigate={~p"/manufacturer/products"} />
+        </:actions>
+        <div class="td-stats">
+          <.td_stat id="stat-manufacturer-products" caption="Products" value={@counts.products} />
+          <.td_stat id="stat-manufacturer-batches" caption="Batches" value={@counts.batches} />
+          <.td_stat id="stat-manufacturer-serials" caption="Serials generated" value={@counts.serials} />
+          <.td_stat id="stat-manufacturer-ssccs" caption="SSCCs issued" value={@counts.ssccs} />
+        </div>
+      </.td_list_page>
     </Layouts.manufacturer_shell>
     """
   end

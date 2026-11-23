@@ -210,7 +210,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
       <div class="space-y-6">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 class="text-2xl font-semibold tracking-tight text-slate-900">
+            <h1 class="text-2xl font-semibold tracking-tight text-td-ink">
               {kind_label(@disposal.kind)} — {@site.name}
             </h1>
             <p class="mt-1 text-sm text-thamani-pewter">{status_message(@disposal.status)}</p>
@@ -223,7 +223,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
           id="add-batch-panel"
           class="rounded-xl ff-surface-card p-4 sm:p-5"
         >
-          <h2 class="mb-3 text-sm font-semibold text-slate-700">Add a batch to dispose</h2>
+          <h2 class="mb-3 text-sm font-semibold text-td-ink">Add a batch to dispose</h2>
           <form
             phx-submit="add_batch"
             id="add-batch-form"
@@ -254,7 +254,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
         </section>
 
         <section id="disposal-items">
-          <h2 class="mb-3 text-sm font-semibold text-slate-700">
+          <h2 class="mb-3 text-sm font-semibold text-td-ink">
             Batches to dispose
             <span class="ml-1 rounded-full bg-thamani-stone px-2 py-0.5 text-xs font-normal text-thamani-pewter">
               {length(@disposal.items)}
@@ -275,7 +275,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
               <article id={"item-#{item.id}"} class="overflow-hidden rounded-xl ff-surface-card">
                 <div class="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div class="min-w-0">
-                    <p class="font-medium text-slate-900">
+                    <p class="font-medium text-td-ink">
                       {product_name(@products_by_id, batch && batch.product_id)}
                     </p>
                     <p class="mt-0.5 font-mono text-xs text-thamani-subtle">
@@ -291,7 +291,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
                       <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
                         Available
                       </dt>
-                      <dd class="mt-0.5 font-semibold tabular-nums text-slate-900">
+                      <dd class="mt-0.5 font-semibold tabular-nums text-td-ink">
                         {item.available_quantity}
                       </dd>
                     </div>
@@ -299,7 +299,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
                       <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
                         Requested
                       </dt>
-                      <dd class="mt-0.5 font-semibold tabular-nums text-slate-900">
+                      <dd class="mt-0.5 font-semibold tabular-nums text-td-ink">
                         {item.quantity}
                       </dd>
                     </div>

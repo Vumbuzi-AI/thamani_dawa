@@ -512,7 +512,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
     ~H"""
     <%= if @live_action == :new and @back_path == ~p"/onboarding" do %>
       <Layouts.app flash={@flash} current_scope={@current_scope} navigation={false}>
-        <div id="onboarding-invite-shell" class="flex min-h-svh flex-col bg-[var(--thamani-snow)]">
+        <div id="onboarding-invite-shell" class="flex min-h-svh flex-col bg-[var(--thamani-surface)]">
           <header class="border-b border-[color-mix(in_srgb,var(--thamani-stone)_70%,transparent)]">
             <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-5 sm:px-8 lg:px-12">
               <.link
@@ -525,7 +525,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
               <div id="onboarding-invite-user" class="flex min-w-0 items-center gap-3">
                 <span
-                  class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-snow)] shadow-sm"
+                  class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-on-accent)] shadow-sm"
                   aria-hidden="true"
                 >
                   {String.first(@current_scope.user.name || "U")}
@@ -549,7 +549,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
           <main class="mx-auto grid w-full max-w-6xl flex-1 items-start gap-10 px-5 pb-16 pt-10 sm:px-8 sm:pt-12 md:grid-cols-[0.7fr_1.3fr] md:gap-10 md:pt-16 lg:gap-16 lg:pt-20">
             <section class="thamani-step-enter flex flex-col items-center text-center md:block md:text-left">
-              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
+              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] text-[var(--thamani-forest)]">
                 <.icon name="hero-user-group" class="size-6" />
               </div>
               <h1 class="w-full max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
@@ -574,7 +574,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
                   id="onboarding-open-invite"
                   type="button"
                   phx-click="open_onboarding_invite"
-                  class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-md"
+                  class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
                   <.icon name="hero-plus" class="mr-2 size-4" /> Invite teammate
                 </button>
@@ -585,7 +585,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
                 id="onboarding-invited-empty"
                 class="mt-8 flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--thamani-stone)] bg-transparent px-6 text-center"
               >
-                <span class="flex size-12 items-center justify-center rounded-2xl bg-white text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
+                <span class="flex size-12 items-center justify-center rounded-2xl bg-td-surface text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
                   <.icon name="hero-envelope" class="size-6" />
                 </span>
                 <h3 class="mt-4 text-base font-semibold text-thamani-forest">No invitations yet</h3>
@@ -627,7 +627,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
                         </span>
                         <span
                           :if={status(user) == :active}
-                          class="inline-flex items-center gap-1 rounded-full bg-thamani-lime px-2.5 py-1 text-xs font-semibold text-thamani-forest"
+                          class="inline-flex items-center gap-1 rounded-full bg-td-accent-tint px-2.5 py-1 text-xs font-semibold text-thamani-forest"
                         >
                           <.icon name="hero-check-circle" class="size-3.5" /> Accepted
                         </span>
@@ -664,7 +664,7 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
                 type="button"
                 phx-click="continue_onboarding"
                 disabled={@onboarding_invited == []}
-                class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg disabled:pointer-events-none disabled:opacity-40"
+                class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg disabled:pointer-events-none disabled:opacity-40"
               >
                 Continue <.icon name="hero-arrow-right" class="ml-3 size-4" />
               </button>

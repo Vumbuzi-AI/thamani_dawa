@@ -290,7 +290,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
                     Verifying&hellip;
                   </p>
                 <% {:matched, _company, _address} -> %>
-                  <div class="rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
+                  <div class="rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
                     <p class="inline-flex items-center gap-1.5">
                       <.icon name="hero-check-circle" class="size-4" /> Verified
                     </p>
@@ -379,7 +379,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
     <div class={[
       "rounded-2xl border p-4 transition-colors duration-200",
       if(@record,
-        do: "border-thamani-forest/30 bg-thamani-lime/30",
+        do: "border-thamani-forest/30 bg-td-accent-tint",
         else: "border-dashed border-thamani-stone bg-thamani-canvas"
       )
     ]}>

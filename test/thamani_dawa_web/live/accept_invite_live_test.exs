@@ -156,7 +156,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
       assert html_response(login_conn, 200) =~
                "Password set. Log in with your new account below."
 
-      assert html_response(login_conn, 200) =~ "Welcome back"
+      assert html_response(login_conn, 200) =~ ~s(id="login-submit")
       assert get_session(login_conn, :user_token) == nil
       assert Accounts.get_user!(admin.organization_id, invited.id).hashed_password
     end

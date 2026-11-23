@@ -111,22 +111,20 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Form do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/aggregations"}
+      crumb="Aggregation"
     >
-      <.header icon="hero-squares-plus" back={~p"/manufacturer/aggregations"}>
-        New aggregation
-        <:subtitle>
-          Pick an existing shipper SSCC, then scan the serials that belong inside it.
-        </:subtitle>
-      </.header>
+      <.td_page_header
+        title="New aggregation"
+        subtitle="Pick an existing shipper SSCC, then scan the serials that belong inside it."
+      />
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section class="rounded-2xl ff-surface-card p-5 sm:p-6">
           <div class="space-y-6">
             <div class="space-y-3">
               <.form for={@sscc_form} id="manufacturer-aggregation-sscc-form" phx-change="select_sscc">
-                <.input
+                <.td_select
                   field={@sscc_form[:manufacturer_shipper_sscc_id]}
-                  type="select"
                   label="Target SSCC"
                   prompt="Choose a shipper SSCC"
                   options={sscc_options(@ssccs)}
@@ -143,16 +141,19 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Form do
                 phx-submit="add_serial"
                 class="flex flex-col gap-3 sm:flex-row sm:items-end"
               >
-                <.input
+                <.td_input
                   field={@serial_form[:serial]}
                   label="Serial"
                   placeholder="Scan or type a serial number"
                   autocomplete="off"
                   required
                 />
-                <.button id="add-manufacturer-aggregation-serial" variant="primary">
-                  <.icon name="hero-plus" class="size-4" /> Add
-                </.button>
+                <.td_button
+                  id="add-manufacturer-aggregation-serial"
+                  type="submit"
+                  variant="primary"
+                  label="Add"
+                />
               </.form>
               <p :if={is_nil(@selected_sscc)} class="text-xs text-thamani-pewter">
                 Choose a target SSCC before scanning serials.
@@ -164,7 +165,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Form do
                 <li
                   :for={entry <- @serials}
                   id={"manufacturer-aggregation-serial-#{entry.serial}"}
-                  class="rounded-xl border border-thamani-stone bg-white p-3 text-sm"
+                  class="rounded-xl border border-thamani-stone bg-td-surface p-3 text-sm"
                 >
                   <p class="font-mono text-xs text-thamani-pewter">{entry.serial}</p>
                   <div class="mt-2">
@@ -174,18 +175,21 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Form do
               </ul>
             </div>
 
-            <div class="flex flex-col-reverse gap-3 border-t border-thamani-stone pt-6 sm:flex-row sm:justify-end">
-              <.button
+            <div class="td-header-actions">
+              <.td_button
                 id="cancel-manufacturer-aggregation"
-                variant="ghost"
+                variant="secondary"
+                label="Cancel"
                 navigate={~p"/manufacturer/aggregations"}
-              >Cancel</.button>
-              <.button
+              />
+              <.td_button
                 id="submit-manufacturer-aggregation"
+                type="button"
                 variant="primary"
+                label="Submit for review"
                 phx-click="submit"
                 disabled={!ready?(@serials)}
-              >Submit for review</.button>
+              />
             </div>
           </div>
         </section>
@@ -217,7 +221,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Form do
     <div class={[
       "rounded-2xl border p-4",
       if(@sscc,
-        do: "border-thamani-forest/30 bg-thamani-lime/30",
+        do: "border-thamani-forest/30 bg-td-accent-tint",
         else: "border-dashed border-thamani-stone bg-thamani-canvas"
       )
     ]}>

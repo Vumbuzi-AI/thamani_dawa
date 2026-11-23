@@ -52,7 +52,7 @@ defmodule ThamaniDawaWeb.LabDashboardLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, lab_tech), ~p"/lab")
 
       assert has_element?(lv, "a[href='/lab/receive-stock']", "Receive stock")
-      assert has_element?(lv, "a[href='/lab/receive-stock'] .bg-warning", "1")
+      assert has_element?(lv, "a[href='/lab/receive-stock'] .td-count", "1")
     end
 
     test "shows no badge when there are no pending batches", %{conn: conn} do
@@ -68,7 +68,7 @@ defmodule ThamaniDawaWeb.LabDashboardLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, lab_tech), ~p"/lab")
 
-      refute has_element?(lv, "a[href='/lab/receive-stock'] .bg-warning")
+      refute has_element?(lv, "a[href='/lab/receive-stock'] .td-count")
     end
   end
 end

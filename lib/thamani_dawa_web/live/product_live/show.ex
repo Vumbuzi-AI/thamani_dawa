@@ -295,7 +295,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
 
       <dl
         id="product-details"
-        class="mb-6 grid grid-cols-2 gap-x-6 gap-y-5 rounded-2xl border border-thamani-stone bg-thamani-snow p-4 text-sm shadow-[0_1px_3px_rgba(28,58,19,0.06)] sm:grid-cols-4 sm:p-5"
+        class="mb-6 grid grid-cols-2 gap-x-6 gap-y-5 rounded-2xl border border-thamani-stone bg-thamani-surface p-4 text-sm shadow-[0_1px_3px_rgba(28,58,19,0.06)] sm:grid-cols-4 sm:p-5"
       >
         <div>
           <dt class="mb-1 text-sm text-thamani-pewter">Status</dt>
@@ -478,11 +478,11 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
           <article
             :for={{id, batch} <- @streams.undispatched_batches}
             id={id}
-            class="group overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-snow shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-thamani-forest/20 hover:shadow-[0_10px_30px_rgba(28,58,19,0.08)]"
+            class="group overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-thamani-forest/20 hover:shadow-[0_10px_30px_rgba(28,58,19,0.08)]"
           >
             <div class="p-4 sm:p-5">
               <div class="flex items-start gap-3.5">
-                <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest ring-1 ring-thamani-stone transition-colors duration-200 group-hover:bg-thamani-lime/40">
+                <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest ring-1 ring-thamani-stone transition-colors duration-200 group-hover:bg-td-accent-tint">
                   <.icon name="hero-archive-box" class="size-5" />
                 </div>
                 <div class="min-w-0 flex-1 pt-0.5">
@@ -491,7 +491,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
                     {batch.batch_no}
                   </h3>
                 </div>
-                <span class="shrink-0 rounded-full bg-thamani-lime px-3 py-1 text-sm font-semibold tabular-nums text-thamani-forest">
+                <span class="shrink-0 rounded-full bg-td-accent-tint px-3 py-1 text-sm font-semibold tabular-nums text-thamani-forest">
                   {batch.remaining_quantity} units
                 </span>
               </div>
@@ -499,13 +499,13 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
               <dl class="mt-4 grid grid-cols-2 border-t border-thamani-stone/80 pt-4">
                 <div class="min-w-0 pr-4">
                   <dt class="text-sm text-thamani-pewter">Expiry</dt>
-                  <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900">
+                  <dd class="mt-1 text-sm font-medium tabular-nums text-td-ink">
                     {batch.expiry_date}
                   </dd>
                 </div>
                 <div class="min-w-0 border-l border-thamani-stone/80 pl-4">
                   <dt class="text-sm text-thamani-pewter">Supplier</dt>
-                  <dd class="mt-1 truncate text-sm font-medium text-slate-900">
+                  <dd class="mt-1 truncate text-sm font-medium text-td-ink">
                     {(batch.supplier && batch.supplier.name) || "—"}
                   </dd>
                 </div>
@@ -578,7 +578,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         >
           <:col :let={{_id, batch}} label="Site">{batch.site.name}</:col>
           <:col :let={{_id, batch}} label="Batch details">
-            <div class="font-medium text-slate-900">{batch.batch_no}</div>
+            <div class="font-medium text-td-ink">{batch.batch_no}</div>
             <div
               :if={batch.serial || batch.manufacture_date}
               class="mt-1 text-xs font-normal text-thamani-pewter"

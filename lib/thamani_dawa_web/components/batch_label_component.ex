@@ -26,7 +26,7 @@ defmodule ThamaniDawaWeb.BatchLabelComponent do
     <div
       id={@id}
       class={[
-        "printable-batch-label border border-thamani-stone rounded-2xl p-5 bg-thamani-snow shadow-none",
+        "printable-batch-label border border-thamani-stone rounded-2xl p-5 bg-thamani-surface shadow-none",
         @class
       ]}
     >
@@ -36,7 +36,7 @@ defmodule ThamaniDawaWeb.BatchLabelComponent do
             id={"datamatrix-canvas-#{@batch.id}"}
             phx-hook="DataMatrix"
             data-gs1-text={@bwip_text}
-            class="w-32 h-32 bg-white p-1 rounded-xl border border-thamani-stone"
+            class="w-32 h-32 bg-td-surface p-1 rounded-xl border border-thamani-stone"
           ></canvas>
           <span class="text-[10px] text-thamani-pewter font-mono mt-1">GS1 DataMatrix</span>
         </div>

@@ -333,14 +333,12 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
             </:group>
             <:group label="Requested between">
               <div class="grid grid-cols-2 gap-2">
-                <.input
-                  type="date"
+                <.date_picker
                   id="filter-date-from"
                   name="filters[date_from]"
                   value={@filters["date_from"]}
                 />
-                <.input
-                  type="date"
+                <.date_picker
                   id="filter-date-to"
                   name="filters[date_to]"
                   value={@filters["date_to"]}
@@ -380,7 +378,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
           <% site = hd(@sites) %>
           <div class="mb-4">
             <span class="thamani-label">Site</span>
-            <p class="text-sm font-medium text-slate-800">{site.name}</p>
+            <p class="text-sm font-medium text-td-ink">{site.name}</p>
           </div>
         <% end %>
 
@@ -436,7 +434,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
           class="mt-5 rounded-xl border border-thamani-stone bg-thamani-canvas p-4"
         >
           <h3 class="text-sm font-semibold text-thamani-forest">Items in this requisition</h3>
-          <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone bg-white">
+          <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone bg-td-surface">
             <table class="w-full table-fixed text-left text-sm">
               <thead class="bg-thamani-canvas text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
                 <tr>

@@ -187,7 +187,7 @@ defmodule ThamaniDawaWeb.InventoryDisposalQueueLive.Index do
         </h2>
         <.form for={@reject_form} id="reject-form" phx-submit="reject" class="flex flex-col gap-4">
           <.input field={@reject_form[:rejection_reason]} type="textarea" label="Reason" required />
-          <.button variant="destructive" phx-disable-with="Rejecting…" class="w-full">
+          <.button variant="danger-confirm" phx-disable-with="Rejecting…" class="w-full">
             Reject disposal
           </.button>
         </.form>

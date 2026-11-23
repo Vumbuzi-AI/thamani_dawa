@@ -85,7 +85,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Index do
 
       <section
         id="new-manufacturer-shipment"
-        class="mt-6 rounded-2xl border border-thamani-sage/30 bg-white p-6 shadow-sm"
+        class="mt-6 rounded-2xl border border-td-hairline bg-td-surface p-6 shadow-sm"
       >
         <h2 class="text-lg font-semibold text-thamani-forest">Prepare a shipment</h2>
         <.form
@@ -109,13 +109,13 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Index do
             >
               <label
                 :for={sscc <- @available_ssccs}
-                class="flex cursor-pointer items-start gap-3 rounded-xl border border-thamani-sage/30 p-4 transition hover:border-thamani-gold hover:bg-thamani-cream/40"
+                class="flex cursor-pointer items-start gap-3 rounded-xl border border-td-hairline p-4 transition hover:border-td-warning-line hover:bg-td-warning-tint"
               >
                 <input
                   type="checkbox"
                   name="shipment[sscc_ids][]"
                   value={sscc.id}
-                  class="mt-1 size-4 rounded border-thamani-sage text-thamani-forest"
+                  class="mt-1 size-4 rounded border-td-hairline text-thamani-forest"
                 />
                 <span>
                   <span class="block font-mono text-sm font-semibold text-thamani-forest">{sscc.code}</span>

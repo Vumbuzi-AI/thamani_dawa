@@ -7,6 +7,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
   import ThamaniDawa.LabOrdersFixtures
   import ThamaniDawa.LabTestsFixtures
   import ThamaniDawa.PatientsFixtures
+  import ThamaniDawa.PaymentsFixtures
   import ThamaniDawa.ProductsFixtures
   import ThamaniDawa.SitesFixtures
 
@@ -103,14 +104,13 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders")
 
-      lv
-      |> form("#lab-orders-filters-form", filters: %{status: "completed"})
-      |> render_submit()
+      # Brief 5.1: status is a tab row, not a filter drawer.
+      lv |> element("#lab-orders-tab-completed") |> render_click()
 
       html = render(lv)
       assert html =~ "Completed Patient"
       refute html =~ "Pending Patient"
-      assert html =~ "Status: Completed"
+      assert has_element?(lv, "#lab-orders-tab-completed.is-active")
     end
 
     test "filters by urgency", ctx do
@@ -137,14 +137,13 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders")
 
-      lv
-      |> form("#lab-orders-filters-form", filters: %{urgency: "stat"})
-      |> render_submit()
+      # Brief 5.1: urgency is a filter chip with a popover menu.
+      lv |> element("#lab-orders-urgency-stat") |> render_click()
 
       html = render(lv)
       assert html =~ "Stat Patient"
       refute html =~ "Routine Patient"
-      assert html =~ "Urgency: Stat"
+      assert has_element?(lv, "#lab-orders-chip-urgency", "Stat")
     end
   end
 
@@ -568,31 +567,30 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
       {:ok, view, _html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/new")
 
-      # Add a second test row so tests[1] exists in the rendered form
-      view |> element("button[phx-click=add_test]") |> render_click()
+      # Doop AZQrJLFBy5: pick a test, Add test commits it, then pick the next.
+      view
+      |> form("#new-lab-order-form", %{"tests" => %{"0" => %{"lab_test_id" => to_string(ctx.lab_test.id)}}})
+      |> render_change()
+
+      view |> element("#add-lab-test") |> render_click()
 
       html =
         view
         |> form("#new-lab-order-form", %{
-          "tests" => %{
-            "0" => %{
-              "lab_test_id" => to_string(ctx.lab_test.id)
-            },
-            "1" => %{
-              "lab_test_id" => to_string(second_test.id)
-            }
-          }
+          "tests" => %{"1" => %{"lab_test_id" => to_string(second_test.id)}}
         })
         |> render_change()
 
-      expected = ctx.lab_test.price |> Decimal.add(second_test.price) |> Decimal.to_string()
-      assert html =~ expected
+      expected = ctx.lab_test.price |> Decimal.add(second_test.price) |> Decimal.round(0)
+      assert html =~ "KSh #{Decimal.to_integer(expected)}" or html =~ "KSh #{Decimal.to_string(expected)}"
     end
 
     test "renders test item inputs inline without Done or Edit buttons", ctx do
       {:ok, view, html} = live(log_in_user(ctx.conn, ctx.admin), ~p"/lab/orders/new")
 
-      assert html =~ "2. Tests"
+      # Doop 4-step flow: the Tests step is labelled in the step row.
+      assert html =~ "Tests"
+      assert has_element?(view, ".td-st", "Details and payment")
       refute html =~ "button[phx-click=collapse_test]"
       refute html =~ "button[phx-click=edit_test]"
       assert has_element?(view, "select[name='tests[0][lab_test_id]']")
@@ -644,6 +642,69 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       updated = LabOrders.get_lab_order_result!(ctx.admin.organization_id, result.id)
       assert updated.results["species"]["value"] == ["P. falciparum"]
       assert has_element?(lv, "#results", "P. falciparum")
+    end
+  end
+
+  describe "lab transaction detail and receipt" do
+    setup ctx do
+      patient = patient_fixture(%{organization_id: ctx.admin.organization_id})
+
+      lab_order =
+        lab_order_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          site_id: ctx.site.id,
+          patient_id: patient.id
+        })
+
+      payment =
+        payment_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          lab_order_id: lab_order.id,
+          amount: Decimal.new("1450"),
+          payment_type: "Cash",
+          provider_reference: "SKL4R2T9QW"
+        })
+
+      {:ok, payment} = ThamaniDawa.Payments.complete_payment(payment)
+      %{patient: patient, lab_order: lab_order, payment: payment}
+    end
+
+    test "opens the transaction modal from its route with the order link and a disabled refund",
+         ctx do
+      conn = log_in_user(build_conn(), ctx.admin)
+      {:ok, lv, html} = live(conn, ~p"/lab/transactions/#{ctx.payment.id}")
+
+      assert has_element?(lv, "#transaction-modal")
+      assert html =~ "Payment KSh 1,450"
+      assert has_element?(lv, "#transaction-order-link[href='/lab/orders/#{ctx.lab_order.id}']")
+      assert has_element?(lv, "#transaction-refund[disabled]")
+      assert has_element?(lv, "#print-receipt-button[href='/lab/transactions/#{ctx.payment.id}/receipt']")
+    end
+
+    test "renders the printable receipt", ctx do
+      conn = log_in_user(build_conn(), ctx.admin)
+      {:ok, lv, html} = live(conn, ~p"/lab/transactions/#{ctx.payment.id}/receipt")
+
+      assert has_element?(lv, "#lab-receipt")
+      assert html =~ "Total paid"
+      assert html =~ "KSh 1,450"
+      assert has_element?(lv, "#print-receipt")
+    end
+
+    test "an unknown transaction id goes back to the list with an error", ctx do
+      conn = log_in_user(build_conn(), ctx.admin)
+
+      assert {:error, {:live_redirect, %{to: "/lab/transactions"}}} =
+               live(conn, ~p"/lab/transactions/999999999")
+    end
+
+    test "a paid order hides Record payment and links its payment to the transaction", ctx do
+      ctx.lab_order |> Ecto.Changeset.change(has_paid: true) |> ThamaniDawa.Repo.update!()
+      conn = log_in_user(build_conn(), ctx.admin)
+      {:ok, lv, _html} = live(conn, ~p"/lab/orders/#{ctx.lab_order.id}")
+
+      refute has_element?(lv, "#record-payment-button")
+      assert has_element?(lv, "#order-payment-link[href='/lab/transactions/#{ctx.payment.id}']")
     end
   end
 

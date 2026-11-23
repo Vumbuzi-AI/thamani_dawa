@@ -30,7 +30,7 @@ defmodule ThamaniDawaWeb.SpecimenLabelComponent do
     <div
       id={@id}
       class={[
-        "printable-batch-label border border-thamani-stone rounded-2xl p-5 bg-thamani-snow shadow-none",
+        "printable-batch-label border border-thamani-stone rounded-2xl p-5 bg-thamani-surface shadow-none",
         @class
       ]}
     >
@@ -40,7 +40,7 @@ defmodule ThamaniDawaWeb.SpecimenLabelComponent do
             id={"datamatrix-canvas-specimen-#{@specimen.id}"}
             phx-hook="DataMatrix"
             data-text={@gs1_text}
-            class="w-32 h-32 bg-white p-1 rounded-xl border border-thamani-stone"
+            class="w-32 h-32 bg-td-surface p-1 rounded-xl border border-thamani-stone"
           ></canvas>
           <span class="text-[10px] text-thamani-pewter font-mono mt-1">DataMatrix</span>
         </div>

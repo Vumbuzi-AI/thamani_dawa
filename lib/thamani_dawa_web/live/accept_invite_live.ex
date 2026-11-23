@@ -55,7 +55,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
           <div>
             <span
               class="thamani-badge"
-              style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
+              style="background: var(--color-td-accent-tint); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -68,7 +68,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
               </svg>
               GS1 Compliant · Built for Kenya
             </span>
-            <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
+            <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-on-accent); text-wrap: balance; margin: 16px 0 20px;">
               Join {@organization.name} on Thamani Dawa.
             </h2>
             <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
@@ -120,7 +120,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
                   value="true"
                   checked={@form[:accepted_legal_terms].value in [true, "true"]}
                   required
-                  class="mt-1 size-4 rounded border-[var(--thamani-stone)] bg-transparent text-[var(--thamani-forest)] accent-[var(--thamani-forest)] focus:ring-2 focus:ring-[var(--thamani-lime)]"
+                  class="mt-1 size-4 rounded border-[var(--thamani-stone)] bg-transparent text-[var(--thamani-forest)] accent-[var(--thamani-forest)] focus:ring-2 focus:ring-[var(--color-td-accent-tint)]"
                 />
                 <span class="min-w-0 text-xs leading-5 text-[var(--thamani-pewter)]">
                   I agree to the

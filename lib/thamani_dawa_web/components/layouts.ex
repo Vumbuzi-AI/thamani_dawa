@@ -10,6 +10,7 @@ defmodule ThamaniDawaWeb.Layouts do
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
+  alias ThamaniDawaWeb.CoreComponents
   alias ThamaniDawaWeb.Portals
   alias ThamaniDawaWeb.SiteScoping
 
@@ -61,7 +62,6 @@ defmodule ThamaniDawaWeb.Layouts do
             <li :if={Scope.lab_access?(@current_scope)}>
               <.link navigate={~p"/lab"} class="btn btn-ghost btn-sm">Lab</.link>
             </li>
-            <li><.theme_toggle /></li>
             <li>
               <.link href={~p"/logout"} method="delete" class="btn btn-ghost btn-sm">Log out</.link>
             </li>
@@ -96,7 +96,10 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :current_path, :string, default: ""
   attr :back, :any, default: nil
   attr :back_label, :string, default: nil
+  attr :crumb, :string, default: nil
+  attr :crumb_parent, :string, default: nil
 
+  slot :tools
   slot :inner_block, required: true
 
   def lab_shell(assigns) do
@@ -107,10 +110,13 @@ defmodule ThamaniDawaWeb.Layouts do
       current_path={@current_path}
       back={@back}
       back_label={@back_label}
+      crumb={@crumb}
+      crumb_parent={@crumb_parent}
       title="Thamani Dawa"
       section_label="Lab"
       base_path="/lab"
     >
+      <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
     """
@@ -124,7 +130,10 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :current_path, :string, default: ""
   attr :back, :any, default: nil
   attr :back_label, :string, default: nil
+  attr :crumb, :string, default: nil
+  attr :crumb_parent, :string, default: nil
 
+  slot :tools
   slot :inner_block, required: true
 
   def pharmacy_shell(assigns) do
@@ -135,10 +144,13 @@ defmodule ThamaniDawaWeb.Layouts do
       current_path={@current_path}
       back={@back}
       back_label={@back_label}
+      crumb={@crumb}
+      crumb_parent={@crumb_parent}
       title="Thamani Dawa"
       section_label="Pharmacy"
       base_path="/pharmacy"
     >
+      <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
     """
@@ -187,7 +199,10 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :current_path, :string, default: ""
   attr :back, :any, default: nil
   attr :back_label, :string, default: nil
+  attr :crumb, :string, default: nil
+  attr :crumb_parent, :string, default: nil
 
+  slot :tools
   slot :inner_block, required: true
 
   def org_shell(assigns) do
@@ -198,10 +213,13 @@ defmodule ThamaniDawaWeb.Layouts do
       current_path={@current_path}
       back={@back}
       back_label={@back_label}
+      crumb={@crumb}
+      crumb_parent={@crumb_parent}
       title="Thamani Dawa"
       section_label="Organization"
       base_path="/org"
     >
+      <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
     """
@@ -212,6 +230,10 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :current_scope, :map, required: true
   attr :current_path, :string, default: ""
 
+  attr :crumb, :string, default: nil
+  attr :crumb_parent, :string, default: nil
+
+  slot :tools
   slot :inner_block, required: true
 
   def platform_shell(assigns) do
@@ -220,6 +242,8 @@ defmodule ThamaniDawaWeb.Layouts do
       flash={@flash}
       current_scope={@current_scope}
       current_path={@current_path}
+      crumb={@crumb}
+      crumb_parent={@crumb_parent}
       title="Thamani Dawa"
       section_label="Platform"
       base_path="/platform"
@@ -233,6 +257,7 @@ defmodule ThamaniDawaWeb.Layouts do
          ]}
       ]}
     >
+      <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
     """
@@ -248,7 +273,10 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :current_path, :string, default: ""
   attr :back, :any, default: nil
   attr :back_label, :string, default: nil
+  attr :crumb, :string, default: nil
+  attr :crumb_parent, :string, default: nil
 
+  slot :tools
   slot :inner_block, required: true
 
   def distributor_shell(assigns) do
@@ -259,10 +287,13 @@ defmodule ThamaniDawaWeb.Layouts do
       current_path={@current_path}
       back={@back}
       back_label={@back_label}
+      crumb={@crumb}
+      crumb_parent={@crumb_parent}
       title="Thamani Dawa"
       section_label="Distributor"
       base_path="/distributor"
     >
+      <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
     """
@@ -278,7 +309,10 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :current_path, :string, default: ""
   attr :back, :any, default: nil
   attr :back_label, :string, default: nil
+  attr :crumb, :string, default: nil
+  attr :crumb_parent, :string, default: nil
 
+  slot :tools
   slot :inner_block, required: true
 
   def manufacturer_shell(assigns) do
@@ -289,10 +323,13 @@ defmodule ThamaniDawaWeb.Layouts do
       current_path={@current_path}
       back={@back}
       back_label={@back_label}
+      crumb={@crumb}
+      crumb_parent={@crumb_parent}
       title="Thamani Dawa"
       section_label="Manufacturer"
       base_path="/manufacturer"
     >
+      <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
     """
@@ -317,7 +354,10 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :show_product_tour, :boolean, default: true
   attr :back, :any, default: nil
   attr :back_label, :string, default: nil
+  attr :crumb, :string, default: nil
+  attr :crumb_parent, :string, default: nil
 
+  slot :tools
   slot :inner_block, required: true
 
   defp sidebar_shell(assigns) do
@@ -339,75 +379,22 @@ defmodule ThamaniDawaWeb.Layouts do
       |> assign(:current_picker_option, current_picker_option(scope, site_picker_options))
 
     ~H"""
-    <div
+    <.td_app_shell
       id="sidebar-shell"
-      class="internal-app flex min-h-screen overflow-x-hidden lg:h-screen lg:overflow-hidden"
-      style="background: var(--thamani-paper); font-family: var(--font-thamani-sans-display, sans-serif);"
-      phx-hook=".Sidebar"
+      crumb_root={@current_picker_option && @current_picker_option.name}
+      crumb={@crumb || active_nav_label(@nav_groups, @current_path, @base_path) || @section_label}
+      crumb_parent={@crumb_parent}
+      nav_label={"#{@section_label} navigation"}
+      help_path={if(@show_product_tour, do: product_tour_path(@base_path))}
     >
-      <button
-        id="sidebar-backdrop"
-        type="button"
-        aria-label="Close navigation"
-        class="fixed inset-0 z-[80] bg-slate-950/35 backdrop-blur-[1px] lg:hidden"
-      />
-      <%!-- Sidebar --%>
-      <aside
-        id="sidebar-aside"
-        class="fixed inset-y-0 left-0 z-[90] flex w-72 -translate-x-full shrink-0 flex-col border-r transition-[transform,width] duration-200 ease-in-out lg:relative lg:z-50 lg:translate-x-0"
-        style="background: var(--thamani-sidenav, #F0EFEA); border-color: var(--thamani-border-nav); width: 288px; padding: 20px 16px;"
-        aria-label={"#{@section_label} navigation"}
-      >
-        <%!-- Brand row --%>
-        <div id="sidebar-brand-row" class="mb-5 flex items-center justify-between gap-3">
-          <div id="sidebar-brand" class="flex min-w-0 items-center gap-3">
-            <a
-              id="sidebar-brand-link"
-              href={~p"/"}
-              class="flex h-14 w-40 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-thamani-frosted bg-white px-3 py-2 shadow-[0_1px_2px_rgba(0,0,0,0.06)] transition-all duration-150 hover:bg-white/90"
-              aria-label="Thamani Dawa home"
-            >
-              <img
-                id="sidebar-brand-logo"
-                src="/images/logo-transparent.png"
-                alt=""
-                class="h-full w-full shrink-0 object-contain"
-              />
-            </a>
-            <div
-              id="sidebar-brand-text"
-              class="hidden flex-col overflow-hidden whitespace-nowrap transition-opacity duration-150"
-            >
-              <a
-                href={~p"/"}
-                class="font-semibold text-[17px] leading-tight truncate block"
-                style="color: var(--thamani-forest);"
-              >
-                {@title}
-              </a>
-            </div>
-          </div>
-          <button
-            id="sidebar-toggle"
-            type="button"
-            aria-label="Collapse sidebar"
-            data-tooltip="Collapse sidebar"
-            aria-expanded="true"
-            aria-controls="sidebar-aside"
-            class="hidden size-11 shrink-0 cursor-pointer items-center justify-center rounded-xl text-thamani-snow shadow-sm transition-all duration-150 hover:-translate-y-px hover:shadow-md active:translate-y-0 active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/60 focus-visible:ring-offset-2 lg:flex"
-            style="background: var(--thamani-forest);"
-          >
-            <span id="sidebar-toggle-collapse-icon" class="inline-flex" aria-hidden="true">
-              <.icon name="hero-arrow-left-end-on-rectangle" class="size-5 shrink-0" />
-            </span>
-            <span id="sidebar-toggle-expand-icon" class="hidden" aria-hidden="true">
-              <.icon name="hero-arrow-right-end-on-rectangle" class="size-5 shrink-0" />
-            </span>
-          </button>
-        </div>
+      <:tools :if={@tools != []}>
+        {render_slot(@tools)}
+      </:tools>
+      <:side>
 
-        <%!-- Context picker: switch between organization-wide management and
-             a specific site. Picking a site lands the user in its operations. --%>
+        <%!-- Site switcher (Doop TD SiteSwitcher, brief 4.4): 44px row, 28px
+             tile with the context glyph, caret-up-down. Picking a site lands
+             the user in its operations; single-context users see it static. --%>
         <form
           :if={
             (not is_nil(@organization_picker_option) and @site_picker_options != []) or
@@ -416,7 +403,7 @@ defmodule ThamaniDawaWeb.Layouts do
           id="site-switch-form"
           action={~p"/switch-site"}
           method="post"
-          class="relative mb-4 flex flex-col"
+          class="td-switch-form"
         >
           <input type="hidden" name="_method" value="patch" />
           <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
@@ -437,55 +424,30 @@ defmodule ThamaniDawaWeb.Layouts do
               aria-label="Change working context"
               aria-controls="site-switch-dropdown"
               aria-haspopup="menu"
-              class="group flex min-h-12 w-full cursor-pointer items-center justify-between gap-2.5 rounded-xl px-3 py-2 text-left text-thamani-forest transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-px hover:bg-white/70 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/40"
-              style="background: color-mix(in srgb, var(--thamani-stone) 72%, white); border: 1px solid color-mix(in srgb, var(--thamani-forest) 25%, var(--thamani-border-nav));"
+              class="td-switch"
             >
-              <span class="flex min-w-0 items-center gap-2.5">
-                <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/70 text-thamani-forest shadow-sm ring-1 ring-thamani-border-nav/70">
-                  <.icon name={@current_picker_option.icon} class="size-4" />
-                </span>
-                <span class="flex min-w-0 flex-col">
-                  <span class="truncate text-sm font-semibold leading-5">
-                    {@current_picker_option.name}
-                  </span>
-                  <span class="truncate text-[11px] font-normal leading-4 text-thamani-pewter">
-                    {@current_picker_option.subtitle}
-                  </span>
-                </span>
-              </span>
-              <.icon
-                name="hero-chevron-down"
-                class="size-4 shrink-0 text-thamani-forest transition-transform group-hover:translate-y-0.5"
-              />
+              <.site_switch_face option={@current_picker_option} />
             </button>
 
-            <div
-              id="site-switch-dropdown"
-              class="absolute left-0 top-full z-50 mt-1.5 hidden w-full rounded-xl border border-thamani-stone bg-white p-1 shadow-xl ff-surface-popover"
-            >
-              <p
-                :if={@organization_picker_option}
-                id="site-switch-organization-heading"
-                class="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-thamani-pewter"
-              >
+            <div id="site-switch-dropdown" class="td-popover td-switch-menu hidden">
+              <p :if={@organization_picker_option} id="site-switch-organization-heading" class="td-popover-label">
                 Organization
               </p>
               <.site_picker_option
                 :if={@organization_picker_option}
                 option={@organization_picker_option}
               />
-
               <p
                 :if={@organization_picker_option && @site_picker_options != []}
                 id="site-switch-sites-heading"
-                class="mx-2.5 mt-1 border-t border-slate-100 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-thamani-pewter"
+                class="td-popover-label"
               >
                 Sites
               </p>
               <p
                 :if={!@organization_picker_option && @site_picker_options != []}
                 id="site-switch-sites-heading"
-                class="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-thamani-pewter"
+                class="td-popover-label"
               >
                 Your sites
               </p>
@@ -493,6 +455,18 @@ defmodule ThamaniDawaWeb.Layouts do
             </div>
           </div>
         </form>
+        <div
+          :if={
+            @current_picker_option &&
+              not ((not is_nil(@organization_picker_option) and @site_picker_options != []) or
+                     length(@site_picker_options) > 1)
+          }
+          class="td-switch-form"
+        >
+          <div class="td-switch is-static">
+            <.site_switch_face option={@current_picker_option} static />
+          </div>
+        </div>
 
         <%!-- Nav list lives in its own scroll region so a short viewport
              scrolls the links instead of pushing the footer (account card,
@@ -502,137 +476,87 @@ defmodule ThamaniDawaWeb.Layouts do
             id="sidebar-scroll"
             class="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
           >
-            <%!-- Primary navigation --%>
-            <nav class="flex flex-col gap-0.5">
-              <%= for {{group_label, items}, index} <- Enum.with_index(@nav_groups) do %>
-                <div
-                  :if={group_label}
-                  class={[
-                    "sidebar-group-label nav-label px-3 pb-1 text-[11px] font-medium uppercase tracking-wide transition-opacity duration-150",
-                    index > 0 && "mt-3 border-t border-thamani-border-nav pt-3"
-                  ]}
-                  style="color: var(--thamani-subtle);"
-                >
+            <nav class="td-nav">
+              <%= for {group_label, items} <- @nav_groups do %>
+                <div :if={group_label} class="sidebar-group-label nav-label td-nav-group-label">
                   {group_label}
                 </div>
                 <%= for {label, icon, path} <- items do %>
-                  <% active =
-                    if path == @base_path,
-                      do: @current_path == @base_path,
-                      else: @current_path == path or String.starts_with?(@current_path, path <> "/") %>
-                  <.link
+                  <% active = nav_active?(path, @current_path, @base_path) %>
+                  <.td_nav_item
+                    label={label}
+                    icon={icon}
+                    active={active}
+                    count={Map.get(@nav_badges, path, 0)}
+                    label_id={"nav-label-#{path}"}
                     navigate={path}
                     data-tour-target={path}
                     data-tooltip={label}
-                    aria-current={active && "page"}
-                    class="flex items-center gap-3 rounded-xl text-[14px] font-medium transition-[background-color,color,scale] whitespace-nowrap active:scale-[0.96]"
-                    style={
-                      if active,
-                        do:
-                          "background: var(--thamani-forest); color: var(--thamani-snow); padding: 9px 12px; min-height: 40px;",
-                        else: "color: var(--thamani-pewter); padding: 9px 12px; min-height: 40px;"
-                    }
-                  >
-                    <.icon name={icon} class="size-5 shrink-0" />
-                    <span id={"nav-label-#{path}"} class="nav-label transition-opacity duration-150">
-                      {label}
-                    </span>
-                    <span
-                      :if={Map.get(@nav_badges, path, 0) > 0}
-                      class="nav-badge bg-warning ml-auto inline-flex items-center justify-center rounded-full text-[11px] font-semibold leading-none"
-                      style="min-width: 20px; height: 20px; padding: 0 6px; background: var(--thamani-lime); color: var(--thamani-forest);"
-                    >
-                      {Map.get(@nav_badges, path)}
-                    </span>
-                  </.link>
+                  />
                 <% end %>
               <% end %>
             </nav>
           </div>
         </div>
 
-        <%!-- Account card + utilities --%>
-        <div
-          id="sidebar-footer"
-          class="shrink-0 mt-3 pt-3 flex flex-col gap-2"
-          style="border-top: 1px solid var(--thamani-border-nav);"
-        >
-          <div id="sidebar-account-menu" class="relative">
+        <%!-- Sidebar bottom (brief 4.5): Dark mode row, Product tour row,
+             hairline, account chip. --%>
+        <div id="sidebar-footer" class="td-sd-foot">
+          <div class="td-urow td-dark-row">
+            <.td_icon name="moon" />
+            <span class="nav-label">Dark mode</span>
             <button
-              id="sidebar-account-card"
               type="button"
-              aria-label="Open account menu"
-              data-tooltip={@current_scope.user.name}
-              phx-click={JS.toggle(to: "#sidebar-account-dropdown")}
-              phx-click-away={JS.hide(to: "#sidebar-account-dropdown")}
-              class="flex w-full cursor-pointer items-center gap-2.5 text-left transition-colors hover:bg-white/70"
-              style="background: var(--thamani-stone); border: 1px solid var(--thamani-border-nav); border-radius: 14px; padding: 8px 10px;"
+              id="dark-mode-switch"
+              class="td-switch-ui"
+              role="switch"
+              aria-checked="false"
+              aria-label="Dark mode"
+              phx-update="ignore"
+              phx-click={JS.dispatch("phx:set-theme")}
+              data-phx-theme="toggle"
+              data-theme-switch
             >
-              <span
-                class="flex size-8 min-w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-semibold"
-                style="background: var(--thamani-forest); color: var(--thamani-snow);"
-              >
-                {String.at(@current_scope.user.name || "U", 0)}
-              </span>
-              <span
-                id="sidebar-profile"
-                class="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap transition-opacity duration-150"
-              >
-                <span class="truncate text-[13px] font-semibold" style="color: #1F2433;">
-                  {@current_scope.user.name}
-                </span>
-              </span>
-              <.icon
-                name="hero-ellipsis-vertical"
-                class="nav-label size-4 shrink-0 text-thamani-pewter"
-              />
+              <span></span>
             </button>
-            <div
-              id="sidebar-account-dropdown"
-              class="absolute bottom-full left-0 z-50 mb-1.5 hidden w-full rounded-xl border border-thamani-stone bg-white p-1.5 shadow-xl ff-surface-popover"
-            >
-              <.link
-                :if={@show_product_tour}
-                id="start-product-tour"
-                navigate={product_tour_path(@base_path)}
-                class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-thamani-forest transition-colors hover:bg-thamani-stone/60"
-              >
-                <.icon name="hero-map" class="size-4 shrink-0" /> Product tour
-              </.link>
-              <.link
-                id="sidebar-logout"
-                href={~p"/logout"}
-                method="delete"
-                class="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
-              >
-                <.icon name="hero-arrow-right-start-on-rectangle" class="size-4 shrink-0" /> Log out
-              </.link>
-            </div>
           </div>
-        </div>
-      </aside>
-
-      <%!-- Main content --%>
-      <main
-        class="min-w-0 flex-1 overscroll-contain lg:overflow-y-auto"
-        style="background: var(--thamani-paper);"
-      >
-        <header
-          id="mobile-app-bar"
-          class="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-thamani-border-nav bg-thamani-snow/95 px-4 backdrop-blur lg:hidden"
-        >
-          <button
-            id="mobile-sidebar-toggle"
-            type="button"
-            aria-label="Open navigation"
-            aria-controls="sidebar-aside"
-            aria-expanded="false"
-            class="flex size-11 shrink-0 items-center justify-center rounded-lg text-thamani-forest transition-[background-color,scale] hover:bg-thamani-lime active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+          <.link
+            :if={@show_product_tour}
+            id="start-product-tour"
+            class="td-urow"
+            navigate={product_tour_path(@base_path)}
           >
-            <.icon name="hero-bars-3" class="size-5" />
-          </button>
-        </header>
-        <div class="mx-auto space-y-5 px-4 py-5 sm:px-6 lg:px-8 lg:py-8" style="max-width: 1600px;">
+            <.td_icon name="signpost" />
+            <span class="nav-label">Product tour</span>
+          </.link>
+          <div class="td-hr"></div>
+          <.td_account_chip
+            name={@current_scope.user.name}
+            role={account_role_label(@current_scope, @section_label)}
+            seed={@current_scope.user.email}
+          >
+            <:menu>
+              <.td_menu_item
+                id="sidebar-logout"
+                tone="danger"
+                label="Log out"
+                icon="sign-out"
+                phx-click={JS.toggle(to: "#sidebar-logout-confirm")}
+              />
+              <div id="sidebar-logout-confirm" hidden>
+                <.td_button
+                  id="sidebar-logout-confirm-link"
+                  variant="danger-confirm"
+                  label="Log out"
+                  href={~p"/logout"}
+                  method="delete"
+                />
+              </div>
+            </:menu>
+          </.td_account_chip>
+        </div>
+      </:side>
+      <:content>
           <%!-- Page-level back affordance. Lives outside the page's header card
                on purpose: separation comes from whitespace, not another box. --%>
           <.link
@@ -648,138 +572,9 @@ defmodule ThamaniDawaWeb.Layouts do
             {@back_label}
           </.link>
           {render_slot(@inner_block)}
-        </div>
-      </main>
-
-      <.flash_group flash={@flash} />
-    </div>
-
-    <script :type={Phoenix.LiveView.ColocatedHook} name=".Sidebar">
-      export default {
-        mounted() {
-          const getSidebar = () => document.getElementById("sidebar-aside");
-          const getMobileToggle = () => document.getElementById("mobile-sidebar-toggle");
-
-          this.updateScrollAffordance = () => {
-            const scroll = document.getElementById("sidebar-scroll");
-            const frame = document.getElementById("sidebar-scroll-frame");
-            if (!scroll || !frame) return;
-
-            const remaining = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop;
-            frame.classList.toggle("can-scroll-up", scroll.scrollTop > 2);
-            frame.classList.toggle("can-scroll-down", remaining > 2);
-          };
-
-          this.sidebarScroll = document.getElementById("sidebar-scroll");
-          this.sidebarScroll?.addEventListener("scroll", this.updateScrollAffordance, {passive: true});
-          this.sidebarResizeObserver = new ResizeObserver(this.updateScrollAffordance);
-          if (this.sidebarScroll) this.sidebarResizeObserver.observe(this.sidebarScroll);
-
-          const hideTooltip = () => {
-            document.getElementById("sidebar-floating-tooltip")?.remove();
-          };
-
-          const showTooltip = (target) => {
-            const sidebar = getSidebar();
-            const label = target?.dataset.tooltip;
-            if (!sidebar?.classList.contains("sidebar-collapsed") || !label) return;
-
-            hideTooltip();
-            const rect = target.getBoundingClientRect();
-            const tooltip = document.createElement("div");
-            tooltip.id = "sidebar-floating-tooltip";
-            tooltip.setAttribute("role", "tooltip");
-            tooltip.textContent = label;
-            tooltip.style.left = `${rect.right + 12}px`;
-            tooltip.style.top = `${rect.top + rect.height / 2}px`;
-            document.body.appendChild(tooltip);
-          };
-
-          const apply = () => {
-            const sidebar = getSidebar();
-            if (sidebar) {
-              const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
-              sidebar.classList.toggle("sidebar-collapsed", collapsed);
-              if (!collapsed) hideTooltip();
-              const toggle = document.getElementById("sidebar-toggle");
-              toggle?.setAttribute("aria-expanded", String(!collapsed));
-              toggle?.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
-              toggle?.setAttribute("data-tooltip", collapsed ? "Expand sidebar" : "Collapse sidebar");
-            }
-          };
-
-          apply();
-          requestAnimationFrame(this.updateScrollAffordance);
-
-          this.handleTooltipOver = (e) => showTooltip(e.target.closest("#sidebar-aside [data-tooltip]"));
-          this.handleTooltipOut = (e) => {
-            if (e.target.closest("#sidebar-aside [data-tooltip]")) hideTooltip();
-          };
-          this.handleTooltipFocus = (e) => showTooltip(e.target.closest("#sidebar-aside [data-tooltip]"));
-          this.handleTooltipBlur = hideTooltip;
-
-          this.handleGlobalClick = (e) => {
-            const toggleBtn = e.target.closest("#sidebar-toggle");
-            if (toggleBtn) {
-              e.preventDefault();
-              e.stopPropagation();
-              const current = localStorage.getItem("sidebar-collapsed") === "true";
-              const next = !current;
-              localStorage.setItem("sidebar-collapsed", String(next));
-              apply();
-              return;
-            }
-
-            const backdrop = e.target.closest("#sidebar-backdrop");
-            if (backdrop) {
-              this.el.classList.remove("sidebar-mobile-open");
-              getMobileToggle()?.setAttribute("aria-expanded", "false");
-              return;
-            }
-
-            const mobileToggle = e.target.closest("#mobile-sidebar-toggle");
-            if (mobileToggle) {
-              const open = !this.el.classList.contains("sidebar-mobile-open");
-              this.el.classList.toggle("sidebar-mobile-open", open);
-              mobileToggle.setAttribute("aria-expanded", String(open));
-              return;
-            }
-
-            const sidebarLink = e.target.closest("#sidebar-aside a");
-            if (sidebarLink) {
-              this.el.classList.remove("sidebar-mobile-open");
-              getMobileToggle()?.setAttribute("aria-expanded", "false");
-            }
-          };
-
-          document.addEventListener("click", this.handleGlobalClick);
-          document.addEventListener("mouseover", this.handleTooltipOver);
-          document.addEventListener("mouseout", this.handleTooltipOut);
-          document.addEventListener("focusin", this.handleTooltipFocus);
-          document.addEventListener("focusout", this.handleTooltipBlur);
-        },
-        updated() {
-          const sidebar = document.getElementById("sidebar-aside");
-          if (sidebar) {
-            const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
-            sidebar.classList.toggle("sidebar-collapsed", collapsed);
-          }
-          requestAnimationFrame(this.updateScrollAffordance);
-        },
-        destroyed() {
-          if (this.handleGlobalClick) {
-            document.removeEventListener("click", this.handleGlobalClick);
-          }
-          document.removeEventListener("mouseover", this.handleTooltipOver);
-          document.removeEventListener("mouseout", this.handleTooltipOut);
-          document.removeEventListener("focusin", this.handleTooltipFocus);
-          document.removeEventListener("focusout", this.handleTooltipBlur);
-          this.sidebarScroll?.removeEventListener("scroll", this.updateScrollAffordance);
-          this.sidebarResizeObserver?.disconnect();
-          document.getElementById("sidebar-floating-tooltip")?.remove();
-        }
-      }
-    </script>
+          <.flash_group flash={@flash} />
+      </:content>
+    </.td_app_shell>
     """
   end
 
@@ -810,6 +605,12 @@ defmodule ThamaniDawaWeb.Layouts do
 
         [{:manufacturer, _items}] ->
           manufacturer_item_groups()
+
+        [{:lab, _items}] ->
+          lab_item_groups(multi_site?)
+
+        [{:pharmacy, _items}] ->
+          pharmacy_item_groups(multi_site?)
 
         [{_portal, items}] ->
           [{"Operations", items}]
@@ -868,34 +669,57 @@ defmodule ThamaniDawaWeb.Layouts do
 
   defp org_ops_visible?(%Scope{} = scope, site), do: Scope.admin?(scope) and is_nil(site)
 
+  # Doop shell Pls-onxlMw (brief 4.1): Lab / Inventory / Payments groups with
+  # Phosphor icons. Pharmacy uses the same groups and adds Quick sale and
+  # Prescriptions after Dashboard.
   defp pharmacy_items(multi_site?) do
+    Enum.flat_map(pharmacy_item_groups(multi_site?), fn {_label, items} -> items end)
+  end
+
+  defp pharmacy_item_groups(multi_site?) do
     [
-      {"Dashboard", "hero-squares-2x2", ~p"/pharmacy"},
-      {"Quick sale", "hero-bolt", ~p"/pharmacy/quick-sale"},
-      {"Prescriptions", "hero-document-text", ~p"/pharmacy/prescriptions"},
-      {"Patients", "hero-user-group", ~p"/pharmacy/patients"},
-      {"Stock", "hero-cube", ~p"/pharmacy/stock"},
-      {"Receive stock", "hero-arrow-down-tray", ~p"/pharmacy/receive-stock"},
-      {"Requisitions", "hero-clipboard-document-list", ~p"/pharmacy/requisitions"},
-      {"Scan", "hero-qr-code", ~p"/pharmacy/scan"},
-      {"Transactions", "hero-banknotes", ~p"/pharmacy/transactions"}
+      {"Pharmacy",
+       [
+         {"Dashboard", "squares-four", ~p"/pharmacy"},
+         {"Quick sale", "lightning", ~p"/pharmacy/quick-sale"},
+         {"Prescriptions", "prescription", ~p"/pharmacy/prescriptions"},
+         {"Patients", "users", ~p"/pharmacy/patients"}
+       ]},
+      {"Inventory",
+       [
+         {"Stock", "package", ~p"/pharmacy/stock"},
+         {"Receive stock", "tray-arrow-down", ~p"/pharmacy/receive-stock"},
+         {"Requisitions", "clipboard-text", ~p"/pharmacy/requisitions"},
+         {"Scan", "barcode", ~p"/pharmacy/scan"}
+       ]
+       |> reject_single_site_requisitions(multi_site?)},
+      {"Payments", [{"Transactions", "money", ~p"/pharmacy/transactions"}]}
     ]
-    |> reject_single_site_requisitions(multi_site?)
   end
 
   defp lab_items(multi_site?) do
+    Enum.flat_map(lab_item_groups(multi_site?), fn {_label, items} -> items end)
+  end
+
+  defp lab_item_groups(multi_site?) do
     [
-      {"Dashboard", "hero-squares-2x2", ~p"/lab"},
-      {"Patients", "hero-user-group", ~p"/lab/patients"},
-      {"Orders", "hero-clipboard-document-list", ~p"/lab/orders"},
-      {"Tests", "hero-beaker", ~p"/lab/tests"},
-      {"Stock", "hero-cube", ~p"/lab/stock"},
-      {"Receive stock", "hero-arrow-down-tray", ~p"/lab/receive-stock"},
-      {"Requisitions", "hero-clipboard-document-list", ~p"/lab/requisitions"},
-      {"Scan", "hero-qr-code", ~p"/lab/scan"},
-      {"Transactions", "hero-banknotes", ~p"/lab/transactions"}
+      {"Lab",
+       [
+         {"Dashboard", "squares-four", ~p"/lab"},
+         {"Orders", "flask", ~p"/lab/orders"},
+         {"Patients", "users", ~p"/lab/patients"},
+         {"Tests", "test-tube", ~p"/lab/tests"}
+       ]},
+      {"Inventory",
+       [
+         {"Stock", "package", ~p"/lab/stock"},
+         {"Receive stock", "tray-arrow-down", ~p"/lab/receive-stock"},
+         {"Requisitions", "clipboard-text", ~p"/lab/requisitions"},
+         {"Scan", "barcode", ~p"/lab/scan"}
+       ]
+       |> reject_single_site_requisitions(multi_site?)},
+      {"Payments", [{"Transactions", "money", ~p"/lab/transactions"}]}
     ]
-    |> reject_single_site_requisitions(multi_site?)
   end
 
   defp distributor_items do
@@ -937,7 +761,8 @@ defmodule ThamaniDawaWeb.Layouts do
          {"Products", "hero-archive-box", ~p"/manufacturer/products"},
          {"Inventory", "hero-cube", ~p"/manufacturer/inventory"},
          {"Shipments", "hero-truck", ~p"/manufacturer/shipments"},
-         {"Aggregation", "hero-squares-plus", ~p"/manufacturer/aggregations"}
+         {"Aggregation", "hero-squares-plus", ~p"/manufacturer/aggregations"},
+         {"Mobile users", "device-mobile-camera", ~p"/manufacturer/mobile-users"}
        ]},
       {"Compliance",
        [
@@ -978,6 +803,7 @@ defmodule ThamaniDawaWeb.Layouts do
     [
       {"Reference data",
        [
+         {"Mobile users", "device-mobile-camera", ~p"/manufacturer/mobile-users"},
          {"Sites", "hero-building-office-2", ~p"/org/sites"}
        ]},
       {"Account",
@@ -1114,6 +940,43 @@ defmodule ThamaniDawaWeb.Layouts do
   end
 
   attr :option, :map, required: true
+  attr :static, :boolean, default: false
+
+  defp site_switch_face(assigns) do
+    ~H"""
+    <span class="td-ss-tile"><.td_icon name={CoreComponents.phosphor_name(@option.icon)} /></span>
+    <span class="td-ss-tx nav-label">
+      <span class="td-ss-n">{@option.name}</span>
+      <span class="td-ss-s">{@option.subtitle}</span>
+    </span>
+    <span :if={!@static} class="td-ss-cv nav-label"><.td_icon name="caret-up-down" /></span>
+    """
+  end
+
+  # Active nav item: exact match for the section root, prefix match below it.
+  # Stock stays active on the stock-take and disposal screens it launches.
+  defp nav_active?(path, current_path, base_path) do
+    cond do
+      path == base_path -> current_path == base_path
+      current_path == path or String.starts_with?(current_path, path <> "/") -> true
+      String.ends_with?(path, "/stock") ->
+        prefix = String.replace_suffix(path, "/stock", "")
+        Enum.any?(["/stock-takes", "/disposals"], &String.starts_with?(current_path, prefix <> &1))
+      true -> false
+    end
+  end
+
+  defp account_role_label(_scope, section_label), do: section_label
+
+  defp active_nav_label(nav_groups, current_path, base_path) do
+    Enum.find_value(nav_groups, fn {_group, items} ->
+      Enum.find_value(items, fn {label, _icon, path} ->
+        if nav_active?(path, current_path, base_path), do: label
+      end)
+    end)
+  end
+
+  attr :option, :map, required: true
 
   defp site_picker_option(assigns) do
     ~H"""
@@ -1125,32 +988,14 @@ defmodule ThamaniDawaWeb.Layouts do
           @option.value <>
           "'; document.getElementById('site-switch-form').requestSubmit();"
       }
-      class={[
-        "flex min-h-11 w-full cursor-pointer items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
-        @option.active? && "bg-thamani-forest/10 text-thamani-forest",
-        not @option.active? && "text-slate-700 hover:bg-thamani-stone/60 hover:text-thamani-forest"
-      ]}
+      class={["td-ss-option", @option.active? && "is-active"]}
     >
-      <span class="flex min-w-0 items-center gap-2.5">
-        <span class={[
-          "flex size-7 shrink-0 items-center justify-center rounded-md",
-          @option.active? && "bg-white/70",
-          not @option.active? && "bg-thamani-stone/60 group-hover:bg-white"
-        ]}>
-          <.icon name={@option.icon} class="size-3.5" />
-        </span>
-        <span class="flex min-w-0 flex-col">
-          <span class="truncate text-[13px] font-semibold leading-4">{@option.name}</span>
-          <span class="truncate text-[11px] font-normal leading-4 text-thamani-pewter">
-            {@option.subtitle}
-          </span>
-        </span>
+      <span class="td-ss-tile"><.td_icon name={CoreComponents.phosphor_name(@option.icon)} /></span>
+      <span class="td-ss-tx">
+        <span class="td-ss-n">{@option.name}</span>
+        <span class="td-ss-s">{@option.subtitle}</span>
       </span>
-      <.icon
-        :if={@option.active?}
-        name="hero-check"
-        class="size-4 shrink-0 text-thamani-forest"
-      />
+      <.td_icon :if={@option.active?} name="check" class="size-4 td-ss-check" />
     </button>
     """
   end
@@ -1203,9 +1048,15 @@ defmodule ThamaniDawaWeb.Layouts do
 
   def unauthenticated(assigns) do
     ~H"""
-    <div class="min-h-screen flex items-center justify-center bg-base-200 px-4">
-      <div class="card w-full max-w-md bg-base-100 shadow-xl">
-        <div class="card-body">
+    <div
+      class="flex min-h-screen items-center justify-center px-4"
+      style="background: var(--color-td-canvas); font-family: Inter, sans-serif;"
+    >
+      <div
+        class="w-full max-w-md rounded-xl border p-6"
+        style="background: var(--color-td-surface); border-color: var(--color-td-hairline);"
+      >
+        <div>
           {render_slot(@inner_block)}
         </div>
       </div>
@@ -1402,14 +1253,14 @@ defmodule ThamaniDawaWeb.Layouts do
         type="button"
         data-tour-dismiss
         aria-label="Close product tour"
-        class="fixed inset-0 z-40 cursor-default bg-slate-950/45 backdrop-blur-[1px]"
+        class="fixed inset-0 z-40 cursor-default bg-td-ink/45 backdrop-blur-[1px]"
       ></button>
       <section
         data-tour-card
         role="dialog"
         aria-modal="true"
         aria-labelledby={"#{@id}-title"}
-        class="fixed z-[100] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-white/20 bg-thamani-forest p-5 text-white shadow-2xl transition-[top,left] duration-200"
+        class="fixed z-[100] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-white/20 bg-thamani-forest p-5 text-td-on-accent shadow-2xl transition-[top,left] duration-200"
       >
         <span
           data-tour-arrow
@@ -1419,7 +1270,7 @@ defmodule ThamaniDawaWeb.Layouts do
           <div>
             <p
               data-tour-progress
-              class="text-xs font-semibold uppercase tracking-[0.16em] text-thamani-lime"
+              class="text-xs font-semibold uppercase tracking-[0.16em] text-td-on-accent"
             >
             </p>
             <h2 id={"#{@id}-title"} data-tour-title class="mt-2 text-xl font-semibold"></h2>
@@ -1428,7 +1279,7 @@ defmodule ThamaniDawaWeb.Layouts do
             type="button"
             data-tour-dismiss
             aria-label="Close product tour"
-            class="rounded-lg p-1 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            class="rounded-lg p-1 text-white/70 transition-colors hover:bg-td-surface/10 hover:text-white"
           >
             <.icon name="hero-x-mark" class="size-5" />
           </button>
@@ -1438,17 +1289,17 @@ defmodule ThamaniDawaWeb.Layouts do
           <button
             type="button"
             data-tour-back
-            class="rounded-full px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-white/10 disabled:invisible"
+            class="rounded-full px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-td-surface/10 disabled:invisible"
           >Back</button>
           <button
             type="button"
             data-tour-dismiss
-            class="rounded-full px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            class="rounded-full px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-td-surface/10 hover:text-white"
           >Skip tour</button>
           <button
             type="button"
             data-tour-next
-            class="rounded-full bg-thamani-lime px-5 py-2 text-sm font-semibold text-thamani-forest transition-all hover:brightness-95 active:scale-[0.98]"
+            class="rounded-full bg-td-accent-tint px-5 py-2 text-sm font-semibold text-thamani-forest transition-all hover:brightness-95 active:scale-[0.98]"
           >Next</button>
         </div>
       </section>
@@ -1490,31 +1341,15 @@ defmodule ThamaniDawaWeb.Layouts do
   """
   def theme_toggle(assigns) do
     ~H"""
-    <div class="card relative flex flex-row items-center border-2 border-base-300 bg-base-300 rounded-full">
-      <div class="absolute w-1/3 h-full rounded-full border-1 border-base-200 bg-base-100 brightness-200 left-0 [[data-theme=light]_&]:left-1/3 [[data-theme=dark]_&]:left-2/3 [[data-theme-source=system]_&]:!left-0 transition-[left]" />
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="system"
-      >
-        <.icon name="hero-computer-desktop-micro" class="size-4 opacity-75 hover:opacity-100" />
+    <div class="td-theme">
+      <button type="button" class="td-icon-btn" phx-click={JS.dispatch("phx:set-theme")} data-phx-theme="system" aria-label="Use system theme">
+        <.icon name="desktop" class="size-4" />
       </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="light"
-      >
-        <.icon name="hero-sun-micro" class="size-4 opacity-75 hover:opacity-100" />
+      <button type="button" class="td-icon-btn" phx-click={JS.dispatch("phx:set-theme")} data-phx-theme="light" aria-label="Use light theme">
+        <.icon name="sun" class="size-4" />
       </button>
-
-      <button
-        class="flex p-2 cursor-pointer w-1/3"
-        phx-click={JS.dispatch("phx:set-theme")}
-        data-phx-theme="dark"
-      >
-        <.icon name="hero-moon-micro" class="size-4 opacity-75 hover:opacity-100" />
+      <button type="button" class="td-icon-btn" phx-click={JS.dispatch("phx:set-theme")} data-phx-theme="dark" aria-label="Use dark theme">
+        <.icon name="moon" class="size-4" />
       </button>
     </div>
     """

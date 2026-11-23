@@ -1,0 +1,259 @@
+/* ============================================================
+   Thamani Dawa design tokens: the single source of truth.
+
+   Values come from the Doop canvas LQFIZlhE35 (Bau). Light values live in
+   the @theme block below, so Tailwind v4 emits them on :root and builds
+   utilities from them (bg-td-surface, text-td-ink-2, rounded-td-card,
+   font-sans, p-td-4 ...). Dark values override the same variables under
+   [data-theme="dark"], which the inline script in root.html.heex sets on
+   <html>. Utilities reference var(--...), so both themes follow.
+
+   Legacy names (thamani-*, forest-depths, font-thamani-*, --surface-*)
+   are kept as aliases of the Doop tokens so existing templates keep
+   working. Prefer the td-* names in new code.
+   ============================================================ */
+
+@theme static {
+  /* ---- Fonts (Doop: --font-sans / --font-mono / --font-landing) ---- */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+  --font-landing: "Rethink Sans", Inter, Arial, sans-serif;
+  --font-td-sans: var(--font-sans);
+  --font-td-mono: var(--font-mono);
+
+  /* ---- Font weights: the product UI uses Inter 400 and 500 only ---- */
+  --font-weight-td-regular: 400;
+  --font-weight-td-medium: 500;
+
+  /* ---- Type scale ---- */
+  --text-td-12: 12px;
+  --text-td-14: 14px;
+  --text-td-16: 16px;
+  --text-label: 13px;
+  --text-body: 14px;
+  --text-stat-value: 28px;
+  --tracking-td: 0;
+
+  /* ---- Radii ---- */
+  --radius-td-badge: 6px;
+  --radius-td-tile: 10px;
+  --radius-td-card: 12px;
+  --radius-pill: 1000px;
+  --radius-field: 8px;
+  --radius-box: 16px;
+
+  /* ---- Spacing ---- */
+  --spacing-td-1: 4px;
+  --spacing-td-2: 8px;
+  --spacing-td-3: 12px;
+  --spacing-td-4: 16px;
+  --spacing-td-6: 24px;
+  --spacing-td-badge: 22px;
+  --spacing-td-control: 30px;
+  --spacing-td-row: 40px;
+  --spacing-td-titlebar: 53px;
+  --spacing-td-header: 68px;
+
+  /* ---- TD colours, light ---- */
+  --color-td-canvas: #EFEFF0;
+  --color-td-surface: #F9F9FA;
+  --color-td-raised: #F9F9FA;
+  --color-td-wash: #F2F2F3;
+  --color-td-hover: rgba(23, 25, 23, 0.05);
+  --color-td-selected: #E3E3E6;
+  --color-td-hairline: #E3E3E6;
+  --color-td-border: #E3E3E6;
+  --color-td-ink: #171917;
+  --color-td-ink-2: #6B6E6A;
+  --color-td-ink-3: #A2A5A1;
+  --color-td-accent: #1C3A13;
+  --color-td-on-accent: #F9F9FA;
+  --color-td-accent-tint: rgba(28, 58, 19, 0.08);
+  --color-td-focus: rgba(28, 58, 19, 0.28);
+  --color-td-success: #1F7A3A;
+  --color-td-success-tint: rgba(31, 122, 58, 0.08);
+  --color-td-success-line: rgba(31, 122, 58, 0.14);
+  --color-td-warning: #9A5B06;
+  --color-td-warning-tint: rgba(178, 108, 8, 0.09);
+  --color-td-warning-line: rgba(178, 108, 8, 0.16);
+  --color-td-expiry: #C2410C;
+  --color-td-expiry-tint: rgba(194, 65, 12, 0.08);
+  --color-td-expiry-line: rgba(194, 65, 12, 0.14);
+  --color-td-danger: #C21F17;
+  --color-td-danger-tint: rgba(194, 31, 23, 0.07);
+  --color-td-danger-line: rgba(194, 31, 23, 0.14);
+  --color-td-info: #2D6E64;
+  --color-td-info-tint: rgba(45, 110, 100, 0.08);
+  --color-td-info-line: rgba(45, 110, 100, 0.14);
+  --color-td-neutral-tint: rgba(23, 25, 23, 0.05);
+  --color-td-ev-green-bg: #DCEFE2;
+  --color-td-ev-green-fg: #1C5B2F;
+  --color-td-ev-orange-bg: #FBE2D2;
+  --color-td-ev-orange-fg: #8A2F08;
+  --color-td-ev-amber-bg: #F6E7C6;
+  --color-td-ev-amber-fg: #704308;
+  --color-td-ev-teal-bg: #D5EBE7;
+  --color-td-ev-teal-fg: #1F5049;
+  --color-td-ev-rose-bg: #F7DAD8;
+  --color-td-ev-rose-fg: #8F1712;
+  --color-td-scrim: rgba(18, 20, 19, 0.32);
+  --color-td-control: #ECECEE;
+  --color-td-chart: #698E79;
+  --color-td-chart-muted: #C9D8CF;
+  --color-td-on-danger: #F9F9FA;
+
+  /* ---- Doop brand palette (same in both themes) ---- */
+  --color-snow-white: #fcfcf7;
+  --color-warm-stone: #eeeee9;
+  --color-frosted-glass: #c4c7c4;
+  --color-ash: #b3b3b3;
+  --color-pewter: #666666;
+  --color-forest-depths: #1c3a13;
+  --color-lime-pulse: #d3fa99;
+  --color-sage-moss: #757c5d;
+  --color-olive-gold: #9f995b;
+  --color-eucalyptus: #698e79;
+  --color-error: #c21f17;
+  --color-ink: #000000;
+
+  /* ---- Legacy aliases: thamani-* utilities follow the TD tokens ---- */
+  --color-thamani-forest: var(--color-td-accent);
+  --color-thamani-evergreen: var(--color-td-accent);
+  --color-thamani-accent: var(--color-td-accent);
+  /* thamani-snow is split in two (Bau, 23 Nov): surface for card and page
+     backgrounds, on-accent for text on accent fills. snow stays as a
+     deprecated alias of on-accent so nothing unconverted breaks. */
+  --color-thamani-surface: var(--color-td-surface);
+  --color-thamani-on-accent: var(--color-td-on-accent);
+  --color-thamani-snow: var(--color-td-on-accent);
+
+
+  --font-thamani-sans: var(--font-sans);
+  --font-thamani-sans-display: var(--font-sans);
+  --font-thamani-sans-mono: var(--font-mono);
+
+  --radius-full: var(--radius-pill);
+}
+
+/* Plain (non-utility) tokens and aliases used directly with var(). */
+:root {
+  color-scheme: light;
+
+  --weight-td-regular: 400;
+  --weight-td-medium: 500;
+  /* Doop legacy weights, kept for reference. The product UI maps them to 400/500. */
+  --weight-normal: var(--weight-td-regular);
+  --weight-medium: var(--weight-td-medium);
+  --weight-semibold: var(--weight-td-medium);
+  --weight-bold: var(--weight-td-medium);
+
+  --thamani-forest: var(--color-td-accent);
+  --thamani-evergreen: var(--color-td-accent);
+  --thamani-accent: var(--color-td-accent);
+  --thamani-surface: var(--color-td-surface);
+  --thamani-on-accent: var(--color-td-on-accent);
+  --thamani-snow: var(--color-td-on-accent);
+  --thamani-canvas: var(--color-td-canvas);
+  --thamani-paper: var(--color-td-canvas);
+  --thamani-ivory: var(--color-td-wash);
+  --thamani-table-head: var(--color-td-wash);
+  --thamani-stone: var(--color-td-hairline);
+  --thamani-frosted: var(--color-td-hairline);
+  --thamani-border-nav: var(--color-td-hairline);
+  --thamani-pewter: var(--color-td-ink-2);
+  --thamani-subtle: var(--color-td-ink-3);
+  --thamani-error: var(--color-td-danger);
+  --thamani-sidenav: var(--color-td-surface);
+  --thamani-sidebar-bg: var(--color-td-surface);
+  --thamani-surface-warm: var(--color-td-surface);
+
+  --surface-1: var(--color-td-canvas);
+  --surface-2: var(--color-td-surface);
+  --surface-3: var(--color-td-raised);
+  --shadow-1: none;
+  --shadow-2: none;
+  --shadow-3: none;
+  --shadow-4: none;
+  --shadow-5: none;
+  --shadow-6: none;
+  --shadow-7: none;
+  --shadow-8: none;
+}
+
+/* ---- TD colours, dark (Doop dark theme) ----
+   The theme script puts data-theme on <html>, so aliases defined on :root
+   resolve against these values too. */
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-td-canvas: #121413;
+  --color-td-surface: #1A1C1B;
+  --color-td-raised: #232524;
+  --color-td-wash: #1F2120;
+  --color-td-hover: rgba(236, 237, 235, 0.07);
+  --color-td-selected: #2B2D2C;
+  --color-td-hairline: #222423;
+  --color-td-border: rgba(0, 0, 0, 0);
+  --color-td-ink: #ECEDEB;
+  --color-td-ink-2: #9C9F9B;
+  --color-td-ink-3: #676A66;
+  --color-td-accent: #D3FA99;
+  --color-td-on-accent: #16240F;
+  --color-td-accent-tint: rgba(211, 250, 153, 0.1);
+  --color-td-focus: rgba(211, 250, 153, 0.35);
+  --color-td-success: #6FD08C;
+  --color-td-success-tint: rgba(111, 208, 140, 0.12);
+  --color-td-success-line: rgba(0, 0, 0, 0);
+  --color-td-warning: #F2B661;
+  --color-td-warning-tint: rgba(242, 182, 97, 0.12);
+  --color-td-warning-line: rgba(0, 0, 0, 0);
+  --color-td-expiry: #FF9A62;
+  --color-td-expiry-tint: rgba(255, 154, 98, 0.12);
+  --color-td-expiry-line: rgba(0, 0, 0, 0);
+  --color-td-danger: #FF7A70;
+  --color-td-danger-tint: rgba(255, 122, 112, 0.12);
+  --color-td-danger-line: rgba(0, 0, 0, 0);
+  --color-td-info: #7CCBBE;
+  --color-td-info-tint: rgba(124, 203, 190, 0.12);
+  --color-td-info-line: rgba(0, 0, 0, 0);
+  --color-td-neutral-tint: rgba(236, 237, 235, 0.07);
+  --color-td-ev-green-bg: #1D3526;
+  --color-td-ev-green-fg: #A9E5BA;
+  --color-td-ev-orange-bg: #3A2316;
+  --color-td-ev-orange-fg: #FFB98F;
+  --color-td-ev-amber-bg: #352B15;
+  --color-td-ev-amber-fg: #F4CB86;
+  --color-td-ev-teal-bg: #17312D;
+  --color-td-ev-teal-fg: #A6DED4;
+  --color-td-ev-rose-bg: #3B1B19;
+  --color-td-ev-rose-fg: #FFA9A2;
+  --color-td-scrim: rgba(0, 0, 0, 0.55);
+  --color-td-control: #262827;
+  --color-td-chart: #8FBBA2;
+  --color-td-chart-muted: #33433A;
+  --color-td-on-danger: #F9F9FA;
+}
+
+/* ---- Print tokens (brief 1A) ----
+   Paper never goes dark, so these are the only light hex values outside the
+   theme blocks. Used by labels, invoices, delivery notes and receipts. */
+:root,
+[data-theme="dark"] {
+  --print-page: #FFFFFF;
+  --print-brand: #1C3A13;
+  --print-ink: #171917;
+  --print-muted: #6B6E6A;
+  --print-line: #E3E3E6;
+  --print-soft: #F2F2F3;
+  --print-font: var(--font-sans);
+}
+
+/* ---- Orb (Doop TD Orb, seeded gradients 1-6) ---- */
+.td-orb { display: inline-block; flex: none; border-radius: 999px; }
+.td-orb[data-orb="1"] { background: radial-gradient(circle at 30% 28%, #D3FA99 0%, #698E79 55%, #1C3A13 100%); }
+.td-orb[data-orb="2"] { background: radial-gradient(circle at 70% 30%, #F2E6B8 0%, #9F995B 50%, #3E4A1F 100%); }
+.td-orb[data-orb="3"] { background: radial-gradient(circle at 35% 70%, #CDEFE6 0%, #5FA894 50%, #1F4F45 100%); }
+.td-orb[data-orb="4"] { background: radial-gradient(circle at 65% 65%, #FFD9C2 0%, #D9875A 50%, #6B2E14 100%); }
+.td-orb[data-orb="5"] { background: radial-gradient(circle at 30% 35%, #E9F7C9 0%, #757C5D 55%, #232B17 100%); }
+.td-orb[data-orb="6"] { background: radial-gradient(circle at 60% 25%, #F6D6D3 0%, #B8706A 50%, #4A1F1C 100%); }

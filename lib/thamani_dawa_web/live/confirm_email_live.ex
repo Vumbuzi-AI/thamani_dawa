@@ -78,11 +78,11 @@ defmodule ThamaniDawaWeb.ConfirmEmailLive do
           <div>
             <span
               class="thamani-badge"
-              style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
+              style="background: var(--color-td-accent-tint); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
             >
               Almost there
             </span>
-            <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
+            <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-on-accent); text-wrap: balance; margin: 16px 0 20px;">
               One quick check before you get started.
             </h2>
             <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
@@ -106,7 +106,7 @@ defmodule ThamaniDawaWeb.ConfirmEmailLive do
         <div class="auth-form-inner" style="max-width: 380px;">
           <ThamaniDawaWeb.Layouts.flash_group flash={@flash} />
 
-          <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
+          <div class="mb-5 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] text-[var(--thamani-forest)]">
             <.icon name="hero-envelope" class="size-6" />
           </div>
 
@@ -127,7 +127,7 @@ defmodule ThamaniDawaWeb.ConfirmEmailLive do
               type="button"
               phx-click="resend"
               disabled={not resend_ready?(assigns)}
-              class="inline-flex h-11 items-center justify-center rounded-full border-0 bg-thamani-forest px-6 text-[15px] font-medium text-thamani-snow no-underline transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-thamani-forest"
+              class="inline-flex h-11 items-center justify-center rounded-full border-0 bg-thamani-forest px-6 text-[15px] font-medium text-thamani-on-accent no-underline transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:bg-thamani-forest"
             >
               <%= if resend_ready?(assigns) do %>
                 Resend confirmation email

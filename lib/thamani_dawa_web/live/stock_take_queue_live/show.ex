@@ -52,7 +52,7 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Show do
   defp requester_label(%{requested_by: requested_by}), do: person_name(requested_by)
 
   defp variance_class(nil), do: ""
-  defp variance_class(0), do: "text-slate-500"
+  defp variance_class(0), do: "text-td-ink-2"
   defp variance_class(v) when v > 0, do: "text-emerald-600 font-medium"
   defp variance_class(_), do: "text-rose-600 font-medium"
 
@@ -84,7 +84,7 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Show do
         </:actions>
       </.header>
 
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6">
+      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Status</dt>
@@ -126,7 +126,7 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Show do
         </div>
       </section>
 
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6">
+      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-subtle">Items</h2>
 
         <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone">

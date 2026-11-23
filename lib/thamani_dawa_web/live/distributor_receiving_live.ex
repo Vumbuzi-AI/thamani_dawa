@@ -1566,7 +1566,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           <ul class="mt-2 flex flex-wrap gap-1.5">
             <li
               :for={serial <- item_serials(item)}
-              class="rounded-lg border border-thamani-stone bg-white px-2 py-1 text-xs font-medium tabular-nums tracking-tight text-thamani-evergreen"
+              class="rounded-lg border border-thamani-stone bg-td-surface px-2 py-1 text-xs font-medium tabular-nums tracking-tight text-thamani-evergreen"
             >
               {serial}
             </li>
@@ -1723,9 +1723,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   # Selected segment of the per-serial condition control. "Accepted" stays quiet
   # (it is the default on every row); damaged and missing take a solid fill
   # so exceptions are the only thing that shouts.
-  defp serial_condition_classes("accepted"), do: "bg-white text-thamani-forest"
+  defp serial_condition_classes("accepted"), do: "bg-td-surface text-thamani-forest"
   defp serial_condition_classes("damaged"), do: "bg-amber-900 text-amber-50"
-  defp serial_condition_classes("missing"), do: "bg-thamani-error text-white"
+  defp serial_condition_classes("missing"), do: "bg-thamani-error text-td-on-danger"
 
   defp product_sections(groups) do
     groups
@@ -1778,7 +1778,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     <span
       :if={serial_scanned?(@pending, @serial)}
       id={"serial-scanned-#{serial_dom_id(@serial)}"}
-      class="serial-scanned-pill ml-2 inline-flex items-center gap-1 rounded-full bg-thamani-lime px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-thamani-forest"
+      class="serial-scanned-pill ml-2 inline-flex items-center gap-1 rounded-full bg-td-accent-tint px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-thamani-forest"
     >
       <.icon name="hero-check" class="size-3" /> Scanned
     </span>
@@ -1889,10 +1889,10 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     >
       <div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex min-w-0 items-center gap-3">
-          <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[#edf1e5] text-thamani-forest">
+          <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-td-accent-tint text-thamani-forest">
             <.icon name="hero-document" class="size-5" />
           </span>
-          <div class="min-w-0 border-l border-[#dfe3d6] pl-3">
+          <div class="min-w-0 border-l border-td-hairline pl-3">
             <h4 class="text-xs font-bold uppercase tracking-wide text-thamani-forest">{@label}</h4>
             <p class="mt-1 text-[11px] leading-4 text-thamani-pewter">
               PDF, JPG, or PNG · up to 5MB{if @upload.max_entries > 1,
@@ -1900,7 +1900,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             </p>
           </div>
         </div>
-        <label class="group inline-flex w-fit shrink-0 cursor-pointer items-center rounded-full border border-thamani-forest bg-white px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-thamani-forest focus-within:ring-2 focus-within:ring-thamani-accent focus-within:ring-offset-2">
+        <label class="group inline-flex w-fit shrink-0 cursor-pointer items-center rounded-full border border-thamani-forest bg-td-surface px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-thamani-forest focus-within:ring-2 focus-within:ring-thamani-accent focus-within:ring-offset-2">
           <span class="text-thamani-forest group-hover:text-white">
             {if @upload.max_entries == 1 and @saved_attachments != [],
               do: "Replace file",
@@ -1914,7 +1914,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         <div
           :for={entry <- @upload.entries}
           id={"#{@name}-upload-#{entry.ref}"}
-          class="rounded-lg border border-thamani-stone bg-white px-3 py-2"
+          class="rounded-lg border border-thamani-stone bg-td-surface px-3 py-2"
         >
           <div class="flex items-center justify-between gap-2">
             <span class="truncate text-xs font-medium text-thamani-forest" title={entry.client_name}>
@@ -2046,7 +2046,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               Verifying&hellip;
             </p>
           <% {:matched, resolved} -> %>
-            <div class="rounded-lg bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
+            <div class="rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
               <p class="inline-flex items-center gap-1.5">
                 <.icon name="hero-check-circle" class="size-4" /> Verified · {resolved.company}
               </p>
@@ -2091,7 +2091,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         <form
           id="distributor-document-uploads-form"
           phx-change="validate_uploads"
-          class="mt-4 divide-y divide-[#e5e8df]"
+          class="mt-4 divide-y divide-td-hairline"
         >
           <.doc_upload_slot
             label="Delivery note"
@@ -2161,7 +2161,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 </div>
                 <span
                   :if={shipper.sscc != "manual"}
-                  class="rounded-lg bg-thamani-lime px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
+                  class="rounded-lg bg-td-accent-tint px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
                 >
                   SSCC {shipper.sscc}
                 </span>
@@ -2306,7 +2306,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                   <button
                     type="submit"
                     id="mark-serial-accepted"
-                    class="mb-3 inline-flex shrink-0 items-center rounded-full bg-thamani-forest px-4 py-[11px] text-sm font-semibold text-white transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+                    class="mb-3 inline-flex shrink-0 items-center rounded-full bg-thamani-forest px-4 py-[11px] text-sm font-semibold text-td-on-accent transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
                   >
                     Mark accepted
                   </button>
@@ -2322,7 +2322,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                   class={[
                     "serial-confirm-notice mt-1 mb-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold",
                     elem(@serial_confirm_notice, 0) == :error && "bg-rose-50 text-thamani-error",
-                    elem(@serial_confirm_notice, 0) == :ok && "bg-thamani-lime text-thamani-forest"
+                    elem(@serial_confirm_notice, 0) == :ok && "bg-td-accent-tint text-thamani-forest"
                   ]}
                 >
                   <span
@@ -2345,7 +2345,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               >
                 {unscanned_confirm_message(length(unreviewed_serials(@pending_shipper)))}
               </p>
-              <div class="mt-4 max-h-[min(28rem,55vh)] overflow-y-auto overscroll-contain rounded-2xl border border-thamani-frosted bg-white">
+              <div class="mt-4 max-h-[min(28rem,55vh)] overflow-y-auto overscroll-contain rounded-2xl border border-thamani-frosted bg-td-surface">
                 <section
                   :for={section <- product_sections(@pending_shipper.groups)}
                   class="border-b border-thamani-frosted last:border-b-0"
@@ -2508,7 +2508,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                   type="button"
                   id="confirm-pending-shipper"
                   phx-click="confirm_pending_shipper"
-                  class="flex-1 rounded-full bg-thamani-forest px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+                  class="flex-1 rounded-full bg-thamani-forest px-4 py-2.5 text-sm font-semibold text-td-on-accent transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
                 >
                   Yes, add to delivery
                 </button>
@@ -2697,13 +2697,12 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               </div>
               <div class="grid gap-x-4 sm:grid-cols-2">
                 <.input field={@form[:batch_no]} label="Batch number" required />
-                <.input field={@form[:expiry_date]} type="date" label="Expiry date" required />
+                <.date_picker field={@form[:expiry_date]} label="Expiry date" required />
               </div>
               <div class="grid gap-x-4 sm:grid-cols-2">
                 <.input field={@form[:manufacturer]} label="Manufacturer (optional)" />
-                <.input
+                <.date_picker
                   field={@form[:manufacture_date]}
-                  type="date"
                   label="Manufacture date (optional)"
                 />
               </div>

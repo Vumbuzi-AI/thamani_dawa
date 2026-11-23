@@ -91,7 +91,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
         />
       </div>
 
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-white p-5 sm:p-6">
+      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <h2 class="text-lg font-semibold text-thamani-forest">Product details</h2>
         <dl class="mt-4 grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -176,7 +176,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
             <div class="mt-1.5 grid gap-1.5 sm:grid-cols-2">
               <span
                 :for={serial <- batch.serials}
-                class="truncate rounded border border-thamani-stone bg-white px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
+                class="truncate rounded border border-thamani-stone bg-td-surface px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
                 title={serial}
               >
                 {serial}

@@ -155,7 +155,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} navigation={false}>
-      <div id="onboarding-shell" class="flex min-h-svh flex-col bg-[var(--thamani-snow)]">
+      <div id="onboarding-shell" class="flex min-h-svh flex-col bg-[var(--thamani-surface)]">
         <header class="border-b border-[color-mix(in_srgb,var(--thamani-stone)_70%,transparent)]">
           <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-5 sm:px-8 lg:px-12">
             <.link
@@ -168,7 +168,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
 
             <div id="onboarding-user" class="flex min-w-0 items-center gap-3">
               <span
-                class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-snow)] shadow-sm"
+                class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-on-accent)] shadow-sm"
                 aria-hidden="true"
               >
                 {String.first(@current_scope.user.name || "U")}
@@ -204,7 +204,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
               aria-hidden="true"
             >
               <span
-                class="onboarding-confetti-piece bg-[var(--thamani-lime)]"
+                class="onboarding-confetti-piece bg-[var(--color-td-accent-tint)]"
                 style="--x:-92px; --y:-58px; --r:210deg; --d:0ms"
               />
               <span
@@ -212,33 +212,33 @@ defmodule ThamaniDawaWeb.OnboardingLive do
                 style="--x:88px; --y:-52px; --r:150deg; --d:60ms"
               />
               <span
-                class="onboarding-confetti-piece bg-[#ef4444]"
+                class="onboarding-confetti-piece bg-td-danger"
                 style="--x:-118px; --y:4px; --r:280deg; --d:110ms"
               />
               <span
-                class="onboarding-confetti-piece rounded-full bg-[#f59e0b]"
+                class="onboarding-confetti-piece rounded-full bg-td-warning"
                 style="--x:116px; --y:10px; --r:190deg; --d:150ms"
               />
               <span
-                class="onboarding-confetti-piece bg-[#38bdf8]"
+                class="onboarding-confetti-piece bg-td-info"
                 style="--x:-72px; --y:70px; --r:330deg; --d:190ms"
               />
               <span
-                class="onboarding-confetti-piece bg-[var(--thamani-lime)]"
+                class="onboarding-confetti-piece bg-[var(--color-td-accent-tint)]"
                 style="--x:76px; --y:72px; --r:240deg; --d:220ms"
               />
               <span
-                class="onboarding-confetti-piece rounded-full bg-[#a78bfa]"
+                class="onboarding-confetti-piece rounded-full bg-td-chart"
                 style="--x:-28px; --y:-84px; --r:180deg; --d:80ms"
               />
               <span
-                class="onboarding-confetti-piece bg-[#fb7185]"
+                class="onboarding-confetti-piece bg-td-ev-rose-fg"
                 style="--x:34px; --y:-82px; --r:300deg; --d:130ms"
               />
             </div>
 
             <div
-              class="relative flex size-24 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--thamani-lime)_13%,white)] text-[var(--thamani-forest)] shadow-[0_18px_45px_rgba(30,57,48,0.08)]"
+              class="relative flex size-24 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--color-td-accent-tint)_13%,white)] text-[var(--thamani-forest)] shadow-[0_18px_45px_rgba(30,57,48,0.08)]"
               aria-hidden="true"
             >
               <.icon name="hero-check" class="size-12 stroke-[2.2]" />
@@ -255,14 +255,14 @@ defmodule ThamaniDawaWeb.OnboardingLive do
               <.link
                 id="onboarding-take-tour"
                 navigate={~p"/org/dashboard?tour=1"}
-                class="inline-flex min-h-12 flex-1 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-snow no-underline transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg"
+                class="inline-flex min-h-12 flex-1 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-on-accent no-underline transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
               >
                 Take the 2-minute tour
               </.link>
               <.link
                 id="onboarding-go-dashboard"
                 navigate={~p"/org/dashboard"}
-                class="inline-flex min-h-12 flex-1 items-center justify-center rounded-full border border-[var(--thamani-stone)] bg-white px-7 py-3 text-[15px] font-medium text-[var(--thamani-forest)] no-underline transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--thamani-forest)] hover:shadow-md"
+                class="inline-flex min-h-12 flex-1 items-center justify-center rounded-full border border-[var(--thamani-stone)] bg-td-surface px-7 py-3 text-[15px] font-medium text-[var(--thamani-forest)] no-underline transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--thamani-forest)] hover:shadow-md"
               >
                 Go to dashboard
               </.link>
@@ -275,7 +275,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
             class="thamani-step-enter grid items-center gap-10 md:grid-cols-[0.9fr_1.1fr] md:gap-10 lg:gap-16"
           >
             <div class="flex flex-col items-center text-center md:block md:text-left">
-              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
+              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] text-[var(--thamani-forest)]">
                 <.icon name="hero-sparkles" class="size-6" />
               </div>
 
@@ -290,20 +290,20 @@ defmodule ThamaniDawaWeb.OnboardingLive do
                 id="onboarding-start"
                 type="button"
                 phx-click="start_setup"
-                class="mt-10 inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-snow transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--thamani-forest)]"
+                class="mt-10 inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-on-accent transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--thamani-forest)]"
               >
                 Start setup <.icon name="hero-arrow-right" class="ml-3 size-4" />
               </button>
             </div>
 
-            <div class="rounded-3xl border border-[var(--thamani-stone)] bg-white/70 p-5 shadow-[0_18px_60px_rgba(30,57,48,0.05)] sm:p-6">
+            <div class="rounded-3xl border border-[var(--thamani-stone)] bg-td-surface/70 p-5 shadow-[0_18px_60px_rgba(30,57,48,0.05)] sm:p-6">
               <div class="grid gap-3">
                 <div
                   :for={item <- @items}
                   id={"onboarding-preview-#{item.key}"}
                   class="flex min-h-16 items-center gap-4 rounded-2xl bg-[var(--thamani-canvas)] px-4 py-3"
                 >
-                  <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
+                  <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-td-surface text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
                     <.icon name={item_icon(item.key)} class="size-5" />
                   </span>
                   <span class="min-w-0 flex-1 text-[15px] font-medium text-[var(--thamani-forest)]">
@@ -320,7 +320,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
             class="thamani-step-enter grid items-center gap-10 md:grid-cols-[0.9fr_1.1fr] md:gap-10 lg:gap-16"
           >
             <div class="flex flex-col items-center text-center md:block md:text-left">
-              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--thamani-lime)_18%,white)] text-[var(--thamani-forest)]">
+              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] text-[var(--thamani-forest)]">
                 <.icon name="hero-sparkles" class="size-6" />
               </div>
 
@@ -335,7 +335,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
                 <.link
                   id="onboarding-cta"
                   navigate={onboarding_path(@current.path, @replay)}
-                  class="inline-flex min-h-12 items-center justify-center rounded-full border-0 bg-thamani-forest px-6 py-3 text-[15px] font-medium text-thamani-snow no-underline transition-all duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--thamani-forest)]"
+                  class="inline-flex min-h-12 items-center justify-center rounded-full border-0 bg-thamani-forest px-6 py-3 text-[15px] font-medium text-thamani-on-accent no-underline transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--thamani-forest)]"
                 >
                   Continue setup <.icon name="hero-arrow-right" class="ml-2 size-4" />
                 </.link>
@@ -367,7 +367,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
             <aside
               id="onboarding-setup-plan"
               aria-label="Setup plan"
-              class="rounded-3xl border border-[var(--thamani-stone)] bg-white/70 p-5 shadow-[0_18px_60px_rgba(30,57,48,0.05)] sm:p-6"
+              class="rounded-3xl border border-[var(--thamani-stone)] bg-td-surface/70 p-5 shadow-[0_18px_60px_rgba(30,57,48,0.05)] sm:p-6"
             >
               <div class="grid gap-3">
                 <.link
@@ -378,12 +378,12 @@ defmodule ThamaniDawaWeb.OnboardingLive do
                     "flex min-h-16 items-center gap-4 rounded-2xl px-4 py-3 no-underline transition-colors hover:brightness-95",
                     if(item.key == @current.key,
                       do:
-                        "bg-[color-mix(in_srgb,var(--thamani-lime)_13%,white)] ring-1 ring-[color-mix(in_srgb,var(--thamani-forest)_18%,transparent)]",
+                        "bg-[color-mix(in_srgb,var(--color-td-accent-tint)_13%,white)] ring-1 ring-[color-mix(in_srgb,var(--thamani-forest)_18%,transparent)]",
                       else: "bg-[var(--thamani-canvas)]"
                     )
                   ]}
                 >
-                  <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
+                  <span class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-td-surface text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
                     <.icon name={item_icon(item.key)} class="size-5" />
                   </span>
                   <span class="min-w-0 flex-1 text-[15px] font-medium text-[var(--thamani-forest)]">
@@ -398,7 +398,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
                   </span>
                   <span
                     :if={item.key == @current.key}
-                    class="shrink-0 rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--thamani-forest)] ring-1 ring-black/[0.05]"
+                    class="shrink-0 rounded-full bg-td-surface px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--thamani-forest)] ring-1 ring-black/[0.05]"
                   >
                     Current
                   </span>

@@ -1,96 +1,19 @@
-<%!-- ============================================================
-     LOGIN — Thamani Dawa
-     Split: Forest Depths left panel · Snow White form right
-     Inputs:  <.thamani_input>
-     Buttons: <.thamani_btn>
-     ============================================================ --%>
-<div class="auth-shell lg:h-svh lg:overflow-hidden">
-  <%!-- Left decorative panel — Forest Depths, hidden on mobile --%>
-  <div class="auth-aside hidden lg:flex lg:h-svh">
-    <%!-- Brand mark + copy --%>
-    <div class="auth-aside-main">
-      <a href="/" aria-label="Thamani Dawa home" class="auth-aside-logo">
-        <img
-          src="/images/logo-transparent.png"
-          alt=""
-          class="h-auto w-full brightness-0 invert"
-        />
-      </a>
-
-      <div>
-        <span
-          class="thamani-badge"
-          style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px; margin-bottom: 24px; display: inline-flex; align-items: center; gap: 7px;"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="14"
-            height="14"
-            aria-hidden="true"
-            style="stroke: currentColor; stroke-width: 1.6; fill: none;"
-          >
-            <path d="M4 5v14M8 5v14M11 5v14M15 5v14M17 5v14M20 5v14" />
-          </svg>
-          GS1 Compliant · Built for Kenya
-        </span>
-        <h2 style="font-size: clamp(28px, 2.8vw, 40px); font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-snow); text-wrap: balance; margin: 16px 0 20px;">
-          Manage your network with confidence.
-        </h2>
-        <p style="font-size: 16px; line-height: 1.65; color: rgba(252,252,247,0.55); max-width: 340px;">
-          Pharmacy, lab, distribution, and warehouse: connected, traceable, and ready for compliance.
-        </p>
-      </div>
-    </div>
-
-    <%!-- Testimonial footer --%>
-    <div style="border-top: 1px solid rgba(252,252,247,0.1); padding-top: 28px;">
-      <p style="font-size: 15px; font-weight: 350; color: rgba(252,252,247,0.75); line-height: 1.55; font-style: italic; margin-bottom: 16px;">
-        "Thamani Dawa keeps our operations organized and traceable."
-      </p>
-      <p style="font-size: 13px; font-weight: 500; color: rgba(252,252,247,0.45);">
-        Dr. Amina Kariuki · Head of Pharmacy, Nairobi General
-      </p>
-    </div>
+<div class="td-auth">
+  <div class="td-auth-corner">
+    <.td_button variant="secondary" label="Create an account" navigate={~p"/signup"} />
   </div>
 
-  <%!-- Right form panel — Snow White --%>
-  <div class="auth-form-panel lg:h-svh lg:overflow-y-auto">
-    <div class="auth-form-inner">
-      <.link navigate={~p"/"} class="auth-back-link">
-        <.icon name="hero-arrow-left" class="size-3.5" /> Back to website
-      </.link>
+  <div class="td-auth-col">
+    <a href="/" aria-label="Thamani Dawa home" class="td-auth-logo">
+      <img src="/images/logo-transparent.png" alt="Thamani Dawa" />
+    </a>
 
-      <%!-- Flash messages --%>
-      <Layouts.flash_group flash={@flash} />
+    <Layouts.flash_group flash={@flash} />
 
-      <%!-- Heading --%>
-      <h1 style="font-size: 32px; font-weight: 350; letter-spacing: -0.4px; line-height: 1.15; color: var(--thamani-forest); margin-bottom: 6px;">
-        Welcome back
-      </h1>
-      <p style="font-size: 15px; color: var(--thamani-pewter); line-height: 1.5; margin-bottom: 24px;">
-        Log in to your Thamani Dawa account.
-      </p>
-
-      <%!-- Development-only accounts created by priv/repo/seeds.exs.
-           A <details> so it's collapsible on mobile (closed by default);
-           the >=901px rule below forces it open on larger screens. --%>
-      <details :if={@demo_accounts != []} id="demo-login-accounts" class="auth-demo-card">
-        <summary class="auth-demo-summary">
-          <div>
-            <h2 class="text-sm font-medium tracking-tight text-thamani-forest">
-              Explore the demo
-            </h2>
-            <p class="mt-0.5 text-xs leading-5 text-thamani-pewter">
-              Choose a role to log in instantly.
-            </p>
-          </div>
-          <span class="rounded-full bg-thamani-lime/30 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-thamani-forest">
-            Seeded
-          </span>
-          <.icon name="hero-chevron-down" class="auth-demo-chevron size-4" />
-        </summary>
-
-        <div class="auth-role-grid">
+    <.td_auth_card title="Log in">
+      <details :if={@demo_accounts != []} id="demo-login-accounts" class="td-auth-demo">
+        <summary>Explore the demo</summary>
+        <div class="td-auth-roles">
           <.form
             :for={account <- @demo_accounts}
             for={account.form}
@@ -100,85 +23,38 @@
           >
             <.input field={account.form[:email]} type="hidden" />
             <.input field={account.form[:password]} type="hidden" />
-            <button
+            <.td_button
               id={"demo-login-#{account.id}-submit"}
               type="submit"
-              class="auth-role-btn group"
-            >
-              <span class="auth-role-icon">
-                <.icon name={account.icon} class="size-4" />
-              </span>
-              <span class="auth-role-text">
-                <span class="auth-role-name">{account.role}</span>
-              </span>
-            </button>
+              variant="secondary"
+              label={account.role}
+            />
           </.form>
         </div>
       </details>
 
-      <%!-- Form --%>
-      <.form for={@form} id="login-form" action={~p"/login"} method="post">
-        <.thamani_input
+      <.form for={@form} id="login-form" action={~p"/login"} method="post" class="td-auth-form">
+        <.td_input
           field={@form[:email]}
           type="email"
           label="Email address"
           placeholder="you@yourpharmacy.com"
           autocomplete="email"
-          icon="hero-envelope"
           required
         />
-
-        <.thamani_input
+        <.td_input
           field={@form[:password]}
           type="password"
           label="Password"
           placeholder="••••••••"
           autocomplete="current-password"
-          icon="hero-lock-closed"
-          class="mb-7"
           required
         />
-
-        <.thamani_btn id="login-submit" type="submit" variant="primary">
-          Log in
-        </.thamani_btn>
+        <.td_button id="login-submit" type="submit" variant="primary" size="lg" label="Log in" />
       </.form>
-
-      <p class="mt-4 text-center text-sm text-thamani-pewter">
-        <.link navigate={~p"/reset-password"} class="underline">Forgot your password?</.link>
-      </p>
-
-      <%!-- Sign-up link --%>
-      <p style="text-align: center; font-size: 14px; color: var(--thamani-pewter); margin-top: 18px;">
-        Don't have an account?
-        <.link
-          navigate={~p"/signup"}
-          style="color: var(--thamani-forest); text-decoration: underline; text-underline-offset: 3px; font-weight: 500;"
-        >
-          Get started here
-        </.link>
-      </p>
-
-      <%!-- Footer legal links (mobile only) --%>
-      <div class="mt-10 flex items-center justify-center gap-5 lg:hidden">
-        <a
-          href="/privacy"
-          style="font-size: 12px; color: var(--thamani-subtle); text-decoration: none;"
-        >Privacy</a>
-        <span style="font-size: 12px; color: var(--thamani-stone);">·</span>
-        <a
-          href="/terms"
-          style="font-size: 12px; color: var(--thamani-subtle); text-decoration: none;"
-        >Terms</a>
-      </div>
-    </div>
+      <:footer>
+        <.link navigate={~p"/reset-password"}>Forgot your password?</.link>
+      </:footer>
+    </.td_auth_card>
   </div>
 </div>
-<script>
-  (function () {
-    var details = document.getElementById("demo-login-accounts");
-    if (details && window.matchMedia("(min-width: 901px)").matches) {
-      details.open = true;
-    }
-  })();
-</script>

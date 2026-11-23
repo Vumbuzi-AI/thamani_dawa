@@ -68,7 +68,7 @@ defmodule ThamaniDawaWeb.PageComponents do
   Renders the shared site footer.
 
   Accepts `active_link` to highlight the current page's link in the Legal column.
-  Pattern-matched to apply `font-weight: 500; color: var(--thamani-snow)` to the active link.
+  Pattern-matched to apply `font-weight: 500; color: var(--thamani-on-accent)` to the active link.
 
   ## Examples
 
@@ -90,7 +90,7 @@ defmodule ThamaniDawaWeb.PageComponents do
           <div class="col-span-2 md:col-span-1">
             <a
               href="/"
-              style="font-size: 18px; font-weight: 500; color: var(--thamani-snow); text-decoration: none; letter-spacing: -0.01em;"
+              style="font-size: 18px; font-weight: 500; color: var(--thamani-on-accent); text-decoration: none; letter-spacing: -0.01em;"
             >
               Thamani Dawa
             </a>
@@ -201,7 +201,7 @@ defmodule ThamaniDawaWeb.PageComponents do
 
   # Pattern-matched helper: active link gets bright colour + weight; inactive is muted
   defp footer_legal_link_style(true),
-    do: "font-size: 14px; color: var(--thamani-snow); text-decoration: none; font-weight: 500;"
+    do: "font-size: 14px; color: var(--thamani-on-accent); text-decoration: none; font-weight: 500;"
 
   defp footer_legal_link_style(false),
     do: "font-size: 14px; color: rgba(252,252,247,0.6); text-decoration: none;"
@@ -250,7 +250,7 @@ defmodule ThamaniDawaWeb.PageComponents do
         <div class="flex items-center gap-3 mb-5">
           <span
             class="thamani-badge"
-            style="background: var(--thamani-lime); color: var(--thamani-forest); font-size: 11px;"
+            style="background: var(--color-td-accent-tint); color: var(--thamani-forest); font-size: 11px;"
           >
             {@badge_label}
           </span>
@@ -258,7 +258,7 @@ defmodule ThamaniDawaWeb.PageComponents do
             {@date_label}
           </span>
         </div>
-        <h1 style="font-size: clamp(32px, 4vw, 48px); font-weight: 350; letter-spacing: -0.72px; line-height: 1.1; color: var(--thamani-snow); text-wrap: balance; margin-bottom: 16px;">
+        <h1 style="font-size: clamp(32px, 4vw, 48px); font-weight: 350; letter-spacing: -0.72px; line-height: 1.1; color: var(--thamani-on-accent); text-wrap: balance; margin-bottom: 16px;">
           {@title}
         </h1>
         <p style="font-size: 17px; line-height: 1.65; color: rgba(252,252,247,0.6); max-width: 560px;">
@@ -299,7 +299,7 @@ defmodule ThamaniDawaWeb.PageComponents do
       <ol style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;">
         <%= for {{anchor, label}, idx} <- Enum.with_index(@entries, 1) do %>
           <li style="display: flex; align-items: baseline; gap: 10px;">
-            <span style="font-size: 11px; font-weight: 500; color: var(--thamani-snow); background: var(--thamani-forest); border-radius: 1000px; padding: 2px 8px; flex-shrink: 0; font-variant-numeric: tabular-nums;">
+            <span style="font-size: 11px; font-weight: 500; color: var(--thamani-on-accent); background: var(--thamani-forest); border-radius: 1000px; padding: 2px 8px; flex-shrink: 0; font-variant-numeric: tabular-nums;">
               {idx}
             </span>
             <a
@@ -403,7 +403,7 @@ defmodule ThamaniDawaWeb.PageComponents do
     <div class="fixed top-6 left-0 w-full z-50 px-4 sm:px-8 pointer-events-none">
       <header
         class="max-w-5xl mx-auto flex items-center justify-between px-4 sm:px-6 h-[64px] pointer-events-auto shadow-sm"
-        style="background: var(--thamani-snow); border: 1.5px solid var(--thamani-stone); border-radius: 1000px;"
+        style="background: var(--thamani-surface); border: 1.5px solid var(--thamani-stone); border-radius: 1000px;"
       >
         <%!-- Left side: Logo + Brand --%>
         <div class="flex items-center gap-3">
@@ -424,7 +424,7 @@ defmodule ThamaniDawaWeb.PageComponents do
             style="font-size: 17px; font-weight: 500; color: var(--thamani-forest); text-decoration: none; letter-spacing: -0.01em; align-items: center; gap: 6px;"
           >
             Thamani Dawa
-            <span style="width: 5px; height: 5px; border-radius: 50%; background: var(--thamani-lime);"></span>
+            <span style="width: 5px; height: 5px; border-radius: 50%; background: var(--color-td-accent-tint);"></span>
           </a>
         </div>
 
@@ -446,7 +446,7 @@ defmodule ThamaniDawaWeb.PageComponents do
           <%= if @current_scope do %>
             <div
               class="flex items-center justify-center shrink-0 w-[36px] h-[36px] min-w-[36px] min-h-[36px] aspect-square rounded-full font-semibold text-sm transition-transform hover:scale-105"
-              style="background: var(--thamani-forest); color: var(--thamani-snow); border-radius: 9999px;"
+              style="background: var(--thamani-forest); color: var(--thamani-on-accent); border-radius: 9999px;"
               title={@current_scope.user.name}
             >
               {String.at(@current_scope.user.name || "U", 0)}

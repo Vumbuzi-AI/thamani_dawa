@@ -182,28 +182,35 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/products"}
+      crumb="Products"
     >
-      <.header icon="hero-archive-box">
-        {@product.name}
-        <:subtitle>
-          <span class="font-mono">{@product.gtin}</span> · {@product.description}
-        </:subtitle>
+      <.td_detail_page
+        title={@product.name}
+        subtitle={"#{@product.gtin} · #{@product.description}"}
+      >
         <:actions>
-          <.button patch={~p"/manufacturer/products/#{@product.gtin}/serials/new"}>
-            <.icon name="hero-plus" class="size-4" /> Add batch
-          </.button>
-          <.button
-            variant="primary"
+          <.td_button
+            variant="secondary"
+            label="Generate serials"
             patch={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
-          >
-            <.icon name="hero-qr-code" class="size-4" /> Generate serials
-          </.button>
+          />
+          <.td_button
+            variant="primary"
+            label="Create SSCC"
+            patch={~p"/manufacturer/products/#{@product.id}/sscc"}
+          />
         </:actions>
-      </.header>
+        <.td_key_value label="GTIN" value={@product.gtin} mono />
+        <.td_key_value label="Description" value={@product.description} />
+      </.td_detail_page>
 
-      <section class="mt-6">
-        <h2 class="dashboard-section-label">Batches</h2>
-        <.table id="manufacturer-batches" rows={@batches}>
+      <section>
+        <.td_card_header title="Batches" />
+        <.td_data_table
+          id="manufacturer-batches"
+          rows={@batches}
+          row_id={fn {batch, _} -> "manufacturer-batch-#{batch.id}" end}
+        >
           <:col :let={{batch, _serial_count}} label="Batch no.">{batch.batch_no}</:col>
           <:col :let={{batch, _serial_count}} label="Production">
             {Calendar.strftime(batch.production_date, "%d %b %Y")}
@@ -212,12 +219,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
             {Calendar.strftime(batch.expiry_date, "%d %b %Y")}
           </:col>
           <:col :let={{_batch, serial_count}} label="Serials">{serial_count}</:col>
-          <:empty_state>
-            <.blank_state icon="hero-cube" title="No batches yet">
-              Add a batch before generating serials or an SSCC for this product.
-            </.blank_state>
-          </:empty_state>
-        </.table>
+          <:empty>
+            <.td_empty
+              title="No batches yet"
+              hint="Generate serials to record the first batch for this product."
+            />
+          </:empty>
+        </.td_data_table>
       </section>
 
       <section class="mt-8">
@@ -225,7 +233,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
         <div class="mt-3 space-y-4">
           <div
             :for={{pallet_code, rows} <- @pallet_groups}
-            class="rounded-2xl border border-thamani-frosted bg-white p-5"
+            class="rounded-2xl border border-thamani-frosted bg-td-surface p-5"
           >
             <div class="flex items-center justify-between gap-4">
               <h3 class="text-sm font-semibold text-thamani-forest">{pallet_label(pallet_code)}</h3>
@@ -255,154 +263,58 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
                   </p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <.button variant="ghost" navigate={~p"/manufacturer/sscc/#{sscc.id}/serials"}>
-                    Serials ({serial_count})
-                  </.button>
-                  <.button variant="ghost" navigate={~p"/manufacturer/sscc/#{sscc.id}/label"}>
-                    Pallet label
-                  </.button>
-                  <.button variant="ghost" href={~p"/manufacturer/sscc/#{sscc.id}/export"}>
-                    Export CSV
-                  </.button>
+                  <.td_button
+                    variant="secondary"
+                    label={"Serials (#{serial_count})"}
+                    navigate={~p"/manufacturer/sscc/#{sscc.id}/serials"}
+                  />
+                  <.td_button
+                    variant="secondary"
+                    label="Case label"
+                    navigate={~p"/manufacturer/sscc/#{sscc.id}/label"}
+                  />
+                  <.td_button
+                    variant="secondary"
+                    label="Export CSV"
+                    href={~p"/manufacturer/sscc/#{sscc.id}/export"}
+                  />
                 </div>
               </div>
             </div>
           </div>
 
-          <.blank_state :if={@pallet_groups == %{}} icon="hero-cube-transparent" title="No SSCCs yet">
-            Create an SSCC to pack serialised units for shipping.
-          </.blank_state>
+          <.td_empty
+            :if={@pallet_groups == %{}}
+            title="No SSCCs yet"
+            hint="Create an SSCC to pack serialised units for shipping."
+          />
         </div>
       </section>
 
-      <.modal
-        :if={@live_action == :new_batch}
-        id="manufacturer-batch-modal"
-        show
-        on_cancel={JS.patch(~p"/manufacturer/products/#{@product.id}")}
-      >
-        <h2 class="mb-4 text-2xl font-medium tracking-tight text-thamani-forest">Add batch</h2>
-        <.form
-          for={@batch_form}
-          id="manufacturer-batch-form"
-          phx-change="validate_batch"
-          phx-submit="save_batch"
-        >
-          <div class="space-y-4">
-            <.input field={@batch_form[:batch_no]} label="Batch number" required />
-            <.input
-              field={@batch_form[:production_date]}
-              type="date"
-              label="Production date"
-              required
-            />
-            <.input field={@batch_form[:expiry_date]} type="date" label="Expiry date" required />
-          </div>
-          <div class="mt-6 flex items-center justify-end gap-3">
-            <.button type="button" phx-click={JS.patch(~p"/manufacturer/products/#{@product.id}")}>
-              Cancel
-            </.button>
-            <.button variant="primary">Save batch</.button>
-          </div>
-        </.form>
-      </.modal>
-
-      <.modal
-        :if={@live_action == :generate_serials}
-        id="manufacturer-serials-modal"
-        show
-        on_cancel={JS.patch(~p"/manufacturer/products/#{@product.id}")}
-      >
-        <h2 class="mb-4 text-2xl font-medium tracking-tight text-thamani-forest">Generate serials</h2>
-        <.form
-          for={@serials_form}
-          id="manufacturer-serials-form"
-          phx-submit="generate_serials"
-        >
-          <div class="space-y-4">
-            <div>
-              <label
-                class="block text-sm font-medium text-thamani-forest"
-                for="serials_manufacturer_batch_id"
-              >
-                Batch
-              </label>
-              <select
-                name="serials[manufacturer_batch_id]"
-                id="serials_manufacturer_batch_id"
-                class="thamani-input mt-1 w-full"
-              >
-                <option :for={{batch, _count} <- @batches} value={batch.id}>{batch.batch_no}</option>
-              </select>
-            </div>
-            <.input
-              field={@serials_form[:trade_item_qty]}
-              type="number"
-              label="Primary units to serialise"
-              required
-            />
-            <.input
-              field={@serials_form[:create_shippers]}
-              type="checkbox"
-              label="Also mint shipper SSCCs for these serials"
-            />
-            <.input field={@serials_form[:shipper_qty]} type="number" label="Units per shipper" />
-            <div class="grid grid-cols-2 gap-4">
-              <.input field={@serials_form[:from_gln]} label="From GLN" />
-              <.input field={@serials_form[:to_gln]} label="To GLN" />
-            </div>
-          </div>
-          <div class="mt-6 flex items-center justify-end gap-3">
-            <.button type="button" phx-click={JS.patch(~p"/manufacturer/products/#{@product.id}")}>
-              Cancel
-            </.button>
-            <.button variant="primary">Generate</.button>
-          </div>
-        </.form>
-      </.modal>
-
-      <.modal
+      <.td_overlay_form
         :if={@live_action == :create_sscc}
         id="manufacturer-sscc-modal"
-        show
+        title="Create SSCC"
+        submit="Create SSCC"
         on_cancel={JS.patch(~p"/manufacturer/products/#{@product.id}")}
       >
-        <h2 class="mb-4 text-2xl font-medium tracking-tight text-thamani-forest">Create SSCC</h2>
-        <.form for={@sscc_form} id="manufacturer-sscc-form" phx-submit="create_sscc">
-          <div class="space-y-4">
-            <div>
-              <label
-                class="block text-sm font-medium text-thamani-forest"
-                for="sscc_manufacturer_batch_id"
-              >
-                Batch
-              </label>
-              <select
-                name="sscc[manufacturer_batch_id]"
-                id="sscc_manufacturer_batch_id"
-                class="thamani-input mt-1 w-full"
-              >
-                <option :for={{batch, _count} <- @batches} value={batch.id}>{batch.batch_no}</option>
-              </select>
-            </div>
-            <.input
-              field={@sscc_form[:count_of_trade_items]}
-              type="number"
-              label="Trade items packed"
-            />
-            <div class="grid grid-cols-2 gap-4">
-              <.input field={@sscc_form[:from_address]} label="From address" />
-              <.input field={@sscc_form[:to_address]} label="To address" />
-            </div>
-          </div>
-          <div class="mt-6 flex items-center justify-end gap-3">
-            <.button type="button" phx-click={JS.patch(~p"/manufacturer/products/#{@product.id}")}>
-              Cancel
-            </.button>
-            <.button variant="primary">Create SSCC</.button>
-          </div>
+        <.form for={@sscc_form} id="manufacturer-sscc-modal-form" phx-submit="create_sscc">
+          <.td_select
+            name="sscc[manufacturer_batch_id]"
+            id="sscc_manufacturer_batch_id"
+            label="Batch"
+            options={Enum.map(@batches, fn {batch, _count} -> {batch.batch_no, batch.id} end)}
+            required
+          />
+          <.td_input
+            field={@sscc_form[:count_of_trade_items]}
+            type="number"
+            label="Trade items packed"
+          />
+          <.td_input field={@sscc_form[:from_address]} label="From address" />
+          <.td_input field={@sscc_form[:to_address]} label="To address" />
         </.form>
-      </.modal>
+      </.td_overlay_form>
     </Layouts.manufacturer_shell>
     """
   end

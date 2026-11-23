@@ -57,9 +57,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
         <section
           :for={group <- @groups}
           id={"sscc-group-#{group.pallet_code || "unassigned"}"}
-          class="overflow-hidden rounded-2xl border border-thamani-stone bg-white shadow-sm"
+          class="overflow-hidden rounded-2xl border border-thamani-stone bg-td-surface shadow-sm"
         >
-          <div class="flex flex-wrap items-center justify-between gap-3 bg-thamani-snow px-5 py-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-thamani-surface px-5 py-4">
             <div>
               <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
                 Pallet SSCC
@@ -68,7 +68,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
               </p>
             </div>
             <div class="flex gap-2 text-xs">
-              <span class="rounded-full bg-white px-3 py-1.5 font-semibold">{length(group.shippers)} shippers</span><span class="rounded-full bg-white px-3 py-1.5 font-semibold">{group.primary_count} primary serials</span>
+              <span class="rounded-full bg-td-surface px-3 py-1.5 font-semibold">{length(group.shippers)} shippers</span><span class="rounded-full bg-td-surface px-3 py-1.5 font-semibold">{group.primary_count} primary serials</span>
             </div>
           </div>
           <div class="divide-y divide-thamani-stone">

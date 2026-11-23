@@ -64,6 +64,47 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
   defp count_phrase(1, noun), do: "1 #{noun}"
   defp count_phrase(count, noun), do: "#{count} #{noun}s"
 
+  def render(%{live_action: :packing_list} = assigns) do
+    ~H"""
+    <Layouts.manufacturer_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={~p"/manufacturer/shipments"}
+      crumb="Shipments"
+    >
+      <.td_page_header title="Packing list" subtitle={@shipment.order_number}>
+        <:actions>
+          <.td_button
+            variant="secondary"
+            label="Back to shipment"
+            navigate={~p"/manufacturer/shipments/#{@shipment.id}"}
+          />
+        </:actions>
+      </.td_page_header>
+      <div class="td-kv-grid">
+        <.td_key_value label="Order" value={@shipment.order_number} mono />
+        <.td_key_value label="Reference" value={@shipment.reference} mono />
+        <.td_key_value label="From" value={@shipment.origin_company} />
+        <.td_key_value label="To" value={@shipment.destination_company} />
+      </div>
+      <.td_data_table
+        id="manufacturer-packing-list"
+        rows={@shipment.shippers}
+        row_id={fn shipper -> "packing-shipper-#{shipper.id}" end}
+      >
+        <:col :let={shipper} label="Shipper">{shipper.name}</:col>
+        <:col :let={shipper} label="SSCC"><span class="td-kv-value is-mono">{shipper.sscc}</span></:col>
+        <:col :let={shipper} label="Product">{shipper.product_name || "Packed trade items"}</:col>
+        <:col :let={shipper} label="Batch">{shipper.batch || "Mixed"}</:col>
+        <:col :let={shipper} label="Units">{length(shipper.items)}</:col>
+        <:empty>
+          <.td_empty title="Nothing packed yet" hint="A mobile user scans units into shippers before this list has lines." />
+        </:empty>
+      </.td_data_table>
+    </Layouts.manufacturer_shell>
+    """
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.manufacturer_shell
@@ -72,36 +113,28 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
       current_path={~p"/manufacturer/shipments"}
     >
       <div class="no-print">
-        <.header icon="hero-truck" back={~p"/manufacturer/shipments"}>
-          <span class="flex flex-wrap items-center gap-3">{@shipment.order_number}<.shipment_status_badge status={
-            @shipment.status
-          } /></span>
-          <:subtitle>
-            <span class="tracking-tight tabular-nums">{@shipment.reference}</span>
-            · {count_phrase(length(@shipment.shippers), "shipper")} · {count_phrase(
-              @unit_count,
-              "unit"
-            )}
-          </:subtitle>
+        <.td_page_header
+          title={@shipment.order_number}
+          subtitle={"#{@shipment.reference} · #{count_phrase(length(@shipment.shippers), "shipper")} · #{count_phrase(@unit_count, "unit")}"}
+        >
           <:actions>
-            <div class="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap md:w-auto md:justify-end md:[&>*]:w-auto">
-              <.button :if={@shipment.status == "approved"} id="manufacturer-delivery-note"><.icon
-                name="hero-document-text"
-                class="size-4"
-              /> View delivery note</.button>
-              <.button :if={@shipment.status == "approved"} id="manufacturer-packing-list"><.icon
-                name="hero-queue-list"
-                class="size-4"
-              /> View packing list</.button>
-              <.button
-                :if={@shipment.status == "submitted"}
-                id="approve-manufacturer-shipment"
-                variant="primary"
-                phx-click="approve"
-              ><.icon name="hero-check-badge" class="size-4" /> Approve shipment</.button>
-            </div>
+            <.shipment_status_badge status={@shipment.status} />
+            <.td_button
+              :if={@shipment.status == "approved"}
+              id="manufacturer-packing-list"
+              variant="secondary"
+              label="View packing list"
+              navigate={~p"/manufacturer/shipments/#{@shipment.id}/packing-list"}
+            />
+            <.td_button
+              :if={@shipment.status == "submitted"}
+              id="approve-manufacturer-shipment"
+              variant="primary"
+              label="Approve shipment"
+              phx-click="approve"
+            />
           </:actions>
-        </.header>
+        </.td_page_header>
 
         <div class="grid gap-4 md:grid-cols-3">
           <.party_card
@@ -147,15 +180,11 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
 
         <section class="mt-6 space-y-4" id="manufacturer-shippers">
           <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">Shippers</h2>
-          <div
+          <.td_empty
             :if={@shipment.shippers == []}
-            class="rounded-2xl border border-dashed border-thamani-stone bg-thamani-canvas p-8 text-center text-sm text-thamani-pewter"
-          >
-            <.icon name="hero-device-phone-mobile" class="mx-auto mb-2 size-8 text-thamani-subtle" />
-            Nothing packed yet. A mobile user finds this shipment by order
-            <span class="font-semibold text-thamani-forest">{@shipment.order_number}</span>
-            and scans units into shippers.
-          </div>
+            title="Nothing packed yet"
+            hint={"A mobile user finds this shipment by order #{@shipment.order_number} and scans units into shippers."}
+          />
           <article
             :for={shipper <- @shipment.shippers}
             id={"shipper-#{shipper.id}"}
@@ -171,7 +200,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
               </div>
               <span
                 :if={shipper.sscc}
-                class="rounded-lg bg-thamani-lime px-3 py-1 font-mono text-xs font-semibold text-thamani-forest"
+                class="rounded-lg bg-td-accent-tint px-3 py-1 font-mono text-xs font-semibold text-thamani-forest"
               >SSCC {shipper.sscc}</span>
             </header>
             <button
@@ -211,7 +240,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
               <li
                 :for={item <- shipper.items}
                 id={"shipment-item-#{item.id}"}
-                class="rounded-xl border border-thamani-stone bg-white p-3 text-sm"
+                class="rounded-xl border border-thamani-stone bg-td-surface p-3 text-sm"
               >
                 <p class="font-medium">{item.product_name || "Verified product"}</p><p class="font-mono text-xs text-thamani-pewter">
                   {item.gtin} · {item.serial}

@@ -48,7 +48,7 @@
 
 .auth-form-panel {
   flex: 1;
-  background: var(--thamani-snow);
+  background: var(--thamani-surface);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -147,19 +147,19 @@
   padding: 7px 10px;
   border-radius: 10px;
   border: 1.5px solid var(--thamani-stone);
-  background: var(--thamani-snow);
+  background: var(--thamani-surface);
   text-align: left;
   cursor: pointer;
   transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
 }
 .auth-role-btn:hover {
   border-color: var(--thamani-forest);
-  background: #fff;
+  background: var(--color-td-surface);
   transform: translateY(-1px);
 }
 .auth-role-btn:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--thamani-accent), 0 0 0 4px var(--thamani-snow);
+  box-shadow: 0 0 0 2px var(--thamani-accent), 0 0 0 4px var(--thamani-surface);
 }
 .auth-role-btn:active {
   transform: translateY(0);
@@ -173,7 +173,7 @@
   height: 28px;
   border-radius: 7px;
   background: var(--thamani-forest);
-  color: var(--thamani-lime);
+  color: var(--color-td-accent-tint);
 }
 .auth-role-text {
   min-width: 0;

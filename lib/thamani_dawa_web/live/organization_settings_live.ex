@@ -312,19 +312,17 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
       current_scope={@current_scope}
       current_path={@current_path}
     >
-      <.header icon="hero-cog-6-tooth">
-        Organization settings
-        <:subtitle>
-          Your organization's identity and the GS1 identifiers it issues or reports under.
-        </:subtitle>
-      </.header>
+      <.td_page_header
+        title="Organization settings"
+        subtitle="Your organization's identity and the GS1 identifiers it issues or reports under."
+      />
 
       <.form
         for={@form}
         id="distributor-gs1-settings-form"
         phx-change="validate"
         phx-submit="save"
-        class="mt-6 overflow-hidden rounded-2xl border border-thamani-stone bg-white shadow-sm"
+        class="mt-6 overflow-hidden rounded-2xl border border-[var(--color-td-hairline)] bg-[var(--color-td-surface)]"
       >
         <div class="p-6 lg:p-8">
           <section
@@ -362,7 +360,7 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
                   field={@form[:vat_registered]}
                   type="checkbox"
                   label="VAT registered"
-                  class="relative h-7 w-12 shrink-0 cursor-pointer appearance-none rounded-full bg-slate-300 transition-colors before:absolute before:left-1 before:top-1 before:size-5 before:rounded-full before:bg-white before:shadow-sm before:transition-transform checked:bg-thamani-forest checked:before:translate-x-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
+                  class="relative h-7 w-12 shrink-0 cursor-pointer appearance-none rounded-full bg-td-hairline transition-colors before:absolute before:left-1 before:top-1 before:size-5 before:rounded-full before:bg-td-surface before:shadow-sm before:transition-transform checked:bg-thamani-forest checked:before:translate-x-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
                 />
               </div>
             </div>
@@ -421,12 +419,12 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
         </div>
 
         <div class="flex justify-end border-t border-thamani-stone bg-thamani-canvas/40 px-6 py-4 lg:px-8">
-          <.button id="save-organization-settings" variant="primary" class="min-w-40">Save changes</.button>
+          <.td_button id="save-organization-settings" type="submit" variant="primary" label="Save changes" />
         </div>
       </.form>
 
       <section
-        class="mt-6 overflow-hidden rounded-2xl border border-thamani-stone bg-white shadow-sm"
+        class="mt-6 overflow-hidden rounded-2xl border border-[var(--color-td-hairline)] bg-[var(--color-td-surface)]"
         aria-labelledby="gs1-prefixes-heading"
       >
         <div class="p-6 lg:p-8">
@@ -453,7 +451,7 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
                   {prefix.prefix}
                   <span
                     :if={prefix.is_primary}
-                    class="ml-2 rounded-full bg-thamani-lime px-2 py-0.5 text-xs font-semibold text-thamani-forest"
+                    class="ml-2 rounded-full bg-td-accent-tint px-2 py-0.5 text-xs font-semibold text-thamani-forest"
                   >
                     Primary
                   </span>

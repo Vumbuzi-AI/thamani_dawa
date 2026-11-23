@@ -5,8 +5,6 @@ defmodule ThamaniDawaWeb.DashboardComponents do
   """
   use Phoenix.Component
 
-  import ThamaniDawaWeb.CoreComponents, only: [icon: 1]
-
   alias Phoenix.LiveView.JS
 
   @doc """
@@ -16,7 +14,7 @@ defmodule ThamaniDawaWeb.DashboardComponents do
 
       <.stat_tile icon="hero-users" label="Total patients" value="26" sublabel="Registered patients" />
   """
-  attr :icon, :string, required: true
+  attr :icon, :string, default: nil
   attr :label, :string, required: true
   attr :value, :any, required: true
   attr :sublabel, :string, default: nil
@@ -25,15 +23,10 @@ defmodule ThamaniDawaWeb.DashboardComponents do
 
   def stat_tile(assigns) do
     ~H"""
-    <div id={@id} class={["dashboard-stat-tile", @class]}>
-      <div class="dashboard-stat-tile-header">
-        <span class="dashboard-stat-tile-label">{@label}</span>
-        <span class="dashboard-stat-tile-icon">
-          <.icon name={@icon} class="size-4" />
-        </span>
-      </div>
-      <span class="dashboard-stat-tile-value">{@value}</span>
-      <span :if={@sublabel} class="dashboard-stat-tile-sublabel">{@sublabel}</span>
+    <div id={@id} class={["td-stat", @class]}>
+      <span class="td-stat-label">{@label}</span>
+      <span class="td-stat-value">{@value}</span>
+      <span :if={@sublabel} class="td-stat-sub">{@sublabel}</span>
     </div>
     """
   end
@@ -59,9 +52,9 @@ defmodule ThamaniDawaWeb.DashboardComponents do
 
   def chart_card(assigns) do
     ~H"""
-    <div class={["dashboard-chart-card", @class]}>
-      <p class="dashboard-chart-title">{@title}</p>
-      <p :if={@subtitle} class="dashboard-chart-subtitle">{@subtitle}</p>
+    <div class={["td-chart", @class]}>
+      <p class="td-stat-label">{@title}</p>
+      <p :if={@subtitle} class="td-stat-sub">{@subtitle}</p>
       <div class="dashboard-chart-canvas-wrap">
         <canvas
           id={@id}

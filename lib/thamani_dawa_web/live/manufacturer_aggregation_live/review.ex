@@ -39,10 +39,15 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Review do
 
       {:error, {:invalid, _items}} ->
         {:noreply,
-         put_flash(socket, :error, "Some serials are no longer valid. Review them before approving.")}
+         put_flash(
+           socket,
+           :error,
+           "Some serials are no longer valid. Review them before approving."
+         )}
 
       {:error, {:over_capacity, _details}} ->
-        {:noreply, put_flash(socket, :error, "This aggregation exceeds the target SSCC capacity.")}
+        {:noreply,
+         put_flash(socket, :error, "This aggregation exceeds the target SSCC capacity.")}
 
       {:error, _reason} ->
         {:noreply, put_flash(socket, :error, "Aggregation could not be approved.")}
@@ -110,30 +115,28 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Review do
       current_path={~p"/manufacturer/aggregations"}
     >
       <div class="no-print">
-        <.header icon="hero-qr-code" back={~p"/manufacturer/aggregations"}>
-          <span class="flex flex-wrap items-center gap-3">{@aggregation.reference}<.aggregation_status_badge status={
-            @aggregation.status
-          } /></span>
-          <:subtitle>
-            <span class="tracking-tight tabular-nums">{@aggregation.shipper_sscc.code}</span>
-            · {length(@aggregation.items)} serial(s)
-          </:subtitle>
+        <.td_page_header
+          title={@aggregation.reference}
+          subtitle={"#{@aggregation.shipper_sscc.code} · #{length(@aggregation.items)} serial(s)"}
+        >
           <:actions>
-            <div class="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap md:w-auto md:justify-end md:[&>*]:w-auto">
-              <.button
-                :if={@aggregation.status == "submitted"}
-                id="reject-manufacturer-aggregation"
-                phx-click="open_reject"
-              ><.icon name="hero-x-circle" class="size-4" /> Reject</.button>
-              <.button
-                :if={@approveable?}
-                id="approve-manufacturer-aggregation"
-                variant="primary"
-                phx-click="approve"
-              ><.icon name="hero-check-badge" class="size-4" /> Approve aggregation</.button>
-            </div>
+            <.aggregation_status_badge status={@aggregation.status} />
+            <.td_button
+              :if={@aggregation.status == "submitted"}
+              id="reject-manufacturer-aggregation"
+              variant="danger"
+              label="Reject"
+              phx-click="open_reject"
+            />
+            <.td_button
+              :if={@approveable?}
+              id="approve-manufacturer-aggregation"
+              variant="primary"
+              label="Approve aggregation"
+              phx-click="approve"
+            />
           </:actions>
-        </.header>
+        </.td_page_header>
 
         <div class="grid gap-4 md:grid-cols-2">
           <div class="rounded-2xl ff-surface-card p-4">
@@ -202,18 +205,16 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Review do
           <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">
             Scanned serials
           </h2>
-          <div
+          <.td_empty
             :if={@aggregation.items == []}
-            class="rounded-2xl border border-dashed border-thamani-stone bg-thamani-canvas p-8 text-center text-sm text-thamani-pewter"
-          >
-            <.icon name="hero-device-phone-mobile" class="mx-auto mb-2 size-8 text-thamani-subtle" />
-            Nothing scanned yet. Add serials from the new aggregation form or the mobile app.
-          </div>
+            title="Nothing scanned yet"
+            hint="Add serials from the new aggregation form or the mobile app."
+          />
           <ul class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             <li
               :for={item <- @aggregation.items}
               id={"aggregation-item-#{item.id}"}
-              class="rounded-xl border border-thamani-stone bg-white p-3 text-sm"
+              class="rounded-xl border border-thamani-stone bg-td-surface p-3 text-sm"
             >
               <div class="flex items-start justify-between gap-2">
                 <div class="min-w-0">
@@ -274,32 +275,36 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Review do
         </section>
       </div>
 
-      <.modal
+      <.td_modal
         :if={@rejecting}
         id="reject-aggregation-modal"
         show
-        close_on_click_away={false}
+        title="Reject aggregation"
+        subtitle="Give the manufacturing team a reason for rejecting this pack."
         on_cancel={JS.push("cancel_reject")}
       >
-        <.header icon="hero-x-circle">
-          Reject aggregation
-          <:subtitle>Give the manufacturing team a reason for rejecting this pack.</:subtitle>
-        </.header>
-        <form id="reject-aggregation-form" phx-submit="reject" class="mt-4 space-y-4">
-          <.input
-            name="reason"
-            label="Rejection reason"
-            placeholder="e.g. Wrong batch or over capacity"
-            required
+        <:body>
+          <form id="reject-aggregation-modal-form" phx-submit="reject">
+            <.td_input
+              name="reason"
+              id="reject-aggregation-reason"
+              label="Rejection reason"
+              placeholder="e.g. Wrong batch or over capacity"
+              required
+            />
+          </form>
+        </:body>
+        <:footer>
+          <.td_button type="button" variant="secondary" label="Cancel" phx-click="cancel_reject" />
+          <.td_button
+            id="confirm-reject-aggregation"
+            type="submit"
+            form="reject-aggregation-modal-form"
+            variant="danger-confirm"
+            label="Reject aggregation"
           />
-          <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <.button type="button" phx-click="cancel_reject" variant="ghost">Cancel</.button>
-            <.button id="confirm-reject-aggregation" variant="destructive">
-              Reject aggregation
-            </.button>
-          </div>
-        </form>
-      </.modal>
+        </:footer>
+      </.td_modal>
     </Layouts.manufacturer_shell>
     """
   end

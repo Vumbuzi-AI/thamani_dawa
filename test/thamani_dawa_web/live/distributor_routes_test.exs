@@ -458,7 +458,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       assert has_element?(view, "#{actions}.sm\\:min-w-\\[19rem\\]")
       assert has_element?(view, "#{actions} > #edit-mobile-user-#{mobile_user.id}.shrink-0")
       assert has_element?(view, "#{actions} > #resend-pin-#{mobile_user.id}.shrink-0")
-      assert has_element?(view, "#{actions} > #toggle-mobile-user-#{mobile_user.id}.shrink-0")
+      assert has_element?(view, "#{actions} > #deactivate-mobile-user-#{mobile_user.id}.shrink-0")
     end
   end
 

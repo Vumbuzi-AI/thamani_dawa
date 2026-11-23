@@ -655,7 +655,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       >
         <div class="space-y-5">
           <div class="flex items-center gap-3">
-            <span class="flex size-10 items-center justify-center rounded-xl bg-thamani-lime text-thamani-forest">
+            <span class="flex size-10 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
               <.icon
                 name={
                   if(@payment_type == "Cash", do: "hero-banknotes", else: "hero-device-phone-mobile")
@@ -710,8 +710,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
                     if(
                       to_string(@payment_form[:tendered].value) == to_string(cart_total(@cart)),
                       do:
-                        "border-thamani-forest bg-thamani-lime text-thamani-forest ring-1 ring-thamani-forest",
-                      else: "border-thamani-stone text-thamani-forest hover:bg-thamani-lime/30"
+                        "border-thamani-forest bg-td-accent-tint text-thamani-forest ring-1 ring-thamani-forest",
+                      else: "border-thamani-stone text-thamani-forest hover:bg-td-accent-tint"
                     )
                   ]}
                 >Exact</button>
@@ -733,8 +733,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
                     if(
                       to_string(@payment_form[:tendered].value) == to_string(amount),
                       do:
-                        "border-thamani-forest bg-thamani-lime text-thamani-forest ring-1 ring-thamani-forest",
-                      else: "border-thamani-stone text-thamani-forest hover:bg-thamani-lime/30"
+                        "border-thamani-forest bg-td-accent-tint text-thamani-forest ring-1 ring-thamani-forest",
+                      else: "border-thamani-stone text-thamani-forest hover:bg-td-accent-tint"
                     )
                   ]}
                 >KES {amount}</button>
@@ -781,7 +781,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
         on_cancel={JS.push("new_sale")}
       >
         <div class="space-y-5 text-center">
-          <span class="mx-auto flex size-12 items-center justify-center rounded-full bg-thamani-lime text-thamani-forest">
+          <span class="mx-auto flex size-12 items-center justify-center rounded-full bg-td-accent-tint text-thamani-forest">
             <.icon name="hero-check" class="size-7" />
           </span>
           <div>
@@ -791,7 +791,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
           </div>
           <div
             id="quick-sale-receipt"
-            class="quick-sale-receipt-card rounded-xl border border-thamani-stone bg-white p-5 text-left text-sm text-slate-900"
+            class="quick-sale-receipt-card rounded-xl border border-thamani-stone bg-td-surface p-5 text-left text-sm text-td-ink"
           >
             <header class="receipt-header text-center">
               <img
@@ -928,7 +928,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       <div class="grid grid-cols-1 gap-5 lg:h-[calc(100dvh-10rem)] lg:min-h-[30rem] lg:grid-cols-[minmax(28rem,1fr)_minmax(34rem,1.15fr)] lg:items-stretch">
         <section
           id="quick-sale-cart"
-          class="order-2 flex min-h-[30rem] flex-col overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-snow lg:order-1 lg:min-h-0"
+          class="order-2 flex min-h-[30rem] flex-col overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface lg:order-1 lg:min-h-0"
         >
           <div
             id="quick-sale-cart-header"
@@ -936,19 +936,19 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
           >
             <div class="flex items-center justify-between gap-3">
               <div class="flex items-center gap-3">
-                <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-thamani-lime text-thamani-forest">
+                <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
                   <.icon name="hero-shopping-cart" class="size-5" />
                 </span>
                 <div>
-                  <h2 class="text-base font-semibold text-thamani-snow">Current sale</h2>
-                  <p class="mt-0.5 text-xs text-thamani-snow/70">
+                  <h2 class="text-base font-semibold text-thamani-on-accent">Current sale</h2>
+                  <p class="mt-0.5 text-xs text-thamani-on-accent/70">
                     Review quantities before taking payment.
                   </p>
                 </div>
               </div>
               <span
                 id="quick-sale-item-count"
-                class="rounded-full bg-thamani-lime px-2.5 py-1 text-xs font-semibold tabular-nums text-thamani-forest"
+                class="rounded-full bg-td-accent-tint px-2.5 py-1 text-xs font-semibold tabular-nums text-thamani-forest"
               >
                 {cart_item_count(@cart)} {if(cart_item_count(@cart) == 1, do: "item", else: "items")}
               </span>
@@ -1080,9 +1080,9 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
                     "flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition-all",
                     if(@payment_type == method,
                       do:
-                        "border-thamani-forest bg-thamani-forest text-thamani-snow shadow-sm ring-2 ring-thamani-forest/20",
+                        "border-thamani-forest bg-thamani-forest text-thamani-on-accent shadow-sm ring-2 ring-thamani-forest/20",
                       else:
-                        "border-thamani-stone bg-thamani-canvas text-thamani-forest hover:border-thamani-forest/50 hover:bg-thamani-lime/20"
+                        "border-thamani-stone bg-thamani-canvas text-thamani-forest hover:border-thamani-forest/50 hover:bg-td-accent-tint"
                     )
                   ]}
                 >
@@ -1116,18 +1116,18 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
           </div>
         </section>
 
-        <section class="order-1 flex min-h-[30rem] flex-col overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-snow lg:order-2 lg:min-h-0">
+        <section class="order-1 flex min-h-[30rem] flex-col overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface lg:order-2 lg:min-h-0">
           <div
             id="quick-sale-catalog-header"
             class="border-b border-thamani-forest bg-thamani-forest px-5 py-4"
           >
             <div class="flex items-center gap-3">
-              <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-thamani-lime text-thamani-forest">
+              <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
                 <.icon name="hero-squares-2x2" class="size-5" />
               </span>
               <div>
-                <h2 class="text-base font-semibold text-thamani-snow">Product catalog</h2>
-                <p class="mt-0.5 text-xs text-thamani-snow/70">
+                <h2 class="text-base font-semibold text-thamani-on-accent">Product catalog</h2>
+                <p class="mt-0.5 text-xs text-thamani-on-accent/70">
                   Search, scan, or choose an item to add to this sale.
                 </p>
               </div>
@@ -1183,11 +1183,11 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
               disabled={product.stock <= 0}
               class={[
                 "flex w-full items-center gap-3 py-3 text-left transition-colors",
-                product.stock > 0 && "hover:bg-thamani-lime/20",
+                product.stock > 0 && "hover:bg-td-accent-tint",
                 product.stock <= 0 && "cursor-not-allowed bg-thamani-canvas/60 opacity-70"
               ]}
             >
-              <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-thamani-lime text-sm font-semibold text-thamani-forest">
+              <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-sm font-semibold text-thamani-forest">
                 {product_initials(product)}
               </span>
               <span class="min-w-0 flex-1">
@@ -1209,7 +1209,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
               <span class={[
                 "flex size-8 shrink-0 items-center justify-center rounded-lg",
                 if(product.stock > 0,
-                  do: "bg-thamani-lime text-thamani-forest",
+                  do: "bg-td-accent-tint text-thamani-forest",
                   else: "bg-thamani-stone text-thamani-pewter"
                 )
               ]}>

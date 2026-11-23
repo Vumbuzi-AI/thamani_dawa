@@ -253,6 +253,8 @@ defmodule ThamaniDawaWeb.Router do
     live_session :lab, on_mount: [{ThamaniDawaWeb.UserAuth, :require_lab_access}] do
       live "/lab", LabDashboardLive, :index
       live "/lab/transactions", EarningsLive, :lab
+      live "/lab/transactions/:id", EarningsLive, :lab_show
+      live "/lab/transactions/:id/receipt", EarningsLive, :lab_receipt
       live "/lab/scan", LabScanLive, :index
 
       live "/lab/patients", LabPatientLive.Index, :index
@@ -374,11 +376,13 @@ defmodule ThamaniDawaWeb.Router do
            :new_serial
 
       live "/manufacturer/products/:gtin/ssccs", ManufacturerProductLive.Ssccs, :index
+      live "/manufacturer/products/:id/sscc", ManufacturerProductLive.Show, :create_sscc
       live "/manufacturer/products/:id", ManufacturerProductLive.Show, :show
 
       live "/manufacturer/inventory", ManufacturerInventoryLive, :index
       live "/manufacturer/shipments", ManufacturerShipmentLive.List, :index
       live "/manufacturer/shipments/new", ManufacturerShipmentLive.Form, :new
+      live "/manufacturer/shipments/:id/packing-list", ManufacturerShipmentLive.Review, :packing_list
       live "/manufacturer/shipments/:id", ManufacturerShipmentLive.Review, :show
 
       live "/manufacturer/aggregations", ManufacturerAggregationLive.List, :index
@@ -392,6 +396,10 @@ defmodule ThamaniDawaWeb.Router do
 
     live_session :manufacturer_admin,
       on_mount: [{ThamaniDawaWeb.UserAuth, :require_manufacturer_admin_access}] do
+      live "/manufacturer/mobile-users", ManufacturerMobileUserLive.Index, :index
+      live "/manufacturer/mobile-users/new", ManufacturerMobileUserLive.Index, :new
+      live "/manufacturer/mobile-users/:id/edit", ManufacturerMobileUserLive.Index, :edit
+
       live "/manufacturer/api-keys", ApiKeysLive, :index
       live "/manufacturer/settings", OrganizationSettingsLive, :index
     end

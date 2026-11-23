@@ -17,7 +17,7 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
     test "renders the login form for unauthenticated users", %{conn: conn} do
       conn = get(conn, ~p"/login")
 
-      assert html_response(conn, 200) =~ "Welcome back"
+      assert html_response(conn, 200) =~ ~s(id="login-submit")
     end
 
     test "renders one-click login forms with the seeded credentials for all eight roles", %{

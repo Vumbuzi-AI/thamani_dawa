@@ -20,9 +20,7 @@ defmodule ThamaniDawaWeb.PlatformDashboardLive do
           Cross-organization health, recent throughput, and items needing attention.
         </:subtitle>
         <:actions>
-          <span class="inline-flex items-center gap-2 rounded-full border border-thamani-stone bg-thamani-canvas px-3 py-2 text-xs font-medium text-thamani-forest">
-            <.icon name="hero-shield-check" class="size-4" /> Read-only access
-          </span>
+          <span class="td-badge">Read-only access</span>
         </:actions>
       </.header>
 

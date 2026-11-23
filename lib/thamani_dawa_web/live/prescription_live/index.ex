@@ -500,12 +500,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                   "rounded-xl border p-4 transition-colors",
                   if(is_editing,
                     do: "border-thamani-accent/50 bg-thamani-canvas shadow-sm",
-                    else: "border-thamani-stone bg-thamani-snow"
+                    else: "border-thamani-stone bg-thamani-surface"
                   )
                 ]}>
                   <div class={"flex justify-between items-center #{if is_editing, do: "mb-4"}"}>
                     <div class="flex items-center gap-2">
-                      <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-thamani-lime text-xs font-semibold text-thamani-forest">
+                      <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-td-accent-tint text-xs font-semibold text-thamani-forest">
                         {item_form.index + 1}
                       </span>
                       <h4 class="font-medium text-sm text-thamani-forest">

@@ -716,7 +716,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       html = render(show_live)
       assert html =~ "Completed"
-      assert html =~ "bg-thamani-lime"
+      assert html =~ "is-success"
 
       updated_prescription = ThamaniDawa.Prescriptions.get_prescription!(org.id, prescription.id)
       assert updated_prescription.status == :completed

@@ -171,13 +171,21 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
 
   def render(assigns) do
     ~H"""
-    <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path="/pharmacy">
-      <.header icon="hero-squares-2x2">
-        Pharmacy dashboard
-        <:subtitle>Pending prescriptions, dispensing, and revenue at your site.</:subtitle>
-      </.header>
-
-      <div class="dashboard-stat-grid mt-4">
+    <Layouts.pharmacy_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path="/pharmacy"
+      crumb="Dashboard"
+    >
+      <:tools>
+        <.button variant="ghost" navigate={~p"/pharmacy/scan"}>Scan</.button>
+        <.button variant="ghost" navigate={~p"/pharmacy/quick-sale"}>Quick sale</.button>
+        <.button variant="primary" navigate={~p"/pharmacy/prescriptions/new"}>
+          New prescription
+        </.button>
+      </:tools>
+      <p class="td-note">Pending prescriptions, dispensing, and revenue at your site.</p>
+      <div class="dashboard-stat-grid">
         <.stat_tile
           icon="hero-document-text"
           label="Pending prescriptions"

@@ -30,6 +30,15 @@ defmodule ThamaniDawa.LabOrders do
 
   ## Lab orders
 
+  @doc """
+  The human order reference shown in the UI, `LO-YYYY-NNNN`, derived from the
+  order's creation year and id (Bau, brief 9.1: no stored column).
+  """
+  def reference(%{id: id, inserted_at: inserted_at}) when is_integer(id) do
+    year = if inserted_at, do: inserted_at.year, else: Date.utc_today().year
+    "LO-#{year}-#{id |> Integer.to_string() |> String.pad_leading(4, "0")}"
+  end
+
   @doc "Lists an organization's lab orders."
   def list_lab_orders(organization_id) do
     Repo.all(from o in LabOrder, where: o.organization_id == ^organization_id)

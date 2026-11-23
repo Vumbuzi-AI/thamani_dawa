@@ -268,7 +268,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
   defp item_state_classes(:out_of_stock), do: "bg-rose-50 text-rose-700 ring-rose-200"
 
   defp item_state_classes(:ready),
-    do: "bg-thamani-lime/30 text-thamani-forest ring-thamani-forest/20"
+    do: "bg-td-accent-tint text-thamani-forest ring-thamani-forest/20"
 
   defp outstanding_quantity(item),
     do: max(item.quantity_prescribed - item.quantity_dispensed, 0)
@@ -299,7 +299,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
       <div id="prescription-receipt" class="mx-auto max-w-lg space-y-4">
         <div
           id="prescription-receipt-card"
-          class="receipt-card rounded-2xl ff-surface-card bg-white p-6 text-sm text-slate-900"
+          class="receipt-card rounded-2xl ff-surface-card bg-td-surface p-6 text-sm text-td-ink"
         >
           <header class="receipt-header text-center">
             <img
@@ -486,7 +486,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         >
           <div class="flex flex-col gap-5 p-5 sm:p-6 lg:flex-row lg:items-start lg:justify-between">
             <div class="flex min-w-0 items-start gap-4">
-              <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-thamani-lime text-thamani-forest sm:size-12">
+              <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest sm:size-12">
                 <.icon name="hero-user" class="size-5" />
               </div>
               <div class="min-w-0">
@@ -494,7 +494,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                   Prescription for
                 </p>
                 <div class="mt-1 flex flex-wrap items-center gap-2.5">
-                  <h1 class="text-xl font-medium tracking-tight text-slate-900 sm:text-2xl">
+                  <h1 class="text-xl font-medium tracking-tight text-td-ink sm:text-2xl">
                     {if @patient, do: @patient.full_name, else: "Walk-in"}
                   </h1>
                   <.status_badge status={@prescription.status} />
@@ -548,7 +548,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
               <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
                 Payment
               </dt>
-              <dd class="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-slate-900">
+              <dd class="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-td-ink">
                 {@prescription.payment_type || "Not recorded"}
                 <span class={[
                   "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset",
@@ -563,7 +563,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
               <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
                 Total amount
               </dt>
-              <dd class="mt-1.5 text-sm font-medium text-slate-900">
+              <dd class="mt-1.5 text-sm font-medium text-td-ink">
                 KES {@prescription.total_amount || "—"}
               </dd>
             </div>
@@ -571,7 +571,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
               <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
                 Prescriber
               </dt>
-              <dd class="mt-1.5 text-sm text-slate-900">
+              <dd class="mt-1.5 text-sm text-td-ink">
                 {@prescription.referring_doctor || "Not recorded"}
               </dd>
             </div>
@@ -579,7 +579,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
               <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
                 Medication items
               </dt>
-              <dd class="mt-1.5 text-sm text-slate-900">
+              <dd class="mt-1.5 text-sm text-td-ink">
                 {length(@items)} {if length(@items) == 1, do: "item", else: "items"}
               </dd>
             </div>
@@ -591,7 +591,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
           id="prescription-notes"
           class="flex items-start gap-3 rounded-xl border border-thamani-stone bg-thamani-stone/40 px-4 py-3.5"
         >
-          <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-white text-thamani-forest ring-1 ring-thamani-stone">
+          <div class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-td-surface text-thamani-forest ring-1 ring-thamani-stone">
             <.icon name="hero-clipboard-document-check" class="size-4" />
           </div>
           <div class="min-w-0">
@@ -599,7 +599,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
               Clinical notes
             </p>
             <p class={[
-              "mt-1 text-sm leading-6 text-slate-700",
+              "mt-1 text-sm leading-6 text-td-ink",
               !@prescription.notes && "italic text-thamani-subtle"
             ]}>
               {@prescription.notes || "No clinical notes were added to this prescription."}
@@ -610,12 +610,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
         <section id="medication-fulfillment" class="pt-2">
           <div class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 class="text-lg font-medium text-slate-900">Medication fulfillment</h2>
+              <h2 class="text-lg font-medium text-td-ink">Medication fulfillment</h2>
               <p class="mt-1 text-sm text-thamani-pewter">
                 Scan the product and batch barcode, then dispense from that exact lot.
               </p>
             </div>
-            <span class="self-start rounded-full bg-thamani-lime px-3 py-1 text-xs font-medium text-thamani-forest">
+            <span class="self-start rounded-full bg-td-accent-tint px-3 py-1 text-xs font-medium text-thamani-forest">
               {Enum.count(@items, & &1.is_verified)} of {length(@items)} verified
             </span>
           </div>
@@ -639,7 +639,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                         {index}
                       </div>
                       <div class="min-w-0">
-                        <h3 class="text-lg font-medium text-slate-900">{product_name(item)}</h3>
+                        <h3 class="text-lg font-medium text-td-ink">{product_name(item)}</h3>
                         <p
                           :if={
                             item.product && item.product.brand_name &&
@@ -665,7 +665,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                       <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
                         Prescribed
                       </dt>
-                      <dd class="mt-1 text-lg font-medium text-slate-900">
+                      <dd class="mt-1 text-lg font-medium text-td-ink">
                         {item.quantity_prescribed}
                       </dd>
                     </div>
@@ -675,7 +675,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                       </dt>
                       <dd
                         id={"dispensed-quantity-#{item.id}"}
-                        class="mt-1 text-lg font-medium text-slate-900"
+                        class="mt-1 text-lg font-medium text-td-ink"
                       >
                         {item.quantity_dispensed}
                       </dd>
@@ -696,7 +696,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                       <dt class="text-[11px] font-medium uppercase tracking-wide text-thamani-subtle">
                         Price
                       </dt>
-                      <dd class="mt-1 text-lg font-medium text-slate-900">
+                      <dd class="mt-1 text-lg font-medium text-td-ink">
                         <%= if item.product && item.product.price do %>
                           KES {item.product.price * item.quantity_prescribed}
                           <span class="text-xs font-normal text-thamani-subtle">
@@ -721,7 +721,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                       <p class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
                         Directions
                       </p>
-                      <p class="mt-1 text-sm leading-6 text-slate-700">
+                      <p class="mt-1 text-sm leading-6 text-td-ink">
                         {item.dosage_instructions} {item.frequency}
                         {if item.route_of_administration,
                           do: " · #{item.route_of_administration}"}
@@ -820,7 +820,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                   <ul class="mt-1.5 space-y-1">
                     <li
                       :for={dispense <- dispenses}
-                      class="flex flex-wrap items-center justify-between gap-1 text-sm text-slate-700"
+                      class="flex flex-wrap items-center justify-between gap-1 text-sm text-td-ink"
                     >
                       <span>
                         Batch {dispense.batch.batch_no || "##{dispense.batch.id}"}

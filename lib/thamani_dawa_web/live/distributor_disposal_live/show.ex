@@ -258,7 +258,7 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
         <section
           :if={@disposal.status == :draft}
           id="add-batch-panel"
-          class="rounded-2xl border border-thamani-frosted bg-white p-4 sm:p-5"
+          class="rounded-2xl border border-thamani-frosted bg-td-surface p-4 sm:p-5"
         >
           <h2 class="text-sm font-semibold text-thamani-forest">
             {if @disposal.kind == :expiry, do: "Add an expired lot", else: "Add a batch"}
@@ -343,7 +343,7 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
           <div
             :if={@disposal.items != []}
             id="disposal-item-rows"
-            class="overflow-hidden rounded-2xl border border-thamani-frosted bg-white"
+            class="overflow-hidden rounded-2xl border border-thamani-frosted bg-td-surface"
           >
             <article
               :for={item <- @disposal.items}
@@ -486,7 +486,7 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
 
         <aside
           :if={@disposal.status == :approved}
-          class="flex items-start gap-3 rounded-2xl border border-thamani-frosted bg-thamani-lime px-4 py-4 sm:px-5"
+          class="flex items-start gap-3 rounded-2xl border border-thamani-frosted bg-td-accent-tint px-4 py-4 sm:px-5"
         >
           <.icon name="hero-check-circle" class="mt-0.5 size-5 shrink-0 text-thamani-forest" />
           <div>

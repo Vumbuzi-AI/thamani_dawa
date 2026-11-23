@@ -797,9 +797,9 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                   type="button"
                   phx-click="choose_inventory_mode"
                   phx-value-mode="manual"
-                  class="group flex flex-col items-start gap-3 rounded-2xl border-2 border-[var(--thamani-stone)] bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[var(--thamani-forest)]"
+                  class="group flex flex-col items-start gap-3 rounded-2xl border-2 border-[var(--thamani-stone)] bg-td-surface p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[var(--thamani-forest)]"
                 >
-                  <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--thamani-lime)_20%,white)] text-[var(--thamani-forest)]">
+                  <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_20%,white)] text-[var(--thamani-forest)]">
                     <.icon name="hero-pencil-square" class="size-5" />
                   </span>
                   <span class="text-sm font-semibold text-thamani-forest">Add manually</span>
@@ -813,9 +813,9 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                   type="button"
                   phx-click="choose_inventory_mode"
                   phx-value-mode="import"
-                  class="group flex flex-col items-start gap-3 rounded-2xl border-2 border-[var(--thamani-stone)] bg-white p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[var(--thamani-forest)]"
+                  class="group flex flex-col items-start gap-3 rounded-2xl border-2 border-[var(--thamani-stone)] bg-td-surface p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[var(--thamani-forest)]"
                 >
-                  <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--thamani-lime)_20%,white)] text-[var(--thamani-forest)]">
+                  <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_20%,white)] text-[var(--thamani-forest)]">
                     <.icon name="hero-arrow-up-tray" class="size-5" />
                   </span>
                   <span class="text-sm font-semibold text-thamani-forest">Import from Excel</span>
@@ -847,7 +847,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                   id="onboarding-open-product"
                   type="button"
                   phx-click="open_onboarding_product"
-                  class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-md"
+                  class="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
                   <.icon name="hero-plus" class="mr-2 size-4" /> Add a product
                 </button>
@@ -858,7 +858,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                 id="onboarding-products-empty"
                 class="mt-8 flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--thamani-stone)] bg-transparent px-6 text-center"
               >
-                <span class="flex size-12 items-center justify-center rounded-2xl bg-white text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
+                <span class="flex size-12 items-center justify-center rounded-2xl bg-td-surface text-[var(--thamani-forest)] shadow-sm ring-1 ring-black/[0.04]">
                   <.icon name="hero-cube" class="size-6" />
                 </span>
                 <h3 class="mt-4 text-base font-semibold text-thamani-forest">No products yet</h3>
@@ -914,7 +914,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                       phx-click="onboarding_product_page"
                       phx-value-page={@onboarding_product_page - 1}
                       disabled={@onboarding_product_page == 1}
-                      class="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-thamani-stone bg-white px-3 text-xs font-medium text-thamani-forest transition-colors hover:border-thamani-forest disabled:cursor-not-allowed disabled:opacity-40"
+                      class="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-thamani-stone bg-td-surface px-3 text-xs font-medium text-thamani-forest transition-colors hover:border-thamani-forest disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <.icon name="hero-chevron-left" class="size-3.5" /> Previous
                     </button>
@@ -934,7 +934,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                         @onboarding_product_page ==
                           onboarding_product_total_pages(@onboarding_products)
                       }
-                      class="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-thamani-stone bg-white px-3 text-xs font-medium text-thamani-forest transition-colors hover:border-thamani-forest disabled:cursor-not-allowed disabled:opacity-40"
+                      class="inline-flex min-h-8 items-center gap-1.5 rounded-full border border-thamani-stone bg-td-surface px-3 text-xs font-medium text-thamani-forest transition-colors hover:border-thamani-forest disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Next <.icon name="hero-chevron-right" class="size-3.5" />
                     </button>
@@ -979,7 +979,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           id="onboarding-product-continue"
           type="button"
           phx-click="continue_onboarding"
-          class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-lg"
+          class="inline-flex min-h-12 items-center justify-center rounded-full bg-thamani-forest px-7 py-3 text-[15px] font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
         >
           Continue <.icon name="hero-arrow-right" class="ml-3 size-4" />
         </button>
@@ -1114,7 +1114,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         <:col :let={{_id, row}} label="Name">
           <span class="hidden sm:inline">{product_name(row.product)}</span>
           <span class="flex min-w-0 items-center gap-3.5 sm:hidden">
-            <span class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-thamani-lime/30 text-thamani-forest ring-1 ring-thamani-stone">
+            <span class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest ring-1 ring-thamani-stone">
               <.icon name="hero-cube" class="size-6" />
             </span>
             <span class="min-w-0">
@@ -1206,8 +1206,8 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   defp product_form_steps(assigns) do
     ~H"""
     <div :if={@gtin_step == :scan} id="gtin-scan-step" class="space-y-4">
-      <div class="bg-slate-50 rounded-lg p-4">
-        <p class="text-sm text-slate-600 mb-4">
+      <div class="bg-td-wash rounded-lg p-4">
+        <p class="text-sm text-td-ink-2 mb-4">
           <span class="font-medium">Scan or enter the product's GTIN</span>
           to automatically fill in product details, or skip to enter everything manually.
         </p>
@@ -1272,9 +1272,9 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
         class="rounded-lg border p-3"
         style={
           case @gtin_lookup do
-            :searching -> "background-color: #F0F9FF; border-color: #E0F2FE;"
-            {:found, _} -> "background-color: #F0FDF4; border-color: #BBF7D0;"
-            {:error, _} -> "background-color: #FEF2F2; border-color: #FECACA;"
+            :searching -> "background-color: var(--color-td-info-tint); border-color: var(--color-td-info-line);"
+            {:found, _} -> "background-color: var(--color-td-success-tint); border-color: var(--color-td-success-line);"
+            {:error, _} -> "background-color: var(--color-td-danger-tint); border-color: var(--color-td-danger-line);"
             _ -> ""
           end
         }
@@ -1304,8 +1304,8 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
             class="text-sm"
             style={
               if elem(message, 0) == :info,
-                do: "color: #16a34a; font-weight: 500;",
-                else: "color: #92400e;"
+                do: "color: var(--color-td-success); font-weight: 500;",
+                else: "color: var(--color-td-warning);"
             }
           >
             {elem(message, 1)}
@@ -1328,10 +1328,10 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
         <div class="space-y-2">
           <label class="block">
-            <span class="text-sm font-medium text-slate-700">
+            <span class="text-sm font-medium text-td-ink">
               Product Name <span class="text-red-500">*</span>
             </span>
-            <span class="text-xs text-slate-500 ml-1">(at least generic or brand name)</span>
+            <span class="text-xs text-td-ink-2 ml-1">(at least generic or brand name)</span>
           </label>
           <div class="grid grid-cols-2 gap-4">
             <.input
@@ -1533,10 +1533,10 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           class="flex flex-col gap-4"
         >
           <div
-            class="group relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-thamani-stone bg-thamani-snow px-8 py-12 text-center transition-colors hover:border-thamani-forest/40 hover:bg-thamani-canvas"
+            class="group relative flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-thamani-stone bg-thamani-surface px-8 py-12 text-center transition-colors hover:border-thamani-forest/40 hover:bg-thamani-canvas"
             phx-drop-target={@uploads.onboarding_csv_file.ref}
           >
-            <span class="flex size-12 items-center justify-center rounded-full bg-thamani-lime/30 text-thamani-forest">
+            <span class="flex size-12 items-center justify-center rounded-full bg-td-accent-tint text-thamani-forest">
               <.icon name="hero-arrow-up-tray" class="size-6" />
             </span>
             <div>
@@ -1553,7 +1553,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
             />
 
             <div :for={entry <- @uploads.onboarding_csv_file.entries} class="w-full text-left">
-              <div class="flex items-center justify-between rounded-lg border border-thamani-stone bg-white px-3 py-2">
+              <div class="flex items-center justify-between rounded-lg border border-thamani-stone bg-td-surface px-3 py-2">
                 <span class="flex items-center gap-2 truncate text-sm text-thamani-forest">
                   <.icon name="hero-document-text" class="size-4 shrink-0 text-thamani-forest/70" />
                   {entry.client_name}
@@ -1589,7 +1589,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
         <div class="flex items-center justify-between gap-4 rounded-xl bg-thamani-stone/40 p-4">
           <div class="flex items-center gap-3">
-            <span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white text-thamani-forest ring-1 ring-thamani-stone">
+            <span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-td-surface text-thamani-forest ring-1 ring-thamani-stone">
               <.icon name="hero-table-cells" class="size-5" />
             </span>
             <div>
@@ -1622,7 +1622,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
             {length(@rows)} rows &bull; {length(@headers)} columns
           </p>
 
-          <div class="mt-3 overflow-x-auto rounded-lg border border-thamani-stone bg-white">
+          <div class="mt-3 overflow-x-auto rounded-lg border border-thamani-stone bg-td-surface">
             <table class="text-xs">
               <thead class="bg-thamani-stone/40 text-left font-medium text-thamani-forest">
                 <tr>
@@ -1654,7 +1654,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                   <th class="px-4 py-2.5">Column from your file</th>
                 </tr>
               </thead>
-              <tbody class="divide-y divide-thamani-stone bg-white">
+              <tbody class="divide-y divide-thamani-stone bg-td-surface">
                 <tr :for={field <- Importer.fields()}>
                   <td class="px-4 py-2.5 text-sm font-medium text-thamani-forest">
                     {field.label}
@@ -1762,7 +1762,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                   <th class="px-3 py-2">Issue</th>
                 </tr>
               </thead>
-              <tbody id="onboarding-import-issue-rows" class="divide-y divide-red-100 bg-white">
+              <tbody id="onboarding-import-issue-rows" class="divide-y divide-red-100 bg-td-surface">
                 <tr :for={row <- import_issue_rows(@preview)}>
                   <td class="px-3 py-2 tabular-nums text-thamani-pewter">{row.index + 1}</td>
                   <td class="px-3 py-2 text-thamani-forest">{import_row_name(row.attrs)}</td>
@@ -1845,7 +1845,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           id="onboarding-import-view-catalog"
           type="button"
           phx-click="back_to_inventory_choice"
-          class="inline-flex min-h-11 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-snow transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#10221e] hover:shadow-md"
+          class="inline-flex min-h-11 items-center justify-center rounded-full bg-thamani-forest px-5 py-2.5 text-sm font-medium text-thamani-on-accent transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
         >
           View catalogue
         </button>
@@ -1863,8 +1863,8 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     <div class="flex items-center gap-2.5">
       <span class={[
         "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-        @state == :done && "bg-thamani-forest text-thamani-snow",
-        @state == :current && "bg-thamani-forest text-thamani-snow",
+        @state == :done && "bg-thamani-forest text-thamani-on-accent",
+        @state == :current && "bg-thamani-forest text-thamani-on-accent",
         @state == :upcoming && "bg-thamani-stone text-thamani-pewter"
       ]}>
         <.icon :if={@state == :done} name="hero-check" class="size-4" />

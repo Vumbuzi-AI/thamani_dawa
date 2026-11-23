@@ -107,7 +107,7 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
     socket
     |> assign(:pipeline_total, counts |> Map.values() |> Enum.sum())
     |> assign(:pipeline_stages, [
-      {"Draft", "bg-slate-400", counts["draft"]},
+      {"Draft", "bg-td-ink-3", counts["draft"]},
       {"Submitted", "bg-amber-700", counts["submitted"]},
       {"Approved", "bg-thamani-forest", counts["approved"]},
       {"Rejected", "bg-red-600", counts["rejected"]}
@@ -182,45 +182,38 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/distributor"}
+      crumb="Dashboard"
     >
-      <.header icon="hero-squares-2x2">
-        Distributor dashboard
-        <:subtitle>
-          Shipments awaiting review, SSCC issuance, and inventory health across your organization.
-        </:subtitle>
-        <:actions>
-          <div class="flex flex-wrap items-center gap-3">
-            <.button
-              id="distributor-new-shipment"
-              variant="primary"
-              navigate={~p"/distributor/shipments/new"}
-            >
-              <.icon name="hero-plus" class="size-4" /> New shipment
-            </.button>
-            <.button
-              id="distributor-receive-stock"
-              variant="ghost"
-              navigate={~p"/distributor/receiving/new"}
-            >
-              <.icon name="hero-arrow-down-tray" class="size-4" /> Receive stock
-            </.button>
-          </div>
-        </:actions>
-      </.header>
+      <:tools>
+        <.button
+          id="distributor-receive-stock"
+          variant="ghost"
+          navigate={~p"/distributor/receiving/new"}
+        >
+          Receive stock
+        </.button>
+        <.button
+          id="distributor-new-shipment"
+          variant="primary"
+          navigate={~p"/distributor/shipments/new"}
+        >
+          New shipment
+        </.button>
+      </:tools>
+      <p class="td-note">
+        Shipments awaiting review, SSCC issuance, and inventory health across your organization.
+      </p>
 
       <div
         :if={!@plan_selected?}
         id="distributor-plan-required"
-        class="mt-4 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:flex-row sm:items-center sm:justify-between"
+        class="td-notice"
       >
-        <div class="flex items-start gap-3">
-          <.icon name="hero-credit-card" class="mt-0.5 size-5 shrink-0 text-amber-700" />
-          <div>
-            <p class="text-sm font-semibold text-amber-900">Choose a serialisation plan</p>
-            <p class="text-sm text-amber-800">
-              Shipments can't be created or approved until you pick a prepay bundle or flex pay-as-you-go.
-            </p>
-          </div>
+        <div>
+          <p class="td-notice-title">Choose a serialisation plan</p>
+          <p class="td-note">
+            Shipments can't be created or approved until you pick a prepay bundle or flex pay-as-you-go.
+          </p>
         </div>
         <.button
           id="distributor-choose-plan"
@@ -250,7 +243,7 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
         <.link
           id="stat-near-expiry-link"
           navigate={~p"/distributor/products?#{%{view: "batches", expiry: "near"}}"}
-          class="block rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent/60"
+          class="block"
         >
           <.stat_tile
             icon="hero-exclamation-triangle"
