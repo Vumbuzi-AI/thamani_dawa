@@ -17,6 +17,33 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
   end
 
   describe "Index" do
+    test "lists prescriptions with status tabs and the payment filter", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id})
+      pharmacist = pharmacist_at_site(organization, site)
+      visit = patient_visit_fixture(%{organization_id: organization.id, site_id: site.id})
+      _prescription = prescription_fixture(%{organization_id: organization.id, patient_visit_id: visit.id})
+
+      conn = log_in_user(conn, pharmacist)
+      {:ok, index_live, html} = live(conn, ~p"/pharmacy/prescriptions")
+
+      assert html =~ "Prescriptions"
+      assert has_element?(index_live, "#prescription-new-button", "New prescription")
+      assert has_element?(index_live, "#prescriptions-tab-all")
+      assert has_element?(index_live, "#prescriptions-tab-pending")
+      assert has_element?(index_live, "#prescriptions-tab-partially_dispensed")
+      assert has_element?(index_live, "#prescriptions-tab-completed")
+      assert has_element?(index_live, "#prescriptions-tab-cancelled")
+      assert has_element?(index_live, "#prescriptions-chip-payment_type", "Any")
+      assert has_element?(index_live, "#prescriptions")
+
+      index_live |> element("#prescriptions-tab-cancelled") |> render_click()
+      assert has_element?(index_live, "#prescriptions-empty", "No prescriptions match")
+      assert has_element?(index_live, "#prescriptions-clear-filters", "Clear filters")
+      index_live |> element("#prescriptions-clear-filters") |> render_click()
+      assert has_element?(index_live, "#prescriptions")
+    end
+
     test "creates a prescription for an existing patient", %{conn: conn} do
       organization = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})
