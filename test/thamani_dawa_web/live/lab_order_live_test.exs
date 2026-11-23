@@ -673,7 +673,7 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       %{patient: patient, lab_order: lab_order, payment: payment}
     end
 
-    test "opens the transaction modal from its route with the order link and a disabled refund",
+    test "opens the transaction modal from its route with the order link and a refund dialog",
          ctx do
       conn = log_in_user(build_conn(), ctx.admin)
       {:ok, lv, html} = live(conn, ~p"/lab/transactions/#{ctx.payment.id}")
@@ -681,7 +681,13 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       assert has_element?(lv, "#transaction-modal")
       assert html =~ "Payment KSh 1,450"
       assert has_element?(lv, "#transaction-order-link[href='/lab/orders/#{ctx.lab_order.id}']")
-      assert has_element?(lv, "#transaction-refund[disabled]")
+      assert has_element?(lv, "#transaction-refund")
+      refute has_element?(lv, "#transaction-refund[disabled]")
+
+      lv |> element("#transaction-refund") |> render_click()
+      assert has_element?(lv, "#refund-modal")
+      assert has_element?(lv, "#transaction-refund-submit[disabled]")
+      assert render(lv) =~ "Refund this payment?"
 
       assert has_element?(
                lv,

@@ -35,7 +35,12 @@ defmodule ThamaniDawaWeb.EarningsLive do
      |> assign(:sites_by_id, Map.new(sites, &{&1.id, &1}))
      |> assign(:site_options, Enum.map(sites, &{&1.name, &1.id}))
      |> assign(:method_options, PaymentMethods.all())
-     |> assign(:status_options, Enum.map(Payment.statuses(), &{Phoenix.Naming.humanize(&1), &1}))
+     |> assign(
+       :status_options,
+       Enum.map(Payment.statuses(), &{Phoenix.Naming.humanize(&1), &1}) ++
+         [{"Refunded", "refunded"}]
+     )
+     |> assign(:refund_open, false)
      |> assign(:multi_site?, multi_site?)
      |> assign(
        :show_site_filter?,
@@ -64,11 +69,14 @@ defmodule ThamaniDawaWeb.EarningsLive do
         |> push_navigate(to: ~p"/lab/transactions")
 
       payment ->
-        assign(socket, :selected, transaction_detail(socket, payment))
+        socket
+        |> assign(:selected, transaction_detail(socket, payment))
+        |> assign(:refund_open, false)
     end
   end
 
-  defp load_selected(socket, _action, _params), do: assign(socket, :selected, nil)
+  defp load_selected(socket, _action, _params),
+    do: socket |> assign(:selected, nil) |> assign(:refund_open, false)
 
   defp scoped_transactions(socket) do
     socket.assigns.current_scope.organization_id
@@ -143,6 +151,25 @@ defmodule ThamaniDawaWeb.EarningsLive do
 
     {:noreply,
      socket |> assign(:filters, %{socket.assigns.filters | key => ""}) |> reload_transactions()}
+  end
+
+  def handle_event("open_refund", _params, socket) do
+    {:noreply, assign(socket, :refund_open, true)}
+  end
+
+  def handle_event("close_refund", _params, socket) do
+    {:noreply, assign(socket, :refund_open, false)}
+  end
+
+  def handle_event("copy_reference", _params, socket) do
+    ref = socket.assigns.selected.payment.provider_reference
+
+    message =
+      if is_binary(ref) and ref != "",
+        do: "Reference copied: #{ref}",
+        else: "This payment has no reference to copy."
+
+    {:noreply, put_flash(socket, :info, message)}
   end
 
   defp reload_transactions(socket) do
@@ -333,8 +360,10 @@ defmodule ThamaniDawaWeb.EarningsLive do
       filters.method != "" && %{label: "Method: #{filters.method}", field: "method"},
       filters.status != "" &&
         %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"},
-      filters.date_from != "" && %{label: "From: #{filters.date_from}", field: "date_from"},
-      filters.date_to != "" && %{label: "To: #{filters.date_to}", field: "date_to"}
+      filters.date_from != "" &&
+        %{label: "From: #{ThamaniDawaWeb.TimeFormat.date(filters.date_from)}", field: "date_from"},
+      filters.date_to != "" &&
+        %{label: "To: #{ThamaniDawaWeb.TimeFormat.date(filters.date_to)}", field: "date_to"}
     ]
     |> Enum.filter(& &1)
   end
@@ -477,7 +506,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
           </table>
         </div>
       </div>
-      <:footer>
+      <:header_actions>
         <div class="td-txn-more">
           <.td_icon_button
             id="transaction-more"
@@ -494,20 +523,46 @@ defmodule ThamaniDawaWeb.EarningsLive do
             hidden
             phx-click-away={JS.hide(to: "#transaction-more-menu")}
           >
+            <.link
+              :if={@selected.lab_order}
+              id="transaction-open-order"
+              role="menuitem"
+              class="td-menu-item"
+              navigate={~p"/lab/orders/#{@selected.lab_order.id}"}
+            >
+              <.td_icon name="arrow-up-right" />
+              Open {LabOrders.reference(@selected.lab_order)}
+            </.link>
+            <button
+              id="transaction-copy-reference"
+              type="button"
+              role="menuitem"
+              class="td-menu-item"
+              phx-click="copy_reference"
+            >
+              <.td_icon name="copy" /> Copy {reference_label(@selected.payment)}
+            </button>
+            <.link
+              id="transaction-print-receipt"
+              role="menuitem"
+              class="td-menu-item"
+              patch={~p"/lab/transactions/#{@selected.payment.id}/receipt"}
+            >
+              <.td_icon name="printer" /> Print receipt
+            </.link>
             <button
               id="transaction-refund"
               type="button"
               role="menuitem"
               class="td-menu-item is-danger"
-              disabled
-              aria-disabled="true"
-              title="Refunds are not available yet"
+              phx-click={JS.hide(to: "#transaction-more-menu") |> JS.push("open_refund")}
             >
-              <.td_icon name="arrow-counter-clockwise" /> Refund
+              <.td_icon name="arrow-counter-clockwise" /> Refund payment
             </button>
-            <p class="td-note px-2 pb-1">Refunds are not available yet.</p>
           </div>
         </div>
+      </:header_actions>
+      <:footer>
         <span class="flex-1"></span>
         <.td_button type="button" phx-click={JS.patch(~p"/lab/transactions")}>Close</.td_button>
         <.td_button
@@ -519,6 +574,62 @@ defmodule ThamaniDawaWeb.EarningsLive do
         >
           Print receipt
         </.td_button>
+      </:footer>
+    </.modal>
+    """
+  end
+
+  attr :selected, :map, required: true
+
+  defp refund_modal(assigns) do
+    amount = ThamaniDawaWeb.Money.ksh(assigns.selected.payment.amount)
+
+    assigns = assign(assigns, :amount_label, amount)
+
+    ~H"""
+    <.modal
+      id="refund-modal"
+      show
+      size="form"
+      title="Refund this payment?"
+      subtitle="Send the money back to the patient."
+      on_cancel={JS.push("close_refund")}
+    >
+      <div class="td-modal-form">
+        <dl class="td-kv-grid">
+          <div class="td-kv">
+            <dt class="td-kv-label">Refund amount</dt>
+            <dd class="td-kv-value is-num">{@amount_label}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">To M-Pesa number</dt>
+            <dd class="td-kv-value">{(@selected.patient && @selected.patient.phone) || "—"}</dd>
+          </div>
+          <div class="td-kv">
+            <dt class="td-kv-label">Original reference</dt>
+            <dd class="td-kv-value is-mono">{@selected.payment.provider_reference || "—"}</dd>
+          </div>
+          <div :if={@selected.lab_order} class="td-kv">
+            <dt class="td-kv-label">Order</dt>
+            <dd class="td-kv-value is-mono">{LabOrders.reference(@selected.lab_order)}</dd>
+          </div>
+        </dl>
+        <.td_textarea name="refund[reason]" label="Reason" value="" rows="3" />
+        <p class="td-note">
+          The refund goes back to the same M-Pesa number. It can't be undone once sent.
+        </p>
+      </div>
+      <:footer>
+        <.td_button type="button" variant="secondary" phx-click="close_refund" label="Cancel" />
+        <.td_button
+          id="transaction-refund-submit"
+          type="button"
+          variant="danger-confirm"
+          label={"Refund #{@amount_label}"}
+          disabled
+          aria-disabled="true"
+          title="Refunds are not available yet"
+        />
       </:footer>
     </.modal>
     """
@@ -696,6 +807,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
       </.table>
 
       <.transaction_modal :if={@live_action == :lab_show && @selected} selected={@selected} />
+      <.refund_modal :if={@live_action == :lab_show && @selected && @refund_open} selected={@selected} />
       <.receipt_sheet :if={@live_action == :lab_receipt && @selected} selected={@selected} />
       </section>
     </.portal_shell>

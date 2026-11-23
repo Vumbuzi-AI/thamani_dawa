@@ -3480,3 +3480,13 @@ label.td-option > input { position: absolute; opacity: 0; pointer-events: none; 
   background: var(--color-td-wash);
   font-size: 12px; color: var(--color-td-ink-3);
 }
+
+/* Transaction actions menu sits in the modal header, before close. */
+.td-modal-hd-end{display:flex;align-items:center;gap:4px;margin-left:auto;flex:none}
+.td-modal-hd-actions{display:flex;align-items:center;gap:4px}
+.td-txn-more{position:relative}
+.td-txn-menu{left:auto;right:0;top:calc(100% + 4px);width:240px}
+
+.td-view-menu { position: relative; display: inline-flex; }
+.td-view-menu-trigger { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; cursor: pointer; background: var(--color-td-surface); border: 1px solid var(--color-td-border); }
+.td-view-menu-pop { left: auto; right: 0; width: 200px; }
