@@ -40,5 +40,6 @@ defmodule ThamaniDawaWeb.ManufacturerDashboardLiveTest do
     assert has_element?(view, "#serial-job-#{batch.id}", batch.batch_no)
     assert has_element?(view, "#serial-job-#{batch.id}", product.gtin)
     assert has_element?(view, "#serial-job-#{batch.id}", "No serials yet")
+    assert has_element?(view, ".td-card-header", "Recent batches")
   end
 end
