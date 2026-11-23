@@ -486,7 +486,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :value, :string, required: true
   attr :caption, :string, required: true
-  attr :rest, :global, include: ~w(href navigate patch)
+  attr :rest, :global, include: ~w(id href navigate patch)
   slot :icon
 
   def td_glance_cell(assigns) do
@@ -643,13 +643,14 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
+  attr :id, :string, default: nil
   attr :title, :string, required: true
   attr :hint, :string, default: nil
   slot :action
 
   def td_empty(assigns) do
     ~H"""
-    <div class="td-empty">
+    <div id={@id} class="td-empty">
       <p class="td-empty-title">{@title}</p>
       <p :if={@hint} class="td-note">{@hint}</p>
       <div :if={@action != []}>{render_slot(@action)}</div>

@@ -235,12 +235,33 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLiveTest do
       {:ok, lv, _html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
 
       assert has_element?(lv, "#pending-prescriptions", "Pending")
-      assert has_element?(lv, "#pending-prescriptions", "No")
+      assert has_element?(lv, "#pending-prescriptions", "Unpaid")
 
       assert {:error, {:live_redirect, %{to: to}}} =
                lv |> element("#pending-prescriptions td", "Pending") |> render_click()
 
       assert to == ~p"/pharmacy/prescriptions/#{pending.id}"
+    end
+  end
+
+  describe "empty account" do
+    test "a new pharmacy site shows empty cards instead of leftover rows", %{conn: conn} do
+      organization = organization_fixture()
+      site = site_fixture(%{organization_id: organization.id, activities: [:pharmacy]})
+      pharmacist = pharmacist_at(organization, site)
+
+      {:ok, lv, html} = live(log_in_user(conn, pharmacist), ~p"/pharmacy")
+
+      assert has_element?(lv, "#pharmacy-dashboard", "Pharmacy dashboard")
+      assert has_element?(lv, "#pending-prescriptions", "No pending prescriptions")
+      assert has_element?(lv, "#top-products-empty", "No dispensing this month")
+      assert has_element?(lv, "#out-of-stock", "Nothing out of stock")
+      assert has_element?(lv, "#low-stock", "No products are low on stock")
+      assert has_element?(lv, "#near-expiry", "No batches expiring soon")
+      refute html =~ "Chart.js"
+      refute has_element?(lv, "canvas")
+      refute has_element?(lv, "#dispensed-by-day-chart")
+      refute has_element?(lv, "#top-products-chart")
     end
   end
 
