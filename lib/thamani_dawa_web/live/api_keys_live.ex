@@ -24,6 +24,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
      |> assign(:organization, organization)
      |> assign(:editing_key_tier, nil)
      |> assign(:editing_gs1, false)
+     |> assign(:clearing_key, nil)
      |> assign(:onboarding?, false)}
   end
 
@@ -89,6 +90,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
      socket
      |> assign(:organization, updated)
      |> assign(:editing_key_tier, nil)
+     |> assign(:clearing_key, nil)
      |> put_flash(
        :info,
        "#{tier_label(tier)} key cleared. Reporting falls back to the platform key."
@@ -129,7 +131,30 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
      socket
      |> assign(:organization, updated)
      |> assign(:editing_gs1, false)
+     |> assign(:clearing_key, nil)
      |> put_flash(:info, "GS1 key cleared. SSCC calls fall back to the platform token.")}
+  end
+
+  def handle_event("prompt_clear_api_key", %{"tier" => tier}, socket)
+      when tier in ["distributor", "facility", "manufacturer"] do
+    {:noreply,
+     assign(socket, :clearing_key, %{
+       kind: :tnt,
+       tier: tier,
+       last4: key_last4(socket.assigns.organization, tier)
+     })}
+  end
+
+  def handle_event("prompt_clear_gs1_key", _params, socket) do
+    {:noreply,
+     assign(socket, :clearing_key, %{
+       kind: :gs1,
+       last4: socket.assigns.organization.gs1_api_key_last4
+     })}
+  end
+
+  def handle_event("cancel_clear_key", _params, socket) do
+    {:noreply, assign(socket, :clearing_key, nil)}
   end
 
   def handle_event("continue_onboarding", _params, socket) do
@@ -165,6 +190,17 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
   defp keys_needed?(organization, tiers) do
     Enum.any?(tiers, &(key_last4(organization, &1) in [nil, ""]))
   end
+
+  defp clear_key_identity(%{kind: :gs1, last4: last4}), do: "GS1 key ending #{last4}"
+
+  defp clear_key_identity(%{kind: :tnt, tier: tier, last4: last4}),
+    do: "#{tier_label(tier)} key ending #{last4}"
+
+  defp clear_key_fallback(%{kind: :gs1}),
+    do: "SSCC calls fall back to the platform token until you add a new one."
+
+  defp clear_key_fallback(_key),
+    do: "Reporting falls back to the platform-wide key until you add a new one."
 
   attr :portal, :atom, required: true
   attr :flash, :map, required: true
@@ -210,67 +246,101 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
 
   defp api_key_row(assigns) do
     ~H"""
-    <div
-      id={"tnt-api-key-#{@tier}"}
-      class="rounded-xl border border-thamani-frosted bg-thamani-canvas px-4 py-3"
-    >
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div class="min-w-0">
-          <p class="text-sm font-semibold text-thamani-forest">{tier_label(@tier)}</p>
-          <p class="mt-0.5 text-xs text-thamani-pewter">{tier_events(@tier)}</p>
-        </div>
+    <div id={"tnt-api-key-#{@tier}"} class={["td-key-row", @editing && "is-editing"]}>
+      <div class="td-key-row-meta">
+        <b>{tier_label(@tier)}</b>
+        <span>{tier_events(@tier)}</span>
+      </div>
 
-        <form
-          :if={@editing}
-          id={"tnt-api-key-form-#{@tier}"}
-          phx-submit="save_api_key"
-          class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center"
-        >
-          <input type="hidden" name="tier" value={@tier} />
-          <input
-            type="password"
-            name="key"
-            autocomplete="off"
-            placeholder="trk_live_…"
-            aria-label={"#{tier_label(@tier)} API key"}
-            class="thamani-input w-full sm:w-64"
-          />
-          <.button type="submit" variant="primary">Save</.button>
-          <.button type="button" phx-click="cancel_edit_api_key">Cancel</.button>
-        </form>
+      <form
+        :if={@editing}
+        id={"tnt-api-key-form-#{@tier}"}
+        phx-submit="save_api_key"
+        class="td-key-row-form"
+      >
+        <input type="hidden" name="tier" value={@tier} />
+        <.td_input
+          id={"tnt-api-key-input-#{@tier}"}
+          type="password"
+          name="key"
+          label={"#{tier_label(@tier)} API key"}
+          autocomplete="off"
+          placeholder="trk_live_…"
+        />
+        <.td_button type="submit" variant="primary" label="Save" />
+        <.td_button type="button" variant="secondary" label="Cancel" phx-click="cancel_edit_api_key" />
+      </form>
 
-        <div :if={!@editing} class="flex items-center justify-between gap-3 sm:justify-end">
-          <p class="text-sm text-thamani-pewter">
-            <%= if @last4 do %>
-              Key ending <span class="font-medium tabular-nums text-thamani-forest">{@last4}</span>
-            <% else %>
-              No key saved
-            <% end %>
-          </p>
-          <div class="flex items-center gap-2">
-            <.button
-              type="button"
-              id={"edit-tnt-key-#{@tier}"}
-              phx-click="edit_api_key"
-              phx-value-tier={@tier}
-              variant={if(@last4, do: "ghost", else: "primary")}
-            >
-              {if @last4, do: "Replace", else: "Add key"}
-            </.button>
-            <.button
-              :if={@last4}
-              type="button"
-              id={"clear-tnt-key-#{@tier}"}
-              phx-click="clear_api_key"
-              phx-value-tier={@tier}
-              data-confirm="Clear this key and use the platform-wide key?"
-            >
-              Clear
-            </.button>
-          </div>
-        </div>
+      <div :if={!@editing} class={["td-key-row-value", is_nil(@last4) && "is-empty"]}>
+        <%= if @last4 do %>
+          Key ending <code>{@last4}</code>
+        <% else %>
+          No key saved
+        <% end %>
+      </div>
+      <div :if={!@editing} class="td-key-row-actions">
+        <.td_button
+          type="button"
+          id={"edit-tnt-key-#{@tier}"}
+          phx-click="edit_api_key"
+          phx-value-tier={@tier}
+          variant={if(@last4, do: "secondary", else: "primary")}
+          glyph={if(@last4, do: nil, else: "plus")}
+          label={if(@last4, do: "Replace", else: "Add key")}
+        />
+        <.td_button
+          :if={@last4}
+          type="button"
+          id={"clear-tnt-key-#{@tier}"}
+          variant="secondary"
+          label="Clear"
+          phx-click="prompt_clear_api_key"
+          phx-value-tier={@tier}
+        />
       </div>
     </div>
+    """
+  end
+
+  defp clear_key_modal(assigns) do
+    ~H"""
+    <.td_modal
+      :if={@clearing_key}
+      id="clear-key-confirm"
+      show
+      title="Clear this key?"
+      subtitle={clear_key_identity(@clearing_key)}
+      on_cancel={JS.push("cancel_clear_key")}
+    >
+      <:body>
+        <p class="td-note">{clear_key_fallback(@clearing_key)}</p>
+      </:body>
+      <:footer>
+        <.td_button
+          type="button"
+          variant="secondary"
+          label="Cancel"
+          phx-click="cancel_clear_key"
+        />
+        <.td_button
+          :if={@clearing_key.kind == :tnt}
+          id="confirm-clear-key"
+          type="button"
+          variant="danger-confirm"
+          label="Clear key"
+          phx-click="clear_api_key"
+          phx-value-tier={@clearing_key.tier}
+        />
+        <.td_button
+          :if={@clearing_key.kind == :gs1}
+          id="confirm-clear-key"
+          type="button"
+          variant="danger-confirm"
+          label="Clear key"
+          phx-click="clear_gs1_key"
+        />
+      </:footer>
+    </.td_modal>
     """
   end
 
@@ -309,7 +379,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
           </p>
         </div>
 
-        <div :if={@tiers != []} id="keys-epcis-tiers" class="mt-6 space-y-3">
+        <div :if={@tiers != []} id="keys-epcis-tiers" class="td-card mt-6">
           <.api_key_row
             :for={tier <- @tiers}
             tier={tier}
@@ -346,6 +416,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
         </button>
       </:footer>
     </.onboarding_task_shell>
+    <.clear_key_modal clearing_key={@clearing_key} />
     """
   end
 
@@ -365,7 +436,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
       current_scope={@current_scope}
       current_path={@current_path}
     >
-      <div class="space-y-5">
+      <div class="space-y-4">
         <.td_page_header
           title="API keys"
           subtitle="Credentials this organization uses with PPB Track & Trace and GS1."
@@ -373,124 +444,101 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
 
         <section
           id="epcis-api-key-settings"
-          class={[
-            "rounded-2xl border bg-td-surface p-5 sm:p-6",
-            if(@keys_needed?, do: "border-thamani-forest", else: "border-thamani-frosted")
-          ]}
+          class={["td-card", @keys_needed? && "is-needed"]}
         >
-          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div class="max-w-2xl">
-              <h2 class="text-base font-semibold text-thamani-forest">
-                {if @keys_needed?, do: "Add your TNT API key", else: "TNT API key"}
-              </h2>
-              <p class="mt-1 text-sm leading-6 text-thamani-pewter">
-                <%= if @keys_needed? do %>
-                  Events are reported with your organization's TNT API key. Add it before you send anything. The TrackIQ Partner Portal is where you register and copy the key.
-                <% else %>
-                  Events are reported with the key saved here.
-                <% end %>
-              </p>
+          <.td_card_header
+            title={if(@keys_needed?, do: "Add your TNT API key", else: "TNT API key")}
+            subtitle={
+              if @keys_needed? do
+                "Events are reported with your organization's TNT API key. Add it before you send anything. The TrackIQ Partner Portal is where you register and copy the key."
+              else
+                "Events are reported with the key saved here."
+              end
+            }
+          >
+            <:actions>
+              <.td_button
+                variant="secondary"
+                label="Partner Portal"
+                glyph="arrow-up-right"
+                href="https://trackiq.apeiro-digital.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+              />
+            </:actions>
+          </.td_card_header>
+
+          <div :if={@tiers == []} class="td-key-row">
+            <div class="td-key-row-value is-empty">
+              This organization has no distributor or facility reporting tier yet.
             </div>
-            <a
-              href="https://trackiq.apeiro-digital.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="inline-flex shrink-0 items-center gap-1.5 text-sm font-medium text-thamani-forest underline-offset-2 hover:underline"
-            >
-              Partner Portal <.icon name="hero-arrow-top-right-on-square" class="size-4" />
-            </a>
           </div>
 
-          <div :if={@tiers == []} class="mt-4 text-sm text-thamani-pewter">
-            This organization has no distributor or facility reporting tier yet.
-          </div>
-
-          <div :if={@tiers != []} class="mt-4 space-y-3">
-            <.api_key_row
-              :for={tier <- @tiers}
-              tier={tier}
-              last4={key_last4(@organization, tier)}
-              editing={@editing_key_tier == tier}
-            />
-          </div>
+          <.api_key_row
+            :for={tier <- @tiers}
+            tier={tier}
+            last4={key_last4(@organization, tier)}
+            editing={@editing_key_tier == tier}
+          />
         </section>
 
-        <section
-          id="gs1-api-key-settings"
-          class="rounded-2xl border border-thamani-frosted bg-td-surface p-5 sm:p-6"
-        >
-          <div class="max-w-2xl">
-            <h2 class="text-base font-semibold text-thamani-forest">GS1 API key</h2>
-            <p class="mt-1 text-sm leading-6 text-thamani-pewter">
-              Bearer token for the GS1 member API. This organization uses it when creating an SSCC and when fetching the serials inside a case. Leave it empty to use the platform token.
-            </p>
-          </div>
+        <section id="gs1-api-key-settings" class="td-card">
+          <.td_card_header
+            title="GS1 API key"
+            subtitle="Bearer token for the GS1 member API, used when creating an SSCC and fetching the serials in a case. Leave it empty to use the platform token."
+          />
 
-          <div
-            id="gs1-api-key-row"
-            class="mt-4 rounded-xl border border-thamani-frosted bg-thamani-canvas px-4 py-3"
-          >
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div class="min-w-0">
-                <p class="text-sm font-semibold text-thamani-forest">Member API</p>
-                <p class="mt-0.5 text-xs text-thamani-pewter">
-                  SSCC creation and case contents
-                </p>
-              </div>
+          <div id="gs1-api-key-row" class={["td-key-row", @editing_gs1 && "is-editing"]}>
+            <div class="td-key-row-meta">
+              <b>Member API</b>
+              <span>SSCC creation and case contents</span>
+            </div>
 
-              <form
-                :if={@editing_gs1}
-                id="gs1-api-key-form"
-                phx-submit="save_gs1_key"
-                class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center"
-              >
-                <input
-                  type="password"
-                  name="key"
-                  autocomplete="off"
-                  placeholder="GS1 API key"
-                  aria-label="GS1 API key"
-                  class="thamani-input w-full sm:w-64"
-                />
-                <.button type="submit" variant="primary">Save</.button>
-                <.button type="button" phx-click="cancel_gs1_key">Cancel</.button>
-              </form>
+            <form :if={@editing_gs1} id="gs1-api-key-form" phx-submit="save_gs1_key" class="td-key-row-form">
+              <.td_input
+                id="gs1-api-key-input"
+                type="password"
+                name="key"
+                label="GS1 API key"
+                autocomplete="off"
+                placeholder="Paste the GS1 member API key"
+              />
+              <.td_button type="submit" variant="primary" label="Save" />
+              <.td_button type="button" variant="secondary" label="Cancel" phx-click="cancel_gs1_key" />
+            </form>
 
-              <div :if={!@editing_gs1} class="flex items-center justify-between gap-3 sm:justify-end">
-                <p class="text-sm text-thamani-pewter">
-                  <%= if @organization.gs1_api_key_last4 do %>
-                    Key ending
-                    <span class="font-medium tabular-nums text-thamani-forest">
-                      {@organization.gs1_api_key_last4}
-                    </span>
-                  <% else %>
-                    No key saved
-                  <% end %>
-                </p>
-                <div class="flex items-center gap-2">
-                  <.button
-                    type="button"
-                    id="edit-gs1-key"
-                    phx-click="edit_gs1_key"
-                    variant={if(@organization.gs1_api_key_last4, do: "ghost", else: "primary")}
-                  >
-                    {if @organization.gs1_api_key_last4, do: "Replace", else: "Add key"}
-                  </.button>
-                  <.button
-                    :if={@organization.gs1_api_key_last4}
-                    type="button"
-                    id="clear-gs1-key"
-                    phx-click="clear_gs1_key"
-                    data-confirm="Clear this key and use the platform-wide key?"
-                  >
-                    Clear
-                  </.button>
-                </div>
-              </div>
+            <div
+              :if={!@editing_gs1}
+              class={["td-key-row-value", is_nil(@organization.gs1_api_key_last4) && "is-empty"]}
+            >
+              <%= if @organization.gs1_api_key_last4 do %>
+                Key ending <code>{@organization.gs1_api_key_last4}</code>
+              <% else %>
+                No key saved
+              <% end %>
+            </div>
+            <div :if={!@editing_gs1} class="td-key-row-actions">
+              <.td_button
+                type="button"
+                id="edit-gs1-key"
+                phx-click="edit_gs1_key"
+                variant={if(@organization.gs1_api_key_last4, do: "secondary", else: "primary")}
+                glyph={if(@organization.gs1_api_key_last4, do: nil, else: "plus")}
+                label={if(@organization.gs1_api_key_last4, do: "Replace", else: "Add key")}
+              />
+              <.td_button
+                :if={@organization.gs1_api_key_last4}
+                type="button"
+                id="clear-gs1-key"
+                variant="secondary"
+                label="Clear"
+                phx-click="prompt_clear_gs1_key"
+              />
             </div>
           </div>
         </section>
       </div>
+      <.clear_key_modal clearing_key={@clearing_key} />
     </.keys_shell>
     """
   end
