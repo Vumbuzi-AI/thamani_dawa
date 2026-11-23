@@ -135,6 +135,26 @@ defmodule ThamaniDawa.Recalls do
   end
 
   @doc """
+  The recall holder rows for one organization — every recalled batch it
+  holds — newest recall first, with each holder's `recall` and `batch`
+  preloaded. Pass `status` (`:open`/`:closed`) to filter by recall status.
+  This is the organization's own view; it never exposes other holders.
+  """
+  def list_holders_for_organization(organization_id, status \\ nil) do
+    query =
+      from h in RecallHolder,
+        join: r in assoc(h, :recall),
+        where: h.organization_id == ^organization_id,
+        order_by: [desc: r.inserted_at, asc: h.id],
+        preload: [recall: r, batch: []]
+
+    query =
+      if status in [:open, :closed], do: where(query, [_h, r], r.status == ^status), else: query
+
+    Repo.all(query)
+  end
+
+  @doc """
   Acknowledges a recall holder on behalf of its organization. Rejects the
   acknowledgement if `user` doesn't belong to the holder's organization —
   this is the one place a non-superadmin writes to a recall record.

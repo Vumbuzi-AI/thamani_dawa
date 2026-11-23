@@ -162,7 +162,12 @@ defmodule ThamaniDawaWeb.Api.V1.LabController do
   def stock(conn, params) do
     {page, per_page} = Params.page(params)
 
-    batches = Batches.list_active_lab_consumable_batches_for_site(org_id(conn), site_id(conn))
+    batches =
+      conn
+      |> org_id()
+      |> Batches.list_active_lab_consumable_batches_for_site(site_id(conn))
+      |> Enum.filter(&Batches.usable?/1)
+
     {entries, meta} = Params.slice(batches, page, per_page)
     Response.page(conn, Enum.map(entries, &Serializer.batch/1), meta)
   end

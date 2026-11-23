@@ -49,7 +49,8 @@ defmodule ThamaniDawaWeb.Api.V1.PharmacyController do
     result =
       Products.list_products_with_site_batches_paginated(org_id(conn), [site_id(conn)], page,
         page_size: per_page,
-        search: params["search"]
+        search: params["search"],
+        usable: true
       )
 
     Response.page(conn, Enum.map(result.entries, &Serializer.product/1), Params.scrivener(result))
@@ -58,7 +59,11 @@ defmodule ThamaniDawaWeb.Api.V1.PharmacyController do
   def stock_product(conn, %{"id" => id}) do
     with {:ok, id} <- parse_id(id),
          {:ok, product} <- fetch(fn -> Products.get_product!(org_id(conn), id) end) do
-      batches = Batches.list_batches_for_product(org_id(conn), product.id, [site_id(conn)])
+      batches =
+        conn
+        |> org_id()
+        |> Batches.list_batches_for_product(product.id, [site_id(conn)])
+        |> Enum.filter(&Batches.usable?/1)
 
       Response.data(conn, %{
         product: Serializer.product(product),

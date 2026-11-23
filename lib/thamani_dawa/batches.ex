@@ -504,6 +504,23 @@ defmodule ThamaniDawa.Batches do
     |> Repo.all()
   end
 
+  @unusable_statuses [:disaggregated, :returned, :expired]
+
+  @doc """
+  Batch statuses that never count as usable stock: a shipper retired by
+  disaggregation, a lot returned to its supplier, and an expired write-off.
+  """
+  def unusable_statuses, do: @unusable_statuses
+
+  @doc """
+  Whether a batch is usable stock: not in `unusable_statuses/0` and still in
+  date. "In date" matches `total_available_stock/3` (expiry after today).
+  """
+  def usable?(%Batch{status: status, expiry_date: expiry_date}) do
+    status not in @unusable_statuses and not is_nil(expiry_date) and
+      Date.after?(expiry_date, ThamaniDawa.BusinessDate.today())
+  end
+
   @doc "Gets the total sum of remaining quantity of approved stock for a product at a given site."
   def total_available_stock(organization_id, site_id, product_id) do
     case Repo.one(

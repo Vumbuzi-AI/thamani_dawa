@@ -50,9 +50,21 @@ defmodule ThamaniDawa.Products do
 
     query
     |> filter_by_site_ids(site_ids)
+    |> filter_usable_batches(Keyword.get(opts, :usable, false))
     |> filter_search(search)
     |> Repo.paginate(page: page, page_size: page_size(opts))
   end
+
+  # `usable: true` keeps only products with at least one usable batch at the
+  # sites — the same rule as `ThamaniDawa.Batches.usable?/1`.
+  defp filter_usable_batches(query, true) do
+    today = ThamaniDawa.BusinessDate.today()
+    unusable = ThamaniDawa.Batches.unusable_statuses()
+
+    where(query, [_p, b], b.status not in ^unusable and b.expiry_date > ^today)
+  end
+
+  defp filter_usable_batches(query, _usable), do: query
 
   defp filter_by_site_ids(query, nil), do: query
 

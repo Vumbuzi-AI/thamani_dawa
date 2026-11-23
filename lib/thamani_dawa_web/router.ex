@@ -88,6 +88,25 @@ defmodule ThamaniDawaWeb.Router do
     post "/pharmacy/requisitions", RequisitionController, :create
     get "/pharmacy/requisitions/:id", RequisitionController, :show
 
+    # Stock takes and disposals; the stock type comes from the portal.
+    scope "/pharmacy", assigns: %{inventory_type: :medicine} do
+      get "/stock-takes", StockTakeController, :index
+      post "/stock-takes", StockTakeController, :create
+      get "/stock-takes/:id", StockTakeController, :show
+      post "/stock-takes/:id/items", StockTakeController, :add_item
+      put "/stock-takes/:id/items/:item_id", StockTakeController, :count
+      post "/stock-takes/:id/submit", StockTakeController, :submit
+      post "/stock-takes/:id/reopen", StockTakeController, :reopen
+
+      get "/disposals", DisposalController, :index
+      post "/disposals", DisposalController, :create
+      get "/disposals/:id", DisposalController, :show
+      post "/disposals/:id/items", DisposalController, :add_item
+      delete "/disposals/:id/items/:item_id", DisposalController, :remove_item
+      post "/disposals/:id/submit", DisposalController, :submit
+      post "/disposals/:id/reopen", DisposalController, :reopen
+    end
+
     get "/lab/dashboard", LabController, :dashboard
     post "/lab/scans", LabController, :scan
     get "/lab/orders", LabController, :orders
@@ -105,6 +124,25 @@ defmodule ThamaniDawaWeb.Router do
     post "/lab/tests", LabController, :create_test
     patch "/lab/tests/:id", LabController, :update_test
 
+    # Stock takes and disposals; the stock type comes from the portal.
+    scope "/lab", assigns: %{inventory_type: :lab_consumable} do
+      get "/stock-takes", StockTakeController, :index
+      post "/stock-takes", StockTakeController, :create
+      get "/stock-takes/:id", StockTakeController, :show
+      post "/stock-takes/:id/items", StockTakeController, :add_item
+      put "/stock-takes/:id/items/:item_id", StockTakeController, :count
+      post "/stock-takes/:id/submit", StockTakeController, :submit
+      post "/stock-takes/:id/reopen", StockTakeController, :reopen
+
+      get "/disposals", DisposalController, :index
+      post "/disposals", DisposalController, :create
+      get "/disposals/:id", DisposalController, :show
+      post "/disposals/:id/items", DisposalController, :add_item
+      delete "/disposals/:id/items/:item_id", DisposalController, :remove_item
+      post "/disposals/:id/submit", DisposalController, :submit
+      post "/disposals/:id/reopen", DisposalController, :reopen
+    end
+
     get "/org/dashboard", OrgController, :dashboard
     get "/org/earnings", OrgController, :earnings
     get "/org/team", TeamController, :index
@@ -116,6 +154,19 @@ defmodule ThamaniDawaWeb.Router do
     post "/org/requisitions/:id/review", RequisitionController, :review
     post "/org/requisitions/:id/reject", RequisitionController, :reject
     post "/org/requisitions/:id/fulfill", RequisitionController, :fulfill
+
+    get "/org/stock-takes", StockTakeController, :queue
+    get "/org/stock-takes/:id", StockTakeController, :queue_show
+    post "/org/stock-takes/:id/approve", StockTakeController, :approve
+    post "/org/stock-takes/:id/reject", StockTakeController, :reject
+
+    get "/org/disposals", DisposalController, :queue
+    get "/org/disposals/:id", DisposalController, :queue_show
+    post "/org/disposals/:id/approve", DisposalController, :approve
+    post "/org/disposals/:id/reject", DisposalController, :reject
+
+    get "/org/recalls", RecallController, :index
+    post "/org/recalls/holders/:id/acknowledge", RecallController, :acknowledge
 
     get "/products", CatalogController, :products
     post "/products", CatalogController, :create_product

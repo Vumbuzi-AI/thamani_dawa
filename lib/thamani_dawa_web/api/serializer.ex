@@ -8,6 +8,8 @@ defmodule ThamaniDawaWeb.Api.Serializer do
   alias ThamaniDawa.Accounts.User
   alias ThamaniDawa.Batches.Batch
   alias ThamaniDawa.GS1Encoder
+  alias ThamaniDawa.InventoryDisposals.InventoryDisposal
+  alias ThamaniDawa.InventoryDisposals.InventoryDisposalItem
   alias ThamaniDawa.LabOrders.LabOrder
   alias ThamaniDawa.LabTests.LabTest
   alias ThamaniDawa.Patients.Patient
@@ -15,11 +17,14 @@ defmodule ThamaniDawaWeb.Api.Serializer do
   alias ThamaniDawa.Prescriptions.Prescription
   alias ThamaniDawa.Prescriptions.PrescriptionItem
   alias ThamaniDawa.Products.Product
+  alias ThamaniDawa.Recalls.RecallHolder
   alias ThamaniDawa.Requisitions.Requisition
   alias ThamaniDawa.Requisitions.RequisitionLine
   alias ThamaniDawa.Sales.Sale
   alias ThamaniDawa.Sales.SaleItem
   alias ThamaniDawa.Sites.Site
+  alias ThamaniDawa.StockTakes.StockTake
+  alias ThamaniDawa.StockTakes.StockTakeItem
   alias ThamaniDawa.Suppliers.Supplier
   alias ThamaniDawaWeb.Api.Access
 
@@ -73,9 +78,14 @@ defmodule ThamaniDawaWeb.Api.Serializer do
       id: product.id,
       generic_name: product.generic_name,
       brand_name: product.brand_name,
+      strength: product.strength,
       category: product.category,
       manufacturer: product.manufacturer,
       uom: product.uom,
+      pack_uom: product.pack_uom,
+      units_per_pack: product.units_per_pack,
+      net_content_quantity: product.net_content_quantity,
+      net_content_uom: product.net_content_uom,
       gtin: product.gtin,
       inventory_type: product.inventory_type,
       is_otc: product.is_otc,
@@ -98,7 +108,13 @@ defmodule ThamaniDawaWeb.Api.Serializer do
         site_id: batch.site_id,
         gtin: batch.gtin,
         batch_no: batch.batch_no,
+        status: batch.status,
         serial: batch.serial,
+        serials: batch.serials,
+        sscc: batch.sscc,
+        logistic_unit_id: batch.logistic_unit_id,
+        zone: batch.zone,
+        bin: batch.bin,
         manufacturer: batch.manufacturer,
         manufacture_date: batch.manufacture_date,
         expiry_date: batch.expiry_date,
@@ -304,6 +320,91 @@ defmodule ThamaniDawaWeb.Api.Serializer do
       {type, amount} ->
         %{payment_type: json_safe(type), amount: json_safe(amount)}
     end)
+  end
+
+  def stock_take(%StockTake{} = stock_take) do
+    json_safe(%{
+      id: stock_take.id,
+      site_id: stock_take.site_id,
+      inventory_type: stock_take.inventory_type,
+      status: stock_take.status,
+      notes: stock_take.notes,
+      rejection_reason: stock_take.rejection_reason,
+      requested_by_id: stock_take.requested_by_id,
+      admin_id: stock_take.admin_id,
+      approved_by_id: stock_take.approved_by_id,
+      approved_at: stock_take.approved_at,
+      inserted_at: stock_take.inserted_at,
+      items: loaded(stock_take.items, &stock_take_item/1)
+    })
+  end
+
+  def stock_take_item(%StockTakeItem{} = item) do
+    json_safe(%{
+      id: item.id,
+      batch_id: item.batch_id,
+      expected_quantity: item.expected_quantity,
+      counted_quantity: item.counted_quantity,
+      variance: item.variance,
+      counted_at: item.counted_at,
+      counted_by_id: item.counted_by_id,
+      notes: item.notes,
+      batch: maybe(item.batch, &batch/1)
+    })
+  end
+
+  def disposal(%InventoryDisposal{} = disposal) do
+    json_safe(%{
+      id: disposal.id,
+      site_id: disposal.site_id,
+      kind: disposal.kind,
+      inventory_type: disposal.inventory_type,
+      status: disposal.status,
+      reason: disposal.reason,
+      notes: disposal.notes,
+      rejection_reason: disposal.rejection_reason,
+      requested_by_id: disposal.requested_by_id,
+      admin_id: disposal.admin_id,
+      approved_by_id: disposal.approved_by_id,
+      approved_at: disposal.approved_at,
+      inserted_at: disposal.inserted_at,
+      items: loaded(disposal.items, &disposal_item/1)
+    })
+  end
+
+  def disposal_item(%InventoryDisposalItem{} = item) do
+    json_safe(%{
+      id: item.id,
+      batch_id: item.batch_id,
+      available_quantity: item.available_quantity,
+      quantity: item.quantity,
+      notes: item.notes,
+      batch: maybe(item.batch, &batch/1)
+    })
+  end
+
+  def recall_holder(%RecallHolder{} = holder) do
+    json_safe(%{
+      id: holder.id,
+      batch_id: holder.batch_id,
+      quantity_at_recall: holder.quantity_at_recall,
+      acknowledged_at: holder.acknowledged_at,
+      acknowledged_by_id: holder.acknowledged_by_id,
+      recall:
+        maybe(holder.recall, fn recall ->
+          %{
+            id: recall.id,
+            gtin: recall.gtin,
+            batch_no: recall.batch_no,
+            reference: recall.reference,
+            classification: recall.classification,
+            reason: recall.reason,
+            status: recall.status,
+            inserted_at: recall.inserted_at
+          }
+        end),
+      batch: maybe(holder.batch, &batch/1)
+    })
   end
 
   defp label(batch) do
