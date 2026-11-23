@@ -192,6 +192,82 @@ seed_api_key.(System.get_env("GS1_MEMBER_API_TOKEN"), fn key ->
   {:ok, _organization} = Organizations.set_gs1_api_key(organization, key)
 end)
 
+# Without live GS1 member-API credentials, shipment approval can't mint
+# SSCCs. Swap in an offline client for the rest of this seed run so the
+# shipment demo data still gets valid, unique (check-digit-correct) SSCCs.
+gs1_live? =
+  Enum.all?(
+    [System.get_env("GS1_MEMBER_API_BASE_URL"), System.get_env("GS1_MEMBER_API_TOKEN")],
+    &(is_binary(&1) and String.trim(&1) != "")
+  )
+
+unless gs1_live? do
+  defmodule ThamaniDawa.Seeds.OfflineMemberApi do
+    @moduledoc false
+    @behaviour ThamaniDawa.GS1.MemberApi
+
+    @impl true
+    def post_create_sscc(_params) do
+      body =
+        "0" <>
+          "6160001" <>
+          (System.unique_integer([:positive, :monotonic])
+           |> Kernel.+(System.os_time(:millisecond))
+           |> rem(1_000_000_000)
+           |> Integer.to_string()
+           |> String.pad_leading(9, "0"))
+
+      {:ok, body <> check_digit(body)}
+    end
+
+    @impl true
+    def post_sscc_contents(_sscc), do: {:error, :not_found}
+
+    @impl true
+    def post_create_serials(_params), do: {:error, :unconfigured}
+
+    @impl true
+    def post_list_products(_params), do: {:ok, []}
+
+    @impl true
+    def post_create_shipper_sscc(params), do: post_create_sscc(params)
+
+    @impl true
+    def post_get_company_prefixes(_params), do: {:ok, ["6160001"]}
+
+    @impl true
+    def post_list_glns(_params), do: {:ok, []}
+
+    @impl true
+    def post_search_glns(_params), do: {:ok, []}
+
+    defp check_digit(digits) do
+      sum =
+        digits
+        |> String.graphemes()
+        |> Enum.reverse()
+        |> Enum.with_index()
+        |> Enum.reduce(0, fn {d, i}, acc ->
+          acc + String.to_integer(d) * if(rem(i, 2) == 0, do: 3, else: 1)
+        end)
+
+      Integer.to_string(rem(10 - rem(sum, 10), 10))
+    end
+  end
+
+  Application.put_env(
+    :thamani_dawa,
+    ThamaniDawa.GS1.MemberApi,
+    Keyword.put(
+      Application.get_env(:thamani_dawa, ThamaniDawa.GS1.MemberApi, []),
+      :client,
+      ThamaniDawa.Seeds.OfflineMemberApi
+    )
+  )
+
+  IO.puts("GS1 member API not configured — seeding SSCCs with an offline stand-in.")
+end
+
 seed_api_key.(System.get_env("PPB_TNT_API_KEY"), fn key ->
   {:ok, _organization} = Organizations.set_epcis_api_key(organization, "facility", key)
 end)
@@ -398,7 +474,6 @@ organization =
   |> Ecto.Changeset.change(
     gln: pharmacy_site.gln,
     gln_verified_at: verified_at,
-    gs1_prefix_verification_status: :verified,
     is_active: true,
     is_subscription_active: true
   )
@@ -692,7 +767,7 @@ ensure_org_batch = fn product, batch_no, quantity, expiry_days, supplier ->
         where: b.organization_id == ^organization_id,
         where: b.product_id == ^product.id,
         where: b.batch_no == ^batch_no,
-        where: b.site_id == ^warehouse_site.id
+        where: is_nil(b.site_id)
     )
 
   batch =
@@ -701,7 +776,6 @@ ensure_org_batch = fn product, batch_no, quantity, expiry_days, supplier ->
         {:ok, created} =
           Batches.receive_into_org_stock(organization_id, %{
             product_id: product.id,
-            site_id: warehouse_site.id,
             batch_no: batch_no,
             gtin: product.gtin,
             manufacturer: supplier.name,
@@ -777,7 +851,7 @@ Enum.each(requisition_specs, fn {site, requester, product, quantity, target} ->
     org_batch =
       Enum.find(
         warehouse_batches,
-        &(&1.product_id == product.id and &1.site_id == warehouse_site.id)
+        &(&1.product_id == product.id and is_nil(&1.site_id))
       )
 
     case target do
@@ -1356,10 +1430,23 @@ end)
 # (local sites first, then the GS1 registry) — there is no stored
 # "customer" entity — so the destinations here are real `Site` rows on
 # another organization, exactly like a real cross-pharmacy shipment.
-{:ok, organization} =
-  Organizations.update_organization_gs1_settings(organization, %{
-    gs1_company_prefix: organization.gs1_company_prefix || "6160001"
-  })
+ensure_verified_gs1_prefix = fn org, prefix_value ->
+  prefix =
+    Repo.get_by(ThamaniDawa.Organizations.OrganizationGs1Prefix,
+      organization_id: org.id,
+      prefix: prefix_value
+    ) ||
+      (
+        {:ok, created} = Organizations.add_gs1_prefix(org, %{prefix: prefix_value})
+        created
+      )
+
+  if not prefix.is_primary, do: {:ok, _} = Organizations.set_primary_gs1_prefix(prefix)
+
+  {:ok, _} = Organizations.mark_prefix_verification_status(prefix, :verified)
+end
+
+ensure_verified_gs1_prefix.(organization, "6160001")
 
 counterpart_org =
   case Repo.get_by(Organization, slug: "riverside-health-network") do
@@ -1389,6 +1476,8 @@ counterpart_org =
     existing ->
       existing
   end
+
+ensure_verified_gs1_prefix.(counterpart_org, "6160003")
 
 destination_sites =
   [

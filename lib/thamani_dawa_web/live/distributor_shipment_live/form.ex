@@ -21,6 +21,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
       socket
       |> assign(:origins, GlnLookup.search_origin(organization_id, "", 500))
       |> assign(:referenceable_shipments, Distributor.list_approved_shipments(organization_id))
+      |> assign(:gs1_api_key, ThamaniDawa.Organizations.gs1_api_key(organization_id))
 
     case socket.assigns.live_action do
       :new ->
@@ -68,7 +69,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
     |> assign(:form, to_form(Distributor.change_shipment(shipment), as: :shipment))
   end
 
-  def handle_event("validate", %{"shipment" => attrs} = params, socket) do
+  def handle_event("validate", %{"shipment" => attrs}, socket) do
     changeset =
       socket.assigns.shipment
       |> Distributor.change_shipment(attrs)
@@ -77,34 +78,31 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
     socket =
       socket
       |> assign(:form, to_form(changeset, as: :shipment))
-      |> maybe_check_destination(params, attrs)
 
     {:noreply, socket}
   end
 
   def handle_event("toggle_transfer_mode", _params, socket) do
-    {:noreply, update(socket, :transfer_mode, &(!&1))}
+    {:noreply, socket |> update(:transfer_mode, &(!&1)) |> assign(:destination_check, :idle)}
   end
 
   def handle_event("save", %{"shipment" => attrs}, socket) do
     cond do
-      socket.assigns.destination_check == :checking ->
+      socket.assigns.transfer_mode ->
+        if selected(
+             other_origins(socket.assigns.origins, attrs["origin_gln"]),
+             attrs["destination_gln"]
+           ),
+           do: save_shipment(socket, attrs),
+           else: {:noreply, put_flash(socket, :error, "Choose a destination site before saving.")}
+
+      not match?({:matched, _, _}, socket.assigns.destination_check) ->
         {:noreply,
          put_flash(
            socket,
            :error,
-           "Still verifying the destination GLN. Press Save again in a moment."
+           "Search the GS1 directory and pick a destination GLN before saving."
          )}
-
-      socket.assigns.destination_check == :idle ->
-        {:noreply,
-         socket
-         |> check_destination_gln(attrs)
-         |> put_flash(:error, "Verifying the destination GLN. Press Save again in a moment.")}
-
-      not match?({:matched, _, _}, socket.assigns.destination_check) ->
-        {:noreply,
-         put_flash(socket, :error, "Enter a valid, verified destination GLN before saving.")}
 
       true ->
         save_shipment(socket, attrs)
@@ -152,36 +150,21 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
     Enum.find_value(socket.assigns.origins, fn site -> site.id == site_id && site.gln end)
   end
 
-  defp maybe_check_destination(socket, params, attrs) do
-    if Map.get(params, "_target") == ["shipment", "destination_gln"] do
-      check_destination_gln(socket, attrs)
-    else
-      socket
-    end
-  end
+  defp destination_selection({:matched, company, address}, gln) when is_binary(gln),
+    do: %{gln: gln, company: company, address: address}
 
-  defp check_destination_gln(socket, attrs) do
-    gln = attrs |> Map.get("destination_gln", "") |> to_string() |> String.trim()
+  defp destination_selection(_check, _gln), do: nil
 
-    if Regex.match?(~r/^\d{13}$/, gln) do
-      socket
-      |> assign(:destination_check, :checking)
-      |> start_async(:destination_lookup, fn -> GlnLookup.resolve_party(gln) end)
-    else
-      assign(socket, :destination_check, :idle)
-    end
-  end
+  def handle_info({:gln_selected, "destination-gln-search", party}, socket) do
+    check = if party, do: {:matched, party.company, party.address}, else: :idle
+    gln = party && party.gln
 
-  def handle_async(:destination_lookup, {:ok, {:ok, resolved}}, socket) do
-    {:noreply, assign(socket, :destination_check, {:matched, resolved.company, resolved.address})}
-  end
+    form =
+      socket.assigns.shipment
+      |> Distributor.change_shipment(Map.put(socket.assigns.form.params, "destination_gln", gln))
+      |> to_form(as: :shipment)
 
-  def handle_async(:destination_lookup, {:ok, {:error, :not_found}}, socket) do
-    {:noreply, assign(socket, :destination_check, :not_found)}
-  end
-
-  def handle_async(:destination_lookup, {:exit, _reason}, socket) do
-    {:noreply, assign(socket, :destination_check, :unavailable)}
+    {:noreply, assign(socket, destination_check: check, form: form)}
   end
 
   def render(assigns) do
@@ -262,7 +245,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
                 label="Destination site"
                 prompt="Choose one of your sites"
                 options={
-                  Enum.map(other_origins(@origins, @form[:origin_gln].value), &{"#{&1.name} · #{&1.gln}", &1.gln})
+                  Enum.map(
+                    other_origins(@origins, @form[:origin_gln].value),
+                    &{"#{&1.name} · #{&1.gln}", &1.gln}
+                  )
                 }
                 phx-debounce="0"
                 required
@@ -273,42 +259,16 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
               >
                 No other sites with a GLN yet.
               </p>
-              <.input
+              <.live_component
                 :if={!@transfer_mode}
-                field={@form[:destination_gln]}
+                module={ThamaniDawaWeb.GlnSearchField}
+                id="destination-gln-search"
+                name="shipment[destination_gln]"
                 label="Destination GLN (ship to)"
-                placeholder="13-digit GLN of the receiving party"
-                inputmode="numeric"
-                phx-debounce="500"
+                api_token={@gs1_api_key}
+                selected={destination_selection(@destination_check, @shipment.destination_gln)}
                 required
               />
-
-              <%= case @destination_check do %>
-                <% :checking -> %>
-                  <p class="inline-flex items-center gap-1.5 text-xs font-medium text-thamani-pewter">
-                    <.icon name="hero-arrow-path" class="size-3.5 motion-safe:animate-spin" />
-                    Verifying&hellip;
-                  </p>
-                <% {:matched, _company, _address} -> %>
-                  <div class="rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
-                    <p class="inline-flex items-center gap-1.5">
-                      <.icon name="hero-check-circle" class="size-4" /> Verified
-                    </p>
-                  </div>
-                <% :not_found -> %>
-                  <p class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                    <.icon name="hero-exclamation-triangle" class="size-4" />
-                    We couldn't verify this GLN. Double-check the number before continuing.
-                  </p>
-                <% :unavailable -> %>
-                  <p class="text-xs leading-5 text-thamani-pewter">
-                    We couldn't verify this GLN right now. Try again in a moment.
-                  </p>
-                <% _ -> %>
-                  <p class="text-xs leading-5 text-thamani-pewter">
-                    We verify this as soon as you enter it — against your own sites and the GS1 registry.
-                  </p>
-              <% end %>
 
               <label class="flex min-h-8 w-fit cursor-pointer items-center gap-2.5 pt-2 text-sm font-medium text-thamani-forest">
                 <input
@@ -358,7 +318,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
           <.gln_card
             title="Ship to"
             icon="hero-building-storefront"
-            record={destination_record(@destination_check, @form[:destination_gln].value)}
+            record={
+              destination_record(@destination_check, @form[:destination_gln].value) ||
+                (@transfer_mode && selected(@origins, @form[:destination_gln].value))
+            }
           />
           <p class="px-1 text-xs leading-5 text-thamani-pewter">
             The company name, address and P.O. box are copied onto the shipment when you save, so

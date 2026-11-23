@@ -7,7 +7,6 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   alias Phoenix.LiveView.JS
 
-
   attr :name, :string, required: true
   attr :weight, :string, default: "regular"
   attr :class, :any, default: "size-4"
@@ -41,9 +40,11 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :size, :string, values: ~w(md lg), default: "md"
   attr :label, :string, default: nil
   attr :glyph, :string, default: nil, doc: "Phosphor icon name shown before the label"
+
   attr :rest, :global,
     include:
       ~w(href navigate patch method download name value disabled type id form title onclick phx-click phx-value-id phx-value-from phx-value-to phx-value-mode phx-value-step phx-value-status phx-disable-with phx-submit phx-target phx-hook data-print-target data-role data-sscc data-gs1-text data-gtin data-batch data-production data-expiry)
+
   slot :icon
   slot :inner_block
 
@@ -112,12 +113,14 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :type, :string, default: "text"
   attr :field, Phoenix.HTML.FormField, default: nil
   attr :errors, :list, default: []
+
   attr :rest, :global,
     include:
       ~w(autocomplete required placeholder disabled autocapitalize phx-debounce min max inputmode readonly maxlength)
 
   def td_input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
-    errors = if Phoenix.Component.used_input?(field), do: Enum.map(field.errors, &error_text/1), else: []
+    errors =
+      if Phoenix.Component.used_input?(field), do: Enum.map(field.errors, &error_text/1), else: []
 
     assigns
     |> assign(:field, nil)
@@ -191,7 +194,8 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :rest, :global, include: ~w(required disabled)
 
   def td_select(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
-    errors = if Phoenix.Component.used_input?(field), do: Enum.map(field.errors, &error_text/1), else: []
+    errors =
+      if Phoenix.Component.used_input?(field), do: Enum.map(field.errors, &error_text/1), else: []
 
     assigns
     |> assign(:field, nil)
@@ -207,9 +211,18 @@ defmodule ThamaniDawaWeb.TDComponents do
     ~H"""
     <label class="td-field" for={@id}>
       <span :if={@label} class="td-field-label">{@label}</span>
-      <select id={@id} name={@name} class={["td-field-control", @state == "error" && "is-error"]} {@rest}>
+      <select
+        id={@id}
+        name={@name}
+        class={["td-field-control", @state == "error" && "is-error"]}
+        {@rest}
+      >
         <option :if={@prompt} value="">{@prompt}</option>
-        <option :for={{label, value} <- @options} value={value} selected={to_string(value) == to_string(@value)}>
+        <option
+          :for={{label, value} <- @options}
+          value={value}
+          selected={to_string(value) == to_string(@value)}
+        >
           {label}
         </option>
       </select>
@@ -669,7 +682,12 @@ defmodule ThamaniDawaWeb.TDComponents do
             />
             <kbd>⌘K</kbd>
           </label>
-          <.link :if={@help_path} navigate={@help_path} class="td-icon-btn" aria-label="Help and product tour">
+          <.link
+            :if={@help_path}
+            navigate={@help_path}
+            class="td-icon-btn"
+            aria-label="Help and product tour"
+          >
             <.td_icon name="question" />
           </.link>
           <button type="button" class="td-icon-btn" aria-label="Notifications">
@@ -701,6 +719,14 @@ defmodule ThamaniDawaWeb.TDComponents do
           };
           apply();
           this.onClick = (event) => {
+            const distributorToggle = event.target.closest("#distributor-nav-toggle");
+            if (distributorToggle) {
+              const items = document.getElementById("distributor-nav-items");
+              const expanded = items?.classList.toggle("hidden") === false;
+              distributorToggle.setAttribute("aria-expanded", String(expanded));
+              document.getElementById("distributor-nav-group")?.classList.toggle("is-expanded", expanded);
+              return;
+            }
             if (event.target.closest("#sidebar-toggle")) {
               event.preventDefault();
               const next = localStorage.getItem("sidebar-collapsed") !== "true";
@@ -817,7 +843,12 @@ defmodule ThamaniDawaWeb.TDComponents do
     <.td_modal id={@id} show={@show} title={@title} subtitle={@subtitle} on_cancel={@on_cancel}>
       <:body>{render_slot(@inner_block)}</:body>
       <:footer>
-        <.td_button type="button" variant="secondary" label="Cancel" phx-click={JS.exec("data-cancel", to: "##{@id}")} />
+        <.td_button
+          type="button"
+          variant="secondary"
+          label="Cancel"
+          phx-click={JS.exec("data-cancel", to: "##{@id}")}
+        />
         <.td_button type="submit" variant="primary" label={@submit} form={"#{@id}-form"} />
       </:footer>
     </.td_modal>
@@ -835,10 +866,17 @@ defmodule ThamaniDawaWeb.TDComponents do
   def td_confirm(assigns) do
     ~H"""
     <.td_modal id={@id} show={@show} title={@title} on_cancel={@on_cancel}>
-      <:body><p class="td-note">{@body}</p></:body>
+      <:body>
+        <p class="td-note">{@body}</p>
+      </:body>
       <:footer>
         <.td_button type="button" variant="secondary" label="Cancel" phx-click={@on_cancel} />
-        <.td_button type="button" variant="danger-confirm" label={@confirm} phx-click={@confirm_click} />
+        <.td_button
+          type="button"
+          variant="danger-confirm"
+          label={@confirm}
+          phx-click={@confirm_click}
+        />
       </:footer>
     </.td_modal>
     """

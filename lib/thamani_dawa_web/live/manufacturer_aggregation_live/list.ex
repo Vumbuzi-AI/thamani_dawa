@@ -60,7 +60,9 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.List do
     |> stream(:aggregations, result.entries, reset: true)
   end
 
-  defp filter_path(socket, changes), do: aggregation_path(Map.merge(socket.assigns.filters, changes))
+  defp filter_path(socket, changes),
+    do: aggregation_path(Map.merge(socket.assigns.filters, changes))
+
   defp pagination_path(filters), do: aggregation_path(filters)
 
   defp aggregation_path(filters),

@@ -100,6 +100,14 @@ defmodule ThamaniDawa.Sites do
     |> Site.changeset(attrs)
     |> Ecto.Changeset.put_change(:organization_id, organization_id)
     |> Repo.audited_insert()
+    |> tap(fn
+      {:ok, %Site{activities: activities}} ->
+        if :manufacturing in (activities || []),
+          do: ThamaniDawa.Manufacturing.ProductSyncWorker.enqueue(organization_id)
+
+      _ ->
+        :ok
+    end)
   end
 
   @doc "Updates a site."

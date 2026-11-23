@@ -269,6 +269,35 @@ defmodule ThamaniDawa.OrganizationsTest do
   end
 
   describe "signup/3" do
+    test "persists GS1 credentials and promotes the selected company prefix" do
+      org_attrs = %{name: "GS1 Signup Org", operating_models: [:laboratory]}
+
+      site_attrs = %{
+        name: "GS1 Signup Lab",
+        activities: [:laboratory],
+        gln: "0614141000784",
+        kmlttb_facility_name: "GS1 Signup Lab",
+        kmlttb_license_number: "L 01234/26"
+      }
+
+      assert {:ok, %{organization: organization, site: site}} =
+               Organizations.signup(org_attrs, site_attrs, valid_user_attributes(),
+                 gs1: %{
+                   api_key: "member-api-key",
+                   prefixes: ["6160001", "6160002"],
+                   primary_prefix: "6160002"
+                 }
+               )
+
+      assert organization.gs1_api_key_last4 == "-key"
+      assert site.gln == "0614141000784"
+
+      assert [
+               %{prefix: "6160002", is_primary: true},
+               %{prefix: "6160001", is_primary: false}
+             ] = Organizations.list_gs1_prefixes(organization.id)
+    end
+
     test "creates a distributor with a selected warehouse site" do
       org_attrs = %{
         name: "Acme Distribution",

@@ -96,7 +96,7 @@ defmodule ThamaniDawa.Sites.Site do
   """
   def default_changeset(site, attrs) do
     site
-    |> cast(attrs, @licensing_fields)
+    |> cast(attrs, @licensing_fields ++ [:gln_verified_at, :gln_verification_source])
     |> trim_changes()
     |> validate_required([:name, :activities])
     |> validate_length(:activities, min: 1, message: "Select at least one activity")

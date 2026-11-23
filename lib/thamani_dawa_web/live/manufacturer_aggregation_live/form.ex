@@ -47,7 +47,12 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Form do
         {:noreply, put_flash(socket, :error, "That serial has already been added.")}
 
       true ->
-        {status, _record} = Manufacturing.classify_serial(socket.assigns.current_scope.organization_id, sscc, serial)
+        {status, _record} =
+          Manufacturing.classify_serial(
+            socket.assigns.current_scope.organization_id,
+            sscc,
+            serial
+          )
 
         {:noreply,
          socket
@@ -201,7 +206,8 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Form do
               <.icon name="hero-cube" class="size-4" /> Packed
             </div>
             <p class="mt-2 text-2xl font-semibold text-thamani-forest">
-              {length(@serials)}<span class="text-sm font-normal text-thamani-pewter">
+              {length(@serials)}
+              <span class="text-sm font-normal text-thamani-pewter">
                 / {(@selected_sscc && @selected_sscc.count_of_trade_items) || 0}
               </span>
             </p>

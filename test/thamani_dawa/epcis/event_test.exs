@@ -289,6 +289,19 @@ defmodule ThamaniDawa.Epcis.EventTest do
     refute Map.has_key?(event, "quantityList")
   end
 
+  test "commissioning normalizes GTIN-13 values before building EPCIS identifiers" do
+    args = %{
+      event_id: @event_id,
+      event_time: @event_time,
+      org_prefix: "6164005",
+      biz_location_gln: @gln,
+      epcs: [%{gtin: "6164005056517", serial: "1001"}]
+    }
+
+    assert {:ok, event} = Event.commission(args)
+    assert event["epcList"] == ["urn:epc:id:sgtin:6164005.005651.1001"]
+  end
+
   test "mixed dispensing carries both epcList and quantityList" do
     args = %{
       event_id: @event_id,

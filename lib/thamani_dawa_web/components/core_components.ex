@@ -228,8 +228,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   attr :type, :string,
     default: "text",
-    values: ~w(checkbox color combobox date datetime-local email file month number password
-               search select tel text textarea time url week hidden)
+    values: ~w(checkbox color combobox date datetime-local email file number password
+               search select tel text textarea url hidden)
 
   attr :field, Phoenix.HTML.FormField,
     doc: "a form field struct retrieved from the form, for example: @form[:email]"
@@ -259,7 +259,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   # Every date field in the app is the TD date picker; the browser's native
   # calendar is never rendered.
-  def input(%{type: "date"} = assigns) do
+  def input(%{type: type} = assigns) when type in ~w(date datetime-local) do
     rest = assigns.rest
 
     assigns =
@@ -282,6 +282,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       max={@dp_max}
       min={@dp_min}
       placeholder={@dp_placeholder}
+      time={@type == "datetime-local"}
       class={@class}
     />
     """
@@ -399,7 +400,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
             viewBox="0 0 256 256"
             class="size-4 shrink-0 transition-transform duration-150"
             aria-hidden="true"
-          ><path fill="currentColor" d="m213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80a8 8 0 0 1 11.32-11.32L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32" /></svg>
+          ><path
+            fill="currentColor"
+            d="m213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80a8 8 0 0 1 11.32-11.32L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32"
+          /></svg>
         </button>
         <div
           data-cs-dropdown
@@ -824,6 +828,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
     default: "left",
     doc: "popover alignment relative to the trigger: 'left' or 'right'"
 
+  attr :time, :boolean,
+    default: false,
+    doc: "adds a 24-hour HH:MM field; the value is submitted as yyyy-mm-ddTHH:MM (datetime-local)"
+
   attr :class, :any, default: nil
   attr :errors, :list, default: []
   attr :field, Phoenix.HTML.FormField, doc: "a form field struct, e.g. @form[:date_of_birth]"
@@ -853,15 +861,31 @@ defmodule ThamaniDawaWeb.CoreComponents do
       |> assign_new(:name, fn -> nil end)
       |> assign_new(:class, fn -> nil end)
       |> assign_new(:align, fn -> "left" end)
-      |> assign(:iso_value, date_iso(assigns[:value]))
+      |> assign_new(:time, fn -> false end)
 
-    assigns = assign(assigns, :display, display_date(assigns.iso_value))
+    {date_part, time_part} = date_time_parts(assigns[:value])
+
+    assigns =
+      assigns
+      |> assign(
+        :iso_value,
+        if(assigns.time, do: date_time_value(date_part, time_part), else: date_part)
+      )
+      |> assign(:time_value, time_part)
+      |> assign(:display, display_date(date_part))
 
     ~H"""
     <div
       id={"#{@id}-dp"}
-      class={["td-dp", @align == "right" && "is-right", @errors != [] && "is-error", @class]}
+      class={[
+        "td-dp",
+        @time && "is-datetime",
+        @align == "right" && "is-right",
+        @errors != [] && "is-error",
+        @class
+      ]}
       phx-hook=".DatePicker"
+      data-dp-mode={if @time, do: "datetime", else: "single"}
       data-max={@max}
       data-min={@min}
     >
@@ -885,26 +909,42 @@ defmodule ThamaniDawaWeb.CoreComponents do
         class="td-dp-value"
       />
 
-      <button
-        type="button"
-        id={"#{@id}-trigger"}
-        data-dp-trigger
-        class="td-dp-trigger"
-        aria-haspopup="dialog"
-        aria-expanded="false"
-        aria-controls={"#{@id}-dp-pop"}
-        aria-invalid={@errors != [] && "true"}
-        disabled={@disabled}
-      >
-        <span
-          data-dp-display
-          data-placeholder={@placeholder}
-          class={["td-dp-display", is_nil(@display) && "is-placeholder"]}
+      <div class="td-dp-row">
+        <button
+          type="button"
+          id={"#{@id}-trigger"}
+          data-dp-trigger
+          class="td-dp-trigger"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-controls={"#{@id}-dp-pop"}
+          aria-invalid={@errors != [] && "true"}
+          disabled={@disabled}
         >
-          {@display || @placeholder}
-        </span>
-        <ThamaniDawaWeb.TDComponents.td_icon name="calendar-blank" class="td-dp-icon" />
-      </button>
+          <span
+            data-dp-display
+            data-placeholder={@placeholder}
+            class={["td-dp-display", is_nil(@display) && "is-placeholder"]}
+          >
+            {@display || @placeholder}
+          </span>
+          <ThamaniDawaWeb.TDComponents.td_icon name="calendar-blank" class="td-dp-icon" />
+        </button>
+        <input
+          :if={@time}
+          type="text"
+          id={"#{@id}-time"}
+          data-dp-time
+          value={@time_value}
+          inputmode="numeric"
+          maxlength="5"
+          placeholder="HH:MM"
+          autocomplete="off"
+          aria-label={if @label, do: "#{@label} time (24-hour)", else: "Time (24-hour)"}
+          disabled={@disabled}
+          class="td-dp-time"
+        />
+      </div>
 
       <div
         data-dp-pop
@@ -922,44 +962,54 @@ defmodule ThamaniDawaWeb.CoreComponents do
     </div>
 
     <script :type={Phoenix.LiveView.ColocatedHook} name=".DatePicker">
+      // One hook for the single, date-time and range variants of the TD DatePicker.
       const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
       const SHORT = MONTHS.map(m => m.slice(0, 3))
       const DOW = ["Mo","Tu","We","Th","Fr","Sa","Su"]
       const CARET_L = '<svg aria-hidden="true" viewBox="0 0 256 256" width="14" height="14"><path fill="currentColor" d="M165.66 202.34a8 8 0 0 1-11.32 11.32l-80-80a8 8 0 0 1 0-11.32l80-80a8 8 0 0 1 11.32 11.32L91.31 128Z"/></svg>'
       const CARET_R = '<svg aria-hidden="true" viewBox="0 0 256 256" width="14" height="14"><path fill="currentColor" d="m181.66 133.66l-80 80a8 8 0 0 1-11.32-11.32L164.69 128L90.34 53.66a8 8 0 0 1 11.32-11.32l80 80a8 8 0 0 1 0 11.32"/></svg>'
-      const CARET_D = '<svg aria-hidden="true" viewBox="0 0 256 256" width="12" height="12"><path fill="currentColor" d="m213.66 101.66l-80 80a8 8 0 0 1-11.32 0l-80-80a8 8 0 0 1 11.32-11.32L128 164.69l74.34-74.35a8 8 0 0 1 11.32 11.32"/></svg>'
 
-      const sameDay = (a, b) => a && b && a.getTime() === b.getTime()
+      const sameDay = (a, b) => !!(a && b && a.getTime() === b.getTime())
       const parseIso = (v) => {
-        if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null
-        const [y, m, d] = v.split("-").map(Number)
-        return new Date(y, m - 1, d)
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || "")
+        return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null
       }
+      const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
       export default {
         mounted() { this.setup() },
         updated() { this.syncFromInput() },
-        destroyed() {
-          document.removeEventListener("click", this.onDocClick, true)
-        },
+        destroyed() { document.removeEventListener("click", this.onDocClick, true) },
         setup() {
-          this.input = this.el.querySelector("[data-dp-input]")
-          this.trigger = this.el.querySelector("[data-dp-trigger]")
-          this.display = this.el.querySelector("[data-dp-display]")
+          this.mode = this.el.dataset.dpMode || "single"
           this.pop = this.el.querySelector("[data-dp-pop]")
           this.today = new Date(); this.today.setHours(0, 0, 0, 0)
+          this.bind()
           this.readBounds()
           this.parseValue()
           this.onDocClick = (e) => { if (!this.el.contains(e.target)) this.close(false) }
-          this.trigger.addEventListener("click", (e) => { e.preventDefault(); this.toggle() })
-          this.trigger.addEventListener("keydown", (e) => {
+          this.el.addEventListener("click", (e) => {
+            if (e.target.closest("[data-dp-trigger]")) { e.preventDefault(); this.toggle() }
+          })
+          this.el.addEventListener("keydown", (e) => {
+            if (!e.target.closest("[data-dp-trigger]")) return
             if (e.key === "ArrowDown" || ((e.key === "Enter" || e.key === " ") && this.isClosed())) {
               e.preventDefault(); this.open()
             }
           })
+          this.el.addEventListener("input", (e) => { if (e.target.matches("[data-dp-time]")) this.onTime(e.target) })
           this.pop.addEventListener("click", (e) => this.handleClick(e))
           this.pop.addEventListener("keydown", (e) => this.handleKey(e))
           document.addEventListener("click", this.onDocClick, true)
+        },
+        // LiveView patches can replace the field's children, so look them up again each time.
+        bind() {
+          this.trigger = this.el.querySelector("[data-dp-trigger]")
+          this.display = this.el.querySelector("[data-dp-display]")
+          this.timeEl = this.el.querySelector("[data-dp-time]")
+          this.input = this.el.querySelector("[data-dp-input]")
+          this.inFrom = this.el.querySelector('[data-dp-input="from"]')
+          this.inTo = this.el.querySelector('[data-dp-input="to"]')
         },
         readBounds() {
           const b = (v) => v === "today" ? this.today : parseIso(v)
@@ -967,35 +1017,50 @@ defmodule ThamaniDawaWeb.CoreComponents do
           this.min = b(this.el.dataset.min)
         },
         syncFromInput() {
-          this.input = this.el.querySelector("[data-dp-input]")
-          this.display = this.el.querySelector("[data-dp-display]")
-          this.trigger = this.el.querySelector("[data-dp-trigger]")
-          this.readBounds()
-          this.parseValue()
-          if (!this.isClosed()) this.trigger.setAttribute("aria-expanded", "true")
+          this.bind(); this.readBounds()
+          if (this.isClosed()) this.parseValue()
+          else this.trigger.setAttribute("aria-expanded", "true")
         },
         parseValue() {
-          this.selected = parseIso(this.input ? this.input.value : "")
+          if (this.mode === "range") {
+            this.start = parseIso(this.inFrom && this.inFrom.value)
+            this.end = parseIso(this.inTo && this.inTo.value)
+          } else {
+            const v = this.input ? this.input.value : ""
+            this.selected = parseIso(v)
+            if (this.timeEl && document.activeElement !== this.timeEl) {
+              const t = (v.split("T")[1] || "").slice(0, 5)
+              if (t) this.timeEl.value = t
+            }
+          }
           this.renderDisplay()
         },
-        iso(date) {
-          return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+        iso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` },
+        fmt(d) { return `${d.getDate()} ${SHORT[d.getMonth()]} ${d.getFullYear()}` },
+        displayText() {
+          if (this.mode !== "range") return this.selected ? this.fmt(this.selected) : null
+          if (this.start && this.end) return `${this.fmt(this.start)} – ${this.fmt(this.end)}`
+          if (this.start) return `From ${this.fmt(this.start)}`
+          if (this.end) return `Until ${this.fmt(this.end)}`
+          return null
         },
-        fmt(date) { return `${date.getDate()} ${SHORT[date.getMonth()]} ${date.getFullYear()}` },
         renderDisplay() {
           if (!this.display) return
-          const has = !!this.selected
-          this.display.textContent = has ? this.fmt(this.selected) : (this.display.dataset.placeholder || "Choose a date")
-          this.display.classList.toggle("is-placeholder", !has)
+          const text = this.displayText()
+          this.display.textContent = text || this.display.dataset.placeholder || "Choose a date"
+          this.display.classList.toggle("is-placeholder", !text)
         },
+        hasValue() { return this.mode === "range" ? !!(this.start || this.end) : !!this.selected },
         disabledDay(d) {
-          return (this.max && d.getTime() > this.max.getTime()) || (this.min && d.getTime() < this.min.getTime())
+          return !!((this.max && d.getTime() > this.max.getTime()) || (this.min && d.getTime() < this.min.getTime()))
         },
         isClosed() { return this.pop.hasAttribute("hidden") },
         toggle() { this.isClosed() ? this.open() : this.close(true) },
         open() {
-          this.focusDate = new Date((this.selected || this.clampToBounds(this.today)).getTime())
-          this.mode = "days"
+          const anchor = this.mode === "range" ? (this.start || this.end) : this.selected
+          this.focusDate = new Date((anchor || this.clampToBounds(this.today)).getTime())
+          this.mode === "range" && (this.pending = null)
+          this.view = "days"
           this.render()
           this.pop.removeAttribute("hidden")
           this.el.classList.add("is-open")
@@ -1008,6 +1073,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
           this.pop.setAttribute("hidden", "")
           this.el.classList.remove("is-open", "is-up")
           this.trigger.setAttribute("aria-expanded", "false")
+          if (this.mode === "range" && this.pending) { this.pending = null; this.parseValue() }
           if (returnFocus) this.trigger.focus()
         },
         clampToBounds(d) {
@@ -1015,19 +1081,57 @@ defmodule ThamaniDawaWeb.CoreComponents do
           if (this.min && d < this.min) return new Date(this.min.getTime())
           return d
         },
-        // Flip above the trigger when the viewport has no room below (same rule as .td-select-pop).
+        // Flip above the field when the viewport has no room below (same rule as .td-select-pop).
         place() {
           this.el.classList.remove("is-up")
           const t = this.trigger.getBoundingClientRect()
           const h = this.pop.offsetHeight
           if (t.bottom + h + 8 > window.innerHeight && t.top - h - 8 > 0) this.el.classList.add("is-up")
         },
+        emit(input) {
+          input.dispatchEvent(new Event("input", { bubbles: true }))
+          input.dispatchEvent(new Event("change", { bubbles: true }))
+        },
+        singleValue() {
+          if (!this.selected) return ""
+          if (this.mode !== "datetime") return this.iso(this.selected)
+          const t = this.timeEl && TIME.test(this.timeEl.value) ? this.timeEl.value : "00:00"
+          return `${this.iso(this.selected)}T${t}`
+        },
+        onTime(el) {
+          el.value = el.value.replace(/[^\d:]/g, "")
+          if (/^\d{4}$/.test(el.value)) el.value = `${el.value.slice(0, 2)}:${el.value.slice(2)}`
+          if (this.selected && TIME.test(el.value)) { this.input.value = this.singleValue(); this.emit(this.input) }
+        },
         choose(d) {
           if (d && this.disabledDay(d)) return
+          if (this.mode === "range") return this.chooseRange(d)
           this.selected = d
-          this.input.value = d ? this.iso(d) : ""
-          this.input.dispatchEvent(new Event("input", { bubbles: true }))
-          this.input.dispatchEvent(new Event("change", { bubbles: true }))
+          this.input.value = this.singleValue()
+          this.emit(this.input)
+          this.renderDisplay()
+          this.close(true)
+          if (d && this.timeEl && !TIME.test(this.timeEl.value)) this.timeEl.focus()
+        },
+        // First click sets the start, the second the end (swapped if it is earlier).
+        chooseRange(d) {
+          if (!d) { this.start = this.end = null; return this.commitRange() }
+          if (!this.pending) {
+            this.pending = d; this.start = d; this.end = null
+            this.focusDate = new Date(d.getTime())
+            this.render(); this.renderDisplay(); return this.focusActive()
+          }
+          const a = this.pending
+          this.start = d < a ? d : a
+          this.end = d < a ? a : d
+          this.pending = null
+          this.commitRange()
+        },
+        commitRange() {
+          this.pending = null
+          this.inFrom.value = this.start ? this.iso(this.start) : ""
+          this.inTo.value = this.end ? this.iso(this.end) : ""
+          this.emit(this.inTo)
           this.renderDisplay()
           this.close(true)
         },
@@ -1044,7 +1148,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         },
         handleKey(e) {
           if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); this.close(true); return }
-          if (this.mode !== "days" || !e.target.matches("[data-dp-day]")) return
+          if (this.view !== "days" || !e.target.matches("[data-dp-day]")) return
           const dow = (this.focusDate.getDay() + 6) % 7
           const map = {
             ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [-7, 0], ArrowDown: [7, 0],
@@ -1061,21 +1165,25 @@ defmodule ThamaniDawaWeb.CoreComponents do
           const a = t.dataset
           if (a.dpNav) {
             const n = parseInt(a.dpNav, 10)
-            if (this.mode === "days") return this.shift(0, n)
-            this.focusDate.setFullYear(this.focusDate.getFullYear() + n * (this.mode === "years" ? 12 : 1))
+            if (this.view === "days") return this.shift(0, n)
+            this.focusDate.setFullYear(this.focusDate.getFullYear() + n * (this.view === "years" ? 12 : 1))
             return this.render()
           }
-          if (a.dpView) { this.mode = a.dpView; this.render(); return this.focusActive() }
+          if (a.dpView) { this.view = a.dpView; this.render(); return this.focusActive() }
           if (a.dpMonth) {
             this.focusDate = new Date(this.focusDate.getFullYear(), parseInt(a.dpMonth, 10), 1)
-            this.mode = "days"; this.render(); return this.focusActive()
+            this.view = "days"; this.render(); return this.focusActive()
           }
           if (a.dpYear) {
             this.focusDate = new Date(parseInt(a.dpYear, 10), this.focusDate.getMonth(), 1)
-            this.mode = "months"; this.render(); return this.focusActive()
+            this.view = "months"; this.render(); return this.focusActive()
           }
           if (a.dpDay) return this.choose(parseIso(a.dpDay))
-          if (a.dpAction === "today") return this.choose(new Date(this.today.getTime()))
+          if (a.dpAction === "today") {
+            const t0 = new Date(this.today.getTime())
+            if (this.mode === "range") { this.start = this.end = t0; return this.commitRange() }
+            return this.choose(t0)
+          }
           if (a.dpAction === "clear") return this.choose(null)
         },
         focusActive() {
@@ -1084,24 +1192,41 @@ defmodule ThamaniDawaWeb.CoreComponents do
         },
         header(label, view, prevLabel, nextLabel) {
           return `<div class="td-dp-hd">
-              <button type="button" class="td-dp-title" data-dp-view="${view}" aria-live="polite">${label}${CARET_D}</button>
-              <span class="td-dp-nv">
-                <button type="button" class="td-dp-nb" data-dp-nav="-1" aria-label="${prevLabel}">${CARET_L}</button>
-                <button type="button" class="td-dp-nb" data-dp-nav="1" aria-label="${nextLabel}">${CARET_R}</button>
-              </span>
-            </div>`
+            <button type="button" class="td-dp-title" data-dp-view="${view}" aria-live="polite">${label}</button>
+            <span class="td-dp-nv">
+              <button type="button" class="td-dp-nb" data-dp-nav="-1" aria-label="${prevLabel}">${CARET_L}</button>
+              <button type="button" class="td-dp-nb" data-dp-nav="1" aria-label="${nextLabel}">${CARET_R}</button>
+            </span>
+          </div>`
         },
         footer() {
           const todayOff = this.disabledDay(this.today)
           return `<div class="td-dp-ft">
-              <button type="button" class="td-dp-text" data-dp-action="clear" ${this.selected ? "" : "disabled"}>Clear</button>
-              <button type="button" class="td-dp-text" data-dp-action="today" ${todayOff ? "disabled" : ""}>Today</button>
-            </div>`
+            <button type="button" class="td-dp-text" data-dp-action="clear" ${this.hasValue() ? "" : "disabled"}>Clear</button>
+            <button type="button" class="td-dp-text" data-dp-action="today" ${todayOff ? "disabled" : ""}>Today</button>
+          </div>`
         },
         render() {
-          if (this.mode === "months") return this.renderMonths()
-          if (this.mode === "years") return this.renderYears()
+          if (this.view === "months") return this.renderMonths()
+          if (this.view === "years") return this.renderYears()
           this.renderDays()
+        },
+        dayClasses(d, m) {
+          const cls = ["td-dp-day"]
+          if (d.getMonth() !== m) cls.push("is-outside")
+          if (sameDay(d, this.today)) cls.push("is-today")
+          if (this.mode !== "range") {
+            if (sameDay(d, this.selected)) cls.push("is-selected")
+            return cls
+          }
+          const s = this.start, e = this.end
+          if (sameDay(d, s) || sameDay(d, e)) cls.push("is-selected")
+          if (s && e && !sameDay(s, e)) {
+            if (sameDay(d, s)) cls.push("is-range-start")
+            if (sameDay(d, e)) cls.push("is-range-end")
+            if (d > s && d < e) cls.push("is-in-range")
+          }
+          return cls
         },
         renderDays() {
           const y = this.focusDate.getFullYear(), m = this.focusDate.getMonth()
@@ -1111,16 +1236,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
           for (let i = 0; i < 42; i++) {
             const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i)
             if (i === 35 && d.getMonth() !== m) break
-            const cls = ["td-dp-day"]
-            if (d.getMonth() !== m) cls.push("is-outside")
-            if (sameDay(d, this.today)) cls.push("is-today")
-            if (sameDay(d, this.selected)) cls.push("is-selected")
-            const off = this.disabledDay(d)
-            const focus = sameDay(d, this.focusDate)
+            const cls = this.dayClasses(d, m)
+            const sel = cls.includes("is-selected")
             grid += `<button type="button" role="gridcell" class="${cls.join(" ")}" data-dp-day="${this.iso(d)}"
-              tabindex="${focus ? 0 : -1}" aria-selected="${sameDay(d, this.selected)}"
+              tabindex="${sameDay(d, this.focusDate) ? 0 : -1}" aria-selected="${sel}"
               ${sameDay(d, this.today) ? 'aria-current="date"' : ""}
-              aria-label="${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}" ${off ? "disabled" : ""}>${d.getDate()}</button>`
+              aria-label="${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}" ${this.disabledDay(d) ? "disabled" : ""}>${d.getDate()}</button>`
           }
           this.pop.innerHTML = this.header(`${MONTHS[m]} ${y}`, "months", "Previous month", "Next month") +
             `<div class="td-dp-wk" aria-hidden="true">${DOW.map(d => `<span>${d}</span>`).join("")}</div>` +
@@ -1128,10 +1249,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
         },
         renderMonths() {
           const y = this.focusDate.getFullYear()
+          const ref = this.mode === "range" ? (this.start || this.end) : this.selected
           const cells = SHORT.map((name, i) => {
             const lastDay = new Date(y, i + 1, 0), firstDay = new Date(y, i, 1)
             const off = (this.max && firstDay > this.max) || (this.min && lastDay < this.min)
-            const sel = this.selected && this.selected.getFullYear() === y && this.selected.getMonth() === i
+            const sel = ref && ref.getFullYear() === y && ref.getMonth() === i
             return `<button type="button" class="td-dp-cell${sel ? " is-selected" : ""}" data-dp-month="${i}"
               tabindex="${i === this.focusDate.getMonth() ? 0 : -1}" ${off ? "disabled" : ""}>${name}</button>`
           }).join("")
@@ -1141,11 +1263,12 @@ defmodule ThamaniDawaWeb.CoreComponents do
         renderYears() {
           const y = this.focusDate.getFullYear()
           const start = y - (y % 12)
+          const ref = this.mode === "range" ? (this.start || this.end) : this.selected
           let cells = ""
           for (let i = 0; i < 12; i++) {
             const yr = start + i
             const off = (this.max && yr > this.max.getFullYear()) || (this.min && yr < this.min.getFullYear())
-            const sel = this.selected && this.selected.getFullYear() === yr
+            const sel = ref && ref.getFullYear() === yr
             cells += `<button type="button" class="td-dp-cell${sel ? " is-selected" : ""}" data-dp-year="${yr}"
               tabindex="${yr === y ? 0 : -1}" ${off ? "disabled" : ""}>${yr}</button>`
           }
@@ -1157,11 +1280,143 @@ defmodule ThamaniDawaWeb.CoreComponents do
     """
   end
 
-  defp date_iso(%Date{} = date), do: Date.to_iso8601(date)
-  defp date_iso(%DateTime{} = dt), do: dt |> DateTime.to_date() |> Date.to_iso8601()
-  defp date_iso(%NaiveDateTime{} = dt), do: dt |> NaiveDateTime.to_date() |> Date.to_iso8601()
-  defp date_iso(value) when is_binary(value), do: value
-  defp date_iso(_), do: ""
+  @doc """
+  The TD DatePicker range variant (Doop `chdlkoodd2`, frame gGZGY4la6k) for From / To
+  filter pairs. One 32px field shows `1 Nov 2026 – 22 Nov 2026`; the popover takes a
+  start and an end click, fills the days between with the accent tint and marks both
+  ends in solid accent. Each end is submitted as ISO `yyyy-mm-dd` in its own hidden
+  input, so the existing `from` / `to` params keep working.
+
+  ## Examples
+
+  ```heex
+  <.date_range_picker
+    id="earnings-dates"
+    label="Date"
+    from_name="filters[date_from]"
+    from_value={@filters.date_from}
+    to_name="filters[date_to]"
+    to_value={@filters.date_to}
+  />
+  ```
+  """
+  attr :id, :string, required: true
+  attr :label, :string, default: nil
+  attr :from_name, :string, required: true
+  attr :from_value, :any, default: nil
+  attr :to_name, :string, required: true
+  attr :to_value, :any, default: nil
+  attr :placeholder, :string, default: "Choose dates"
+  attr :max, :string, default: nil
+  attr :min, :string, default: nil
+  attr :align, :string, default: "left"
+  attr :disabled, :boolean, default: false
+  attr :class, :any, default: nil
+
+  def date_range_picker(assigns) do
+    {from, _} = date_time_parts(assigns.from_value)
+    {to, _} = date_time_parts(assigns.to_value)
+
+    assigns =
+      assigns
+      |> assign(:from_iso, from)
+      |> assign(:to_iso, to)
+      |> assign(:display, display_range(display_date(from), display_date(to)))
+
+    ~H"""
+    <div
+      id={"#{@id}-dp"}
+      class={["td-dp is-range", @align == "right" && "is-right", @class]}
+      phx-hook=".DatePicker"
+      data-dp-mode="range"
+      data-max={@max}
+      data-min={@min}
+    >
+      <label :if={@label} for={"#{@id}-trigger"} class="thamani-label">{@label}</label>
+      <input
+        type="text"
+        name={@from_name}
+        id={"#{@id}-from"}
+        value={@from_iso}
+        data-dp-input="from"
+        tabindex="-1"
+        aria-hidden="true"
+        class="td-dp-value"
+      />
+      <input
+        type="text"
+        name={@to_name}
+        id={"#{@id}-to"}
+        value={@to_iso}
+        data-dp-input="to"
+        tabindex="-1"
+        aria-hidden="true"
+        class="td-dp-value"
+      />
+      <div class="td-dp-row">
+        <button
+          type="button"
+          id={"#{@id}-trigger"}
+          data-dp-trigger
+          class="td-dp-trigger"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+          aria-controls={"#{@id}-dp-pop"}
+          disabled={@disabled}
+        >
+          <span
+            data-dp-display
+            data-placeholder={@placeholder}
+            class={["td-dp-display", is_nil(@display) && "is-placeholder"]}
+          >
+            {@display || @placeholder}
+          </span>
+          <ThamaniDawaWeb.TDComponents.td_icon name="calendar-blank" class="td-dp-icon" />
+        </button>
+      </div>
+      <div
+        data-dp-pop
+        id={"#{@id}-dp-pop"}
+        class="td-dp-pop"
+        role="dialog"
+        aria-modal="false"
+        aria-label={
+          if @label, do: "Choose #{String.downcase(@label)} range", else: "Choose a date range"
+        }
+        phx-update="ignore"
+        hidden
+      >
+      </div>
+    </div>
+    """
+  end
+
+  defp display_range(nil, nil), do: nil
+  defp display_range(from, nil), do: "From #{from}"
+  defp display_range(nil, to), do: "Until #{to}"
+  defp display_range(from, to), do: "#{from} – #{to}"
+
+  # {"yyyy-mm-dd", "HH:MM"} from a Date, DateTime, NaiveDateTime or form string.
+  defp date_time_parts(%Date{} = date), do: {Date.to_iso8601(date), ""}
+
+  defp date_time_parts(%DateTime{} = dt),
+    do: {dt |> DateTime.to_date() |> Date.to_iso8601(), Calendar.strftime(dt, "%H:%M")}
+
+  defp date_time_parts(%NaiveDateTime{} = dt),
+    do: {dt |> NaiveDateTime.to_date() |> Date.to_iso8601(), Calendar.strftime(dt, "%H:%M")}
+
+  defp date_time_parts(value) when is_binary(value) do
+    case String.split(value, ["T", " "], parts: 2) do
+      [date, time] -> {date, String.slice(time, 0, 5)}
+      [date] -> {date, ""}
+    end
+  end
+
+  defp date_time_parts(_), do: {"", ""}
+
+  defp date_time_value("", _time), do: ""
+  defp date_time_value(date, ""), do: date <> "T00:00"
+  defp date_time_value(date, time), do: date <> "T" <> time
 
   defp display_date(value) when is_binary(value) and value != "" do
     case Date.from_iso8601(value) do
@@ -2243,7 +2498,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   attr :type, :string,
     default: "text",
-    values: ~w(text email url password textarea),
+    values: ~w(text email url password textarea select combobox),
     doc: "HTML input type"
 
   attr :placeholder, :string, default: nil
@@ -2251,7 +2506,285 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :class, :any, default: nil, doc: "extra classes on the wrapper div"
   attr :required, :boolean, default: false, doc: "shows a required marker next to the label"
   attr :icon, :string, default: nil, doc: "optional hero-* icon name shown leading the input"
+
+  attr :sensitive, :boolean,
+    default: false,
+    doc: "visually masks non-password secrets without invoking browser password managers"
+
+  attr :options, :list, default: [], doc: "options for select inputs, as label/value pairs"
   attr :rest, :global, include: ~w(disabled readonly rows)
+
+  slot :badge, doc: "optional trailing badge rendered vertically centered inside the input"
+
+  def thamani_input(%{type: "combobox", field: field} = assigns) do
+    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+
+    opts =
+      Enum.map(assigns[:options] || [], fn
+        {label, value} -> [to_string(label), to_string(value)]
+        label -> [to_string(label), to_string(label)]
+      end)
+
+    assigns =
+      assigns
+      |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+      |> assign(:input_id, field.id)
+      |> assign(:name, field.name)
+      |> assign(:value, field.value)
+      |> assign(:opts_json, Jason.encode!(opts))
+
+    ~H"""
+    <div class={["mb-5", @class]}>
+      <div class={[
+        "flex items-baseline justify-between mb-2",
+        @errors != [] && "mb-1"
+      ]}>
+        <label
+          for={"#{@input_id}-trigger"}
+          class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
+        >
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
+        </label>
+      </div>
+      <div
+        id={"#{@input_id}-combobox"}
+        phx-hook=".ThamaniCombobox"
+        data-options={@opts_json}
+        data-prompt={@placeholder || ""}
+        class="relative"
+      >
+        <select id={@input_id} name={@name} data-tc-input required={@required} class="hidden">
+          <option :if={@placeholder} value="">{@placeholder}</option>
+          <option
+            :for={{label, value} <- @options}
+            value={value}
+            selected={to_string(@value) == to_string(value)}
+          >
+            {label}
+          </option>
+        </select>
+        <button
+          type="button"
+          id={"#{@input_id}-trigger"}
+          data-tc-trigger
+          aria-haspopup="listbox"
+          aria-expanded="false"
+          class={[
+            "flex w-full items-center justify-between gap-2 box-border px-4 py-3 text-left",
+            "text-[15px] bg-thamani-snow border-[1.5px] rounded-lg outline-none cursor-pointer select-none",
+            "transition-[border-color,box-shadow] duration-150 ease-in-out",
+            "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
+            (@errors != [] && "border-thamani-error") || "border-thamani-stone"
+          ]}
+        >
+          <span data-tc-display class="truncate text-[var(--thamani-pewter)]">
+            {@placeholder || "Select…"}
+          </span>
+          <span
+            data-tc-chevron
+            class="inline-flex shrink-0 text-[var(--thamani-pewter)] transition-transform duration-150"
+          >
+            <.icon name="hero-chevron-down" class="size-4" />
+          </span>
+        </button>
+        <div
+          data-tc-dropdown
+          role="listbox"
+          class="absolute z-[70] mt-1 hidden w-full overflow-hidden rounded-xl border border-thamani-stone bg-thamani-snow shadow-lg"
+        >
+          <div class="border-b border-thamani-stone/50 px-2 pb-1.5 pt-2">
+            <input
+              data-tc-search
+              type="text"
+              placeholder="Search…"
+              autocomplete="off"
+              class="w-full rounded-lg border-0 bg-thamani-stone/40 px-2.5 py-1.5 text-sm text-thamani-forest outline-none placeholder:text-thamani-pewter/50"
+            />
+          </div>
+          <div data-tc-list class="max-h-52 overflow-y-auto py-1"></div>
+        </div>
+      </div>
+      <p :for={msg <- @errors} class="text-[13px] text-thamani-error mt-1.5">
+        {msg}
+      </p>
+      <script :type={Phoenix.LiveView.ColocatedHook} name=".ThamaniCombobox">
+        export default {
+          mounted() { this.init() },
+          updated() { this.syncDisplay() },
+          destroyed() {
+            document.removeEventListener("click", this.onDocClick)
+            document.removeEventListener("keydown", this.onKey)
+          },
+          init() {
+            this.input    = this.el.querySelector("[data-tc-input]")
+            this.trigger  = this.el.querySelector("[data-tc-trigger]")
+            this.display  = this.el.querySelector("[data-tc-display]")
+            this.dropdown = this.el.querySelector("[data-tc-dropdown]")
+            this.list     = this.el.querySelector("[data-tc-list]")
+            this.search   = this.el.querySelector("[data-tc-search]")
+            this.chevron  = this.el.querySelector("[data-tc-chevron]")
+            this.renderList("")
+            this.syncDisplay()
+            this.onTrigger  = (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              this.toggle()
+            }
+            this.onDocClick = (e) => { if (!this.el.contains(e.target)) this.close() }
+            this.onKey      = (e) => { if (e.key === "Escape") this.close() }
+            this.trigger.addEventListener("click", this.onTrigger)
+            if (this.search) {
+              this.search.addEventListener("input", () => this.renderList(this.search.value))
+              this.search.addEventListener("click", (e) => e.stopPropagation())
+              this.search.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") { e.stopPropagation(); this.close() }
+                if (e.key === "ArrowDown") {
+                  e.preventDefault()
+                  const first = this.list.querySelector("[data-tc-val]")
+                  if (first) first.focus()
+                }
+              })
+            }
+            document.addEventListener("click", this.onDocClick)
+            document.addEventListener("keydown", this.onKey)
+          },
+          opts()   { return JSON.parse(this.el.dataset.options || "[]") },
+          prompt() { return this.el.dataset.prompt || "" },
+          renderList(query) {
+            this.list.innerHTML = ""
+            const q = (query || "").toLowerCase().trim()
+            const cur = this.input ? String(this.input.value) : ""
+            const allOpts = this.opts()
+            const filtered = q === "" ? allOpts : allOpts.filter(([label]) => label.toLowerCase().includes(q))
+            const p = this.prompt()
+            if (p && q === "") this.list.appendChild(this.makeBtn("", p, false, true))
+            if (filtered.length === 0) {
+              const empty = document.createElement("div")
+              empty.textContent = "No matches"
+              empty.className = "px-3 py-2 text-sm text-center text-[var(--thamani-pewter)]"
+              this.list.appendChild(empty)
+              return
+            }
+            filtered.forEach(([label, val]) => {
+              this.list.appendChild(this.makeBtn(String(val), label, String(val) === cur, false))
+            })
+          },
+          makeBtn(val, label, active, isPrompt) {
+            const b = document.createElement("button")
+            b.type = "button"
+            b.dataset.tcVal = val
+            b.textContent = label
+            b.tabIndex = 0
+            b.className = active
+              ? "block w-full text-left px-3 py-2 text-sm font-medium cursor-pointer outline-none text-[var(--thamani-forest)] bg-[color-mix(in_srgb,var(--thamani-lime)_26%,white)]"
+              : "block w-full text-left px-3 py-2 text-sm cursor-pointer outline-none transition-colors hover:bg-thamani-stone/50 " +
+                (isPrompt ? "text-[var(--thamani-pewter)]" : "text-base-content")
+            b.addEventListener("mousedown", (e) => { e.preventDefault() })
+            b.addEventListener("click", (e) => { e.stopPropagation(); this.select(b.dataset.tcVal) })
+            b.addEventListener("keydown", (e) => {
+              if (e.key === "Enter" || e.key === " ") { e.preventDefault(); this.select(b.dataset.tcVal) }
+              if (e.key === "ArrowDown") { e.preventDefault(); const n = b.nextElementSibling; if (n) n.focus() }
+              if (e.key === "ArrowUp")   {
+                e.preventDefault()
+                const p = b.previousElementSibling
+                if (p && p.dataset.tcVal !== undefined) p.focus()
+                else if (this.search) this.search.focus()
+              }
+            })
+            return b
+          },
+          select(val) {
+            this.input.value = val
+            this.input.dispatchEvent(new Event("input",  { bubbles: true }))
+            this.input.dispatchEvent(new Event("change", { bubbles: true }))
+            this.renderList("")
+            this.syncDisplay()
+            this.close()
+          },
+          syncDisplay() {
+            if (!this.input || !this.display) return
+            const val   = String(this.input.value)
+            const match = this.opts().find(([, v]) => String(v) === val)
+            if (match) {
+              this.display.textContent = match[0]
+              this.display.classList.remove("text-[var(--thamani-pewter)]")
+            } else {
+              this.display.textContent = this.prompt() || "Select…"
+              this.display.classList.add("text-[var(--thamani-pewter)]")
+            }
+          },
+          toggle() { this.dropdown.classList.contains("hidden") ? this.open() : this.close() },
+          open() {
+            if (this.search) this.search.value = ""
+            this.renderList("")
+            this.dropdown.classList.remove("hidden")
+            this.trigger.setAttribute("aria-expanded", "true")
+            if (this.chevron) this.chevron.style.transform = "rotate(180deg)"
+            setTimeout(() => { if (this.search) this.search.focus() }, 10)
+          },
+          close() {
+            this.dropdown.classList.add("hidden")
+            this.trigger.setAttribute("aria-expanded", "false")
+            if (this.chevron) this.chevron.style.transform = ""
+            if (this.search) this.search.value = ""
+          }
+        }
+      </script>
+    </div>
+    """
+  end
+
+  def thamani_input(%{type: "select", field: field} = assigns) do
+    errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
+
+    assigns =
+      assigns
+      |> assign(:errors, Enum.map(errors, &translate_error(&1)))
+      |> assign(:input_id, field.id)
+      |> assign(:name, field.name)
+      |> assign(:value, field.value)
+
+    ~H"""
+    <div class={["mb-5", @class]}>
+      <div class={[
+        "flex items-baseline justify-between mb-2",
+        @errors != [] && "mb-1"
+      ]}>
+        <label
+          for={@input_id}
+          class="block text-[13px] font-medium text-thamani-pewter tracking-[0.01em]"
+        >
+          {@label}<span :if={@required} class="text-red-600">&nbsp;*</span>
+        </label>
+      </div>
+      <select
+        id={@input_id}
+        name={@name}
+        required={@required}
+        class={[
+          "w-full box-border px-4 py-3 text-[15px] text-base-content bg-thamani-snow",
+          "border-[1.5px] rounded-lg outline-none",
+          "transition-[border-color,box-shadow] duration-150 ease-in-out",
+          "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
+          (@errors != [] && "border-thamani-error") || "border-thamani-stone"
+        ]}
+        {@rest}
+      >
+        <option :if={@placeholder} value="">{@placeholder}</option>
+        <option
+          :for={{label, value} <- @options}
+          value={value}
+          selected={to_string(@value) == to_string(value)}
+        >
+          {label}
+        </option>
+      </select>
+      <p :for={msg <- @errors} class="text-[13px] text-thamani-error mt-1.5">
+        {msg}
+      </p>
+    </div>
+    """
+  end
 
   def thamani_input(%{type: "textarea", field: field} = assigns) do
     errors = if Phoenix.Component.used_input?(field), do: field.errors, else: []
@@ -2306,6 +2839,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       |> assign(:input_id, field.id)
       |> assign(:name, field.name)
       |> assign(:value, field.value)
+      |> assign(:input_type, if(assigns.sensitive, do: "text", else: assigns.type))
 
     ~H"""
     <div class={["mb-5", @class]}>
@@ -2329,9 +2863,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
         </span>
         <input
           id={@input_id}
-          type={@type}
+          type={@input_type}
           name={@name}
-          value={Phoenix.HTML.Form.normalize_value(@type, assigns[:value])}
+          value={Phoenix.HTML.Form.normalize_value(@input_type, assigns[:value])}
           placeholder={@placeholder}
           autocomplete={@autocomplete}
           required={@required}
@@ -2341,19 +2875,34 @@ defmodule ThamaniDawaWeb.CoreComponents do
             "transition-[border-color,box-shadow] duration-150 ease-in-out",
             "focus:border-thamani-accent focus:shadow-[0_0_0_3px_rgba(102,103,171,0.12)]",
             if(@icon, do: "pl-11!", else: "pl-4!"),
-            @type == "password" && "pr-11!",
+            (@type == "password" || @sensitive) && "pr-11!",
+            @sensitive && "[-webkit-text-security:disc]",
             (@errors != [] && "border-thamani-error") || "border-thamani-stone"
           ]}
           {@rest}
         />
+        <span
+          :if={@badge != []}
+          class={[
+            "pointer-events-none absolute inset-y-0 flex items-center",
+            (@type == "password" || @sensitive) && "right-11",
+            !(@type == "password" || @sensitive) && "right-3"
+          ]}
+        >
+          {render_slot(@badge)}
+        </span>
         <button
-          :if={@type == "password"}
+          :if={@type == "password" || @sensitive}
           type="button"
           id={"#{@input_id}-toggle"}
           aria-label="Show password"
           class="absolute inset-y-0 right-3 flex items-center text-thamani-pewter hover:text-thamani-forest"
           phx-click={
-            JS.toggle_attribute({"type", "text", "password"}, to: "##{@input_id}")
+            if @sensitive do
+              JS.toggle_class("[-webkit-text-security:disc]", to: "##{@input_id}")
+            else
+              JS.toggle_attribute({"type", "text", "password"}, to: "##{@input_id}")
+            end
             |> JS.toggle(to: "##{@input_id}-eye")
             |> JS.toggle(to: "##{@input_id}-eye-slash")
           }
@@ -2385,9 +2934,18 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :on_cancel, JS, default: %JS{}
   attr :close_on_click_away, :boolean, default: true
   attr :class, :any, default: nil
-  attr :title, :string, default: nil, doc: "dialog title (Doop TD Modal HtFGl5-GrG); every converted dialog sets it"
+
+  attr :title, :string,
+    default: nil,
+    doc: "dialog title (Doop TD Modal HtFGl5-GrG); every converted dialog sets it"
+
   attr :subtitle, :string, default: nil
-  attr :size, :string, values: ~w(form confirm wide), default: "form", doc: "form = 560px, confirm = 480px, wide = 640px (multi-step flows)"
+
+  attr :size, :string,
+    values: ~w(form confirm wide),
+    default: "form",
+    doc: "form = 560px, confirm = 480px, wide = 640px (multi-step flows)"
+
   slot :inner_block, required: true
   slot :footer, doc: "right-aligned actions: secondary Cancel, then the primary"
 

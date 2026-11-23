@@ -92,6 +92,30 @@ defmodule ThamaniDawaWeb.PortalSwitcherTest do
       assert has_element?(view, "#site-switch-option-#{lab_site.id} .td-ss-check")
       refute has_element?(view, "#site-switch-org .td-ss-check")
     end
+
+    test "labels distributor and manufacturer sites by their site type", %{
+      conn: conn,
+      admin: admin
+    } do
+      distributor_site =
+        site_fixture(%{
+          organization_id: admin.organization_id,
+          name: "Distribution Centre",
+          activities: [:distribution]
+        })
+
+      manufacturer_site =
+        site_fixture(%{
+          organization_id: admin.organization_id,
+          name: "Manufacturing Plant",
+          activities: [:manufacturing]
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/org/sites")
+
+      assert has_element?(view, "#site-switch-option-#{distributor_site.id}", "Distributor")
+      assert has_element?(view, "#site-switch-option-#{manufacturer_site.id}", "Manufacturer")
+    end
   end
 
   describe "multi-site staff" do

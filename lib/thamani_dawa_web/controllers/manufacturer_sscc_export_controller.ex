@@ -1,6 +1,6 @@
 defmodule ThamaniDawaWeb.ManufacturerSsccExportController do
   @moduledoc """
-  Streams a shipper SSCC's serials as a formula-injection-safe CSV. Access
+  Streams a shipper SSCC's serials (fetched from the GS1 member API) as a formula-injection-safe CSV. Access
   is enforced by the `:require_manufacturer_user` plug; the SSCC is always
   looked up within the signed-in user's organization.
   """
@@ -12,12 +12,24 @@ defmodule ThamaniDawaWeb.ManufacturerSsccExportController do
   def show(conn, %{"id" => id}) do
     organization_id = conn.assigns.current_scope.organization_id
     sscc = Manufacturing.get_sscc_group!(organization_id, id)
-    serials = Manufacturing.list_serials_for_sscc(organization_id, sscc.id)
+
+    case Manufacturing.fetch_sscc_serials(organization_id, sscc.code) do
+      {:ok, serials} ->
+        send_csv(conn, sscc, serials)
+
+      {:error, _reason} ->
+        conn
+        |> put_flash(:error, "Couldn't load this SSCC's serials from GS1. Try again shortly.")
+        |> redirect(to: ~p"/manufacturer/sscc/#{sscc.id}/serials")
+    end
+  end
+
+  defp send_csv(conn, sscc, serials) do
     filename = "sscc-#{sscc.code}.csv"
 
     rows =
       for serial <- serials do
-        [sscc.code, sscc.gtin, sscc.batch, serial.serial]
+        [sscc.code, serial.gtin, serial.batch, serial.serial]
       end
 
     body =

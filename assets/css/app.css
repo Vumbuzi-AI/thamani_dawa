@@ -242,6 +242,10 @@ body {
   font-weight: var(--weight-td-medium);
 }
 
+#distributor-nav-group.is-expanded .distributor-nav-chevron {
+  transform: rotate(180deg);
+}
+
 #sidebar-aside .text-thamani-pewter,
 #sidebar-profile > span:last-child {
   color: var(--color-td-ink-2) !important;
@@ -751,7 +755,6 @@ input[type="text"]:not(.hidden):not([hidden]),
 input[type="email"]:not(.hidden):not([hidden]),
 input[type="password"]:not(.hidden):not([hidden]),
 input[type="number"]:not(.hidden):not([hidden]),
-input[type="date"]:not(.hidden):not([hidden]),
 input[type="tel"]:not(.hidden):not([hidden]),
 input[type="url"]:not(.hidden):not([hidden]),
 select:not(.hidden):not([hidden]),
@@ -3093,7 +3096,7 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
   --td-dp-hover: var(--color-td-hover);
   --td-dp-selected-bg: var(--color-td-accent);
   --td-dp-selected-ink: var(--color-td-on-accent);
-  --td-dp-today-ring: transparent; /* Doop marks today with weight only */
+  --td-dp-today-ring: var(--color-td-accent);
   --td-dp-muted: var(--color-td-ink-3);
   --td-dp-z: 80;
   position: relative;
@@ -3158,8 +3161,29 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-fd .td-fd-panel { right: 0; transform-origin: top right; }
 .td-fd.is-left .td-fd-panel { right: auto; left: 0; transform-origin: top left; }
 
-/* dark: Doop dark has no hairline borders, so popovers over a raised modal need their own edge */
-[data-theme="dark"] .td-dp { --td-dp-bg: var(--color-td-selected); --td-dp-border: rgba(255, 255, 255, 0.07); --td-dp-hover: rgba(255, 255, 255, 0.06); }
-[data-theme="dark"] .td-dp-pop,
-[data-theme="dark"] .td-select-pop { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
-[data-theme="dark"] .td-select-pop { background: var(--color-td-selected); border-color: rgba(255, 255, 255, 0.07); }
+/* dark: Doop dark has no hairline borders, so the popovers get a 1px border in a surface token (no shadow) */
+[data-theme="dark"] .td-dp { --td-dp-bg: var(--color-td-raised); --td-dp-border: var(--color-td-selected); --td-dp-hover: var(--color-td-selected); }
+[data-theme="dark"] .td-select-pop { background: var(--color-td-raised); border-color: var(--color-td-selected); }
+
+/* TD DatePicker: date-time row and range variant */
+.td-dp-row { display: flex; gap: 8px; }
+.td-dp-row > .td-dp-trigger { flex: 1 1 auto; min-width: 0; }
+.td-dp-time, .internal-app .td-dp-time {
+  flex: none; width: 76px !important; height: 32px !important; padding: 0 10px !important; margin: 0 !important;
+  border: 1px solid var(--color-td-border) !important; border-radius: 8px !important;
+  background: var(--color-td-raised) !important; color: var(--color-td-ink) !important;
+  font: inherit; font-size: 14px !important; font-variant-numeric: tabular-nums; box-shadow: none !important;
+}
+.td-dp-time::placeholder { color: var(--color-td-ink-3); }
+.td-dp-time:focus { outline: 3px solid var(--color-td-focus) !important; outline-offset: 0; border-color: var(--color-td-accent) !important; }
+.td-dp-day.is-in-range { background: var(--color-td-accent-tint) !important; border-radius: 0; }
+.td-dp-day.is-range-start { border-radius: var(--td-dp-day-radius) 0 0 var(--td-dp-day-radius); }
+.td-dp-day.is-range-end { border-radius: 0 var(--td-dp-day-radius) var(--td-dp-day-radius) 0; }
+.td-dp.is-range .td-dp-gr { row-gap: 2px; column-gap: 0; }
+
+/* collapsible Distributor nav group (master): the group label is the toggle */
+.td-nav-group-toggle { display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; background: none; cursor: pointer; text-align: left; }
+.td-nav-group-toggle:hover { color: var(--color-td-ink); }
+.td-nav-group-toggle:focus-visible { outline: 2px solid var(--color-td-focus); outline-offset: -2px; border-radius: 6px; }
+.td-nav-group-caret { width: 12px; height: 12px; flex: none; transition: transform .15s ease-out; }
+#distributor-nav-group.is-expanded .td-nav-group-caret { transform: rotate(180deg); }

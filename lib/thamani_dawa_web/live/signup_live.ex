@@ -3,6 +3,7 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.Accounts.User
+  alias ThamaniDawa.GS1.MemberApi
   alias ThamaniDawa.Grp
   alias ThamaniDawa.Grp.Licence
   alias ThamaniDawa.Kmlttb
@@ -12,10 +13,11 @@ defmodule ThamaniDawaWeb.SignupLive do
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
 
-  @steps [:operating_model, :main_location, :administrator]
+  @steps [:operating_model, :gs1_key, :main_location, :administrator]
   @operating_models ~w(pharmacy laboratory distributor manufacturer)
   @step_labels %{
     operating_model: "Organization",
+    gs1_key: "GS1 account",
     main_location: "Main location",
     administrator: "Administrator"
   }
@@ -31,6 +33,7 @@ defmodule ThamaniDawaWeb.SignupLive do
         )
       )
       |> assign(:site_form, to_form(Site.default_changeset(%Site{}, %{}), as: :site))
+      |> assign(:gs1_form, to_form(%{"api_key" => ""}, as: :gs1))
       |> assign(
         :admin_form,
         to_form(
@@ -44,7 +47,13 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> assign(:step, :operating_model)
       |> assign(:organization_params, nil)
       |> assign(:site_params, nil)
-      |> assign(:name_taken, false)
+      |> assign(:gs1_key, nil)
+      |> assign(:gs1_prefixes, [])
+      |> assign(:gs1_glns, [])
+      |> assign(:gs1_company_name, "")
+      |> assign(:primary_prefix, nil)
+      |> assign(:gs1_key_check, :idle)
+      |> assign(:gln_verification_source, nil)
       |> assign(:gln_check, :idle)
       |> assign(:ppb_check, :idle)
       |> assign(:kmlttb_check, :idle)
@@ -80,8 +89,7 @@ defmodule ThamaniDawaWeb.SignupLive do
     {:noreply,
      socket
      |> assign(:org_form, to_form(org_changeset, as: :organization))
-     |> assign(:site_form, site_form)
-     |> maybe_check_organization_name(params, org_params)}
+     |> assign(:site_form, site_form)}
   end
 
   def handle_event("restore_signup_draft", draft, socket) do
@@ -121,17 +129,9 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> Organization.changeset(org_params)
       |> Map.put(:action, :validate)
 
-    name = Map.get(org_params, "name", "")
-
     cond do
-      Enum.empty?(Map.get(org_params, "operating_models", [])) or blank?(name) ->
+      Enum.empty?(Map.get(org_params, "operating_models", [])) ->
         {:noreply, assign(socket, :org_form, to_form(org_changeset, as: :organization))}
-
-      not blank?(name) and Organizations.organization_name_taken?(String.trim(name)) ->
-        {:noreply,
-         socket
-         |> assign(:name_taken, true)
-         |> assign(:org_form, to_form(org_changeset, as: :organization))}
 
       true ->
         site_changeset =
@@ -144,10 +144,61 @@ defmodule ThamaniDawaWeb.SignupLive do
 
         {:noreply,
          socket
-         |> assign(:step, :main_location)
+         |> assign(:step, :gs1_key)
          |> assign(:organization_params, org_params)
          |> assign(:org_form, to_form(org_changeset, as: :organization))
          |> assign(:site_form, to_form(site_changeset, as: :site))}
+    end
+  end
+
+  def handle_event("verify_gs1_key", %{"gs1" => %{"api_key" => key}}, socket) do
+    key = key |> to_string() |> String.trim()
+
+    if blank?(key) do
+      {:noreply,
+       socket
+       |> assign(:gs1_key_check, :idle)
+       |> assign(:gs1_form, to_form(%{"api_key" => key}, as: :gs1))}
+    else
+      {:noreply,
+       socket
+       |> assign(:gs1_key_check, :checking)
+       |> assign(:gs1_form, to_form(%{"api_key" => key}, as: :gs1))
+       |> start_async(:gs1_key_check, fn ->
+         with {:ok, prefixes} <- MemberApi.get_company_prefixes(api_token: key),
+              {:ok, glns} <- MemberApi.list_glns(api_token: key) do
+           {:ok, prefixes, glns}
+         end
+       end)}
+    end
+  end
+
+  def handle_event("continue_gs1_key", _params, socket) do
+    case socket.assigns.gs1_key_check do
+      {:verified, company_name, prefixes, _glns}
+      when is_binary(company_name) and company_name != "" ->
+        organization_params = Map.put(socket.assigns.organization_params, "name", company_name)
+
+        if prefixes != [] and blank?(socket.assigns.primary_prefix) do
+          {:noreply, assign(socket, :gs1_key_check, {:missing_primary, company_name, prefixes})}
+        else
+          {:noreply,
+           socket
+           |> assign(:organization_params, organization_params)
+           |> assign(
+             :org_form,
+             to_form(Organization.signup_changeset(%Organization{}, organization_params),
+               as: :organization
+             )
+           )
+           |> assign(:step, :main_location)}
+        end
+
+      {:verified, _company_name, _prefixes, _glns} ->
+        {:noreply, assign(socket, :gs1_key_check, :name_not_found)}
+
+      _ ->
+        {:noreply, assign(socket, :gs1_key_check, :required)}
     end
   end
 
@@ -157,6 +208,8 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> Map.get("site", %{})
       |> apply_activity_choice(socket.assigns.organization_params)
 
+    site_params = member_gln_site_params(socket, site_params)
+
     site_changeset =
       %Site{}
       |> Site.default_changeset(site_params)
@@ -165,19 +218,32 @@ defmodule ThamaniDawaWeb.SignupLive do
     {:noreply,
      socket
      |> assign(:site_form, to_form(site_changeset, as: :site))
+     |> assign(:site_params, site_params)
      |> maybe_autofill_ppb_facility_name()
      |> maybe_autofill_kmlttb_facility_name()
-     |> maybe_check_gln(params, site_params)
+     |> select_member_gln(params, site_params)
      |> maybe_check_ppb(params, site_params)
      |> maybe_check_kmlttb(params, site_params)}
   end
 
   def handle_event("continue_site", %{"site" => site_params} = params, socket) do
-    site_params = apply_activity_choice(site_params, socket.assigns.organization_params)
+    site_params =
+      socket
+      |> member_gln_site_params(
+        apply_activity_choice(site_params, socket.assigns.organization_params)
+      )
+
+    socket = verify_member_gln(socket, site_params)
 
     site_changeset = Site.default_changeset(%Site{}, site_params)
     ppb_ftype = Site.ppb_ftype(Map.get(site_params, "activities", []))
     kmlttb_required = Site.kmlttb_required?(Map.get(site_params, "activities", []))
+
+    socket =
+      socket
+      |> assign(:site_form, to_form(site_changeset, as: :site))
+      |> maybe_autofill_ppb_facility_name()
+      |> maybe_autofill_kmlttb_facility_name()
 
     cond do
       not gln_present?(site_params) ->
@@ -345,6 +411,12 @@ defmodule ThamaniDawaWeb.SignupLive do
     site_kmlttb_required = Site.kmlttb_required?(site_activities)
 
     cond do
+      not match?({:verified, _, _, _}, socket.assigns.gs1_key_check) ->
+        {:noreply,
+         socket
+         |> assign(:step, :gs1_key)
+         |> put_flash(:error, "Please verify your GS1 API key again before continuing.")}
+
       socket.assigns.gln_check == :checking ->
         {:noreply,
          put_flash(socket, :error, "We’re rechecking your GS1 details. Try again in a moment.")}
@@ -384,7 +456,12 @@ defmodule ThamaniDawaWeb.SignupLive do
     case Organizations.signup(
            socket.assigns.organization_params,
            socket.assigns.site_params,
-           admin_params
+           admin_params,
+           gs1: %{
+             api_key: socket.assigns.gs1_key,
+             prefixes: socket.assigns.gs1_prefixes,
+             primary_prefix: socket.assigns.primary_prefix
+           }
          ) do
       {:ok, result} ->
         Accounts.deliver_user_confirmation_instructions(result.user, fn token ->
@@ -399,7 +476,7 @@ defmodule ThamaniDawaWeb.SignupLive do
       {:error, %Ecto.Changeset{data: %Organization{}} = changeset} ->
         {:noreply,
          socket
-         |> assign(:step, :operating_model)
+         |> assign(:step, :gs1_key)
          |> assign(:org_form, to_form(changeset, as: :organization))
          |> put_flash(:error, changeset_error_flash(changeset, "organization"))}
 
@@ -483,6 +560,29 @@ defmodule ThamaniDawaWeb.SignupLive do
        |> maybe_autofill_ppb_facility_name()
        |> maybe_autofill_kmlttb_facility_name()}
     end
+  end
+
+  def handle_async(:gs1_key_check, {:ok, {:ok, prefixes, glns}}, socket) do
+    company_name = company_name_from_glns(glns)
+    prefixes = prefixes |> Enum.map(&to_string/1) |> Enum.reject(&blank?/1) |> Enum.uniq()
+
+    {:noreply,
+     socket
+     |> assign(:gs1_key, socket.assigns.gs1_form[:api_key].value)
+     |> assign(:gs1_prefixes, prefixes)
+     |> assign(:gs1_glns, glns)
+     |> assign(:gs1_company_name, company_name)
+     |> assign(:primary_prefix, List.first(prefixes))
+     |> assign(:gs1_key_check, {:verified, company_name, prefixes, glns})}
+  end
+
+  def handle_async(:gs1_key_check, {:ok, {:error, reason}}, socket)
+      when reason in [:unauthorized, :forbidden] do
+    {:noreply, assign(socket, :gs1_key_check, :invalid)}
+  end
+
+  def handle_async(:gs1_key_check, _result, socket) do
+    {:noreply, assign(socket, :gs1_key_check, :unavailable)}
   end
 
   def handle_async(:gln_lookup, {:ok, {:ok, :inactive, licence}}, socket) do
@@ -633,17 +733,7 @@ defmodule ThamaniDawaWeb.SignupLive do
     |> String.slice(0, max_length)
   end
 
-  defp restorable_step(step, organization_params, site_params) do
-    models_present? = Map.get(organization_params, "operating_models", []) != []
-    name_present? = not blank?(Map.get(organization_params, "name", ""))
-    site_present? = models_present? and name_present? and Map.get(site_params, "gln") != ""
-
-    case step do
-      "administrator" when site_present? -> :administrator
-      "main_location" when models_present? and name_present? -> :main_location
-      _ -> :operating_model
-    end
-  end
+  defp restorable_step(_step, _organization_params, _site_params), do: :operating_model
 
   defp reverify_restored_gln(socket, site_params, step)
        when step in [:main_location, :administrator] do
@@ -695,20 +785,15 @@ defmodule ThamaniDawaWeb.SignupLive do
   defp activities_for_choice("laboratory"), do: ["laboratory"]
   defp activities_for_choice("pharmacy_laboratory"), do: ["pharmacy", "laboratory"]
   defp activities_for_choice("distribution"), do: ["distribution"]
+  defp activities_for_choice("manufacturing"), do: ["manufacturing"]
+
+  defp activities_for_choice("manufacturing_distribution"),
+    do: ["manufacturing", "distribution"]
+
   defp activities_for_choice(_choice), do: []
 
   defp licensee_name(licence), do: Licence.name(licence)
   defp licensee_address(licence), do: Licence.address(licence)
-
-  defp maybe_check_organization_name(socket, params, org_params) do
-    if Map.get(params, "_target") == ["organization", "name"] do
-      name = org_params |> Map.get("name", "") |> to_string() |> String.trim()
-      taken? = name != "" and Organizations.organization_name_taken?(name)
-      assign(socket, :name_taken, taken?)
-    else
-      socket
-    end
-  end
 
   defp maybe_autofill_site_fields(socket, licence) do
     socket
@@ -735,8 +820,69 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   defp gs1_gln_registration_url, do: "https://gs1kenya.org/membership"
 
+  defp gs1_key_verified?(gs1_key_check) do
+    match?({:verified, _, _, _}, gs1_key_check) or
+      match?({:missing_primary, _, _}, gs1_key_check) or
+      gs1_key_check == :name_not_found
+  end
+
   defp blank?(nil), do: true
   defp blank?(value), do: value |> to_string() |> String.trim() == ""
+
+  defp member_gln_site_params(socket, site_params) do
+    gln = Map.get(site_params, "gln", "")
+
+    case Enum.find(socket.assigns.gs1_glns, &(Map.get(&1, "gln") == gln)) do
+      nil ->
+        site_params
+
+      row ->
+        site_params
+        |> Map.put("name", member_gln_description(row))
+        |> Map.put("address", Map.get(row, "address", ""))
+    end
+  end
+
+  defp select_member_gln(socket, params, site_params) do
+    if Map.get(params, "_target") == ["site", "gln"] do
+      verify_member_gln(socket, site_params)
+    else
+      socket
+    end
+  end
+
+  defp verify_member_gln(socket, site_params) do
+    gln = Map.get(site_params, "gln", "")
+
+    case Enum.find(socket.assigns.gs1_glns, &(Map.get(&1, "gln") == gln)) do
+      nil ->
+        assign(socket, :gln_check, :idle)
+
+      row ->
+        name = member_gln_description(row)
+        address = Map.get(row, "address")
+
+        socket
+        |> assign(:gln_verification_source, "gs1_member")
+        |> assign(
+          :gln_check,
+          if(Sites.gln_taken?(gln), do: {:taken, name, address}, else: {:matched, name, address})
+        )
+    end
+  end
+
+  defp member_gln_description(row) do
+    Enum.find_value(["description", "location", "address"], "", fn key ->
+      value = Map.get(row, key, "")
+      if blank?(value), do: nil, else: value
+    end)
+  end
+
+  defp company_name_from_glns(glns) do
+    glns
+    |> Enum.map(&Map.get(&1, "company", ""))
+    |> Enum.find("", &(not blank?(&1)))
+  end
 
   defp maybe_check_gln(socket, params, site_params) do
     if Map.get(params, "_target") == ["site", "gln"] do
@@ -1077,11 +1223,15 @@ defmodule ThamaniDawaWeb.SignupLive do
   end
 
   defp signup_title(:operating_model), do: "Tell us about your organization"
+  defp signup_title(:gs1_key), do: "Connect your GS1 account"
   defp signup_title(:main_location), do: "Set up your main location"
   defp signup_title(:administrator), do: "Create your administrator"
 
   defp signup_subtitle(:operating_model),
     do: "Select all the services you operate. You can choose more than one."
+
+  defp signup_subtitle(:gs1_key),
+    do: "We’ll use your GS1 member account to set up your organization and locations."
 
   defp signup_subtitle(:main_location),
     do: "Verify this location first, then choose what this specific premises is licensed to do."
@@ -1309,23 +1459,138 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <% end %>
                   </fieldset>
 
-                  <div class="mb-6">
-                    <.td_input
-                      field={@org_form[:name]}
-                      label="Organization name"
-                      placeholder="e.g. Afya Pharmacy Ltd"
-                      phx-debounce="500"
-                      required
-                    />
-                    <p :if={@name_taken} class="mt-2 text-xs text-red-700">
-                      An organization with this name already exists. If this is your organization,
-                      <a href="/login" class="underline">log in</a>
-                      instead.
-                    </p>
-                  </div>
-
-                  <.td_button id="onboarding-continue" type="submit" variant="primary" size="lg" label="Continue" />
+                  <.td_button
+                    id="onboarding-continue"
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    label="Continue"
+                  />
                 </.form>
+              <% :gs1_key -> %>
+
+                <.form for={@gs1_form} id="gs1-key-form" phx-submit="verify_gs1_key">
+                  <div class="mb-8">
+                    <.thamani_input
+                      field={@gs1_form[:api_key]}
+                      type="text"
+                      label="GS1 API key"
+                      autocomplete="off"
+                      sensitive
+                      required
+                    >
+                      <:badge :if={gs1_key_verified?(@gs1_key_check)}>
+                        <span
+                          id="gs1-key-verified-badge"
+                          class="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--thamani-forest)_12%,white)] px-2.5 py-1 text-xs font-semibold text-[var(--thamani-forest)]"
+                        >
+                          <.icon name="hero-check-circle" class="size-3.5" /> Verified
+                        </span>
+                      </:badge>
+                    </.thamani_input>
+                    <p class="-mt-3 mb-2 text-xs text-[var(--thamani-pewter)]">
+                      We verify this with GS1 as soon as you enter it
+                    </p>
+                    <%= case @gs1_key_check do %>
+                      <% :checking -> %>
+                        <p class="mb-2 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--thamani-pewter)]">
+                          <.icon name="hero-arrow-path" class="size-3.5 animate-spin" />
+                          Verifying with GS1&hellip;
+                        </p>
+                      <% :invalid -> %>
+                        <p class="mb-2 text-xs text-red-700">This key wasn't accepted by GS1</p>
+                      <% :unavailable -> %>
+                        <p class="mb-2 text-xs text-[var(--thamani-pewter)]">
+                          Couldn't reach GS1, try again
+                        </p>
+                      <% _ -> %>
+                    <% end %>
+                    <aside
+                      :if={@gs1_key_check == :idle}
+                      class="mt-5 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_14%,white)] bg-[color-mix(in_srgb,var(--thamani-forest)_4%,white)] px-5 py-5"
+                    >
+                      <div class="flex items-start gap-4">
+                        <.icon
+                          name="hero-information-circle"
+                          class="mt-0.5 size-5 shrink-0 text-[var(--thamani-forest)]"
+                        />
+                        <div>
+                          <p class="text-sm font-semibold text-[var(--thamani-forest)]">
+                            Not sure what this is?
+                          </p>
+                          <p class="mt-1.5 max-w-2xl text-xs leading-5 text-[var(--thamani-pewter)]">
+                            Your GS1 API key lets us securely retrieve the company prefixes and GLNs assigned to your membership.
+                          </p>
+                          <a
+                            id="gs1-membership-link"
+                            href={gs1_gln_registration_url()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--thamani-forest)] underline decoration-[color-mix(in_srgb,var(--thamani-forest)_35%,transparent)] underline-offset-4 transition hover:decoration-[var(--thamani-forest)]"
+                          >
+                            Get one from GS1 Kenya
+                            <.icon name="hero-arrow-up-right" class="size-3.5" />
+                          </a>
+                        </div>
+                      </div>
+                    </aside>
+                  </div>
+                  <.thamani_btn
+                    :if={!gs1_key_verified?(@gs1_key_check)}
+                    id="verify-gs1-key"
+                    type="submit"
+                    variant="primary"
+                    disabled={@gs1_key_check == :checking}
+                  >
+                    Verify <.icon name="hero-arrow-right" class="ml-2 size-4" />
+                  </.thamani_btn>
+                </.form>
+
+                <%= if gs1_key_verified?(@gs1_key_check) do %>
+                  <div class="mt-6">
+                    <div
+                      :if={!blank?(@gs1_company_name)}
+                      id="gs1-organization-badge"
+                      class="mb-6 flex w-full items-center gap-3 rounded-2xl border border-[color-mix(in_srgb,var(--thamani-forest)_16%,white)] bg-[color-mix(in_srgb,var(--thamani-forest)_6%,white)] px-4 py-3 text-[var(--thamani-forest)] shadow-sm"
+                    >
+                      <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-white">
+                        <.icon name="hero-building-office-2" class="size-4.5" />
+                      </span>
+                      <span class="min-w-0">
+                        <span class="block text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--thamani-pewter)]">
+                          Verified organization
+                        </span>
+                        <span class="mt-0.5 block truncate text-base font-semibold">
+                          {@gs1_company_name}
+                        </span>
+                      </span>
+                      <.icon
+                        name="hero-check-badge"
+                        class="size-5 shrink-0 text-[var(--thamani-forest)]"
+                      />
+                    </div>
+                    <p :if={blank?(@gs1_company_name)} class="mb-4 text-xs text-red-700">
+                      We couldn't find your company name in GS1.
+                    </p>
+                    <p :if={@gs1_key_check == :name_not_found} class="mb-4 text-xs text-red-700">
+                      We couldn't find your company name in GS1.
+                    </p>
+                    <.form for={@gs1_form} id="gs1-continue-form" phx-submit="continue_gs1_key">
+                      <div class="flex items-center gap-3">
+                        <button
+                          id="gs1-key-back"
+                          type="button"
+                          phx-click="back"
+                          phx-value-from="gs1_key"
+                          class="inline-flex h-11 items-center justify-center rounded-full border border-[var(--thamani-stone)] bg-white px-5 text-sm font-medium text-[var(--thamani-forest)] transition hover:border-[var(--thamani-forest)]"
+                        ><.icon name="hero-arrow-left" class="mr-2 size-4" /> Back</button>
+                        <.thamani_btn id="gs1-key-continue" type="submit" variant="primary">
+                          Continue <.icon name="hero-arrow-right" class="ml-2 size-4" />
+                        </.thamani_btn>
+                      </div>
+                    </.form>
+                  </div>
+                <% end %>
               <% :main_location -> %>
                 <.form
                   for={@site_form}
@@ -1342,11 +1607,17 @@ defmodule ThamaniDawaWeb.SignupLive do
                   <input type="hidden" name="site[address]" value={@site_form[:address].value} />
 
                   <div class="mb-8">
-                    <.td_input
+                    <.input
                       field={@site_form[:gln]}
+                      type="combobox"
+                      placeholder="Select a GLN from your GS1 account"
+                      options={
+                        Enum.map(@gs1_glns, fn row ->
+                          {"#{member_gln_description(row)} — #{Map.get(row, "gln")}",
+                           Map.get(row, "gln")}
+                        end)
+                      }
                       label="Location GLN"
-                      placeholder="13-digit GS1 Global Location Number"
-                      phx-debounce="500"
                       required
                     />
                     <%= case @gln_check do %>
@@ -1420,38 +1691,6 @@ defmodule ThamaniDawaWeb.SignupLive do
                           We verify this with the GS1 registry as soon as you enter it.
                         </p>
                     <% end %>
-
-                    <aside
-                      :if={not match?({:matched, _, _}, @gln_check)}
-                      id="gln-help"
-                      class="mt-5 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_14%,white)] bg-[color-mix(in_srgb,var(--thamani-forest)_4%,white)] px-5 py-5"
-                    >
-                      <div class="flex items-start gap-4">
-                        <.icon
-                          name="hero-information-circle"
-                          class="mt-0.5 size-5 shrink-0 text-[var(--thamani-forest)]"
-                        />
-                        <div>
-                          <p class="text-sm font-semibold text-[var(--thamani-forest)]">
-                            Not sure what this is?
-                          </p>
-                          <p class="mt-1.5 max-w-2xl text-xs leading-5 text-[var(--thamani-pewter)]">
-                            A GLN uniquely identifies this physical location. Each additional
-                            branch or wholesale premises should use its own GLN.
-                          </p>
-                          <a
-                            id="gln-registration-link"
-                            href={gs1_gln_registration_url()}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--thamani-forest)] underline decoration-[color-mix(in_srgb,var(--thamani-forest)_35%,transparent)] underline-offset-4 transition hover:decoration-[var(--thamani-forest)]"
-                          >
-                            Don’t have one? Get a GLN from GS1 Kenya
-                            <.icon name="hero-arrow-up-right" class="size-3.5" />
-                          </a>
-                        </div>
-                      </div>
-                    </aside>
                   </div>
 
                   <%= if match?({:matched, _, _}, @gln_check) do %>
@@ -1697,7 +1936,9 @@ defmodule ThamaniDawaWeb.SignupLive do
                       type="submit"
                       variant="primary"
                       size="lg"
-                      label={if @gln_check == :checking, do: "Checking GS1 registry…", else: "Continue"}
+                      label={
+                        if @gln_check == :checking, do: "Checking GS1 registry…", else: "Continue"
+                      }
                       disabled={
                         not match?({:matched, _, _}, @gln_check) or
                           (current_site_ftype(@site_form) != nil and
@@ -1836,15 +2077,20 @@ defmodule ThamaniDawaWeb.SignupLive do
                       phx-click="back"
                       phx-value-from="administrator"
                     />
-                    <.td_button id="signup-submit" type="submit" variant="primary" size="lg" label="Create account" />
+                    <.td_button
+                      id="signup-submit"
+                      type="submit"
+                      variant="primary"
+                      size="lg"
+                      label="Create account"
+                    />
                   </div>
                 </.form>
             <% end %>
           </div>
 
           <:footer>
-            Already have an account?
-            <.link navigate={~p"/login"}>Log in here</.link>
+            Already have an account? <.link navigate={~p"/login"}>Log in here</.link>
           </:footer>
         </.td_auth_card>
       </div>

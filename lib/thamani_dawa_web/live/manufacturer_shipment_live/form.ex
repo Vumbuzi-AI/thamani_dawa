@@ -18,13 +18,14 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
      |> assign(:origins, origins)
      |> assign(:destination_check, :idle)
      |> assign(:transfer_mode, false)
+     |> assign(:gs1_api_key, ThamaniDawa.Organizations.gs1_api_key(organization_id))
      |> assign(:form, to_form(Distributor.change_shipment(shipment), as: :shipment))}
   end
 
   def handle_event("toggle_transfer_mode", _params, socket),
-    do: {:noreply, update(socket, :transfer_mode, &(!&1))}
+    do: {:noreply, socket |> update(:transfer_mode, &(!&1)) |> assign(:destination_check, :idle)}
 
-  def handle_event("validate", %{"shipment" => attrs} = params, socket) do
+  def handle_event("validate", %{"shipment" => attrs}, socket) do
     changeset =
       socket.assigns.shipment
       |> Distributor.change_shipment(attrs)
@@ -33,7 +34,6 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
     socket =
       socket
       |> assign(:form, to_form(changeset, as: :shipment))
-      |> maybe_check_destination(params, attrs)
 
     {:noreply, socket}
   end
@@ -68,31 +68,17 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
 
   defp destination_record(_, _), do: nil
 
-  defp maybe_check_destination(socket, params, attrs) do
-    if Map.get(params, "_target") == ["shipment", "destination_gln"],
-      do: check_destination_gln(socket, attrs),
-      else: socket
+  def handle_info({:gln_selected, "destination-gln-search", party}, socket) do
+    check = if party, do: {:matched, party.company, party.address}, else: :idle
+    gln = party && party.gln
+
+    form =
+      socket.assigns.shipment
+      |> Distributor.change_shipment(Map.put(socket.assigns.form.params, "destination_gln", gln))
+      |> to_form(as: :shipment)
+
+    {:noreply, assign(socket, destination_check: check, form: form)}
   end
-
-  defp check_destination_gln(socket, attrs) do
-    gln = attrs |> Map.get("destination_gln", "") |> to_string() |> String.trim()
-
-    if Regex.match?(~r/^\d{13}$/, gln),
-      do:
-        socket
-        |> assign(:destination_check, :checking)
-        |> start_async(:destination_lookup, fn -> GlnLookup.resolve_party(gln) end),
-      else: assign(socket, :destination_check, :idle)
-  end
-
-  def handle_async(:destination_lookup, {:ok, {:ok, party}}, socket),
-    do: {:noreply, assign(socket, :destination_check, {:matched, party.company, party.address})}
-
-  def handle_async(:destination_lookup, {:ok, {:error, :not_found}}, socket),
-    do: {:noreply, assign(socket, :destination_check, :not_found)}
-
-  def handle_async(:destination_lookup, {:exit, _}, socket),
-    do: {:noreply, assign(socket, :destination_check, :unavailable)}
 
   def render(assigns) do
     ~H"""
@@ -147,31 +133,15 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
                 options={Enum.map(@origins, &{"#{&1.name} · #{&1.gln}", &1.gln})}
                 required
               />
-              <.td_input
+              <.live_component
                 :if={!@transfer_mode}
-                field={@form[:destination_gln]}
+                module={ThamaniDawaWeb.GlnSearchField}
+                id="destination-gln-search"
+                name="shipment[destination_gln]"
                 label="Destination GLN (ship to)"
-                placeholder="13-digit GLN of the receiving party"
-                inputmode="numeric"
-                phx-debounce="500"
+                api_token={@gs1_api_key}
                 required
               />
-              <p :if={@destination_check == :checking} class="text-xs text-thamani-pewter">
-                <.icon name="hero-arrow-path" class="inline size-3.5 motion-safe:animate-spin" />
-                Verifying…
-              </p>
-              <p
-                :if={match?({:matched, _, _}, @destination_check)}
-                class="rounded-lg bg-td-accent-tint px-3 py-2 text-xs font-semibold text-thamani-forest"
-              >
-                <.icon name="hero-check-circle" class="inline size-4" /> Verified
-              </p>
-              <p
-                :if={@destination_check == :not_found}
-                class="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
-              >
-                We couldn't verify this GLN.
-              </p>
             </div>
             <div class="td-header-actions">
               <.td_button
@@ -199,7 +169,10 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
           <.gln_card
             title="Ship to"
             icon="hero-building-storefront"
-            record={destination_record(@destination_check, @form[:destination_gln].value)}
+            record={
+              destination_record(@destination_check, @form[:destination_gln].value) ||
+                (@transfer_mode && selected(@origins, @form[:destination_gln].value))
+            }
           />
         </aside>
       </div>

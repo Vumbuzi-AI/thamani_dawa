@@ -114,6 +114,8 @@ defmodule ThamaniDawaWeb.PortalNavigationTest do
 
       {:ok, view, _html} = live(conn, ~p"/distributor")
 
+      assert has_element?(view, "#distributor-nav-toggle[aria-expanded='false']")
+      assert has_element?(view, "#distributor-nav-items.hidden")
       assert has_element?(view, "span[id='nav-label-/distributor']")
       assert has_element?(view, "span[id='nav-label-/distributor/shipments']")
       refute has_element?(view, "span[id='nav-label-/org/sites']")

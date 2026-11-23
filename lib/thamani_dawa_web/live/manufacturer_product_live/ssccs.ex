@@ -53,79 +53,77 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
         </.blank_state>
       </div>
 
-      <div id="manufacturer-product-ssccs" class="mt-6 space-y-5">
-        <section
+      <div id="manufacturer-product-ssccs" class="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <article
           :for={group <- @groups}
           id={"sscc-group-#{group.pallet_code || "unassigned"}"}
-          class="overflow-hidden rounded-2xl border border-thamani-stone bg-td-surface shadow-sm"
+          class="flex flex-col rounded-2xl border border-thamani-stone bg-td-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-td-hairline hover:shadow-md"
         >
-          <div class="flex flex-wrap items-center justify-between gap-3 bg-thamani-surface px-5 py-4">
-            <div>
+          <div class="flex items-start gap-3">
+            <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
+              <.icon name="hero-qr-code" class="size-5" />
+            </span>
+            <div class="min-w-0">
               <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
                 Pallet SSCC
               </p><p class="mt-1 font-mono font-semibold text-thamani-forest">
                 {group.pallet_code || "Not assigned to a pallet"}
               </p>
             </div>
-            <div class="flex gap-2 text-xs">
-              <span class="rounded-full bg-td-surface px-3 py-1.5 font-semibold">{length(group.shippers)} shippers</span><span class="rounded-full bg-td-surface px-3 py-1.5 font-semibold">{group.primary_count} primary serials</span>
+          </div>
+
+          <% row = hd(group.shippers) %>
+          <dl class="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
+            <div>
+              <dt class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">Batch</dt><dd class="mt-1 font-semibold text-thamani-forest">
+                {row.sscc.batch || Enum.map_join(row.sscc.batches, ", ", & &1.batch_no)}
+              </dd>
             </div>
+            <div>
+              <dt class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">GTIN</dt><dd class="mt-1 truncate font-mono text-thamani-forest">
+                {row.sscc.gtin}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">Produced</dt><dd class="mt-1 text-thamani-forest">
+                {row.sscc.production_date || "—"}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">Expires</dt><dd class="mt-1 text-thamani-forest">
+                {row.sscc.expiry_date || "—"}
+              </dd>
+            </div>
+          </dl>
+
+          <div class="mt-5 flex flex-wrap gap-2">
+            <span class="rounded-full bg-thamani-mist px-3 py-1.5 text-xs font-bold text-thamani-forest">{length(
+              group.shippers
+            )} Shippers</span>
+            <span class="rounded-full bg-thamani-lime/30 px-3 py-1.5 text-xs font-bold text-thamani-forest">{group.primary_count} Primary serials</span>
           </div>
-          <div class="divide-y divide-thamani-stone">
-            <article :for={row <- group.shippers} id={"shipper-sscc-#{row.sscc.id}"} class="p-5">
-              <div class="grid gap-4 md:grid-cols-6">
-                <div>
-                  <p class="text-xs text-thamani-pewter">Shipper SSCC</p><p class="mt-1 font-mono text-sm font-semibold">
-                    {row.sscc.code}
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs text-thamani-pewter">Batch</p><p class="mt-1 text-sm font-semibold">
-                    {row.sscc.batch || Enum.map_join(row.sscc.batches, ", ", & &1.batch_no)}
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs text-thamani-pewter">GTIN</p><p class="mt-1 font-mono text-sm">
-                    {row.sscc.gtin}
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs text-thamani-pewter">Produced</p><p class="mt-1 text-sm">
-                    {row.sscc.production_date || "—"}
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs text-thamani-pewter">Expires</p><p class="mt-1 text-sm">
-                    {row.sscc.expiry_date || "—"}
-                  </p>
-                </div>
-                <div>
-                  <p class="text-xs text-thamani-pewter">Primary serials</p><p class="mt-1 text-sm font-semibold">
-                    {row.serial_count}
-                  </p>
-                </div>
-              </div>
-              <div class="mt-4 flex flex-wrap gap-2">
-                <.button id={"sscc-#{row.sscc.id}-shippers"} type="button" variant="ghost">Shippers list</.button>
-                <.button
-                  id={"sscc-#{row.sscc.id}-serials"}
-                  navigate={~p"/manufacturer/sscc/#{row.sscc.id}/serials"}
-                  variant="ghost"
-                >Serials list</.button>
-                <.button
-                  id={"sscc-#{row.sscc.id}-label"}
-                  navigate={~p"/manufacturer/sscc/#{row.sscc.id}/label"}
-                  variant="ghost"
-                >Pallet Label</.button>
-                <.button
-                  id={"sscc-#{row.sscc.id}-export"}
-                  href={~p"/manufacturer/sscc/#{row.sscc.id}/export"}
-                  variant="ghost"
-                >Export CSV</.button>
-              </div>
-            </article>
+          <hr class="my-5 border-thamani-stone" />
+          <div class="mt-auto flex flex-wrap gap-2">
+            <.button id={"sscc-#{row.sscc.id}-shippers"} type="button" variant="primary"><.icon
+              name="hero-truck"
+              class="size-4"
+            /> Shippers</.button>
+            <.button
+              id={"sscc-#{row.sscc.id}-serials"}
+              navigate={~p"/manufacturer/sscc/#{row.sscc.id}/serials"}
+            ><.icon name="hero-list-bullet" class="size-4" /> Serials</.button>
+            <.button
+              id={"sscc-#{row.sscc.id}-label"}
+              navigate={~p"/manufacturer/sscc/#{row.sscc.id}/label"}
+              variant="ghost"
+            ><.icon name="hero-qr-code" class="size-4" /> Pallet Label</.button>
+            <.button
+              id={"sscc-#{row.sscc.id}-export"}
+              href={~p"/manufacturer/sscc/#{row.sscc.id}/export"}
+              variant="ghost"
+            ><.icon name="hero-arrow-down-tray" class="size-4" /> Export CSV</.button>
           </div>
-        </section>
+        </article>
       </div>
     </Layouts.manufacturer_shell>
     """

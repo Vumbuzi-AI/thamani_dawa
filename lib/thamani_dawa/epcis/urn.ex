@@ -15,7 +15,8 @@ defmodule ThamaniDawa.Epcis.Urn do
   @serial_pattern ~r/^[\x21-\x22\x25-\x2F\x30-\x39\x3A-\x3F\x41-\x5A\x5F\x61-\x7A]{1,20}$/
 
   @doc """
-  Builds an SGTIN EPC URN from a GTIN-14 and a serial.
+  Builds an SGTIN EPC URN from a GTIN-14 (or a GTIN-13, normalized with a
+  leading indicator zero) and a serial.
 
       iex> ThamaniDawa.Epcis.Urn.sgtin("00614141107346", "1001", 7)
       {:ok, "urn:epc:id:sgtin:0614141.010734.1001"}
@@ -27,7 +28,7 @@ defmodule ThamaniDawa.Epcis.Urn do
       {:error, :invalid_serial}
   """
   def sgtin(gtin14, serial, prefix_length) do
-    with {:ok, digits} <- checked_digits(gtin14, 14),
+    with {:ok, digits} <- checked_gtin(gtin14),
          :ok <- validate_serial(serial),
          {:ok, {prefix, item_ref}} <- split_gtin(digits, prefix_length) do
       {:ok, "urn:epc:id:sgtin:#{prefix}.#{item_ref}.#{serial}"}
@@ -35,13 +36,14 @@ defmodule ThamaniDawa.Epcis.Urn do
   end
 
   @doc """
-  Builds an LGTIN (lot-level) class URN from a GTIN-14 and a lot number.
+  Builds an LGTIN (lot-level) class URN from a GTIN-14 (or a GTIN-13,
+  normalized with a leading indicator zero) and a lot number.
 
       iex> ThamaniDawa.Epcis.Urn.lgtin("00614141107346", "LOT123", 7)
       {:ok, "urn:epc:class:lgtin:0614141.010734.LOT123"}
   """
   def lgtin(gtin14, lot, prefix_length) do
-    with {:ok, digits} <- checked_digits(gtin14, 14),
+    with {:ok, digits} <- checked_gtin(gtin14),
          :ok <- validate_serial(lot),
          {:ok, {prefix, item_ref}} <- split_gtin(digits, prefix_length) do
       {:ok, "urn:epc:class:lgtin:#{prefix}.#{item_ref}.#{lot}"}
@@ -149,6 +151,21 @@ defmodule ThamaniDawa.Epcis.Urn do
   end
 
   defp checked_digits(_value, _length), do: {:error, :not_numeric}
+
+  # EPCIS SGTIN and LGTIN URNs always encode a GTIN-14. GTIN-13 is a valid
+  # trade-item representation whose GTIN-14 form is the same identifier with
+  # a leading zero indicator digit, so normalize it at this outbound boundary.
+  defp checked_gtin(value) when is_binary(value) do
+    value
+    |> String.trim()
+    |> normalize_gtin13()
+    |> checked_digits(14)
+  end
+
+  defp checked_gtin(value), do: checked_digits(value, 14)
+
+  defp normalize_gtin13(value) when byte_size(value) == 13, do: "0" <> value
+  defp normalize_gtin13(value), do: value
 
   defp check_digit_valid?(digits) do
     {payload, check} = String.split_at(digits, -1)

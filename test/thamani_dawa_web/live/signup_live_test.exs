@@ -3,9 +3,9 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
   import Phoenix.LiveViewTest
   import ThamaniDawa.AccountsFixtures
-  import ThamaniDawa.OrganizationsFixtures
 
   alias ThamaniDawa.Organizations.Organization
+  alias ThamaniDawa.Organizations
   alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites.Site
 
@@ -23,7 +23,7 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
   end
 
   describe "signup" do
-    test "creates an organization, admin, and selected first site in three steps",
+    test "creates an organization, admin, and selected first site from GS1 details",
          %{
            conn: conn
          } do
@@ -57,6 +57,10 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       organization = Repo.get_by!(Organization, name: @org_name)
       assert organization.operating_models == [:pharmacy]
       assert is_nil(organization.license_number)
+      assert organization.gs1_api_key_last4 == "-key"
+
+      assert [%{prefix: "6160001", is_primary: true}] =
+               Organizations.list_gs1_prefixes(organization.id)
 
       site = Repo.get_by!(Site, organization_id: organization.id)
       assert site.name == "Test Licensee"
@@ -86,34 +90,40 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
              )
     end
 
-    test "requires an organization name before continuing", %{conn: conn} do
+    test "does not render an organization name field and advances to GS1 verification", %{
+      conn: conn
+    } do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
-      html =
-        view
-        |> form("#organization-setup-form",
-          organization: %{operating_models: ["pharmacy"], name: ""}
-        )
-        |> render_submit()
+      refute has_element?(view, "input[name='organization[name]']")
 
-      assert html =~ "Please enter your organization name"
-      refute has_element?(view, "#site-setup-form")
+      view
+      |> form("#organization-setup-form", organization: %{operating_models: ["pharmacy"]})
+      |> render_submit()
+
+      assert has_element?(view, "#gs1-key-form")
+      assert has_element?(view, "#gs1_api_key[type='text'][autocomplete='off']")
+      assert has_element?(view, "#gs1_api_key-toggle")
+      refute has_element?(view, "#gs1-key-form input[type='password']")
     end
 
-    test "blocks continue when the organization name is already taken", %{conn: conn} do
-      organization_fixture(%{name: @org_name})
-
+    test "shows the verified organization without asking for a primary prefix", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
-      html =
-        view
-        |> form("#organization-setup-form",
-          organization: %{operating_models: ["pharmacy"], name: @org_name}
-        )
-        |> render_submit()
+      view
+      |> form("#organization-setup-form", organization: %{operating_models: ["pharmacy"]})
+      |> render_submit()
 
-      assert html =~ "already exists"
-      refute has_element?(view, "#site-setup-form")
+      view
+      |> form("#gs1-key-form", gs1: %{api_key: "test-member-key"})
+      |> render_submit()
+
+      render_async(view, 5_000)
+
+      assert has_element?(view, "#gs1-organization-badge", @org_name)
+      assert has_element?(view, "#gs1-organization-badge", "Verified organization")
+      refute has_element?(view, "input[name='prefix']")
+      refute render(view) =~ "Primary company prefix"
     end
 
     test "shows the error on the admin form when the email is already taken", %{conn: conn} do
@@ -142,7 +152,9 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       refute Repo.get_by(Organization, name: @org_name)
     end
 
-    test "restores a saved onboarding step and reverifies its registry data", %{conn: conn} do
+    test "restores only the operating-model step because GS1 credentials are never drafted", %{
+      conn: conn
+    } do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       render_hook(view, "restore_signup_draft", %{
@@ -158,13 +170,8 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
         }
       })
 
-      assert has_element?(view, "#step-panel-main_location")
-      assert has_element?(view, "#site-setup-form input[name='site[gln]'][value='#{@site_gln}']")
-
-      render_async(view, 5_000)
-      view |> element("#main-location-back") |> render_click()
-
-      assert has_element?(view, "input[name='organization[name]'][value='#{@org_name}']")
+      assert has_element?(view, "#step-panel-operating_model")
+      refute has_element?(view, "input[name='organization[name]']")
 
       for model <- ~w(pharmacy laboratory distributor) do
         assert has_element?(
@@ -192,13 +199,13 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
         }
       })
 
-      assert has_element?(view, "#signup-form")
+      assert has_element?(view, "#organization-setup-form")
       refute has_element?(view, "#signup-form input[value='saved@example.com']")
       refute render(view) =~ "must-not-be-restored"
       refute has_element?(view, "input[name='user[accepted_legal_terms]'][checked]")
     end
 
-    test "blocks continue when the location GLN is found but no longer active", %{conn: conn} do
+    test "treats a GLN from the GS1 member account as verified", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/signup")
 
       view = complete_operating_model_step(view, ["pharmacy"])
@@ -207,21 +214,13 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
 
       inactive_gln = "0614141000456"
 
-      view
-      |> form("#site-setup-form", site: %{gln: inactive_gln})
-      |> render_submit()
-
-      html = render_async(view, 5_000)
-
-      assert html =~ "not currently active in the GS1 registry"
-
       html =
         view
         |> form("#site-setup-form", site: %{gln: inactive_gln})
-        |> render_submit()
+        |> render_change(%{"_target" => ["site", "gln"]})
 
-      assert html =~ "isn&#39;t currently active"
-      refute has_element?(view, "#signup-form")
+      assert html =~ "Verified · Test Licensee Annex"
+      refute html =~ "Checking with the GS1 registry"
     end
 
     test "validates each wizard step", %{conn: conn} do
@@ -389,8 +388,9 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       view = complete_operating_model_step(view, ["laboratory", "distributor"])
 
       view |> element("#main-location-back") |> render_click()
+      view |> element("#gs1-key-back") |> render_click()
 
-      assert has_element?(view, "input[name='organization[name]'][value='#{@org_name}']")
+      assert has_element?(view, "#organization-setup-form")
 
       assert has_element?(
                view,
@@ -409,12 +409,19 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
     end
   end
 
-  # Completes the operating-model step (step 1): ticks the given models,
-  # fills in the organization name, and submits, advancing straight to the
-  # main-location step.
-  defp complete_operating_model_step(view, models, name \\ @org_name) do
+  defp complete_operating_model_step(view, models, _name \\ @org_name) do
     view
-    |> form("#organization-setup-form", organization: %{operating_models: models, name: name})
+    |> form("#organization-setup-form", organization: %{operating_models: models})
+    |> render_submit()
+
+    view
+    |> form("#gs1-key-form", gs1: %{api_key: "test-member-key"})
+    |> render_submit()
+
+    render_async(view, 5_000)
+
+    view
+    |> form("#gs1-continue-form", %{})
     |> render_submit()
 
     view

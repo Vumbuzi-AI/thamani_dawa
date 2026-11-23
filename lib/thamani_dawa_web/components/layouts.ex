@@ -391,7 +391,6 @@ defmodule ThamaniDawaWeb.Layouts do
         {render_slot(@tools)}
       </:tools>
       <:side>
-
         <%!-- Site switcher (Doop TD SiteSwitcher, brief 4.4): 44px row, 28px
              tile with the context glyph, caret-up-down. Picking a site lands
              the user in its operations; single-context users see it static. --%>
@@ -430,7 +429,11 @@ defmodule ThamaniDawaWeb.Layouts do
             </button>
 
             <div id="site-switch-dropdown" class="td-popover td-switch-menu hidden">
-              <p :if={@organization_picker_option} id="site-switch-organization-heading" class="td-popover-label">
+              <p
+                :if={@organization_picker_option}
+                id="site-switch-organization-heading"
+                class="td-popover-label"
+              >
                 Organization
               </p>
               <.site_picker_option
@@ -478,22 +481,41 @@ defmodule ThamaniDawaWeb.Layouts do
           >
             <nav class="td-nav">
               <%= for {group_label, items} <- @nav_groups do %>
-                <div :if={group_label} class="sidebar-group-label nav-label td-nav-group-label">
+                <div
+                  :if={group_label && group_label != "Distributor"}
+                  class="sidebar-group-label nav-label td-nav-group-label"
+                >
                   {group_label}
                 </div>
-                <%= for {label, icon, path} <- items do %>
-                  <% active = nav_active?(path, @current_path, @base_path) %>
-                  <.td_nav_item
-                    label={label}
-                    icon={icon}
-                    active={active}
-                    count={Map.get(@nav_badges, path, 0)}
-                    label_id={"nav-label-#{path}"}
-                    navigate={path}
-                    data-tour-target={path}
-                    data-tooltip={label}
-                  />
-                <% end %>
+                <div :if={group_label == "Distributor"} id="distributor-nav-group">
+                  <button
+                    id="distributor-nav-toggle"
+                    type="button"
+                    aria-controls="distributor-nav-items"
+                    aria-expanded="false"
+                    class="sidebar-group-label nav-label td-nav-group-label td-nav-group-toggle"
+                  >
+                    Distributor <.td_icon name="caret-down" class="td-nav-group-caret" />
+                  </button>
+                </div>
+                <div
+                  id={if(group_label == "Distributor", do: "distributor-nav-items")}
+                  class={["td-nav", group_label == "Distributor" && "hidden"]}
+                >
+                  <%= for {label, icon, path} <- items do %>
+                    <% active = nav_active?(path, @current_path, @base_path) %>
+                    <.td_nav_item
+                      label={label}
+                      icon={icon}
+                      active={active}
+                      count={Map.get(@nav_badges, path, 0)}
+                      label_id={"nav-label-#{path}"}
+                      navigate={path}
+                      data-tour-target={path}
+                      data-tooltip={label}
+                    />
+                  <% end %>
+                </div>
               <% end %>
             </nav>
           </div>
@@ -557,22 +579,22 @@ defmodule ThamaniDawaWeb.Layouts do
         </div>
       </:side>
       <:content>
-          <%!-- Page-level back affordance. Lives outside the page's header card
+        <%!-- Page-level back affordance. Lives outside the page's header card
                on purpose: separation comes from whitespace, not another box. --%>
-          <.link
-            :if={is_binary(@back)}
-            navigate={@back}
-            class="group inline-flex items-center gap-2 text-[13px] font-medium transition-colors hover:text-thamani-forest"
-            style="color: var(--thamani-pewter);"
-          >
-            <.icon
-              name="hero-arrow-left"
-              class="size-3.5 shrink-0 transition-transform duration-150 group-hover:-translate-x-0.5"
-            />
-            {@back_label}
-          </.link>
-          {render_slot(@inner_block)}
-          <.flash_group flash={@flash} />
+        <.link
+          :if={is_binary(@back)}
+          navigate={@back}
+          class="group inline-flex items-center gap-2 text-[13px] font-medium transition-colors hover:text-thamani-forest"
+          style="color: var(--thamani-pewter);"
+        >
+          <.icon
+            name="hero-arrow-left"
+            class="size-3.5 shrink-0 transition-transform duration-150 group-hover:-translate-x-0.5"
+          />
+          {@back_label}
+        </.link>
+        {render_slot(@inner_block)}
+        <.flash_group flash={@flash} />
       </:content>
     </.td_app_shell>
     """
@@ -601,7 +623,7 @@ defmodule ThamaniDawaWeb.Layouts do
     labeled_ops =
       case ops_groups do
         [{:distributor, _items}] ->
-          distributor_item_groups()
+          [{"Distributor", distributor_items()}]
 
         [{:manufacturer, _items}] ->
           manufacturer_item_groups()
@@ -932,6 +954,7 @@ defmodule ThamaniDawaWeb.Layouts do
   defp site_context_icon(site) do
     cond do
       Site.distribution?(site) -> "hero-archive-box"
+      Site.manufacturer?(site) -> "hero-cog-8-tooth"
       Site.pharmacy?(site) and Site.lab?(site) -> "hero-building-office-2"
       Site.pharmacy?(site) -> "hero-building-storefront"
       Site.lab?(site) -> "hero-beaker"
@@ -957,12 +980,22 @@ defmodule ThamaniDawaWeb.Layouts do
   # Stock stays active on the stock-take and disposal screens it launches.
   defp nav_active?(path, current_path, base_path) do
     cond do
-      path == base_path -> current_path == base_path
-      current_path == path or String.starts_with?(current_path, path <> "/") -> true
+      path == base_path ->
+        current_path == base_path
+
+      current_path == path or String.starts_with?(current_path, path <> "/") ->
+        true
+
       String.ends_with?(path, "/stock") ->
         prefix = String.replace_suffix(path, "/stock", "")
-        Enum.any?(["/stock-takes", "/disposals"], &String.starts_with?(current_path, prefix <> &1))
-      true -> false
+
+        Enum.any?(
+          ["/stock-takes", "/disposals"],
+          &String.starts_with?(current_path, prefix <> &1)
+        )
+
+      true ->
+        false
     end
   end
 
@@ -1005,7 +1038,8 @@ defmodule ThamaniDawaWeb.Layouts do
       Enum.flat_map(activities || [], fn
         :pharmacy -> ["Pharmacy"]
         :laboratory -> ["Lab"]
-        :distribution -> ["Distribution"]
+        :distribution -> ["Distributor"]
+        :manufacturing -> ["Manufacturer"]
         _ -> []
       end)
 
@@ -1342,13 +1376,31 @@ defmodule ThamaniDawaWeb.Layouts do
   def theme_toggle(assigns) do
     ~H"""
     <div class="td-theme">
-      <button type="button" class="td-icon-btn" phx-click={JS.dispatch("phx:set-theme")} data-phx-theme="system" aria-label="Use system theme">
+      <button
+        type="button"
+        class="td-icon-btn"
+        phx-click={JS.dispatch("phx:set-theme")}
+        data-phx-theme="system"
+        aria-label="Use system theme"
+      >
         <.icon name="desktop" class="size-4" />
       </button>
-      <button type="button" class="td-icon-btn" phx-click={JS.dispatch("phx:set-theme")} data-phx-theme="light" aria-label="Use light theme">
+      <button
+        type="button"
+        class="td-icon-btn"
+        phx-click={JS.dispatch("phx:set-theme")}
+        data-phx-theme="light"
+        aria-label="Use light theme"
+      >
         <.icon name="sun" class="size-4" />
       </button>
-      <button type="button" class="td-icon-btn" phx-click={JS.dispatch("phx:set-theme")} data-phx-theme="dark" aria-label="Use dark theme">
+      <button
+        type="button"
+        class="td-icon-btn"
+        phx-click={JS.dispatch("phx:set-theme")}
+        data-phx-theme="dark"
+        aria-label="Use dark theme"
+      >
         <.icon name="moon" class="size-4" />
       </button>
     </div>

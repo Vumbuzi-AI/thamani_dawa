@@ -3,8 +3,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
 
   alias ThamaniDawa.Distributor.GlnLookup
   alias ThamaniDawa.Manufacturing
-
-  @max_primary_quantity 100
+  alias ThamaniDawa.Organizations
 
   def update(assigns, socket) do
     {:ok,
@@ -14,7 +13,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
      |> assign_new(:step, fn -> 1 end)
      |> assign_new(:submitting, fn -> false end)
      |> assign_new(:issued, fn -> nil end)
-     |> assign_new(:to_gln_check, fn -> :idle end)
+     |> assign_new(:to_gln_query, fn -> "" end)
+     |> assign_new(:to_gln_results, fn -> [] end)
+     |> assign_new(:to_gln_search_status, fn -> :idle end)
      |> assign_new(:form_params, fn -> default_params(assigns.site) end)
      |> assign_new(:form, fn -> to_form(default_params(assigns.site), as: :serial_generation) end)}
   end
@@ -74,7 +75,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
       socket
       |> assign(:form_params, params)
       |> assign(:form, generation_form(params, errors))
-      |> maybe_check_to_gln(params)
 
     {:noreply, socket}
   end
@@ -82,7 +82,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
   def handle_event("save", %{"serial_generation" => params}, socket) do
     params = sync_from_facility(params, socket.assigns.facilities)
 
-    case resolve_to_party(params, socket.assigns.mode) do
+    case resolve_to_party(params, socket.assigns.mode, gs1_api_key(socket)) do
       {:ok, params} ->
         errors = validation_errors(params, socket.assigns.mode)
 
@@ -94,50 +94,77 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
 
       {:error, params} ->
         errors = [{:to_gln, {"could not be verified", []}} | validation_errors(params, "order")]
-        {:noreply, socket |> assign(:to_gln_check, :not_found) |> assign_form(params, errors)}
+        {:noreply, assign_form(socket, params, errors)}
     end
   end
 
-  defp maybe_check_to_gln(socket, params) do
-    gln = params |> Map.get("to_gln", "") |> String.trim()
+  def handle_event("search_to_gln", %{"value" => query}, socket) do
+    query = String.trim(query)
+    params = clear_to_party(socket.assigns.form_params)
 
-    if Regex.match?(~r/^\d{13}$/, gln) do
-      socket
-      |> assign(:to_gln_check, :checking)
-      |> start_async(:to_gln_lookup, fn -> {gln, GlnLookup.resolve_party(gln)} end)
+    if String.length(query) < 2 do
+      {:noreply,
+       socket
+       |> assign(:to_gln_query, query)
+       |> assign(:to_gln_results, [])
+       |> assign(:to_gln_search_status, :idle)
+       |> assign_form(params, validation_errors(params, socket.assigns.mode))}
     else
-      assign(socket, :to_gln_check, :idle)
-    end
-  end
-
-  def handle_async(:to_gln_lookup, {:ok, {gln, {:ok, party}}}, socket) do
-    if socket.assigns.form_params["to_gln"] == gln do
-      params = put_to_party(socket.assigns.form_params, party)
-      errors = validation_errors(params, socket.assigns.mode)
+      api_token = gs1_api_key(socket)
 
       {:noreply,
        socket
-       |> assign(:to_gln_check, :matched)
-       |> assign_form(params, errors)}
+       |> assign(:to_gln_query, query)
+       |> assign(:to_gln_results, [])
+       |> assign(:to_gln_search_status, :searching)
+       |> assign_form(params, validation_errors(params, socket.assigns.mode))
+       |> start_async(:to_gln_search, fn ->
+         {query, GlnLookup.search_destination(api_token, query)}
+       end)}
+    end
+  end
+
+  def handle_event("select_to_gln", %{"gln" => gln}, socket) do
+    case Enum.find(socket.assigns.to_gln_results, &(&1.gln == gln)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "That destination GLN is no longer available.")}
+
+      party ->
+        params = socket.assigns.form_params |> put_to_party(party) |> Map.put("to_gln", party.gln)
+
+        {:noreply,
+         socket
+         |> assign(:to_gln_query, destination_label(party))
+         |> assign(:to_gln_results, [])
+         |> assign(:to_gln_search_status, :selected)
+         |> assign_form(params, validation_errors(params, socket.assigns.mode))}
+    end
+  end
+
+  def handle_async(:to_gln_search, {:ok, {query, {:ok, results}}}, socket) do
+    if socket.assigns.to_gln_query == query do
+      {:noreply,
+       socket
+       |> assign(:to_gln_results, results)
+       |> assign(:to_gln_search_status, :complete)}
     else
       {:noreply, socket}
     end
   end
 
-  def handle_async(:to_gln_lookup, {:ok, {_gln, {:error, :not_found}}}, socket),
-    do: {:noreply, assign(socket, :to_gln_check, :not_found)}
+  def handle_async(:to_gln_search, _result, socket),
+    do:
+      {:noreply,
+       socket |> assign(:to_gln_results, []) |> assign(:to_gln_search_status, :unavailable)}
 
-  def handle_async(:to_gln_lookup, {:exit, _reason}, socket),
-    do: {:noreply, assign(socket, :to_gln_check, :unavailable)}
-
-  defp resolve_to_party(params, "order") do
-    case GlnLookup.resolve_party(params["to_gln"]) do
+  defp resolve_to_party(params, "order", api_token) do
+    case GlnLookup.resolve_destination(api_token, params["to_gln"]) do
       {:ok, party} -> {:ok, put_to_party(params, party)}
-      {:error, :not_found} -> {:error, params}
+      {:error, _reason} -> {:error, params}
     end
   end
 
-  defp resolve_to_party(params, _mode), do: {:ok, params}
+  defp resolve_to_party(params, _mode, _api_token), do: {:ok, params}
 
   defp put_to_party(params, party) do
     params
@@ -234,11 +261,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
     end)
   end
 
-  defp destination_facility_options(facilities, from_gln) do
-    facilities
-    |> Enum.reject(&(&1.gln == from_gln))
-    |> facility_options()
-  end
+  defp clear_to_party(params),
+    do:
+      params
+      |> Map.put("to_gln", "")
+      |> Map.put("to_company_name", "")
+      |> Map.put("to_address", "")
+
+  defp destination_label(party), do: "#{party.gln} · #{party.company}"
+
+  defp gs1_api_key(socket), do: Organizations.gs1_api_key(socket.assigns.organization_id)
 
   defp generation_form(params, errors) do
     to_form(params, as: :serial_generation, errors: errors)
@@ -249,7 +281,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
     |> required_error(params, :batch_no, "Batch number")
     |> required_error(params, :production_date, "Production date")
     |> required_error(params, :expiry_date, "Expiry date")
-    |> quantity_error(params, :primary_quantity, "Primary quantity", @max_primary_quantity)
+    |> quantity_error(params, :primary_quantity, "Primary quantity")
     |> date_order_error(params)
     |> mode_errors(params, mode)
   end
@@ -258,6 +290,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
     errors
     |> quantity_error(params, :shipper_quantity, "Shipper quantity")
     |> shipper_not_over_primary_error(params)
+    |> shipper_divides_primary_error(params)
     |> required_error(params, :from_gln, "From GLN")
     |> required_error(params, :from_company_name, "From company name")
     |> required_error(params, :from_address, "From address")
@@ -291,6 +324,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
          {shipper, ""} <- Integer.parse(Map.get(params, "shipper_quantity", "")),
          true <- shipper > primary do
       [{:shipper_quantity, {"cannot exceed the primary quantity", []}} | errors]
+    else
+      _other -> errors
+    end
+  end
+
+  defp shipper_divides_primary_error(errors, params) do
+    with {primary, ""} <- Integer.parse(Map.get(params, "primary_quantity", "")),
+         {shipper, ""} <- Integer.parse(Map.get(params, "shipper_quantity", "")),
+         false <- rem(primary, shipper) == 0 do
+      [{:shipper_quantity, {"must divide the primary quantity evenly", []}} | errors]
     else
       _other -> errors
     end
@@ -410,7 +453,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                 field={@form[:primary_quantity]}
                 type="number"
                 min="1"
-                max="100"
                 label="Primary quantity"
                 required
               />
@@ -421,9 +463,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                 field={@form[:shipper_quantity]}
                 type="number"
                 min="1"
-                label="Shipper quantity"
+                label="Units per shipper SSCC"
                 required
               />
+              <p :if={@mode == "order"} class="td-note">
+                The primary quantity must divide evenly by this number.
+              </p>
               <div class="td-header-actions">
                 <.td_button
                   id="serial-wizard-prev"
@@ -454,10 +499,26 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
               </div>
             <% else %>
               <input type="hidden" name="serial_generation[batch_no]" value={@form[:batch_no].value} />
-              <input type="hidden" name="serial_generation[production_date]" value={@form[:production_date].value} />
-              <input type="hidden" name="serial_generation[expiry_date]" value={@form[:expiry_date].value} />
-              <input type="hidden" name="serial_generation[primary_quantity]" value={@form[:primary_quantity].value} />
-              <input type="hidden" name="serial_generation[shipper_quantity]" value={@form[:shipper_quantity].value} />
+              <input
+                type="hidden"
+                name="serial_generation[production_date]"
+                value={@form[:production_date].value}
+              />
+              <input
+                type="hidden"
+                name="serial_generation[expiry_date]"
+                value={@form[:expiry_date].value}
+              />
+              <input
+                type="hidden"
+                name="serial_generation[primary_quantity]"
+                value={@form[:primary_quantity].value}
+              />
+              <input
+                type="hidden"
+                name="serial_generation[shipper_quantity]"
+                value={@form[:shipper_quantity].value}
+              />
               <div>
                 <p class="td-note">From</p>
                 <.input
@@ -473,17 +534,73 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
               </div>
               <div>
                 <p class="td-note">To</p>
-                <.input
-                  field={@form[:to_gln]}
-                  type="combobox"
-                  label="To GLN"
-                  options={destination_facility_options(@facilities, @form[:from_gln].value)}
-                  placeholder="Search other facilities"
-                  phx-debounce="500"
-                  required
-                />
-                <p :if={@to_gln_check == :checking} class="td-note">Looking up company…</p>
-                <p :if={@to_gln_check == :not_found} class="td-note">We couldn't verify this GLN.</p>
+                <label for="serial_generation_to_gln_search" class="thamani-label">
+                  To GLN<span
+                    aria-hidden="true"
+                    style="color: var(--color-td-danger); margin-left: 2px;"
+                  >*</span>
+                </label>
+                <input type="hidden" name="serial_generation[to_gln]" value={@form[:to_gln].value} />
+                <div id="serial-generation-to-gln-combobox" class="relative">
+                  <input
+                    id="serial_generation_to_gln_search"
+                    type="search"
+                    value={@to_gln_query}
+                    phx-keyup="search_to_gln"
+                    phx-debounce="300"
+                    phx-target={@myself}
+                    autocomplete="off"
+                    placeholder="Search by GLN, company, or address"
+                    class="thamani-input w-full"
+                  />
+                  <div
+                    :if={@to_gln_results != []}
+                    id="serial-generation-to-gln-results"
+                    role="listbox"
+                    class="td-select-pop max-h-56 overflow-y-auto py-1"
+                  >
+                    <button
+                      :for={party <- @to_gln_results}
+                      id={"serial-generation-to-gln-#{party.gln}"}
+                      type="button"
+                      role="option"
+                      phx-click="select_to_gln"
+                      phx-value-gln={party.gln}
+                      phx-target={@myself}
+                      class="block w-full px-3 py-2 text-left text-sm transition hover:bg-[var(--color-td-hover)]"
+                    >
+                      <span class="block font-mono font-medium text-[var(--color-td-ink)]">{party.gln}</span>
+                      <span class="block text-xs text-[var(--color-td-ink-3)]">{party.company} · {party.address ||
+                        "—"}</span>
+                    </button>
+                  </div>
+                </div>
+                <p
+                  :if={String.length(@to_gln_query) == 1}
+                  id="serial-generation-to-gln-search-hint"
+                  class="td-note"
+                >
+                  Type at least 2 characters to search the GS1 GLN directory.
+                </p>
+                <p :if={@to_gln_search_status == :searching} class="td-note">
+                  Searching GS1 GLNs…
+                </p>
+                <p
+                  :if={
+                    @to_gln_query != "" and @to_gln_search_status == :complete and
+                      @to_gln_results == []
+                  }
+                  class="td-note"
+                >
+                  No GS1 GLNs match this search.
+                </p>
+                <p
+                  :if={@to_gln_search_status == :unavailable}
+                  class="td-note"
+                  style="color: var(--color-td-danger);"
+                >
+                  The GS1 GLN directory is unavailable. Try again in a moment.
+                </p>
                 <.td_input field={@form[:to_company_name]} label="To company name" readonly required />
                 <.td_input field={@form[:to_address]} label="To address" readonly required />
               </div>

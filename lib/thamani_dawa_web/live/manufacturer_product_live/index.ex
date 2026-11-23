@@ -160,14 +160,47 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
         search: socket.assigns.search
       )
 
-    counts = Manufacturing.generation_counts(organization_id)
+    remote_counts = remote_counts(organization_id)
     usage = Billing.active_usage(organization_id)
+
+    page_info = %{page_info | entries: merge_remote_counts(page_info.entries, remote_counts)}
+
+    counts =
+      organization_id
+      |> Manufacturing.list_products_with_counts()
+      |> merge_remote_counts(remote_counts)
+      |> generation_counts()
 
     socket
     |> assign(:page_info, page_info)
     |> assign(:rows, page_info.entries)
     |> assign(:number_generated, counts.serials + counts.ssccs)
     |> assign(:maximum, maximum(usage))
+  end
+
+  defp remote_counts(organization_id) do
+    case Manufacturing.remote_product_counts(organization_id) do
+      {:ok, counts} -> counts
+      {:error, _reason} -> %{}
+    end
+  end
+
+  defp merge_remote_counts(entries, remote_counts) do
+    Enum.map(entries, fn %{product: product} = entry ->
+      case remote_counts[product.gtin] do
+        nil -> entry
+        counts -> Map.merge(entry, counts)
+      end
+    end)
+  end
+
+  defp generation_counts(entries) do
+    Enum.reduce(entries, %{serials: 0, ssccs: 0}, fn entry, totals ->
+      %{
+        serials: totals.serials + entry.serial_count,
+        ssccs: totals.ssccs + entry.sscc_count
+      }
+    end)
   end
 
   defp maximum(%{quantity_limit: nil}), do: "Unlimited"
@@ -219,7 +252,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
         subtitle="GTINs registered to this organization and their serialisation activity."
       >
         <:actions>
-          <.td_button id="sync-manufacturer-products" variant="secondary" label="Sync from GS1" phx-click="sync_products" />
+          <.td_button
+            id="sync-manufacturer-products"
+            variant="secondary"
+            label="Sync from GS1"
+            phx-click="sync_products"
+          />
           <.td_button
             id="add-manufacturer-product"
             variant="primary"
@@ -229,7 +267,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
         </:actions>
         <:filters>
           <div class="td-stats">
-            <.td_stat id="manufacturer-number-generated" caption="Number generated" value={@number_generated} />
+            <.td_stat
+              id="manufacturer-number-generated"
+              caption="Number generated"
+              value={@number_generated}
+            />
             <.td_stat id="manufacturer-maximum" caption="Maximum" value={@maximum} />
           </div>
           <form id="manufacturer-product-search" phx-change="search">
@@ -256,7 +298,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
               phx-value-view="grid"
             />
           </.td_segmented>
-          <.td_button id="reset-manufacturer-products" variant="secondary" label="Reset" phx-click="reset" />
+          <.td_button
+            id="reset-manufacturer-products"
+            variant="secondary"
+            label="Reset"
+            phx-click="reset"
+          />
         </:filters>
 
         <.td_data_table
@@ -274,7 +321,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
             {Calendar.strftime(product.inserted_at, "%d %b %Y")}
           </:col>
           <:col :let={%{product: product, sscc_count: count}} label="SSCC">
-            {count}
+            <span id={"product-#{product.id}-sscc-count"}>{count}</span>
             <.td_button
               id={"product-#{product.id}-ssccs"}
               variant="secondary"
@@ -283,7 +330,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
             />
           </:col>
           <:col :let={%{product: product, serial_count: count}} label="Serials">
-            {count}
+            <span id={"product-#{product.id}-serial-count"}>{count}</span>
             <.td_button
               id={"product-#{product.id}-serials"}
               variant="secondary"
@@ -312,7 +359,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
           id="manufacturer-products-grid"
           class="td-stats"
         >
-          <article :for={row <- @rows} id={"manufacturer-product-card-#{row.product.id}"} class="td-stat">
+          <article
+            :for={row <- @rows}
+            id={"manufacturer-product-card-#{row.product.id}"}
+            class="td-stat"
+          >
             <span class="td-kv-value is-mono">{row.product.gtin}</span>
             <span class="td-stat-value">{row.product.name}</span>
             <span class="td-stat-sub">{row.product.description || "No description"}</span>
@@ -324,7 +375,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
               patch={~p"/manufacturer/products/#{row.product.gtin}/serials/new"}
             />
           </article>
-          <.td_empty :if={@rows == []} title="No products found" hint="Add or sync a GTIN to start generating primary serials." />
+          <.td_empty
+            :if={@rows == []}
+            title="No products found"
+            hint="Add or sync a GTIN to start generating primary serials."
+          />
         </div>
       </.td_list_page>
 
