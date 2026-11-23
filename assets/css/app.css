@@ -3216,3 +3216,7 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-kv-grid.is-pad { padding: 20px; }
 .td-li { padding: 10px 20px; }
 .td-empty-card { padding: 48px 20px; }
+
+/* Full shipper-label workspace, matching the healthcare label browser. */
+.td-modal-slot.shipper-labels-modal { width: min(1150px, calc(100vw - 32px)); }
+.shipper-labels-modal .td-modal-bd { padding: 20px; }

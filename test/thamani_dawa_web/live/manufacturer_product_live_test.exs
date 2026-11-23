@@ -134,6 +134,54 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert get_in(event.payload, ["readPoint", "id"]) =~ String.slice(site.gln, 0, 6)
   end
 
+  test "shows newly created batches first with their creation timestamps", %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+
+    assert {:ok, _result} =
+             Manufacturing.generate_primary_serials(
+               organization.id,
+               product,
+               %{
+                 "batch_no" => "OLDER-BATCH",
+                 "production_date" => "2026-11-22",
+                 "expiry_date" => "2027-11-22"
+               },
+               1,
+               manufacturer_session_gln(user)
+             )
+
+    assert {:ok, _result} =
+             Manufacturing.generate_primary_serials(
+               organization.id,
+               product,
+               %{
+                 "batch_no" => "NEWEST-BATCH",
+                 "production_date" => "2026-01-01",
+                 "expiry_date" => "2027-01-01"
+               },
+               1,
+               manufacturer_session_gln(user)
+             )
+
+    assert {:ok, [newest, older]} =
+             Manufacturing.fetch_product_batches(organization.id, product.gtin)
+
+    assert newest.batch_no == "NEWEST-BATCH"
+    assert older.batch_no == "OLDER-BATCH"
+    assert newest.created_at
+
+    {:ok, view, _html} =
+      live(log_in_user(conn, user), ~p"/manufacturer/products/#{product.gtin}/serials")
+
+    assert has_element?(view, "#selected-serial-batch", "NEWEST-BATCH")
+
+    assert has_element?(
+             view,
+             "#serial-batch-created-at-NEWEST-BATCH",
+             ThamaniDawaWeb.TimeFormat.datetime(newest.created_at)
+           )
+  end
+
   test "make-to-order path generates primary serials then mints shipper SSCCs", %{
     conn: conn
   } do
@@ -256,6 +304,42 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert sscc.to_address == site.address
     assert sscc.order_number == "PO-2026-0142"
 
+    {:ok, ssccs, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/ssccs")
+    assert has_element?(ssccs, "#sscc-#{sscc.id}-shippers")
+
+    ssccs
+    |> element("#sscc-#{sscc.id}-shippers")
+    |> render_click()
+
+    assert has_element?(ssccs, "#pallet-shippers-modal")
+    assert has_element?(ssccs, "#pallet-shippers-list")
+
+    groups
+    |> Enum.with_index(1)
+    |> Enum.each(fn {%{sscc: group_shipper}, index} ->
+      assert has_element?(ssccs, "#pallet-shipper-#{group_shipper.id}", group_shipper.code)
+
+      assert has_element?(
+               ssccs,
+               "#shipper-label-position-#{group_shipper.id}",
+               "#{index}/#{length(groups)}"
+             )
+
+      assert has_element?(ssccs, "#sscc-label-content-#{group_shipper.id}")
+      assert has_element?(ssccs, "#sscc-modal-barcode-#{group_shipper.id}[phx-hook=DataMatrix]")
+      assert has_element?(ssccs, "#print-shipper-#{group_shipper.id}[phx-hook=LabelPrint]")
+
+      assert has_element?(
+               ssccs,
+               "#download-shipper-#{group_shipper.id}[phx-hook=LabelSvgDownload]"
+             )
+
+      assert has_element?(ssccs, "#shipper-#{group_shipper.id}-serials")
+    end)
+
+    assert has_element?(ssccs, "#print-all-shippers[phx-hook=PrintAllLabels]")
+    assert has_element?(ssccs, "#download-all-shippers-svg[phx-hook=DownloadAllLabelsSvg]")
+
     # Each shipper is packed through /create_shipper_sscc with its serials.
     pack_requests =
       Enum.filter(
@@ -338,6 +422,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(serials, "#primary-serial-batch-number", batch.batch_no)
     assert has_element?(serials, "#primary-serial-production-date")
     assert has_element?(serials, "#primary-serial-expiry-date")
+
+    assert has_element?(
+             serials,
+             "#serial-batch-created-at-#{batch.batch_no}",
+             ThamaniDawaWeb.TimeFormat.datetime(batch.inserted_at)
+           )
+
     assert has_element?(serials, "#manufacturer-serials [phx-hook=DataMatrix]")
     assert has_element?(serials, "#export-batch-serials")
     assert has_element?(serials, "#manufacturer-serial-0001", "(17)")
@@ -411,7 +502,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert request["material_description"] ==
              if(product.description not in [nil, ""], do: product.description, else: product.name)
 
-    assert [%{sscc: shipper}] = Manufacturing.list_sscc_groups(organization.id, product.id)
+    assert [%{sscc: shipper, serial_count: 2, serials: ["0001", "0003"]}] =
+             Manufacturing.list_sscc_groups(organization.id, product.id)
+
     assert shipper.batch == batch.batch_no
     assert shipper.count_of_trade_items == 2
     assert shipper.to_gln == "0614141000784"

@@ -407,20 +407,42 @@ defmodule ThamaniDawa.Manufacturing do
   def fetch_product_batches(organization_id, gtin, opts \\ []) when is_binary(gtin) do
     opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
 
+    local_batches =
+      Repo.all(
+        from b in Batch,
+          join: p in assoc(b, :product),
+          where: b.organization_id == ^organization_id and p.gtin == ^gtin,
+          select: {b.batch_no, %{created_at: b.inserted_at, local_id: b.id}}
+      )
+      |> Map.new()
+
     with {:ok, rows} <- MemberApi.barcode_batches(gtin, opts) do
       batches =
         rows
         |> Enum.filter(&(is_binary(&1["batch"]) and &1["batch"] != ""))
         |> Enum.group_by(& &1["batch"])
         |> Enum.map(fn {batch_no, [first | _] = batch_rows} ->
+          local = Map.get(local_batches, batch_no, %{created_at: nil, local_id: nil})
+
           %{
             batch_no: batch_no,
             production_date: parse_api_date(first["production"]),
             expiry_date: parse_api_date(first["expiry"]),
+            created_at: local.created_at,
+            local_id: local.local_id,
             serial_count: batch_serial_count(batch_rows)
           }
         end)
-        |> Enum.sort_by(&{&1.production_date || ~D[0000-01-01], &1.batch_no}, :desc)
+        |> Enum.sort_by(
+          &{
+            not is_nil(&1.created_at),
+            batch_created_sort_value(&1.created_at),
+            &1.local_id || 0,
+            &1.production_date || ~D[0000-01-01],
+            &1.batch_no
+          },
+          :desc
+        )
 
       {:ok, batches}
     end
@@ -438,6 +460,13 @@ defmodule ThamaniDawa.Manufacturing do
       |> Enum.uniq()
       |> length()
     end
+  end
+
+  defp batch_created_sort_value(nil), do: 0
+  defp batch_created_sort_value(%DateTime{} = value), do: DateTime.to_unix(value, :microsecond)
+
+  defp batch_created_sort_value(%NaiveDateTime{} = value) do
+    value |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_unix(:microsecond)
   end
 
   @doc """
@@ -1234,26 +1263,19 @@ defmodule ThamaniDawa.Manufacturing do
   def list_sscc_groups(organization_id, product_id) do
     %Product{gtin: gtin} = get_product!(organization_id, product_id)
 
-    serial_counts =
-      from s in Serial,
-        join: sb in SsccBatch,
-        on: sb.manufacturer_batch_id == s.manufacturer_batch_id,
-        where: sb.manufacturer_shipper_sscc_id == parent_as(:sscc).id,
-        where:
-          is_nil(s.manufacturer_shipper_sscc_id) or
-            s.manufacturer_shipper_sscc_id == parent_as(:sscc).id,
-        select: count(s.id)
-
     from(sscc in ShipperSscc,
-      as: :sscc,
       where: sscc.organization_id == ^organization_id and sscc.gtin == ^gtin,
       order_by: [desc: sscc.inserted_at],
-      preload: [:pallet, :batches],
-      select: {sscc, subquery(serial_counts)}
+      preload: [:pallet, :batches, :serials]
     )
     |> Repo.all()
-    |> Enum.map(fn {sscc, serial_count} ->
-      %{sscc: sscc, serial_count: serial_count}
+    |> Enum.map(fn sscc ->
+      serials =
+        (sscc.packed_serials ++ Enum.map(sscc.serials, & &1.serial))
+        |> Enum.reject(&(&1 in [nil, ""]))
+        |> Enum.uniq()
+
+      %{sscc: sscc, serials: serials, serial_count: length(serials)}
     end)
   end
 

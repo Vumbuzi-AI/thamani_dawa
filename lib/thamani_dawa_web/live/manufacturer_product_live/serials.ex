@@ -483,6 +483,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                 <dt>Produced</dt><dd>{long_date(batch.production_date)}</dd>
               </div><div class="flex justify-between">
                 <dt>Expires</dt><dd>{long_date(batch.expiry_date)}</dd>
+              </div><div class="flex justify-between gap-3 pt-1">
+                <dt>Created at</dt><dd
+                  id={"serial-batch-created-at-#{dom_key(batch.batch_no)}"}
+                  class="text-right"
+                >
+                  {ThamaniDawaWeb.TimeFormat.datetime(batch.created_at)}
+                </dd>
               </div>
             </dl>
           </.link>
