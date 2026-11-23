@@ -4,7 +4,7 @@
 // sidesteps any stylesheet/CSS problem entirely (no stylesheet is needed,
 // the print job is just images) and leaves the live page's own DOM and
 // LiveView socket completely untouched.
-async function printLabelDivs(divs) {
+async function printLabelDivs(divs, size) {
   if (!window.html2canvas) {
     console.error("html2canvas is not loaded; cannot print labels")
     return
@@ -19,10 +19,12 @@ async function printLabelDivs(divs) {
 
   if (images.length === 0) return
 
-  return printImagesInIframe(images)
+  return printImagesInIframe(images, size)
 }
 
-function printImagesInIframe(images) {
+// size is "WIDTH HEIGHT" in CSS units, e.g. "50mm 25mm"; shipper labels default to 4in x 6in.
+function printImagesInIframe(images, size = "4in 6in") {
+  const [width, height] = size.split(" ")
   const iframe = document.createElement("iframe")
   iframe.style.position = "fixed"
   iframe.style.right = "0"
@@ -41,9 +43,9 @@ function printImagesInIframe(images) {
 
   const html =
     "<!DOCTYPE html><html><head><title>Print</title><style>" +
-    "@page { size: 4in 6in; margin: 0; } " +
+    `@page { size: ${width} ${height}; margin: 0; } ` +
     "html, body { margin: 0; padding: 0; } " +
-    ".page { width: 4in; height: 6in; page-break-after: always; overflow: hidden; display: flex; align-items: center; justify-content: center; } " +
+    `.page { width: ${width}; height: ${height}; page-break-after: always; overflow: hidden; display: flex; align-items: center; justify-content: center; } ` +
     ".page:last-child { page-break-after: auto; } " +
     "img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }" +
     "</style></head><body>" +
@@ -103,11 +105,12 @@ export const PrintAllLabels = {
     this.handleClick = async () => {
       const container = this.el.dataset.printContainer
       const root = container ? document.querySelector(container) : document
-      const divs = root ? Array.from(root.querySelectorAll(".printable-sscc-label")) : []
+      const selector = this.el.dataset.printTarget || ".printable-sscc-label"
+      const divs = root ? Array.from(root.querySelectorAll(selector)) : []
       if (divs.length === 0) return
 
       try {
-        await printLabelDivs(divs)
+        await printLabelDivs(divs, this.el.dataset.labelSize)
       } catch (error) {
         console.error("Could not print labels", error)
         window.alert("Could not prepare the labels for printing. Please try again.")

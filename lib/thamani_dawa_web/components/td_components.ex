@@ -43,7 +43,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :rest, :global,
     include:
-      ~w(href navigate patch method download name value disabled type id form title onclick target rel phx-click phx-value-id phx-value-tier phx-value-from phx-value-to phx-value-mode phx-value-step phx-value-status phx-disable-with phx-submit phx-target phx-hook data-print-target data-print-container data-download-container data-role data-sscc data-gs1-text data-quantity data-gtin data-batch data-production data-expiry data-material-description data-order-number data-from-company data-from-address data-to-company data-to-address data-to-po-box)
+      ~w(href navigate patch method download name value disabled type id form title onclick target rel phx-click phx-value-id phx-value-tier phx-value-from phx-value-to phx-value-mode phx-value-step phx-value-status phx-disable-with phx-submit phx-target phx-hook data-print-target data-print-container data-label-size data-download-container data-role data-sscc data-gs1-text data-quantity data-gtin data-batch data-production data-expiry data-material-description data-order-number data-from-company data-from-address data-to-company data-to-address data-to-po-box)
 
   slot :icon
   slot :inner_block
@@ -427,9 +427,10 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :event, :string, default: "set_filter"
 
   def td_filter_menu(assigns) do
-    current = Enum.find_value(assigns.options, assigns.value, fn {v, label} ->
-      if v == assigns.value, do: label
-    end)
+    current =
+      Enum.find_value(assigns.options, assigns.value, fn {v, label} ->
+        if v == assigns.value, do: label
+      end)
 
     assigns = assign(assigns, :current_label, current)
 
@@ -720,7 +721,10 @@ defmodule ThamaniDawaWeb.TDComponents do
         class="td-chip td-view-menu-trigger"
         aria-haspopup="menu"
         aria-expanded="false"
-        phx-click={JS.toggle(to: "##{@id}-menu") |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "##{@id}-trigger")}
+        phx-click={
+          JS.toggle(to: "##{@id}-menu")
+          |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "##{@id}-trigger")
+        }
       >
         <.td_icon name="calendar-blank" class="size-3.5" />
         <span>View</span>
@@ -770,7 +774,9 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :selected, :boolean, default: false
   attr :title, :string, required: true
   attr :body, :string, default: nil
-  attr :rest, :global, include: ~w(type phx-click id phx-target phx-value-mode phx-value-index phx-value-type)
+
+  attr :rest, :global,
+    include: ~w(type phx-click id phx-target phx-value-mode phx-value-index phx-value-type)
 
   def td_option_card(assigns) do
     ~H"""
@@ -895,7 +901,7 @@ defmodule ThamaniDawaWeb.TDComponents do
             options={@columns}
           />
           <p class="td-note">
-            The file downloads as CSV and opens in Excel or Google Sheets.<span :if={@count}> {@count} {@noun} match.</span>
+            The file downloads as CSV and opens in Excel or Google Sheets.<span :if={@count}>{@count} {@noun} match.</span>
           </p>
         </.form>
       </:body>
@@ -1212,7 +1218,12 @@ defmodule ThamaniDawaWeb.TDComponents do
             >
               <.td_icon name="bell" />
             </button>
-            <div id="td-notifications" class="td-notifications hidden" role="dialog" aria-labelledby="td-notifications-title">
+            <div
+              id="td-notifications"
+              class="td-notifications hidden"
+              role="dialog"
+              aria-labelledby="td-notifications-title"
+            >
               <div class="td-notifications-hd">
                 <p id="td-notifications-title">Notifications</p>
                 <button type="button" class="td-text-btn" id="td-notifications-mark-read" disabled>
@@ -1266,17 +1277,17 @@ defmodule ThamaniDawaWeb.TDComponents do
         </div>
         <div class="td-cmd-body">
           <p class="td-cmd-gh">Go to</p>
-          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer"}><span class="td-cmd-ti"><.td_icon name="squares-four" /></span><span class="td-cmd-t"><b>Dashboard</b></span></.link>
-          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/products"}><span class="td-cmd-ti"><.td_icon name="package" /></span><span class="td-cmd-t"><b>Products</b></span></.link>
-          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/inventory"}><span class="td-cmd-ti"><.td_icon name="cube" /></span><span class="td-cmd-t"><b>Inventory</b></span></.link>
-          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/shipments"}><span class="td-cmd-ti"><.td_icon name="truck" /></span><span class="td-cmd-t"><b>Shipments</b></span></.link>
-          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/aggregations"}><span class="td-cmd-ti"><.td_icon name="squares-plus" /></span><span class="td-cmd-t"><b>Aggregation</b></span></.link>
-          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/mobile-users"}><span class="td-cmd-ti"><.td_icon name="device-mobile-camera" /></span><span class="td-cmd-t"><b>Mobile users</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer"><span class="td-cmd-ti"><.td_icon name="squares-four" /></span><span class="td-cmd-t"><b>Dashboard</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/products"><span class="td-cmd-ti"><.td_icon name="package" /></span><span class="td-cmd-t"><b>Products</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/inventory"><span class="td-cmd-ti"><.td_icon name="cube" /></span><span class="td-cmd-t"><b>Inventory</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/shipments"><span class="td-cmd-ti"><.td_icon name="truck" /></span><span class="td-cmd-t"><b>Shipments</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/aggregations"><span class="td-cmd-ti"><.td_icon name="squares-plus" /></span><span class="td-cmd-t"><b>Aggregation</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/mobile-users"><span class="td-cmd-ti"><.td_icon name="device-mobile-camera" /></span><span class="td-cmd-t"><b>Mobile users</b></span></.link>
           <p class="td-cmd-gh">Actions</p>
-          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/products"}><span class="td-cmd-ti"><.td_icon name="plus" /></span><span class="td-cmd-t"><b>Add product</b></span></.link>
-          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/aggregations"}><span class="td-cmd-ti"><.td_icon name="package" /></span><span class="td-cmd-t"><b>Add SSCC</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/products"><span class="td-cmd-ti"><.td_icon name="plus" /></span><span class="td-cmd-t"><b>Add product</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/aggregations"><span class="td-cmd-ti"><.td_icon name="package" /></span><span class="td-cmd-t"><b>Add SSCC</b></span></.link>
           <p class="td-cmd-gh">Account</p>
-          <.link class="td-cmd-row" data-td-cmd-row navigate={"/manufacturer/api-keys"}><span class="td-cmd-ti"><.td_icon name="key" /></span><span class="td-cmd-t"><b>API keys</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/api-keys"><span class="td-cmd-ti"><.td_icon name="key" /></span><span class="td-cmd-t"><b>API keys</b></span></.link>
           <button
             type="button"
             class="td-cmd-row td-cmd-danger"
@@ -1891,7 +1902,11 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   def td_date_filter(assigns) do
     assigns =
-      assign(assigns, :shown, ThamaniDawaWeb.DateRangeFilter.label(assigns.preset, assigns.date_from, assigns.date_to))
+      assign(
+        assigns,
+        :shown,
+        ThamaniDawaWeb.DateRangeFilter.label(assigns.preset, assigns.date_from, assigns.date_to)
+      )
 
     ~H"""
     <div class="td-chip-wrap" phx-click-away={JS.hide(to: "##{@id}-pop")}>
@@ -1975,5 +1990,4 @@ defmodule ThamaniDawaWeb.TDComponents do
     <span class="td-person"><.td_orb seed={to_string(@seed || @name)} size={20} /><span>{@name}</span></span>
     """
   end
-
 end

@@ -7,7 +7,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.DistributorPagination
 
-  @page_size 24
+  @page_size 50
+  @preview_size 8
 
   def mount(%{"gtin" => gtin}, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -27,6 +28,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      |> assign(:batch_shippers, [])
      |> assign(:serial_shippers, %{})
      |> assign(:batch_fully_packed, false)
+     |> assign(:batch_serial_total, 0)
+     |> assign(:batch_packed, 0)
+     |> assign(:label_serial, nil)
      |> reset_pack()}
   end
 
@@ -41,6 +45,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     socket =
       socket
       |> assign(:search, search)
+      |> assign(:view, if(params["view"] == "serials", do: "serials", else: "batch"))
+      |> assign(
+        :state_filter,
+        if(params["state"] in ["packed", "unpacked"], do: params["state"], else: "")
+      )
+      |> assign(:return_to, ThamaniDawaWeb.ReturnTo.safe(params["return_to"] || "", ""))
+      |> assign(:back_path, ThamaniDawaWeb.ReturnTo.path(params, ~p"/manufacturer/products"))
+      |> assign_new(:print_open, fn -> false end)
       |> ensure_batches()
 
     {:noreply, select_batch(socket, Map.get(params, "batch"), search, params)}
@@ -96,16 +108,30 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
         case result do
           {:ok, serials} ->
-            serials = filter_serials(serials, search, batch)
+            all_serials = serials
+
+            serials =
+              serials
+              |> filter_serials(search, batch)
+              |> filter_state(socket.assigns.state_filter, by_serial)
+
+            page_size = if socket.assigns.view == "serials", do: @page_size, else: @preview_size
 
             page =
               DistributorPagination.page(
                 serials,
                 DistributorPagination.page_number(params),
-                @page_size
+                page_size
               )
 
-            assign(socket, selected_batch: batch, serial_page: page, serials_error: nil)
+            assign(socket,
+              selected_batch: batch,
+              serial_page: page,
+              serials_error: nil,
+              batch_serial_total: length(all_serials),
+              batch_packed: Enum.count(all_serials, &Map.has_key?(by_serial, &1.serial)),
+              label_serial: List.first(all_serials)
+            )
 
           {:error, reason} ->
             assign(socket, selected_batch: batch, serial_page: nil, serials_error: reason)
@@ -154,6 +180,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     if matching == [], do: batches, else: matching
   end
 
+  defp filter_state(serials, "packed", by_serial),
+    do: Enum.filter(serials, &Map.has_key?(by_serial, &1.serial))
+
+  defp filter_state(serials, "unpacked", by_serial),
+    do: Enum.reject(serials, &Map.has_key?(by_serial, &1.serial))
+
+  defp filter_state(serials, _state, _by_serial), do: serials
+
   defp filter_serials(serials, "", _batch), do: serials
 
   defp filter_serials(serials, search, batch) do
@@ -172,9 +206,28 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      )}
   end
 
-  def handle_event("reset", _params, socket) do
+  def handle_event("set_filter", %{"field" => "state", "value" => value}, socket) do
+    query = page_query(socket.assigns, state: value)
+
     {:noreply,
-     push_patch(socket, to: ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials")}
+     push_patch(socket,
+       to: ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials?#{query}"
+     )}
+  end
+
+  def handle_event("open_print", _params, socket),
+    do: {:noreply, assign(socket, :print_open, true)}
+
+  def handle_event("close_print", _params, socket),
+    do: {:noreply, assign(socket, :print_open, false)}
+
+  def handle_event("reset", _params, socket) do
+    to =
+      if socket.assigns.view == "serials",
+        do: view_serials_path(socket.assigns, search: "", state: ""),
+        else: ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials"
+
+    {:noreply, push_patch(socket, to: to)}
   end
 
   # Aggregation later: pack a batch's unpacked serials into a new shipper
@@ -375,12 +428,49 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   defp facility_options(facilities),
     do: Enum.map(facilities, &{"#{&1.name} · #{&1.gln}", &1.gln})
 
-  defp search_params(socket, search) do
-    case socket.assigns.selected_batch do
-      nil -> %{search: search}
-      batch -> %{batch: batch.batch_no, search: search}
-    end
+  defp search_params(socket, search), do: page_query(socket.assigns, search: search)
+
+  # Query for this page, keeping batch, view, state and return_to.
+  defp page_query(assigns, overrides) do
+    base = [
+      batch: assigns.selected_batch && assigns.selected_batch.batch_no,
+      view: if(assigns.view == "serials", do: "serials"),
+      state: assigns.state_filter,
+      search: assigns.search,
+      return_to: assigns.return_to
+    ]
+
+    base
+    |> Keyword.merge(overrides)
+    |> Enum.reject(fn {_k, v} -> v in [nil, ""] end)
   end
+
+  defp batch_path(assigns, batch_no) do
+    query =
+      Enum.reject([batch: batch_no, return_to: assigns.return_to], fn {_k, v} ->
+        v in [nil, ""]
+      end)
+
+    ~p"/manufacturer/products/#{assigns.product.gtin}/serials?#{query}"
+  end
+
+  defp view_serials_path(assigns, overrides \\ []) do
+    query = page_query(%{assigns | view: "serials"}, overrides)
+    ~p"/manufacturer/products/#{assigns.product.gtin}/serials?#{query}"
+  end
+
+  defp sscc_serials_path(assigns, shipper) do
+    ~p"/manufacturer/sscc/#{shipper.id}/serials?#{%{return_to: current_page(assigns)}}"
+  end
+
+  defp current_page(assigns),
+    do:
+      ~p"/manufacturer/products/#{assigns.product.gtin}/serials?#{page_query(assigns, search: "")}"
+
+  defp sgtin(product, serial), do: "(01)#{gtin14(product)}(21)#{serial.serial}"
+
+  defp label_date(nil), do: ""
+  defp label_date(date), do: Calendar.strftime(date, "%d.%m.%Y")
 
   defp org_id(socket), do: socket.assigns.current_scope.organization_id
 
@@ -414,550 +504,670 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       current_scope={@current_scope}
       current_path={~p"/manufacturer/products"}
     >
-      <.header icon="hero-qr-code">
-        Primary serials
-        <:subtitle>{@product.name} · {@product.gtin}</:subtitle>
-        <:actions>
-          <.button navigate={~p"/manufacturer/products"}><.icon name="hero-arrow-left" class="size-4" />
-          Products</.button>
-        </:actions>
-      </.header>
-
-      <div class="mt-6 flex gap-3 rounded-2xl border border-thamani-stone bg-td-surface p-3">
-        <form id="manufacturer-serial-search" phx-change="search" class="flex-1">
-          <.input
-            type="search"
-            name="search"
-            value={@search}
-            placeholder="Search serial or batch"
-            phx-debounce="300"
-            class="w-full"
-          />
-        </form>
-        <.button id="reset-manufacturer-serial-search" type="button" phx-click="reset">Reset</.button>
-      </div>
-
-      <div id="manufacturer-serial-batches" class="mt-5 grid gap-4 lg:grid-cols-[18rem_1fr]">
-        <aside class="space-y-3">
-          <div
-            :if={is_nil(@batches)}
-            id="serial-batches-loading"
-            class="flex items-center gap-2 rounded-2xl border border-thamani-stone bg-white p-4 text-sm text-thamani-pewter"
-          >
-            <.icon name="hero-arrow-path" class="size-4 animate-spin" /> Loading batches from GS1…
+      <%= if @view == "serials" and @selected_batch do %>
+        {view_serials(assigns)}
+      <% else %>
+        <.td_back_link
+          id="serials-back"
+          to={@back_path}
+          label={ThamaniDawaWeb.ReturnTo.label(@back_path, "Back to Products")}
+        />
+        <div class="td-idh">
+          <div>
+            <h1 class="td-idh-title">{@product.name}</h1>
+            <p class="td-idh-sub">
+              GTIN <span class="font-mono">{@product.gtin}</span>
+              <span :if={is_list(@batches)}> · {length(@batches)} {if length(@batches) == 1,
+                do: "batch",
+                else: "batches"}</span>
+            </p>
           </div>
-          <div
-            :if={@batches_error}
-            id="serial-batches-error"
-            class="space-y-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"
-          >
-            <p>{error_message(@batches_error)}</p>
-            <.button id="retry-serial-batches" type="button" phx-click="retry">Retry</.button>
+          <div class="td-idh-actions">
+            <.td_button
+              id="batches-generate-serials"
+              label="Generate serials"
+              navigate={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
+            />
+            <.td_button
+              :if={@selected_batch}
+              id="export-batch-serials"
+              glyph="download-simple"
+              label="Export CSV"
+              href={
+                ~p"/manufacturer/products/#{@product.gtin}/batches/#{@selected_batch.batch_no}/serials/export"
+              }
+            />
+            <.td_button
+              :if={@selected_batch && !@pack_open && !@batch_fully_packed}
+              id="open-pack-serials"
+              label="Create shipper SSCC"
+              phx-click="open_pack"
+              phx-disable-with="Loading unpacked serials…"
+            />
+            <span :if={@batch_fully_packed} id="batch-fully-packed">
+              <.td_badge tone="success" label="All serials packed" />
+            </span>
           </div>
-          <.blank_state
-            :if={@batches == [] and is_nil(@batches_error)}
-            icon="hero-cube"
-            title="No serials yet"
-          >
-            Use + Serial on the Products page to create the first batch.
-          </.blank_state>
-          <.link
-            :for={batch <- @batches || []}
-            id={"serial-batch-#{dom_key(batch.batch_no)}"}
-            patch={
-              ~p"/manufacturer/products/#{@product.gtin}/serials?#{%{batch: batch.batch_no, search: @search}}"
-            }
-            class={[
-              "block rounded-2xl border p-4 transition",
-              @selected_batch && @selected_batch.batch_no == batch.batch_no &&
-                "border-thamani-forest bg-td-wash",
-              (!@selected_batch || @selected_batch.batch_no != batch.batch_no) &&
-                "border-thamani-stone bg-td-surface hover:border-td-hairline"
-            ]}
-          >
-            <div class="flex items-start justify-between gap-3">
-              <span class="font-semibold text-thamani-forest">Batch {batch.batch_no}</span><span class="rounded-full bg-td-surface px-2 py-1 text-xs font-bold text-thamani-forest">{batch.serial_count}</span>
+        </div>
+
+        <div id="manufacturer-serial-batches" class="td-pad td-batch-split">
+          <aside class="td-card td-batch-rail">
+            <.td_card_header
+              title="Batches"
+              subtitle={
+                if is_list(@batches),
+                  do:
+                    "#{length(@batches)} #{if length(@batches) == 1, do: "batch", else: "batches"} for this product",
+                  else: "Loading from GS1"
+              }
+            />
+            <p :if={is_nil(@batches)} id="serial-batches-loading" class="td-note td-pad">
+              Loading batches from GS1…
+            </p>
+            <div :if={@batches_error} id="serial-batches-error" class="td-ban is-danger m-3">
+              <span>{error_message(@batches_error)}</span>
+              <.td_button id="retry-serial-batches" label="Retry" phx-click="retry" />
             </div>
-            <dl class="mt-3 space-y-1 text-xs text-thamani-pewter">
-              <div class="flex justify-between">
-                <dt>Produced</dt><dd>{long_date(batch.production_date)}</dd>
-              </div><div class="flex justify-between">
-                <dt>Expires</dt><dd>{long_date(batch.expiry_date)}</dd>
-              </div><div class="flex justify-between gap-3 pt-1">
-                <dt>Created at</dt><dd
-                  id={"serial-batch-created-at-#{dom_key(batch.batch_no)}"}
-                  class="text-right"
-                >
+            <div
+              :if={@batches == [] and is_nil(@batches_error)}
+              id="serial-batches-empty"
+              class="td-pad"
+            >
+              <p class="td-empty-title">No serials yet</p>
+              <p class="td-note">Generate serials to create the first batch for this product.</p>
+            </div>
+            <.link
+              :for={batch <- @batches || []}
+              id={"serial-batch-#{dom_key(batch.batch_no)}"}
+              patch={batch_path(assigns, batch.batch_no)}
+              class={[
+                "td-batch-item",
+                @selected_batch && @selected_batch.batch_no == batch.batch_no && "is-on"
+              ]}
+            >
+              <span class="td-batch-l1">
+                <span class="font-mono">{batch.batch_no}</span>
+                <.td_badge :if={new_batch?(batch)} tone="info" label="New" />
+              </span>
+              <span class="td-batch-l2">
+                <span>{batch.serial_count} serials</span>
+                <span id={"serial-batch-created-at-#{dom_key(batch.batch_no)}"}>
                   {ThamaniDawaWeb.TimeFormat.datetime(batch.created_at)}
-                </dd>
-              </div>
-            </dl>
-          </.link>
-        </aside>
-
-        <section
-          :if={@selected_batch}
-          id="selected-serial-batch"
-          class="overflow-hidden rounded-2xl border border-thamani-stone bg-td-surface shadow-sm"
-        >
-          <div class="flex flex-wrap items-center justify-between gap-4 border-b border-thamani-stone bg-thamani-snow px-5 py-4 sm:px-6">
-            <div class="flex items-center gap-3">
-              <span class="flex size-10 items-center justify-center rounded-xl bg-thamani-lime/45 text-thamani-forest shadow-sm">
-                <.icon name="hero-qr-code" class="size-5" />
+                </span>
               </span>
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
-                  Primary serial batch
-                </p>
-                <h2 class="mt-0.5 text-lg font-semibold tracking-tight text-thamani-forest">
-                  Batch {@selected_batch.batch_no}
-                </h2>
-              </div>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              <.button
-                :if={!@pack_open and !@batch_fully_packed}
-                id="open-pack-serials"
-                type="button"
-                phx-click="open_pack"
-                phx-disable-with="Loading unpacked serials…"
-              ><.icon name="hero-archive-box-arrow-down" class="size-4" /> Create shipper SSCC</.button>
-              <span
-                :if={@batch_fully_packed}
-                id="batch-fully-packed"
-                class="inline-flex items-center gap-1.5 rounded-full bg-thamani-lime/40 px-3 py-2 text-xs font-semibold text-thamani-forest"
-              >
-                <.icon name="hero-check-badge" class="size-4" /> All serials packed
-              </span>
-              <.button
-                id="export-batch-serials"
-                href={
-                  ~p"/manufacturer/products/#{@product.gtin}/batches/#{@selected_batch.batch_no}/serials/export"
-                }
-              ><.icon name="hero-arrow-down-tray" class="size-4" /> Export CSV</.button>
-            </div>
-          </div>
-
-          <section
-            :if={@pack_open}
-            id="pack-serials-panel"
-            class="border-b border-thamani-stone bg-thamani-mist/40 px-5 py-5 sm:px-6"
-          >
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
-                  Aggregate later
-                </p>
-                <h3 class="mt-0.5 text-base font-semibold text-thamani-forest">
-                  Pack unpacked serials into a shipper SSCC
-                </h3>
-                <p class="mt-1 text-xs text-thamani-pewter">
-                  Batch {@selected_batch.batch_no} · {length(@pack_serials)} unpacked ·
-                  <span id="pack-selected-count">{MapSet.size(@pack_selected)}</span>
-                  selected
-                </p>
-              </div>
-              <button
-                id="close-pack-serials"
-                type="button"
-                phx-click="close_pack"
-                class="rounded-lg p-1.5 text-thamani-pewter transition hover:bg-white hover:text-thamani-forest"
-              >
-                <.icon name="hero-x-mark" class="size-5" />
-              </button>
-            </div>
-
-            <p
-              :if={@pack_error}
-              id="pack-serials-error"
-              class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-            >
-              {error_message(@pack_error)}
+            </.link>
+            <p :if={is_list(@batches) and @batches != []} class="td-note td-pad">
+              A batch appears here each time you generate serials for this product.
             </p>
+          </aside>
 
-            <p
-              :if={@pack_serials == [] and is_nil(@pack_error)}
-              id="pack-serials-empty"
-              class="mt-4 rounded-xl border border-thamani-stone bg-white px-4 py-3 text-sm text-thamani-pewter"
-            >
-              Every serial in this batch is already packed into a shipper.
-            </p>
-
-            <.form
-              :if={@pack_serials != []}
-              for={@pack_form}
-              id="pack-serials-form"
-              phx-change="validate_pack"
-              phx-submit="submit_pack"
-              class="mt-4 space-y-4"
-            >
-              <div class="flex items-center gap-3 text-xs font-semibold">
-                <button
-                  id="pack-select-all"
-                  type="button"
-                  phx-click="pack_select_all"
-                  class="text-thamani-forest underline-offset-2 hover:underline"
-                >
-                  Select all
-                </button>
-                <button
-                  id="pack-clear"
-                  type="button"
-                  phx-click="pack_clear"
-                  class="text-thamani-pewter underline-offset-2 hover:underline"
-                >
-                  Clear
-                </button>
+          <div :if={@selected_batch} id="selected-serial-batch" class="td-batch-col">
+            <div class="td-card">
+              <div id="primary-serial-batch-details" class="td-kv-grid is-pad is-6">
+                <div id="primary-serial-batch-number" class="td-kv">
+                  <span class="td-kv-label">Batch</span>
+                  <span class="td-kv-value is-mono">{@selected_batch.batch_no}</span>
+                </div>
+                <div id="primary-serial-gtin" class="td-kv">
+                  <span class="td-kv-label">GTIN</span>
+                  <span class="td-kv-value is-mono">{@product.gtin}</span>
+                </div>
+                <div id="primary-serial-production-date" class="td-kv">
+                  <span class="td-kv-label">Produced</span>
+                  <span class="td-kv-value">{long_date(@selected_batch.production_date)}</span>
+                </div>
+                <div id="primary-serial-expiry-date" class="td-kv">
+                  <span class="td-kv-label">Expires</span>
+                  <span class="td-kv-value">{long_date(@selected_batch.expiry_date)}</span>
+                </div>
+                <div class="td-kv">
+                  <span class="td-kv-label">Serials</span>
+                  <span class="td-kv-value">{@batch_serial_total}</span>
+                </div>
+                <div id="primary-serial-packed" class="td-kv">
+                  <span class="td-kv-label">Packed</span>
+                  <span class="td-kv-value">{@batch_packed} of {@batch_serial_total}</span>
+                </div>
               </div>
+            </div>
 
-              <div
-                id="pack-serial-options"
-                class="grid max-h-72 gap-2 overflow-y-auto rounded-xl border border-thamani-stone bg-white p-3 sm:grid-cols-2 xl:grid-cols-4"
+            <div :if={@pack_open} class="td-card">
+              <section
+                id="pack-serials-panel"
+                class="border-b border-thamani-stone bg-thamani-mist/40 px-5 py-5 sm:px-6"
               >
-                <button
-                  :for={serial <- @pack_serials}
-                  id={"pack-serial-#{dom_key(serial)}"}
-                  type="button"
-                  phx-click="toggle_pack_serial"
-                  phx-value-serial={serial}
-                  class={[
-                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-left font-mono text-xs transition",
-                    if(MapSet.member?(@pack_selected, serial),
-                      do: "border-thamani-forest bg-thamani-lime/20 text-thamani-forest",
-                      else: "border-thamani-stone text-thamani-pewter hover:border-thamani-sage"
-                    )
-                  ]}
-                >
-                  <.icon
-                    name={
-                      if(MapSet.member?(@pack_selected, serial),
-                        do: "hero-check-circle-solid",
-                        else: "hero-stop"
-                      )
-                    }
-                    class="size-4 shrink-0"
-                  />
-                  <span class="truncate">{serial}</span>
-                </button>
-              </div>
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
+                      Aggregate later
+                    </p>
+                    <h3 class="mt-0.5 text-base font-semibold text-thamani-forest">
+                      Pack unpacked serials into a shipper SSCC
+                    </h3>
+                    <p class="mt-1 text-xs text-thamani-pewter">
+                      Batch {@selected_batch.batch_no} · {length(@pack_serials)} unpacked ·
+                      <span id="pack-selected-count">{MapSet.size(@pack_selected)}</span>
+                      selected
+                    </p>
+                  </div>
+                  <button
+                    id="close-pack-serials"
+                    type="button"
+                    phx-click="close_pack"
+                    class="rounded-lg p-1.5 text-thamani-pewter transition hover:bg-white hover:text-thamani-forest"
+                  >
+                    <.icon name="hero-x-mark" class="size-5" />
+                  </button>
+                </div>
 
-              <div class="grid gap-4 sm:grid-cols-3">
-                <.input
-                  field={@pack_form[:from_gln]}
-                  type="select"
-                  label="From facility"
-                  options={facility_options(@pack_facilities)}
-                  prompt="Choose a facility"
-                />
-                <div class="space-y-1.5">
-                  <label for="pack_to_gln_search" class="thamani-label">To GLN</label>
-                  <input type="hidden" name="pack[to_gln]" value={@pack_form[:to_gln].value} />
-                  <div id="pack-to-gln-combobox" class="relative">
-                    <input
-                      id="pack_to_gln_search"
-                      type="search"
-                      value={@to_gln_query}
-                      phx-keyup="search_pack_to_gln"
-                      phx-debounce="300"
-                      autocomplete="off"
-                      placeholder="Search by GLN, company, or address"
-                      class="thamani-input w-full"
+                <p
+                  :if={@pack_error}
+                  id="pack-serials-error"
+                  class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                >
+                  {error_message(@pack_error)}
+                </p>
+
+                <p
+                  :if={@pack_serials == [] and is_nil(@pack_error)}
+                  id="pack-serials-empty"
+                  class="mt-4 rounded-xl border border-thamani-stone bg-white px-4 py-3 text-sm text-thamani-pewter"
+                >
+                  Every serial in this batch is already packed into a shipper.
+                </p>
+
+                <.form
+                  :if={@pack_serials != []}
+                  for={@pack_form}
+                  id="pack-serials-form"
+                  phx-change="validate_pack"
+                  phx-submit="submit_pack"
+                  class="mt-4 space-y-4"
+                >
+                  <div class="flex items-center gap-3 text-xs font-semibold">
+                    <button
+                      id="pack-select-all"
+                      type="button"
+                      phx-click="pack_select_all"
+                      class="text-thamani-forest underline-offset-2 hover:underline"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      id="pack-clear"
+                      type="button"
+                      phx-click="pack_clear"
+                      class="text-thamani-pewter underline-offset-2 hover:underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
+
+                  <div
+                    id="pack-serial-options"
+                    class="grid max-h-72 gap-2 overflow-y-auto rounded-xl border border-thamani-stone bg-white p-3 sm:grid-cols-2 xl:grid-cols-4"
+                  >
+                    <button
+                      :for={serial <- @pack_serials}
+                      id={"pack-serial-#{dom_key(serial)}"}
+                      type="button"
+                      phx-click="toggle_pack_serial"
+                      phx-value-serial={serial}
+                      class={[
+                        "flex items-center gap-2 rounded-lg border px-3 py-2 text-left font-mono text-xs transition",
+                        if(MapSet.member?(@pack_selected, serial),
+                          do: "border-thamani-forest bg-thamani-lime/20 text-thamani-forest",
+                          else: "border-thamani-stone text-thamani-pewter hover:border-thamani-sage"
+                        )
+                      ]}
+                    >
+                      <.icon
+                        name={
+                          if(MapSet.member?(@pack_selected, serial),
+                            do: "hero-check-circle-solid",
+                            else: "hero-stop"
+                          )
+                        }
+                        class="size-4 shrink-0"
+                      />
+                      <span class="truncate">{serial}</span>
+                    </button>
+                  </div>
+
+                  <div class="grid gap-4 sm:grid-cols-3">
+                    <.input
+                      field={@pack_form[:from_gln]}
+                      type="select"
+                      label="From facility"
+                      options={facility_options(@pack_facilities)}
+                      prompt="Choose a facility"
                     />
-                    <div
-                      :if={@to_gln_results != []}
-                      id="pack-to-gln-results"
-                      role="listbox"
-                      class="absolute z-[70] mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-thamani-stone bg-white py-1 shadow-lg"
-                    >
-                      <button
-                        :for={party <- @to_gln_results}
-                        id={"pack-to-gln-#{party.gln}"}
-                        type="button"
-                        role="option"
-                        phx-click="select_pack_to_gln"
-                        phx-value-gln={party.gln}
-                        class="block w-full px-3 py-2 text-left text-sm transition hover:bg-thamani-mist"
+                    <div class="space-y-1.5">
+                      <label for="pack_to_gln_search" class="thamani-label">To GLN</label>
+                      <input type="hidden" name="pack[to_gln]" value={@pack_form[:to_gln].value} />
+                      <div id="pack-to-gln-combobox" class="relative">
+                        <input
+                          id="pack_to_gln_search"
+                          type="search"
+                          value={@to_gln_query}
+                          phx-keyup="search_pack_to_gln"
+                          phx-debounce="300"
+                          autocomplete="off"
+                          placeholder="Search by GLN, company, or address"
+                          class="thamani-input w-full"
+                        />
+                        <div
+                          :if={@to_gln_results != []}
+                          id="pack-to-gln-results"
+                          role="listbox"
+                          class="absolute z-[70] mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-thamani-stone bg-white py-1 shadow-lg"
+                        >
+                          <button
+                            :for={party <- @to_gln_results}
+                            id={"pack-to-gln-#{party.gln}"}
+                            type="button"
+                            role="option"
+                            phx-click="select_pack_to_gln"
+                            phx-value-gln={party.gln}
+                            class="block w-full px-3 py-2 text-left text-sm transition hover:bg-thamani-mist"
+                          >
+                            <span class="block font-mono font-semibold text-thamani-forest">
+                              {party.gln}
+                            </span>
+                            <span class="block text-xs text-thamani-pewter">
+                              {party.company} · {party.address || "—"}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                      <p :if={String.length(@to_gln_query) == 1} class="text-xs text-thamani-pewter">
+                        Type at least 2 characters to search the GS1 GLN directory.
+                      </p>
+                      <p :if={@to_gln_search_status == :searching} class="text-xs text-thamani-pewter">
+                        <.icon
+                          name="hero-arrow-path"
+                          class="inline size-3.5 motion-safe:animate-spin"
+                        /> Searching GS1 GLNs…
+                      </p>
+                      <p
+                        :if={@to_gln_search_status == :complete and @to_gln_results == []}
+                        class="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
                       >
-                        <span class="block font-mono font-semibold text-thamani-forest">
-                          {party.gln}
-                        </span>
-                        <span class="block text-xs text-thamani-pewter">
-                          {party.company} · {party.address || "—"}
-                        </span>
-                      </button>
+                        No GS1 GLNs match this search.
+                      </p>
+                      <p :if={@to_gln_search_status == :unavailable} class="text-xs text-red-700">
+                        The GS1 GLN directory is unavailable. Try again in a moment.
+                      </p>
                     </div>
+                    <.input
+                      field={@pack_form[:order_number]}
+                      type="text"
+                      label="Order number (optional)"
+                    />
                   </div>
-                  <p :if={String.length(@to_gln_query) == 1} class="text-xs text-thamani-pewter">
-                    Type at least 2 characters to search the GS1 GLN directory.
-                  </p>
-                  <p :if={@to_gln_search_status == :searching} class="text-xs text-thamani-pewter">
-                    <.icon name="hero-arrow-path" class="inline size-3.5 motion-safe:animate-spin" />
-                    Searching GS1 GLNs…
-                  </p>
-                  <p
-                    :if={@to_gln_search_status == :complete and @to_gln_results == []}
-                    class="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800"
-                  >
-                    No GS1 GLNs match this search.
-                  </p>
-                  <p :if={@to_gln_search_status == :unavailable} class="text-xs text-red-700">
-                    The GS1 GLN directory is unavailable. Try again in a moment.
-                  </p>
-                </div>
-                <.input
-                  field={@pack_form[:order_number]}
-                  type="text"
-                  label="Order number (optional)"
-                />
-              </div>
 
-              <div class="flex justify-end">
-                <.button
-                  id="submit-pack-serials"
-                  type="submit"
-                  variant="primary"
-                  disabled={MapSet.size(@pack_selected) == 0}
-                  phx-disable-with="Creating shipper SSCC…"
-                >
-                  <.icon name="hero-archive-box" class="size-4" />
-                  Create SSCC for {MapSet.size(@pack_selected)} serials
-                </.button>
-              </div>
-            </.form>
-          </section>
-
-          <div
-            :if={@batch_shippers != []}
-            id="batch-shipper-ssccs"
-            class="border-b border-thamani-stone px-5 py-5 sm:px-6"
-          >
-            <div class="flex items-center justify-between gap-3">
-              <div>
-                <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
-                  Aggregation
-                </p>
-                <h3 class="mt-0.5 font-semibold text-thamani-forest">
-                  Shipper SSCCs for batch {@selected_batch.batch_no}
-                </h3>
-              </div>
-              <span class="rounded-full bg-thamani-mist px-3 py-1 text-xs font-bold text-thamani-forest">
-                {length(@batch_shippers)} SSCCs
-              </span>
-            </div>
-            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <article
-                :for={shipper <- @batch_shippers}
-                id={"batch-shipper-#{shipper.id}"}
-                class="flex flex-col rounded-2xl border border-thamani-stone bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-thamani-sage hover:shadow-md"
-              >
-                <div class="flex items-start gap-3">
-                  <span class="flex size-10 flex-none items-center justify-center rounded-xl bg-thamani-lime/45 text-thamani-forest">
-                    <.icon name="hero-qr-code" class="size-5" />
-                  </span>
-                  <div class="min-w-0 flex-1">
-                    <p class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">
-                      Shipper SSCC
-                    </p>
-                    <p
-                      class="truncate font-mono text-sm font-bold text-thamani-forest"
-                      title={shipper.code}
+                  <div class="flex justify-end">
+                    <.button
+                      id="submit-pack-serials"
+                      type="submit"
+                      variant="primary"
+                      disabled={MapSet.size(@pack_selected) == 0}
+                      phx-disable-with="Creating shipper SSCC…"
                     >
-                      {shipper.code}
-                    </p>
+                      <.icon name="hero-archive-box" class="size-4" />
+                      Create SSCC for {MapSet.size(@pack_selected)} serials
+                    </.button>
                   </div>
-                </div>
-                <dl class="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
-                  <div>
-                    <dt class="text-xs font-bold uppercase text-thamani-pewter/80">Batch</dt>
-                    <dd class="mt-1 font-bold text-thamani-forest">{shipper.batch}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-bold uppercase text-thamani-pewter/80">GTIN</dt>
-                    <dd class="mt-1 truncate font-mono text-thamani-forest">{shipper.gtin}</dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-bold uppercase text-thamani-pewter/80">To GLN</dt>
-                    <dd class="mt-1 truncate font-mono text-thamani-forest">
-                      {shipper.to_gln || "—"}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt class="text-xs font-bold uppercase text-thamani-pewter/80">Packed</dt>
-                    <dd class="mt-1 text-thamani-forest">
-                      {Calendar.strftime(shipper.inserted_at, "%d %b %Y")}
-                    </dd>
-                  </div>
-                </dl>
-                <div class="mt-5 flex flex-wrap gap-2">
-                  <span class="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700">
-                    {shipper.count_of_trade_items || 0} Primary serials
-                  </span>
-                </div>
-                <hr class="my-5 border-thamani-stone" />
-                <div class="mt-auto flex flex-wrap gap-2">
-                  <.link
-                    id={"batch-shipper-serials-#{shipper.id}"}
-                    navigate={~p"/manufacturer/sscc/#{shipper.id}/serials"}
-                    class="inline-flex items-center gap-1.5 rounded-full bg-thamani-forest px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-thamani-forest/90"
-                  >
-                    <.icon name="hero-list-bullet" class="size-4" /> Serials
-                  </.link>
-                  <.link
-                    id={"batch-shipper-label-#{shipper.id}"}
-                    navigate={~p"/manufacturer/sscc/#{shipper.id}/label"}
-                    class="inline-flex items-center gap-1.5 rounded-full border border-thamani-stone px-3 py-1.5 text-xs font-semibold text-thamani-forest transition hover:border-thamani-sage hover:bg-thamani-mist"
-                  >
-                    <.icon name="hero-qr-code" class="size-4" /> Shipper label
-                  </.link>
-                </div>
-              </article>
+                </.form>
+              </section>
             </div>
-          </div>
 
-          <dl
-            id="primary-serial-batch-details"
-            class="grid divide-y divide-thamani-stone sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4"
-          >
-            <div id="primary-serial-gtin" class="px-5 py-4 sm:px-6">
-              <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-thamani-pewter">
-                <.icon name="hero-barcode" class="size-4 text-thamani-forest" /> GTIN
-              </dt>
-              <dd class="mt-2 font-mono text-sm font-semibold text-thamani-forest">
-                {@product.gtin}
-              </dd>
+            <div :if={@serials_error} id="manufacturer-serials-error" class="td-ban is-danger">
+              <span>{error_message(@serials_error)}</span>
+              <.td_button id="retry-manufacturer-serials" label="Retry" phx-click="retry" />
             </div>
-            <div id="primary-serial-batch-number" class="px-5 py-4 sm:px-6">
-              <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-thamani-pewter">
-                <.icon name="hero-tag" class="size-4 text-thamani-forest" /> Batch number
-              </dt>
-              <dd class="mt-2 font-mono text-sm font-semibold text-thamani-forest">
-                {@selected_batch.batch_no}
-              </dd>
-            </div>
-            <div id="primary-serial-production-date" class="px-5 py-4 sm:px-6">
-              <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-thamani-pewter">
-                <.icon name="hero-calendar-days" class="size-4 text-thamani-forest" /> Production date
-              </dt>
-              <dd class="mt-2 text-sm font-semibold text-thamani-forest">
-                {long_date(@selected_batch.production_date)}
-              </dd>
-            </div>
-            <div id="primary-serial-expiry-date" class="px-5 py-4 sm:px-6">
-              <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-thamani-pewter">
-                <.icon name="hero-calendar-days" class="size-4 text-thamani-forest" /> Expiry date
-              </dt>
-              <dd class="mt-2 text-sm font-semibold text-thamani-forest">
-                {long_date(@selected_batch.expiry_date)}
-              </dd>
-            </div>
-          </dl>
 
-          <div
-            :if={@serials_error}
-            id="manufacturer-serials-error"
-            class="m-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:m-6"
-          >
-            <span>{error_message(@serials_error)}</span>
-            <.button id="retry-manufacturer-serials" type="button" phx-click="retry">Retry</.button>
-          </div>
-
-          <div
-            :if={@serial_page}
-            id="manufacturer-serials"
-            class="m-5 grid gap-4 sm:m-6 sm:grid-cols-2 xl:grid-cols-3"
-          >
-            <article
-              :for={serial <- @serial_page.entries}
-              id={"manufacturer-serial-#{dom_key(serial.serial)}"}
-              class="rounded-xl border border-td-hairline bg-td-surface p-4 transition hover:shadow-sm"
-            >
-              <div
-                id={"manufacturer-serial-label-#{dom_key(serial.serial)}"}
-                class="printable-primary-label"
-              >
-                <p class="truncate font-mono text-sm font-semibold text-thamani-forest">
-                  {serial.serial}
+            <div :if={@serial_page} class="td-batch-pair">
+              <div class="td-card" id="serial-preview-card">
+                <.td_card_header
+                  title={"Serials in #{@selected_batch.batch_no}"}
+                  subtitle={"The first #{length(@serial_page.entries)} of #{@batch_serial_total}. Print or export the whole batch from here."}
+                >
+                  <:actions>
+                    <.td_button
+                      id="view-all-serials"
+                      label="View all serials"
+                      patch={view_serials_path(assigns)}
+                    />
+                  </:actions>
+                </.td_card_header>
+                <table class="td-rows is-static" id="manufacturer-serials">
+                  <thead>
+                    <tr>
+                      <th>Serial (SGTIN)</th><th>State</th><th>Shipper SSCC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <.serial_row
+                      :for={serial <- @serial_page.entries}
+                      serial={serial}
+                      product={@product}
+                      batch={@selected_batch}
+                      serial_shippers={@serial_shippers}
+                      return_to={current_page(assigns)}
+                      full={false}
+                    />
+                  </tbody>
+                </table>
+                <p class="td-note td-pad">
+                  Showing <b>{length(@serial_page.entries)}</b>
+                  of <b>{@batch_serial_total}</b>
+                  serials
                 </p>
-                <div class="mt-0.5 flex items-center justify-between gap-2">
-                  <p class="text-xs text-thamani-pewter">serial</p>
-                  <%= case Map.get(@serial_shippers, serial.serial) do %>
-                    <% nil -> %>
-                      <span
-                        id={"serial-unpacked-#{dom_key(serial.serial)}"}
-                        class="rounded-full bg-td-surface px-2 py-0.5 text-[11px] font-semibold text-thamani-pewter"
-                      >
-                        Unpacked
-                      </span>
-                    <% shipper -> %>
-                      <.link
-                        id={"serial-sscc-#{dom_key(serial.serial)}"}
-                        navigate={~p"/manufacturer/sscc/#{shipper.id}/serials"}
-                        title={"Packed in SSCC #{shipper.code}"}
-                        class="inline-flex min-w-0 items-center gap-1 rounded-full bg-thamani-forest px-2 py-0.5 font-mono text-[11px] font-semibold text-thamani-on-accent transition hover:bg-thamani-forest/85"
-                      >
-                        <.icon name="hero-archive-box" class="size-3 shrink-0" />
-                        <span class="truncate">SSCC {shipper.code}</span>
-                      </.link>
-                  <% end %>
-                </div>
-                <div class="mt-3 flex items-center gap-3">
-                  <canvas
-                    id={"serial-datamatrix-#{dom_key(serial.serial)}"}
-                    phx-hook="DataMatrix"
-                    phx-update="ignore"
-                    data-gs1-text={gs1_text(@product, @selected_batch, serial)}
-                    class="size-28 shrink-0 bg-td-surface p-1"
-                  ></canvas>
-                  <dl class="min-w-0 text-xs leading-5 text-thamani-forest">
-                    <div>(01) {gtin14(@product)}</div>
-                    <div>(10) {@selected_batch.batch_no}</div>
-                    <div>(17) {date_ai(@selected_batch.expiry_date)}</div>
-                    <div>(11) {date_ai(@selected_batch.production_date)}</div>
-                    <div class="truncate">(21) {serial.serial}</div>
-                  </dl>
-                </div>
               </div>
-              <div class="mt-4 flex flex-wrap gap-2">
-                <button
-                  id={"print-serial-#{dom_key(serial.serial)}"}
-                  type="button"
-                  phx-hook="LabelPrint"
-                  data-print-target={"#manufacturer-serial-label-#{dom_key(serial.serial)}"}
-                  class="inline-flex items-center gap-1.5 rounded-lg bg-thamani-forest px-3 py-2 text-xs font-semibold text-thamani-on-accent transition hover:bg-thamani-forest/90"
-                ><.icon name="hero-printer" class="size-4" /> Print</button>
-                <button
-                  id={"download-serial-#{dom_key(serial.serial)}"}
-                  type="button"
-                  phx-hook="LabelSvgDownload"
-                  data-role="download-serial-svg"
-                  data-serial={serial.serial}
-                  data-gs1-text={gs1_text(@product, @selected_batch, serial)}
-                  data-gtin={@product.gtin}
-                  data-batch={@selected_batch.batch_no}
-                  class="inline-flex items-center gap-1.5 rounded-lg border border-thamani-stone bg-td-surface px-3 py-2 text-xs font-semibold text-thamani-forest transition hover:bg-td-wash"
-                ><.icon name="hero-arrow-down-tray" class="size-4" /> Download as SVG</button>
-              </div>
-            </article>
-          </div>
 
-          <.blank_state
-            :if={@serial_page && @serial_page.total_entries == 0}
-            class="mx-5 mb-5 sm:mx-6 sm:mb-6"
-            icon="hero-magnifying-glass"
-            title="No matching serials"
-          >
-            Try another serial or batch search.
-          </.blank_state>
-          <.pagination
-            :if={@serial_page && @serial_page.total_entries > 0}
-            page={@serial_page}
-            path={
-              ~p"/manufacturer/products/#{@product.gtin}/serials?#{%{batch: @selected_batch.batch_no, search: @search}}"
-            }
-          />
-        </section>
-      </div>
+              <div :if={@label_serial} class="td-card" id="serial-label-preview">
+                <.td_card_header title="Label preview" subtitle="One label per serial, 50 × 25 mm">
+                  <:actions>
+                    <.td_button
+                      id="open-print-labels"
+                      variant="primary"
+                      glyph="printer"
+                      label="Print labels"
+                      phx-click="open_print"
+                    />
+                  </:actions>
+                </.td_card_header>
+                <div class="td-pad">
+                  <.serial_label
+                    id="serial-label-sample"
+                    product={@product}
+                    batch={@selected_batch}
+                    serial={@label_serial}
+                  />
+                  <p class="td-note mt-3">All {@batch_serial_total} labels use this layout.</p>
+                </div>
+              </div>
+            </div>
+
+            <div :if={@batch_shippers != []} id="batch-shipper-ssccs" class="td-card">
+              <.td_card_header
+                title={"Shipper SSCCs for #{@selected_batch.batch_no}"}
+                subtitle={"#{length(@batch_shippers)} #{if length(@batch_shippers) == 1, do: "shipper", else: "shippers"} packed from this batch"}
+              />
+              <table class="td-rows is-static">
+                <thead>
+                  <tr>
+                    <th>SSCC</th><th>To GLN</th><th class="is-num">Serials</th><th>Packed</th><th>
+                      <span class="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={shipper <- @batch_shippers} id={"batch-shipper-#{shipper.id}"}>
+                    <td class="font-mono">{shipper.code}</td>
+                    <td class="font-mono">{shipper.to_gln || "Not set"}</td>
+                    <td class="is-num">{shipper.count_of_trade_items || 0}</td>
+                    <td>{ThamaniDawaWeb.TimeFormat.date(shipper.inserted_at)}</td>
+                    <td class="td-row-actions">
+                      <.td_button
+                        id={"batch-shipper-serials-#{shipper.id}"}
+                        label="Serials"
+                        navigate={sscc_serials_path(assigns, shipper)}
+                      />
+                      <.td_button
+                        id={"batch-shipper-label-#{shipper.id}"}
+                        glyph="printer"
+                        label="Print label"
+                        navigate={~p"/manufacturer/sscc/#{shipper.id}/label"}
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      <% end %>
+
+      <.print_labels_modal
+        :if={@print_open and @selected_batch}
+        product={@product}
+        batch={@selected_batch}
+        serials={Map.get(@serials_cache, @selected_batch.batch_no, [])}
+      />
     </Layouts.manufacturer_shell>
+    """
+  end
+
+  defp new_batch?(batch) do
+    case created_at(batch.created_at) do
+      %DateTime{} = at -> DateTime.diff(DateTime.utc_now(), at, :hour) < 24
+      _ -> false
+    end
+  end
+
+  defp created_at(%DateTime{} = at), do: at
+  defp created_at(%NaiveDateTime{} = at), do: DateTime.from_naive!(at, "Etc/UTC")
+
+  defp created_at(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, at, _offset} -> at
+      _ -> nil
+    end
+  end
+
+  defp created_at(_value), do: nil
+
+  attr :serial, :map, required: true
+  attr :product, :map, required: true
+  attr :batch, :map, required: true
+  attr :serial_shippers, :map, required: true
+  attr :return_to, :string, required: true
+  attr :full, :boolean, default: false
+
+  defp serial_row(assigns) do
+    assigns = assign(assigns, :shipper, Map.get(assigns.serial_shippers, assigns.serial.serial))
+
+    ~H"""
+    <tr id={"manufacturer-serial-#{dom_key(@serial.serial)}"}>
+      <td class="font-mono">{sgtin(@product, @serial)}</td>
+      <td :if={@full} class="font-mono">{@batch.batch_no}</td>
+      <td :if={@full}>{long_date(@batch.expiry_date)}</td>
+      <td>
+        <span :if={is_nil(@shipper)} id={"serial-unpacked-#{dom_key(@serial.serial)}"}>
+          <.td_badge tone="neutral" label="Unpacked" />
+        </span>
+        <.td_badge :if={@shipper} tone="success" label="Packed" />
+      </td>
+      <td>
+        <span :if={is_nil(@shipper)} class="td-s12">Not packed</span>
+        <.link
+          :if={@shipper}
+          id={"serial-sscc-#{dom_key(@serial.serial)}"}
+          class="td-link font-mono"
+          navigate={~p"/manufacturer/sscc/#{@shipper.id}/serials?#{%{return_to: @return_to}}"}
+          title={"Packed in SSCC #{@shipper.code}"}
+        >
+          {@shipper.code}
+        </.link>
+      </td>
+    </tr>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :product, :map, required: true
+  attr :batch, :map, required: true
+  attr :serial, :map, required: true
+  attr :class, :string, default: nil
+
+  defp serial_label(assigns) do
+    ~H"""
+    <div id={@id} class={["td-serial-label", @class]}>
+      <canvas
+        id={"#{@id}-datamatrix"}
+        phx-hook="DataMatrix"
+        phx-update="ignore"
+        data-gs1-text={gs1_text(@product, @batch, @serial)}
+        class="td-serial-label-dm"
+      ></canvas>
+      <div class="td-serial-label-tx">
+        <b>{@product.name}</b>
+        <span>GTIN {@product.gtin}</span>
+        <span>BATCH {@batch.batch_no}</span>
+        <span>EXP {label_date(@batch.expiry_date)}</span>
+        <span>SN {@serial.serial}</span>
+      </div>
+    </div>
+    """
+  end
+
+  attr :product, :map, required: true
+  attr :batch, :map, required: true
+  attr :serials, :list, required: true
+
+  defp print_labels_modal(assigns) do
+    ~H"""
+    <.modal
+      id="print-labels-modal"
+      show
+      size="form"
+      title="Print labels"
+      subtitle={"#{length(@serials)} DataMatrix labels for batch #{@batch.batch_no}, one per serial."}
+      on_cancel={JS.push("close_print")}
+    >
+      <div class="td-kv-list">
+        <div class="td-kv">
+          <span class="td-kv-label">Product</span><span class="td-kv-value">{@product.name}</span>
+        </div>
+        <div class="td-kv">
+          <span class="td-kv-label">Batch</span><span class="td-kv-value is-mono">{@batch.batch_no}</span>
+        </div>
+        <div class="td-kv">
+          <span class="td-kv-label">Label size</span><span class="td-kv-value">50 × 25 mm</span>
+        </div>
+        <div class="td-kv">
+          <span class="td-kv-label">Labels</span><span class="td-kv-value">{length(@serials)}</span>
+        </div>
+      </div>
+      <div id="print-labels-sheet" class="td-print-sheet" aria-hidden="true">
+        <.serial_label
+          :for={serial <- @serials}
+          id={"print-label-#{dom_key(serial.serial)}"}
+          class="printable-serial-label"
+          product={@product}
+          batch={@batch}
+          serial={serial}
+        />
+      </div>
+      <:footer>
+        <.td_button id="cancel-print-labels" label="Cancel" phx-click="close_print" />
+        <.td_button
+          id="print-batch-labels"
+          variant="primary"
+          glyph="printer"
+          label={"Print #{length(@serials)} labels"}
+          phx-hook="PrintAllLabels"
+          data-print-target=".printable-serial-label"
+          data-label-size="50mm 25mm"
+          disabled={@serials == []}
+        />
+      </:footer>
+    </.modal>
+    """
+  end
+
+  defp view_serials(assigns) do
+    ~H"""
+    <.td_back_link
+      id="view-serials-back"
+      to={batch_path(assigns, @selected_batch.batch_no)}
+      label={"Back to batch #{@selected_batch.batch_no}"}
+    />
+    <div class="td-idh">
+      <div>
+        <h1 class="td-idh-title">Serials in {@selected_batch.batch_no}</h1>
+        <p class="td-idh-sub">
+          {@product.name} · GTIN <span class="font-mono">{@product.gtin}</span>
+        </p>
+      </div>
+      <div class="td-idh-actions">
+        <.td_button
+          id="export-batch-serials"
+          glyph="download-simple"
+          label="Export CSV"
+          href={
+            ~p"/manufacturer/products/#{@product.gtin}/batches/#{@selected_batch.batch_no}/serials/export"
+          }
+        />
+        <.td_button
+          id="open-print-labels"
+          glyph="printer"
+          label="Print labels"
+          phx-click="open_print"
+        />
+      </div>
+    </div>
+
+    <div class="td-toolbar">
+      <form id="manufacturer-serial-search" phx-change="search">
+        <.td_search name="search" value={@search} placeholder="Search serials" phx-debounce="300" />
+      </form>
+      <.td_filter_menu
+        id="serials"
+        field="state"
+        label="State"
+        value={@state_filter}
+        options={[{"", "All"}, {"unpacked", "Unpacked"}, {"packed", "Packed"}]}
+      />
+      <span class="td-toolbar-count" id="view-serials-count">
+        <b>{@batch_serial_total}</b> serials · <b>{@batch_packed}</b> packed
+      </span>
+    </div>
+
+    <div :if={@serials_error} id="manufacturer-serials-error" class="td-ban is-danger m-4">
+      <span>{error_message(@serials_error)}</span>
+      <.td_button id="retry-manufacturer-serials" label="Retry" phx-click="retry" />
+    </div>
+
+    <div
+      :if={@serial_page && @serial_page.total_entries == 0}
+      id="view-serials-empty"
+      class="td-pad td-empty-wrap"
+    >
+      <div class="td-card td-empty-card">
+        <p class="td-empty-title">No matching serials</p>
+        <p class="td-note">Try another serial, or clear the search and filters.</p>
+        <.td_button id="view-serials-clear" label="Clear search" phx-click="reset" />
+      </div>
+    </div>
+
+    <div :if={@serial_page && @serial_page.total_entries > 0} class="td-list-table">
+      <table class="td-rows" id="manufacturer-serials">
+        <thead>
+          <tr>
+            <th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>State</th><th>Shipper SSCC</th>
+          </tr>
+        </thead>
+        <tbody>
+          <.serial_row
+            :for={serial <- @serial_page.entries}
+            serial={serial}
+            product={@product}
+            batch={@selected_batch}
+            serial_shippers={@serial_shippers}
+            return_to={current_page(assigns)}
+            full
+          />
+        </tbody>
+      </table>
+    </div>
+    <.pagination
+      :if={@serial_page && @serial_page.total_entries > 0}
+      page={@serial_page}
+      path={view_serials_path(assigns)}
+    />
     """
   end
 end
