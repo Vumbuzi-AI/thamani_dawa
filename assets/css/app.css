@@ -3365,3 +3365,29 @@ label.td-option > input { position: absolute; opacity: 0; pointer-events: none; 
 .td-org-badge b { display: block; font-size: 14px; font-weight: 500; }
 .td-org-badge span { display: block; font-size: 12px; color: var(--color-td-ink-2); }
 .td-count-chip { font-size: 12px; color: var(--color-td-ink-2); }
+
+.td-hint { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--color-td-ink-2); }
+.td-hint-link { color: var(--color-td-ink); text-decoration: underline; }
+.td-tnt-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 0 16px 16px; }
+.td-tnt-waiting { margin: 0; font-size: 14px; color: var(--color-td-ink-2); }
+.td-tnt-waiting b { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--color-td-ink); }
+.td-tnt-toolbar { display: flex; align-items: center; gap: 12px; padding: 0 16px 16px; }
+.td-filter-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 12px; border: 1px solid var(--color-td-border);
+  border-radius: 8px; background: var(--color-td-surface); color: var(--color-td-ink);
+  font-size: 14px; cursor: pointer;
+}
+#epcis-status-filters { position: relative; }
+#status-filter-dropdown-menu { position: absolute; left: 0; top: calc(100% + 4px); z-index: 20; min-width: 220px; }
+.td-tnt-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.td-sub { display: block; font-size: 12px; font-weight: 400; color: var(--color-td-ink-2); margin-top: 2px; }
+.td-k { margin: 0 0 6px; font-size: 12px; font-weight: 500; color: var(--color-td-ink-2); }
+.td-json { max-height: 240px; overflow: auto; padding: 12px; border-radius: 8px; background: var(--color-td-ink); color: var(--color-td-wash); font-size: 12px; font-family: var(--font-mono); }
+.td-tnt-json-tabs { display: flex; gap: 8px; margin: 8px 0; }
+.td-tnt-json-tabs button { border: 0; background: none; padding: 0; color: var(--color-td-ink); text-decoration: underline; font-size: 14px; cursor: pointer; }
+.td-badge { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; }
+.td-badge.is-warning { background: var(--color-td-warning-tint); color: var(--color-td-warning); }
+.td-badge.is-success { background: var(--color-td-success-tint, var(--color-td-accent-tint)); color: var(--color-td-success, var(--color-td-accent)); }
+.td-badge.is-danger { background: var(--color-td-danger-tint); color: var(--color-td-danger); }
+.td-badge.is-neutral { background: var(--color-td-wash); color: var(--color-td-ink-2); }

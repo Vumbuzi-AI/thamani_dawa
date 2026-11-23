@@ -937,7 +937,7 @@ defmodule ThamaniDawaWeb.Layouts do
        ]},
       {"Compliance",
        [
-         {"EPCIS events", "hero-signal", ~p"/manufacturer/epcis"}
+         {"TNT reporting", "broadcast", ~p"/manufacturer/epcis"}
        ]}
     ]
   end
@@ -980,7 +980,7 @@ defmodule ThamaniDawaWeb.Layouts do
       {"Account",
        [
          {"API keys", "hero-key", ~p"/manufacturer/api-keys"},
-         {"TNT reporting", "hero-globe-alt", ~p"/manufacturer/epcis"},
+         {"TNT reporting", "broadcast", ~p"/manufacturer/epcis"},
          {"Org settings", "hero-cog-6-tooth", ~p"/manufacturer/settings"}
        ]}
     ]
@@ -997,7 +997,7 @@ defmodule ThamaniDawaWeb.Layouts do
        [
          {"Billing", "hero-credit-card", ~p"/distributor/billing"},
          {"API keys", "hero-key", ~p"/distributor/api-keys"},
-         {"TNT reporting", "hero-globe-alt", ~p"/distributor/epcis"},
+         {"TNT reporting", "broadcast", ~p"/distributor/epcis"},
          {"Org settings", "hero-cog-6-tooth", ~p"/distributor/settings"}
        ]}
     ]
@@ -1016,7 +1016,7 @@ defmodule ThamaniDawaWeb.Layouts do
       {"Account",
        [
          {"API keys", "hero-key", ~p"/org/api-keys"},
-         {"TNT reporting", "hero-globe-alt", ~p"/org/epcis"},
+         {"TNT reporting", "broadcast", ~p"/org/epcis"},
          {"Org settings", "hero-cog-6-tooth", ~p"/org/settings"}
        ]}
     ]
