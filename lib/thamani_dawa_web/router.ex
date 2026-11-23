@@ -313,6 +313,8 @@ defmodule ThamaniDawaWeb.Router do
       on_mount: [{ThamaniDawaWeb.UserAuth, :require_distributor_access}] do
       live "/distributor", DistributorDashboardLive, :index
 
+      live "/distributor/orders", DistributorShipmentLive.Index, :orders
+      live "/distributor/orders/new", DistributorShipmentLive.Index, :new
       live "/distributor/shipments", DistributorShipmentLive.Index, :index
       live "/distributor/shipments/new", DistributorShipmentLive.Form, :new
       live "/distributor/shipments/:id/edit", DistributorShipmentLive.Form, :edit
@@ -326,6 +328,7 @@ defmodule ThamaniDawaWeb.Router do
            :packing_list
 
       live "/distributor/shipments/:id", DistributorShipmentLive.Show, :show
+      live "/distributor/shipments/:id/edit-details", DistributorShipmentLive.Show, :edit
 
       live "/distributor/products", DistributorProductLive.Index, :index
       live "/distributor/products/new", DistributorProductLive.Index, :new

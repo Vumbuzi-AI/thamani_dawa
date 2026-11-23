@@ -206,6 +206,9 @@ defmodule ThamaniDawa.Distributor do
       |> filter_origin_site(opts[:origin_site_id])
       |> filter_date_from(opts[:date_from])
       |> filter_date_to(opts[:date_to])
+      |> filter_destination(opts[:destination_gln])
+      |> filter_approved_from(opts[:approved_from])
+      |> filter_approved_to(opts[:approved_to])
 
     total_entries = Repo.aggregate(query, :count, :id)
     total_pages = max(ceil(total_entries / @page_size), 1)
@@ -217,7 +220,7 @@ defmodule ThamaniDawa.Distributor do
           order_by: [desc: s.updated_at, desc: s.id],
           limit: ^@page_size,
           offset: ^((page_number - 1) * @page_size),
-          preload: [:assigned_to, :submitted_by, shippers: :items]
+          preload: [:assigned_to, :submitted_by, :approved_by, :created_by, shippers: :items]
       )
 
     %{
@@ -227,6 +230,62 @@ defmodule ThamaniDawa.Distributor do
       total_pages: total_pages,
       total_entries: total_entries
     }
+  end
+
+  @doc """
+  Per-destination facts for peeks and the customers list, keyed by GLN:
+  open orders (draft or submitted), total orders, the last approved
+  shipment's reference and approval time, and the last order time.
+  """
+  def destination_summaries(organization_id, glns) do
+    glns = glns |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    if glns == [] do
+      %{}
+    else
+      counts =
+        Repo.all(
+          from s in Shipment,
+            where: s.organization_id == ^organization_id and s.destination_gln in ^glns,
+            group_by: s.destination_gln,
+            select:
+              {s.destination_gln,
+               %{
+                 open_orders: filter(count(s.id), s.status in ["draft", "submitted"]),
+                 order_count: count(s.id),
+                 last_order_at: max(s.inserted_at)
+               }}
+        )
+        |> Map.new()
+
+      last_shipments =
+        Repo.all(
+          from s in Shipment,
+            where:
+              s.organization_id == ^organization_id and s.destination_gln in ^glns and
+                s.status == "approved",
+            distinct: s.destination_gln,
+            order_by: [asc: s.destination_gln, desc: s.approved_at, desc: s.id],
+            select: {s.destination_gln, %{id: s.id, reference: s.reference, approved_at: s.approved_at}}
+        )
+        |> Map.new()
+
+      Map.new(glns, fn gln ->
+        base = Map.get(counts, gln, %{open_orders: 0, order_count: 0, last_order_at: nil})
+        {gln, Map.put(base, :last_shipment, Map.get(last_shipments, gln))}
+      end)
+    end
+  end
+
+  @doc "Recent shipments to one destination GLN, newest first."
+  def list_shipments_to(organization_id, gln, limit \\ 5) do
+    Repo.all(
+      from s in Shipment,
+        where: s.organization_id == ^organization_id and s.destination_gln == ^gln,
+        order_by: [desc: s.updated_at, desc: s.id],
+        limit: ^limit,
+        preload: [shippers: :items]
+    )
   end
 
   @doc "Shipment counts per status for an organization."
@@ -295,7 +354,29 @@ defmodule ThamaniDawa.Distributor do
   defp filter_status(query, status) when status in ["draft", "submitted", "approved", "rejected"],
     do: from(s in query, where: s.status == ^status)
 
+  defp filter_status(query, statuses) when is_list(statuses) and statuses != [],
+    do: from(s in query, where: s.status in ^statuses)
+
   defp filter_status(query, _status), do: query
+
+  defp filter_destination(query, gln) when is_binary(gln) and gln != "",
+    do: from(s in query, where: s.destination_gln == ^gln)
+
+  defp filter_destination(query, _gln), do: query
+
+  defp filter_approved_from(query, %Date{} = date),
+    do: from(s in query, where: s.approved_at >= ^eat_day_start(date))
+
+  defp filter_approved_from(query, _date), do: query
+
+  defp filter_approved_to(query, %Date{} = date),
+    do: from(s in query, where: s.approved_at < ^eat_day_start(Date.add(date, 1)))
+
+  defp filter_approved_to(query, _date), do: query
+
+  # Midnight EAT (UTC+3) for a calendar day, as a UTC timestamp.
+  defp eat_day_start(date),
+    do: date |> DateTime.new!(~T[00:00:00], "Etc/UTC") |> DateTime.add(-3 * 3600)
 
   defp filter_participant_tier(query, tier) when tier in ["distributor", "manufacturer"],
     do: from(s in query, where: s.participant_tier == ^tier)

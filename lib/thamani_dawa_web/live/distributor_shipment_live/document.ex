@@ -11,7 +11,7 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
 
   alias ThamaniDawa.Distributor
 
-  def mount(%{"id" => id}, _session, socket) do
+  def mount(%{"id" => id} = params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
     shipment = Distributor.get_shipment!(organization_id, id)
 
@@ -23,6 +23,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
        socket
        |> assign(:page_title, "#{title} · #{shipment.order_number}")
        |> assign(:shipment, shipment)
+       |> assign(
+         :back_to,
+         ThamaniDawaWeb.ReturnTo.path(params, ~p"/distributor/shipments/#{shipment.id}")
+       )
        |> assign(:lines, delivery_lines(shipment))
        |> assign(:sections, packing_sections(shipment))
        |> assign(:unit_count, unit_count(shipment))}
@@ -42,11 +46,8 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
       current_path={~p"/distributor/shipments"}
     >
       <div class="no-print mb-4 flex flex-wrap items-center justify-between gap-3">
-        <.link
-          navigate={~p"/distributor/shipments/#{@shipment.id}"}
-          class="inline-flex items-center gap-1.5 text-sm font-medium text-thamani-forest hover:underline"
-        >
-          <.icon name="hero-arrow-left" class="size-4" /> Back to shipment
+        <.link id="document-back" navigate={@back_to} class="td-back-link">
+          <.td_icon name="arrow-left" class="size-3.5" /> Back to {@shipment.reference}
         </.link>
         <div class="flex flex-wrap items-center gap-2">
           <nav
