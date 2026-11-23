@@ -225,6 +225,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
 
   defp summary_for(_summaries, _customer), do: %{open_orders: 0, order_count: 0, last_order_at: nil, last_shipment: nil}
 
+  defp type_label(nil), do: nil
   defp type_label(type), do: Phoenix.Naming.humanize(type)
 
   defp order_tone("submitted"), do: "warning"
@@ -446,12 +447,15 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
                   <td>
                     <.td_pid :if={customer.gln} id={"#{dom_id}-gln"} label={customer.gln} mono>
                       <:peek>
-                        <.td_peek kind="Customer" title={customer.name} subtitle={customer.address}>
-                          <:row label="GLN" mono>{customer.gln}</:row>
+                        <.td_peek kind="GLN" title={customer.gln} subtitle={customer.name} mono>
+                          <:row label="Address">{customer.address || "—"}</:row>
+                          <:row label="Party type">{type_label(customer.customer_type) || "—"}</:row>
+                          <:row label="Saved as">Customer</:row>
+                          <:row label="Used on">{summary_for(@summaries, customer).order_count} orders</:row>
                           <:row label="Open orders">{summary_for(@summaries, customer).open_orders}</:row>
-                          <:row label="Orders">{summary_for(@summaries, customer).order_count}</:row>
-                          <:row label="Last order">{TimeFormat.datetime(summary_for(@summaries, customer).last_order_at)}</:row>
-                          <:row :if={customer.contact_phone} label="Phone">{customer.contact_phone}</:row>
+                          <:action>
+                            <.td_button patch={panel_path(customer, @search)} label="Open customer" />
+                          </:action>
                         </.td_peek>
                       </:peek>
                     </.td_pid>
