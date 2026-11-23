@@ -57,6 +57,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
          |> assign(:checked_sscc, nil)
          |> assign(:sscc_warning, nil)
          |> assign(:origin_gln, "")
+         |> assign(:is_return, false)
          |> assign(:receiving_draft, nil)
          |> assign(:draft_attachments, [])
          |> assign_origin_defaults()
@@ -141,6 +142,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
        |> assign(:checked_sscc, nil)
        |> assign(:sscc_warning, nil)
        |> assign(:origin_gln, "")
+       |> assign(:is_return, false)
        |> assign_origin_defaults()
        |> assign_serial_confirm()
        |> discard_receiving_draft()}
@@ -436,7 +438,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
            "One or more items are not in your catalog yet. Add each one before finishing."
          )}
 
-      socket.assigns.distributor_org? and not match?({:matched, _}, socket.assigns.origin_check) ->
+      (socket.assigns.distributor_org? or socket.assigns.receiving_portal == :organization) and
+          not match?({:matched, _}, socket.assigns.origin_check) ->
         {:noreply,
          socket
          |> put_flash(:error, "Enter a valid, verified origin GLN before finishing.")
@@ -449,6 +452,10 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       true ->
         post_delivery(socket)
     end
+  end
+
+  def handle_event("toggle_is_return", _params, socket) do
+    {:noreply, update(socket, :is_return, &(!&1))}
   end
 
   def handle_event("validate_origin", %{"origin" => %{"gln" => gln}}, socket) do
@@ -570,13 +577,20 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     user_id = socket.assigns.current_scope.user.id
     origin = origin_payload(socket)
 
+    return_opts =
+      if socket.assigns.receiving_portal == :organization do
+        %{is_return: socket.assigns.is_return == true}
+      else
+        %{}
+      end
+
     case GoodsReceipts.receive_delivery(
            organization_id,
            user_id,
            socket.assigns.delivery_items,
            socket.assigns.receipt_posting_key,
            origin,
-           %{}
+           return_opts
          ) do
       {:ok, receipt} ->
         store_delivery_attachments(socket, receipt, user_id)
@@ -1984,6 +1998,20 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             </p>
           <% _ -> %>
         <% end %>
+
+        <label
+          :if={@receiving_portal == :organization}
+          class="td-return-toggle mt-4"
+        >
+          <input
+            type="checkbox"
+            id="org-receiving-is-return"
+            name="is_return"
+            checked={@is_return}
+            phx-click="toggle_is_return"
+          />
+          This is a return
+        </label>
       </div>
 
       <section
@@ -2033,7 +2061,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             Scan or select the first product in this delivery.
             <:actions>
               <.button id="open-add-item-empty" variant="primary" phx-click="open_add_item">
-                <.icon name="hero-plus" class="size-4" /> Enter shipper SSCC
+                <.icon name="hero-plus" class="size-4" />
+                {if @receiving_portal == :organization, do: "Add item", else: "Enter shipper SSCC"}
               </.button>
             </:actions>
           </.blank_state>
@@ -2042,7 +2071,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-semibold text-thamani-forest">Items in this delivery</h3>
             <.button id="open-add-item-bottom" variant="ghost" phx-click="open_add_item">
-              <.icon name="hero-plus" class="size-4" /> Enter shipper SSCC
+              <.icon name="hero-plus" class="size-4" />
+              {if @receiving_portal == :organization, do: "Add item", else: "Enter shipper SSCC"}
             </.button>
           </div>
           <div class="mt-3 space-y-4">
@@ -2089,38 +2119,97 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         </div>
       </div>
 
+      <.td_modal
+        :if={@add_item_open and @receiving_portal == :organization}
+        id="distributor-add-item-modal"
+        show
+        width={640}
+        title={add_item_modal_title(@receipt_step)}
+        subtitle={add_item_modal_subtitle(@receipt_step)}
+        on_cancel={JS.push("close_add_item")}
+      >
+        <:body>
+          <.add_item_steps {assigns} />
+        </:body>
+      </.td_modal>
+
       <.modal
-        :if={@add_item_open}
+        :if={@add_item_open and @receiving_portal != :organization}
         id="distributor-add-item-modal"
         show
         on_cancel={JS.push("close_add_item")}
       >
         <div class="border-b border-thamani-stone pb-4">
           <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
-            {cond do
-              @receipt_step == :sscc -> "Enter SSCC"
-              @receipt_step == :confirm_shipper -> "Confirm this case's contents"
-              @receipt_step == :new_product -> "Add to catalog"
-              true -> "Add item"
-            end}
+            {add_item_modal_title(@receipt_step)}
           </h2>
           <p class="mt-1 text-sm text-thamani-pewter">
-            {cond do
-              @receipt_step == :sscc ->
-                "Scan or type the case label's SSCC to pull in its contents."
-
-              @receipt_step == :confirm_shipper ->
-                "Unmarked contents stay accepted. Flag anything damaged or missing before adding it."
-
-              @receipt_step == :new_product ->
-                "This GTIN is not in your catalog yet. Save the product and its batch stays on this delivery."
-
-              true ->
-                "Scan or select the product, then add its batch details."
-            end}
+            {add_item_modal_subtitle(@receipt_step)}
           </p>
         </div>
+        <.add_item_steps {assigns} />
+      </.modal>
 
+
+      <.table
+        :if={!@receiving_new?}
+        id="distributor-receipts"
+        rows={@streams.receipts}
+        row_click={
+          fn {_id, receipt} ->
+            JS.navigate("#{@receiving_index_path}/#{receipt.id}")
+          end
+        }
+      >
+        <:col :let={{_id, receipt}} label="Receipt">
+          <span class="font-semibold text-thamani-forest">{receipt.number}</span>
+          <p
+            :if={open_discrepancy_count(receipt) > 0}
+            id={"receipt-open-lines-#{receipt.id}"}
+            class="mt-1 text-xs font-semibold text-amber-800"
+          >
+            {open_discrepancy_count(receipt)} not confirmed
+          </p>
+        </:col>
+        <:col :let={{_id, receipt}} label="Supplier">{receipt_supplier(receipt)}</:col>
+        <:col :let={{_id, receipt}} label="Warehouse">{receipt_warehouse(receipt)}</:col>
+        <:col :let={{_id, receipt}} label="Received">
+          {if @receiving_portal == :organization,
+            do: ThamaniDawaWeb.TimeFormat.datetime(receipt.received_at) <> " EAT",
+            else: Calendar.strftime(receipt.received_at, "%d %b %Y, %H:%M UTC")}
+        </:col>
+        <:col :let={{_id, receipt}} label="Items">{length(receipt.items)}</:col>
+        <:empty_state>
+          <.blank_state icon="hero-arrow-down-tray" title="No receipts yet">
+            Add a warehouse, product, and supplier, then receive the first delivery.
+          </.blank_state>
+        </:empty_state>
+      </.table>
+      <.pagination :if={!@receiving_new?} page={@page_info} path={@receiving_index_path} />
+    </.receiving_shell>
+    """
+  end
+
+
+  defp add_item_modal_title(:sscc), do: "Enter SSCC"
+  defp add_item_modal_title(:confirm_shipper), do: "Confirm this case's contents"
+  defp add_item_modal_title(:new_product), do: "Add to catalog"
+  defp add_item_modal_title(_), do: "Add item"
+
+  defp add_item_modal_subtitle(:sscc),
+    do: "Scan or type the case label's SSCC to pull in its contents."
+
+  defp add_item_modal_subtitle(:confirm_shipper),
+    do: "Unmarked contents stay accepted. Flag anything damaged or missing before adding it."
+
+  defp add_item_modal_subtitle(:new_product),
+    do: "This GTIN is not in your catalog yet. Save the product and its batch stays on this delivery."
+
+  defp add_item_modal_subtitle(_),
+    do: "Scan or select the product, then add its batch details."
+
+  defp add_item_steps(assigns) do
+    ~H"""
         <%= cond do %>
           <% @receipt_step == :sscc -> %>
             <.form
@@ -2589,49 +2678,16 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               >
                 <.icon name="hero-exclamation-triangle" class="size-4" /> {@sscc_warning}
               </p>
-              <.button class="mt-3 w-full" variant="primary">
-                {if is_nil(@editing_delivery_item_id),
-                  do: "Add received item",
-                  else: "Save item changes"}
+              <.button class="mt-3 w-full" variant="primary" id="add-to-delivery">
+                {cond do
+                  not is_nil(@editing_delivery_item_id) -> "Save item changes"
+                  @receiving_portal == :organization -> "Add to delivery"
+                  true -> "Add received item"
+                end}
               </.button>
             </.form>
         <% end %>
-      </.modal>
 
-      <.table
-        :if={!@receiving_new?}
-        id="distributor-receipts"
-        rows={@streams.receipts}
-        row_click={
-          fn {_id, receipt} ->
-            JS.navigate("#{@receiving_index_path}/#{receipt.id}")
-          end
-        }
-      >
-        <:col :let={{_id, receipt}} label="Receipt">
-          <span class="font-semibold text-thamani-forest">{receipt.number}</span>
-          <p
-            :if={open_discrepancy_count(receipt) > 0}
-            id={"receipt-open-lines-#{receipt.id}"}
-            class="mt-1 text-xs font-semibold text-amber-800"
-          >
-            {open_discrepancy_count(receipt)} not confirmed
-          </p>
-        </:col>
-        <:col :let={{_id, receipt}} label="Supplier">{receipt_supplier(receipt)}</:col>
-        <:col :let={{_id, receipt}} label="Warehouse">{receipt_warehouse(receipt)}</:col>
-        <:col :let={{_id, receipt}} label="Received">
-          {Calendar.strftime(receipt.received_at, "%d %b %Y, %H:%M UTC")}
-        </:col>
-        <:col :let={{_id, receipt}} label="Items">{length(receipt.items)}</:col>
-        <:empty_state>
-          <.blank_state icon="hero-arrow-down-tray" title="No receipts yet">
-            Add a warehouse, product, and supplier, then receive the first delivery.
-          </.blank_state>
-        </:empty_state>
-      </.table>
-      <.pagination :if={!@receiving_new?} page={@page_info} path={@receiving_index_path} />
-    </.receiving_shell>
     """
   end
 

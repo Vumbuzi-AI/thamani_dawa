@@ -858,6 +858,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :show, :boolean, default: false
   attr :title, :string, default: nil
   attr :subtitle, :string, default: nil
+  attr :width, :integer, default: nil
   attr :on_cancel, JS, default: %JS{}
   slot :body, required: true
   slot :footer
@@ -876,6 +877,7 @@ defmodule ThamaniDawaWeb.TDComponents do
         <.focus_wrap
           id={"#{@id}-container"}
           class="td-modal"
+          style={@width && "width: min(#{@width}px, 100%)"}
           phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
           phx-key="escape"
           phx-click-away={JS.exec("data-cancel", to: "##{@id}")}

@@ -105,6 +105,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
             expiry: expiry,
             uom: uom,
             quantity: batch_lines |> Enum.map(&(&1.quantity || 0)) |> Enum.sum(),
+            location: batch_lines |> Enum.map(& &1.location) |> Enum.find(&(&1 not in [nil, "—"])) || "—",
             lines: batch_lines
           }
         end)
@@ -129,6 +130,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
       condition: batch_condition(batch.status),
       sscc: batch.sscc,
       logistic_unit_id: batch.logistic_unit_id,
+      location: if(batch.site, do: batch.site.name, else: "—"),
       discrepancy_id: nil,
       resolvable: false,
       resolution_reference: nil
@@ -149,6 +151,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
       condition: discrepancy_condition(discrepancy),
       sscc: discrepancy.sscc,
       logistic_unit_id: nil,
+      location: "—",
       discrepancy_id: discrepancy.id,
       resolvable: discrepancy.status == :open,
       resolution_reference: discrepancy.resolution_reference
@@ -380,8 +383,29 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
     end
   end
 
+  defp received_by_label(%{received_by: %{name: name}}) when is_binary(name) and name != "",
+    do: name
+
+  defp received_by_label(%{received_by: %{email: email}}) when is_binary(email), do: email
+  defp received_by_label(_receipt), do: "—"
+
+  defp receipt_received_at(dt) do
+    ThamaniDawaWeb.TimeFormat.datetime(dt) <> " EAT"
+  end
+
+  defp follow_up_from_groups(groups) do
+    groups
+    |> Enum.flat_map(& &1.batches)
+    |> Enum.flat_map(&follow_up_lines(&1.lines))
+  end
+
   def render(assigns) do
-    assigns = assign(assigns, :receipt_groups, receipt_groups(assigns.receipt))
+    groups = receipt_groups(assigns.receipt)
+
+    assigns =
+      assigns
+      |> assign(:receipt_groups, groups)
+      |> assign(:receipt_follow_up, follow_up_from_groups(groups))
 
     ~H"""
     <.receipt_shell
@@ -390,6 +414,152 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
       current_scope={@current_scope}
       current_path={@receiving_index_path}
     >
+      <%= if @receiving_portal == :organization do %>
+        <div class="td-recipe">
+          <div class="td-back">
+            <.link navigate={@receiving_index_path} class="td-back-link">
+              <.td_icon name="arrow-left" class="size-3.5" /> Back to Receiving
+            </.link>
+          </div>
+          <.td_page_header title="Goods receipt" subtitle={receipt_received_at(@receipt.received_at)}>
+            <:actions>
+              <.td_badge tone="success" label="Received" />
+            </:actions>
+          </.td_page_header>
+          <div class="td-kv-grid">
+            <.td_key_value label="Receipt" value={@receipt.number} mono />
+            <.td_key_value label="Supplier" value={supplier_summary(@receipt)} />
+            <.td_key_value label="Warehouse" value={warehouse_summary(@receipt.items)} />
+            <.td_key_value label="Received by" value={received_by_label(@receipt)} />
+          </div>
+
+          <section class="mt-6">
+            <.td_card_header title="Items" subtitle="Batches checked in on this receipt." />
+            <table :if={@receipt_groups != []} id="goods-receipt-items" class="td-rows">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Batch</th>
+                  <th>Expiry</th>
+                  <th>Location</th>
+                  <th class="is-num">Quantity</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={batch <- Enum.flat_map(@receipt_groups, & &1.batches)}>
+                  <td>{batch.product_name}</td>
+                  <td class="is-num">{batch.batch_no || "—"}</td>
+                  <td>{format_expiry(batch.expiry)}</td>
+                  <td>{batch.location}</td>
+                  <td class="is-num">
+                    {batch.quantity} {Products.unit_label(batch.uom)}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <.blank_state
+              :if={@receipt_groups == []}
+              icon="hero-archive-box"
+              title="Nothing on this receipt"
+            >
+              Received batches and missing lines will show here.
+            </.blank_state>
+
+            <div :if={@receipt_follow_up != []} class="mt-4">
+              <p class="td-muted">Not confirmed</p>
+              <ul class="mt-3 grid gap-3 sm:grid-cols-2">
+                <li
+                  :for={line <- @receipt_follow_up}
+                  id={"goods-receipt-line-#{line.id}"}
+                  class="rounded-xl border border-thamani-stone bg-td-surface p-3"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <p class="min-w-0 text-sm font-medium">{line.product_name}</p>
+                    <span
+                      :if={line.condition}
+                      class={[
+                        "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                        condition_classes(line.condition)
+                      ]}
+                    >
+                      {condition_label(line.condition)}
+                    </span>
+                  </div>
+                  <p
+                    :if={line.resolution_reference not in [nil, ""]}
+                    class="mt-2 text-xs text-thamani-pewter"
+                  >
+                    Reference
+                    <span class="font-medium">{line.resolution_reference}</span>
+                  </p>
+                  <div
+                    :if={line.resolvable}
+                    id={"discrepancy-actions-#{line.discrepancy_id}"}
+                    class="mt-3 flex flex-wrap gap-2"
+                  >
+                    <button
+                      :for={status <- ["found", "lost", "stolen"]}
+                      type="button"
+                      id={"discrepancy-#{line.discrepancy_id}-#{status}"}
+                      phx-click="open_resolve"
+                      phx-value-id={line.discrepancy_id}
+                      phx-value-status={status}
+                      class="td-chip"
+                    >
+                      {condition_label(String.to_existing_atom(status))}
+                    </button>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </section>
+
+          <section class="mt-6">
+            <.td_card_header
+              title="Documents"
+              subtitle="GRN, invoice, and any other documents attached to this delivery."
+            />
+            <p :if={@receipt.attachments == []} class="td-muted mt-3">No documents attached.</p>
+            <ul
+              :if={@receipt.attachments != []}
+              id="goods-receipt-documents"
+              class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+            >
+              <li
+                :for={attachment <- @receipt.attachments}
+                id={"goods-receipt-document-#{attachment.id}"}
+                class="td-doc-card"
+              >
+                <p class="td-doc-name" title={attachment.filename}>{attachment.filename}</p>
+                <p class="td-muted">
+                  {doc_type_label(attachment.doc_type)} · {document_kind(attachment)} · {format_file_size(
+                    attachment.byte_size
+                  )}
+                </p>
+                <div class="td-doc-actions">
+                  <a
+                    href={attachment.path}
+                    target="_blank"
+                    rel="noopener"
+                    aria-label={"Preview #{attachment.filename}"}
+                    class="td-btn is-secondary"
+                  >
+                    Preview
+                  </a>
+                  <a
+                    href={attachment.path}
+                    download={attachment.filename}
+                    aria-label={"Download #{attachment.filename}"}
+                    class="td-btn is-primary"
+                  >
+                    Download
+                  </a>
+                </div>
+              </li>
+            </ul>
+          </section>
+        </div>
+      <% else %>
       <.header icon="hero-document-check">
         {@receipt.number}
         <:subtitle>Complete record of this received delivery.</:subtitle>
@@ -535,6 +705,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           </li>
         </ul>
       </section>
+      <% end %>
 
       <.modal
         :if={@resolving_id}
