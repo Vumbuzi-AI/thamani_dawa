@@ -198,111 +198,59 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
   defp parse_date(%Date{} = d), do: {:ok, d}
   defp parse_date(_), do: {:error, :invalid}
 
-  defp format_range_dates({from, to}) do
-    "System-wide view for #{Calendar.strftime(from, "%d %b %Y")} to #{Calendar.strftime(to, "%d %b %Y")}"
-  end
-
   defp to_date_val(%DateTime{} = dt), do: DateTime.to_date(dt)
   defp to_date_val(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_date(ndt)
   defp to_date_val(%Date{} = d), do: d
 
-  defp money(amount) do
-    grouped =
-      amount
-      |> round()
-      |> Integer.to_string()
-      |> String.reverse()
-      |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
-      |> String.reverse()
+  defp money(amount), do: ThamaniDawaWeb.Money.ksh(amount)
 
-    "KSh " <> grouped
+  defp range_chip_label("custom", {from, to}) do
+    "#{ThamaniDawaWeb.TimeFormat.date(from)} – #{ThamaniDawaWeb.TimeFormat.date(to)}"
   end
 
-  defp daily_revenue_chart_data(daily_revenue) do
-    %{
-      labels: Enum.map(daily_revenue, fn {date, _amount} -> Calendar.strftime(date, "%d %b") end),
-      datasets: [
-        %{
-          label: "KSh Collected",
-          data: Enum.map(daily_revenue, fn {_date, amount} -> amount end),
-          borderColor: "#6667ab",
-          backgroundColor: "rgba(102, 103, 171, 0.14)",
-          fill: true,
-          tension: 0.3,
-          pointRadius: 3
-        }
-      ]
-    }
+  defp range_chip_label(range, _dates) do
+    Dashboards.ranges() |> Enum.into(%{}) |> Map.get(range, "This Month")
   end
 
-  defp monthly_revenue_chart_data(monthly_revenue) do
-    %{
-      labels:
-        Enum.map(monthly_revenue, fn {date, _amount} -> Calendar.strftime(date, "%b %Y") end),
-      datasets: [
-        %{
-          label: "Revenue",
-          data: Enum.map(monthly_revenue, fn {_date, amount} -> amount end),
-          backgroundColor: "#6667ab",
-          borderRadius: 4
-        }
-      ]
-    }
+  defp day_axis(date), do: Calendar.strftime(date, "%-d %b")
+  defp month_axis(date), do: Calendar.strftime(date, "%b %Y")
+
+  defp revenue_bars(series, label_fun) do
+    amounts = Enum.map(series, &elem(&1, 1))
+    max = Enum.max(amounts, fn -> 0 end)
+    total = length(series)
+
+    series
+    |> Enum.with_index()
+    |> Enum.map(fn {{date, amount}, index} ->
+      height =
+        cond do
+          max <= 0 -> 8
+          true -> max(8, round(amount / max * 100))
+        end
+
+      %{height: height, recent: index >= max(0, total - 7), label: label_fun.(date)}
+    end)
   end
 
-  defp chart_options do
-    %{
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: %{legend: %{display: false}},
-      scales: %{y: %{beginAtZero: true}}
-    }
+  defp axis_labels([]), do: []
+
+  defp axis_labels(marks) do
+    last = length(marks) - 1
+    mid = div(last, 2)
+    [Enum.at(marks, 0).label, Enum.at(marks, mid).label, Enum.at(marks, last).label]
   end
 
-  defp legend_chart_options do
-    %{
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: %{legend: %{display: true, position: "bottom"}}
-    }
+  defp site_tick_max(rows) do
+    rows
+    |> Enum.map(&tick_count(&1.revenue))
+    |> Enum.max(fn -> 0 end)
   end
 
-  defp site_chart_data(rows) do
-    %{
-      labels: Enum.map(rows, & &1.site.name),
-      datasets: [
-        %{
-          label: "Revenue",
-          data: Enum.map(rows, &Decimal.to_float(&1.revenue)),
-          backgroundColor: "#84cc16",
-          borderRadius: 6
-        },
-        %{
-          label: "Cost of goods",
-          data: Enum.map(rows, &Decimal.to_float(&1.cost_of_goods)),
-          backgroundColor: "#94a3b8",
-          borderRadius: 6
-        }
-      ]
-    }
-  end
+  defp tick_count(%Decimal{} = d), do: d |> Decimal.round(0) |> Decimal.to_integer() |> abs()
+  defp tick_count(n) when is_number(n), do: n |> round() |> abs()
+  defp tick_count(_), do: 0
 
-  defp profit_chart_data(rows) do
-    %{
-      labels: Enum.map(rows, & &1.site.name),
-      datasets: [
-        %{
-          label: "Profit",
-          data: Enum.map(rows, &Decimal.to_float(&1.profit)),
-          backgroundColor:
-            Enum.map(rows, fn row ->
-              if Decimal.negative?(row.profit), do: "#ef4444", else: "#84cc16"
-            end),
-          borderRadius: 6
-        }
-      ]
-    }
-  end
 
   defp combined_search_items(results) do
     patients =
@@ -354,6 +302,13 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
   end
 
   def render(assigns) do
+    assigns =
+      assigns
+      |> assign(:daily_bars, revenue_bars(assigns[:daily_revenue] || [], &day_axis/1))
+      |> assign(:monthly_bars, revenue_bars(assigns[:monthly_revenue] || [], &month_axis/1))
+      |> assign(:range_label, range_chip_label(assigns[:range], assigns[:dates]))
+      |> assign(:site_tick_max, site_tick_max(assigns[:site_profitability] || []))
+
     ~H"""
     <Layouts.org_shell
       flash={@flash}
@@ -362,7 +317,9 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
       crumb="Dashboard"
     >
       <:tools>
-        <.button variant="primary" navigate={~p"/org/sites/new"}>Add site</.button>
+        <.td_button variant="primary" navigate={~p"/org/sites/new"} label="Add site">
+          <:icon><.td_icon name="plus" /></:icon>
+        </.td_button>
       </:tools>
       <%!-- Fixed backdrop blur overlay when search popover is active --%>
       <div
@@ -375,197 +332,6 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
         phx-click="dismiss_search"
       />
 
-      <.header :if={not @setup_required?} icon="hero-squares-2x2">
-        Admin Dashboard
-        <:subtitle>
-          {format_range_dates(@dates)}
-        </:subtitle>
-        <:actions>
-          <div id="org-dashboard-range-filter" class="w-full">
-            <.range_filter event="set_range" current={@range} ranges={Dashboards.ranges()} />
-          </div>
-        </:actions>
-        <:toolbar>
-          <div class="relative flex-1 w-full">
-            <input
-              type="text"
-              name="search"
-              value={@search_query}
-              phx-keyup="search"
-              phx-focus="activate_search"
-              phx-click="activate_search"
-              phx-debounce="250"
-              placeholder="Search patients, visits, revenue or reports..."
-              class="thamani-input relative z-40 w-full rounded-xl px-4 py-2.5 text-sm placeholder:text-thamani-pewter/60 focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
-            />
-
-            <%!-- Search Results Popover --%>
-            <div
-              :if={
-                @search_query != "" and String.trim(@search_query) != "" and
-                  Map.get(assigns, :search_active, true)
-              }
-              phx-window-keydown="dismiss_search"
-              phx-key="escape"
-              class="absolute left-0 right-0 top-full z-40 mt-2 rounded-2xl p-4 space-y-3 max-h-[460px] overflow-y-auto ff-surface-popover"
-            >
-              <div class="flex items-center justify-between border-b border-thamani-stone pb-2.5">
-                <div class="flex items-center gap-2">
-                  <.icon name="hero-magnifying-glass" class="size-4 text-thamani-forest" />
-                  <span class="text-xs font-medium text-thamani-forest uppercase tracking-wider">
-                    Search hits for "{@search_query}"
-                  </span>
-                </div>
-                <div class="flex items-center gap-3">
-                  <button
-                    type="button"
-                    phx-click="clear_search"
-                    class="text-xs font-medium text-thamani-forest hover:underline cursor-pointer"
-                  >
-                    Clear search
-                  </button>
-                  <button
-                    type="button"
-                    phx-click="dismiss_search"
-                    class="text-xs font-medium text-thamani-pewter hover:text-thamani-forest cursor-pointer"
-                  >
-                    <.icon name="hero-x-mark" class="size-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div class="text-xs text-thamani-pewter bg-thamani-stone/50 p-2.5 rounded-lg border border-thamani-stone flex items-center justify-between">
-                <span>Metrics on dashboard below filtered for "{@search_query}"</span>
-                <span class="font-medium text-thamani-forest">
-                  {@stats.total_patients} patients • {@stats.patient_visits} visits • {money(
-                    @stats.revenue_collected
-                  )}
-                </span>
-              </div>
-
-              <%!-- Unified Flat Search Items List --%>
-              <% items = combined_search_items(@search_results) %>
-              <div
-                :if={items != []}
-                class="divide-y divide-thamani-stone/60 rounded-xl ff-surface-card"
-              >
-                <div
-                  :for={item <- items}
-                  class="p-3 hover:bg-thamani-stone/40 transition-colors flex items-center justify-between gap-3"
-                >
-                  <div class="flex items-center gap-3 min-w-0">
-                    <div class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-thamani-stone text-thamani-forest">
-                      <.icon name={item.icon} class="size-4" />
-                    </div>
-                    <div class="min-w-0">
-                      <p class="text-sm font-medium text-thamani-forest truncate">{item.title}</p>
-                      <p class="text-xs text-thamani-pewter truncate">{item.subtitle}</p>
-                    </div>
-                  </div>
-                  <span class="px-2.5 py-1 text-xs font-medium bg-td-accent-tint text-thamani-forest rounded-full shrink-0">
-                    {item.badge}
-                  </span>
-                </div>
-              </div>
-
-              <%!-- Empty state --%>
-              <div
-                :if={items == []}
-                class="py-8 text-center text-sm text-thamani-pewter"
-              >
-                No matching patients, sites, staff, or records found for "{@search_query}"
-              </div>
-            </div>
-          </div>
-
-          <div class="relative">
-            <button
-              type="button"
-              phx-click="toggle_filters"
-              class={[
-                "inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-normal transition-all shrink-0 cursor-pointer w-full sm:w-auto border",
-                @show_filters &&
-                  "bg-thamani-forest text-thamani-on-accent border-thamani-forest shadow-sm",
-                !@show_filters &&
-                  "bg-thamani-surface text-thamani-forest border-thamani-stone hover:bg-thamani-stone/60"
-              ]}
-            >
-              <.icon name="hero-adjustments-horizontal" class="size-4" /> Filters
-              <span :if={@range == "custom"} class="size-2 rounded-full bg-td-accent-tint"></span>
-            </button>
-
-            <%!-- Backdrop to dismiss filter popover when clicking outside --%>
-            <div
-              :if={@show_filters}
-              class="fixed inset-0 z-40 bg-black/5"
-              phx-click="toggle_filters"
-            />
-
-            <%!-- Filters Date Range Picker Popover --%>
-            <div
-              :if={@show_filters}
-              class="absolute right-0 top-full z-50 mt-2 w-[340px] sm:w-[420px] rounded-2xl p-5 ff-surface-popover transition-all"
-            >
-              <form phx-submit="apply_custom_range">
-                <div class="flex items-center justify-between border-b border-thamani-stone pb-3 mb-4">
-                  <div class="flex items-center gap-2">
-                    <.icon name="hero-adjustments-horizontal" class="size-4 text-thamani-forest" />
-                    <h3 class="font-semibold text-thamani-forest text-base">Filters</h3>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <button
-                      type="button"
-                      phx-click="reset_filters"
-                      class="text-xs font-semibold text-thamani-forest hover:underline cursor-pointer"
-                    >
-                      Reset all
-                    </button>
-                    <button
-                      type="button"
-                      phx-click="toggle_filters"
-                      class="text-thamani-pewter hover:text-thamani-forest cursor-pointer p-1 rounded-lg hover:bg-thamani-stone/60 transition-colors"
-                      aria-label="Close filters"
-                    >
-                      <.icon name="hero-x-mark" class="size-4" />
-                    </button>
-                  </div>
-                </div>
-
-                <p class="text-[11px] font-bold tracking-wider text-thamani-pewter uppercase mb-3">
-                  Date Range
-                </p>
-
-                <div class="mb-6">
-                  <.date_range_picker
-                    id="filter-dates"
-                    from_name="from"
-                    from_value={elem(@dates, 0)}
-                    to_name="to"
-                    to_value={elem(@dates, 1)}
-                    max="today"
-                  />
-                </div>
-
-                <div class="flex items-center justify-end gap-3 border-t border-thamani-stone pt-4">
-                  <button
-                    type="button"
-                    phx-click="clear_filters"
-                    class="px-4 py-2 text-xs sm:text-sm font-normal text-thamani-forest border border-thamani-forest rounded-full hover:bg-thamani-stone transition-colors cursor-pointer"
-                  >
-                    Clear filters
-                  </button>
-                  <button
-                    type="submit"
-                    class="px-5 py-2 text-xs sm:text-sm font-normal text-thamani-on-accent bg-thamani-forest hover:opacity-90 rounded-full transition-colors cursor-pointer shadow-sm"
-                  >
-                    Apply filters
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </:toolbar>
-      </.header>
 
       <section
         :if={@setup_required?}
@@ -657,70 +423,297 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
         </ul>
       </section>
 
-      <div :if={not @setup_required?} id="admin-dashboard-stats" class="dashboard-stat-grid mt-6">
-        <.stat_tile
-          icon="hero-user-group"
-          label="Total patients"
-          value={@stats.total_patients}
-          sublabel="Registered patients"
-        />
-        <.stat_tile
-          icon="hero-building-office-2"
-          label="Patient visits"
-          value={@stats.patient_visits}
-          sublabel="Visits in selected window"
-        />
-        <.stat_tile
-          icon="hero-banknotes"
-          label="Revenue collected"
-          value={money(@stats.revenue_collected)}
-          sublabel="Wallet credits in selected window"
-        />
-        <.stat_tile
-          icon="hero-users"
-          label="Active staff"
-          value={@stats.active_staff}
-          sublabel="Enabled system accounts"
-        />
-      </div>
+      <.td_dashboard
+        :if={not @setup_required?}
+        id="org-admin-dashboard"
+        title="Admin dashboard"
+        subtitle="Revenue, patients, and staff across every site in your organization."
+      >
+        <:actions>
+          <div class="td-org-dash-search">
+            <input
+              type="search"
+              name="search"
+              value={@search_query}
+              placeholder="Search patients, visits, revenue or reports..."
+              phx-keyup="search"
+              phx-focus="activate_search"
+              phx-click="activate_search"
+              phx-debounce="250"
+              autocomplete="off"
+              class="td-input td-org-dash-search-input"
+            />
+            <button
+              :if={@search_query != "" and String.trim(@search_query) != ""}
+              type="button"
+              phx-click="clear_search"
+              class="td-icon-btn"
+              aria-label="Clear search"
+            >
+              <.td_icon name="x" class="size-3.5" />
+            </button>
 
-      <div :if={not @setup_required?} id="admin-dashboard-charts" class="dashboard-chart-grid mt-6">
-        <.chart_card
-          id="daily-revenue-chart"
-          title="Daily revenue"
-          subtitle="Wallet credits collected per day in the selected window"
-          type="line"
-          data={daily_revenue_chart_data(@daily_revenue)}
-          options={chart_options()}
-        />
-        <.chart_card
-          id="monthly-revenue-chart"
-          title="Monthly revenue"
-          subtitle="Total wallet credits collected in the last 12 months"
-          type="bar"
-          data={monthly_revenue_chart_data(@monthly_revenue)}
-          options={chart_options()}
-        />
-      </div>
+            <div
+              :if={
+                @search_query != "" and String.trim(@search_query) != "" and
+                  Map.get(assigns, :search_active, true)
+              }
+              phx-window-keydown="dismiss_search"
+              phx-key="escape"
+              class="td-popover td-org-dash-search-pop"
+            >
+              <% items = combined_search_items(@search_results) %>
+              <div class="td-org-dash-search-hd">
+                <p class="td-popover-label">Search hits for "{@search_query}"</p>
+                <button type="button" phx-click="clear_search" class="td-text-btn">
+                  Clear search
+                </button>
+              </div>
+              <p class="td-org-dash-search-hint">
+                Metrics on dashboard below filtered for "{@search_query}"
+                <span>
+                  {@stats.total_patients} patients • {@stats.patient_visits} visits • {money(
+                    @stats.revenue_collected
+                  )}
+                </span>
+              </p>
+              <div :if={items == []} class="td-empty-inline">
+                No matching patients, sites, staff, or records found for "{@search_query}"
+              </div>
+              <div :for={item <- items} class="td-org-dash-search-item">
+                <div>
+                  <p class="td-org-dash-search-title">{item.title}</p>
+                  <p class="td-muted">{item.subtitle}</p>
+                </div>
+                <span class="td-chip is-quiet">{item.badge}</span>
+              </div>
+            </div>
+          </div>
 
-      <div :if={not @setup_required?} id="org-analytics-charts" class="dashboard-chart-grid mt-6">
-        <.chart_card
-          id="org-site-performance-chart"
-          title="Revenue and cost by site"
-          subtitle="All-time site comparison"
-          type="bar"
-          data={site_chart_data(@site_profitability)}
-          options={legend_chart_options()}
-        />
-        <.chart_card
-          id="org-site-profit-chart"
-          title="Profit by site"
-          subtitle="All-time, revenue less stock cost"
-          type="bar"
-          data={profit_chart_data(@site_profitability)}
-          options={chart_options()}
-        />
-      </div>
+          <div id="org-dashboard-range-filter" class="td-view-menu">
+            <button
+              type="button"
+              id="org-dashboard-range-filter-trigger"
+              class="td-chip td-view-menu-trigger"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              phx-click={
+                JS.toggle(to: "#org-dashboard-range-filter-menu")
+                |> JS.toggle_attribute({"aria-expanded", "true", "false"},
+                  to: "#org-dashboard-range-filter-trigger"
+                )
+              }
+            >
+              <.td_icon name="calendar-blank" class="size-3.5" />
+              <span>Date range</span>
+              <span class="td-chip-value">{@range_label}</span>
+              <.td_icon name="caret-down" class="size-3.5" />
+            </button>
+            <div
+              id="org-dashboard-range-filter-menu"
+              class="td-popover td-view-menu-pop"
+              role="menu"
+              hidden
+              phx-click-away={JS.hide(to: "#org-dashboard-range-filter-menu")}
+            >
+              <p class="td-popover-label">Date range</p>
+              <button
+                :for={{key, label} <- Dashboards.ranges()}
+                type="button"
+                role="menuitem"
+                class={["td-menu-item", key == @range && "is-selected"]}
+                phx-click={
+                  JS.hide(to: "#org-dashboard-range-filter-menu")
+                  |> JS.push("set_range", value: %{range: key})
+                }
+              >
+                <span class="flex-1">{label}</span>
+                <.td_icon :if={key == @range} name="check" class="size-3.5" />
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                class={["td-menu-item", @range == "custom" && "is-selected"]}
+                phx-click={
+                  JS.hide(to: "#org-dashboard-range-filter-menu")
+                  |> JS.push("toggle_filters")
+                }
+              >
+                <span class="flex-1">Custom…</span>
+                <.td_icon :if={@range == "custom"} name="check" class="size-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div class="relative">
+            <button type="button" phx-click="toggle_filters" class="td-chip">
+              <.td_icon name="funnel-simple" class="size-3.5" />
+              Filters
+              <span :if={@range == "custom"} class="td-chip-dot"></span>
+            </button>
+            <div
+              :if={@show_filters}
+              class="fixed inset-0 z-40"
+              phx-click="toggle_filters"
+            />
+            <div :if={@show_filters} class="td-popover td-org-dash-filters absolute right-0 top-full z-50 mt-2">
+              <form phx-submit="apply_custom_range">
+                <div class="td-org-dash-filters-hd">
+                  <h3>Filters</h3>
+                  <button type="button" phx-click="reset_filters" class="td-text-btn">
+                    Reset all
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="toggle_filters"
+                    class="td-icon-btn"
+                    aria-label="Close filters"
+                  >
+                    <.td_icon name="x" class="size-3.5" />
+                  </button>
+                </div>
+                <p class="td-popover-label">Date range</p>
+                <.date_range_picker
+                  id="filter-dates"
+                  from_name="from"
+                  from_value={elem(@dates, 0)}
+                  to_name="to"
+                  to_value={elem(@dates, 1)}
+                  max="today"
+                />
+                <div class="td-org-dash-filters-ft">
+                  <button type="button" phx-click="clear_filters" class="td-btn is-secondary">
+                    Clear filters
+                  </button>
+                  <button type="submit" class="td-btn is-primary">Apply filters</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </:actions>
+
+        <:strip id="admin-dashboard-stats">
+          <.td_glance_cell
+            id="total-patients-stat"
+            value={@stats.total_patients}
+            caption="total patients"
+            tone="success"
+          >
+            <:icon><.td_icon name="users" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="patient-visits-stat"
+            value={@stats.patient_visits}
+            caption="patient visits"
+            tone="info"
+          >
+            <:icon><.td_icon name="calendar-check" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="revenue-collected-stat"
+            value={money(@stats.revenue_collected)}
+            caption="revenue collected"
+            tone="warning"
+          >
+            <:icon><.td_icon name="wallet" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="active-staff-stat"
+            value={@stats.active_staff}
+            caption="active staff"
+            tone="neutral"
+          >
+            <:icon><.td_icon name="identification-badge" /></:icon>
+          </.td_glance_cell>
+        </:strip>
+
+        <div id="admin-dashboard-charts">
+        <.td_dash_row>
+          <.td_dash_card
+            id="daily-revenue-chart"
+            title="Daily revenue"
+            subtitle="Wallet credits collected per day in the selected window"
+          >
+            <div class="td-bars" aria-label="Daily revenue in the selected window">
+              <i
+                :for={bar <- @daily_bars}
+                class={bar.recent && "is-now"}
+                style={"height: #{bar.height}%"}
+              >
+              </i>
+            </div>
+            <div :if={@daily_bars != []} class="td-axis">
+              <span :for={label <- axis_labels(@daily_bars)}>{label}</span>
+            </div>
+          </.td_dash_card>
+          <.td_dash_card
+            id="monthly-revenue-chart"
+            title="Monthly revenue"
+            subtitle="Total wallet credits collected in the last 12 months"
+            width={380}
+          >
+            <div class="td-bars" aria-label="Monthly revenue over the last 12 months">
+              <i
+                :for={bar <- @monthly_bars}
+                class={bar.recent && "is-now"}
+                style={"height: #{bar.height}%"}
+              >
+              </i>
+            </div>
+            <div :if={@monthly_bars != []} class="td-axis">
+              <span :for={label <- axis_labels(@monthly_bars)}>{label}</span>
+            </div>
+          </.td_dash_card>
+        </.td_dash_row>
+        </div>
+
+        <div id="org-analytics-charts">
+        <.td_dash_row>
+          <.td_dash_card
+            id="org-site-performance-chart"
+            title="Revenue and cost by site"
+            subtitle="All-time site comparison. Profit is revenue less stock cost."
+          >
+            <table class="td-rows td-ticks">
+              <thead>
+                <tr>
+                  <th>Site</th>
+                  <th>Revenue</th>
+                  <th>Stock cost</th>
+                  <th>Profit</th>
+                  <th class="td-ticks-col"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :if={@site_profitability == []}>
+                  <td colspan="5" class="td-muted">No site revenue yet.</td>
+                </tr>
+                <tr
+                  :for={row <- @site_profitability}
+                  id={"org-site-row-#{row.site.id}"}
+                  class="is-link"
+                  phx-click={JS.navigate("/org/sites/#{row.site.id}")}
+                >
+                  <td>{row.site.name}</td>
+                  <td class="is-num">{money(row.revenue)}</td>
+                  <td class="is-num">{money(row.cost_of_goods)}</td>
+                  <td class="is-num">{money(row.profit)}</td>
+                  <td>
+                    <.td_ticks
+                      count={tick_count(row.revenue)}
+                      max={@site_tick_max}
+                      tone="success"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div id="org-site-profit-chart" class="hidden" aria-hidden="true"></div>
+          </.td_dash_card>
+        </.td_dash_row>
+        </div>
+      </.td_dashboard>
+
 
       <div
         :if={not @setup_required?}
