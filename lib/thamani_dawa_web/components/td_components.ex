@@ -962,6 +962,120 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   defp format_download_bytes(_), do: "—"
 
+  @doc """
+  Hidden hook that prints the current page (or a document URL in a hidden
+  iframe) and starts a same-origin file download. Keep this mounted while
+  the Print or Download-ready overlays can fire, so the events are not lost
+  when those dialogs close.
+  """
+  attr :id, :string, required: true
+
+  def td_browser_file(assigns) do
+    ~H"""
+    <span id={@id} phx-hook=".TdBrowserFile" hidden></span>
+    <script :type={Phoenix.LiveView.ColocatedHook} name=".TdBrowserFile">
+      export default {
+        mounted() {
+          this.handleEvent("td:print", ({url}) => {
+            if (url) {
+              const frame = document.createElement("iframe")
+              frame.setAttribute("hidden", "")
+              frame.src = url
+              frame.onload = () => {
+                try {
+                  frame.contentWindow.focus()
+                  frame.contentWindow.print()
+                } finally {
+                  setTimeout(() => frame.remove(), 5000)
+                }
+              }
+              document.body.appendChild(frame)
+            } else {
+              window.print()
+            }
+          })
+          this.handleEvent("td:file", ({url, filename}) => {
+            if (!url) return
+            const link = document.createElement("a")
+            link.href = url
+            if (filename) link.download = filename
+            document.body.appendChild(link)
+            link.click()
+            link.remove()
+          })
+        }
+      }
+    </script>
+    """
+  end
+
+  @doc """
+  Doop "Print" dialog (d687xWcrBC): printer, copies, and paper, then
+  Cancel / Print. There is no site-printer registry in the product, so the
+  only printer option is this computer — Print opens the browser dialog
+  (which is also where the user can change the copy count).
+  """
+  attr :id, :string, required: true
+  attr :on_cancel, JS, required: true
+  attr :submit, :string, default: "confirm_print"
+  attr :printer, :string, default: "browser"
+  attr :copies, :integer, default: 1
+  attr :paper, :string, default: "a4"
+  attr :printer_options, :list, default: [{"This computer", "browser"}]
+  attr :paper_options, :list, default: [{"A4", "a4"}, {"80 mm receipt", "80mm"}]
+
+  def td_print(assigns) do
+    ~H"""
+    <.td_modal
+      id={@id}
+      show
+      width={480}
+      title="Print"
+      subtitle="Send this document to a printer at your site."
+      on_cancel={@on_cancel}
+    >
+      <:body>
+        <.form for={%{}} as={:print} id={"#{@id}-form"} phx-submit={@submit} class="td-modal-form">
+          <.td_select
+            id={"#{@id}-printer"}
+            name="printer"
+            label="Printer"
+            value={@printer}
+            options={@printer_options}
+          />
+          <div class="td-fgrid is-2">
+            <.td_select
+              id={"#{@id}-copies"}
+              name="copies"
+              label="Copies"
+              value={@copies}
+              options={Enum.map(1..5, &{to_string(&1), &1})}
+            />
+            <.td_select
+              id={"#{@id}-paper"}
+              name="paper"
+              label="Paper"
+              value={@paper}
+              options={@paper_options}
+            />
+          </div>
+        </.form>
+      </:body>
+      <:footer>
+        <.td_button type="button" variant="secondary" label="Cancel" phx-click={@on_cancel} />
+        <.td_button
+          id={"#{@id}-submit"}
+          type="submit"
+          variant="primary"
+          label="Print"
+          glyph="printer"
+          form={"#{@id}-form"}
+        />
+      </:footer>
+    </.td_modal>
+    """
+  end
+
   attr :id, :string, required: true
   attr :show, :boolean, default: false
   attr :title, :string, default: nil

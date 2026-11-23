@@ -119,4 +119,86 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLiveTest do
       "site_id" => ctx.warehouse.id
     })
   end
+
+  describe "org print and download overlays" do
+    import ThamaniDawa.AccountsFixtures
+    import ThamaniDawa.SitesFixtures
+
+    alias ThamaniDawa.GoodsReceipts.Attachment
+
+    test "Print opens the shared dialog and Download shows the ready overlay", %{conn: conn} do
+      admin = user_fixture()
+      _site = site_fixture(%{organization_id: admin.organization_id})
+      receipt = org_receipt_fixture(admin)
+      attachment = attachment_fixture(receipt, admin)
+
+      {:ok, view, html} = live(log_in_user(conn, admin), ~p"/org/receiving/#{receipt.id}")
+
+      assert html =~ "Goods receipt"
+      assert has_element?(view, "#goods-receipt-print")
+      assert has_element?(view, "#goods-receipt-document-#{attachment.id}-print")
+      assert has_element?(view, "#goods-receipt-document-#{attachment.id}-download")
+      refute has_element?(view, "#goods-receipt-print-dialog")
+      refute has_element?(view, "#goods-receipt-download-ready")
+
+      view |> element("#goods-receipt-print") |> render_click()
+      assert has_element?(view, "#goods-receipt-print-dialog", "Print")
+      assert has_element?(view, "#goods-receipt-print-dialog", "Send this document to a printer at your site.")
+      assert has_element?(view, "#goods-receipt-print-dialog-printer", "This computer")
+
+      view |> form("#goods-receipt-print-dialog-form") |> render_submit()
+      refute has_element?(view, "#goods-receipt-print-dialog")
+
+      view |> element("#goods-receipt-document-#{attachment.id}-print") |> render_click()
+      assert has_element?(view, "#goods-receipt-print-dialog")
+      view |> element("#goods-receipt-print-dialog button", "Cancel") |> render_click()
+      refute has_element?(view, "#goods-receipt-print-dialog")
+
+      view |> element("#goods-receipt-document-#{attachment.id}-download") |> render_click()
+      assert has_element?(view, "#goods-receipt-download-ready", "Your file is ready")
+      assert has_element?(view, "#goods-receipt-download-ready", "inv-KP-88120.pdf")
+      assert has_element?(view, "#goods-receipt-download-ready", "ready")
+      view |> element("#goods-receipt-download-ready button", "Done") |> render_click()
+      refute has_element?(view, "#goods-receipt-download-ready")
+    end
+
+    test "the distributor receipt is unchanged", %{conn: conn} = ctx do
+      receipt = receipt_fixture(ctx)
+      conn = log_in_user(conn, ctx.user)
+      {:ok, view, _html} = live(conn, ~p"/distributor/receiving/#{receipt.id}")
+
+      refute has_element?(view, "#goods-receipt-print")
+      refute has_element?(view, "#goods-receipt-print-dialog")
+      refute has_element?(view, "#goods-receipt-download-ready")
+    end
+
+    defp org_receipt_fixture(admin) do
+      {:ok, receipt} =
+        %GoodsReceipt{}
+        |> GoodsReceipt.changeset(%{
+          number: "GRN-#{System.unique_integer([:positive])}",
+          posting_key: Ecto.UUID.generate(),
+          received_at: DateTime.utc_now(:second),
+          received_by_id: admin.id
+        })
+        |> Ecto.Changeset.put_change(:organization_id, admin.organization_id)
+        |> Repo.insert()
+
+      receipt
+    end
+
+    defp attachment_fixture(receipt, admin) do
+      %Attachment{}
+      |> Attachment.changeset(%{
+        doc_type: :invoice,
+        filename: "inv-KP-88120.pdf",
+        path: "/uploads/goods_receipts/#{receipt.id}/inv-KP-88120.pdf",
+        content_type: "application/pdf",
+        byte_size: 312_000,
+        goods_receipt_id: receipt.id,
+        uploaded_by_id: admin.id
+      })
+      |> Repo.insert!()
+    end
+  end
 end

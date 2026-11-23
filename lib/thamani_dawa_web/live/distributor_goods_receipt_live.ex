@@ -17,7 +17,9 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
      |> assign(:receiving_index_path, index_path)
      |> assign(:resolving_id, nil)
      |> assign(:resolving_status, nil)
-     |> assign(:resolution_reference, "")}
+     |> assign(:resolution_reference, "")
+     |> assign(:print, nil)
+     |> assign(:download_ready, nil)}
   end
 
   def handle_event("open_resolve", %{"id" => id, "status" => status}, socket)
@@ -62,6 +64,62 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
       {:noreply,
        put_flash(socket, :error, "That line is not an open discrepancy on this receipt.")}
     end
+  end
+
+  def handle_event("open_print", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :print, print_target(socket, id))}
+  end
+
+  def handle_event("open_print", _params, socket) do
+    {:noreply, assign(socket, :print, receipt_print_target(socket.assigns.receipt))}
+  end
+
+  def handle_event("close_print", _params, socket) do
+    {:noreply, assign(socket, :print, nil)}
+  end
+
+  def handle_event("confirm_print", _params, socket) do
+    url = socket.assigns.print && socket.assigns.print[:url]
+
+    {:noreply,
+     socket
+     |> assign(:print, nil)
+     |> push_event("td:print", %{url: url})}
+  end
+
+  def handle_event("download_document", %{"id" => id}, socket) do
+    case find_attachment(socket.assigns.receipt, id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, "That document is not on this receipt.")}
+
+      attachment ->
+        {:noreply,
+         socket
+         |> assign(:download_ready, %{
+           filename: attachment.filename,
+           bytes: attachment.byte_size
+         })
+         |> push_event("td:file", %{url: attachment.path, filename: attachment.filename})}
+    end
+  end
+
+  def handle_event("close_download_ready", _params, socket) do
+    {:noreply, assign(socket, :download_ready, nil)}
+  end
+
+  defp print_target(socket, id) do
+    case find_attachment(socket.assigns.receipt, id) do
+      nil -> nil
+      attachment -> %{filename: attachment.filename, url: attachment.path, paper: "a4"}
+    end
+  end
+
+  defp receipt_print_target(receipt) do
+    %{filename: receipt.number, url: nil, paper: "a4"}
+  end
+
+  defp find_attachment(receipt, id) do
+    Enum.find(receipt.attachments || [], &(to_string(&1.id) == to_string(id)))
   end
 
   defp reload_receipt(socket) do
@@ -424,6 +482,14 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           <.td_page_header title="Goods receipt" subtitle={receipt_received_at(@receipt.received_at)}>
             <:actions>
               <.td_badge tone="success" label="Received" />
+              <.td_button
+                id="goods-receipt-print"
+                type="button"
+                variant="secondary"
+                label="Print"
+                glyph="printer"
+                phx-click="open_print"
+              />
             </:actions>
           </.td_page_header>
           <div class="td-kv-grid">
@@ -546,18 +612,45 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
                   >
                     Preview
                   </a>
-                  <a
-                    href={attachment.path}
-                    download={attachment.filename}
-                    aria-label={"Download #{attachment.filename}"}
+                  <button
+                    type="button"
+                    id={"goods-receipt-document-#{attachment.id}-print"}
+                    class="td-btn is-secondary"
+                    phx-click="open_print"
+                    phx-value-id={attachment.id}
+                    aria-label={"Print #{attachment.filename}"}
+                  >
+                    Print
+                  </button>
+                  <button
+                    type="button"
+                    id={"goods-receipt-document-#{attachment.id}-download"}
                     class="td-btn is-primary"
+                    phx-click="download_document"
+                    phx-value-id={attachment.id}
+                    aria-label={"Download #{attachment.filename}"}
                   >
                     Download
-                  </a>
+                  </button>
                 </div>
               </li>
             </ul>
           </section>
+
+          <.td_browser_file id="goods-receipt-browser-file" />
+          <.td_print
+            :if={@print}
+            id="goods-receipt-print-dialog"
+            paper={@print.paper}
+            on_cancel={JS.push("close_print")}
+          />
+          <.td_download_ready
+            :if={@download_ready}
+            id="goods-receipt-download-ready"
+            filename={@download_ready.filename}
+            bytes={@download_ready.bytes || 0}
+            on_cancel={JS.push("close_download_ready")}
+          />
         </div>
       <% else %>
       <.header icon="hero-document-check">
