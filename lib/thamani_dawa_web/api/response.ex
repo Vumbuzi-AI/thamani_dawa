@@ -113,8 +113,10 @@ defmodule ThamaniDawaWeb.Api.Response do
   defp reason_details(:invalid_dispatch_quantity),
     do: {422, "invalid_quantity", "quantity must be more than zero."}
 
-  defp reason_details(:same_site),
-    do: {422, "same_site", "This batch is already at that site. Pick another site."}
+  defp reason_details(:already_dispatched),
+    do:
+      {422, "already_dispatched",
+       "This batch is already at a site. Only warehouse stock can be dispatched."}
 
   defp reason_details(:nothing_to_dispatch),
     do: {422, "insufficient_stock", "This batch has no stock left to move."}

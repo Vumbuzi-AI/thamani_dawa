@@ -92,18 +92,51 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogControllerTest do
       assert json_response(conn, 201)["data"]["site_id"] == ctx.pharmacy.id
     end
 
-    test "without site_id is a clear 422", ctx do
+    test "without site_id, a multi-site organization records warehouse stock", ctx do
       conn =
         ctx.admin
         |> auth()
         |> post(
           ~p"/api/v1/products/#{ctx.product.id}/batches",
-          Jason.encode!(%{batch_no: "API-3", expiry_date: "2030-01-01", quantity: 5})
+          Jason.encode!(%{
+            gtin: unique_gtin(),
+            batch_no: "API-3",
+            expiry_date: "2030-01-01",
+            quantity: 5
+          })
         )
 
-      error = json_response(conn, 422)["error"]
-      assert error["code"] == "site_id_required"
-      assert error["message"] =~ "site_id"
+      batch = json_response(conn, 201)["data"]
+      assert batch["site_id"] == nil
+      assert batch["approver_id"] == nil
+
+      product =
+        ctx.admin |> auth() |> get(~p"/api/v1/products/#{ctx.product.id}") |> json_response(200)
+
+      assert Enum.map(product["data"]["undispatched"], & &1["id"]) == [batch["id"]]
+    end
+
+    test "without site_id, a single-site organization receives into its site" do
+      admin = user_fixture()
+      site = site_fixture(%{organization_id: admin.organization_id, activities: [:pharmacy]})
+      product = product_fixture(%{organization_id: admin.organization_id})
+
+      conn =
+        admin
+        |> auth()
+        |> post(
+          ~p"/api/v1/products/#{product.id}/batches",
+          Jason.encode!(%{
+            gtin: unique_gtin(),
+            batch_no: "API-7",
+            expiry_date: "2030-01-01",
+            quantity: 5
+          })
+        )
+
+      batch = json_response(conn, 201)["data"]
+      assert batch["site_id"] == site.id
+      assert batch["approver_id"] == admin.id
     end
 
     test "with a site_id that is not a number is a clear 422", ctx do
@@ -185,24 +218,23 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogControllerTest do
                Enum.sort([on_shelf.id, in_transit.id])
 
       assert Enum.map(data["pending_receipt"], & &1["id"]) == [in_transit.id]
-      refute Map.has_key?(data, "undispatched")
+      assert data["undispatched"] == []
     end
   end
 
   describe "POST /api/v1/batches/:id/dispatch" do
     setup ctx do
       batch =
-        batch_fixture(%{
+        org_batch_fixture(%{
           organization_id: ctx.admin.organization_id,
           product_id: ctx.product.id,
-          site_id: ctx.pharmacy.id,
           quantity: 30
         })
 
       {:ok, batch: batch}
     end
 
-    test "moves part of a batch to another site, awaiting receipt there", ctx do
+    test "dispatches part of warehouse stock to a site, awaiting receipt there", ctx do
       conn =
         ctx.admin
         |> auth()
@@ -223,16 +255,23 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogControllerTest do
       assert source["data"]["remaining_quantity"] == 18
     end
 
-    test "to the same site is a clear 422", ctx do
+    test "a batch already at a site is a clear 422", ctx do
+      site_batch =
+        batch_fixture(%{
+          organization_id: ctx.admin.organization_id,
+          product_id: ctx.product.id,
+          site_id: ctx.pharmacy.id
+        })
+
       conn =
         ctx.admin
         |> auth()
         |> post(
-          ~p"/api/v1/batches/#{ctx.batch.id}/dispatch",
-          Jason.encode!(%{site_id: ctx.pharmacy.id, quantity: 1})
+          ~p"/api/v1/batches/#{site_batch.id}/dispatch",
+          Jason.encode!(%{site_id: ctx.other_pharmacy.id, quantity: 1})
         )
 
-      assert json_response(conn, 422)["error"]["code"] == "same_site"
+      assert json_response(conn, 422)["error"]["code"] == "already_dispatched"
     end
 
     test "more than is left is insufficient stock", ctx do
@@ -257,6 +296,15 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogControllerTest do
         )
 
       assert json_response(conn, 422)["error"]["code"] == "quantity_required"
+    end
+
+    test "without a site_id is a clear 422", ctx do
+      conn =
+        ctx.admin
+        |> auth()
+        |> post(~p"/api/v1/batches/#{ctx.batch.id}/dispatch", Jason.encode!(%{quantity: 1}))
+
+      assert json_response(conn, 422)["error"]["code"] == "site_id_required"
     end
 
     test "to another organization's site is not found", ctx do

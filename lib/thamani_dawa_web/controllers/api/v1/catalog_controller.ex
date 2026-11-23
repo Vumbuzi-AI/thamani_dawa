@@ -44,18 +44,19 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogController do
     Response.page(conn, Enum.map(result.entries, &Serializer.product/1), Params.scrivener(result))
   end
 
-  # `undispatched` was removed on 20 Nov 2026: every batch is now bound to a
-  # site from receipt, so there is no org-level pool left to dispatch from.
-  # `pending_receipt` replaces it — batches transferred to a site that the
-  # site has not confirmed yet (the only stock not yet on a shelf).
+  # `undispatched` is org warehouse stock not yet dispatched to a site (as on
+  # the web product page). `pending_receipt` lists site batches dispatched
+  # but not yet confirmed by the site.
   def show_product(conn, %{"id" => id}) do
     with {:ok, id} <- parse_id(id),
          {:ok, product} <- fetch(fn -> Products.get_product!(org_id(conn), id) end) do
       batches = Batches.list_batches_for_product(org_id(conn), product.id)
+      undispatched = Batches.list_undispatched_batches_for_product(org_id(conn), product.id)
 
       Response.data(conn, %{
         product: Serializer.product(product),
         batches: Enum.map(batches, &Serializer.batch/1),
+        undispatched: Enum.map(undispatched, &Serializer.batch/1),
         pending_receipt:
           batches
           |> Enum.filter(&is_nil(&1.received_at))
@@ -83,9 +84,11 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogController do
     end)
   end
 
-  # API batches are received straight into a site and auto-approved, the same
-  # as the web receive flow: `receive_directly_at_site/4` stamps the receipt
-  # and records the EPCIS facility receipt.
+  # Mirrors the web "add batch" flow. With a `site_id` the batch is received
+  # straight into that site, auto-approved, and the EPCIS facility receipt is
+  # recorded (`receive_directly_at_site/4`). Without one, a single-site
+  # organization receives into its only site the same way, and a multi-site
+  # organization records org warehouse stock to dispatch later.
   def create_batch(conn, %{"product_id" => product_id} = params) do
     idempotent(conn, fn ->
       attrs =
@@ -93,9 +96,8 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogController do
         |> Params.drop_tenant()
         |> Map.put("product_id", product_id)
 
-      with {:ok, site_id} <- batch_site_id(attrs["site_id"]),
-           {:ok, batch} <-
-             Batches.receive_directly_at_site(org_id(conn), site_id, actor_id(conn), attrs) do
+      with {:ok, destination} <- batch_destination(conn, attrs["site_id"]),
+           {:ok, batch} <- receive_batch(conn, destination, attrs) do
         {:ok, 201, %{data: Serializer.batch(batch, label: true)}}
       end
     end)
@@ -108,8 +110,8 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogController do
     end
   end
 
-  # A site-to-site transfer: debits the source batch and creates a batch at
-  # the destination site that waits for that site to confirm receipt.
+  # Dispatches org warehouse stock to a site, where it waits for the site to
+  # confirm receipt. Site batches cannot be moved again (`already_dispatched`).
   def dispatch(conn, %{"id" => id} = params) do
     idempotent(conn, fn ->
       with {:ok, id} <- parse_id(id),
@@ -182,7 +184,25 @@ defmodule ThamaniDawaWeb.Api.V1.CatalogController do
     end)
   end
 
-  defp batch_site_id(value), do: required_integer(value, :site_id_required)
+  defp batch_destination(conn, value) when value in [nil, ""] do
+    case Sites.list_sites(org_id(conn)) do
+      [site] -> {:ok, {:site, site.id}}
+      _sites -> {:ok, :warehouse}
+    end
+  end
+
+  defp batch_destination(_conn, value) do
+    with {:ok, site_id} <- required_integer(value, :site_id_required),
+         do: {:ok, {:site, site_id}}
+  end
+
+  defp receive_batch(conn, {:site, site_id}, attrs) do
+    Batches.receive_directly_at_site(org_id(conn), site_id, actor_id(conn), attrs)
+  end
+
+  defp receive_batch(conn, :warehouse, attrs) do
+    Batches.receive_into_org_stock(org_id(conn), Map.delete(attrs, "site_id"))
+  end
 
   defp required_integer(value, missing) when value in [nil, ""], do: {:error, missing}
 
