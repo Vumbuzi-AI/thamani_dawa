@@ -740,7 +740,33 @@ defmodule ThamaniDawaWeb.Layouts do
           end)
       end
 
-    labeled_ops ++ management_groups(scope, ops_groups, site)
+    labeled_ops ++ visible_account_groups(scope, ops_groups, site)
+  end
+
+  # Management (Account, org settings, TNT) only appears in the unsited
+  # admin context. Sited admins still need API keys, so that one item
+  # stays in an Account group (APIKEYS-1).
+  defp visible_account_groups(%Scope{} = scope, ops_groups, site) do
+    case management_groups(scope, ops_groups, site) do
+      [] -> sited_admin_account_groups(scope, ops_groups)
+      groups -> groups
+    end
+  end
+
+  defp sited_admin_account_groups(scope, ops_groups) do
+    cond do
+      not Scope.admin?(scope) ->
+        []
+
+      Enum.any?(ops_groups, &match?({:distributor, _}, &1)) ->
+        [{"Account", [{"API keys", "hero-key", ~p"/distributor/api-keys"}]}]
+
+      Enum.any?(ops_groups, &match?({:manufacturer, _}, &1)) ->
+        [{"Account", [{"API keys", "hero-key", ~p"/manufacturer/api-keys"}]}]
+
+      true ->
+        []
+    end
   end
 
   # Operations panels, in stable display order. Each appears when the

@@ -43,7 +43,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :rest, :global,
     include:
-      ~w(href navigate patch method download name value disabled type id form title onclick phx-click phx-value-id phx-value-from phx-value-to phx-value-mode phx-value-step phx-value-status phx-disable-with phx-submit phx-target phx-hook data-print-target data-print-container data-download-container data-role data-sscc data-gs1-text data-quantity data-gtin data-batch data-production data-expiry data-material-description data-order-number data-from-company data-from-address data-to-company data-to-address data-to-po-box)
+      ~w(href navigate patch method download name value disabled type id form title onclick target rel phx-click phx-value-id phx-value-tier phx-value-from phx-value-to phx-value-mode phx-value-step phx-value-status phx-disable-with phx-submit phx-target phx-hook data-print-target data-print-container data-download-container data-role data-sscc data-gs1-text data-quantity data-gtin data-batch data-production data-expiry data-material-description data-order-number data-from-company data-from-address data-to-company data-to-address data-to-po-box)
 
   slot :icon
   slot :inner_block

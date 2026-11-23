@@ -2815,6 +2815,25 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; flex-wrap: wrap; }
 .td-pad { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
 .td-card { border: 1px solid var(--color-td-hairline); border-radius: 12px; background: var(--color-td-surface); overflow: hidden; }
+.td-card.is-needed { border-color: var(--color-td-accent); }
+.td-key-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--color-td-hairline);
+}
+.td-key-row.is-editing { background: var(--color-td-wash); }
+.td-key-row-meta { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.td-key-row-meta b { font-size: 14px; font-weight: 500; color: var(--color-td-ink); }
+.td-key-row-meta span { font-size: 12px; color: var(--color-td-ink-2); }
+.td-key-row-value { font-size: 14px; color: var(--color-td-ink-2); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.td-key-row-value.is-empty { color: var(--color-td-ink-3); }
+.td-key-row-value code { font-family: var(--font-mono); font-size: 12px; color: var(--color-td-ink); }
+.td-key-row-actions { display: flex; gap: 8px; flex: none; }
+.td-key-row-form { display: flex; gap: 8px; align-items: flex-end; width: min(560px, 100%); }
+.td-key-row-form .td-field { flex: 1; margin: 0; }
+
 .td-back {
   display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-bottom: 1px solid var(--color-td-hairline);
   font-size: 14px; font-weight: var(--weight-td-medium); color: var(--color-td-ink-2); text-decoration: none; background: var(--color-td-surface);
