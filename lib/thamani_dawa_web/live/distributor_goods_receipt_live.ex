@@ -4,7 +4,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   alias ThamaniDawa.GoodsReceipts
   alias ThamaniDawa.Products
 
-  def mount(%{"id" => id}, _session, socket) do
+  def mount(%{"id" => id} = params, _session, socket) do
     receipt = GoodsReceipts.get_receipt!(socket.assigns.current_scope.organization_id, id)
 
     portal = if socket.assigns.live_action == :org_show, do: :organization, else: :distributor
@@ -15,6 +15,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
      |> assign(:receipt, receipt)
      |> assign(:receiving_portal, portal)
      |> assign(:receiving_index_path, index_path)
+     |> assign(:back_path, ThamaniDawaWeb.ReturnTo.path(params, index_path))
      |> assign(:resolving_id, nil)
      |> assign(:resolving_status, nil)
      |> assign(:resolution_reference, "")
@@ -37,7 +38,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
 
   def handle_event(
         "confirm_resolve",
-        %{"resolution_reference" => reference},
+        %{"resolution_reference" => reference} = params,
         %{assigns: %{resolving_id: id, resolving_status: status}} = socket
       )
       when not is_nil(id) and status in ["found", "lost", "stolen"] do
@@ -47,7 +48,9 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
     if discrepancy.goods_receipt_id == socket.assigns.receipt.id and discrepancy.status == :open do
       case GoodsReceipts.resolve_discrepancy(discrepancy, socket.assigns.current_scope.user.id, %{
              "status" => status,
-             "resolution_reference" => reference
+             "resolution_reference" => reference,
+             "outcome" => blank_to_nil(params["outcome"]),
+             "resolution_note" => blank_to_nil(params["resolution_note"])
            }) do
         {:ok, _discrepancy} ->
           {:noreply,
@@ -653,6 +656,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           />
         </div>
       <% else %>
+      <.td_back_link id="receipt-back" to={@back_path} label={ThamaniDawaWeb.ReturnTo.label(@back_path, "Back to Receiving")} />
       <.header icon="hero-document-check">
         {@receipt.number}
         <:subtitle>Complete record of this received delivery.</:subtitle>
@@ -804,15 +808,20 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
         :if={@resolving_id}
         id="resolve-discrepancy-modal"
         show
+        title="Resolve discrepancy"
+        subtitle={"Close this line as #{condition_label(String.to_existing_atom(@resolving_status))}. Found means the goods turned up; lost and stolen need an investigation reference."}
         on_cancel={JS.push("close_resolve")}
       >
-        <h2 class="mb-2 text-2xl font-medium tracking-tight text-thamani-forest">
-          Close this line as {condition_label(String.to_existing_atom(@resolving_status))}
-        </h2>
-        <p class="mb-4 text-sm text-thamani-pewter">
-          Found means the goods turned up. Lost and stolen are conclusions, and each needs an investigation reference before the line can close.
-        </p>
-        <.form for={%{}} as={:resolve} id="resolve-discrepancy-form" phx-submit="confirm_resolve">
+        <.form for={%{}} as={:resolve} id="resolve-discrepancy-form" class="td-modal-form" phx-submit="confirm_resolve">
+          <.input
+            type="select"
+            name="outcome"
+            id="resolve-outcome"
+            value=""
+            label="Outcome"
+            prompt="Choose an outcome (optional)"
+            options={outcome_options()}
+          />
           <.input
             :if={@resolving_status in ["lost", "stolen"]}
             name="resolution_reference"
@@ -827,12 +836,33 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
             name="resolution_reference"
             value=""
           />
-          <.button variant="primary" class="mt-3 w-full">Confirm</.button>
+          <.input
+            type="textarea"
+            name="resolution_note"
+            id="resolve-note"
+            value=""
+            label="Note"
+            placeholder="For example: supplier confirmed by phone, balance comes with the next delivery."
+          />
         </.form>
+        <:footer>
+          <.td_button type="button" label="Cancel" phx-click="close_resolve" />
+          <.td_button id="confirm-resolve" type="submit" form="resolve-discrepancy-form" variant="primary" label="Mark as resolved" />
+        </:footer>
       </.modal>
     </.receipt_shell>
     """
   end
+
+  defp blank_to_nil(value) when value in [nil, ""], do: nil
+  defp blank_to_nil(value), do: value
+
+  defp outcome_options,
+    do: [
+      {"Supplier is sending the balance", "supplier_sending_balance"},
+      {"Credit note", "credit_note"},
+      {"Write off", "write_off"}
+    ]
 
   defp doc_type_label(:delivery_note), do: "Delivery note"
   defp doc_type_label(:invoice), do: "Invoice"

@@ -14,6 +14,7 @@ defmodule ThamaniDawa.GoodsReceipts.ReceivingDiscrepancy do
 
   @reasons [:missing]
   @statuses [:open, :found, :lost, :stolen]
+  @outcomes [:supplier_sending_balance, :credit_note, :write_off]
 
   schema "receiving_discrepancies" do
     field :sscc, :string
@@ -25,6 +26,8 @@ defmodule ThamaniDawa.GoodsReceipts.ReceivingDiscrepancy do
     field :reason, Ecto.Enum, values: @reasons, default: :missing
     field :status, Ecto.Enum, values: @statuses, default: :open
     field :resolution_reference, :string
+    field :outcome, Ecto.Enum, values: @outcomes
+    field :resolution_note, :string
     field :resolved_at, :utc_datetime
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
@@ -37,6 +40,7 @@ defmodule ThamaniDawa.GoodsReceipts.ReceivingDiscrepancy do
   end
 
   def statuses, do: @statuses
+  def outcomes, do: @outcomes
 
   @doc false
   def changeset(discrepancy, attrs) do
@@ -64,7 +68,7 @@ defmodule ThamaniDawa.GoodsReceipts.ReceivingDiscrepancy do
   @doc "Changeset applied when an investigation resolves a discrepancy."
   def resolve_changeset(discrepancy, attrs) do
     discrepancy
-    |> cast(attrs, [:status, :resolution_reference, :resolved_by_id])
+    |> cast(attrs, [:status, :resolution_reference, :resolved_by_id, :outcome, :resolution_note])
     |> validate_required([:status], message: "can't be blank")
     |> validate_inclusion(:status, [:found, :lost, :stolen])
     |> then(fn changeset ->
