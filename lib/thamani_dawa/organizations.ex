@@ -421,7 +421,8 @@ defmodule ThamaniDawa.Organizations do
     Repo.transaction(fn ->
       with {:ok, organization} <- create_signup_organization(org_attrs),
            {:ok, organization} <- persist_gs1_details(organization, Keyword.get(opts, :gs1)),
-           {:ok, site} <- Sites.create_default_site(organization.id, site_attrs),
+           {:ok, site} <-
+             Sites.create_default_site(organization.id, site_attrs, licences: :optional),
            {:ok, organization} <- copy_site_gln(organization, site),
            {:ok, user} <-
              Accounts.register_user(organization.id, admin_attrs, organization.operating_models) do

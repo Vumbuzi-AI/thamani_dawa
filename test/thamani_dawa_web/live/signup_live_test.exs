@@ -254,8 +254,11 @@ defmodule ThamaniDawaWeb.SignupLiveTest do
       submit_site(view, %{gln: @site_gln})
       render_async(view, 5_000)
 
-      assert has_element?(view, "input[name='site[activity_choice]'][value='laboratory']")
+      # SIGNUP-1: no KMLTTB licence either, so a lab-only site with a
+      # verified GLN goes straight on to the administrator step too.
+      refute has_element?(view, "#site_kmlttb_facility_name")
       refute has_element?(view, "input[name='site[activity_choice]'][value='pharmacy']")
+      assert has_element?(view, "#signup-form")
 
       {:ok, view, _html} = live(conn, ~p"/signup")
 

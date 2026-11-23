@@ -86,22 +86,34 @@ defmodule ThamaniDawa.Sites.Site do
 
   @doc """
   Minimal changeset for system-created sites (signup default site) — no
-  address yet. PPB licence details are not collected at signup. Requires
-  a KMLTTB facility name and license number whenever a diagnostic lab is
-  among the activities (see `kmlttb_required?/1`).
+  address yet. PPB licence details are not collected. Requires a KMLTTB
+  facility name and license number whenever a diagnostic lab is among the
+  activities (see `kmlttb_required?/1`), unless `licences: :optional`.
   """
-  def default_changeset(site, attrs) do
-    site
-    |> cast(attrs, @licensing_fields ++ [:gln_verified_at, :gln_verification_source])
-    |> trim_changes()
-    |> validate_required([:name, :activities])
-    |> validate_length(:activities, min: 1, message: "Select at least one activity")
-    |> validate_format(:gln, ~r/^\d{13}$/, message: "must be 13 digits")
-    |> validate_gln_check_digit()
-    |> validate_activity_exclusivity()
-    |> validate_kmlttb_fields()
-    |> unique_constraint(:gln)
+  def default_changeset(site, attrs, opts \\ []) do
+    changeset =
+      site
+      |> cast(attrs, @licensing_fields ++ [:gln_verified_at, :gln_verification_source])
+      |> trim_changes()
+      |> validate_required([:name, :activities])
+      |> validate_length(:activities, min: 1, message: "Select at least one activity")
+      |> validate_format(:gln, ~r/^\d{13}$/, message: "must be 13 digits")
+      |> validate_gln_check_digit()
+      |> validate_activity_exclusivity()
+      |> unique_constraint(:gln)
+
+    case Keyword.get(opts, :licences, :required) do
+      :optional -> changeset
+      :required -> validate_kmlttb_fields(changeset)
+    end
   end
+
+  @doc """
+  The signup main-location changeset (SIGNUP-1): a GS1 API key and GLN are
+  the only requirements, so no KMLTTB licence is asked for. Licence details
+  passed anyway are kept and verified in the background.
+  """
+  def signup_changeset(site, attrs), do: default_changeset(site, attrs, licences: :optional)
 
   defp trim_changes(changeset) do
     Enum.reduce(@trimmed_fields, changeset, &trim_change(&2, &1))

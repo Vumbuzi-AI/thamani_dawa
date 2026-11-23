@@ -6,7 +6,6 @@ defmodule ThamaniDawaWeb.SignupLive do
   alias ThamaniDawa.GS1.MemberApi
   alias ThamaniDawa.Grp
   alias ThamaniDawa.Grp.Licence
-  alias ThamaniDawa.Kmlttb
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Organizations.Organization
   alias ThamaniDawa.Sites
@@ -31,7 +30,7 @@ defmodule ThamaniDawaWeb.SignupLive do
           as: :organization
         )
       )
-      |> assign(:site_form, to_form(Site.default_changeset(%Site{}, %{}), as: :site))
+      |> assign(:site_form, to_form(Site.signup_changeset(%Site{}, %{}), as: :site))
       |> assign(:gs1_form, to_form(%{"api_key" => ""}, as: :gs1))
       |> assign(
         :admin_form,
@@ -54,7 +53,6 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> assign(:gs1_key_check, :idle)
       |> assign(:gln_verification_source, nil)
       |> assign(:gln_check, :idle)
-      |> assign(:kmlttb_check, :idle)
       |> assign(:admin_first_name, "")
       |> assign(:admin_last_name, "")
       |> assign(:trigger_login, false)
@@ -76,7 +74,7 @@ defmodule ThamaniDawaWeb.SignupLive do
         site_changeset =
           socket
           |> site_base()
-          |> Site.default_changeset(%{"activities" => suggested_site_activities(org_params)})
+          |> Site.signup_changeset(%{"activities" => suggested_site_activities(org_params)})
           |> Map.put(:action, :validate)
 
         to_form(site_changeset, as: :site)
@@ -102,7 +100,7 @@ defmodule ThamaniDawaWeb.SignupLive do
     step = restorable_step(Map.get(draft, "step"), organization_params, site_params)
 
     org_changeset = Organization.signup_changeset(%Organization{}, organization_params)
-    site_changeset = Site.default_changeset(%Site{}, site_params)
+    site_changeset = Site.signup_changeset(%Site{}, site_params)
 
     socket =
       socket
@@ -112,7 +110,6 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> assign(:org_form, to_form(org_changeset, as: :organization))
       |> assign(:site_form, to_form(site_changeset, as: :site))
       |> reverify_restored_gln(site_params, step)
-      |> reverify_restored_kmlttb(site_params, step)
 
     {:reply, %{restored: true}, socket}
   end
@@ -134,7 +131,7 @@ defmodule ThamaniDawaWeb.SignupLive do
         site_changeset =
           socket
           |> site_base()
-          |> Site.default_changeset(%{
+          |> Site.signup_changeset(%{
             "activities" => preserved_or_suggested_site_activities(socket, org_params)
           })
           |> Map.put(:action, :validate)
@@ -209,16 +206,14 @@ defmodule ThamaniDawaWeb.SignupLive do
 
     site_changeset =
       %Site{}
-      |> Site.default_changeset(site_params)
+      |> Site.signup_changeset(site_params)
       |> Map.put(:action, :validate)
 
     {:noreply,
      socket
      |> assign(:site_form, to_form(site_changeset, as: :site))
      |> assign(:site_params, site_params)
-     |> maybe_autofill_kmlttb_facility_name()
-     |> select_member_gln(params, site_params)
-     |> maybe_check_kmlttb(params, site_params)}
+     |> select_member_gln(params, site_params)}
   end
 
   def handle_event("continue_site", %{"site" => site_params} = params, socket) do
@@ -230,13 +225,8 @@ defmodule ThamaniDawaWeb.SignupLive do
 
     socket = verify_member_gln(socket, site_params)
 
-    site_changeset = Site.default_changeset(%Site{}, site_params)
-    kmlttb_required = Site.kmlttb_required?(Map.get(site_params, "activities", []))
-
-    socket =
-      socket
-      |> assign(:site_form, to_form(site_changeset, as: :site))
-      |> maybe_autofill_kmlttb_facility_name()
+    site_changeset = Site.signup_changeset(%Site{}, site_params)
+    socket = assign(socket, :site_form, to_form(site_changeset, as: :site))
 
     cond do
       not gln_present?(site_params) ->
@@ -288,29 +278,6 @@ defmodule ThamaniDawaWeb.SignupLive do
            "We couldn't find this GLN in the GS1 registry. Get one from GS1 Kenya, then try again."
          )}
 
-      kmlttb_required && socket.assigns.kmlttb_check == :checking ->
-        {:noreply,
-         put_flash(
-           socket,
-           :error,
-           "Still checking this location's KMLTTB license. Press Continue again in a moment."
-         )}
-
-      kmlttb_required && socket.assigns.kmlttb_check == :idle ->
-        {:noreply,
-         socket
-         |> maybe_check_kmlttb(
-           Map.put(params, "_target", ["site", "kmlttb_license_number"]),
-           site_params
-         )
-         |> put_flash(
-           :error,
-           "Checking this location's KMLTTB license. Press Continue again in a moment."
-         )}
-
-      kmlttb_required && not match?({:matched, _}, socket.assigns.kmlttb_check) ->
-        {:noreply, put_flash(socket, :error, kmlttb_error_message(socket.assigns.kmlttb_check))}
-
       not site_changeset.valid? ->
         {:noreply,
          assign(socket, :site_form, to_form(%{site_changeset | action: :validate}, as: :site))}
@@ -348,23 +315,8 @@ defmodule ThamaniDawaWeb.SignupLive do
     {:noreply, assign(socket, :step, previous)}
   end
 
-  def handle_event("select_kmlttb_candidate", %{"index" => index}, socket) do
-    case socket.assigns.kmlttb_check do
-      {:ambiguous, candidates} ->
-        case Enum.at(candidates, String.to_integer(index)) do
-          nil -> {:noreply, socket}
-          detail -> {:noreply, assign(socket, :kmlttb_check, {:matched, detail})}
-        end
-
-      _ ->
-        {:noreply, socket}
-    end
-  end
-
   def handle_event("save", %{"user" => admin_params}, socket) do
     admin_params = compose_admin_name(admin_params)
-    site_activities = Map.get(socket.assigns.site_params || %{}, "activities", [])
-    site_kmlttb_required = Site.kmlttb_required?(site_activities)
 
     cond do
       not match?({:verified, _, _, _}, socket.assigns.gs1_key_check) ->
@@ -382,15 +334,6 @@ defmodule ThamaniDawaWeb.SignupLive do
          socket
          |> assign(:step, :main_location)
          |> put_flash(:error, "Please verify your location GLN again before continuing.")}
-
-      site_kmlttb_required && not match?({:matched, _}, socket.assigns.kmlttb_check) ->
-        {:noreply,
-         socket
-         |> assign(:step, :main_location)
-         |> put_flash(
-           :error,
-           "Please verify this location's KMLTTB license again before continuing."
-         )}
 
       true ->
         complete_signup(socket, admin_params)
@@ -503,8 +446,7 @@ defmodule ThamaniDawaWeb.SignupLive do
        socket
        |> clear_flash(:error)
        |> assign(:gln_check, {:matched, name, address})
-       |> maybe_autofill_site_fields(licence)
-       |> maybe_autofill_kmlttb_facility_name()}
+       |> maybe_autofill_site_fields(licence)}
     end
   end
 
@@ -548,35 +490,6 @@ defmodule ThamaniDawaWeb.SignupLive do
 
   def handle_async(:gln_lookup, {:exit, _reason}, socket) do
     {:noreply, socket |> clear_flash(:error) |> assign(:gln_check, :unavailable)}
-  end
-
-  def handle_async(:kmlttb_lookup, {:ok, {:ok, :verified, detail}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:kmlttb_check, {:matched, detail})}
-  end
-
-  def handle_async(:kmlttb_lookup, {:ok, {:ok, :license_inactive, detail}}, socket) do
-    {:noreply,
-     socket |> clear_flash(:error) |> assign(:kmlttb_check, {:license_inactive, detail})}
-  end
-
-  def handle_async(:kmlttb_lookup, {:ok, {:ok, :ambiguous, candidates}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:kmlttb_check, {:ambiguous, candidates})}
-  end
-
-  def handle_async(:kmlttb_lookup, {:ok, {:error, :name_not_found}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:kmlttb_check, :name_not_found)}
-  end
-
-  def handle_async(:kmlttb_lookup, {:ok, {:error, :license_mismatch}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:kmlttb_check, :license_mismatch)}
-  end
-
-  def handle_async(:kmlttb_lookup, {:ok, {:error, _reason}}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:kmlttb_check, :unavailable)}
-  end
-
-  def handle_async(:kmlttb_lookup, {:exit, _reason}, socket) do
-    {:noreply, socket |> clear_flash(:error) |> assign(:kmlttb_check, :unavailable)}
   end
 
   # Step 1's form only submits operating_models and name, so rebasing on a
@@ -623,12 +536,7 @@ defmodule ThamaniDawaWeb.SignupLive do
       "gln" => restored_string(params, "gln", 13),
       # Registry-owned location details are deliberately re-derived too.
       "name" => "",
-      "address" => "",
-      # These are typed, not registry-derived, so unlike name/address above
-      # they're worth restoring — losing them on a refresh meant redoing
-      # KMLTTB verification from scratch for no reason.
-      "kmlttb_facility_name" => restored_string(params, "kmlttb_facility_name", 200),
-      "kmlttb_license_number" => restored_string(params, "kmlttb_license_number", 50)
+      "address" => ""
     }
   end
 
@@ -657,13 +565,6 @@ defmodule ThamaniDawaWeb.SignupLive do
   end
 
   defp reverify_restored_gln(socket, _site_params, _step), do: socket
-
-  defp reverify_restored_kmlttb(socket, site_params, step)
-       when step in [:main_location, :administrator] do
-    check_kmlttb(socket, site_params)
-  end
-
-  defp reverify_restored_kmlttb(socket, _site_params, _step), do: socket
 
   defp compose_admin_name(admin_params) do
     first = admin_params |> Map.get("first_name", "") |> to_string() |> String.trim()
@@ -823,97 +724,6 @@ defmodule ThamaniDawaWeb.SignupLive do
     Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(payload)) == check
   end
 
-  defp maybe_check_kmlttb(socket, params, site_params) do
-    if Map.get(params, "_target") in [
-         ["site", "kmlttb_facility_name"],
-         ["site", "kmlttb_license_number"]
-       ] do
-      check_kmlttb(socket, site_params)
-    else
-      socket
-    end
-  end
-
-  defp check_kmlttb(socket, site_params) do
-    required = Site.kmlttb_required?(Map.get(site_params, "activities", []))
-
-    facility_name =
-      site_params |> Map.get("kmlttb_facility_name", "") |> to_string() |> String.trim()
-
-    license_number =
-      site_params |> Map.get("kmlttb_license_number", "") |> to_string() |> String.trim()
-
-    if required && likely_complete_name?(facility_name) &&
-         kmlttb_license_complete?(license_number) do
-      socket
-      |> assign(:kmlttb_check, :checking)
-      |> start_async(:kmlttb_lookup, fn ->
-        Kmlttb.verify_license(facility_name, license_number)
-      end)
-    else
-      assign(socket, :kmlttb_check, :idle)
-    end
-  end
-
-  # KMLTTB's licence numbers are unmasked, and every real one we've seen
-  # follows "L" + 5 digits + "/" + 2 digits (e.g. "L 01710/26"), with or
-  # without the space — so we can gate on the actual format,
-  # not just a length guess.
-  defp kmlttb_license_complete?(value), do: Regex.match?(~r/^L\s?\d{5}\/\d{2}$/i, value)
-
-  # Fires registry checks only once a field looks plausibly finished, not on
-  # every keystroke of a value that's clearly still being typed — a bare
-  # non-empty check combined with a short debounce meant a normal pause
-  # mid-name (e.g. glancing at a card before typing the next word) fired a
-  # real external API call for each partial value. License numbers have
-  # their own format-specific gate (`kmlttb_license_complete?/1`) since we know their real shape; a
-  # facility name is free text, so length is the only signal available.
-  defp likely_complete_name?(value), do: String.length(value) >= 4
-
-  defp kmlttb_error_message({:ambiguous, _candidates}),
-    do:
-      "Multiple labs matched that name and license. Pick the correct one below before continuing."
-
-  defp kmlttb_error_message(:name_not_found),
-    do:
-      "We couldn't verify this lab with KMLTTB. Double-check the facility name and license number."
-
-  defp kmlttb_error_message(:license_mismatch),
-    do:
-      "We found that lab with KMLTTB, but this license number doesn't match their record for it. Double-check the number."
-
-  defp kmlttb_error_message({:license_inactive, _detail}),
-    do:
-      "This lab's KMLTTB license was found but isn't currently active. Please check its status with KMLTTB before continuing."
-
-  defp kmlttb_error_message(:unavailable),
-    do: "We couldn't reach the KMLTTB registry to verify this license. Try again in a moment."
-
-  defp kmlttb_error_message(_kmlttb_check),
-    do: "Please verify this location's KMLTTB license before continuing."
-
-  # Prefills the KMLTTB facility-name field from the GLN-matched site name —
-  # left editable, since
-  # a lab's KMLTTB trading name can legitimately differ from the parent
-  # organization's GS1 legal name.
-  defp maybe_autofill_kmlttb_facility_name(socket) do
-    changeset = socket.assigns.site_form.source
-
-    if Site.kmlttb_required?(Ecto.Changeset.get_field(changeset, :activities) || []) do
-      autofill_field(
-        socket,
-        :site_form,
-        :site,
-        :kmlttb_facility_name,
-        Ecto.Changeset.get_field(changeset, :name)
-      )
-    else
-      socket
-    end
-  end
-
-  defp current_site_lab_required?(form), do: Site.kmlttb_required?(form[:activities].value || [])
-
   defp gln_present?(site_params) do
     site_params |> Map.get("gln", "") |> to_string() |> String.trim() != ""
   end
@@ -1064,7 +874,7 @@ defmodule ThamaniDawaWeb.SignupLive do
     do: "We’ll use your GS1 member account to set up your organization and locations."
 
   defp signup_subtitle(:main_location),
-    do: "Verify this location first, then choose what this specific premises is licensed to do."
+    do: "Choose this location from your GS1 account, then say what happens here."
 
   defp signup_subtitle(:administrator),
     do: "Add the administrator who will manage your sites, team, and organization settings."
@@ -1144,9 +954,7 @@ defmodule ThamaniDawaWeb.SignupLive do
               "activity_choice",
               "gln",
               "name",
-              "address",
-              "kmlttb_facility_name",
-              "kmlttb_license_number"
+              "address"
             ], draft.site)
 
             this.draft = draft
@@ -1553,98 +1361,6 @@ defmodule ThamaniDawaWeb.SignupLive do
                           <% end %>
                         </fieldset>
                     <% end %>
-
-                    <%= if current_site_lab_required?(@site_form) do %>
-                      <div class="mb-7">
-                        <h2 class="mb-1 text-sm font-medium text-[var(--thamani-forest)]">
-                          KMLTTB lab license
-                        </h2>
-                        <p class="mb-4 text-xs leading-5 text-[var(--thamani-pewter)]">
-                          Diagnostic labs are licensed by KMLTTB — verify
-                          this location's lab license below.
-                        </p>
-
-                        <.td_input
-                          field={@site_form[:kmlttb_facility_name]}
-                          label="Facility name (as licensed with KMLTTB)"
-                          placeholder="e.g. Afya CBD Diagnostics"
-                          phx-debounce="900"
-                          required
-                        />
-                        <.td_input
-                          field={@site_form[:kmlttb_license_number]}
-                          label="KMLTTB license number"
-                          placeholder="e.g. L 01234/26"
-                          phx-debounce="900"
-                          required
-                        />
-
-                        <%= case @kmlttb_check do %>
-                          <% :checking -> %>
-                            <p class="-mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-[var(--thamani-pewter)]">
-                              <.icon name="hero-arrow-path" class="size-3.5 animate-spin" />
-                              Checking with the KMLTTB registry&hellip;
-                            </p>
-                          <% {:matched, detail} -> %>
-                            <div class="-mt-3 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
-                              <p class="inline-flex items-center gap-1.5">
-                                <.icon name="hero-check-circle" class="size-4" /> Verified with KMLTTB
-                              </p>
-                              <p
-                                :if={detail[:valid_until]}
-                                class="mt-1 font-normal text-[var(--thamani-pewter)]"
-                              >
-                                Valid until {detail[:valid_until]}
-                              </p>
-                            </div>
-                          <% {:license_inactive, detail} -> %>
-                            <div class="-mt-3 rounded-lg bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-800">
-                              <p class="inline-flex items-center gap-1.5">
-                                <.icon name="hero-exclamation-triangle" class="size-4" />
-                                Found with KMLTTB, but not currently active.
-                              </p>
-                              <p :if={detail[:status]} class="mt-1 font-normal text-amber-700">
-                                Status: {detail[:status]}
-                              </p>
-                            </div>
-                          <% {:ambiguous, candidates} -> %>
-                            <div class="-mt-3 rounded-lg bg-amber-50 px-3 py-3 text-xs text-amber-800">
-                              <p class="mb-2 inline-flex items-center gap-1.5 font-semibold">
-                                <.icon name="hero-exclamation-triangle" class="size-4" />
-                                Multiple labs matched — pick the correct one:
-                              </p>
-                              <div class="td-mode-grid">
-                                <%= for {candidate, index} <- Enum.with_index(candidates) do %>
-                                  <.td_option_card
-                                    title={candidate[:name]}
-                                    body={candidate[:county]}
-                                    phx-click="select_kmlttb_candidate"
-                                    phx-value-index={index}
-                                  />
-                                <% end %>
-                              </div>
-                            </div>
-                          <% :name_not_found -> %>
-                            <p class="-mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                              <.icon name="hero-exclamation-triangle" class="size-4" />
-                              We couldn't verify this lab with KMLTTB. Double-check the facility name and license number.
-                            </p>
-                          <% :license_mismatch -> %>
-                            <p class="-mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                              <.icon name="hero-exclamation-triangle" class="size-4" />
-                              We found that lab, but this license number doesn't match KMLTTB's record for it.
-                            </p>
-                          <% :unavailable -> %>
-                            <p class="-mt-3 text-xs text-[var(--thamani-pewter)]">
-                              We couldn't reach the KMLTTB registry to verify this license. Try again in a moment.
-                            </p>
-                          <% _ -> %>
-                            <p class="-mt-3 text-xs text-[var(--thamani-pewter)]">
-                              We verify this with the KMLTTB lab register once both fields are filled in.
-                            </p>
-                        <% end %>
-                      </div>
-                    <% end %>
                   <% end %>
 
                   <div class="td-header-actions">
@@ -1664,11 +1380,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                       label={
                         if @gln_check == :checking, do: "Checking GS1 registry…", else: "Continue"
                       }
-                      disabled={
-                        not match?({:matched, _, _}, @gln_check) or
-                          (current_site_lab_required?(@site_form) and
-                             not match?({:matched, _}, @kmlttb_check))
-                      }
+                      disabled={not match?({:matched, _, _}, @gln_check)}
                     />
                   </div>
                 </.form>
