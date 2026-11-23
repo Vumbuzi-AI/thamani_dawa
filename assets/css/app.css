@@ -3537,3 +3537,10 @@ label.td-option > input { position: absolute; opacity: 0; pointer-events: none; 
 .td-org-dash-filters-ft { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--color-td-border); }
 .td-chip-dot { width: 6px; height: 6px; border-radius: 99px; background: var(--color-td-accent); }
 .td-chip.is-quiet { height: auto; padding: 2px 8px; font-size: 11px; pointer-events: none; }
+
+.td-return-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--color-td-ink); cursor: pointer; }
+.td-return-toggle input { width: 16px; height: 16px; accent-color: var(--color-td-accent); }
+.td-doc-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--color-td-border); border-radius: 16px; background: var(--color-td-surface); }
+.td-doc-name { font-size: 13px; font-weight: 600; color: var(--color-td-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-doc-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--color-td-border); }
+.td-doc-actions .td-btn { justify-content: center; text-decoration: none; }
