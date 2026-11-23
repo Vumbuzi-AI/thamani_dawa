@@ -227,8 +227,8 @@ defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
     assert Repo.reload!(event).status == "accepted"
   end
 
-  test "a new organization defaults to manual submission mode" do
+  test "a new organization defaults to automatic submission mode" do
     fresh = DistributorFixtures.distributor_organization_fixture()
-    assert fresh.epcis_submission_mode == :manual
+    assert fresh.epcis_submission_mode == :automatic
   end
 end

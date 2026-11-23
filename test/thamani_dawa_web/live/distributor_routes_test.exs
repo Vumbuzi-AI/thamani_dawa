@@ -97,6 +97,21 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       end
     end
 
+    test "settings toggles EPCIS submission mode, defaulting to automatic", %{
+      conn: conn,
+      distributor: distributor
+    } do
+      {:ok, view, _html} = live(conn, ~p"/distributor/settings")
+
+      assert has_element?(view, ~s(#settings-epcis-mode-automatic[aria-pressed="true"]))
+
+      view |> element("#settings-epcis-mode-manual") |> render_click()
+      assert has_element?(view, ~s(#settings-epcis-mode-manual[aria-pressed="true"]))
+
+      assert ThamaniDawa.Organizations.get_organization!(distributor.organization_id).epcis_submission_mode ==
+               :manual
+    end
+
     test "opens the receive-stock form without a browser refresh", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/distributor/receiving")
 
@@ -597,7 +612,7 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       refute has_element?(view, "#delivery-shipper-1", "tablet")
     end
 
-    test "scanned serials are marked accepted and unscanned units must be confirmed", %{
+    test "accepting a case accepts every unit unless flagged", %{
       conn: conn,
       distributor: distributor
     } do
@@ -640,96 +655,21 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       render_async(view)
 
       assert shipper.sscc in ThamaniDawa.GS1.MemberApiStub.requested_contents()
-      assert has_element?(view, "#serial-confirm-form")
+      refute has_element?(view, "#serial-confirm-form")
       assert has_element?(view, "#pending-serial-SN10001", "Accepted")
-      refute has_element?(view, "#unscanned-confirm")
-
-      view |> element("#confirm-pending-shipper") |> render_click()
-
-      assert has_element?(view, "#unscanned-confirm", "3 units weren't scanned")
-      assert has_element?(view, "#serial-unscanned-SN10001", "Confirm")
-      assert has_element?(view, "#serial-unscanned-SN10002", "Confirm")
-      assert has_element?(view, "#serial-unscanned-SN10003", "Confirm")
-      refute has_element?(view, "#delivery-shipper-1")
-
-      view
-      |> form("#serial-confirm-form", serial_confirm: %{serial: "NOT-A-UNIT"})
-      |> render_submit()
-
-      assert has_element?(view, "#serial-confirm-notice", "That serial isn't in this case.")
-
-      view
-      |> form("#serial-confirm-form", serial_confirm: %{serial: "00" <> shipper.sscc})
-      |> render_submit()
-
-      assert has_element?(
-               view,
-               "#serial-confirm-notice",
-               "That's the case SSCC. Scan a unit data matrix from inside the case."
-             )
-
-      assert has_element?(
-               view,
-               "#serial-confirm-input[phx-hook='ScanField'][phx-debounce='150']"
-             )
-
-      [first | _] = batches
-
-      view
-      |> form("#serial-confirm-form", serial_confirm: %{serial: data_matrix_for(first)})
-      |> render_change()
-
-      assert has_element?(view, "#serial-confirm-notice", "SN10001 marked accepted")
-      assert has_element?(view, "#serial-scanned-SN10001", "Scanned")
-      refute has_element?(view, "#serial-unscanned-SN10001")
-      assert has_element?(view, "#unscanned-confirm", "2 units weren't scanned")
-
-      view
-      |> form("#serial-confirm-form", serial_confirm: %{serial: "SN10001"})
-      |> render_submit()
-
-      assert has_element?(view, "#serial-confirm-notice", "SN10001 is already marked accepted.")
+      assert has_element?(view, "#confirm-pending-shipper", "Accept all")
 
       view
       |> element("#pending-serial-SN10002 button[phx-value-condition='damaged']")
       |> render_click()
-
-      view
-      |> form("#serial-confirm-form", serial_confirm: %{serial: "SN10002"})
-      |> render_submit()
-
-      assert has_element?(view, "#serial-confirm-notice", "SN10002 marked accepted")
-      assert has_element?(view, "#serial-scanned-SN10002", "Scanned")
-
-      assert has_element?(
-               view,
-               "#pending-serial-SN10002 button[phx-value-condition='accepted'][aria-checked='true']"
-             )
-
-      view
-      |> element("#pending-serial-SN10002 button[phx-value-condition='damaged']")
-      |> render_click()
-
-      assert has_element?(
-               view,
-               "#pending-serial-SN10002 button[phx-value-condition='damaged'][aria-checked='true']"
-             )
-
-      refute has_element?(view, "#serial-unscanned-SN10002")
-      assert has_element?(view, "#unscanned-confirm", "1 unit wasn't scanned")
-
-      view |> element("#confirm-pending-shipper") |> render_click()
-      assert has_element?(view, "#unscanned-confirm", "1 unit wasn't scanned")
 
       view
       |> element("#pending-serial-SN10003 button[phx-value-condition='missing']")
       |> render_click()
 
-      refute has_element?(view, "#unscanned-confirm")
-
       view |> element("#confirm-pending-shipper") |> render_click()
 
-      refute has_element?(view, "#serial-confirm-form")
+      refute has_element?(view, "#confirm-pending-shipper")
       assert has_element?(view, "#delivery-shipper-1", "SN10001")
       assert has_element?(view, "#delivery-shipper-1", "SN10002")
       refute has_element?(view, "#delivery-shipper-1", "SN10003")

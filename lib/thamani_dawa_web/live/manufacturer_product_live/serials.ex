@@ -26,6 +26,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      |> assign(:serial_page, nil)
      |> assign(:batch_shippers, [])
      |> assign(:serial_shippers, %{})
+     |> assign(:batch_fully_packed, false)
      |> reset_pack()}
   end
 
@@ -72,7 +73,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           serial_page: nil,
           serials_error: nil,
           batch_shippers: [],
-          serial_shippers: %{}
+          serial_shippers: %{},
+          batch_fully_packed: false
         )
 
       batch ->
@@ -85,7 +87,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             batch.batch_no
           )
 
-        socket = assign(socket, batch_shippers: shippers, serial_shippers: by_serial)
+        socket =
+          assign(socket,
+            batch_shippers: shippers,
+            serial_shippers: by_serial,
+            batch_fully_packed: fully_packed?(result, by_serial)
+          )
 
         case result do
           {:ok, serials} ->
@@ -105,6 +112,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         end
     end
   end
+
+  # Every issued serial in the batch already sits in a shipper SSCC.
+  defp fully_packed?({:ok, [_ | _] = serials}, by_serial),
+    do: Enum.all?(serials, &Map.has_key?(by_serial, &1.serial))
+
+  defp fully_packed?(_result, _by_serial), do: false
 
   defp batch_serials(socket, batch_no) do
     case socket.assigns.serials_cache do
@@ -245,6 +258,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         {:noreply,
          socket
          |> assign(:pack_form, pack_form(Map.put(socket.assigns.pack_form.params, "to_gln", gln)))
+         |> assign(:pack_to_party, party)
          |> assign(:to_gln_query, "#{party.gln} · #{party.company}")
          |> assign(:to_gln_results, [])
          |> assign(:to_gln_search_status, :selected)}
@@ -256,13 +270,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       socket.assigns
 
     serials = Enum.filter(all, &MapSet.member?(selected, &1))
+    attrs = put_pack_parties(params, socket.assigns)
 
     case Manufacturing.pack_serials_into_shipper(
            org_id(socket),
            product,
            batch,
            serials,
-           params,
+           attrs,
            site_gln: current_site_gln(socket)
          ) do
       {:ok, shipper} ->
@@ -304,9 +319,29 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      socket |> assign(:to_gln_results, []) |> assign(:to_gln_search_status, :unavailable)}
   end
 
+  # Company/address for the label: the From facility from the org's sites,
+  # the To party from the GS1 directory result the user picked.
+  defp put_pack_parties(params, assigns) do
+    from = Enum.find(assigns.pack_facilities, &(&1.gln == params["from_gln"]))
+
+    to =
+      with %{gln: gln} = party <- assigns.pack_to_party,
+           ^gln <- params["to_gln"],
+           do: party,
+           else: (_ -> nil)
+
+    Map.merge(params, %{
+      "from_company_name" => from && from.name,
+      "from_address" => from && from.address,
+      "to_company_name" => to && to.company,
+      "to_address" => to && to.address
+    })
+  end
+
   defp reset_pack(socket) do
     socket
     |> assign(:to_gln_query, "")
+    |> assign(:pack_to_party, nil)
     |> assign(:to_gln_results, [])
     |> assign(:to_gln_search_status, :idle)
     |> assign(:pack_open, false)
@@ -448,6 +483,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                 <dt>Produced</dt><dd>{long_date(batch.production_date)}</dd>
               </div><div class="flex justify-between">
                 <dt>Expires</dt><dd>{long_date(batch.expiry_date)}</dd>
+              </div><div class="flex justify-between gap-3 pt-1">
+                <dt>Created at</dt><dd
+                  id={"serial-batch-created-at-#{dom_key(batch.batch_no)}"}
+                  class="text-right"
+                >
+                  {ThamaniDawaWeb.TimeFormat.datetime(batch.created_at)}
+                </dd>
               </div>
             </dl>
           </.link>
@@ -474,12 +516,19 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             </div>
             <div class="flex flex-wrap gap-2">
               <.button
-                :if={!@pack_open}
+                :if={!@pack_open and !@batch_fully_packed}
                 id="open-pack-serials"
                 type="button"
                 phx-click="open_pack"
                 phx-disable-with="Loading unpacked serials…"
               ><.icon name="hero-archive-box-arrow-down" class="size-4" /> Create shipper SSCC</.button>
+              <span
+                :if={@batch_fully_packed}
+                id="batch-fully-packed"
+                class="inline-flex items-center gap-1.5 rounded-full bg-thamani-lime/40 px-3 py-2 text-xs font-semibold text-thamani-forest"
+              >
+                <.icon name="hero-check-badge" class="size-4" /> All serials packed
+              </span>
               <.button
                 id="export-batch-serials"
                 href={

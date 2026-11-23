@@ -4,6 +4,7 @@ defmodule ThamaniDawaWeb.Money do
   def ksh(nil), do: ksh(Decimal.new(0))
   def ksh(amount) when is_integer(amount), do: ksh(Decimal.new(amount))
   def ksh(amount) when is_float(amount), do: ksh(Decimal.from_float(amount))
+
   def ksh(amount) when is_binary(amount) do
     case Decimal.parse(String.replace(amount, ",", "")) do
       {%Decimal{} = decimal, _rest} -> ksh(decimal)

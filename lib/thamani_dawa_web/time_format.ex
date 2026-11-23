@@ -21,6 +21,12 @@ defmodule ThamaniDawaWeb.TimeFormat do
   def date(value), do: value |> to_eat() |> Calendar.strftime("%-d %b %Y")
 
   @doc "Shifts a UTC timestamp to EAT wall-clock time."
-  def to_eat(%DateTime{} = dt), do: dt |> DateTime.shift_zone!("Etc/UTC") |> DateTime.to_naive() |> NaiveDateTime.add(@eat_offset)
+  def to_eat(%DateTime{} = dt),
+    do:
+      dt
+      |> DateTime.shift_zone!("Etc/UTC")
+      |> DateTime.to_naive()
+      |> NaiveDateTime.add(@eat_offset)
+
   def to_eat(%NaiveDateTime{} = dt), do: NaiveDateTime.add(dt, @eat_offset)
 end

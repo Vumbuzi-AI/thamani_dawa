@@ -18,7 +18,12 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   @filter_options %{
     urgency: [{"", "Any"}, {"routine", "Routine"}, {"urgent", "Urgent"}, {"stat", "Stat"}],
     paid: [{"", "Any"}, {"paid", "Paid"}, {"unpaid", "Unpaid"}],
-    created: [{"", "Any time"}, {"today", "Today"}, {"7d", "Last 7 days"}, {"30d", "Last 30 days"}]
+    created: [
+      {"", "Any time"},
+      {"today", "Today"},
+      {"7d", "Last 7 days"},
+      {"30d", "Last 30 days"}
+    ]
   }
 
   def mount(_params, _session, socket) do
@@ -274,7 +279,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
     |> assign(:total_orders, total)
     |> assign(:page, page)
     |> assign(:last_page, last_page)
-    |> assign(:lab_orders, lab_orders |> Enum.drop((page - 1) * @page_size) |> Enum.take(@page_size))
+    |> assign(
+      :lab_orders,
+      lab_orders |> Enum.drop((page - 1) * @page_size) |> Enum.take(@page_size)
+    )
   end
 
   defp set_filter(socket, key, value) do
@@ -351,11 +359,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
     Enum.find(patients, &(to_string(&1.id) == id))
   end
 
-  defp modal_subtitle(1, _patient, _count), do: "Choose the patient, add tests, then confirm details."
+  defp modal_subtitle(1, _patient, _count),
+    do: "Choose the patient, add tests, then confirm details."
+
   defp modal_subtitle(2, nil, _count), do: "Add the tests requested."
   defp modal_subtitle(2, patient, _count), do: "#{patient.full_name} · add the tests requested."
   defp modal_subtitle(3, nil, count), do: "#{count} #{tests_word(count)}."
-  defp modal_subtitle(3, patient, count), do: "#{patient.full_name} · #{count} #{tests_word(count)}."
+
+  defp modal_subtitle(3, patient, count),
+    do: "#{patient.full_name} · #{count} #{tests_word(count)}."
 
   defp category_name(%{category: %{name: name}}), do: name
   defp category_name(_test), do: nil
@@ -431,7 +443,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
       </:tools>
 
       <section class="td-recipe td-list-page">
-        <.td_page_header title="Lab orders" subtitle="Search, filter, and manage lab orders at your site." />
+        <.td_page_header
+          title="Lab orders"
+          subtitle="Search, filter, and manage lab orders at your site."
+        />
 
         <nav class="td-tabs" aria-label="Order status">
           <button
@@ -453,7 +468,11 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           >
             <span>{label}</span>
             <span class="td-count">
-              {Map.get(@status_counts, if(value == "", do: :all, else: String.to_existing_atom(value)), 0)}
+              {Map.get(
+                @status_counts,
+                if(value == "", do: :all, else: String.to_existing_atom(value)),
+                0
+              )}
             </span>
           </button>
         </nav>
@@ -473,21 +492,49 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
               <kbd>/</kbd>
             </label>
           </form>
-          <.filter_chip field={:urgency} label="Urgency" value={@filters.urgency} options={@filter_options.urgency} />
-          <.filter_chip field={:paid} label="Paid" value={@filters.paid} options={@filter_options.paid} />
-          <.filter_chip field={:created} label="Created" value={@filters.created} options={@filter_options.created} />
+          <.filter_chip
+            field={:urgency}
+            label="Urgency"
+            value={@filters.urgency}
+            options={@filter_options.urgency}
+          />
+          <.filter_chip
+            field={:paid}
+            label="Paid"
+            value={@filters.paid}
+            options={@filter_options.paid}
+          />
+          <.filter_chip
+            field={:created}
+            label="Created"
+            value={@filters.created}
+            options={@filter_options.created}
+          />
         </div>
 
         <div :if={@lab_orders == []} class="td-pad td-empty-wrap">
           <div id="lab-orders-empty" class="td-card td-empty-card">
             <%= if filtered?(@search, @filters) do %>
               <p class="td-empty-title">No lab orders match</p>
-              <p class="td-note">Try another status or clear the search to see every order at your site.</p>
-              <.td_button id="clear-lab-order-filters" label="Clear filters" phx-click="clear_filters" />
+              <p class="td-note">
+                Try another status or clear the search to see every order at your site.
+              </p>
+              <.td_button
+                id="clear-lab-order-filters"
+                label="Clear filters"
+                phx-click="clear_filters"
+              />
             <% else %>
               <p class="td-empty-title">No lab orders yet</p>
-              <p class="td-note">Orders created at your site appear here. Start with a patient and the tests they need.</p>
-              <.td_button id="empty-new-lab-order" variant="primary" label="New order" patch={~p"/lab/orders/new"}>
+              <p class="td-note">
+                Orders created at your site appear here. Start with a patient and the tests they need.
+              </p>
+              <.td_button
+                id="empty-new-lab-order"
+                variant="primary"
+                label="New order"
+                patch={~p"/lab/orders/new"}
+              >
                 <:icon><.td_icon name="plus" /></:icon>
               </.td_button>
             <% end %>
@@ -515,13 +562,20 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                 <td><span class="td-mono">{LabOrders.reference(lab_order)}</span></td>
                 <td>
                   <span class="td-person">
-                    <.td_orb seed={patient_name(@patient_by_visit_id, lab_order.patient_visit_id)} size={20} />
+                    <.td_orb
+                      seed={patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}
+                      size={20}
+                    />
                     <span>{patient_name(@patient_by_visit_id, lab_order.patient_visit_id)}</span>
                   </span>
                 </td>
                 <td><.status_badge status={lab_order.status} /></td>
                 <td>
-                  <.td_badge :if={lab_order.urgency in ["urgent", "stat"]} tone="danger" label={Phoenix.Naming.humanize(lab_order.urgency)} />
+                  <.td_badge
+                    :if={lab_order.urgency in ["urgent", "stat"]}
+                    tone="danger"
+                    label={Phoenix.Naming.humanize(lab_order.urgency)}
+                  />
                   <span :if={lab_order.urgency not in ["urgent", "stat"]} class="td-muted">
                     {Phoenix.Naming.humanize(lab_order.urgency || "routine")}
                   </span>
@@ -641,9 +695,18 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                   <.td_key_value label="GSRN" value={patient.gsrn || "—"} mono />
                   <.td_key_value
                     label="Date of birth"
-                    value={if patient.date_of_birth, do: Calendar.strftime(patient.date_of_birth, "%d %b %Y"), else: "—"}
+                    value={
+                      if patient.date_of_birth,
+                        do: Calendar.strftime(patient.date_of_birth, "%d %b %Y"),
+                        else: "—"
+                    }
                   />
-                  <.td_key_value label="Gender" value={if patient.gender, do: String.capitalize(to_string(patient.gender)), else: "—"} />
+                  <.td_key_value
+                    label="Gender"
+                    value={
+                      if patient.gender, do: String.capitalize(to_string(patient.gender)), else: "—"
+                    }
+                  />
                 </div>
               </div>
             </div>
@@ -749,7 +812,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
             <div class="td-segmented is-radio" role="radiogroup" aria-label="Urgency">
               <label
                 :for={u <- @urgencies}
-                class={["td-segment", to_string(@header_form[:urgency].value || "routine") == u && "is-active"]}
+                class={[
+                  "td-segment",
+                  to_string(@header_form[:urgency].value || "routine") == u && "is-active"
+                ]}
               >
                 <input
                   type="radio"
@@ -775,7 +841,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                 type="checkbox"
                 name="lab_order[is_referral]"
                 value="true"
-                checked={Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_referral].value)}
+                checked={
+                  Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_referral].value)
+                }
               />
               <span>Referred from another facility</span>
             </label>
@@ -807,7 +875,9 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                   type="checkbox"
                   name="lab_order[has_paid]"
                   value="true"
-                  checked={Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:has_paid].value)}
+                  checked={
+                    Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:has_paid].value)
+                  }
                 />
                 <span>Paid</span>
               </label>

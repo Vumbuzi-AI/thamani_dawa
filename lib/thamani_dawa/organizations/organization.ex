@@ -32,7 +32,7 @@ defmodule ThamaniDawa.Organizations.Organization do
 
     field :epcis_submission_mode, Ecto.Enum,
       values: [:automatic, :manual],
-      default: :manual
+      default: :automatic
 
     field :epcis_distributor_api_key, ThamaniDawa.Encrypted.Binary
     field :epcis_distributor_api_key_last4, :string

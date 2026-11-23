@@ -57,10 +57,26 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
     {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
 
     assert has_element?(view, "#epcis-reporting-controls")
-    assert has_element?(view, "#epcis-mode-manual[aria-pressed='true']")
+    assert has_element?(view, "#epcis-mode-automatic[aria-pressed='true']")
     assert has_element?(view, "#epcis-send-now[disabled]")
     refute has_element?(view, "#epcis-api-key-settings")
     assert has_element?(view, "#epcis-api-keys-link", "API keys")
+  end
+
+  test "refuses to send events while no TNT API key is saved", %{
+    conn: conn,
+    distributor: distributor
+  } do
+    org = ThamaniDawa.Organizations.get_organization!(distributor.organization_id)
+    {:ok, _} = ThamaniDawa.Organizations.update_epcis_submission_mode(org, "manual")
+    pending = insert_event(distributor.organization_id, "pending")
+
+    {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
+
+    assert has_element?(view, "#epcis-send-now[disabled]")
+    view |> element("#send-epcis-event-#{pending.id}") |> render_click()
+
+    assert ThamaniDawa.Repo.reload!(pending).status == "pending"
   end
 
   test "flags a halted queue when a rejected event blocks the org", %{

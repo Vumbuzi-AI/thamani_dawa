@@ -93,12 +93,17 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
         row_id={fn shipper -> "packing-shipper-#{shipper.id}" end}
       >
         <:col :let={shipper} label="Shipper">{shipper.name}</:col>
-        <:col :let={shipper} label="SSCC"><span class="td-kv-value is-mono">{shipper.sscc}</span></:col>
+        <:col :let={shipper} label="SSCC">
+          <span class="td-kv-value is-mono">{shipper.sscc}</span>
+        </:col>
         <:col :let={shipper} label="Product">{shipper.product_name || "Packed trade items"}</:col>
         <:col :let={shipper} label="Batch">{shipper.batch || "Mixed"}</:col>
         <:col :let={shipper} label="Units">{length(shipper.items)}</:col>
         <:empty>
-          <.td_empty title="Nothing packed yet" hint="A mobile user scans units into shippers before this list has lines." />
+          <.td_empty
+            title="Nothing packed yet"
+            hint="A mobile user scans units into shippers before this list has lines."
+          />
         </:empty>
       </.td_data_table>
     </Layouts.manufacturer_shell>

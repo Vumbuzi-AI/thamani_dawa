@@ -34,11 +34,11 @@ defmodule ThamaniDawaWeb.ManufacturerDashboardLive do
     >
       <:tools>
         <.td_button
-          id="manufacturer-new-product"
+          id="manufacturer-view-products"
           variant="primary"
-          label="Add product"
-          glyph="plus"
-          navigate={~p"/manufacturer/products/new"}
+          label="View products"
+          glyph="package"
+          navigate={~p"/manufacturer/products"}
         />
       </:tools>
 

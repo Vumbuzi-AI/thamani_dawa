@@ -291,6 +291,15 @@ defmodule ThamaniDawa.Organizations do
     organization
     |> Organization.epcis_submission_mode_changeset(%{epcis_submission_mode: mode})
     |> Repo.update()
+    |> case do
+      {:ok, %Organization{epcis_submission_mode: :automatic} = updated} ->
+        # Flush anything that queued up while the org was on manual.
+        ThamaniDawa.Epcis.SubmissionWorker.enqueue_now(updated.id)
+        {:ok, updated}
+
+      other ->
+        other
+    end
   end
 
   @doc """
@@ -303,6 +312,45 @@ defmodule ThamaniDawa.Organizations do
     organization
     |> Organization.epcis_api_key_changeset(tier, key)
     |> Repo.update()
+    |> case do
+      {:ok, updated} = ok ->
+        if epcis_api_key_configured?(updated, tier),
+          do: release_key_blocked_events(updated, tier)
+
+        ok
+
+      error ->
+        error
+    end
+  end
+
+  @doc "Whether this org has its own PPB TNT API key saved for `tier` — nothing is sent without one."
+  def epcis_api_key_configured?(%Organization{} = organization, tier) do
+    key =
+      case tier do
+        "distributor" -> organization.epcis_distributor_api_key
+        "manufacturer" -> organization.epcis_manufacturer_api_key
+        _facility -> organization.epcis_facility_api_key
+      end
+
+    is_binary(key) and key != ""
+  end
+
+  # Events blocked only because the key was missing go back to the queue now
+  # that one exists; the worker then sends them according to the org's mode.
+  defp release_key_blocked_events(organization, tier) do
+    from(e in ThamaniDawa.Epcis.OutboxEvent,
+      where: e.organization_id == ^organization.id,
+      where: e.participant_tier == ^tier and e.status == "blocked",
+      where: like(e.blocked_reason, "No EPCIS % API key configured%")
+    )
+    |> Repo.update_all(
+      set: [status: "pending", blocked_reason: nil, attempts: 0, next_attempt_at: nil]
+    )
+
+    %{organization_id: organization.id, forced: false}
+    |> ThamaniDawa.Epcis.SubmissionWorker.new()
+    |> Oban.insert!()
   end
 
   @doc "Clears an org's own PPB API key for one tier. EPCIS submissions block until a new one is added."

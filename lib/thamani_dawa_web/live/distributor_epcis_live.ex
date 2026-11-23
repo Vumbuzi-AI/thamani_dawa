@@ -87,8 +87,14 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
     organization_id = socket.assigns.current_scope.organization_id
     event = Outbox.get_event!(organization_id, id)
 
-    case event.status do
-      "pending" ->
+    cond do
+      not Organizations.epcis_api_key_configured?(
+        socket.assigns.organization,
+        event.participant_tier
+      ) ->
+        {:noreply, put_flash(socket, :error, missing_key_message())}
+
+      event.status == "pending" ->
         case SubmissionWorker.submit_now(event) do
           {status, _updated} when status in [:accepted, :duplicate] ->
             {:noreply,
@@ -118,7 +124,7 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
              |> put_flash(:error, updated.blocked_reason)}
         end
 
-      _ ->
+      true ->
         {:noreply, put_flash(socket, :error, "Only pending events can be sent individually.")}
     end
   end
@@ -149,20 +155,28 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
     organization_id = socket.assigns.current_scope.organization_id
     pending = socket.assigns.status_counts["pending"]
 
-    if pending > 0 do
-      SubmissionWorker.enqueue_now(organization_id)
+    cond do
+      socket.assigns.tnt_keys_missing? ->
+        {:noreply, put_flash(socket, :error, missing_key_message())}
 
-      {:noreply,
-       socket
-       |> reload()
-       |> put_flash(
-         :info,
-         "Sending #{pending} pending event#{if pending == 1, do: "", else: "s"} to PPB now."
-       )}
-    else
-      {:noreply, put_flash(socket, :error, "There are no pending events to send.")}
+      pending > 0 ->
+        SubmissionWorker.enqueue_now(organization_id)
+
+        {:noreply,
+         socket
+         |> reload()
+         |> put_flash(
+           :info,
+           "Sending #{pending} pending event#{if pending == 1, do: "", else: "s"} to PPB now."
+         )}
+
+      true ->
+        {:noreply, put_flash(socket, :error, "There are no pending events to send.")}
     end
   end
+
+  defp missing_key_message,
+    do: "Add your PPB TNT API key before sending EPCIS events."
 
   defp key_last4(organization, "distributor"), do: organization.epcis_distributor_api_key_last4
   defp key_last4(organization, "facility"), do: organization.epcis_facility_api_key_last4
@@ -611,7 +625,10 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
             id="epcis-send-now"
             variant="primary"
             phx-click="send_now"
-            disabled={@organization.epcis_submission_mode != :manual or @pending_count == 0}
+            disabled={
+              @organization.epcis_submission_mode != :manual or @pending_count == 0 or
+                @tnt_keys_missing?
+            }
             data-confirm={"Send #{@pending_count} pending event(s) to the PPB Hub now?"}
             class="w-full sm:w-auto"
           >

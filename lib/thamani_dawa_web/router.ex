@@ -170,6 +170,10 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/team/new", TeamLive.Index, :new
       live "/org/team/:id/edit", TeamLive.Index, :edit
 
+      live "/org/mobile-users", OrgMobileUserLive.Index, :index
+      live "/org/mobile-users/new", OrgMobileUserLive.Index, :new
+      live "/org/mobile-users/:id/edit", OrgMobileUserLive.Index, :edit
+
       live "/org/sites", SiteLive.Index, :index
       live "/org/sites/new", SiteLive.Index, :new
       live "/org/sites/:id", SiteLive.Show, :show
@@ -368,7 +372,6 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer", ManufacturerDashboardLive, :index
 
       live "/manufacturer/products", ManufacturerProductLive.Index, :index
-      live "/manufacturer/products/new", ManufacturerProductLive.Index, :new
       live "/manufacturer/products/:gtin/serials", ManufacturerProductLive.Serials, :index
 
       live "/manufacturer/products/:gtin/serials/new",
@@ -382,11 +385,19 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer/inventory", ManufacturerInventoryLive, :index
       live "/manufacturer/shipments", ManufacturerShipmentLive.List, :index
       live "/manufacturer/shipments/new", ManufacturerShipmentLive.Form, :new
-      live "/manufacturer/shipments/:id/packing-list", ManufacturerShipmentLive.Review, :packing_list
+
+      live "/manufacturer/shipments/:id/packing-list",
+           ManufacturerShipmentLive.Review,
+           :packing_list
+
       live "/manufacturer/shipments/:id", ManufacturerShipmentLive.Review, :show
 
       live "/manufacturer/aggregations", ManufacturerAggregationLive.Dashboard, :index
       live "/manufacturer/aggregations/new", ManufacturerAggregationLive.Wizard, :new
+
+      live "/manufacturer/aggregations/pallets/new",
+           ManufacturerAggregationLive.PalletNew,
+           :new
 
       live "/manufacturer/aggregations/pallets/:pallet_id/ssccs/new",
            ManufacturerAggregationLive.Wizard,

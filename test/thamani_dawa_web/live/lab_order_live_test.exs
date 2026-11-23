@@ -569,7 +569,9 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
 
       # Doop AZQrJLFBy5: pick a test, Add test commits it, then pick the next.
       view
-      |> form("#new-lab-order-form", %{"tests" => %{"0" => %{"lab_test_id" => to_string(ctx.lab_test.id)}}})
+      |> form("#new-lab-order-form", %{
+        "tests" => %{"0" => %{"lab_test_id" => to_string(ctx.lab_test.id)}}
+      })
       |> render_change()
 
       view |> element("#add-lab-test") |> render_click()
@@ -582,7 +584,9 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
         |> render_change()
 
       expected = ctx.lab_test.price |> Decimal.add(second_test.price) |> Decimal.round(0)
-      assert html =~ "KSh #{Decimal.to_integer(expected)}" or html =~ "KSh #{Decimal.to_string(expected)}"
+
+      assert html =~ "KSh #{Decimal.to_integer(expected)}" or
+               html =~ "KSh #{Decimal.to_string(expected)}"
     end
 
     test "renders test item inputs inline without Done or Edit buttons", ctx do
@@ -678,7 +682,11 @@ defmodule ThamaniDawaWeb.LabOrderLiveTest do
       assert html =~ "Payment KSh 1,450"
       assert has_element?(lv, "#transaction-order-link[href='/lab/orders/#{ctx.lab_order.id}']")
       assert has_element?(lv, "#transaction-refund[disabled]")
-      assert has_element?(lv, "#print-receipt-button[href='/lab/transactions/#{ctx.payment.id}/receipt']")
+
+      assert has_element?(
+               lv,
+               "#print-receipt-button[href='/lab/transactions/#{ctx.payment.id}/receipt']"
+             )
     end
 
     test "renders the printable receipt", ctx do

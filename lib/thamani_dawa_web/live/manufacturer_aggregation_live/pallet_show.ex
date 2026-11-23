@@ -5,8 +5,19 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
 
   def mount(%{"id" => id}, _session, socket) do
     pallet = Manufacturing.get_pallet!(socket.assigns.current_scope.organization_id, id)
-    {:ok, socket |> assign(:page_title, "Pallet #{pallet.code}") |> assign(:pallet, pallet)}
+
+    {:ok,
+     socket
+     |> assign(:page_title, "Pallet #{pallet.code}")
+     |> assign(:pallet, pallet)
+     |> assign(
+       :total_serials,
+       Enum.sum(Enum.map(pallet.shipper_ssccs, &(&1.count_of_trade_items || 0)))
+     )}
   end
+
+  defp batch_label(sscc),
+    do: sscc.batch || Enum.map_join(sscc.batches, ", ", & &1.batch_no)
 
   def render(assigns) do
     ~H"""
@@ -16,74 +27,80 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
       current_path={~p"/manufacturer/aggregations"}
     >
       <.header icon="hero-archive-box" back={~p"/manufacturer/aggregations"}>
-        Pallet: {@pallet.code}
-        <:subtitle>Where this pallet ships from and to, and the shipper SSCCs on it.</:subtitle>
-        <:actions>
-          <.button
-            id="add-pallet-shipper"
-            variant="primary"
-            navigate={~p"/manufacturer/aggregations/pallets/#{@pallet.id}/ssccs/new"}
-          ><.icon name="hero-plus" class="size-4" /> Add shipper SSCC</.button>
-        </:actions>
+        <span class="font-mono">{@pallet.code}</span>
+        <:subtitle>
+          Pallet SSCC · {length(@pallet.shipper_ssccs)} shippers · {@total_serials} primary serials
+        </:subtitle>
       </.header>
-      <div class="grid gap-4 md:grid-cols-2">
-        <.party_card
-          title="From"
-          gln={@pallet.from_gln}
-          company={@pallet.from_company_name}
-          address={@pallet.from_address}
-          icon="hero-building-office-2"
-        />
-        <.party_card
-          title="To"
-          gln={@pallet.to_gln}
-          company={@pallet.to_company_name}
-          address={@pallet.to_address}
-          icon="hero-map-pin"
-        />
+
+      <div :if={@pallet.shipper_ssccs == []} id="pallet-shippers-empty">
+        <.blank_state icon="hero-cube-transparent" title="No shipper SSCCs on this pallet">
+          Shippers on this pallet were moved or shipped.
+        </.blank_state>
       </div>
-      <section id="pallet-shippers" class="mt-6 overflow-hidden rounded-2xl ff-surface-card">
-        <div class="border-b border-thamani-stone p-5 font-semibold text-thamani-forest">
-          {length(@pallet.shipper_ssccs)} shipper SSCCs
-        </div>
-        <div :if={@pallet.shipper_ssccs == []} class="p-8 text-center text-sm text-thamani-pewter">
-          No shipper SSCCs on this pallet yet.
-        </div>
-        <div class="divide-y divide-thamani-stone">
-          <.link
-            :for={sscc <- @pallet.shipper_ssccs}
-            id={"pallet-shipper-#{sscc.id}"}
-            navigate={~p"/manufacturer/aggregations/ssccs/#{sscc.id}"}
-            class="flex items-center justify-between p-5 hover:bg-thamani-lime/20"
-          >
-            <div>
-              <p class="font-mono text-sm font-semibold text-thamani-forest">{sscc.code}</p><p class="text-sm text-thamani-pewter">
-                GTIN {sscc.gtin || "Not added"} · {length(sscc.batches)} batches
+
+      <div id="pallet-shippers" class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <article
+          :for={sscc <- @pallet.shipper_ssccs}
+          id={"pallet-shipper-#{sscc.id}"}
+          class="flex flex-col rounded-2xl border border-thamani-stone bg-td-surface p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-td-hairline hover:shadow-md"
+        >
+          <div class="flex items-start gap-3">
+            <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
+              <.icon name="hero-qr-code" class="size-5" />
+            </span>
+            <div class="min-w-0">
+              <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
+                Shipper SSCC
               </p>
+              <p class="mt-1 truncate font-mono font-semibold text-thamani-forest">{sscc.code}</p>
             </div>
-            <.icon name="hero-chevron-right" class="size-5 text-thamani-pewter" />
-          </.link>
-        </div>
-      </section>
+          </div>
+
+          <dl class="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
+            <div>
+              <dt class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">Batch</dt>
+              <dd class="mt-1 font-semibold text-thamani-forest">{batch_label(sscc)}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">GTIN</dt>
+              <dd class="mt-1 truncate font-mono text-thamani-forest">{sscc.gtin || "—"}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">Produced</dt>
+              <dd class="mt-1 text-thamani-forest">{sscc.production_date || "—"}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-bold uppercase tracking-wide text-thamani-pewter">Expires</dt>
+              <dd class="mt-1 text-thamani-forest">{sscc.expiry_date || "—"}</dd>
+            </div>
+          </dl>
+
+          <div class="mt-5">
+            <span class="rounded-full bg-thamani-lime/30 px-3 py-1.5 text-xs font-bold text-thamani-forest">
+              {sscc.count_of_trade_items || 0} Primary serials
+            </span>
+          </div>
+          <hr class="my-5 border-thamani-stone" />
+          <div class="mt-auto flex flex-wrap gap-2">
+            <.button
+              id={"pallet-shipper-#{sscc.id}-serials"}
+              navigate={~p"/manufacturer/sscc/#{sscc.id}/serials"}
+            ><.icon name="hero-list-bullet" class="size-4" /> Serials</.button>
+            <.button
+              id={"pallet-shipper-#{sscc.id}-label"}
+              navigate={~p"/manufacturer/sscc/#{sscc.id}/label"}
+              variant="ghost"
+            ><.icon name="hero-qr-code" class="size-4" /> Label</.button>
+            <.button
+              id={"pallet-shipper-#{sscc.id}-export"}
+              href={~p"/manufacturer/sscc/#{sscc.id}/export"}
+              variant="ghost"
+            ><.icon name="hero-arrow-down-tray" class="size-4" /> Export CSV</.button>
+          </div>
+        </article>
+      </div>
     </Layouts.manufacturer_shell>
-    """
-  end
-
-  attr :title, :string, required: true
-  attr :gln, :string, default: nil
-  attr :company, :string, default: nil
-  attr :address, :string, default: nil
-  attr :icon, :string, required: true
-
-  defp party_card(assigns) do
-    ~H"""
-    <article class="rounded-2xl ff-surface-card p-5">
-      <div class="flex items-center gap-2 text-sm font-semibold text-thamani-forest">
-        <.icon name={@icon} class="size-5" /> {@title}
-      </div><p class="mt-3 font-medium">{@company}</p><p class="text-sm text-thamani-pewter">
-        GLN {@gln}
-      </p><p class="mt-1 text-sm text-thamani-pewter">{@address}</p>
-    </article>
     """
   end
 end

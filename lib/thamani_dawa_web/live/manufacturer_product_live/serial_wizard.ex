@@ -32,7 +32,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
       "from_address" => site.address || "",
       "to_gln" => "",
       "to_company_name" => "",
-      "to_address" => ""
+      "to_address" => "",
+      "order_number" => ""
     }
   end
 
@@ -191,13 +192,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
          ) do
       {:ok, %{serials: serials}} ->
         {:noreply,
-         assign(socket,
-           submitting: false,
-           issued: %{
-             kind: "stock",
-             count: length(serials),
-             batch: params["batch_no"]
-           }
+         socket
+         |> assign(:submitting, false)
+         |> put_flash(
+           :info,
+           "#{length(serials)} primary serial#{if length(serials) == 1, do: "", else: "s"} generated."
+         )
+         |> push_navigate(
+           to:
+             ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials?#{%{batch: params["batch_no"]}}"
          )}
 
       {:error, reason} ->
@@ -223,15 +226,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
          ) do
       {:ok, %{serials: serials, shippers: shippers}} ->
         {:noreply,
-         assign(socket,
-           submitting: false,
-           issued: %{
-             kind: "order",
-             count: length(serials),
-             shippers: length(shippers),
-             batch: params["batch_no"],
-             destination: params["to_company_name"]
-           }
+         socket
+         |> assign(:submitting, false)
+         |> put_flash(
+           :info,
+           "#{length(serials)} primary serial#{if length(serials) == 1, do: "", else: "s"} and #{length(shippers)} shipper SSCC#{if length(shippers) == 1, do: "", else: "s"} generated."
+         )
+         |> push_navigate(
+           to:
+             ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials?#{%{batch: params["batch_no"]}}"
          )}
 
       {:error, reason} ->
@@ -241,7 +244,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
   end
 
   defp party_fields,
-    do: ~w(from_gln from_company_name from_address to_gln to_company_name to_address)
+    do: ~w(from_gln from_company_name from_address to_gln to_company_name to_address order_number)
 
   defp sync_from_facility(params, facilities) do
     case Enum.find(facilities, &(&1.gln == params["from_gln"])) do
@@ -297,6 +300,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
     |> required_error(params, :to_gln, "To GLN")
     |> required_error(params, :to_company_name, "To company name")
     |> required_error(params, :to_address, "To address")
+    |> required_error(params, :order_number, "Order number")
   end
 
   defp mode_errors(errors, _params, _mode), do: errors
@@ -604,6 +608,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                 <.td_input field={@form[:to_company_name]} label="To company name" readonly required />
                 <.td_input field={@form[:to_address]} label="To address" readonly required />
               </div>
+              <.td_input
+                field={@form[:order_number]}
+                id="serial-generation-order-number"
+                label="Order number"
+                placeholder="e.g. PO-2026-0142"
+                autocomplete="off"
+                required
+              />
               <div class="td-header-actions">
                 <.td_button
                   id="serial-wizard-prev"
