@@ -997,6 +997,7 @@ defmodule ThamaniDawaWeb.Layouts do
       {"Account",
        [
          {"Billing", "credit-card", ~p"/distributor/billing"},
+         {"API keys", "key", ~p"/distributor/api-keys"},
          {"TNT reporting", "broadcast", ~p"/distributor/epcis"},
          {"Org settings", "gear", ~p"/distributor/settings"}
        ]}

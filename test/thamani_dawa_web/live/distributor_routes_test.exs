@@ -64,7 +64,8 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
 
     test "non-admin staff can still reach day-to-day operations", %{conn: conn} do
       for path <- [~p"/distributor", ~p"/distributor/shipments", ~p"/distributor/products"] do
-        assert {:ok, _view, _html} = live(conn, path)
+        assert {:ok, view, _html} = live(conn, path)
+        refute has_element?(view, ~s(a[href="/distributor/api-keys"]))
       end
     end
 
@@ -94,6 +95,9 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
         if path == ~p"/distributor/receiving" do
           assert has_element?(view, ~s(a[href="/distributor/receiving"][aria-current="page"]))
         end
+
+        # Admins keep API keys in the sidebar (Gap pass 4).
+        assert has_element?(view, ~s(a[href="/distributor/api-keys"]))
       end
     end
 
