@@ -177,11 +177,17 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
 
       {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
 
-      assert has_element?(lv, "#btn-toggle-active-user-#{staff.id}", "Deactivate")
+      assert has_element?(lv, "#btn-prompt-deactivate-row-#{staff.id}", "Deactivate")
+      refute has_element?(lv, "#deactivate-confirm")
+
+      html = lv |> element("#btn-prompt-deactivate-row-#{staff.id}") |> render_click()
+      assert has_element?(lv, "#deactivate-confirm")
+      assert html =~ "Deactivate this account?"
 
       html = lv |> element("#btn-toggle-active-user-#{staff.id}") |> render_click()
 
       assert html =~ "Amina Tester deactivated."
+      refute has_element?(lv, "#deactivate-confirm")
       assert has_element?(lv, "#btn-toggle-active-user-#{staff.id}", "Reactivate")
       assert %{is_active: false} = ThamaniDawa.Accounts.get_user!(admin.organization_id, staff.id)
 

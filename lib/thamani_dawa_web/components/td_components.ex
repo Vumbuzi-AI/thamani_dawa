@@ -328,7 +328,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :tone, :string, values: ~w(default danger), default: "default"
   attr :label, :string, required: true
   attr :icon, :string, default: nil
-  attr :rest, :global, include: ~w(id type href navigate patch method phx-click)
+  attr :rest, :global, include: ~w(id type href navigate patch method phx-click phx-value-id)
 
   def td_menu_item(%{rest: rest} = assigns) do
     class = ["td-menu-item", assigns.tone == "danger" && "is-danger"]
