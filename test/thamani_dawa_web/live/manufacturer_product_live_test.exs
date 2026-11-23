@@ -93,16 +93,19 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     refute has_element?(lv, ~s([name="serial_generation[shipper_quantity]"]))
     refute has_element?(lv, ~s([name="serial_generation[from_gln]"]))
 
-    lv
-    |> form("#manufacturer-serial-generation-form", %{
-      "serial_generation" => %{
-        "batch_no" => "LOT-2026-11",
-        "production_date" => "2026-11-20",
-        "expiry_date" => "2027-11-20",
-        "primary_quantity" => "5"
-      }
-    })
-    |> render_submit()
+    expected_path = "/manufacturer/products/#{product.gtin}/serials?batch=LOT-2026-11"
+
+    assert {:error, {:live_redirect, %{to: ^expected_path}}} =
+             lv
+             |> form("#manufacturer-serial-generation-form", %{
+               "serial_generation" => %{
+                 "batch_no" => "LOT-2026-11",
+                 "production_date" => "2026-11-20",
+                 "expiry_date" => "2027-11-20",
+                 "primary_quantity" => "5"
+               }
+             })
+             |> render_submit()
 
     [{batch, 5}] = Manufacturing.list_batches(organization.id, product.id)
     assert [serial | _] = Manufacturing.list_serials(organization.id, batch.id)
@@ -280,17 +283,20 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
              ~s(input[name="serial_generation[to_address]"][value="#{site.address}"][readonly])
            )
 
-    lv
-    |> form("#manufacturer-serial-generation-form", %{
-      "serial_generation" => %{
-        "from_gln" => other_facility.gln,
-        "to_gln" => site.gln,
-        "to_company_name" => "Untrusted submitted name",
-        "to_address" => "Untrusted submitted address",
-        "order_number" => "PO-2026-0142"
-      }
-    })
-    |> render_submit()
+    expected_path = "/manufacturer/products/#{product.gtin}/serials?batch=LOT-2026-ORDER"
+
+    assert {:error, {:live_redirect, %{to: ^expected_path}}} =
+             lv
+             |> form("#manufacturer-serial-generation-form", %{
+               "serial_generation" => %{
+                 "from_gln" => other_facility.gln,
+                 "to_gln" => site.gln,
+                 "to_company_name" => "Untrusted submitted name",
+                 "to_address" => "Untrusted submitted address",
+                 "order_number" => "PO-2026-0142"
+               }
+             })
+             |> render_submit()
 
     [{batch, 4}] = Manufacturing.list_batches(organization.id, product.id)
     groups = Manufacturing.list_sscc_groups(organization.id, product.id)

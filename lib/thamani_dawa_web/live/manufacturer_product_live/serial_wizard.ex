@@ -192,13 +192,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
          ) do
       {:ok, %{serials: serials}} ->
         {:noreply,
-         assign(socket,
-           submitting: false,
-           issued: %{
-             kind: "stock",
-             count: length(serials),
-             batch: params["batch_no"]
-           }
+         socket
+         |> assign(:submitting, false)
+         |> put_flash(
+           :info,
+           "#{length(serials)} primary serial#{if length(serials) == 1, do: "", else: "s"} generated."
+         )
+         |> push_navigate(
+           to:
+             ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials?#{%{batch: params["batch_no"]}}"
          )}
 
       {:error, reason} ->
@@ -224,15 +226,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
          ) do
       {:ok, %{serials: serials, shippers: shippers}} ->
         {:noreply,
-         assign(socket,
-           submitting: false,
-           issued: %{
-             kind: "order",
-             count: length(serials),
-             shippers: length(shippers),
-             batch: params["batch_no"],
-             destination: params["to_company_name"]
-           }
+         socket
+         |> assign(:submitting, false)
+         |> put_flash(
+           :info,
+           "#{length(serials)} primary serial#{if length(serials) == 1, do: "", else: "s"} and #{length(shippers)} shipper SSCC#{if length(shippers) == 1, do: "", else: "s"} generated."
+         )
+         |> push_navigate(
+           to:
+             ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials?#{%{batch: params["batch_no"]}}"
          )}
 
       {:error, reason} ->
