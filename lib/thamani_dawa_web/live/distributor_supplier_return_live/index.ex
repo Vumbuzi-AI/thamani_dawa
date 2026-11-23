@@ -32,9 +32,11 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
      |> assign(:return_count, 0)}
   end
 
-  def handle_params(_params, _url, socket) do
+  def handle_params(params, _url, socket) do
     {:noreply,
      socket
+     |> assign(:status, if(params["status"] in ~w(draft pending approved rejected), do: params["status"], else: ""))
+     |> assign(:search, params["search"] || "")
      |> apply_action(socket.assigns.live_action)
      |> reload_returns()}
   end
@@ -66,6 +68,9 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
   defp apply_action(socket, :index) do
     assign(socket, form: nil)
   end
+
+  def handle_event("search", %{"search" => search}, socket),
+    do: {:noreply, push_patch(socket, to: list_path(socket.assigns.status, search))}
 
   def handle_event("validate", %{"disposal" => attrs}, socket) do
     changeset =
@@ -141,10 +146,47 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
           InventoryDisposals.list_disposals_for_site(org_id, site_id, @kind, @inventory_type)
       end
 
+    counts = Enum.frequencies_by(returns, &Atom.to_string(&1.status))
+    query = socket.assigns.search |> String.trim() |> String.downcase()
+
+    shown =
+      returns
+      |> Enum.filter(&(socket.assigns.status == "" or Atom.to_string(&1.status) == socket.assigns.status))
+      |> Enum.filter(&(query == "" or return_matches?(&1, query)))
+
     socket
     |> assign(:return_count, length(returns))
-    |> stream(:supplier_returns, returns, reset: true)
+    |> assign(:status_counts, counts)
+    |> assign(:shown_count, length(shown))
+    |> stream(:supplier_returns, shown, reset: true)
   end
+
+  defp return_matches?(disposal, query) do
+    ["#{disposal.id}", "return ##{disposal.id}", return_supplier(disposal), disposal.reason, disposal.notes]
+    |> Enum.concat(Enum.map(disposal.items, &(&1.batch && &1.batch.batch_no)))
+    |> Enum.any?(&(is_binary(&1) and String.contains?(String.downcase(&1), query)))
+  end
+
+  defp return_supplier(%{items: items}) do
+    items
+    |> Enum.map(&(&1.batch && &1.batch.supplier && &1.batch.supplier.name))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> case do
+      [] -> "—"
+      [name] -> name
+      names -> "#{length(names)} suppliers"
+    end
+  end
+
+  defp return_units(%{items: items}), do: items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()
+
+  defp list_path(status, search) do
+    query = Enum.reject([{"status", status}, {"search", search}], fn {_k, v} -> v in [nil, ""] end)
+    "/distributor/returns" <> if(query == [], do: "", else: "?" <> URI.encode_query(query))
+  end
+
+  defp detail_path(d), do: ThamaniDawaWeb.ReturnTo.with_query(~p"/distributor/returns/#{d.id}", ~p"/distributor/returns")
 
   defp locked_site(sites, scope) do
     case Enum.find(sites, &(&1.id == scope.current_site_id)) do
@@ -167,8 +209,6 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
     end
   end
 
-  defp continue_label(:draft), do: "Continue editing"
-  defp continue_label(_status), do: "View"
 
   def render(assigns) do
     ~H"""
@@ -177,18 +217,16 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
       current_scope={@current_scope}
       current_path="/distributor/returns"
     >
-      <.header icon="hero-arrow-uturn-left">
-        Returns
-        <:subtitle>
-          Stock moving back to suppliers or in from customers, tracked through to approval.
-        </:subtitle>
-        <:actions :if={@return_count > 0}>
-          <.button id="new-supplier-return" variant="primary" patch={~p"/distributor/returns/new"}>
-            <.icon name="hero-plus" class="size-4" /> New supplier return
-          </.button>
-        </:actions>
-      </.header>
-
+      <div class="td-recipe td-list-page">
+        <.td_page_header
+          title="Supplier returns"
+          subtitle="Stock going back to a supplier. Your organisation admin approves each return before the stock leaves."
+        >
+          <:actions :if={@return_count > 0}>
+            <.td_button id="new-supplier-return" variant="primary" glyph="plus" patch={~p"/distributor/returns/new"} label="New supplier return" />
+          </:actions>
+        </.td_page_header>
+      </div>
       <.returns_tabs active={:supplier} />
 
       <.modal
@@ -228,45 +266,78 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
         </.form>
       </.modal>
 
-      <.table id="supplier-returns" rows={@streams.supplier_returns}>
-        <:col
-          :let={{_id, d}}
-          :if={is_nil(locked_site(@sites, @current_scope))}
-          label="Warehouse"
-        >
-          {site_name(@sites_by_id, d.site_id)}
-        </:col>
-        <:col :let={{_id, d}} label="Status">
-          <.status_badge status={d.status} />
-        </:col>
-        <:col :let={{_id, d}} label="Started">
-          {Calendar.strftime(d.inserted_at, "%d %b %Y")}
-        </:col>
-        <:action :let={{_id, d}}>
-          <.button variant="ghost" navigate={ThamaniDawaWeb.ReturnTo.with_query(~p"/distributor/returns/#{d.id}", ~p"/distributor/returns")} class="gap-2">
-            <.icon
-              name={if d.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
-              class="size-4"
-            />
-            {continue_label(d.status)}
-          </.button>
-        </:action>
-        <:empty_state>
-          <div class="td-empty-state">
-            <.td_icon name="arrow-u-up-left" class="td-empty-state-icon" />
-            <p class="td-empty-state-title">No supplier returns yet</p>
-            <p class="td-empty-state-text">Start one when stock is going back to the supplier.</p>
-            <div class="td-empty-state-actions">
-              <.td_button
-                id="new-supplier-return"
-                variant="primary"
-                label="Start a supplier return"
-                patch={~p"/distributor/returns/new"}
-              />
-            </div>
+      <div class="td-list-page" id="supplier-returns-page">
+        <nav class="td-tabs" aria-label="Supplier return status">
+          <.td_tab id="sr-tab-all" label="All" count={@return_count} active={@status == ""} patch={list_path("", @search)} />
+          <.td_tab
+            :for={{status, label} <- [{"draft", "Draft"}, {"pending", "Awaiting approval"}, {"approved", "Approved"}, {"rejected", "Rejected"}]}
+            id={"sr-tab-#{status}"}
+            label={label}
+            count={Map.get(@status_counts, status, 0)}
+            active={@status == status}
+            patch={list_path(status, @search)}
+          />
+        </nav>
+        <div class="td-toolbar">
+          <form id="supplier-return-search" phx-change="search" phx-submit="search" onsubmit="return false">
+            <label class="td-search">
+              <.td_icon name="magnifying-glass" />
+              <input type="search" name="search" value={@search} placeholder="Search return, supplier or batch" phx-debounce="250" autocomplete="off" />
+              <kbd>/</kbd>
+            </label>
+          </form>
+          <span class="flex-1"></span>
+        </div>
+
+        <div :if={@shown_count == 0} id="supplier-returns-empty" class="td-pad td-empty-wrap">
+          <div class="td-card td-empty-card">
+            <%= if @return_count == 0 do %>
+              <p class="td-empty-title">No supplier returns yet</p>
+              <p class="td-note">Start one when stock is going back to a supplier, for example after a recall or a damaged delivery.</p>
+              <.td_button id="new-supplier-return" variant="primary" label="New supplier return" patch={~p"/distributor/returns/new"} />
+            <% else %>
+              <p class="td-empty-title">Nothing matches</p>
+              <p class="td-note">Try a different search, or another tab.</p>
+              <.td_button id="supplier-returns-clear" patch={~p"/distributor/returns"} label="Clear filters" />
+            <% end %>
           </div>
-        </:empty_state>
-      </.table>
+        </div>
+
+        <div class="td-list-table" hidden={@shown_count == 0}>
+          <table class="td-rows">
+            <thead>
+              <tr>
+                <th>Return</th>
+                <th>Supplier</th>
+                <th :if={is_nil(locked_site(@sites, @current_scope))}>Warehouse</th>
+                <th>Status</th>
+                <th class="is-num">Batches</th>
+                <th class="is-num">Units</th>
+                <th>Created (EAT)</th>
+                <th>Created by</th>
+              </tr>
+            </thead>
+            <tbody id="supplier-returns" phx-update="stream">
+              <tr :for={{dom_id, d} <- @streams.supplier_returns} id={dom_id} class="is-link" phx-click={JS.navigate(detail_path(d))}>
+                <td>
+                  <.link navigate={detail_path(d)} id={"#{dom_id}-open"}><b>Return #{d.id}</b></.link>
+                  <span :if={d.reason} class="td-sub td-s12">{d.reason}</span>
+                </td>
+                <td>{return_supplier(d)}</td>
+                <td :if={is_nil(locked_site(@sites, @current_scope))}>{site_name(@sites_by_id, d.site_id)}</td>
+                <td><.status_badge status={d.status} /></td>
+                <td class="is-num">{length(d.items)}</td>
+                <td class="is-num">{return_units(d)}</td>
+                <td>{ThamaniDawaWeb.TimeFormat.datetime(d.inserted_at)}</td>
+                <td>
+                  <.td_person_cell :if={d.requested_by} name={d.requested_by.name || d.requested_by.email} seed={d.requested_by.id} />
+                  <span :if={!d.requested_by} class="td-sub">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </Layouts.distributor_shell>
     """
   end

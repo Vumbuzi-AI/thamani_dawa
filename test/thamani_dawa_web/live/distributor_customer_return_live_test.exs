@@ -83,6 +83,10 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLiveTest do
              })
              |> render_submit()
 
+    {:ok, list, _html} = live(conn, ~p"/distributor/customer-returns")
+    assert has_element?(list, "#customer-returns", "PO-RETURN-1")
+    assert has_element?(list, "#cr-tab-all")
+
     {:ok, view, _html} = live(conn, to)
 
     assert has_element?(view, "#customer-return-detail")
