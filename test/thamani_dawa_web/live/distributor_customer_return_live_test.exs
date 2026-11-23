@@ -86,6 +86,8 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLiveTest do
     {:ok, view, _html} = live(conn, to)
 
     assert has_element?(view, "#customer-return-detail")
+    assert has_element?(view, "#customer-return-back[href='/distributor/customer-returns']", "Back to Customer returns")
+    assert has_element?(view, "#customer-return-summary", "PO-RETURN-1")
     refute has_element?(view, "#customer-returns")
     assert has_element?(view, "#return-pack-#{item.id}")
     refute has_element?(view, "#add-return-item-form")

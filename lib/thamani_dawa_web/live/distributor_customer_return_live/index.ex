@@ -82,7 +82,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
     )
   end
 
-  defp apply_action(socket, :show, %{"id" => id}) do
+  defp apply_action(socket, :show, %{"id" => id} = params) do
     customer_return =
       CustomerReturns.get_return!(socket.assigns.current_scope.organization_id, id)
 
@@ -90,6 +90,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
     |> assign(:form, nil)
     |> assign(:detail_id, nil)
     |> assign(:customer_return, customer_return)
+    |> assign(:return_to, ThamaniDawaWeb.ReturnTo.path(params, ~p"/distributor/customer-returns"))
   end
 
   defp apply_action(socket, :index, _params) do
@@ -815,12 +816,13 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
   defp detail_return(_returns, nil), do: nil
   defp detail_return(returns, id), do: Enum.find(returns, &(&1.id == id))
 
-  defp open_return(%{status: :completed} = customer_return) do
-    JS.push("open_detail", value: %{id: customer_return.id})
-  end
-
   defp open_return(customer_return) do
-    JS.navigate(~p"/distributor/customer-returns/#{customer_return.id}")
+    JS.navigate(
+      ThamaniDawaWeb.ReturnTo.with_query(
+        ~p"/distributor/customer-returns/#{customer_return.id}",
+        ~p"/distributor/customer-returns"
+      )
+    )
   end
 
   defp reason_label(nil), do: "—"
@@ -1096,23 +1098,64 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
     <Layouts.distributor_shell
       flash={@flash}
       current_scope={@current_scope}
-      current_path="/distributor/returns"
+      current_path={if @live_action == :show, do: "/distributor/customer-returns", else: "/distributor/returns"}
     >
       <%= if @live_action == :show do %>
-        <.header icon="hero-arrow-uturn-left">
-          {@customer_return.customer.name}
-          <:subtitle>
-            Return #{@customer_return.id} · {@customer_return.site.name} · {status_message(
-              @customer_return.status
-            )}
-          </:subtitle>
-          <:actions>
-            <.status_badge status={@customer_return.status} />
-            <.button variant="ghost" navigate={~p"/distributor/customer-returns"}>
-              <.icon name="hero-arrow-left" class="size-4" /> All returns
-            </.button>
-          </:actions>
-        </.header>
+        <div class="td-recipe td-detail-page" id="customer-return-page">
+          <.td_back_link
+            id="customer-return-back"
+            to={@return_to}
+            label={ThamaniDawaWeb.ReturnTo.label(@return_to, "Back to Customer returns")}
+          />
+          <header class="td-idh">
+            <div class="td-idh-text">
+              <h1 class="td-idh-title">
+                <span>Return #{@customer_return.id}</span>
+                <.status_badge status={@customer_return.status} />
+              </h1>
+              <p class="td-idh-sub">
+                {@customer_return.customer.name} · {@customer_return.site.name} · {status_message(@customer_return.status)}
+              </p>
+            </div>
+          </header>
+          <section class="td-card" id="customer-return-summary">
+            <dl class="td-kv-grid is-pad is-6">
+              <div class="td-kv">
+                <dt class="td-kv-label">Customer</dt>
+                <dd class="td-kv-value">{@customer_return.customer.name}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Customer GLN</dt>
+                <dd class="td-kv-value td-mono">{@customer_return.customer.gln || "—"}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Shipment</dt>
+                <dd class="td-kv-value">
+                  <.link
+                    :if={@customer_return.shipment}
+                    navigate={ThamaniDawaWeb.ReturnTo.with_query(~p"/distributor/shipments/#{@customer_return.shipment.id}", "/distributor/customer-returns/#{@customer_return.id}")}
+                  >
+                    {@customer_return.shipment.order_number || @customer_return.shipment.reference}
+                  </.link>
+                  <span :if={@customer_return.shipment} class="td-sub td-s12">{@customer_return.shipment.reference}</span>
+                  <span :if={!@customer_return.shipment}>—</span>
+                </dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Reason</dt>
+                <dd class="td-kv-value">{reason_label(@customer_return.reason)}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Items</dt>
+                <dd class="td-kv-value">{length(@customer_return.items)}</dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Created (EAT)</dt>
+                <dd class="td-kv-value">{ThamaniDawaWeb.TimeFormat.datetime(@customer_return.inserted_at)}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
         <section id="customer-return-detail" class="mt-5 rounded-2xl ff-surface-card p-5 sm:p-6">
           <.return_panel customer_return={@customer_return} products={@products} />
         </section>
