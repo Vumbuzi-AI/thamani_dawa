@@ -1,0 +1,27 @@
+meta {
+  name: Approve
+  type: http
+  seq: 24
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/aggregations/{{aggregation_id}}/approve
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Links the serials to the SSCC. Returns 422 `over_capacity` or `invalid_serials` when they no longer fit.
+}

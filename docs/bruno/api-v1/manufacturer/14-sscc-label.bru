@@ -1,0 +1,19 @@
+meta {
+  name: SSCC label
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/ssccs/{{sscc_id}}/label
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  The data printed on the shipper label: SSCC, GS1 text, product, batch, quantity and From/To parties.
+}

@@ -1,0 +1,25 @@
+meta {
+  name: Reject
+  type: http
+  seq: 25
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/aggregations/{{aggregation_id}}/reject
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "reason": "Wrong carton"
+  }
+}

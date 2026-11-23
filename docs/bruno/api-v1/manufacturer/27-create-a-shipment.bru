@@ -1,0 +1,30 @@
+meta {
+  name: Create a shipment
+  type: http
+  seq: 27
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/shipments
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "order_number": "PO-2026-101",
+    "destination_gln": "{{to_gln}}"
+  }
+}
+
+docs {
+  `origin_gln` defaults to your current site. Packers fill and submit it from the mobile app.
+}

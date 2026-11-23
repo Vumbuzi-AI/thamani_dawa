@@ -1,0 +1,29 @@
+meta {
+  name: Scan a serial
+  type: http
+  seq: 22
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/aggregations/{{aggregation_id}}/items
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "serial": "0001"
+  }
+}
+
+docs {
+  Drafts only. A serial already scanned returns 409 `duplicate_serial`.
+}

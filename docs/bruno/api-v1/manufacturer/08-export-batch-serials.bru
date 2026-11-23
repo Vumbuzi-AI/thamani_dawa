@@ -1,0 +1,23 @@
+meta {
+  name: Export batch serials
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/products/{{product_id}}/batches/{{batch_id}}/serials/export
+  body: none
+  auth: bearer
+}
+
+params:query {
+  format: csv
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  `format=csv` downloads the same CSV as the web; without it each row comes back as a JSON object keyed by the column names.
+}

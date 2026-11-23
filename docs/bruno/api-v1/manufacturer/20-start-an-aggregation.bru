@@ -1,0 +1,29 @@
+meta {
+  name: Start an aggregation
+  type: http
+  seq: 20
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/aggregations
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "sscc_id": "{{sscc_id}}"
+  }
+}
+
+docs {
+  Starts a draft. Send `serials` (a list) to create it already submitted; every serial must be valid and unique.
+}

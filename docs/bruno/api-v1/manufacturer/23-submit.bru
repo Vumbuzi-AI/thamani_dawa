@@ -1,0 +1,27 @@
+meta {
+  name: Submit
+  type: http
+  seq: 23
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/aggregations/{{aggregation_id}}/submit
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {}
+}
+
+docs {
+  Needs at least one item.
+}

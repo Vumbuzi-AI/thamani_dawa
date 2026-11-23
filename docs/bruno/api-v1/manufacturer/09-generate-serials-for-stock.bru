@@ -1,0 +1,33 @@
+meta {
+  name: Generate serials for stock
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/products/{{product_id}}/serials
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "mode": "stock",
+    "batch_no": "LOT-001",
+    "production_date": "2026-11-20",
+    "expiry_date": "2027-11-20",
+    "primary_quantity": 10
+  }
+}
+
+docs {
+  The + Serial wizard. Serials are minted at your current site, which needs a GLN. At most 100 primary serials per request.
+}

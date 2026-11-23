@@ -1,0 +1,15 @@
+meta {
+  name: EPCIS status
+  type: http
+  seq: 30
+}
+
+get {
+  url: {{base_url}}/api/v1/manufacturer/epcis/status
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

@@ -114,3 +114,47 @@ Under `/distributor/mobile`, with a mobile token:
 Writes answer with the whole shipment so the app redraws once. Mobile routes
 don't take an `Idempotency-Key` yet, because the replay store is keyed to
 staff users.
+
+## Manufacturer
+
+Under `/manufacturer`, for manufacturer staff and admins in a manufacturer
+organization (the same check as the web portal). Only `GET gs1-prefixes` is
+admin only. API keys, settings and EPCIS resends stay on the web.
+
+- `GET dashboard`: counts, and aggregations awaiting review.
+- Products: `GET`/`POST products`, `GET products/:id`,
+  `GET products/gtin/:gtin`. The licence key is never returned.
+- `GET products/:id/batches`, `GET products/:id/batches/:batch_id/serials`
+  (paginated, with each serial's GS1 text) and `.../serials/export`.
+- `POST products/:id/serials` is the + Serial wizard. `mode` is `stock`
+  (`batch_no`, `production_date`, `expiry_date`, `primary_quantity`, at
+  most 100) or `order` (also `shipper_quantity` and `to_gln`; From defaults
+  to the current site). Serials are minted at the user's current site, which
+  needs a GLN (422 `site_gln_required`). The validation rules are
+  `Manufacturing.SerialGeneration`, shared with the web wizard; errors come
+  back as 422 `validation_failed` with `fields`. A GS1 outage is 502
+  `gs1_unavailable`.
+- SSCCs: `GET products/:id/ssccs` (with serial counts), `GET ssccs/:id`,
+  `GET ssccs/:id/serials`, `GET ssccs/:id/label` (the label's data),
+  `GET ssccs/:id/export`.
+- Exports return one object per row, keyed by the CSV's column names;
+  `?format=csv` downloads the web's CSV.
+- `GET inventory`: batches grouped by product.
+- Aggregations: `GET aggregations` (`status`, `search`),
+  `GET aggregations/ssccs` (SSCCs that can be packed),
+  `POST aggregations/classify` (`sscc_id`, `serial`; read only),
+  `POST aggregations` (`sscc_id`, and optionally `serials` to create it
+  already submitted), `GET aggregations/:id`, `POST :id/items` (`serial`,
+  drafts only), `POST :id/submit`, `POST :id/approve`, `POST :id/reject`
+  (`reason`). Approving can return 422 `over_capacity` or `invalid_serials`;
+  a step in the wrong state is 409 `invalid_state`.
+- Shipments: `GET shipments` (`status`, `search`, `date_from`, `date_to`),
+  `POST shipments` (`order_number`, `destination_gln`; `origin_gln`
+  defaults to the current site), `GET shipments/:id`,
+  `POST shipments/:id/approve`. These are the same manufacturer-tier
+  shipments as the web: packers fill and submit them, staff approve.
+  Approving an approved shipment returns it unchanged.
+- EPCIS (read only): `GET epcis/status` (counts per status, whether the
+  queue is halted, submission mode), `GET epcis/events` (newest 200,
+  `status` and `search`), `GET epcis/events/:id` with the payload.
+- `GET gs1-prefixes`: the organization's GS1 company prefixes.

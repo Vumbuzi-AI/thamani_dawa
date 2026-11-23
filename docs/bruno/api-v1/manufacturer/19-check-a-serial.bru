@@ -1,0 +1,30 @@
+meta {
+  name: Check a serial
+  type: http
+  seq: 19
+}
+
+post {
+  url: {{base_url}}/api/v1/manufacturer/aggregations/classify
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "sscc_id": "{{sscc_id}}",
+    "serial": "0001"
+  }
+}
+
+docs {
+  Says whether a scanned serial can go into this SSCC. Read only.
+}
