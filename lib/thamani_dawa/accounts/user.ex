@@ -129,6 +129,15 @@ defmodule ThamaniDawa.Accounts.User do
     |> validate_password([])
   end
 
+  @doc "Changeset for a signed-in user updating their own name and email."
+  def profile_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:name, :email])
+    |> validate_required([:name], message: "Please enter your name")
+    |> trim_change(:email)
+    |> validate_email()
+  end
+
   @doc "Changeset for an admin editing a team member's role and site assignment. Site assignment (`:sites`) is handled separately by `update_user/3` via `put_assoc/3`."
   def edit_changeset(user, attrs) do
     user

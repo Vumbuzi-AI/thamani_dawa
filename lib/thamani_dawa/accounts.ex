@@ -221,6 +221,13 @@ defmodule ThamaniDawa.Accounts do
     Repo.audited_update(changeset)
   end
 
+  @doc "Updates the signed-in user's name and email. Does not change roles or sites."
+  def update_profile(%User{} = user, attrs) do
+    user
+    |> User.profile_changeset(attrs)
+    |> Repo.audited_update()
+  end
+
   @doc """
   Activates or deactivates a team member within an organization.
 
