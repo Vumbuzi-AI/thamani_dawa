@@ -2,6 +2,7 @@ defmodule ThamaniDawaWeb.LayoutsTest do
   use ThamaniDawaWeb.ConnCase, async: true
 
   import Phoenix.LiveViewTest
+  import Swoosh.TestAssertions
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.SitesFixtures
 
@@ -106,7 +107,10 @@ defmodule ThamaniDawaWeb.LayoutsTest do
     test "groups help and personal actions in the sidebar footer", %{conn: conn, admin: admin} do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
+      assert has_element?(lv, "#sidebar-account-dropdown #account-settings", "Account settings")
+      assert has_element?(lv, "#sidebar-account-dropdown #account-help-docs", "Help & docs")
       assert has_element?(lv, "#sidebar-account-dropdown #start-product-tour", "Product tour")
+      assert has_element?(lv, "#sidebar-account-dropdown #account-shortcuts", "Keyboard shortcuts")
       assert has_element?(lv, "#sidebar-account-dropdown #account-theme-dark[role=menuitemradio]")
 
       assert has_element?(
@@ -143,6 +147,41 @@ defmodule ThamaniDawaWeb.LayoutsTest do
              )
 
       assert has_element?(lv, "#site-switch-trigger[data-tooltip]")
+    end
+  end
+
+  describe "account settings" do
+    test "the account menu opens a modal that saves the name and emails a reset link", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      assert has_element?(lv, "#account-settings-modal", "Account settings")
+      assert has_element?(lv, "#account-settings-form")
+      assert has_element?(lv, "#account-settings-send-reset", "Send reset link")
+
+      lv
+      |> form("#account-settings-form", user: %{name: "Amina Otieno"})
+      |> render_submit()
+
+      assert_redirect(lv, ~p"/org/sites")
+
+      {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/sites")
+      assert html =~ "Amina Otieno"
+      assert has_element?(lv, "#sidebar-profile", "Amina Otieno")
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
+
+      lv
+      |> element("#account-settings-send-reset")
+      |> render_click()
+
+      assert_redirect(lv, ~p"/org/sites")
+      assert_email_sent(fn email ->
+        Enum.any?(email.to, fn {_name, addr} -> addr == admin.email end) and
+          (email.text_body || email.html_body || "") =~ "reset-password"
+      end)
     end
   end
 

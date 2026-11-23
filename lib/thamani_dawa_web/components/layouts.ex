@@ -546,6 +546,16 @@ defmodule ThamaniDawaWeb.Layouts do
                 </div>
               </div>
               <.td_menu_item
+                id="account-settings"
+                role="menuitem"
+                label="Account settings"
+                icon="user"
+                phx-click={
+                  JS.hide(to: "#sidebar-account-dropdown")
+                  |> ThamaniDawaWeb.CoreComponents.show_modal("account-settings-modal")
+                }
+              />
+              <.td_menu_item
                 :if={@org_settings_path}
                 id="account-org-settings"
                 role="menuitem"
@@ -554,6 +564,14 @@ defmodule ThamaniDawaWeb.Layouts do
                 navigate={@org_settings_path}
               />
               <div class="td-am-div" role="separator"></div>
+              <.td_menu_item
+                :if={@show_product_tour}
+                id="account-help-docs"
+                role="menuitem"
+                label="Help & docs"
+                icon="book-open"
+                navigate={product_tour_path(@base_path)}
+              />
               <.td_menu_item
                 :if={@show_product_tour}
                 id="start-product-tour"
@@ -623,6 +641,14 @@ defmodule ThamaniDawaWeb.Layouts do
               />
             </:menu>
           </.td_account_chip>
+          <.live_component
+            module={ThamaniDawaWeb.AccountSettingsComponent}
+            id="account-settings"
+            current_scope={@current_scope}
+            role_label={account_role_label(@current_scope, @section_label)}
+            context={@account_context}
+            return_to={@current_path}
+          />
           <.td_modal
             id="sidebar-logout-confirm"
             title="Log out?"
