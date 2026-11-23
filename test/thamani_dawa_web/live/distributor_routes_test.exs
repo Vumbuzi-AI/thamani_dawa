@@ -120,6 +120,18 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       assert_patch(view, ~p"/distributor/receiving/new")
       assert has_element?(view, "#open-add-item-empty")
       refute has_element?(view, "#distributor-receipts")
+      assert has_element?(view, "#accept-delivery[disabled]")
+      assert has_element?(view, "#accept-delivery-modal #finish-distributor-delivery")
+      assert has_element?(view, "#receive-back[href='/distributor/receiving']")
+    end
+
+    test "receiving list shows the new-account empty state and a no-match state", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/distributor/receiving")
+      assert has_element?(view, "#receiving-empty", "No deliveries received yet")
+      assert has_element?(view, "#receiving-empty-receive")
+
+      {:ok, view, _html} = live(conn, ~p"/distributor/receiving?search=nothing-here")
+      assert has_element?(view, "#receiving-empty")
     end
 
     test "product tabs and search share the responsive toolbar row", %{conn: conn} do

@@ -14,6 +14,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   alias ThamaniDawa.Suppliers
   alias ThamaniDawa.Suppliers.Supplier
   alias ThamaniDawaWeb.DistributorPagination
+  alias ThamaniDawaWeb.DateRangeFilter
+  alias ThamaniDawaWeb.TimeFormat
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -116,6 +118,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       socket
       |> assign(:receiving_new?, receiving_new?)
       |> assign(:page_number, DistributorPagination.page_number(params))
+      |> assign(:receipt_filters, receipt_filters(params))
       |> reload_receipts()
 
     if socket.assigns.receiving_new? do
@@ -191,6 +194,26 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   defp receiving_new_path(:organization), do: ~p"/org/receiving/new"
   defp receiving_new_path(_), do: ~p"/distributor/receiving/new"
 
+
+  def handle_event("search", %{"search" => search}, socket),
+    do: {:noreply, push_patch(socket, to: receipt_filter_path(socket, %{"search" => search}))}
+
+  def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
+      when field in ["supplier", "discrepancies"],
+      do: {:noreply, push_patch(socket, to: receipt_filter_path(socket, %{field => value}))}
+
+  def handle_event("set_date_preset", %{"value" => value}, socket),
+    do: {:noreply, push_patch(socket, to: receipt_filter_path(socket, %{"date" => value, "date_from" => "", "date_to" => ""}))}
+
+  def handle_event("apply_date_range", params, socket) do
+    from = params["date_from"] || ""
+    to = params["date_to"] || ""
+    preset = if from == "" and to == "", do: "", else: "custom"
+    {:noreply, push_patch(socket, to: receipt_filter_path(socket, %{"date" => preset, "date_from" => from, "date_to" => to}))}
+  end
+
+  def handle_event("clear_filters", _params, socket),
+    do: {:noreply, push_patch(socket, to: socket.assigns.receiving_index_path)}
 
   def handle_event("open_add_item", _params, socket) do
     {:noreply, assign(socket, :add_item_open, true)}
@@ -1365,6 +1388,30 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end)
   end
 
+  defp delivery_items_caption([]), do: "Nothing scanned yet"
+
+  defp delivery_items_caption(items) do
+    shippers = delivery_shipper_count(items)
+    units = ThamaniDawaWeb.DistributorComponents.number(shipper_units(items))
+    "#{shippers} #{if shippers == 1, do: "shipper", else: "shippers"} · #{units} units"
+  end
+
+  defp delivery_shipper_count(items),
+    do: items |> Enum.map(&Map.get(&1.attrs, "sscc")) |> Enum.reject(&(&1 in [nil, ""])) |> Enum.uniq() |> length()
+
+  defp damaged_caption(items) do
+    case items |> Enum.filter(& &1[:flagged_damaged?]) |> shipper_units() do
+      0 -> "None"
+      n -> "#{ThamaniDawaWeb.DistributorComponents.number(n)} units"
+    end
+  end
+
+  defp accept_origin_name({:matched, resolved}), do: resolved.company || "—"
+  defp accept_origin_name(_), do: "Not verified"
+
+  defp blank_dash(value) when value in [nil, ""], do: "—"
+  defp blank_dash(value), do: value
+
   defp shipper_units(items), do: items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()
 
   attr :batch, :map, required: true
@@ -1588,11 +1635,77 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
+  defp receipt_filters(params) do
+    %{
+      "search" => params["search"] || "",
+      "supplier" => params["supplier"] || "",
+      "discrepancies" => if(params["discrepancies"] in ["open", "none"], do: params["discrepancies"], else: ""),
+      "date" => DateRangeFilter.valid_preset(params["date"]),
+      "date_from" => params["date_from"] || "",
+      "date_to" => params["date_to"] || ""
+    }
+  end
+
+  defp receipt_filter_path(socket, changes) do
+    query =
+      socket.assigns.receipt_filters
+      |> Map.merge(changes)
+      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
+      |> Map.new()
+
+    "#{socket.assigns.receiving_index_path}?#{URI.encode_query(query)}" |> String.trim_trailing("?")
+  end
+
+  defp receipts_filtered?(filters), do: Enum.any?(filters, fn {_k, v} -> v not in [nil, ""] end)
+
+  defp apply_receipt_filters(receipts, filters) do
+    {from, to} = DateRangeFilter.resolve(filters["date"], filters["date_from"], filters["date_to"])
+    query = filters["search"] |> String.trim() |> String.downcase()
+
+    Enum.filter(receipts, fn receipt ->
+      (query == "" or receipt_matches?(receipt, query)) and
+        (filters["supplier"] == "" or receipt_supplier(receipt) == filters["supplier"]) and
+        discrepancy_filter?(receipt, filters["discrepancies"]) and
+        in_eat_range?(receipt.received_at, from, to)
+    end)
+  end
+
+  defp receipt_matches?(receipt, query) do
+    [receipt.number, receipt.origin_company, receipt.origin_gln, receipt_supplier(receipt)]
+    |> Enum.concat(Enum.flat_map(receipt.items, &[&1.batch_no, &1.sscc, &1.gtin]))
+    |> Enum.any?(&(is_binary(&1) and String.contains?(String.downcase(&1), query)))
+  end
+
+  defp discrepancy_filter?(receipt, "open"), do: open_discrepancy_count(receipt) > 0
+  defp discrepancy_filter?(receipt, "none"), do: open_discrepancy_count(receipt) == 0
+  defp discrepancy_filter?(_receipt, _), do: true
+
+  defp in_eat_range?(_at, nil, nil), do: true
+  defp in_eat_range?(nil, _from, _to), do: false
+
+  defp in_eat_range?(at, from, to) do
+    day = at |> DateTime.add(3 * 3600) |> DateTime.to_date()
+    (is_nil(from) or Date.compare(day, from) != :lt) and (is_nil(to) or Date.compare(day, to) != :gt)
+  end
+
+  defp receipt_units(receipt), do: receipt.items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()
+
+  defp receipt_shippers(receipt),
+    do: receipt.items |> Enum.map(& &1.sscc) |> Enum.reject(&(&1 in [nil, ""])) |> Enum.uniq() |> length()
+
   defp reload_receipts(socket) do
-    receipts =
+    all_receipts =
       socket.assigns.current_scope.organization_id
       |> GoodsReceipts.list_receipts()
       |> filter_current_warehouse(socket.assigns.current_scope)
+
+    filters = socket.assigns[:receipt_filters] || receipt_filters(%{})
+    receipts = apply_receipt_filters(all_receipts, filters)
+
+    socket =
+      socket
+      |> assign(:receipt_suppliers, all_receipts |> Enum.map(&receipt_supplier/1) |> Enum.reject(&(&1 == "—")) |> Enum.uniq() |> Enum.sort())
+      |> assign(:receipt_total, length(all_receipts))
 
     page_info = DistributorPagination.page(receipts, socket.assigns.page_number)
 
@@ -1760,19 +1873,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
-  defp receipt_warehouse(receipt) do
-    receipt.items
-    |> Enum.map(& &1.site_id)
-    |> Enum.uniq()
-    |> case do
-      [_site_id] ->
-        receipt.items |> hd() |> Map.get(:site) |> then(&if(&1, do: &1.name, else: "—"))
-
-      _ ->
-        "Multiple warehouses"
-    end
-  end
-
   defp doc_upload_error_to_string(:too_large), do: "File is too large (max 5MB)."
   defp doc_upload_error_to_string(:too_many_files), do: "Choose fewer files."
   defp doc_upload_error_to_string(:not_accepted), do: "Must be a PDF or image file."
@@ -1932,6 +2032,14 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         >
           <:actions>
             <.td_button id="receive-cancel" variant="secondary" patch={@receiving_index_path} label="Cancel" />
+            <.td_button
+              :if={@receiving_portal != :organization}
+              id="accept-delivery"
+              variant="primary"
+              label="Accept delivery"
+              disabled={@delivery_items == []}
+              phx-click={show_modal("accept-delivery-modal")}
+            />
           </:actions>
         </.td_page_header>
       </div>
@@ -1960,12 +2068,11 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
       <div
         :if={@receiving_new? and (@distributor_org? or @receiving_portal == :organization)}
-        class="mb-4 rounded-2xl ff-surface-card p-5 sm:p-6"
+        class="td-card mb-4"
+        id="delivery-origin-card"
       >
-        <h3 class="text-sm font-semibold text-thamani-forest">Receiving from</h3>
-        <p class="mt-1 text-xs text-thamani-pewter">
-          One sender for this whole delivery, verified against your own sites and the GS1 registry.
-        </p>
+        <.td_card_header title="Delivery" subtitle="Who sent it, verified against your own sites and the GS1 registry." />
+        <div class="td-pad">
         <form id="distributor-origin-form" phx-change="validate_origin" class="mt-3">
           <.input
             id="origin-gln"
@@ -2031,6 +2138,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           />
           This is a return
         </label>
+        </div>
       </div>
 
       <section
@@ -2074,25 +2182,46 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         </form>
       </section>
 
-      <div :if={@receiving_new?} class="rounded-2xl ff-surface-card p-5 sm:p-6">
-        <div :if={@delivery_items == []} class="py-6">
-          <.blank_state icon="hero-arrow-down-tray" title="No items added yet">
-            Scan or select the first product in this delivery.
-            <:actions>
-              <.button id="open-add-item-empty" variant="primary" phx-click="open_add_item">
-                <.icon name="hero-plus" class="size-4" />
-                {if @receiving_portal == :organization, do: "Add item", else: "Enter shipper SSCC"}
-              </.button>
-            </:actions>
-          </.blank_state>
+      <div :if={@receiving_new?} class="td-card" id="delivery-items-card">
+        <.td_card_header
+          title="Items in this delivery"
+          subtitle={delivery_items_caption(@delivery_items)}
+        >
+          <:actions :if={@delivery_items != []}>
+            <.td_button
+              id="open-add-item-bottom"
+              variant="secondary"
+              glyph="plus"
+              phx-click="open_add_item"
+              label={if @receiving_portal == :organization, do: "Add item", else: "Scan shipper"}
+            />
+          </:actions>
+        </.td_card_header>
+        <div :if={@delivery_items == []} class="td-pad td-empty-wrap">
+          <div class="td-empty-card">
+            <p class="td-empty-title">
+              {if @receiving_portal == :organization, do: "No items added yet", else: "Scan the first shipper"}
+            </p>
+            <p class="td-note">
+              {if @receiving_portal == :organization,
+                do: "Scan or select the first product in this delivery.",
+                else: "Scanning a shipper SSCC loads everything packed inside it. No label? Add the item by hand."}
+            </p>
+            <.td_button
+              id="open-add-item-empty"
+              variant="primary"
+              glyph="barcode"
+              phx-click="open_add_item"
+              label={if @receiving_portal == :organization, do: "Add item", else: "Scan shipper SSCC"}
+            />
+          </div>
         </div>
-        <div :if={@delivery_items != []}>
-          <div class="flex items-center justify-between">
-            <h3 class="text-sm font-semibold text-thamani-forest">Items in this delivery</h3>
-            <.button id="open-add-item-bottom" variant="ghost" phx-click="open_add_item">
-              <.icon name="hero-plus" class="size-4" />
-              {if @receiving_portal == :organization, do: "Add item", else: "Enter shipper SSCC"}
-            </.button>
+        <div :if={@delivery_items != []} class="td-pad">
+          <div :if={@pending_discrepancies != []} id="delivery-discrepancy-banner" class="td-ban is-warning mb-3">
+            <.td_icon name="warning" class="size-4" />
+            <span>
+              {length(@pending_discrepancies)} {if length(@pending_discrepancies) == 1, do: "line doesn't", else: "lines don't"} match what was sent. They will be recorded as discrepancies on the receipt for you to resolve.
+            </span>
           </div>
           <div class="mt-3 space-y-4">
             <article
@@ -2126,17 +2255,38 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               <.delivery_batch :for={batch <- delivery_batch_groups(shipper.items)} batch={batch} />
             </article>
           </div>
-          <.button
-            :if={@receiving_portal != :organization}
-            id="finish-distributor-delivery"
-            class="mt-4 w-full"
-            variant="primary"
-            phx-click="finish_delivery"
-          >
-            Finish receiving ({length(@delivery_items)} items)
-          </.button>
         </div>
       </div>
+
+      <.modal
+        :if={@receiving_new? and @receiving_portal != :organization}
+        id="accept-delivery-modal"
+        size="confirm"
+        title="Accept this delivery?"
+        subtitle="You are about to add this stock to your warehouse."
+      >
+        <dl class="td-kv-list" id="accept-delivery-summary">
+          <div><dt>From</dt><dd>{accept_origin_name(@origin_check)}</dd></div>
+          <div><dt>Supplier GLN</dt><dd class="td-mono">{blank_dash(@origin_gln)}</dd></div>
+          <div><dt>Shippers</dt><dd>{delivery_shipper_count(@delivery_items)} scanned</dd></div>
+          <div><dt>Units received</dt><dd>{ThamaniDawaWeb.DistributorComponents.number(shipper_units(@delivery_items))}</dd></div>
+          <div><dt>Damaged</dt><dd>{damaged_caption(@delivery_items)}</dd></div>
+          <div>
+            <dt>Discrepancies</dt>
+            <dd>{if @pending_discrepancies == [], do: "None", else: "#{length(@pending_discrepancies)} to resolve"}</dd>
+          </div>
+        </dl>
+        <:footer>
+          <.td_button variant="secondary" label="Keep checking" phx-click={hide_modal("accept-delivery-modal")} />
+          <.td_button
+            id="finish-distributor-delivery"
+            variant="primary"
+            label="Accept delivery"
+            disabled={@delivery_items == []}
+            phx-click={JS.push("finish_delivery") |> hide_modal("accept-delivery-modal")}
+          />
+        </:footer>
+      </.modal>
 
       <.td_modal
         :if={@add_item_open and @receiving_portal == :organization}
@@ -2170,40 +2320,122 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       </.modal>
 
 
-      <.table
-        :if={!@receiving_new?}
-        id="distributor-receipts"
-        rows={@streams.receipts}
-        row_click={
-          fn {_id, receipt} ->
-            JS.navigate("#{@receiving_index_path}/#{receipt.id}")
-          end
-        }
-      >
-        <:col :let={{_id, receipt}} label="Receipt">
-          <span class="font-semibold text-thamani-forest">{receipt.number}</span>
-          <p
-            :if={open_discrepancy_count(receipt) > 0}
-            id={"receipt-open-lines-#{receipt.id}"}
-            class="mt-1 text-xs font-semibold text-amber-800"
-          >
-            {open_discrepancy_count(receipt)} not confirmed
-          </p>
-        </:col>
-        <:col :let={{_id, receipt}} label="Supplier">{receipt_supplier(receipt)}</:col>
-        <:col :let={{_id, receipt}} label="Warehouse">{receipt_warehouse(receipt)}</:col>
-        <:col :let={{_id, receipt}} label="Received">
-          {if @receiving_portal == :organization,
-            do: ThamaniDawaWeb.TimeFormat.datetime(receipt.received_at) <> " EAT",
-            else: Calendar.strftime(receipt.received_at, "%d %b %Y, %H:%M UTC")}
-        </:col>
-        <:col :let={{_id, receipt}} label="Items">{length(receipt.items)}</:col>
-        <:empty_state>
-          <.blank_state icon="hero-arrow-down-tray" title="No receipts yet">
-            Add a warehouse, product, and supplier, then receive the first delivery.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+      <div :if={!@receiving_new?} class="td-list-page" id="receiving-list">
+        <div class="td-toolbar">
+          <form id="receiving-search" phx-change="search" phx-submit="search" onsubmit="return false">
+            <label class="td-search">
+              <.td_icon name="magnifying-glass" />
+              <input
+                type="search"
+                name="search"
+                value={@receipt_filters["search"]}
+                placeholder="Search receipt, supplier, GLN, SSCC or batch"
+                phx-debounce="250"
+                autocomplete="off"
+              />
+              <kbd>/</kbd>
+            </label>
+          </form>
+          <.td_filter_menu
+            id="receiving"
+            field="supplier"
+            label="Supplier"
+            value={@receipt_filters["supplier"]}
+            options={[{"", "Any"} | Enum.map(@receipt_suppliers, &{&1, &1})]}
+          />
+          <.td_filter_menu
+            id="receiving"
+            field="discrepancies"
+            label="Discrepancies"
+            value={@receipt_filters["discrepancies"]}
+            options={[{"", "Any"}, {"open", "Open"}, {"none", "None open"}]}
+          />
+          <.td_date_filter
+            id="receiving-date"
+            label="Received"
+            preset={@receipt_filters["date"]}
+            date_from={@receipt_filters["date_from"]}
+            date_to={@receipt_filters["date_to"]}
+          />
+          <span class="flex-1"></span>
+        </div>
+
+        <div :if={@page_info.total_entries == 0} id="receiving-empty" class="td-pad td-empty-wrap">
+          <div class="td-card td-empty-card">
+            <%= if receipts_filtered?(@receipt_filters) and @receipt_total > 0 do %>
+              <p class="td-empty-title">Nothing matches</p>
+              <p class="td-note">Try a different search, or clear the filters.</p>
+              <.td_button id="receiving-clear-filters" phx-click="clear_filters" label="Clear filters" />
+            <% else %>
+              <p class="td-empty-title">No deliveries received yet</p>
+              <p class="td-note">
+                When stock arrives, scan the shipper SSCCs to check it against what was sent and post it to stock.
+              </p>
+              <.td_button
+                id="receiving-empty-receive"
+                variant="primary"
+                patch={@receiving_new_path}
+                label="Receive delivery"
+              />
+            <% end %>
+          </div>
+        </div>
+
+        <div class="td-list-table" hidden={@page_info.total_entries == 0}>
+          <table class="td-rows">
+            <thead>
+              <tr>
+                <th>Receipt</th>
+                <th>Received from</th>
+                <th class="is-num">Shippers</th>
+                <th class="is-num">Units</th>
+                <th>Discrepancies</th>
+                <th>Received (EAT)</th>
+                <th>Received by</th>
+              </tr>
+            </thead>
+            <tbody id="distributor-receipts" phx-update="stream">
+              <tr
+                :for={{dom_id, receipt} <- @streams.receipts}
+                id={dom_id}
+                class="is-link"
+                phx-click={JS.navigate("#{@receiving_index_path}/#{receipt.id}?return_to=#{URI.encode_www_form(@receiving_index_path)}")}
+              >
+                <td>
+                  <b>{receipt.number}</b>
+                  <span :if={receipt.is_return} class="td-sub td-s12">Return</span>
+                </td>
+                <td>
+                  {receipt_supplier(receipt)}
+                  <span :if={receipt.origin_gln} class="td-sub td-mono td-s12">{receipt.origin_gln}</span>
+                </td>
+                <td class="is-num">{receipt_shippers(receipt)}</td>
+                <td class="is-num">{ThamaniDawaWeb.DistributorComponents.number(receipt_units(receipt))}</td>
+                <td>
+                  <span :if={open_discrepancy_count(receipt) > 0} id={"receipt-open-lines-#{receipt.id}"}>
+                    <.td_badge tone="warning" label={"#{open_discrepancy_count(receipt)} not confirmed"} />
+                  </span>
+                  <.td_badge
+                    :if={open_discrepancy_count(receipt) == 0 and receipt.discrepancies != []}
+                    tone="neutral"
+                    label="Resolved"
+                  />
+                  <.td_badge :if={receipt.discrepancies == []} tone="success" label="None" />
+                </td>
+                <td>{TimeFormat.datetime(receipt.received_at)}</td>
+                <td>
+                  <.td_person_cell
+                    :if={receipt.received_by}
+                    name={receipt.received_by.name || receipt.received_by.email}
+                    seed={receipt.received_by.id}
+                  />
+                  <span :if={!receipt.received_by} class="td-sub">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
       <.pagination :if={!@receiving_new?} page={@page_info} path={@receiving_index_path} />
     </.receiving_shell>
     """
