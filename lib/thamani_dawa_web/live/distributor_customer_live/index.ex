@@ -259,10 +259,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
         id="distributor-customer-modal"
         show
         on_cancel={JS.patch(~p"/distributor/customers")}
+        title={if @live_action == :new, do: "Add customer", else: "Edit customer"}
+        subtitle={if @live_action == :new, do: "Look up the GLN in GS1. Verified customers are quicker to pick on orders.", else: nil}
       >
-        <h2 class="mb-4 text-2xl font-medium tracking-tight text-thamani-forest">
-          {if @live_action == :new, do: "Add customer", else: "Edit customer"}
-        </h2>
         <.form for={@form} id="distributor-customer-form" phx-change="validate" phx-submit="save">
           <div class="mb-6">
             <.input
@@ -378,14 +377,20 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
               <.input field={@form[:contact_phone]} label="Contact phone" />
             </div>
 
-            <div class="mt-6 flex items-center justify-end gap-3">
-              <.button type="button" phx-click={JS.patch(~p"/distributor/customers")}>
-                Cancel
-              </.button>
-              <.button variant="primary">Save customer</.button>
-            </div>
+
           </div>
         </.form>
+        <:footer>
+          <.td_button type="button" variant="secondary" label="Cancel" phx-click={JS.patch(~p"/distributor/customers")} />
+          <.td_button
+            id="save-customer"
+            type="submit"
+            form="distributor-customer-form"
+            variant="primary"
+            disabled={!show_customer_fields?(@live_action, @gln_check)}
+            label={if @live_action == :new, do: "Add customer", else: "Save changes"}
+          />
+        </:footer>
       </.modal>
 
       <div class={["td-list-page", @selected && "td-detail-row"]} id="customers-page">

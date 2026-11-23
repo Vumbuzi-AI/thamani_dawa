@@ -45,4 +45,19 @@ defmodule ThamaniDawaWeb.DistributorCustomerLiveTest do
     {:ok, view, _html} = live(conn, ~p"/distributor/customers?search=nobody")
     assert has_element?(view, "#customers-empty", "Nothing matches")
   end
+
+  test "editing a customer saves from the modal footer", %{conn: conn, distributor: distributor} do
+    {:ok, customer} =
+      Customers.create_customer(distributor.organization_id, %{"name" => "Coast Diagnostics", "customer_type" => "other"})
+
+    {:ok, view, _html} = live(conn, ~p"/distributor/customers/#{customer.id}/edit")
+    assert has_element?(view, "#distributor-customer-modal", "Edit customer")
+
+    view
+    |> form("#distributor-customer-form", customer: %{name: "Coast Diagnostics Ltd"})
+    |> render_submit()
+
+    assert_patch(view, ~p"/distributor/customers")
+    assert has_element?(view, "#distributor-customers", "Coast Diagnostics Ltd")
+  end
 end
