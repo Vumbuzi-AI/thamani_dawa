@@ -62,8 +62,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
      |> assign(:base_path, if(mode == :orders, do: "/distributor/orders", else: "/distributor/shipments"))
      |> assign(:filters, filters)
      |> assign(:page, page_number(params))
-     |> load_shipments()}
+     |> safe_load_shipments()}
   end
+
+  def handle_event("retry_load", _params, socket), do: {:noreply, safe_load_shipments(socket)}
 
   def handle_event("search", %{"search" => search}, socket),
     do: {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
@@ -92,6 +94,23 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
 
   def handle_info({:distributor_shipment, _event, _shipment_id}, socket),
     do: {:noreply, load_shipments(socket)}
+
+  # A dropped database connection shows the "didn't load" state with Try
+  # again instead of crashing the LiveView into a reconnect loop.
+  defp safe_load_shipments(socket) do
+    socket |> load_shipments() |> assign(:load_error, false)
+  rescue
+    error in [DBConnection.ConnectionError, Postgrex.Error] ->
+      require Logger
+      Logger.warning("Distributor list failed to load: " <> Exception.message(error))
+
+      socket
+      |> assign(:load_error, true)
+      |> assign(:counts, Map.new(ThamaniDawa.Distributor.Shipment.statuses(), &{&1, 0}))
+      |> assign(:summaries, %{})
+      |> assign(:page_info, %{total_entries: 0, page_number: 1, page_size: 25, total_pages: 1})
+      |> stream(:shipments, [], reset: true)
+  end
 
   defp load_shipments(socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -343,6 +362,12 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
         <div :if={@page_info.total_entries == 0} id={"#{@mode}-empty"} class="td-pad td-empty-wrap">
           <div class="td-card td-empty-card">
             <%= cond do %>
+              <% @load_error -> %>
+                <p class="td-empty-title" id="list-load-error">
+                  {if @mode == :orders, do: "Orders didn't load", else: "Shipments didn't load"}
+                </p>
+                <p class="td-note">Thamani couldn't reach the server. Check your connection, then try again.</p>
+                <.td_button id="retry-load" phx-click="retry_load" label="Try again" />
               <% filtered?(@filters) -> %>
                 <p class="td-empty-title">Nothing matches</p>
                 <p class="td-note">Try a different search, or clear the filters.</p>
