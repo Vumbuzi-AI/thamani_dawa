@@ -18,6 +18,27 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
   end
 
   def handle_event("show_shippers", %{"group-id" => group_id}, socket) do
+    show_group_modal(socket, group_id, :shipper)
+  end
+
+  def handle_event("show_serials", %{"group-id" => group_id}, socket) do
+    show_group_modal(socket, group_id, :primary)
+  end
+
+  def handle_event("show_pallet_label", %{"group-id" => group_id}, socket) do
+    show_group_modal(socket, group_id, :label)
+  end
+
+  def handle_event("switch_modal_tab", %{"type" => type}, socket)
+      when type in ["shipper", "primary", "label"] do
+    {:noreply, assign(socket, :modal_tab, String.to_existing_atom(type))}
+  end
+
+  def handle_event("close_shippers", _params, socket) do
+    {:noreply, assign(socket, :selected_group, nil)}
+  end
+
+  defp show_group_modal(socket, group_id, modal_tab) do
     selected_group =
       Enum.find(socket.assigns.groups, fn group ->
         Enum.any?(group.shippers, &(to_string(&1.sscc.id) == group_id))
@@ -26,16 +47,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
     {:noreply,
      socket
      |> assign(:selected_group, selected_group)
-     |> assign(:modal_tab, :shipper)}
-  end
-
-  def handle_event("switch_modal_tab", %{"type" => type}, socket)
-      when type in ["shipper", "primary"] do
-    {:noreply, assign(socket, :modal_tab, String.to_existing_atom(type))}
-  end
-
-  def handle_event("close_shippers", _params, socket) do
-    {:noreply, assign(socket, :selected_group, nil)}
+     |> assign(:modal_tab, modal_tab)}
   end
 
   defp group_ssccs(rows) do
@@ -71,6 +83,20 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
 
   defp party(sscc, field) do
     (sscc.pallet && Map.get(sscc.pallet, field)) || Map.get(sscc, field)
+  end
+
+  defp pallet_label_row(group) do
+    row = hd(group.shippers)
+
+    %{
+      row
+      | sscc: %{
+          row.sscc
+          | code: group.pallet_code || row.sscc.code,
+            count_of_trade_items: length(group.shippers)
+        },
+        serial_count: length(group.shippers)
+    }
   end
 
   attr :row, :map, required: true
@@ -295,11 +321,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
             ><.icon name="hero-truck" class="size-4" /> Shippers</.button>
             <.button
               id={"sscc-#{row.sscc.id}-serials"}
-              navigate={~p"/manufacturer/sscc/#{row.sscc.id}/serials"}
+              type="button"
+              phx-click="show_serials"
+              phx-value-group-id={row.sscc.id}
             ><.icon name="hero-list-bullet" class="size-4" /> Serials</.button>
             <.button
               id={"sscc-#{row.sscc.id}-label"}
-              navigate={~p"/manufacturer/sscc/#{row.sscc.id}/label"}
+              type="button"
+              phx-click="show_pallet_label"
+              phx-value-group-id={row.sscc.id}
               variant="ghost"
             ><.icon name="hero-qr-code" class="size-4" /> Pallet Label</.button>
             <.button
@@ -317,17 +347,45 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
         show
         size="wide"
         class="shipper-labels-modal"
-        title="Shipper Serials"
+        title={
+          case @modal_tab do
+            :shipper -> "Shipper labels"
+            :primary -> "Primary serials"
+            :label -> "Pallet label"
+          end
+        }
         subtitle={"SSCC #{@selected_group.pallet_code || "Not assigned to a pallet"}"}
         on_cancel={JS.push("close_shippers")}
       >
         <div class="flex flex-wrap items-center gap-2 border-b border-thamani-stone pb-4">
-          <.button type="button" variant="primary">Shipper ({length(@selected_group.shippers)})</.button>
           <.button
+            id="pallet-modal-shippers-tab"
             type="button"
-            navigate={~p"/manufacturer/sscc/#{hd(@selected_group.shippers).sscc.id}/serials"}
+            variant={if(@modal_tab == :shipper, do: "primary", else: "ghost")}
+            phx-click="switch_modal_tab"
+            phx-value-type="shipper"
+          >Shipper ({length(@selected_group.shippers)})</.button>
+          <.button
+            id="pallet-modal-serials-tab"
+            type="button"
+            variant={if(@modal_tab == :primary, do: "primary", else: "ghost")}
+            phx-click="switch_modal_tab"
+            phx-value-type="primary"
           >Primary ({@selected_group.primary_count})</.button>
-          <.button id="print-all-shippers" type="button" phx-hook="PrintAllLabels"><.icon
+          <.button
+            id="pallet-modal-label-tab"
+            type="button"
+            variant={if(@modal_tab == :label, do: "primary", else: "ghost")}
+            phx-click="switch_modal_tab"
+            phx-value-type="label"
+          ><.icon name="hero-qr-code" class="size-4" /> Pallet label</.button>
+          <.button
+            :if={@modal_tab == :shipper}
+            id="print-all-shippers"
+            type="button"
+            phx-hook="PrintAllLabels"
+            data-print-container="#pallet-shippers-list"
+          ><.icon
             name="hero-printer"
             class="size-4"
           /> Print All Shipper</.button>
@@ -336,7 +394,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
           )} items</span>
         </div>
 
-        <div id="pallet-shippers-list" class="mt-4 max-h-[68vh] space-y-5 overflow-y-auto pr-1">
+        <div
+          :if={@modal_tab == :shipper}
+          id="pallet-shippers-list"
+          class="mt-4 max-h-[68vh] space-y-5 overflow-y-auto pr-1"
+        >
           <.shipper_label
             :for={{shipper, index} <- Enum.with_index(@selected_group.shippers, 1)}
             row={shipper}
@@ -346,21 +408,70 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
           />
         </div>
 
+        <div
+          :if={@modal_tab == :primary}
+          id="pallet-primary-serials-list"
+          class="mt-4 max-h-[68vh] overflow-y-auto pr-1"
+        >
+          <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <section
+              :for={shipper <- @selected_group.shippers}
+              id={"pallet-primary-shipper-#{shipper.sscc.id}"}
+              class="rounded-xl border border-thamani-stone bg-thamani-snow p-4"
+            >
+              <p class="truncate font-mono text-sm font-semibold text-thamani-forest">
+                {shipper.sscc.code}
+              </p>
+              <p class="mt-1 text-xs text-thamani-pewter">{shipper.serial_count} primary serials</p>
+              <div class="mt-3 space-y-2">
+                <span
+                  :for={serial <- shipper.serials}
+                  class="block truncate rounded-lg bg-white px-3 py-2 font-mono text-xs text-thamani-forest shadow-sm"
+                >{serial}</span>
+                <p :if={shipper.serials == []} class="text-sm text-thamani-pewter">
+                  No local serials are recorded for this shipper.
+                </p>
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div
+          :if={@modal_tab == :label}
+          id="pallet-label-preview"
+          class="mt-4 max-h-[68vh] overflow-y-auto pr-1"
+        >
+          <.shipper_label
+            row={pallet_label_row(@selected_group)}
+            product_name={@product.name}
+            position={1}
+            total={1}
+          />
+        </div>
+
         <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-thamani-stone pt-4">
           <span class="text-sm text-thamani-pewter">Showing {length(@selected_group.shippers)} of {length(
             @selected_group.shippers
           )} items</span>
           <div class="flex flex-wrap gap-2">
             <.button type="button" phx-click="close_shippers">Close</.button>
-            <.button id="print-all-shippers-footer" type="button" phx-hook="PrintAllLabels"><.icon
+            <.button
+              :if={@modal_tab == :shipper}
+              id="print-all-shippers-footer"
+              type="button"
+              phx-hook="PrintAllLabels"
+              data-print-container="#pallet-shippers-list"
+            ><.icon
               name="hero-printer"
               class="size-4"
             /> Print All Shipper</.button>
             <.button
+              :if={@modal_tab == :shipper}
               id="download-all-shippers-svg"
               type="button"
               variant="primary"
               phx-hook="DownloadAllLabelsSvg"
+              data-download-container="#pallet-shippers-list"
             ><.icon name="hero-arrow-down-tray" class="size-4" /> Download All Shipper as SVG</.button>
           </div>
         </div>

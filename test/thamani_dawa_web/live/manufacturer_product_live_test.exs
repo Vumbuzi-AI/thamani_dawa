@@ -344,7 +344,39 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     end)
 
     assert has_element?(ssccs, "#print-all-shippers[phx-hook=PrintAllLabels]")
-    assert has_element?(ssccs, "#download-all-shippers-svg[phx-hook=DownloadAllLabelsSvg]")
+    assert has_element?(
+             ssccs,
+             "#download-all-shippers-svg[phx-hook=DownloadAllLabelsSvg][data-download-container='#pallet-shippers-list']"
+           )
+
+    ssccs
+    |> element("#sscc-#{sscc.id}-serials")
+    |> render_click()
+
+    assert has_element?(ssccs, "#pallet-shippers-modal")
+    assert has_element?(ssccs, "#pallet-primary-serials-list")
+    refute has_element?(ssccs, "#pallet-shippers-list")
+
+    ssccs
+    |> element("#sscc-#{sscc.id}-label")
+    |> render_click()
+
+    assert has_element?(ssccs, "#pallet-shippers-modal")
+    assert has_element?(ssccs, "#pallet-label-preview")
+    assert has_element?(ssccs, "#pallet-label-preview", sscc.pallet.code)
+
+    assert has_element?(
+             ssccs,
+             "#pallet-label-preview [data-gs1-text*='(00)#{sscc.pallet.code}']"
+           )
+
+    refute has_element?(ssccs, "#pallet-primary-serials-list")
+
+    ssccs
+    |> element("#pallet-modal-shippers-tab")
+    |> render_click()
+
+    assert has_element?(ssccs, "#pallet-shippers-list")
 
     # Each shipper is packed through /create_shipper_sscc with its serials.
     pack_requests =
@@ -436,6 +468,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
            )
 
     assert has_element?(serials, "#manufacturer-serials [phx-hook=DataMatrix]")
+
+    assert has_element?(
+             serials,
+             "#print-serial-0001[data-print-target='#manufacturer-serial-label-0001']"
+           )
+
     assert has_element?(serials, "#export-batch-serials")
     assert has_element?(serials, "#manufacturer-serial-0001", "(17)")
     assert has_element?(serials, "#manufacturer-serial-0003")
@@ -612,6 +650,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert saved.from_company_name == site.name
     assert saved.to_company_name not in [nil, ""]
     assert has_element?(label, "#sscc-label-to", saved.to_company_name)
+
+    assert has_element?(
+             label,
+             "#download-manufacturer-label-svg[data-quantity='5'][data-from-company][data-to-company]"
+           )
   end
 
   defp manufacturer_session_gln(user) do

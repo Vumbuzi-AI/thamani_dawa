@@ -148,32 +148,34 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
             id={"sscc-primary-#{dom_key(serial)}"}
             class="rounded-xl border border-thamani-lime/60 bg-thamani-lime/10 p-4"
           >
-            <p class="truncate font-mono text-sm font-semibold text-thamani-forest">
-              {serial.serial}
-            </p>
-            <p class="mt-0.5 text-xs text-thamani-pewter">serial</p>
-            <div class="mt-3 flex items-center gap-3">
-              <canvas
-                id={"sscc-serial-datamatrix-#{dom_key(serial)}"}
-                phx-hook="DataMatrix"
-                phx-update="ignore"
-                data-gs1-text={gs1_text(serial)}
-                class="size-28 shrink-0 bg-white p-1"
-              ></canvas>
-              <dl class="min-w-0 text-xs leading-5 text-thamani-forest">
-                <div>(01) {gtin14(serial)}</div><div>
-                  (10) {serial.batch}
-                </div><div>(17) {date_ai(serial.expiry_date)}</div><div>
-                  (11) {date_ai(serial.production_date)}
-                </div><div class="truncate">(21) {serial.serial}</div>
-              </dl>
+            <div id={"sscc-primary-label-#{dom_key(serial)}"} class="printable-primary-label">
+              <p class="truncate font-mono text-sm font-semibold text-thamani-forest">
+                {serial.serial}
+              </p>
+              <p class="mt-0.5 text-xs text-thamani-pewter">serial</p>
+              <div class="mt-3 flex items-center gap-3">
+                <canvas
+                  id={"sscc-serial-datamatrix-#{dom_key(serial)}"}
+                  phx-hook="DataMatrix"
+                  phx-update="ignore"
+                  data-gs1-text={gs1_text(serial)}
+                  class="size-28 shrink-0 bg-white p-1"
+                ></canvas>
+                <dl class="min-w-0 text-xs leading-5 text-thamani-forest">
+                  <div>(01) {gtin14(serial)}</div><div>
+                    (10) {serial.batch}
+                  </div><div>(17) {date_ai(serial.expiry_date)}</div><div>
+                    (11) {date_ai(serial.production_date)}
+                  </div><div class="truncate">(21) {serial.serial}</div>
+                </dl>
+              </div>
             </div>
             <div class="mt-4 flex flex-wrap gap-2">
               <button
                 id={"print-sscc-serial-#{dom_key(serial)}"}
                 type="button"
                 phx-hook="LabelPrint"
-                data-print-target={"#sscc-primary-#{dom_key(serial)}"}
+                data-print-target={"#sscc-primary-label-#{dom_key(serial)}"}
                 class="inline-flex items-center gap-1.5 rounded-lg bg-thamani-forest px-3 py-2 text-xs font-semibold text-white transition hover:bg-thamani-forest/90"
               ><.icon name="hero-printer" class="size-4" /> Print</button>
               <button

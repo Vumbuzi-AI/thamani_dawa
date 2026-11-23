@@ -43,9 +43,9 @@ function printImagesInIframe(images) {
     "<!DOCTYPE html><html><head><title>Print</title><style>" +
     "@page { size: 4in 6in; margin: 0; } " +
     "html, body { margin: 0; padding: 0; } " +
-    ".page { width: 4in; height: 6in; page-break-after: always; overflow: hidden; } " +
+    ".page { width: 4in; height: 6in; page-break-after: always; overflow: hidden; display: flex; align-items: center; justify-content: center; } " +
     ".page:last-child { page-break-after: auto; } " +
-    "img { display: block; width: 4in; height: 6in; }" +
+    "img { display: block; max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; }" +
     "</style></head><body>" +
     pages +
     "</body></html>"
@@ -101,7 +101,9 @@ export const LabelPrint = {
 export const PrintAllLabels = {
   mounted() {
     this.handleClick = async () => {
-      const divs = Array.from(document.querySelectorAll(".printable-sscc-label"))
+      const container = this.el.dataset.printContainer
+      const root = container ? document.querySelector(container) : document
+      const divs = root ? Array.from(root.querySelectorAll(".printable-sscc-label")) : []
       if (divs.length === 0) return
 
       try {

@@ -52,6 +52,13 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
     (sscc.pallet && Map.get(sscc.pallet, field)) || Map.get(sscc, field)
   end
 
+  defp material_description(sscc) do
+    case List.first(sscc.batches) do
+      %{product: product} -> product.description || product.name
+      _batch -> nil
+    end
+  end
+
   attr :label, :string, required: true
   attr :value, :any, required: true
   attr :align, :string, default: "left"
@@ -169,10 +176,17 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
           data-role="download-label-svg"
           data-sscc={@sscc.code}
           data-gs1-text={gs1_text(@sscc)}
+          data-quantity={@sscc.count_of_trade_items}
           data-gtin={@sscc.gtin}
           data-batch={@sscc.batch}
-          data-production={@sscc.production_date}
-          data-expiry={@sscc.expiry_date}
+          data-production={date_ai(@sscc.production_date)}
+          data-expiry={date_ai(@sscc.expiry_date)}
+          data-material-description={material_description(@sscc)}
+          data-order-number={@sscc.order_number}
+          data-from-company={party(@sscc, :from_company_name)}
+          data-from-address={party(@sscc, :from_address)}
+          data-to-company={party(@sscc, :to_company_name)}
+          data-to-address={party(@sscc, :to_address)}
         />
       </div>
     </Layouts.manufacturer_shell>

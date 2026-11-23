@@ -234,7 +234,9 @@ export const DownloadAllLabelsSvg = {
 
   downloadAll() {
     const bw = window.bwipjs || bwipjs
-    const buttons = document.querySelectorAll('[data-role="download-label-svg"]')
+    const container = this.el.dataset.downloadContainer
+    const root = container ? document.querySelector(container) : document
+    const buttons = root ? root.querySelectorAll('[data-role="download-label-svg"]') : []
 
     buttons.forEach((button, index) => {
       setTimeout(() => downloadLabelSvg(button.dataset, bw), index * 300)
