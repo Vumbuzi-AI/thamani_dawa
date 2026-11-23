@@ -692,7 +692,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
                   :for={row <- @site_profitability}
                   id={"org-site-row-#{row.site.id}"}
                   class="is-link"
-                  phx-click={JS.navigate("/org/sites/#{row.site.id}")}
+                  phx-click={JS.navigate("/org/sites/#{row.site.id}?return_to=" <> URI.encode_www_form("/org/dashboard"))}
                 >
                   <td>{row.site.name}</td>
                   <td class="is-num">{money(row.revenue)}</td>
