@@ -170,6 +170,16 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end
   end
 
+  # Distributor deliveries land on their receipt (Doop wJYopBvolb); the
+  # organization portal keeps its own receive flow.
+  defp after_delivery(%{assigns: %{receiving_portal: :distributor}} = socket, receipt),
+    do:
+      push_navigate(socket,
+        to: ~p"/distributor/receiving/#{receipt.id}?#{%{return_to: "/distributor/receiving"}}"
+      )
+
+  defp after_delivery(socket, _receipt), do: push_patch(socket, to: socket.assigns.receiving_index_path)
+
   defp receiving_portal(action) when action in [:org_index, :org_new], do: :organization
   defp receiving_portal(_action), do: :distributor
 
@@ -604,7 +614,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
            :info,
            receiving_flash_message(receipt, socket.assigns.pending_discrepancies)
          )
-         |> push_patch(to: socket.assigns.receiving_index_path)}
+         |> after_delivery(receipt)}
 
       {:error, changeset} ->
         {:noreply,
@@ -1914,30 +1924,39 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           </.td_page_header>
         </div>
       <% else %>
-      <.header :if={@receiving_new?} icon="hero-arrow-down-tray">
-        Receive stock
-        <:subtitle>
-          Scan or select each item as it comes off the truck, then add its batch details.
-        </:subtitle>
-        <:actions>
-          <.button variant="ghost" patch={@receiving_index_path}>Cancel</.button>
-        </:actions>
-      </.header>
+      <div :if={@receiving_new?} class="td-recipe">
+        <.td_back_link id="receive-back" to={@receiving_index_path} label="Back to Receiving" />
+        <.td_page_header
+          title="Receive delivery"
+          subtitle="Scan each shipper SSCC or product barcode as it comes off the truck, then check it against what was sent."
+        >
+          <:actions>
+            <.td_button id="receive-cancel" variant="secondary" patch={@receiving_index_path} label="Cancel" />
+          </:actions>
+        </.td_page_header>
+      </div>
       <% end %>
 
-      <.header :if={!@receiving_new?} icon="hero-arrow-down-tray">
-        Receive inventory
-        <:subtitle>Check in a delivery directly into a distributor warehouse.</:subtitle>
-        <:actions>
-          <.button
-            id="receive-distributor-stock"
-            variant="primary"
-            patch={@receiving_new_path}
-          >
-            <.icon name="hero-plus" class="size-4" /> Receive stock
-          </.button>
-        </:actions>
-      </.header>
+      <div :if={!@receiving_new?} class="td-recipe">
+        <.td_page_header
+          title="Receiving"
+          subtitle={
+            if @receiving_portal == :organization,
+              do: "Check in a delivery directly into a site.",
+              else: "Deliveries checked in to your warehouse. Scan the shipper SSCCs as stock arrives to check it against what was sent."
+          }
+        >
+          <:actions>
+            <.td_button
+              id="receive-distributor-stock"
+              variant="primary"
+              glyph="plus"
+              label="Receive delivery"
+              patch={@receiving_new_path}
+            />
+          </:actions>
+        </.td_page_header>
+      </div>
 
       <div
         :if={@receiving_new? and (@distributor_org? or @receiving_portal == :organization)}
