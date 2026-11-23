@@ -131,7 +131,8 @@ defmodule ThamaniDawaWeb.DistributorStockLiveTest do
     refute html =~ "LOT-DISPATCHED"
     refute html =~ "Dock"
     refute html =~ "Picking"
-    refute has_element?(view, ~s(a[href="/distributor/stock"]))
+    # NAV-1 puts Stock in the sidebar on every distributor page.
+    assert has_element?(view, ~s(a[href="/distributor/stock"]))
 
     {:ok, _view, quarantine_html} =
       live(conn, ~p"/distributor/products?#{%{view: "batches", hold: "quarantine"}}")
