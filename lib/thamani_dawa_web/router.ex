@@ -166,6 +166,10 @@ defmodule ThamaniDawaWeb.Router do
       live "/org/dashboard", OrgDashboardLive, :index
       live "/org/earnings", EarningsLive, :index
 
+      live "/org/receiving", DistributorReceivingLive, :org_index
+      live "/org/receiving/new", DistributorReceivingLive, :org_new
+      live "/org/receiving/:id", DistributorGoodsReceiptLive, :org_show
+
       live "/org/team", TeamLive.Index, :index
       live "/org/team/new", TeamLive.Index, :new
       live "/org/team/:id/edit", TeamLive.Index, :edit
@@ -215,6 +219,8 @@ defmodule ThamaniDawaWeb.Router do
 
     live_session :platform, on_mount: [{ThamaniDawaWeb.UserAuth, :require_superadmin}] do
       live "/platform", PlatformDashboardLive, :index
+      live "/platform/organizations", PlatformOrganizationsLive, :index
+      live "/platform/organizations/:id", PlatformOrganizationsLive, :show
       live "/platform/audit", PlatformAuditLive, :index
       live "/platform/recalls", PlatformRecallLive, :index
     end
