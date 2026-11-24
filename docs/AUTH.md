@@ -24,6 +24,22 @@ The `:browser` pipeline runs `fetch_current_scope_for_user/2`. That loads the se
 
 Logout deletes the session token and renews/clears the session.
 
+## GS1 Kenya SSO
+
+GS1 SSO uses OAuth authorization code flow with a fresh state value and S256
+PKCE verifier for every attempt. Configure `GS1_SSO_CLIENT_ID`,
+`GS1_SSO_CLIENT_SECRET`, and `GS1_SSO_CALLBACK_URL`. Register the exact value of
+`GS1_SSO_CALLBACK_URL` with GS1 Kenya; its path must route to
+`/auth/gs1/callback` (for example,
+`https://app.example.com/auth/gs1/callback`). The application never derives
+this URL from request headers.
+
+SSO follows the existing account-creation policy: an existing active local
+account is linked once using its verified email, then identified by the GS1
+`sub` claim on later sign-ins. Unknown identities must complete the normal
+organization signup or invitation flow first. Nullable organization claims
+from GS1 do not change the local tenant assignment.
+
 ## Route Guards
 
 LiveView route groups use `ThamaniDawaWeb.UserAuth.on_mount/4`:

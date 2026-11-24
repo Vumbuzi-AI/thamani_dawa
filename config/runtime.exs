@@ -41,6 +41,18 @@ end
 
 config :thamani_dawa, ThamaniDawa.GtinLookup, api_key: System.get_env("GS1_GRP_API_KEY")
 
+if config_env() != :test do
+  config :thamani_dawa, ThamaniDawa.Gs1Sso,
+    issuer: "https://gs1kenya.org",
+    client_id: System.get_env("GS1_SSO_CLIENT_ID"),
+    client_secret: System.get_env("GS1_SSO_CLIENT_SECRET"),
+    callback_url: System.get_env("GS1_SSO_CALLBACK_URL"),
+    authorization_url: "https://gs1kenya.org/oauth/authorize",
+    token_url: "https://gs1kenya.org/oauth/token",
+    userinfo_url: "https://gs1kenya.org/oauth/userinfo",
+    retry: false
+end
+
 config :thamani_dawa, :google_maps, api_key: System.get_env("GOOGLE_MAPS_API_KEY")
 
 daraja_enabled = System.get_env("DARAJA_ENABLED", "false") in ~w(true 1 yes)

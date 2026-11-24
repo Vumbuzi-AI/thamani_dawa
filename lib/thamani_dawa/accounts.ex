@@ -23,6 +23,52 @@ defmodule ThamaniDawa.Accounts do
     )
   end
 
+  @doc "Finds or links an active local account for a GS1 SSO identity."
+  def link_gs1_sso_user(sub, email) when is_binary(sub) and is_binary(email) do
+    normalized_email = email |> String.trim() |> String.downcase()
+
+    Repo.transaction(fn ->
+      case Repo.one(from u in User, where: u.gs1_sso_sub == ^sub, lock: "FOR UPDATE") do
+        %User{is_active: true} = user ->
+          user
+
+        %User{} ->
+          Repo.rollback(:inactive_account)
+
+        nil ->
+          link_gs1_sso_by_email(sub, normalized_email)
+      end
+    end)
+  end
+
+  defp link_gs1_sso_by_email(sub, email) do
+    case Repo.one(
+           from u in User,
+             where: fragment("lower(?)", u.email) == ^email,
+             lock: "FOR UPDATE"
+         ) do
+      %User{is_active: false} ->
+        Repo.rollback(:inactive_account)
+
+      %User{gs1_sso_sub: nil} = user ->
+        changeset =
+          user
+          |> Ecto.Changeset.change(gs1_sso_sub: sub)
+          |> Ecto.Changeset.unique_constraint(:gs1_sso_sub)
+
+        case Repo.update(changeset) do
+          {:ok, linked_user} -> linked_user
+          {:error, _changeset} -> Repo.rollback(:identity_already_linked)
+        end
+
+      %User{} ->
+        Repo.rollback(:identity_already_linked)
+
+      nil ->
+        Repo.rollback(:account_not_found)
+    end
+  end
+
   @doc """
   Gets a user by email and password, across the whole platform.
   Returns `nil` if the user is not found, deactivated, or the password is incorrect.

@@ -97,7 +97,7 @@ defmodule ThamaniDawaWeb.SessionController do
   # A fresh self-signup starts the full-screen checklist and then the product
   # tour. Returning admins also resume the checklist while database-backed
   # setup tasks remain; invited staff continue to their own portal tour.
-  defp login_redirect_path(user, true, _first_staff_login?) do
+  def login_redirect_path(user, true, _first_staff_login?) do
     if :admin in user.roles and onboarding_incomplete?(user) do
       ~p"/onboarding"
     else
@@ -105,7 +105,7 @@ defmodule ThamaniDawaWeb.SessionController do
     end
   end
 
-  defp login_redirect_path(user, false, first_staff_login?) do
+  def login_redirect_path(user, false, first_staff_login?) do
     cond do
       :admin in user.roles and onboarding_incomplete?(user) ->
         ~p"/onboarding"

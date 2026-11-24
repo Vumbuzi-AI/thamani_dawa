@@ -28,6 +28,8 @@ defmodule ThamaniDawaWeb.Router do
 
     get "/login", SessionController, :new
     post "/login", SessionController, :create
+    get "/auth/gs1", Gs1SsoController, :new
+    get "/auth/gs1/callback", Gs1SsoController, :callback
     delete "/logout", SessionController, :delete
     get "/reset-password", PasswordResetController, :new
     post "/reset-password", PasswordResetController, :create

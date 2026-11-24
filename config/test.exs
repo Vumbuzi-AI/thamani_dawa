@@ -33,6 +33,17 @@ config :thamani_dawa, ThamaniDawa.GtinLookup,
   # just burn the test's timeout budget on backoff.
   retry: false
 
+config :thamani_dawa, ThamaniDawa.Gs1Sso,
+  issuer: "https://gs1kenya.org",
+  client_id: "test-client-id",
+  client_secret: "test-client-secret",
+  callback_url: "https://app.example.test/auth/gs1/callback",
+  authorization_url: "https://gs1kenya.org/oauth/authorize",
+  token_url: "https://gs1kenya.org/oauth/token",
+  userinfo_url: "https://gs1kenya.org/oauth/userinfo",
+  plug: {Req.Test, ThamaniDawa.Gs1Sso},
+  retry: false
+
 config :thamani_dawa, ThamaniDawa.Gln, company_prefix: "0614141"
 
 # The GS1 registry is stubbed out so tests never reach the network.

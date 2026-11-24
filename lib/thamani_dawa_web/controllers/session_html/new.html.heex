@@ -52,6 +52,13 @@
         />
         <.td_button id="login-submit" type="submit" variant="primary" size="lg" label="Log in" />
       </.form>
+      <.link
+        id="gs1-sso-login"
+        href={~p"/auth/gs1"}
+        class="mt-4 flex w-full items-center justify-center rounded-xl border border-slate-300 px-4 py-3 font-semibold text-slate-700 transition hover:border-emerald-600 hover:text-emerald-700"
+      >
+        Continue with GS1 Kenya
+      </.link>
       <:footer>
         <.link navigate={~p"/reset-password"}>Forgot your password?</.link>
       </:footer>

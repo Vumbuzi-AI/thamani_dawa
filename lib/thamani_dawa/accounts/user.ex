@@ -21,6 +21,7 @@ defmodule ThamaniDawa.Accounts.User do
     field :last_logged_in_at, :utc_datetime
     field :last_logged_out_at, :utc_datetime
     field :confirmed_at, :utc_datetime
+    field :gs1_sso_sub, :string
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
     belongs_to :current_site, ThamaniDawa.Sites.Site
