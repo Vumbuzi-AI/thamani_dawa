@@ -28,10 +28,16 @@ defmodule ThamaniDawaWeb.TDComponents do
   end
 
   def td_icon(assigns) do
+    assigns = update(assigns, :name, &known_icon/1)
+
     ~H"""
     <Phosphor.icon name={@name} weight={@weight} class={@class} />
     """
   end
+
+  # The bundled Phosphor set has no squares-plus. Stack is the aggregation mark.
+  defp known_icon("squares-plus"), do: "stack"
+  defp known_icon(name), do: name
 
   attr :variant, :string,
     values: ~w(primary secondary danger danger-confirm),
@@ -399,14 +405,29 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil
+  attr :back, :any, default: nil
   slot :actions
 
   def td_page_header(assigns) do
     ~H"""
     <header class="td-page-header">
-      <div>
-        <h1>{@title}</h1>
-        <p :if={@subtitle}>{@subtitle}</p>
+      <div class="flex min-w-0 items-start gap-3">
+        <.link :if={is_binary(@back)} navigate={@back} aria-label="Go back" class="td-icon-btn mt-1">
+          <.td_icon name="arrow-left" />
+        </.link>
+        <button
+          :if={@back == true}
+          type="button"
+          aria-label="Go back"
+          onclick="window.history.back()"
+          class="td-icon-btn mt-1"
+        >
+          <.td_icon name="arrow-left" />
+        </button>
+        <div class="min-w-0">
+          <h1>{@title}</h1>
+          <p :if={@subtitle}>{@subtitle}</p>
+        </div>
       </div>
       <div :if={@actions != []} class="td-header-actions">{render_slot(@actions)}</div>
     </header>
@@ -803,12 +824,22 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
-  attr :tone, :string, values: ~w(info success warning danger), default: "info"
+  attr :tone, :string, values: ~w(success danger info warning), default: "success"
   attr :text, :string, required: true
 
   def td_toast(assigns) do
     ~H"""
-    <p class={["td-toast", "is-#{@tone}"]} role="status">{@text}</p>
+    <p class={["td-toast", "is-#{@tone}"]} data-tone={@tone} role="status">
+      <span class="td-toast-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256">
+          <path
+            fill="currentColor"
+            d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m45.66 85.66l-56 56a8 8 0 0 1-11.32 0l-24-24a8 8 0 0 1 11.32-11.32L112 148.69l50.34-50.35a8 8 0 0 1 11.32 11.32"
+          />
+        </svg>
+      </span>
+      <span class="td-toast-text">{@text}</span>
+    </p>
     """
   end
 
@@ -1552,7 +1583,7 @@ defmodule ThamaniDawaWeb.TDComponents do
         aria-label="Open account menu"
         aria-haspopup="menu"
         aria-controls="sidebar-account-dropdown"
-        phx-click={JS.toggle(to: "#sidebar-account-dropdown")}
+        phx-click={JS.toggle(to: "#sidebar-account-dropdown", display: "flex")}
         phx-click-away={JS.hide(to: "#sidebar-account-dropdown")}
       >
         <.td_orb seed={@seed} size={28} />
@@ -1567,7 +1598,6 @@ defmodule ThamaniDawaWeb.TDComponents do
         class="td-account-menu"
         role="menu"
         aria-label="Account"
-        hidden
       >
         {render_slot(@menu)}
       </div>
@@ -1584,6 +1614,7 @@ defmodule ThamaniDawaWeb.TDComponents do
             Array.from(menu.querySelectorAll("[role^=menuitem]")).filter((el) => el.offsetParent !== null)
           const isOpen = () => getComputedStyle(menu).display !== "none"
           const close = (refocus) => {
+            menu.hidden = false
             menu.style.display = "none"
             chip.setAttribute("aria-expanded", "false")
             if (refocus) chip.focus()
@@ -1616,17 +1647,22 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil
+  attr :back, :any, default: nil
   slot :actions
+  slot :tabs
   slot :filters
   slot :inner_block, required: true
 
   def td_list_page(assigns) do
     ~H"""
-    <section class="td-recipe">
-      <.td_page_header title={@title} subtitle={@subtitle}>
+    <section class="td-recipe td-list-page">
+      <.td_page_header title={@title} subtitle={@subtitle} back={@back}>
         <:actions>{render_slot(@actions)}</:actions>
       </.td_page_header>
-      <div :if={@filters != []} class="td-filter-row">{render_slot(@filters)}</div>
+      <nav :if={@tabs != []} class="td-tabs">{render_slot(@tabs)}</nav>
+      <div :if={@filters != []} class={[@tabs != [] && "td-toolbar", @tabs == [] && "td-filter-row"]}>
+        {render_slot(@filters)}
+      </div>
       {render_slot(@inner_block)}
     </section>
     """
@@ -1634,16 +1670,19 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil
+  attr :back, :any, default: nil
   slot :actions
-  slot :inner_block, required: true
+  slot :body
+  slot :inner_block
 
   def td_detail_page(assigns) do
     ~H"""
     <section class="td-recipe">
-      <.td_page_header title={@title} subtitle={@subtitle}>
+      <.td_page_header title={@title} subtitle={@subtitle} back={@back}>
         <:actions>{render_slot(@actions)}</:actions>
       </.td_page_header>
-      <div class="td-kv-grid">{render_slot(@inner_block)}</div>
+      <div :if={@inner_block != []} class="td-kv-grid">{render_slot(@inner_block)}</div>
+      {render_slot(@body)}
     </section>
     """
   end
@@ -1676,24 +1715,29 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :id, :string, required: true
   attr :show, :boolean, default: true
   attr :title, :string, required: true
+  attr :subtitle, :string, default: nil
   attr :body, :string, required: true
   attr :confirm, :string, default: "Confirm"
+  attr :confirm_id, :string, default: nil
+  attr :confirm_value_id, :any, default: nil
   attr :on_cancel, JS, default: %JS{}
   attr :confirm_click, :string, required: true
 
   def td_confirm(assigns) do
     ~H"""
-    <.td_modal id={@id} show={@show} title={@title} on_cancel={@on_cancel}>
+    <.td_modal id={@id} show={@show} title={@title} subtitle={@subtitle} on_cancel={@on_cancel}>
       <:body>
         <p class="td-note">{@body}</p>
       </:body>
       <:footer>
         <.td_button type="button" variant="secondary" label="Cancel" phx-click={@on_cancel} />
         <.td_button
+          id={@confirm_id}
           type="button"
           variant="danger-confirm"
           label={@confirm}
           phx-click={@confirm_click}
+          phx-value-id={@confirm_value_id}
         />
       </:footer>
     </.td_modal>
@@ -1735,13 +1779,13 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
-  attr :title, :string, required: true
+  attr :title, :string, default: nil
   slot :inner_block, required: true
 
   def td_mode_picker(assigns) do
     ~H"""
     <div class="td-mode">
-      <h2>{@title}</h2>
+      <h2 :if={@title}>{@title}</h2>
       <div class="td-mode-grid">{render_slot(@inner_block)}</div>
     </div>
     """

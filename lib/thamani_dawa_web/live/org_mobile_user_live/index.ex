@@ -25,6 +25,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
      |> assign(:users, [])
      |> assign(:load_error, nil)
      |> assign(:deactivate_user, nil)
+     |> assign(:resend_user, nil)
      |> load_users()}
   end
 
@@ -88,6 +89,29 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
 
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, error_message(reason))}
+    end
+  end
+
+  def handle_event("ask_resend", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :resend_user, Enum.find(socket.assigns.users, &(&1["id"] == id)))}
+  end
+
+  def handle_event("cancel_resend", _params, socket) do
+    {:noreply, assign(socket, :resend_user, nil)}
+  end
+
+  def handle_event("confirm_resend", _params, socket) do
+    case socket.assigns.resend_user do
+      nil ->
+        {:noreply, socket}
+
+      user ->
+        socket
+        |> assign(:resend_user, nil)
+        |> then(fn socket ->
+          # Reuse the existing event so the GS1 call stays in one place.
+          handle_event("resend_pin", %{"id" => user["id"]}, socket)
+        end)
     end
   end
 
@@ -292,9 +316,8 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
               <:action :let={user}>
                 <.link
                   id={"resend-pin-#{user["id"]}"}
-                  phx-click="resend_pin"
+                  phx-click="ask_resend"
                   phx-value-id={user["id"]}
-                  data-confirm={"Send #{user["name"]} a new PIN? Their current PIN stops working."}
                 >
                   Resend PIN
                 </.link>
@@ -356,6 +379,16 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
           <% end %>
         </.form>
       </.td_overlay_form>
+
+      <.td_confirm
+        :if={@resend_user}
+        id="resend-pin-modal"
+        title={"Send #{@resend_user["name"]} a new PIN?"}
+        body="Their current PIN stops working. GS1 emails the new one."
+        confirm="Send new PIN"
+        confirm_click="confirm_resend"
+        on_cancel={JS.push("cancel_resend")}
+      />
 
       <.td_confirm
         :if={@deactivate_user}

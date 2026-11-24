@@ -34,7 +34,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
   alias ThamaniDawaWeb.Layouts
 
   @doc """
-  Renders flash notices.
+  Renders a flash as the canon TD toast: an ink pill with a check, sitting in
+  the toast region. Info flashes are completed actions, so they use the
+  success tone. Error flashes use danger. Click the pill to dismiss it.
 
   ## Examples
 
@@ -59,6 +61,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
   def flash(assigns) do
     assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
     assigns = assign(assigns, :timeout_ms, flash_timeout(assigns))
+    assigns = assign(assigns, :tone, toast_tone(assigns.kind))
 
     ~H"""
     <div
@@ -67,37 +70,29 @@ defmodule ThamaniDawaWeb.CoreComponents do
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       phx-hook="FlashAutoDismiss"
       data-timeout={@timeout_ms}
-      role="alert"
-      class="toast toast-top toast-end z-50"
+      data-kind={@kind}
+      role={if @tone == "danger", do: "alert", else: "status"}
+      class="td-toast-hit"
       {@rest}
     >
-      <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
-      ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
-        <div>
-          <p :if={@title} class="font-semibold">{@title}</p>
-          <p>{msg}</p>
-        </div>
-        <div class="flex-1" />
-        <button
-          type="button"
-          data-flash-dismiss
-          class="group relative self-start cursor-pointer transition-transform active:scale-[0.96] after:absolute after:inset-[-12px] after:content-['']"
-          aria-label={gettext("close")}
-        >
-          <.icon
-            name="hero-x-mark"
-            class="size-5 opacity-40 transition-opacity group-hover:opacity-70"
-          />
-        </button>
-      </div>
+      <p class={["td-toast", "is-#{@tone}"]} data-tone={@tone}>
+        <span class="td-toast-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256">
+            <path
+              fill="currentColor"
+              d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m45.66 85.66l-56 56a8 8 0 0 1-11.32 0l-24-24a8 8 0 0 1 11.32-11.32L112 148.69l50.34-50.35a8 8 0 0 1 11.32 11.32"
+            />
+          </svg>
+        </span>
+        <span class="td-toast-text"><span :if={@title}>{@title}. </span>{msg}</span>
+      </p>
     </div>
     """
   end
+
+  # Completed actions are stored as :info. The toast for those is the green check.
+  defp toast_tone(:error), do: "danger"
+  defp toast_tone(_kind), do: "success"
 
   defp flash_timeout(%{id: id}) when id in ["client-error", "server-error"], do: 0
   defp flash_timeout(%{kind: :error}), do: 8_000
@@ -786,7 +781,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
   @doc """
   The one date field for the whole app (Doop TD DatePicker anatomy): a 32px
   TD trigger showing `23 Nov 2026`, and a month calendar popover with Phosphor
-  carets, today and selected states, and Clear / Today text actions. The value
+  carets, today and selected states, and Clear / Today text actions.   The month
+  name opens the twelve months. The year opens twelve years in one click.
+  Choosing a month or a year returns to that month's days. From the year
+  grid, the range title opens the months. The value
   is submitted as ISO `yyyy-mm-dd` in a hidden input, so changesets, `phx-change`
   and `phx-submit` keep working unchanged. `<.input>` and `<.td_input>` with the
   date type render this component too, so the browser's native calendar never
@@ -1175,8 +1173,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
             this.view = "days"; this.render(); return this.focusActive()
           }
           if (a.dpYear) {
-            this.focusDate = new Date(parseInt(a.dpYear, 10), this.focusDate.getMonth(), 1)
-            this.view = "months"; this.render(); return this.focusActive()
+            const yr = parseInt(a.dpYear, 10)
+            const month = this.focusDate.getMonth()
+            const day = Math.min(this.focusDate.getDate(), new Date(yr, month + 1, 0).getDate())
+            this.focusDate = new Date(yr, month, day)
+            this.view = "days"; this.render(); return this.focusActive()
           }
           if (a.dpDay) return this.choose(parseIso(a.dpDay))
           if (a.dpAction === "today") {
@@ -1198,6 +1199,25 @@ defmodule ThamaniDawaWeb.CoreComponents do
               <button type="button" class="td-dp-nb" data-dp-nav="1" aria-label="${nextLabel}">${CARET_R}</button>
             </span>
           </div>`
+        },
+        dayHeader(month, year) {
+          return `<div class="td-dp-hd">
+            <span class="td-dp-titles">
+              <button type="button" class="td-dp-title" data-dp-view="months" aria-label="Choose month">${month}</button>
+              <button type="button" class="td-dp-title" data-dp-view="years" aria-label="Choose year">${year}</button>
+            </span>
+            <span class="td-dp-nv">
+              <button type="button" class="td-dp-nb" data-dp-nav="-1" aria-label="Previous month">${CARET_L}</button>
+              <button type="button" class="td-dp-nb" data-dp-nav="1" aria-label="Next month">${CARET_R}</button>
+            </span>
+          </div>`
+        },
+        yearPageStart(y) {
+          if (this.mode === "range") return y - (y % 12)
+          const base = this.today.getFullYear()
+          let offset = (y - base) % 12
+          if (offset < 0) offset += 12
+          return y - offset
         },
         footer() {
           const todayOff = this.disabledDay(this.today)
@@ -1243,7 +1263,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
               ${sameDay(d, this.today) ? 'aria-current="date"' : ""}
               aria-label="${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}" ${this.disabledDay(d) ? "disabled" : ""}>${d.getDate()}</button>`
           }
-          this.pop.innerHTML = this.header(`${MONTHS[m]} ${y}`, "months", "Previous month", "Next month") +
+          this.pop.innerHTML = this.dayHeader(MONTHS[m], y) +
             `<div class="td-dp-wk" aria-hidden="true">${DOW.map(d => `<span>${d}</span>`).join("")}</div>` +
             `<div class="td-dp-gr" role="grid">${grid}</div>` + this.footer()
         },
@@ -1262,7 +1282,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
         },
         renderYears() {
           const y = this.focusDate.getFullYear()
-          const start = y - (y % 12)
+          const start = this.yearPageStart(y)
           const ref = this.mode === "range" ? (this.start || this.end) : this.selected
           let cells = ""
           for (let i = 0; i < 12; i++) {
@@ -1272,7 +1292,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
             cells += `<button type="button" class="td-dp-cell${sel ? " is-selected" : ""}" data-dp-year="${yr}"
               tabindex="${yr === y ? 0 : -1}" ${off ? "disabled" : ""}>${yr}</button>`
           }
-          this.pop.innerHTML = this.header(`${start} to ${start + 11}`, "days", "Previous years", "Next years") +
+          this.pop.innerHTML = this.header(`${start} – ${start + 11}`, "months", "Previous years", "Next years") +
             `<div class="td-dp-cells">${cells}</div>` + this.footer()
         }
       }
@@ -1282,7 +1302,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   @doc """
   The TD DatePicker range variant (Doop `chdlkoodd2`, frame gGZGY4la6k) for From / To
-  filter pairs. One 32px field shows `1 Nov 2026 – 22 Nov 2026`; the popover takes a
+  filter pairs. It uses the same month and year grids as the single date picker.
+  One 32px field shows `1 Nov 2026 – 22 Nov 2026`; the popover takes a
   start and an end click, fills the days between with the accent tint and marks both
   ends in solid accent. Each end is submitted as ISO `yyyy-mm-dd` in its own hidden
   input, so the existing `from` / `to` params keep working.
@@ -1399,11 +1420,14 @@ defmodule ThamaniDawaWeb.CoreComponents do
   # {"yyyy-mm-dd", "HH:MM"} from a Date, DateTime, NaiveDateTime or form string.
   defp date_time_parts(%Date{} = date), do: {Date.to_iso8601(date), ""}
 
-  defp date_time_parts(%DateTime{} = dt),
-    do: {dt |> DateTime.to_date() |> Date.to_iso8601(), Calendar.strftime(dt, "%H:%M")}
+  defp date_time_parts(%DateTime{} = dt), do: dt |> ThamaniDawaWeb.TimeFormat.to_eat() |> eat_parts()
 
   defp date_time_parts(%NaiveDateTime{} = dt),
-    do: {dt |> NaiveDateTime.to_date() |> Date.to_iso8601(), Calendar.strftime(dt, "%H:%M")}
+    do: dt |> ThamaniDawaWeb.TimeFormat.to_eat() |> eat_parts()
+
+  defp eat_parts(%NaiveDateTime{} = eat) do
+    {eat |> NaiveDateTime.to_date() |> Date.to_iso8601(), Calendar.strftime(eat, "%H:%M")}
+  end
 
   defp date_time_parts(value) when is_binary(value) do
     case String.split(value, ["T", " "], parts: 2) do
@@ -1420,7 +1444,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
 
   defp display_date(value) when is_binary(value) and value != "" do
     case Date.from_iso8601(value) do
-      {:ok, date} -> Calendar.strftime(date, "%-d %b %Y")
+      {:ok, date} -> ThamaniDawaWeb.TimeFormat.date(date)
       _ -> nil
     end
   end

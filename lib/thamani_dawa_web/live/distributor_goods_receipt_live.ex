@@ -252,7 +252,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   defp condition_classes(_status), do: "bg-thamani-stone text-thamani-forest"
 
   defp format_expiry(nil), do: "—"
-  defp format_expiry(%Date{} = date), do: Calendar.strftime(date, "%d %b %Y")
+  defp format_expiry(%Date{} = date), do: ThamaniDawaWeb.TimeFormat.date(date)
 
   defp case_units(group) do
     group.batches |> Enum.map(& &1.quantity) |> Enum.sum()
@@ -742,15 +742,15 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
       </section>
 
       <section :if={@receipt.attachments != []} class="mt-6">
-        <.header variant="plain">
-          <span>Documents</span>
-          <:subtitle>GRN, invoice, and any other documents attached to this delivery.</:subtitle>
-        </.header>
+        <.td_card_header
+          title="Documents"
+          subtitle="GRN, invoice, and any other documents attached to this delivery."
+        />
         <ul id="goods-receipt-documents" class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <li
             :for={attachment <- @receipt.attachments}
             id={"goods-receipt-document-#{attachment.id}"}
-            class="group flex min-w-0 flex-col rounded-2xl border border-thamani-stone bg-td-surface p-4 shadow-[0_1px_2px_rgba(23,48,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--thamani-forest)_28%,white)] hover:shadow-md"
+            class="group flex min-w-0 flex-col rounded-2xl border border-thamani-stone bg-td-surface p-4 shadow-[0_1px_2px_rgba(23,48,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-thamani-forest hover:shadow-md"
           >
             <div class="flex min-w-0 items-start gap-3">
               <span class={[
@@ -871,7 +871,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
   defp document_icon(_attachment), do: "hero-document"
 
   defp document_icon_class(%{content_type: "application/pdf"}),
-    do: "bg-red-50 text-red-700"
+    do: "bg-td-danger-tint text-td-danger"
 
   defp document_icon_class(%{content_type: "image/" <> _}),
     do: "bg-sky-50 text-sky-700"

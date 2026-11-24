@@ -65,22 +65,18 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
       current_scope={@current_scope}
       current_path={~p"/distributor/billing"}
     >
-      <.header icon="hero-credit-card">
-        <span class="flex flex-wrap items-center gap-3">
-          Billing
+      <.td_list_page title="Billing" subtitle="Your serialisation allowance and payment history.">
+        <:actions>
           <span class="rounded-full bg-thamani-stone px-3 py-1 text-xs font-semibold text-thamani-forest">
             {plan_label(@organization.serialisation_type)}
           </span>
           <span
             :if={@overdue?}
             id="distributor-billing-overdue"
-            class="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800"
+            class="rounded-full bg-td-danger-tint px-3 py-1 text-xs font-semibold text-td-danger"
           >
             Overdue
           </span>
-        </span>
-        <:subtitle>Your serialisation allowance and payment history.</:subtitle>
-        <:actions>
           <.button
             :if={@organization.serialisation_type == "prepay"}
             id="distributor-buy-bundle"
@@ -98,7 +94,6 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
             <.icon name="hero-banknotes" class="size-4" /> Settle usage
           </.button>
         </:actions>
-      </.header>
 
       <%= if @organization.serialisation_type == "prepay" do %>
         <div class="dashboard-stat-grid" id="distributor-prepay-usage">
@@ -206,6 +201,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
           </:empty_state>
         </.table>
       </section>
+      </.td_list_page>
     </Layouts.distributor_shell>
     """
   end

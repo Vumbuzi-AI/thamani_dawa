@@ -12,8 +12,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
   alias ThamaniDawa.StockTakes
-
-  @base_path "/pharmacy/stock-takes"
+  alias ThamaniDawaWeb.CarePortal
 
   def mount(%{"id" => id}, _session, socket) do
     scope = socket.assigns.current_scope
@@ -183,10 +182,15 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
   end
 
   def render(assigns) do
-    assigns = assign(assigns, :base_path, @base_path)
+    assigns = assign(assigns, :base_path, CarePortal.stock_takes(assigns.portal))
 
     ~H"""
-    <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path={@base_path}>
+    <Layouts.care_shell
+      portal={@portal}
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@base_path}
+    >
       <div class="space-y-6">
         <div class="flex flex-wrap items-start justify-between gap-3">
           <div class="min-w-0">
@@ -380,7 +384,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
             <p class="text-sm font-semibold text-thamani-forest">Stock take approved</p>
             <p class="mt-0.5 text-sm text-thamani-pewter">
               Batch quantities were updated to match the physical counts recorded above. {if @stock_take.approved_at,
-                do: "Approved on #{Calendar.strftime(@stock_take.approved_at, "%d %b %Y at %H:%M")}.",
+                do: "Approved on #{ThamaniDawaWeb.TimeFormat.datetime(@stock_take.approved_at)}.",
                 else: ""}
             </p>
           </div>
@@ -399,7 +403,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Show do
           </div>
         </aside>
       </div>
-    </Layouts.pharmacy_shell>
+    </Layouts.care_shell>
     """
   end
 

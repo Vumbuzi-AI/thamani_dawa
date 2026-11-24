@@ -96,7 +96,7 @@ defmodule ThamaniDawaWeb.GlnSearchField do
           :if={@results != []}
           id={"#{@id}-results"}
           role="listbox"
-          class="absolute z-[70] mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-thamani-stone bg-white py-1 shadow-lg"
+          class="absolute z-[70] mt-1 max-h-56 w-full overflow-y-auto rounded-xl border border-thamani-stone bg-td-surface py-1 shadow-lg"
         >
           <button
             :for={party <- @results}
@@ -106,7 +106,7 @@ defmodule ThamaniDawaWeb.GlnSearchField do
             phx-click="select"
             phx-value-gln={party.gln}
             phx-target={@myself}
-            class="block w-full px-3 py-2 text-left text-sm transition hover:bg-thamani-mist"
+            class="block w-full px-3 py-2 text-left text-sm transition hover:bg-td-hover"
           >
             <span class="block font-mono font-semibold text-thamani-forest">{party.gln}</span>
             <span class="block text-xs text-thamani-pewter">

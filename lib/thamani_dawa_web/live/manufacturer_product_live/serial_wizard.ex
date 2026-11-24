@@ -291,12 +291,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
 
   defp mode_errors(errors, params, "order") do
     errors
-    |> quantity_error(params, :shipper_quantity, "Shipper quantity")
+    |> quantity_error(params, :shipper_quantity, "Units per shipper SSCC")
     |> shipper_not_over_primary_error(params)
     |> shipper_divides_primary_error(params)
-    |> required_error(params, :from_gln, "From GLN")
-    |> required_error(params, :from_company_name, "From company name")
-    |> required_error(params, :from_address, "From address")
+    |> required_error(params, :from_gln, "From facility")
+    |> required_error(params, :from_company_name, "Company")
+    |> required_error(params, :from_address, "Address")
     |> required_error(params, :to_gln, "To GLN")
     |> required_error(params, :to_company_name, "To company name")
     |> required_error(params, :to_address, "To address")
@@ -354,8 +354,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
   end
 
   defp step_label(1), do: "Mode"
-  defp step_label(2), do: "Batch & quantity"
-  defp step_label(3), do: "From / To"
+  defp step_label(2), do: "Batch"
+  defp step_label(3), do: "From and To"
+
+  defp wizard_subtitle(1, _mode), do: "Choose how this batch leaves the plant."
+  defp wizard_subtitle(_step, "stock"), do: "Make to stock"
+  defp wizard_subtitle(_step, "order"), do: "Make to order"
+  defp wizard_subtitle(_step, _mode), do: "Choose how this batch leaves the plant."
 
   defp total_steps("order"), do: 3
   defp total_steps(_mode), do: 2
@@ -363,6 +368,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
   def render(assigns) do
     ~H"""
     <div id="manufacturer-serial-wizard">
+      <p id="serial-wizard-subtitle" class="td-wizard-sub">{wizard_subtitle(@step, @mode)}</p>
       <%= if @issued do %>
         <div id="serials-issued">
           <p :if={@issued.kind == "stock"} class="td-note">
@@ -424,21 +430,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
             <.td_key_value label="Selected product" value={@product.name} />
             <.td_key_value label="GTIN" value={@product.gtin} mono />
           </div>
-          <.td_mode_picker title="How should these serials be issued?">
-            <.td_option_card
-              id="serial-wizard-mode-order"
-              title="Make to order"
-              body="Create the shipper SSCCs now, with a From/To party for the labels."
-              phx-click="choose_mode"
-              phx-value-mode="order"
-              phx-target={@myself}
-            />
+          <.td_mode_picker>
             <.td_option_card
               id="serial-wizard-mode-stock"
               title="Make to stock"
-              body="Store as groups of batches. No SSCC is created yet."
+              body="Issue serials for a batch and keep the units in store. You pack them into shipper SSCCs later."
               phx-click="choose_mode"
               phx-value-mode="stock"
+              phx-target={@myself}
+            />
+            <.td_option_card
+              id="serial-wizard-mode-order"
+              title="Make to order"
+              body="Issue serials and pack them into shipper SSCCs now, for one order and one destination."
+              phx-click="choose_mode"
+              phx-value-mode="order"
               phx-target={@myself}
             />
           </.td_mode_picker>
@@ -452,7 +458,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
             class="td-auth-form"
           >
             <%= if @step == 2 do %>
-              <.td_input field={@form[:batch_no]} label="Batch #" required />
+              <.td_input field={@form[:batch_no]} label="Batch number" required />
               <.td_input
                 field={@form[:primary_quantity]}
                 type="number"
@@ -478,7 +484,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                   id="serial-wizard-prev"
                   type="button"
                   variant="secondary"
-                  label="Prev"
+                  label="Back"
                   phx-click="prev_step"
                   phx-target={@myself}
                 />
@@ -497,7 +503,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                     type="submit"
                     variant="primary"
                     label="Generate serials"
-                    phx-disable-with="Generating…"
+                    phx-disable-with="Generating"
                   />
                 <% end %>
               </div>
@@ -524,7 +530,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                 value={@form[:shipper_quantity].value}
               />
               <div>
-                <p class="td-note">From</p>
                 <.input
                   field={@form[:from_gln]}
                   type="combobox"
@@ -533,11 +538,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                   placeholder="Search your facilities"
                   required
                 />
-                <.td_input field={@form[:from_company_name]} label="From company name" required />
-                <.td_input field={@form[:from_address]} label="From address" required />
+                <.td_input field={@form[:from_company_name]} label="Company" required />
+                <.td_input field={@form[:from_address]} label="Address" required />
               </div>
               <div>
-                <p class="td-note">To</p>
                 <label for="serial_generation_to_gln_search" class="thamani-label">
                   To GLN<span
                     aria-hidden="true"
@@ -621,7 +625,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                   id="serial-wizard-prev"
                   type="button"
                   variant="secondary"
-                  label="Prev"
+                  label="Back"
                   phx-click="prev_step"
                   phx-target={@myself}
                 />
@@ -630,7 +634,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                   type="submit"
                   variant="primary"
                   label="Generate serials & SSCCs"
-                  phx-disable-with="Generating…"
+                  phx-disable-with="Generating"
                 />
               </div>
             <% end %>

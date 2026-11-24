@@ -1,6 +1,6 @@
 <div class="td-auth">
   <div class="td-auth-corner">
-    <.td_button variant="secondary" label="Back to log in" navigate={~p"/login"} />
+    <.td_button variant="secondary" label="Back to log in" navigate={~p"/login"} glyph="arrow-left" />
   </div>
 
   <div class="td-auth-col">
@@ -8,12 +8,11 @@
       <img src="/images/logo-transparent.png" alt="Thamani Dawa" />
     </a>
 
-    <Layouts.flash_group flash={@flash} />
+    <div class="td-auth-panel">
+      <h1>Choose a new password</h1>
+      <p class="td-auth-lead">Use at least 12 characters. You will log in with it from now on.</p>
+      <p :if={msg = Phoenix.Flash.get(@flash, :error)} class="td-auth-error">{msg}</p>
 
-    <.td_auth_card
-      title="Choose a new password"
-      subtitle="Make it something you haven't used before."
-    >
       <.form
         for={@form}
         id="password-reset-form"
@@ -25,12 +24,30 @@
           field={@form[:password]}
           type="password"
           label="New password"
+          hint="At least 12 characters"
+          placeholder="••••••••"
+          autocomplete="new-password"
+          required
+        />
+        <.td_input
+          field={@form[:password_confirmation]}
+          type="password"
+          label="Confirm new password"
           placeholder="••••••••"
           autocomplete="new-password"
           required
         />
         <.td_button type="submit" variant="primary" size="lg" label="Reset password" />
       </.form>
-    </.td_auth_card>
+
+      <p class="td-auth-switch">
+        <.link navigate={~p"/login"}>Back to log in</.link>
+      </p>
+    </div>
+  </div>
+
+  <div class="td-auth-page-foot">
+    <.link navigate={~p"/privacy"}>Privacy</.link>
+    <.link navigate={~p"/terms"}>Terms</.link>
   </div>
 </div>

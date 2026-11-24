@@ -244,14 +244,14 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
   def render(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/products"}>
-      <.header icon="hero-arrow-up-tray">
-        Import products
-        <:subtitle>Bring in your product catalogue from a spreadsheet.</:subtitle>
+      <.td_detail_page
+        title="Import products"
+        subtitle="Bring in your product catalogue from a spreadsheet."
+      >
         <:actions>
-          <.button variant="ghost" navigate={~p"/org/products"}>Cancel</.button>
+          <.td_button variant="secondary" label="Cancel" navigate={~p"/org/products"} />
         </:actions>
-      </.header>
-
+        <:body>
       <div class="rounded-2xl ff-surface-card p-5 sm:p-6">
         <.step_indicator step={@step} />
 
@@ -605,14 +605,16 @@ defmodule ThamaniDawaWeb.ProductLive.Import do
         </div>
 
         <div :if={@step == :done} class="mt-6 max-w-3xl space-y-4">
-          <div class="rounded-xl border border-green-200 bg-green-50 p-4">
-            <p class="text-sm font-medium text-green-800">
+          <div class="rounded-xl border border-td-success-line bg-td-success-tint p-4">
+            <p class="text-sm font-medium text-td-success">
               Imported {@summary.created} of {@summary.total} rows.
             </p>
           </div>
           <.button variant="primary" navigate={~p"/org/products"}>Back to products</.button>
         </div>
       </div>
+        </:body>
+      </.td_detail_page>
     </Layouts.org_shell>
     """
   end

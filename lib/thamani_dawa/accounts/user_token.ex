@@ -18,9 +18,9 @@ defmodule ThamaniDawa.Accounts.UserToken do
   @doc """
   Builds a token used for maintaining a user's session, tied to the given user.
   """
-  def build_session_token(user) do
+  def build_session_token(user, context \\ "session") when context in ["session", "remember"] do
     token = :crypto.strong_rand_bytes(@rand_size)
-    {token, %__MODULE__{token: token, context: "session", user_id: user.id}}
+    {token, %__MODULE__{token: token, context: context, user_id: user.id}}
   end
 
   @doc """
@@ -31,15 +31,22 @@ defmodule ThamaniDawa.Accounts.UserToken do
   resolves `current_scope`, not only at login time.
   """
   def verify_session_token_query(token) do
+    days = validity_in_days("session")
+    idle = idle_timeout_in_minutes()
+
     query =
-      from token in by_token_and_context_query(token, "session"),
+      from token in by_browser_token_query(token),
         join: user in assoc(token, :user),
-        where:
-          token.inserted_at > ago(^validity_in_days("session"), "day") and
-            token.last_used_at > ago(^idle_timeout_in_minutes(), "minute") and user.is_active,
+        where: token.inserted_at > ago(^days, "day") and user.is_active,
+        where: token.context == "remember" or token.last_used_at > ago(^idle, "minute"),
         select: user
 
     {:ok, query}
+  end
+
+  @doc "A browser login token, either a tab session or a remembered one."
+  def by_browser_token_query(token) do
+    from t in __MODULE__, where: t.token == ^token and t.context in ["session", "remember"]
   end
 
   @doc """

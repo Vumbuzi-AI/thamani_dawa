@@ -2,6 +2,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Distributor
+  alias ThamaniDawa.Manufacturing
 
   @tabs [
     {"", "All"},
@@ -44,10 +45,21 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
 
   defp load_shipments(socket) do
     f = socket.assigns.filters
+    organization_id = socket.assigns.current_scope.organization_id
 
-    result =
-      Distributor.list_shipments(socket.assigns.current_scope.organization_id, %{
-        participant_tier: "manufacturer",
+    filters = %{
+      participant_tier: "manufacturer",
+      status: f["status"],
+      search: f["search"],
+      date_from: parse_date(f["date_from"]),
+      date_to: parse_date(f["date_to"]),
+      page: socket.assigns.page
+    }
+
+    distributor = Distributor.list_shipments(organization_id, filters)
+
+    packed =
+      Manufacturing.list_shipments_page(organization_id, %{
         status: f["status"],
         search: f["search"],
         date_from: parse_date(f["date_from"]),
@@ -55,9 +67,46 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
         page: socket.assigns.page
       })
 
+    rows =
+      (Enum.map(distributor.entries, &distributor_row/1) ++
+         Enum.map(packed.entries, &packed_row/1))
+      |> Enum.sort_by(& &1.updated_at, {:desc, DateTime})
+
     socket
-    |> assign(:page_info, Map.delete(result, :entries))
-    |> stream(:shipments, result.entries, reset: true)
+    |> assign(:page_info, Map.delete(distributor, :entries))
+    |> stream(:shipments, rows, reset: true)
+  end
+
+  defp distributor_row(shipment) do
+    %{
+      id: "d-#{shipment.id}",
+      order_number: shipment.order_number,
+      reference: shipment.reference,
+      status: shipment.status,
+      origin_company: shipment.origin_company,
+      destination_company: shipment.destination_company,
+      shipper_count: length(shipment.shippers),
+      unit_count: shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum(),
+      packed_by: (shipment.assigned_to && shipment.assigned_to.name) || "Unclaimed",
+      updated_at: shipment.updated_at,
+      path: ~p"/manufacturer/shipments/#{shipment.id}"
+    }
+  end
+
+  defp packed_row(shipment) do
+    %{
+      id: "m-#{shipment.id}",
+      order_number: shipment.order_number,
+      reference: shipment.reference,
+      status: shipment.status,
+      origin_company: shipment.origin_company,
+      destination_company: shipment.destination_company,
+      shipper_count: length(shipment.shipper_ssccs),
+      unit_count: Enum.sum(Enum.map(shipment.shipper_ssccs, &(&1.count_of_trade_items || 0))),
+      packed_by: (shipment.created_by && shipment.created_by.name) || "Web",
+      updated_at: shipment.updated_at,
+      path: ~p"/manufacturer/shipments/packed/#{shipment.id}"
+    }
   end
 
   defp filter_path(socket, changes), do: shipment_path(Map.merge(socket.assigns.filters, changes))
@@ -83,9 +132,6 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
       _ -> nil
     end
   end
-
-  defp unit_count(shipment),
-    do: shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum()
 
   def render(assigns) do
     ~H"""
@@ -141,7 +187,29 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
           row_id={fn {id, _shipment} -> id end}
         >
           <:col :let={{_id, shipment}} label="Order">
-            <.td_key_value label={shipment.order_number} value={shipment.reference} mono />
+            <.td_pid
+              id={"shipment-#{shipment.id}-order"}
+              label={shipment.order_number}
+              mono
+              navigate={shipment.path}
+            >
+              <:peek>
+                <.td_peek
+                  kind="Order"
+                  title={shipment.order_number}
+                  subtitle={shipment.reference}
+                  icon="clipboard-text"
+                >
+                  <:row label="From">{shipment.origin_company}</:row>
+                  <:row label="To">{shipment.destination_company}</:row>
+                  <:row label="Shippers">{shipment.shipper_count}</:row>
+                  <:row label="Packed by">{shipment.packed_by}</:row>
+                  <:action>
+                    <.td_button label="Review" navigate={shipment.path} />
+                  </:action>
+                </.td_peek>
+              </:peek>
+            </.td_pid>
           </:col>
           <:col :let={{_id, shipment}} label="Status">
             <.td_badge
@@ -152,17 +220,18 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
           <:col :let={{_id, shipment}} label="From">{shipment.origin_company}</:col>
           <:col :let={{_id, shipment}} label="To">{shipment.destination_company}</:col>
           <:col :let={{_id, shipment}} label="Shippers / units">
-            {length(shipment.shippers)} / {unit_count(shipment)}
+            {shipment.shipper_count} / {shipment.unit_count}
           </:col>
-          <:col :let={{_id, shipment}} label="Mobile user">
-            {(shipment.assigned_to && shipment.assigned_to.name) || "Unclaimed"}
+          <:col :let={{_id, shipment}} label="Packed by">
+            {shipment.packed_by}
           </:col>
           <:col :let={{_id, shipment}} label="Updated">{date_time(shipment.updated_at)}</:col>
           <:action :let={{_id, shipment}}>
             <.td_button
+              id={"review-#{shipment.id}"}
               variant="secondary"
               label="Review"
-              navigate={~p"/manufacturer/shipments/#{shipment.id}"}
+              navigate={shipment.path}
             />
           </:action>
           <:empty>

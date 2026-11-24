@@ -153,11 +153,10 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
       current_scope={@current_scope}
       current_path={~p"/distributor/mobile-users"}
     >
-      <.header icon="hero-device-phone-mobile">
-        Mobile users
-        <:subtitle>
-          People who pack shipments with the Thamani Dawa mobile app. PINs are emailed, never shown here.
-        </:subtitle>
+      <.td_list_page
+        title="Mobile users"
+        subtitle="People who pack shipments with the Thamani Dawa mobile app. PINs are emailed, never shown here."
+      >
         <:actions>
           <.button
             :if={@app_download_url}
@@ -174,7 +173,6 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
             <.icon name="hero-plus" class="size-4" /> Add mobile user
           </.button>
         </:actions>
-      </.header>
 
       <.modal
         :if={@live_action in [:new, :edit]}
@@ -325,6 +323,7 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+      </.td_list_page>
     </Layouts.distributor_shell>
     """
   end

@@ -23,7 +23,9 @@ export const FlashAutoDismiss = {
     if (!timeout || timeout < 1) return
 
     this.dismissTimer = window.setTimeout(() => {
-      this.el.querySelector("[data-flash-dismiss]")?.click()
+      const button = this.el.querySelector("[data-flash-dismiss]")
+      if (button) button.click()
+      else this.el.click()
     }, timeout)
   },
 

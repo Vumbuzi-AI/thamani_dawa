@@ -162,9 +162,9 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
     |> Enum.take(-take)
   end
 
-  defp day_label(date), do: date |> Calendar.strftime("%d %b") |> String.trim_leading("0")
+  defp day_label(date), do: ThamaniDawaWeb.TimeFormat.month_day(date)
   defp week_label(date), do: "W/c " <> day_label(date)
-  defp month_label(date), do: Calendar.strftime(date, "%b %Y")
+  defp month_label(date), do: ThamaniDawaWeb.TimeFormat.month_year(date)
 
   defp axis_labels(marks) do
     case marks do
@@ -201,7 +201,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
   defp status_label(status),
     do: status |> to_string() |> String.replace("_", " ") |> String.capitalize()
 
-  defp short_dt(%DateTime{} = dt), do: Calendar.strftime(dt, "%d %b, %H:%M")
+  defp short_dt(%DateTime{} = dt), do: ThamaniDawaWeb.TimeFormat.short_datetime(dt)
   defp short_dt(_), do: ""
 
   defp newest(orders) do

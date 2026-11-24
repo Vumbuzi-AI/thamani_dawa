@@ -1,6 +1,6 @@
 <div class="td-auth">
   <div class="td-auth-corner">
-    <.td_button variant="secondary" label="Back to log in" navigate={~p"/login"} />
+    <.td_button variant="secondary" label="Back to log in" navigate={~p"/login"} glyph="arrow-left" />
   </div>
 
   <div class="td-auth-col">
@@ -8,12 +8,13 @@
       <img src="/images/logo-transparent.png" alt="Thamani Dawa" />
     </a>
 
-    <Layouts.flash_group flash={@flash} />
+    <div class="td-auth-panel">
+      <h1>Reset your password</h1>
+      <p class="td-auth-lead">
+        Enter the email you log in with. We will send you a link to choose a new password.
+      </p>
+      <p :if={msg = Phoenix.Flash.get(@flash, :error)} class="td-auth-error">{msg}</p>
 
-    <.td_auth_card
-      title="Reset your password"
-      subtitle="Enter your email and we'll send a one-time reset link."
-    >
       <.form
         for={@form}
         id="password-reset-request-form"
@@ -31,6 +32,16 @@
         />
         <.td_button type="submit" variant="primary" size="lg" label="Send reset link" />
       </.form>
-    </.td_auth_card>
+
+      <p class="td-auth-switch">
+        <span>Remembered it?</span>
+        <.link navigate={~p"/login"}>Back to log in</.link>
+      </p>
+    </div>
+  </div>
+
+  <div class="td-auth-page-foot">
+    <.link navigate={~p"/privacy"}>Privacy</.link>
+    <.link navigate={~p"/terms"}>Terms</.link>
   </div>
 </div>

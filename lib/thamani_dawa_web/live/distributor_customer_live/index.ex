@@ -317,7 +317,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
                   Looking up this GLN&hellip;
                 </p>
               <% {:matched, company, address} -> %>
-                <div class="mt-2 flex items-start gap-3 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
+                <div class="mt-2 flex items-start gap-3 rounded-lg bg-td-accent-tint px-3 py-2.5 text-xs font-semibold text-thamani-forest">
                   <.icon name="hero-check-circle" class="mt-0.5 size-4 flex-none" />
                   <div class="min-w-0">
                     <p>{company}</p>

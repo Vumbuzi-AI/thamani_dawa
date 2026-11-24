@@ -1064,12 +1064,18 @@ defmodule ThamaniDawa.Manufacturing do
   The pallet inherits its parties from the first selected shipper.
   """
   def create_pallet_from_shippers(organization_id, shipper_ids) when is_list(shipper_ids) do
-    wanted = MapSet.new(shipper_ids, &to_string/1)
-
-    shippers =
+    available =
       organization_id
       |> list_available_ssccs()
-      |> Enum.filter(&MapSet.member?(wanted, to_string(&1.id)))
+      |> Map.new(&{to_string(&1.id), &1})
+
+    shippers =
+      Enum.flat_map(shipper_ids, fn id ->
+        case Map.fetch(available, to_string(id)) do
+          {:ok, shipper} -> [shipper]
+          :error -> []
+        end
+      end)
 
     case shippers do
       [] ->
@@ -1447,6 +1453,148 @@ defmodule ThamaniDawa.Manufacturing do
 
   def change_shipment(shipment \\ %Shipment{}, attrs \\ %{}),
     do: Shipment.changeset(shipment, attrs)
+
+  @doc """
+  Opens one draft shipment for a pallet's shippers. Parties come from the
+  pallet. Shippers already on a shipment are refused, and no second
+  shipment is written.
+  """
+  def create_shipment_from_pallet(organization_id, user, pallet_id, order_number) do
+    order_number = order_number |> to_string() |> String.trim()
+
+    cond do
+      order_number == "" ->
+        {:error, :order_number}
+
+      true ->
+        pallet = get_pallet!(organization_id, pallet_id)
+        ids = Enum.map(pallet.shipper_ssccs, & &1.id)
+
+        case ids do
+          [] ->
+            {:error, :no_shippers}
+
+          _ ->
+            case available_ssccs(organization_id, ids) do
+              {:ok, _ssccs} ->
+                insert_pallet_shipment(organization_id, user, pallet, ids, order_number)
+
+              {:error, :sscc_unavailable} ->
+                {:error, :already_shipped}
+            end
+        end
+    end
+  end
+
+  defp insert_pallet_shipment(organization_id, user, pallet, ids, order_number) do
+    Repo.transaction(fn ->
+      shipment =
+        %Shipment{organization_id: organization_id, created_by_id: user.id}
+        |> Ecto.Changeset.change(%{
+          reference: shipment_reference(),
+          order_number: order_number,
+          status: "draft",
+          origin_gln: pallet.from_gln,
+          origin_company: blank_default(pallet.from_company_name, pallet.from_gln),
+          origin_address: pallet.from_address || "",
+          destination_gln: pallet.to_gln,
+          destination_company: blank_default(pallet.to_company_name, pallet.to_gln),
+          destination_address: pallet.to_address || ""
+        })
+        |> Repo.insert!()
+
+      Enum.each(ids, fn id ->
+        %ShipmentItem{}
+        |> ShipmentItem.changeset(%{
+          manufacturer_shipment_id: shipment.id,
+          manufacturer_shipper_sscc_id: id
+        })
+        |> Repo.insert!()
+      end)
+
+      get_shipment!(organization_id, shipment.id)
+    end)
+  end
+
+  @doc """
+  Says whether a scanned shipper SSCC can join the pallet being built.
+
+  `accepted_ids` are shippers already on this pallet. `destination_gln` is
+  their shared destination. A scan is ready, unknown, a duplicate, already
+  on a shipment, empty, or a different destination.
+  """
+  def classify_pallet_scan(organization_id, raw_code, opts \\ []) do
+    code = raw_code |> to_string() |> String.trim()
+    accepted_ids = opts |> Keyword.get(:accepted_ids, []) |> Enum.map(&to_string/1)
+    destination_gln = blank_gln(Keyword.get(opts, :destination_gln))
+
+    cond do
+      code == "" ->
+        {:error, :blank}
+
+      true ->
+        case Repo.get_by(ShipperSscc, organization_id: organization_id, code: code) do
+          nil ->
+            {:error, :unknown, code}
+
+          shipper ->
+            classify_known_shipper(shipper, accepted_ids, destination_gln)
+        end
+    end
+  end
+
+  def get_shipper_sscc(organization_id, id) do
+    Repo.get_by(ShipperSscc, organization_id: organization_id, id: id)
+  end
+
+  defp classify_known_shipper(shipper, accepted_ids, destination_gln) do
+    cond do
+      to_string(shipper.id) in accepted_ids ->
+        {:error, :duplicate, shipper, "Already on this pallet"}
+
+      not is_nil(shipper.manufacturer_pallet_id) ->
+        {:error, :duplicate, shipper, "Already on a pallet"}
+
+      true ->
+        case shipment_order_for_shipper(shipper.id) do
+          nil ->
+            cond do
+              empty_shipper?(shipper) ->
+                {:error, :empty, shipper, "Empty shipper"}
+
+              destination_gln && shipper.to_gln not in [nil, "", destination_gln] ->
+                {:error, :different_destination, shipper, "Different destination"}
+
+              true ->
+                {:ok, shipper}
+            end
+
+          order ->
+            label = if order in [nil, ""], do: "a shipment", else: "shipment #{order}"
+            {:error, :on_shipment, shipper, "Already on #{label}"}
+        end
+    end
+  end
+
+  defp empty_shipper?(shipper) do
+    count = shipper.count_of_trade_items || 0
+    packed = shipper.packed_serials || []
+    count <= 0 and packed == []
+  end
+
+  defp shipment_order_for_shipper(shipper_id) do
+    Repo.one(
+      from i in ShipmentItem,
+        join: s in Shipment,
+        on: s.id == i.manufacturer_shipment_id,
+        where: i.manufacturer_shipper_sscc_id == ^shipper_id,
+        select: s.order_number,
+        limit: 1
+    )
+  end
+
+  defp blank_gln(value) when value in [nil, ""], do: nil
+  defp blank_gln(value), do: value
 
   def list_available_ssccs(organization_id) do
     used = from i in ShipmentItem, select: i.manufacturer_shipper_sscc_id

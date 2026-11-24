@@ -80,13 +80,10 @@ defmodule ThamaniDawaWeb.PlatformRecallLive do
       current_scope={@current_scope}
       current_path={~p"/platform/recalls"}
     >
-      <.header icon="hero-exclamation-triangle">
-        Recalls
-        <:subtitle>
-          Trace a batch across every organization on the network, and cascade a recall to every
-          holder at once.
-        </:subtitle>
-      </.header>
+      <.td_list_page
+        title="Recalls"
+        subtitle="Trace a batch across every organization on the network, and cascade a recall to every holder at once."
+      >
 
       <.form_block title="Find a batch">
         <form phx-submit="search" class="flex flex-wrap items-end gap-3">
@@ -136,10 +133,7 @@ defmodule ThamaniDawaWeb.PlatformRecallLive do
               {batch.remaining_quantity} units remaining, zone {batch.zone}
             </p>
             <p :if={batch.goods_receipt} class="mt-1 text-xs text-thamani-pewter">
-              Received from {batch.goods_receipt.origin_company || "unknown origin"} on {Calendar.strftime(
-                batch.goods_receipt.received_at,
-                "%d %b %Y"
-              )}
+              Received from {batch.goods_receipt.origin_company || "unknown origin"} on {ThamaniDawaWeb.TimeFormat.date(batch.goods_receipt.received_at)}
             </p>
             <ul :if={shipments != []} class="mt-1 text-xs text-thamani-pewter">
               <li :for={%{shipment: shipment, unit_count: unit_count} <- shipments}>
@@ -203,6 +197,7 @@ defmodule ThamaniDawaWeb.PlatformRecallLive do
           </form>
         </div>
       </.form_block>
+      </.td_list_page>
     </Layouts.platform_shell>
     """
   end

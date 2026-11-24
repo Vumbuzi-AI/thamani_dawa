@@ -246,7 +246,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
         %{
           type: :visit,
           title: v.patient_name,
-          subtitle: "Date: #{Calendar.strftime(to_date_val(v.inserted_at), "%d %b %Y")}",
+          subtitle: "Date: #{ThamaniDawaWeb.TimeFormat.date(v.inserted_at)}",
           badge: String.capitalize(to_string(v.visit_type)),
           icon: "hero-document-text"
         }
@@ -257,7 +257,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp daily_revenue_chart_data(daily_revenue) do
     %{
-      labels: Enum.map(daily_revenue, fn {date, _amount} -> Calendar.strftime(date, "%d %b") end),
+      labels: Enum.map(daily_revenue, fn {date, _amount} -> ThamaniDawaWeb.TimeFormat.month_day(date) end),
       datasets: [
         %{
           label: "KSh Collected",
@@ -274,7 +274,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp monthly_revenue_chart_data(monthly_revenue) do
     %{
-      labels: Enum.map(monthly_revenue, fn {date, _n} -> Calendar.strftime(date, "%b %Y") end),
+      labels: Enum.map(monthly_revenue, fn {date, _n} -> ThamaniDawaWeb.TimeFormat.month_year(date) end),
       datasets: [
         %{
           label: "Revenue",
@@ -343,7 +343,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp lab_volume_chart_data(rows) do
     %{
-      labels: Enum.map(rows, fn {date, _} -> Calendar.strftime(date, "%d %b") end),
+      labels: Enum.map(rows, fn {date, _} -> ThamaniDawaWeb.TimeFormat.month_day(date) end),
       datasets: [
         %{
           label: "Lab orders",
@@ -756,10 +756,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       </div>
 
       <section id="site-team" class="mt-8">
-        <.header variant="plain">
-          Site team
-          <:subtitle>People currently assigned to this location</:subtitle>
-        </.header>
+        <.td_card_header title="Site team" subtitle="People currently assigned to this location" />
         <.table id="site-staff" rows={@staff}>
           <:col :let={user} label="Name">
             <span class="td-person">
@@ -796,10 +793,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
       <div :if={@tab == :pharmacy}>
         <section id="pharmacy-stock-overview" class="mt-6">
-          <.header variant="plain">
-            Stock attention
-            <:subtitle>Inventory that may need action soon</:subtitle>
-          </.header>
+          <.td_card_header title="Stock attention" subtitle="Inventory that may need action soon" />
 
           <div class="grid gap-6 xl:grid-cols-2">
             <div class="flex min-w-0 flex-col [&>.responsive-table]:flex-1">
@@ -808,7 +802,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
                   <h3 class="font-medium text-thamani-forest">Low stock</h3>
                   <p class="mt-0.5 text-sm text-thamani-pewter">At or below reorder level</p>
                 </div>
-                <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                <span class="rounded-full bg-td-warning-tint px-2.5 py-1 text-xs font-medium text-td-warning">
                   {length(@low_stock)} items
                 </span>
               </div>
@@ -836,7 +830,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
                     Expiring within {@near_expiry_days} days
                   </p>
                 </div>
-                <span class="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                <span class="rounded-full bg-td-warning-tint px-2.5 py-1 text-xs font-medium text-td-warning">
                   {length(@near_expiry)} batches
                 </span>
               </div>
@@ -866,10 +860,12 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           </div>
         </section>
 
-        <.header variant="plain" class="mt-8">
-          Pending prescriptions
-          <:subtitle>Prescriptions waiting for pharmacy action</:subtitle>
-        </.header>
+        <div class="mt-8">
+          <.td_card_header
+            title="Pending prescriptions"
+            subtitle="Prescriptions waiting for pharmacy action"
+          />
+        </div>
         <.table
           id="site-pending-prescriptions"
           rows={@pending_prescriptions}
@@ -893,7 +889,9 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       </div>
 
       <div :if={@tab == :lab}>
-        <.header variant="plain" class="mt-6">Pending orders</.header>
+        <div class="mt-6">
+          <.td_card_header title="Pending orders" />
+        </div>
         <.table
           id="site-pending-orders"
           rows={@pending_orders}
@@ -911,7 +909,9 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
           </:empty_state>
         </.table>
 
-        <.header variant="plain" class="mt-6">Incomplete reports</.header>
+        <div class="mt-6">
+          <.td_card_header title="Incomplete reports" />
+        </div>
         <.table
           id="site-incomplete-orders"
           rows={@incomplete_orders}

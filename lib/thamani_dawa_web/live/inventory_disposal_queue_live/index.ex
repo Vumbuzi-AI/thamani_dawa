@@ -153,13 +153,10 @@ defmodule ThamaniDawaWeb.InventoryDisposalQueueLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path="/org/disposals">
-      <.header icon="hero-trash">
-        Disposals
-        <:subtitle>
-          Expiry write-offs and supplier returns raised by your sites, awaiting review.
-        </:subtitle>
-      </.header>
-
+      <.td_list_page
+        title="Disposals"
+        subtitle="Expiry write-offs and supplier returns raised by your sites, awaiting review."
+      >
       <nav class="mt-4 flex gap-2 border-b border-thamani-stone">
         <.link
           :for={{status, label} <- @tabs}
@@ -226,6 +223,7 @@ defmodule ThamaniDawaWeb.InventoryDisposalQueueLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+      </.td_list_page>
     </Layouts.org_shell>
     """
   end

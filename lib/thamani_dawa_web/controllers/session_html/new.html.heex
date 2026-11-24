@@ -8,38 +8,21 @@
       <img src="/images/logo-transparent.png" alt="Thamani Dawa" />
     </a>
 
-    <Layouts.flash_group flash={@flash} />
-
-    <.td_auth_card title="Log in">
-      <details :if={@demo_accounts != []} id="demo-login-accounts" class="td-auth-demo">
-        <summary>Explore the demo</summary>
-        <div class="td-auth-roles">
-          <.form
-            :for={account <- @demo_accounts}
-            for={account.form}
-            id={"demo-login-#{account.id}"}
-            action={~p"/login"}
-            method="post"
-          >
-            <.input field={account.form[:email]} type="hidden" />
-            <.input field={account.form[:password]} type="hidden" />
-            <.td_button
-              id={"demo-login-#{account.id}-submit"}
-              type="submit"
-              variant="secondary"
-              label={account.role}
-            />
-          </.form>
-        </div>
-      </details>
+    <div class="td-auth-panel">
+      <h1>Log in</h1>
+      <p class="td-auth-lead">Use the email and password for your Thamani Dawa account.</p>
+      <p :if={msg = Phoenix.Flash.get(@flash, :info)} class="td-auth-note">{msg}</p>
+      <p :if={msg = Phoenix.Flash.get(@flash, :error)} class="td-auth-error">{msg}</p>
 
       <.form for={@form} id="login-form" action={~p"/login"} method="post" class="td-auth-form">
+        <input type="hidden" name="remember_me" value="false" />
         <.td_input
           field={@form[:email]}
           type="email"
           label="Email address"
           placeholder="you@yourpharmacy.com"
           autocomplete="email"
+          state={if(Phoenix.Flash.get(@flash, :error), do: "error", else: "default")}
           required
         />
         <.td_input
@@ -48,13 +31,42 @@
           label="Password"
           placeholder="••••••••"
           autocomplete="current-password"
+          state={if(Phoenix.Flash.get(@flash, :error), do: "error", else: "default")}
           required
         />
+        <div class="td-auth-row">
+          <.td_checkbox id="login-remember" name="remember_me" label="Keep me logged in" on={@remember} />
+          <.link navigate={~p"/reset-password"}>Forgot password?</.link>
+        </div>
         <.td_button id="login-submit" type="submit" variant="primary" size="lg" label="Log in" />
       </.form>
-      <:footer>
-        <.link navigate={~p"/reset-password"}>Forgot your password?</.link>
-      </:footer>
-    </.td_auth_card>
+
+      <p class="td-auth-switch">
+        <span>New to Thamani Dawa?</span>
+        <.link navigate={~p"/signup"}>Create an account</.link>
+      </p>
+
+      <div :if={@demo_accounts != []} id="demo-login-accounts" class="td-auth-demo">
+        <span>Explore the demo as</span>
+        <.form
+          :for={account <- @demo_accounts}
+          for={account.form}
+          id={"demo-login-#{account.id}"}
+          action={~p"/login"}
+          method="post"
+        >
+          <.input field={account.form[:email]} type="hidden" />
+          <.input field={account.form[:password]} type="hidden" />
+          <button id={"demo-login-#{account.id}-submit"} type="submit" class="td-auth-demo-link">
+            {account.role}
+          </button>
+        </.form>
+      </div>
+    </div>
+  </div>
+
+  <div class="td-auth-page-foot">
+    <.link navigate={~p"/privacy"}>Privacy</.link>
+    <.link navigate={~p"/terms"}>Terms</.link>
   </div>
 </div>

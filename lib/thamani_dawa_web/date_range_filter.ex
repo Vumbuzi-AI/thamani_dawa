@@ -41,7 +41,7 @@ defmodule ThamaniDawaWeb.DateRangeFilter do
         {nil, nil} -> "Any time"
         {%Date{} = f, nil} -> "From #{TimeFormat.date(f)}"
         {nil, %Date{} = t} -> "Until #{TimeFormat.date(t)}"
-        {f, t} -> "#{Calendar.strftime(f, "%-d %b")} to #{TimeFormat.date(t)}"
+        {f, t} -> "#{ThamaniDawaWeb.TimeFormat.month_day(f)} to #{TimeFormat.date(t)}"
       end
 
     if eat? and text != "Any time", do: text <> " · EAT", else: text

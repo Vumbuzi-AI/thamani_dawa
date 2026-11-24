@@ -54,10 +54,10 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLive do
           >
             <:col :let={{batch, _count}} label="Batch no.">{batch.batch_no}</:col>
             <:col :let={{batch, _count}} label="Production">
-              {Calendar.strftime(batch.production_date, "%d %b %Y")}
+              {ThamaniDawaWeb.TimeFormat.date(batch.production_date)}
             </:col>
             <:col :let={{batch, _count}} label="Expiry">
-              {Calendar.strftime(batch.expiry_date, "%d %b %Y")}
+              {ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}
             </:col>
             <:col :let={{_batch, count}} label="Serials">{count}</:col>
           </.td_data_table>

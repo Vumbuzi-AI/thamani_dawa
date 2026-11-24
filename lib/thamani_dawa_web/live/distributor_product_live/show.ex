@@ -45,7 +45,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
   defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
 
   defp date_or_dash(nil), do: "—"
-  defp date_or_dash(date), do: Calendar.strftime(date, "%d %b %Y")
+  defp date_or_dash(date), do: ThamaniDawaWeb.TimeFormat.date(date)
 
   defp supplier_name(nil), do: "—"
   defp supplier_name(supplier), do: supplier.name
@@ -57,9 +57,10 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
       current_scope={@current_scope}
       current_path={~p"/distributor/products"}
     >
-      <.header icon="hero-cube">
-        {product_name(@product)}
-        <:subtitle>Product details and warehouse batches for this catalog item.</:subtitle>
+      <.td_detail_page
+        title={product_name(@product)}
+        subtitle="Product details and warehouse batches for this catalog item."
+      >
         <:actions>
           <.button variant="ghost" navigate={~p"/distributor/products"}>
             <.icon name="hero-arrow-left" class="size-4" /> Inventory
@@ -68,7 +69,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
             <.icon name="hero-plus" class="size-4" /> Receive stock
           </.button>
         </:actions>
-      </.header>
+        <:body>
 
       <div class="mt-5 grid gap-4 sm:grid-cols-3">
         <.stat_tile
@@ -147,12 +148,10 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
         </dl>
       </section>
 
-      <.header variant="plain" class="mt-6">
-        Batches
-        <:subtitle>
-          Batch numbers, warehouse locations, expiry dates, and remaining quantities.
-        </:subtitle>
-      </.header>
+      <.td_card_header
+        title="Batches"
+        subtitle="Batch numbers, warehouse locations, expiry dates, and remaining quantities."
+      />
       <.table
         id="distributor-product-batches"
         rows={@streams.batches}
@@ -203,6 +202,8 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
         page={@page_info}
         path={~p"/distributor/products/#{@product.id}"}
       />
+        </:body>
+      </.td_detail_page>
     </Layouts.distributor_shell>
     """
   end

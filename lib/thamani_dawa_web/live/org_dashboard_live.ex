@@ -1,7 +1,7 @@
 defmodule ThamaniDawaWeb.OrgDashboardLive do
   use ThamaniDawaWeb, :live_view
 
-  alias ThamaniDawa.{Dashboards, Organizations, Reports, Sites}
+  alias ThamaniDawa.{Accounts, Dashboards, Organizations, Reports, Sites}
 
   def mount(params, _session, socket) do
     {:ok,
@@ -17,15 +17,17 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     sites = Sites.list_sites(organization_id)
     primary_site = List.first(sites)
     checklist_items = Organizations.onboarding_checklist(organization, primary_site)
+    demo? = Accounts.demo_login_account?(socket.assigns.current_scope.user)
 
     socket
     |> assign(:organization, organization)
     |> assign(:primary_site, primary_site)
     |> assign(:checklist_items, checklist_items)
-    |> assign(:setup_required?, not site_ready?(primary_site))
+    |> assign(:setup_required?, not demo? and not site_ready?(primary_site))
     |> assign(
       :show_checklist?,
-      is_nil(organization.onboarding_checklist_dismissed_at) and
+      not demo? and
+        is_nil(organization.onboarding_checklist_dismissed_at) and
         Enum.any?(checklist_items, &(not &1.done?))
     )
     |> assign(:site_profitability, Reports.site_profitability(organization_id))
@@ -212,8 +214,8 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     Dashboards.ranges() |> Enum.into(%{}) |> Map.get(range, "This Month")
   end
 
-  defp day_axis(date), do: Calendar.strftime(date, "%-d %b")
-  defp month_axis(date), do: Calendar.strftime(date, "%b %Y")
+  defp day_axis(date), do: ThamaniDawaWeb.TimeFormat.month_day(date)
+  defp month_axis(date), do: ThamaniDawaWeb.TimeFormat.month_year(date)
 
   defp revenue_bars(series, label_fun) do
     amounts = Enum.map(series, &elem(&1, 1))
@@ -292,7 +294,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
           type: :visit,
           title: v.patient_name,
           subtitle:
-            "Site: #{v.site_name} • Date: #{Calendar.strftime(to_date_val(v.inserted_at), "%d %b %Y")}",
+            "Site: #{v.site_name} • Date: #{ThamaniDawaWeb.TimeFormat.date(v.inserted_at)}",
           badge: String.capitalize(to_string(v.visit_type)),
           icon: "hero-document-text"
         }

@@ -35,7 +35,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
         invite_fixture("valid@example.com")
 
       {:ok, view, html} = live(conn, ~p"/invites/#{encoded_token}")
-      assert html =~ "Welcome, New Hire"
+      assert html =~ "Join #{organization.name}"
       assert has_element?(view, "#accept-invite-form")
 
       assert has_element?(
@@ -75,7 +75,8 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
                )
                |> render_submit()
 
-      assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/invites/#{encoded_token}")
+      assert {:ok, _view, html} = live(conn, ~p"/invites/#{encoded_token}")
+      assert html =~ "This invite link has expired"
     end
 
     test "an expired token shows a safe error and redirects to /login", %{conn: conn} do
@@ -85,11 +86,13 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
       |> UserToken.by_user_and_context_query("invite")
       |> Repo.update_all(set: [inserted_at: DateTime.add(DateTime.utc_now(), -8, :day)])
 
-      assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/invites/#{encoded_token}")
+      assert {:ok, _view, html} = live(conn, ~p"/invites/#{encoded_token}")
+      assert html =~ "This invite link has expired"
     end
 
     test "an invalid token shows a safe error and redirects to /login", %{conn: conn} do
-      assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/invites/bogus-token")
+      assert {:ok, _view, html} = live(conn, ~p"/invites/bogus-token")
+      assert html =~ "This invite link has expired"
     end
 
     test "a too-short password shows a validation error and does not activate the account", %{
@@ -107,7 +110,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
         )
         |> render_submit()
 
-      assert html =~ "Must be at least 8 characters"
+      assert html =~ "Must be at least 12 characters"
 
       assert %{hashed_password: nil} = Accounts.get_user!(organization.id, invited.id)
     end

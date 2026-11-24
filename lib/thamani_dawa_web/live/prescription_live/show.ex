@@ -325,7 +325,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
               </div>
               <div class="flex justify-between gap-2">
                 <span>Date</span>
-                <strong>{Calendar.strftime(@prescription.inserted_at, "%d %b %Y %H:%M")}</strong>
+                <strong>{ThamaniDawaWeb.TimeFormat.datetime(@prescription.inserted_at)}</strong>
               </div>
               <div class="flex justify-between gap-2">
                 <span>Patient</span>
@@ -843,7 +843,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
                       <span>
                         Batch {dispense.batch.batch_no || "##{dispense.batch.id}"}
                         <span class="text-thamani-subtle">
-                          · exp {Calendar.strftime(dispense.batch.expiry_date, "%b %d, %Y")} · by {user_display(
+                          · exp {ThamaniDawaWeb.TimeFormat.date(dispense.batch.expiry_date)} · by {user_display(
                             dispense.dispensed_by
                           )}
                         </span>

@@ -4,6 +4,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Show do
   alias ThamaniDawa.Products
   alias ThamaniDawa.Requisitions
   alias ThamaniDawa.Sites
+  alias ThamaniDawaWeb.CarePortal
 
   def mount(%{"id" => id}, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -41,20 +42,24 @@ defmodule ThamaniDawaWeb.RequisitionLive.Show do
 
   def render(assigns) do
     ~H"""
-    <Layouts.pharmacy_shell
+    <Layouts.care_shell
+      portal={@portal}
       flash={@flash}
       current_scope={@current_scope}
-      current_path="/pharmacy/requisitions"
+      current_path={CarePortal.requisitions(@portal)}
     >
-      <.header icon="hero-clipboard-document-list">
-        {@requisition.number}
-        <:subtitle>Details of this stock request to the organization.</:subtitle>
+      <.td_detail_page
+        title={@requisition.number}
+        subtitle="Details of this stock request to the organization."
+      >
         <:actions>
-          <.button variant="ghost" navigate={~p"/pharmacy/requisitions"}>
-            <.icon name="hero-arrow-left" class="size-4" /> Requisitions
-          </.button>
+          <.td_button
+            variant="secondary"
+            label="Requisitions"
+            navigate={CarePortal.requisitions(@portal)}
+          />
         </:actions>
-      </.header>
+        <:body>
 
       <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
@@ -81,7 +86,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Show do
               Requested
             </dt>
             <dd class="mt-1 text-sm text-thamani-ink">
-              {Calendar.strftime(@requisition.inserted_at, "%d %b %Y, %H:%M UTC")}
+              {ThamaniDawaWeb.TimeFormat.datetime(@requisition.inserted_at)}
             </dd>
           </div>
         </dl>
@@ -147,7 +152,9 @@ defmodule ThamaniDawaWeb.RequisitionLive.Show do
           </div>
         <% end %>
       </section>
-    </Layouts.pharmacy_shell>
+        </:body>
+      </.td_detail_page>
+    </Layouts.care_shell>
     """
   end
 end

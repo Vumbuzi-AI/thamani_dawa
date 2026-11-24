@@ -55,10 +55,11 @@ defmodule ThamaniDawaWeb.LabScanLive do
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/scan"}>
-      <.header icon="hero-qr-code">
-        Scan consumable
-        <:subtitle>Decode a GS1 barcode and match it to lab stock or a registered site.</:subtitle>
-      </.header>
+      <.td_detail_page
+        title="Scan consumable"
+        subtitle="Decode a GS1 barcode and match it to lab stock or a registered site."
+      >
+        <:body>
 
       <section
         id="lab-scan-panel"
@@ -129,6 +130,8 @@ defmodule ThamaniDawaWeb.LabScanLive do
           </div>
         </div>
       </div>
+        </:body>
+      </.td_detail_page>
     </Layouts.lab_shell>
     """
   end

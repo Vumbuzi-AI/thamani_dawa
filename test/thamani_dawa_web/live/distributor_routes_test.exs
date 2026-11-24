@@ -139,13 +139,12 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       assert has_element?(view, "#receiving-empty")
     end
 
-    test "product tabs and search share the responsive toolbar row", %{conn: conn} do
+    test "product tabs sit above the search toolbar", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/distributor/products")
 
-      assert has_element?(
-               view,
-               "#distributor-product-toolbar #distributor-products-tab"
-             )
+      assert has_element?(view, ".td-tabs #distributor-products-tab", "Products")
+      assert has_element?(view, ".td-tabs #distributor-batches-tab", "Batches")
+      refute has_element?(view, "#distributor-product-toolbar #distributor-products-tab")
 
       assert has_element?(
                view,

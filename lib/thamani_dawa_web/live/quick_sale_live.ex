@@ -639,13 +639,10 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       current_scope={@current_scope}
       current_path="/pharmacy/quick-sale"
     >
-      <.header icon="hero-bolt">
-        Quick sale
-        <:subtitle>
-          Pick products and take payment. Stock is dispensed and the sale is marked paid
-          immediately.
-        </:subtitle>
-      </.header>
+      <.td_list_page
+        title="Quick sale"
+        subtitle="Pick products and take payment. Stock is dispensed and the sale is marked paid immediately."
+      >
 
       <.modal
         :if={@payment_modal}
@@ -808,9 +805,8 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
                   <span>Receipt no.</span><strong>{@completed_sale.receipt_number}</strong>
                 </div>
                 <div id="receipt-date-time" class="flex justify-between gap-2">
-                  <span>Date</span><strong>{Calendar.strftime(
-                    @completed_sale.completed_at,
-                    "%d %b %Y %H:%M"
+                  <span>Date</span><strong>{ThamaniDawaWeb.TimeFormat.datetime(
+                    @completed_sale.completed_at
                   )}</strong>
                 </div>
                 <div class="flex justify-between gap-2">
@@ -1232,6 +1228,7 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
           </div>
         </section>
       </div>
+      </.td_list_page>
     </Layouts.pharmacy_shell>
     """
   end

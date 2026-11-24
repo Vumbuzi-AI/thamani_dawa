@@ -4,6 +4,7 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
   alias ThamaniDawa.Patients
   alias ThamaniDawa.Patients.Patient
   alias ThamaniDawa.PatientVisits
+  alias ThamaniDawaWeb.CarePortal
 
   def mount(_params, _session, socket) do
     {:ok,
@@ -30,7 +31,7 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
   defp apply_action(socket, _action), do: socket
 
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    {:noreply, push_patch(socket, to: ~p"/pharmacy/patients?tab=#{tab}")}
+    {:noreply, push_patch(socket, to: CarePortal.patients_tab(socket.assigns.portal, tab, nil))}
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -47,12 +48,18 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
     page = socket.assigns.page
     search = socket.assigns.search
 
+    visit_opts =
+      if socket.assigns.portal == :lab do
+        [visit_type: :lab, site_id: site_id, search: search]
+      else
+        [site_id: site_id, search: search]
+      end
+
     page_result =
       PatientVisits.list_patient_visits_paginated(
         organization_id,
         page,
-        site_id: site_id,
-        search: search
+        visit_opts
       )
 
     socket
@@ -79,35 +86,37 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.pharmacy_shell
+    <Layouts.care_shell
+      portal={@portal}
       flash={@flash}
       current_scope={@current_scope}
-      current_path="/pharmacy/patients"
+      current_path={CarePortal.patients(@portal)}
     >
-      <.header icon="hero-user-group">
-        Patients
-        <:subtitle>Patients recognized by your organization, and their visits.</:subtitle>
-        <:toolbar>
-          <div class="flex min-w-0 items-center gap-3">
-            <.tab_group>
-              <:tab
-                id="patients-tab"
-                active={@tab == "patients"}
-                phx_click="switch_tab"
-                phx_value_tab="patients"
-              >
-                Patients
-              </:tab>
-              <:tab
-                id="visits-tab"
-                active={@tab == "visits"}
-                phx_click="switch_tab"
-                phx_value_tab="visits"
-              >
-                Patient visits
-              </:tab>
-            </.tab_group>
-
+      <.td_list_page title="Patients" subtitle="Patients recognized by your organization, and their visits.">
+        <:tabs>
+          <button
+            id="patients-tab"
+            type="button"
+            class={["td-tab", @tab == "patients" && "is-active"]}
+            phx-click="switch_tab"
+            phx-value-tab="patients"
+            aria-current={@tab == "patients" && "page"}
+          >
+            Patients
+          </button>
+          <button
+            id="visits-tab"
+            type="button"
+            class={["td-tab", @tab == "visits" && "is-active"]}
+            phx-click="switch_tab"
+            phx-value-tab="visits"
+            aria-current={@tab == "visits" && "page"}
+          >
+            Patient visits
+          </button>
+        </:tabs>
+        <:filters>
+          <div class="flex min-w-0 w-full items-center gap-3">
             <form phx-change="search" class="min-w-0 flex-1" id="search-form">
               <.search_input
                 name="search"
@@ -120,14 +129,13 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
               />
             </form>
           </div>
-        </:toolbar>
-      </.header>
+        </:filters>
 
       <.table
         :if={@tab == "patients"}
         id="patients"
         rows={@patients_rows}
-        row_click={&JS.navigate(~p"/pharmacy/patients/#{&1.id}")}
+        row_click={&JS.navigate(CarePortal.patient(@portal, &1.id))}
       >
         <:col :let={patient} label="Name">{patient.full_name}</:col>
         <:col :let={patient} label="Phone">{patient.phone}</:col>
@@ -141,19 +149,27 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
           >
             {if @search != "",
               do: "Try a different search term.",
-              else: "Patients created via prescriptions will appear here."}
+              else:
+                if(@portal == :lab,
+                  do: "Patients created via lab orders will appear here.",
+                  else: "Patients created via prescriptions will appear here."
+                )}
           </.blank_state>
         </:empty_state>
       </.table>
 
       <.table :if={@tab == "visits"} id="patient-visits" rows={@patient_visits}>
-        <:col :let={visit} label="Patient">{visit.patient_name || "Walk-in"}</:col>
+        <:col :let={visit} label="Patient">
+          {if @portal == :lab, do: visit.patient_name, else: visit.patient_name || "Walk-in"}
+        </:col>
         <:col :let={visit} label="Phone">{visit.patient_phone}</:col>
         <:col :let={visit} label="Site">{visit.site_name}</:col>
         <:col :let={visit} label="Seen by">{visit.user_name}</:col>
-        <:col :let={visit} label="Visit type">{Phoenix.Naming.humanize(visit.visit_type)}</:col>
+        <:col :if={@portal != :lab} :let={visit} label="Visit type">
+          {Phoenix.Naming.humanize(visit.visit_type)}
+        </:col>
         <:col :let={visit} label="Date">
-          {Calendar.strftime(visit.inserted_at, "%b %d, %H:%M")}
+          {ThamaniDawaWeb.TimeFormat.short_datetime(visit.inserted_at)}
         </:col>
         <:empty_state>
           <.blank_state
@@ -167,18 +183,10 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
         </:empty_state>
       </.table>
 
-      <.pagination page={@page_info} path={pagination_path(@tab, @search)} />
-    </Layouts.pharmacy_shell>
+      <.pagination page={@page_info} path={CarePortal.patients_tab(@portal, @tab, @search)} />
+      </.td_list_page>
+    </Layouts.care_shell>
     """
   end
 
-  defp pagination_path(tab, search) do
-    search = String.trim(search || "")
-
-    if search != "" do
-      ~p"/pharmacy/patients?tab=#{tab}&search=#{search}"
-    else
-      ~p"/pharmacy/patients?tab=#{tab}"
-    end
-  end
 end

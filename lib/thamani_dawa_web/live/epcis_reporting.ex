@@ -491,11 +491,7 @@ defmodule ThamaniDawaWeb.EpcisReporting do
     """
   end
 
-  def format_eat(%DateTime{} = dt) do
-    dt
-    |> DateTime.add(3 * 3600, :second)
-    |> Calendar.strftime("%d %b %Y, %H:%M")
-  end
+  def format_eat(%DateTime{} = dt), do: ThamaniDawaWeb.TimeFormat.datetime(dt)
 
   def format_eat(%NaiveDateTime{} = dt) do
     dt

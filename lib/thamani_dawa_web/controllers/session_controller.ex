@@ -10,7 +10,7 @@ defmodule ThamaniDawaWeb.SessionController do
   alias ThamaniDawaWeb.Portals
 
   import Phoenix.Component, only: [to_form: 2]
-  import ThamaniDawaWeb.UserAuth, only: [log_in_user: 2, log_out_user: 1]
+  import ThamaniDawaWeb.UserAuth, only: [log_in_user: 2, log_in_user: 3, log_out_user: 1]
 
   plug :put_layout, [html: {ThamaniDawaWeb.Layouts, :root}] when action in [:new, :create]
 
@@ -29,8 +29,8 @@ defmodule ThamaniDawaWeb.SessionController do
     end
   end
 
-  def create(conn, %{"email" => email, "password" => password}) do
-    authenticate(conn, email, password, false)
+  def create(conn, %{"email" => email, "password" => password} = params) do
+    authenticate(conn, email, password, false, remember?(params))
   end
 
   # Signup submits its validated LiveView form through a regular browser POST
@@ -42,11 +42,11 @@ defmodule ThamaniDawaWeb.SessionController do
     authenticate(conn, email, password, true)
   end
 
-  def create(conn, %{"user" => %{"email" => email, "password" => password}}) do
-    authenticate(conn, email, password, false)
+  def create(conn, %{"user" => %{"email" => email, "password" => password}} = params) do
+    authenticate(conn, email, password, false, remember?(params))
   end
 
-  defp authenticate(conn, email, password, start_tour?) do
+  defp authenticate(conn, email, password, start_tour?, remember? \\ false) do
     rate_keys = ["ip:" <> remote_ip(conn), "email:" <> String.downcase(String.trim(email))]
 
     case LoginRateLimiter.allow?(rate_keys) do
@@ -60,24 +60,28 @@ defmodule ThamaniDawaWeb.SessionController do
                 is_nil(user.last_logged_in_at)
 
             conn
-            |> log_in_user(user)
+            |> log_in_user(user, remember: remember?)
             |> redirect(to: login_redirect_path(user, start_tour?, first_staff_login?))
 
           nil ->
-            invalid_login(conn, email)
+            invalid_login(conn, email, remember?)
         end
 
       {:error, :rate_limited} ->
         conn
         |> put_flash(:error, "Too many login attempts. Please wait before trying again.")
-        |> render_login(%{"email" => email, "password" => ""})
+        |> render_login(%{"email" => email, "password" => "", "remember_me" => remember_value(remember?)})
     end
   end
 
-  defp invalid_login(conn, email) do
+  defp invalid_login(conn, email, remember?) do
     conn
-    |> put_flash(:error, "Invalid email or password")
-    |> render_login(%{"email" => email, "password" => ""})
+    |> put_flash(:error, "Invalid email or password. Check both and try again, or reset your password.")
+    |> render_login(%{
+      "email" => email,
+      "password" => "",
+      "remember_me" => remember_value(remember?)
+    })
   end
 
   defp remote_ip(conn), do: conn.remote_ip |> :inet.ntoa() |> to_string()
@@ -97,16 +101,18 @@ defmodule ThamaniDawaWeb.SessionController do
   # A fresh self-signup starts the full-screen checklist and then the product
   # tour. Returning admins also resume the checklist while database-backed
   # setup tasks remain; invited staff continue to their own portal tour.
-  defp login_redirect_path(user, true, _first_staff_login?) do
-    if :admin in user.roles and onboarding_incomplete?(user) do
-      ~p"/onboarding"
-    else
-      redirect_path_for(user) <> "?tour=1"
-    end
-  end
-
-  defp login_redirect_path(user, false, first_staff_login?) do
+  # Demo logins skip that screen and land on their portal.
+  defp login_redirect_path(user, start_tour?, first_staff_login?) do
     cond do
+      Accounts.demo_login_account?(user) ->
+        redirect_path_for(user)
+
+      start_tour? and :admin in user.roles and onboarding_incomplete?(user) ->
+        ~p"/onboarding"
+
+      start_tour? ->
+        redirect_path_for(user) <> "?tour=1"
+
       :admin in user.roles and onboarding_incomplete?(user) ->
         ~p"/onboarding"
 
@@ -130,9 +136,18 @@ defmodule ThamaniDawaWeb.SessionController do
   defp render_login(conn, params) do
     render(conn, :new,
       form: to_form(params, as: nil),
+      remember: remember?(params),
       demo_accounts: demo_accounts()
     )
   end
+
+  defp remember?(%{"remember_me" => "true"}), do: true
+  defp remember?(%{"remember_me" => values}) when is_list(values), do: "true" in values
+  defp remember?(%{"remember_me" => _}), do: false
+  defp remember?(_params), do: true
+
+  defp remember_value(true), do: "true"
+  defp remember_value(false), do: "false"
 
   defp demo_accounts do
     :thamani_dawa

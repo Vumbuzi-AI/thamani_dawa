@@ -12,8 +12,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
   alias ThamaniDawa.InventoryDisposals
   alias ThamaniDawa.Products
   alias ThamaniDawa.Sites
-
-  @base_path "/pharmacy/disposals"
+  alias ThamaniDawaWeb.CarePortal
 
   def mount(%{"id" => id} = params, _session, socket) do
     scope = socket.assigns.current_scope
@@ -30,7 +29,13 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
      |> assign(:products_by_id, products_by_id)
      |> assign(:addable_batches, addable_batches(org_id, disposal))
      |> assign(:confirm_submit, false)
-     |> assign(:return_to, ThamaniDawaWeb.ReturnTo.safe(params["return_to"], @base_path))}
+     |> assign(
+       :return_to,
+       ThamaniDawaWeb.ReturnTo.safe(
+         params["return_to"],
+         CarePortal.disposals(socket.assigns.portal)
+       )
+     )}
   end
 
   defp addable_batches(org_id, disposal) do
@@ -204,10 +209,14 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
   defp kind_label(:returned), do: "Supplier return"
 
   def render(assigns) do
-    assigns = assign(assigns, :base_path, @base_path)
+    assigns = assign(assigns, :base_path, CarePortal.disposals(assigns.portal))
 
     ~H"""
-    <Layouts.pharmacy_shell flash={@flash} current_scope={@current_scope} current_path={@base_path}
+    <Layouts.care_shell
+      portal={@portal}
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@base_path}
       back={@return_to}
       back_label="Back to list"
     >
@@ -367,7 +376,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
             <p class="text-sm font-semibold text-emerald-800">Disposal approved</p>
             <p class="mt-0.5 text-sm text-emerald-700">
               Batch quantities were reduced to match the disposal recorded above. {if @disposal.approved_at,
-                do: "Approved on #{Calendar.strftime(@disposal.approved_at, "%d %b %Y at %H:%M")}.",
+                do: "Approved on #{ThamaniDawaWeb.TimeFormat.datetime(@disposal.approved_at)}.",
                 else: ""}
             </p>
           </div>
@@ -386,7 +395,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Show do
           </div>
         </aside>
       </div>
-    </Layouts.pharmacy_shell>
+    </Layouts.care_shell>
     """
   end
 

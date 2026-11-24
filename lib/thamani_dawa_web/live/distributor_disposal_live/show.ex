@@ -495,7 +495,7 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
             </p>
             <p class="mt-0.5 text-sm text-thamani-pewter">
               Stock was reduced to match the request above. {if @disposal.approved_at,
-                do: "Approved on #{Calendar.strftime(@disposal.approved_at, "%d %b %Y at %H:%M")}.",
+                do: "Approved on #{ThamaniDawaWeb.TimeFormat.datetime(@disposal.approved_at)}.",
                 else: ""}
             </p>
           </div>

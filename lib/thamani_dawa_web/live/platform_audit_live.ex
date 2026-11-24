@@ -137,7 +137,7 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
     if rest == [], do: label, else: label <> " +#{length(rest)} more"
   end
 
-  defp format_time(timestamp), do: Calendar.strftime(timestamp, "%d %b %Y, %H:%M UTC")
+  defp format_time(timestamp), do: ThamaniDawaWeb.TimeFormat.datetime(timestamp)
 
   def render(assigns) do
     ~H"""
@@ -146,12 +146,11 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
       current_scope={@current_scope}
       current_path="/platform/audit"
     >
-      <.header icon="hero-clipboard-document-list">
-        Audit activity
-        <:subtitle>
-          Every audited change across all organizations. Patient-identifying values are not shown.
-        </:subtitle>
-        <:toolbar>
+      <.td_list_page
+        title="Audit activity"
+        subtitle="Every audited change across all organizations. Patient-identifying values are not shown."
+      >
+        <:filters>
           <form id="platform-audit-search" phx-change="search" phx-submit="search">
             <.search_input
               name="search"
@@ -211,8 +210,7 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
               clear={JS.push("clear_filter", value: %{filter: "action"})}
             />
           </.filter_drawer>
-        </:toolbar>
-      </.header>
+        </:filters>
 
       <div class="dashboard-stat-grid">
         <.stat_tile
@@ -272,6 +270,7 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
         </:empty_state>
       </.table>
       <.pagination page={@page_info} path={pagination_path(@filters)} />
+      </.td_list_page>
     </Layouts.platform_shell>
     """
   end

@@ -267,8 +267,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
           <.td_icon name="arrow-left" class="size-3.5" /> Back to Products
         </.link>
       </div>
-      <.header icon="hero-cube">
-        {product_name(@product)}
+      <.td_detail_page title={product_name(@product)}>
         <:actions>
           <div class="grid w-full grid-cols-3 gap-2 xl:w-auto">
             <.button
@@ -299,8 +298,7 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
             </.button>
           </div>
         </:actions>
-      </.header>
-
+        <:body>
       <dl
         id="product-details"
         class="mb-6 grid grid-cols-2 gap-x-6 gap-y-5 rounded-2xl border border-thamani-stone bg-thamani-surface p-4 text-sm shadow-[0_1px_3px_rgba(28,58,19,0.06)] sm:grid-cols-4 sm:p-5"
@@ -623,6 +621,8 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
           </:empty_state>
         </.table>
       </div>
+        </:body>
+      </.td_detail_page>
     </Layouts.org_shell>
     """
   end

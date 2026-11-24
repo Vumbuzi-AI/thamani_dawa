@@ -14,15 +14,14 @@ defmodule ThamaniDawaWeb.PlatformDashboardLive do
   def render(assigns) do
     ~H"""
     <Layouts.platform_shell flash={@flash} current_scope={@current_scope} current_path="/platform">
-      <.header icon="hero-squares-2x2">
-        Platform dashboard
-        <:subtitle>
-          Cross-organization health, recent throughput, and items needing attention.
-        </:subtitle>
+      <.td_dashboard
+        id="platform-dashboard"
+        title="Platform dashboard"
+        subtitle="Cross-organization health, recent throughput, and items needing attention."
+      >
         <:actions>
           <span class="td-badge">Read-only access</span>
         </:actions>
-      </.header>
 
       <div id="platform-overview" class="dashboard-stat-grid">
         <.stat_tile
@@ -154,10 +153,11 @@ defmodule ThamaniDawaWeb.PlatformDashboardLive do
           </ol>
         </.form_block>
       </div>
+      </.td_dashboard>
     </Layouts.platform_shell>
     """
   end
 
   defp activity_time(nil), do: "No audited activity"
-  defp activity_time(timestamp), do: Calendar.strftime(timestamp, "%d %b %Y, %H:%M UTC")
+  defp activity_time(timestamp), do: ThamaniDawaWeb.TimeFormat.datetime(timestamp)
 end

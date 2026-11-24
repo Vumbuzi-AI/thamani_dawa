@@ -368,15 +368,17 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
   defp render_index(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/suppliers"}>
-      <.header icon="hero-truck">
-        Suppliers
-        <:subtitle>Search, filter, and manage your organization's suppliers.</:subtitle>
+      <.td_list_page title="Suppliers" subtitle="Search, filter, and manage your organization's suppliers.">
         <:actions>
-          <.button id="supplier-new-button" variant="primary" patch={~p"/org/suppliers/new"}>
-            <.icon name="hero-plus" class="size-4" /> Add supplier
-          </.button>
+          <.td_button
+            id="supplier-new-button"
+            variant="primary"
+            label="Add supplier"
+            glyph="plus"
+            patch={~p"/org/suppliers/new"}
+          />
         </:actions>
-        <:toolbar>
+        <:filters>
           <form phx-change="search" class="flex-1" id="search-form">
             <.search_input
               name="search"
@@ -406,8 +408,7 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
               clear={JS.push("clear_chip", value: %{"field" => chip.field})}
             />
           </.filter_drawer>
-        </:toolbar>
-      </.header>
+        </:filters>
 
       <.modal
         :if={@live_action in [:new, :edit]}
@@ -480,6 +481,7 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
       </.table>
 
       <.pagination page={@page_info} path={~p"/org/suppliers"} />
+      </.td_list_page>
     </Layouts.org_shell>
     """
   end

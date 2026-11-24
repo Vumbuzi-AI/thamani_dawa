@@ -13,6 +13,19 @@ defmodule ThamaniDawa.Accounts do
 
   ## Users
 
+  @doc "True when this email is one of the configured one-click demo logins."
+  def demo_login_account?(%User{email: email}) when is_binary(email) do
+    normalized = email |> String.trim() |> String.downcase()
+
+    :thamani_dawa
+    |> Application.get_env(:demo_login_accounts, [])
+    |> Enum.any?(fn account ->
+      account.email |> to_string() |> String.trim() |> String.downcase() == normalized
+    end)
+  end
+
+  def demo_login_account?(_), do: false
+
   @doc "Gets a user by email, across the whole platform (email is globally unique)."
   def get_user_by_email(email) when is_binary(email) do
     normalized_email = email |> String.trim() |> String.downcase()
@@ -606,8 +619,9 @@ defmodule ThamaniDawa.Accounts do
   ## Session
 
   @doc "Generates a session token for the given user."
-  def generate_user_session_token(user) do
-    {token, user_token} = UserToken.build_session_token(user)
+  def generate_user_session_token(user, opts \\ []) do
+    context = if opts[:remember], do: "remember", else: "session"
+    {token, user_token} = UserToken.build_session_token(user, context)
     Repo.insert!(%{user_token | last_used_at: DateTime.utc_now() |> DateTime.truncate(:second)})
     token
   end
@@ -622,7 +636,7 @@ defmodule ThamaniDawa.Accounts do
   def touch_user_session(token) when is_binary(token) do
     now = DateTime.utc_now() |> DateTime.truncate(:second)
 
-    query = UserToken.by_token_and_context_query(token, "session")
+    query = UserToken.by_browser_token_query(token)
     Repo.update_all(query, set: [last_used_at: now])
 
     :ok
@@ -633,7 +647,7 @@ defmodule ThamaniDawa.Accounts do
 
   @doc "Deletes the given session token."
   def delete_user_session_token(token) do
-    Repo.delete_all(UserToken.by_token_and_context_query(token, "session"))
+    Repo.delete_all(UserToken.by_browser_token_query(token))
     :ok
   end
 

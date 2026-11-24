@@ -1,7 +1,6 @@
 defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
   use ThamaniDawaWeb, :live_view
 
-  alias ThamaniDawa.Distributor.Billing
   alias ThamaniDawa.Manufacturing
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.DistributorPagination
@@ -145,21 +144,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
       )
 
     remote_counts = remote_counts(organization_id)
-    usage = Billing.active_usage(organization_id)
 
     page_info = %{page_info | entries: merge_remote_counts(page_info.entries, remote_counts)}
-
-    counts =
-      organization_id
-      |> Manufacturing.list_products_with_counts()
-      |> merge_remote_counts(remote_counts)
-      |> generation_counts()
 
     socket
     |> assign(:page_info, page_info)
     |> assign(:rows, filter_rows(page_info.entries, socket.assigns[:serials_filter]))
-    |> assign(:number_generated, counts.serials + counts.ssccs)
-    |> assign(:maximum, maximum(usage))
   end
 
   defp remote_counts(organization_id) do
@@ -177,19 +167,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
       end
     end)
   end
-
-  defp generation_counts(entries) do
-    Enum.reduce(entries, %{serials: 0, ssccs: 0}, fn entry, totals ->
-      %{
-        serials: totals.serials + entry.serial_count,
-        ssccs: totals.ssccs + entry.sscc_count
-      }
-    end)
-  end
-
-  defp maximum(%{quantity_limit: nil}), do: "Unlimited"
-  defp maximum(%{quantity_limit: limit}) when is_integer(limit), do: limit
-  defp maximum(_usage), do: 0
 
   defp view_mode(params, fallback) do
     case Map.get(params, "view", fallback) do
@@ -244,14 +221,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
           />
         </:actions>
         <:filters>
-          <div class="td-stats">
-            <.td_stat
-              id="manufacturer-number-generated"
-              caption="Number generated"
-              value={@number_generated}
-            />
-            <.td_stat id="manufacturer-maximum" caption="Maximum" value={@maximum} />
-          </div>
           <form id="manufacturer-product-search" phx-change="search">
             <.td_search
               name="search"
@@ -348,7 +317,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
                         <:row label="Added">{ThamaniDawaWeb.TimeFormat.date(product.inserted_at)}</:row>
                         <:action>
                           <.td_button :if={serials > 0} navigate={~p"/manufacturer/products/#{product.gtin}/serials"} label="View serials" />
-                          <.td_button :if={serials == 0} patch={~p"/manufacturer/products/#{product.gtin}/serials/new"} label="Generate serials" />
+                          <.td_button patch={~p"/manufacturer/products/#{product.gtin}/serials/new"} label="Generate serials" />
                         </:action>
                       </.td_peek>
                     </:peek>
@@ -369,7 +338,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
                     navigate={~p"/manufacturer/products/#{product.gtin}/serials"}
                   />
                   <.td_button
-                    :if={serials == 0}
                     id={"product-#{product.id}-add-serial"}
                     label="Generate serials"
                     patch={~p"/manufacturer/products/#{product.gtin}/serials/new"}
@@ -395,11 +363,17 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
             <span class="td-stat-sub">{row.product.description || "No description"}</span>
             <.td_key_value label="SSCC" value={row.sscc_count} />
             <.td_key_value label="Serials" value={row.serial_count} />
-            <.td_button
-              variant="primary"
-              label="Serial"
-              patch={~p"/manufacturer/products/#{row.product.gtin}/serials/new"}
-            />
+            <div class="td-row-actions">
+              <.td_button
+                :if={row.serial_count > 0}
+                label="View serials"
+                navigate={~p"/manufacturer/products/#{row.product.gtin}/serials"}
+              />
+              <.td_button
+                label="Generate serials"
+                patch={~p"/manufacturer/products/#{row.product.gtin}/serials/new"}
+              />
+            </div>
           </article>
           <.td_empty
             :if={@rows == []}
@@ -419,7 +393,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
         :if={@live_action == :new_serial}
         id="manufacturer-serial-modal"
         show
-        title="Generate primary serials"
+        title="Generate serials"
         on_cancel={JS.patch(~p"/manufacturer/products")}
       >
         <:body>

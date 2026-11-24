@@ -102,6 +102,44 @@ defmodule ThamaniDawaWeb.Layouts do
   slot :tools
   slot :inner_block, required: true
 
+  attr :portal, :atom, required: true, values: [:pharmacy, :lab]
+
+  def care_shell(assigns) do
+    {section_label, base_path} =
+      if assigns.portal == :lab, do: {"Lab", "/lab"}, else: {"Pharmacy", "/pharmacy"}
+
+    assigns = assign(assigns, section_label: section_label, base_path: base_path)
+
+    ~H"""
+    <.sidebar_shell
+      flash={@flash}
+      current_scope={@current_scope}
+      current_path={@current_path}
+      back={@back}
+      back_label={@back_label}
+      crumb={@crumb}
+      crumb_parent={@crumb_parent}
+      title="Thamani Dawa"
+      section_label={@section_label}
+      base_path={@base_path}
+    >
+      <:tools>{render_slot(@tools)}</:tools>
+      {render_slot(@inner_block)}
+    </.sidebar_shell>
+    """
+  end
+
+  attr :flash, :map, required: true
+  attr :current_scope, :map, required: true
+  attr :current_path, :string, default: ""
+  attr :back, :any, default: nil
+  attr :back_label, :string, default: nil
+  attr :crumb, :string, default: nil
+  attr :crumb_parent, :string, default: nil
+
+  slot :tools
+  slot :inner_block, required: true
+
   def lab_shell(assigns) do
     ~H"""
     <.sidebar_shell
@@ -645,64 +683,6 @@ defmodule ThamaniDawaWeb.Layouts do
               />
             </:menu>
           </.td_account_chip>
-          <.live_component
-            module={ThamaniDawaWeb.AccountSettingsComponent}
-            id="account-settings"
-            current_scope={@current_scope}
-            role_label={account_role_label(@current_scope, @section_label)}
-            context={@account_context}
-            return_to={@current_path}
-          />
-          <.td_modal
-            id="sidebar-logout-confirm"
-            title="Log out?"
-            on_cancel={ThamaniDawaWeb.CoreComponents.hide_modal("sidebar-logout-confirm")}
-          >
-            <:body>
-              <p class="td-note">You will need to sign in again to continue.</p>
-            </:body>
-            <:footer>
-              <.td_button
-                type="button"
-                variant="secondary"
-                label="Cancel"
-                phx-click={ThamaniDawaWeb.CoreComponents.hide_modal("sidebar-logout-confirm")}
-              />
-              <.td_button
-                id="sidebar-logout-confirm-link"
-                variant="danger-confirm"
-                label="Log out"
-                href={~p"/logout"}
-                method="delete"
-              />
-            </:footer>
-          </.td_modal>
-          <.td_modal
-            id="mobile-app-modal"
-            title="Get the mobile app"
-            subtitle="For the team that packs and scans shipments."
-            on_cancel={ThamaniDawaWeb.CoreComponents.hide_modal("mobile-app-modal")}
-          >
-            <:body>
-              <div class="td-mobile-app">
-                <.td_icon name="qr-code" class="size-10" />
-                <div>
-                  <p class="td-mobile-app-tt">Scan with the phone camera</p>
-                  <p class="td-note">
-                    Opens the Thamani Dawa app listing. Mobile users sign in with the PIN you set for them.
-                  </p>
-                </div>
-              </div>
-            </:body>
-            <:footer>
-              <.td_button
-                type="button"
-                variant="primary"
-                label="Done"
-                phx-click={ThamaniDawaWeb.CoreComponents.hide_modal("mobile-app-modal")}
-              />
-            </:footer>
-          </.td_modal>
         </div>
       </:side>
       <:content>
@@ -724,6 +704,66 @@ defmodule ThamaniDawaWeb.Layouts do
         <.flash_group flash={@flash} />
       </:content>
     </.td_app_shell>
+    <div id="sidebar-modals">
+      <.live_component
+        module={ThamaniDawaWeb.AccountSettingsComponent}
+        id="account-settings"
+        current_scope={@current_scope}
+        role_label={account_role_label(@current_scope, @section_label)}
+        context={@account_context}
+        return_to={@current_path}
+      />
+      <.td_modal
+        id="sidebar-logout-confirm"
+        title="Log out?"
+        on_cancel={ThamaniDawaWeb.CoreComponents.hide_modal("sidebar-logout-confirm")}
+      >
+        <:body>
+          <p class="td-note">You will need to sign in again to continue.</p>
+        </:body>
+        <:footer>
+          <.td_button
+            type="button"
+            variant="secondary"
+            label="Cancel"
+            phx-click={ThamaniDawaWeb.CoreComponents.hide_modal("sidebar-logout-confirm")}
+          />
+          <.td_button
+            id="sidebar-logout-confirm-link"
+            variant="danger-confirm"
+            label="Log out"
+            href={~p"/logout"}
+            method="delete"
+          />
+        </:footer>
+      </.td_modal>
+      <.td_modal
+        id="mobile-app-modal"
+        title="Get the mobile app"
+        subtitle="For the team that packs and scans shipments."
+        on_cancel={ThamaniDawaWeb.CoreComponents.hide_modal("mobile-app-modal")}
+      >
+        <:body>
+          <div class="td-mobile-app">
+            <.td_icon name="qr-code" class="size-10" />
+            <div>
+              <p class="td-mobile-app-tt">Scan with the phone camera</p>
+              <p class="td-note">
+                Opens the Thamani Dawa app listing. Mobile users sign in with the PIN you set for them.
+              </p>
+            </div>
+          </div>
+        </:body>
+        <:footer>
+          <.td_button
+            type="button"
+            variant="primary"
+            label="Done"
+            phx-click={ThamaniDawaWeb.CoreComponents.hide_modal("mobile-app-modal")}
+          />
+        </:footer>
+      </.td_modal>
+    </div>
     """
   end
 
@@ -1201,6 +1241,7 @@ defmodule ThamaniDawaWeb.Layouts do
           "'; document.getElementById('site-switch-form').requestSubmit();"
       }
       class={["td-ss-option", @option.active? && "is-active"]}
+      title={"#{@option.name} — #{@option.subtitle}"}
     >
       <span class="td-ss-tile"><.td_icon name={CoreComponents.phosphor_name(@option.icon)} /></span>
       <span class="td-ss-tx">
@@ -1408,14 +1449,13 @@ defmodule ThamaniDawaWeb.Layouts do
 
   def flash_group(assigns) do
     ~H"""
-    <div id={@id} aria-live="polite">
+    <div id={@id} class="td-toast-region" aria-live="polite">
       <.flash kind={:info} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
       <.flash
         id="client-error"
         kind={:error}
-        title={gettext("We can't find the internet")}
         phx-disconnected={
           show(".phx-client-error #client-error")
           |> JS.remove_attribute("hidden", to: ".phx-client-error #client-error")
@@ -1423,14 +1463,12 @@ defmodule ThamaniDawaWeb.Layouts do
         phx-connected={hide("#client-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
+        {gettext("We can't find the internet. Attempting to reconnect.")}
       </.flash>
 
       <.flash
         id="server-error"
         kind={:error}
-        title={gettext("Something went wrong!")}
         phx-disconnected={
           show(".phx-server-error #server-error")
           |> JS.remove_attribute("hidden", to: ".phx-server-error #server-error")
@@ -1438,8 +1476,7 @@ defmodule ThamaniDawaWeb.Layouts do
         phx-connected={hide("#server-error") |> JS.set_attribute({"hidden", ""})}
         hidden
       >
-        {gettext("Attempting to reconnect")}
-        <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
+        {gettext("Something went wrong. Attempting to reconnect.")}
       </.flash>
     </div>
     """
@@ -1473,11 +1510,11 @@ defmodule ThamaniDawaWeb.Layouts do
         role="dialog"
         aria-modal="true"
         aria-labelledby={"#{@id}-title"}
-        class="fixed z-[100] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-white/20 bg-thamani-forest p-5 text-td-on-accent shadow-2xl transition-[top,left] duration-200"
+        class="fixed z-[100] w-[min(390px,calc(100vw-2rem))] rounded-2xl border border-td-on-accent/20 bg-thamani-forest p-5 text-td-on-accent shadow-2xl transition-[top,left] duration-200"
       >
         <span
           data-tour-arrow
-          class="absolute left-[-7px] top-1/2 hidden size-3.5 -translate-y-1/2 rotate-45 border-b border-l border-white/20 bg-thamani-forest"
+          class="absolute left-[-7px] top-1/2 hidden size-3.5 -translate-y-1/2 rotate-45 border-b border-l border-td-on-accent/20 bg-thamani-forest"
         ></span>
         <div class="flex items-start justify-between gap-4">
           <div>
@@ -1492,27 +1529,27 @@ defmodule ThamaniDawaWeb.Layouts do
             type="button"
             data-tour-dismiss
             aria-label="Close product tour"
-            class="rounded-lg p-1 text-white/70 transition-colors hover:bg-td-surface/10 hover:text-white"
+            class="rounded-lg p-1 text-td-on-accent/70 transition-colors hover:bg-td-on-accent/10 hover:text-td-on-accent"
           >
             <.icon name="hero-x-mark" class="size-5" />
           </button>
         </div>
-        <p data-tour-description class="mt-3 text-[15px] leading-6 text-white/85"></p>
+        <p data-tour-description class="mt-3 text-[15px] leading-6 text-td-on-accent/85"></p>
         <div class="mt-5 flex items-center justify-between gap-3">
           <button
             type="button"
             data-tour-back
-            class="rounded-full px-4 py-2 text-sm font-medium text-white/80 transition-colors hover:bg-td-surface/10 disabled:invisible"
+            class="rounded-full px-4 py-2 text-sm font-medium text-td-on-accent/80 transition-colors hover:bg-td-on-accent/10 disabled:invisible"
           >Back</button>
           <button
             type="button"
             data-tour-dismiss
-            class="rounded-full px-3 py-2 text-sm font-medium text-white/70 transition-colors hover:bg-td-surface/10 hover:text-white"
+            class="rounded-full px-3 py-2 text-sm font-medium text-td-on-accent/70 transition-colors hover:bg-td-on-accent/10 hover:text-td-on-accent"
           >Skip tour</button>
           <button
             type="button"
             data-tour-next
-            class="rounded-full bg-td-accent-tint px-5 py-2 text-sm font-semibold text-thamani-forest transition-all hover:brightness-95 active:scale-[0.98]"
+            class="rounded-full bg-td-on-accent px-5 py-2 text-sm font-semibold text-td-accent transition-all hover:brightness-95 active:scale-[0.98]"
           >Next</button>
         </div>
       </section>

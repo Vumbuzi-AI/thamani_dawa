@@ -11,10 +11,7 @@ defmodule ThamaniDawaWeb.PasswordResetController do
 
   def create(conn, %{"email" => email}) do
     _ = Accounts.deliver_password_reset_instructions(email, &url(~p"/reset-password/#{&1}"))
-
-    conn
-    |> put_flash(:info, "If that email belongs to an active account, a reset link has been sent.")
-    |> redirect(to: ~p"/login")
+    render(conn, :sent, email: email)
   end
 
   def edit(conn, %{"token" => token}) do
@@ -30,6 +27,16 @@ defmodule ThamaniDawaWeb.PasswordResetController do
   end
 
   def update(conn, %{"token" => token, "user" => attrs}) do
+    if password_mismatch?(attrs) do
+      conn
+      |> put_flash(:error, "Those passwords do not match.")
+      |> render(:edit, token: token, form: to_form(attrs, as: :user))
+    else
+      reset_password(conn, token, attrs)
+    end
+  end
+
+  defp reset_password(conn, token, attrs) do
     case Accounts.get_user_by_reset_password_token(token) do
       nil ->
         conn
@@ -50,4 +57,10 @@ defmodule ThamaniDawaWeb.PasswordResetController do
   end
 
   defp render_request(conn, attrs), do: render(conn, :new, form: to_form(attrs, as: nil))
+
+  defp password_mismatch?(%{"password" => password, "password_confirmation" => confirmation})
+       when password != confirmation,
+       do: true
+
+  defp password_mismatch?(_attrs), do: false
 end

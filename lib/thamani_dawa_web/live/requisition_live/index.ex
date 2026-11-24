@@ -5,7 +5,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
   alias ThamaniDawa.Products
   alias ThamaniDawa.Requisitions
   alias ThamaniDawa.Sites
-  alias ThamaniDawa.Sites.Site
+  alias ThamaniDawaWeb.CarePortal
   alias ThamaniDawaWeb.SiteScoping
 
   def mount(_params, _session, socket) do
@@ -18,7 +18,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
     sites =
       scope
       |> Accounts.list_sites_for_user()
-      |> Enum.filter(&Site.pharmacy?/1)
+      |> Enum.filter(&CarePortal.site?(socket.assigns.portal, &1))
 
     all_sites = Sites.list_sites(organization_id)
 
@@ -70,7 +70,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
       |> Requisitions.list_requisitions()
       |> SiteScoping.for_current_site(scope)
       |> Enum.filter(fn r ->
-        Enum.any?(all_sites, &(&1.id == r.site_id and Site.pharmacy?(&1)))
+        Enum.any?(all_sites, &(&1.id == r.site_id and CarePortal.site?(socket.assigns.portal, &1)))
       end)
 
     requisitions =
@@ -101,7 +101,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
       |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
       |> Map.new()
 
-    ~p"/pharmacy/requisitions?#{query}"
+    CarePortal.requisitions_query(socket.assigns.portal, query)
   end
 
   defp active_filter_count(filters),
@@ -182,7 +182,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
              socket
              |> put_flash(:info, "Requisition sent to the organization.")
              |> stream_insert(:requisitions, requisition, at: 0)
-             |> push_patch(to: ~p"/pharmacy/requisitions")}
+             |> push_patch(to: CarePortal.requisitions(socket.assigns.portal))}
 
           {:error, _reason} ->
             {:noreply, put_flash(socket, :error, "Couldn't send that requisition.")}
@@ -290,22 +290,25 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.pharmacy_shell
+    <Layouts.care_shell
+      portal={@portal}
       flash={@flash}
       current_scope={@current_scope}
-      current_path="/pharmacy/requisitions"
+      current_path={CarePortal.requisitions(@portal)}
     >
-      <.header icon="hero-clipboard-document-list">
-        Requisitions
-        <:subtitle>
-          Ask the organization for stock when your site's levels are running low.
-        </:subtitle>
+      <.td_list_page
+        title="Requisitions"
+        subtitle="Ask the organization for stock when your site's levels are running low."
+      >
         <:actions>
-          <.button variant="primary" patch={~p"/pharmacy/requisitions/new"}>
-            <.icon name="hero-plus" class="size-4" /> New requisition
-          </.button>
+          <.td_button
+            variant="primary"
+            label="New requisition"
+            glyph="plus"
+            patch={CarePortal.requisitions_new(@portal)}
+          />
         </:actions>
-        <:toolbar>
+        <:filters>
           <form id="requisition-search" phx-change="search" phx-submit="search">
             <.search_input
               name="search"
@@ -356,14 +359,13 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
               clear={JS.push("clear_filter", value: %{filter: "date_to"})}
             />
           </.filter_drawer>
-        </:toolbar>
-      </.header>
+        </:filters>
 
       <.modal
         :if={@live_action == :new}
         id="new-requisition-modal"
         show
-        on_cancel={JS.patch(~p"/pharmacy/requisitions")}
+        on_cancel={JS.patch(CarePortal.requisitions(@portal))}
       >
         <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
           New requisition
@@ -498,7 +500,7 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
       <.table
         id="requisitions"
         rows={@streams.requisitions}
-        row_click={fn {_id, r} -> JS.navigate(~p"/pharmacy/requisitions/#{r.id}") end}
+        row_click={fn {_id, r} -> JS.navigate(CarePortal.requisition(@portal, r.id)) end}
       >
         <:col :let={{_id, r}} label="Reference">
           <span class="font-semibold text-thamani-forest">{r.number}</span>
@@ -515,7 +517,8 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
-    </Layouts.pharmacy_shell>
+      </.td_list_page>
+    </Layouts.care_shell>
     """
   end
 end
