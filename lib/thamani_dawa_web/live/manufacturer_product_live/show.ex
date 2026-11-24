@@ -23,7 +23,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
   end
 
   def handle_params(params, _url, socket) do
-    socket = assign(socket, :back_path, ThamaniDawaWeb.ReturnTo.path(params, ~p"/manufacturer/products"))
+    socket =
+      assign(socket, :back_path, ThamaniDawaWeb.ReturnTo.path(params, ~p"/manufacturer/products"))
+
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
   end
 
@@ -209,122 +211,131 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
         <.td_key_value label="GTIN" value={@product.gtin} mono />
         <.td_key_value label="Description" value={@product.description} />
         <:body>
-      <section>
-        <.td_card_header title="Batches" />
-        <.td_data_table
-          id="manufacturer-batches"
-          rows={@batches}
-          row_id={fn {batch, _} -> "manufacturer-batch-#{batch.id}" end}
-        >
-          <:col :let={{batch, serial_count}} label="Batch no.">
-            <.td_pid id={"manufacturer-batch-#{batch.id}-peek"} label={batch.batch_no} mono>
-              <:peek>
-                <.td_peek kind="Batch" title={batch.batch_no} subtitle={@product.name} icon="stack">
-                  <:row label="Production">{ThamaniDawaWeb.TimeFormat.date(batch.production_date)}</:row>
-                  <:row label="Expiry">{ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}</:row>
-                  <:row label="Serials">{serial_count}</:row>
-                </.td_peek>
-              </:peek>
-            </.td_pid>
-          </:col>
-          <:col :let={{batch, _serial_count}} label="Production">
-            {ThamaniDawaWeb.TimeFormat.date(batch.production_date)}
-          </:col>
-          <:col :let={{batch, _serial_count}} label="Expiry">
-            {ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}
-          </:col>
-          <:col :let={{_batch, serial_count}} label="Serials">{serial_count}</:col>
-          <:empty>
-            <.td_empty
-              icon="stack"
-              title="No batches yet"
-              hint="Generate serials to record the first batch for this product."
+          <section>
+            <.td_card_header title="Batches" />
+            <.td_data_table
+              id="manufacturer-batches"
+              rows={@batches}
+              row_id={fn {batch, _} -> "manufacturer-batch-#{batch.id}" end}
             >
-              <:action>
-                <.td_button
-                  variant="secondary"
-                  glyph="arrow-right"
-                  label="Generate serials"
-                  patch={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
-                />
-              </:action>
-            </.td_empty>
-          </:empty>
-        </.td_data_table>
-      </section>
+              <:col :let={{batch, serial_count}} label="Batch no.">
+                <.td_pid id={"manufacturer-batch-#{batch.id}-peek"} label={batch.batch_no} mono>
+                  <:peek>
+                    <.td_peek
+                      kind="Batch"
+                      title={batch.batch_no}
+                      subtitle={@product.name}
+                      icon="stack"
+                    >
+                      <:row label="Production">
+                        {ThamaniDawaWeb.TimeFormat.date(batch.production_date)}
+                      </:row>
+                      <:row label="Expiry">{ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}</:row>
+                      <:row label="Serials">{serial_count}</:row>
+                    </.td_peek>
+                  </:peek>
+                </.td_pid>
+              </:col>
+              <:col :let={{batch, _serial_count}} label="Production">
+                {ThamaniDawaWeb.TimeFormat.date(batch.production_date)}
+              </:col>
+              <:col :let={{batch, _serial_count}} label="Expiry">
+                {ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}
+              </:col>
+              <:col :let={{_batch, serial_count}} label="Serials">{serial_count}</:col>
+              <:empty>
+                <.td_empty
+                  icon="stack"
+                  title="No batches yet"
+                  hint="Generate serials to record the first batch for this product."
+                >
+                  <:action>
+                    <.td_button
+                      variant="secondary"
+                      glyph="arrow-right"
+                      label="Generate serials"
+                      patch={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
+                    />
+                  </:action>
+                </.td_empty>
+              </:empty>
+            </.td_data_table>
+          </section>
 
-      <section class="mt-8">
-        <h2 class="dashboard-section-label">Pallet-SSCC groups</h2>
-        <div class="mt-3 space-y-4">
-          <div
-            :for={{pallet_code, rows} <- @pallet_groups}
-            class="rounded-2xl border border-thamani-frosted bg-td-surface p-5"
-          >
-            <div class="flex items-center justify-between gap-4">
-              <h3 class="text-sm font-semibold text-thamani-forest">{pallet_label(pallet_code)}</h3>
-              <span class="text-xs text-thamani-pewter">
-                {length(rows)} shippers · {Enum.sum(Enum.map(rows, & &1.serial_count))} primary serials
-              </span>
-            </div>
-
-            <div class="mt-4 space-y-3">
+          <section class="mt-8">
+            <h2 class="dashboard-section-label">Pallet-SSCC groups</h2>
+            <div class="mt-3 space-y-4">
               <div
-                :for={%{sscc: sscc, serial_count: serial_count} <- rows}
-                class="grid grid-cols-2 gap-3 rounded-xl border border-thamani-frosted bg-thamani-canvas px-4 py-3 text-sm sm:grid-cols-4"
+                :for={{pallet_code, rows} <- @pallet_groups}
+                class="rounded-2xl border border-thamani-frosted bg-td-surface p-5"
               >
-                <div>
-                  <p class="text-xs text-thamani-pewter">SSCC</p>
-                  <p class="font-mono">{sscc.code}</p>
+                <div class="flex items-center justify-between gap-4">
+                  <h3 class="text-sm font-semibold text-thamani-forest">
+                    {pallet_label(pallet_code)}
+                  </h3>
+                  <span class="text-xs text-thamani-pewter">
+                    {length(rows)} shippers · {Enum.sum(Enum.map(rows, & &1.serial_count))} primary serials
+                  </span>
                 </div>
-                <div>
-                  <p class="text-xs text-thamani-pewter">Batch</p>
-                  <p>{sscc.batch || "—"}</p>
-                </div>
-                <div>
-                  <p class="text-xs text-thamani-pewter">Produced / Expires</p>
-                  <p>
-                    {sscc.production_date && ThamaniDawaWeb.TimeFormat.date(sscc.production_date)} – {sscc.expiry_date &&
-                      ThamaniDawaWeb.TimeFormat.date(sscc.expiry_date)}
-                  </p>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <.td_button
-                    variant="secondary"
-                    label={"Serials (#{serial_count})"}
-                    navigate={~p"/manufacturer/sscc/#{sscc.id}/serials"}
-                  />
-                  <.td_button
-                    variant="secondary"
-                    label="Case label"
-                    navigate={~p"/manufacturer/sscc/#{sscc.id}/label"}
-                  />
-                  <.td_button
-                    variant="secondary"
-                    label="Export CSV"
-                    href={~p"/manufacturer/sscc/#{sscc.id}/export"}
-                  />
+
+                <div class="mt-4 space-y-3">
+                  <div
+                    :for={%{sscc: sscc, serial_count: serial_count} <- rows}
+                    class="grid grid-cols-2 gap-3 rounded-xl border border-thamani-frosted bg-thamani-canvas px-4 py-3 text-sm sm:grid-cols-4"
+                  >
+                    <div>
+                      <p class="text-xs text-thamani-pewter">SSCC</p>
+                      <p class="font-mono">{sscc.code}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-thamani-pewter">Batch</p>
+                      <p>{sscc.batch || "—"}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-thamani-pewter">Produced / Expires</p>
+                      <p>
+                        {sscc.production_date && ThamaniDawaWeb.TimeFormat.date(sscc.production_date)} – {sscc.expiry_date &&
+                          ThamaniDawaWeb.TimeFormat.date(sscc.expiry_date)}
+                      </p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+                      <.td_button
+                        variant="secondary"
+                        label={"Serials (#{serial_count})"}
+                        navigate={~p"/manufacturer/sscc/#{sscc.id}/serials"}
+                      />
+                      <.td_button
+                        variant="secondary"
+                        label="Case label"
+                        navigate={~p"/manufacturer/sscc/#{sscc.id}/label"}
+                      />
+                      <.td_button
+                        variant="secondary"
+                        label="Export CSV"
+                        href={~p"/manufacturer/sscc/#{sscc.id}/export"}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <.td_empty
-            :if={@pallet_groups == %{}}
-            icon="package"
-            title="No SSCCs yet"
-            hint="Create an SSCC to pack serialised units for shipping."
-          >
-            <:action>
-              <.td_button
-                variant="secondary"
-                glyph="arrow-right"
-                label="Create SSCC"
-                patch={~p"/manufacturer/products/#{@product.id}/sscc"}
-              />
-            </:action>
-          </.td_empty>
-        </div>
-      </section>
+              <.td_empty
+                :if={@pallet_groups == %{}}
+                icon="package"
+                title="No SSCCs yet"
+                hint="Create an SSCC to pack serialised units for shipping."
+              >
+                <:action>
+                  <.td_button
+                    variant="secondary"
+                    glyph="arrow-right"
+                    label="Create SSCC"
+                    patch={~p"/manufacturer/products/#{@product.id}/sscc"}
+                  />
+                </:action>
+              </.td_empty>
+            </div>
+          </section>
         </:body>
       </.td_detail_page>
 

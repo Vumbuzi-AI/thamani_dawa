@@ -144,7 +144,8 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       when field in ["role", "site_id", "status"] do
     key = String.to_existing_atom(field)
 
-    {:noreply, socket |> assign(:filters, %{socket.assigns.filters | key => value}) |> assign_lists()}
+    {:noreply,
+     socket |> assign(:filters, %{socket.assigns.filters | key => value}) |> assign_lists()}
   end
 
   def handle_event("clear_filters", _params, socket) do
@@ -340,7 +341,6 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
   defp active_filter_count(filters) do
     Enum.count([filters.role != "", filters.site_id != "", filters.status != ""], & &1)
   end
-
 
   defp sites_summary([]), do: "—"
   defp sites_summary(sites), do: Enum.map_join(sites, ", ", & &1.name)
@@ -727,7 +727,13 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/team"}>
         <:search>
           <form phx-change="search" id="search-form" onsubmit="return false">
-            <.td_search name="search" value={@search} placeholder="Search by name or email" shortcut="⌘K" phx-debounce="200" />
+            <.td_search
+              name="search"
+              value={@search}
+              placeholder="Search by name or email"
+              shortcut="⌘K"
+              phx-debounce="200"
+            />
           </form>
         </:search>
         <.td_list_page title="Team" subtitle="Search, filter, and manage your team.">
@@ -740,7 +746,10 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
               field="role"
               label="Role"
               value={@filters.role}
-              options={[{"", "Any"} | Enum.map(User.assignable_roles(), &{to_string(&1), Phoenix.Naming.humanize(&1)})]}
+              options={[
+                {"", "Any"}
+                | Enum.map(User.assignable_roles(), &{to_string(&1), Phoenix.Naming.humanize(&1)})
+              ]}
             />
             <.td_filter_menu
               id="team"
@@ -763,60 +772,20 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
             />
           </:filters>
 
-        <.td_overlay_form
-          :if={@live_action == :new}
-          id="invite"
-          title="Invite a staff member"
-          submit="Send invite"
-          on_cancel={
-            if @back_path in [~p"/org/dashboard", ~p"/onboarding"],
-              do: JS.navigate(@back_path),
-              else: JS.patch(@back_path)
-          }
-        >
-          <form id="invite-form" phx-submit="save" phx-change="form_change">
-            <.input field={@form[:name]} label="Name" required />
-            <.input field={@form[:email]} type="email" label="Email" required />
-            <.role_checkboxes
-              selected_roles={@selected_roles}
-              errors={@form[:roles].errors}
-              organization={@organization}
-            />
-            <.site_checkboxes
-              :if={@selected_roles != ["admin"]}
-              sites={compatible_sites(@sites, @selected_roles)}
-              all_sites={@sites}
-              checked_site_ids={@checked_site_ids}
-              selected_roles={@selected_roles}
-            />
-            <div
-              :if={"admin" in @selected_roles}
-              class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
-            >
-              <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
-              <span>Admins automatically have organization-wide access across all sites.</span>
-            </div>
-          </form>
-        </.td_overlay_form>
-
-        <.td_modal
-          :if={@live_action == :edit}
-          id="edit-modal"
-          show
-          title="Edit team member"
-          subtitle="Change roles and site access."
-          on_cancel={JS.patch(~p"/org/team")}
-        >
-          <:body>
-            <form id="edit-form" phx-submit="save_edit" phx-change="form_change">
-              <div class="td-member-hd">
-                <.td_orb seed={@editing_user.email} size={32} />
-                <div>
-                  <span class="td-am-name">{@editing_user.name}</span>
-                  <span class="td-am-role">{@editing_user.email}</span>
-                </div>
-                <.status_badge status={status(@editing_user)} class="td-status" />
-              </div>
+          <.td_overlay_form
+            :if={@live_action == :new}
+            id="invite"
+            title="Invite a staff member"
+            submit="Send invite"
+            on_cancel={
+              if @back_path in [~p"/org/dashboard", ~p"/onboarding"],
+                do: JS.navigate(@back_path),
+                else: JS.patch(@back_path)
+            }
+          >
+            <form id="invite-form" phx-submit="save" phx-change="form_change">
+              <.input field={@form[:name]} label="Name" required />
+              <.input field={@form[:email]} type="email" label="Email" required />
               <.role_checkboxes
                 selected_roles={@selected_roles}
                 errors={@form[:roles].errors}
@@ -831,135 +800,185 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
               />
               <div
                 :if={"admin" in @selected_roles}
-                class="flex items-center gap-2.5 text-xs text-thamani-pewter mt-3"
+                class="flex items-center gap-2.5 text-xs text-thamani-pewter bg-thamani-stone/40 border border-thamani-stone rounded-xl p-3 mt-3"
               >
-                <.td_icon name="info" />
+                <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
                 <span>Admins automatically have organization-wide access across all sites.</span>
               </div>
-              <div class="td-access-row">
-                <%= if @editing_user.id == @current_scope.user.id do %>
-                  <p>This is your account. You cannot deactivate your own account.</p>
-                <% else %>
-                  <%= if status(@editing_user) == :inactive do %>
-                    <div>
-                      <b>Account deactivated</b>
-                      <p>Reactivate to restore access.</p>
-                    </div>
-                    <.td_button
-                      id={"btn-toggle-active-user-#{@editing_user.id}"}
-                      type="button"
-                      variant="secondary"
-                      label="Reactivate"
-                      phx-click="toggle_active"
-                      phx-value-id={@editing_user.id}
-                    />
-                  <% else %>
-                    <div>
-                      <b>Deactivate account</b>
-                      <p>
-                        {if status(@editing_user) == :invited,
-                          do: "Not accepted yet. Deactivate to stop them joining.",
-                          else: "They lose access straight away. You can reactivate later."}
-                      </p>
-                    </div>
-                    <.td_button
-                      id={"btn-prompt-deactivate-#{@editing_user.id}"}
-                      type="button"
-                      variant="danger"
-                      label="Deactivate"
-                      phx-click="prompt_deactivate"
-                      phx-value-id={@editing_user.id}
-                    />
-                  <% end %>
-                <% end %>
-              </div>
             </form>
-          </:body>
-          <:footer>
-            <.td_button variant="secondary" label="Cancel" patch={~p"/org/team"} />
-            <.td_button variant="primary" label="Save changes" glyph="check" form="edit-form" type="submit" />
-          </:footer>
-        </.td_modal>
+          </.td_overlay_form>
 
-        <.table id="users" rows={@users} row_click={fn user -> JS.patch(~p"/org/team/#{user.id}/edit") end}>
-          <:col :let={user} label="Name">{user.name}</:col>
-          <:col :let={user} label="Email">{user.email}</:col>
-          <:col :let={user} label="Role">
-            <span class="sm:line-clamp-2" title={User.humanize_roles(user)}>
-              {User.humanize_roles(user)}
-            </span>
-          </:col>
-          <:col :let={user} label="Sites">
-            <span class="sm:line-clamp-2" title={sites_summary(user.sites)}>
-              {sites_summary(user.sites)}
-            </span>
-          </:col>
-          <:col :let={user} label="Status">
-            <.status_badge status={status(user)} />
-          </:col>
-          <:action :let={user}>
-            <div class="td-row-menu">
-              <.td_icon_button
-                id={"btn-row-menu-#{user.id}"}
-                label="Row actions"
-                phx-click={JS.toggle(to: "#team-row-menu-#{user.id}")}
-              >
-                <:icon><.td_icon name="dots-three" /></:icon>
-              </.td_icon_button>
-              <div id={"team-row-menu-#{user.id}"} class="td-row-menu-list" hidden>
-                <.td_menu_item
-                  id={"btn-edit-user-#{user.id}"}
-                  label="Edit"
-                  patch={~p"/org/team/#{user.id}/edit"}
+          <.td_modal
+            :if={@live_action == :edit}
+            id="edit-modal"
+            show
+            title="Edit team member"
+            subtitle="Change roles and site access."
+            on_cancel={JS.patch(~p"/org/team")}
+          >
+            <:body>
+              <form id="edit-form" phx-submit="save_edit" phx-change="form_change">
+                <div class="td-member-hd">
+                  <.td_orb seed={@editing_user.email} size={32} />
+                  <div>
+                    <span class="td-am-name">{@editing_user.name}</span>
+                    <span class="td-am-role">{@editing_user.email}</span>
+                  </div>
+                  <.status_badge status={status(@editing_user)} class="td-status" />
+                </div>
+                <.role_checkboxes
+                  selected_roles={@selected_roles}
+                  errors={@form[:roles].errors}
+                  organization={@organization}
                 />
-                <.td_menu_item
-                  :if={user.id != @current_scope.user.id and user.is_active}
-                  id={"btn-prompt-deactivate-row-#{user.id}"}
-                  label="Deactivate"
-                  tone="danger"
-                  phx-click="prompt_deactivate"
-                  phx-value-id={user.id}
+                <.site_checkboxes
+                  :if={@selected_roles != ["admin"]}
+                  sites={compatible_sites(@sites, @selected_roles)}
+                  all_sites={@sites}
+                  checked_site_ids={@checked_site_ids}
+                  selected_roles={@selected_roles}
                 />
-                <.td_menu_item
-                  :if={user.id != @current_scope.user.id and not user.is_active}
-                  id={"btn-toggle-active-user-#{user.id}"}
-                  label="Reactivate"
-                  phx-click="toggle_active"
-                  phx-value-id={user.id}
-                />
+                <div
+                  :if={"admin" in @selected_roles}
+                  class="flex items-center gap-2.5 text-xs text-thamani-pewter mt-3"
+                >
+                  <.td_icon name="info" />
+                  <span>Admins automatically have organization-wide access across all sites.</span>
+                </div>
+                <div class="td-access-row">
+                  <%= if @editing_user.id == @current_scope.user.id do %>
+                    <p>This is your account. You cannot deactivate your own account.</p>
+                  <% else %>
+                    <%= if status(@editing_user) == :inactive do %>
+                      <div>
+                        <b>Account deactivated</b>
+                        <p>Reactivate to restore access.</p>
+                      </div>
+                      <.td_button
+                        id={"btn-toggle-active-user-#{@editing_user.id}"}
+                        type="button"
+                        variant="secondary"
+                        label="Reactivate"
+                        phx-click="toggle_active"
+                        phx-value-id={@editing_user.id}
+                      />
+                    <% else %>
+                      <div>
+                        <b>Deactivate account</b>
+                        <p>
+                          {if status(@editing_user) == :invited,
+                            do: "Not accepted yet. Deactivate to stop them joining.",
+                            else: "They lose access straight away. You can reactivate later."}
+                        </p>
+                      </div>
+                      <.td_button
+                        id={"btn-prompt-deactivate-#{@editing_user.id}"}
+                        type="button"
+                        variant="danger"
+                        label="Deactivate"
+                        phx-click="prompt_deactivate"
+                        phx-value-id={@editing_user.id}
+                      />
+                    <% end %>
+                  <% end %>
+                </div>
+              </form>
+            </:body>
+            <:footer>
+              <.td_button variant="secondary" label="Cancel" patch={~p"/org/team"} />
+              <.td_button
+                variant="primary"
+                label="Save changes"
+                glyph="check"
+                form="edit-form"
+                type="submit"
+              />
+            </:footer>
+          </.td_modal>
+
+          <.table
+            id="users"
+            rows={@users}
+            row_click={fn user -> JS.patch(~p"/org/team/#{user.id}/edit") end}
+          >
+            <:col :let={user} label="Name">{user.name}</:col>
+            <:col :let={user} label="Email">{user.email}</:col>
+            <:col :let={user} label="Role">
+              <span class="sm:line-clamp-2" title={User.humanize_roles(user)}>
+                {User.humanize_roles(user)}
+              </span>
+            </:col>
+            <:col :let={user} label="Sites">
+              <span class="sm:line-clamp-2" title={sites_summary(user.sites)}>
+                {sites_summary(user.sites)}
+              </span>
+            </:col>
+            <:col :let={user} label="Status">
+              <.status_badge status={status(user)} />
+            </:col>
+            <:action :let={user}>
+              <div class="td-row-menu">
+                <.td_icon_button
+                  id={"btn-row-menu-#{user.id}"}
+                  label="Row actions"
+                  phx-click={JS.toggle(to: "#team-row-menu-#{user.id}")}
+                >
+                  <:icon><.td_icon name="dots-three" /></:icon>
+                </.td_icon_button>
+                <div id={"team-row-menu-#{user.id}"} class="td-row-menu-list" hidden>
+                  <.td_menu_item
+                    id={"btn-edit-user-#{user.id}"}
+                    label="Edit"
+                    patch={~p"/org/team/#{user.id}/edit"}
+                  />
+                  <.td_menu_item
+                    :if={user.id != @current_scope.user.id and user.is_active}
+                    id={"btn-prompt-deactivate-row-#{user.id}"}
+                    label="Deactivate"
+                    tone="danger"
+                    phx-click="prompt_deactivate"
+                    phx-value-id={user.id}
+                  />
+                  <.td_menu_item
+                    :if={user.id != @current_scope.user.id and not user.is_active}
+                    id={"btn-toggle-active-user-#{user.id}"}
+                    label="Reactivate"
+                    phx-click="toggle_active"
+                    phx-value-id={user.id}
+                  />
+                </div>
               </div>
-            </div>
-          </:action>
-          <:empty_state>
-            <.blank_state
-              icon="users-three"
-              title={
-                if @search != "" or active_filter_count(@filters) > 0,
-                  do: "No team members match your search or filters",
-                  else: "No team members yet"
-              }
-            >
-              {if @search != "" or active_filter_count(@filters) > 0,
-                do: "Try a different search term, or clear the applied filters.",
-                else: "Invite teammates to get them access to your organization."}
-            </.blank_state>
-          </:empty_state>
-        </.table>
+            </:action>
+            <:empty_state>
+              <.blank_state
+                icon="users-three"
+                title={
+                  if @search != "" or active_filter_count(@filters) > 0,
+                    do: "No team members match your search or filters",
+                    else: "No team members yet"
+                }
+              >
+                {if @search != "" or active_filter_count(@filters) > 0,
+                  do: "Try a different search term, or clear the applied filters.",
+                  else: "Invite teammates to get them access to your organization."}
+              </.blank_state>
+            </:empty_state>
+          </.table>
 
-        <.pagination page={@page_info} path={~p"/org/team"} />
+          <.pagination page={@page_info} path={~p"/org/team"} />
 
-        <.td_confirm
-          :if={@confirming_user}
-          id="deactivate-confirm"
-          title="Deactivate this account?"
-          subtitle={@confirming_user.name}
-          body="They lose access straight away. You can reactivate later."
-          confirm="Deactivate"
-          confirm_click="toggle_active"
-          confirm_id={"btn-toggle-active-user-#{@confirming_user.id}"}
-          confirm_value_id={@confirming_user.id}
-          on_cancel={JS.push("cancel_deactivate")}
-        />
+          <.td_confirm
+            :if={@confirming_user}
+            id="deactivate-confirm"
+            title="Deactivate this account?"
+            subtitle={@confirming_user.name}
+            body="They lose access straight away. You can reactivate later."
+            confirm="Deactivate"
+            confirm_click="toggle_active"
+            confirm_id={"btn-toggle-active-user-#{@confirming_user.id}"}
+            confirm_value_id={@confirming_user.id}
+            on_cancel={JS.push("cancel_deactivate")}
+          />
         </.td_list_page>
       </Layouts.org_shell>
     <% end %>

@@ -101,12 +101,12 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
            socket
            |> put_flash(:info, "Disposal request started.")
            |> push_navigate(
-               to:
-                 ThamaniDawaWeb.ReturnTo.with_query(
-                   CarePortal.disposal(socket.assigns.portal, disposal.id),
-                   kind_path(socket.assigns.portal, :index, socket.assigns.list_kind)
-                 )
-             )}
+             to:
+               ThamaniDawaWeb.ReturnTo.with_query(
+                 CarePortal.disposal(socket.assigns.portal, disposal.id),
+                 kind_path(socket.assigns.portal, :index, socket.assigns.list_kind)
+               )
+           )}
 
         {:error, changeset} ->
           {:noreply, assign(socket, form: to_form(changeset, as: :disposal))}
@@ -243,74 +243,87 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
           </button>
         </:tabs>
 
-      <.modal
-        :if={@live_action == :new}
-        id="disposal-modal"
-        show
-        on_cancel={JS.patch(kind_path(@portal, :index, @list_kind))}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
-          {if @list_kind == "returned",
-            do: "Start a supplier return",
-            else: "Start an expiry write-off"}
-        </h2>
-        <.form for={@form} id="disposal-form" phx-submit="save" phx-change="validate" class="mt-4">
-          <input type="hidden" name="disposal[requested_by_id]" value={@current_scope.user.id} />
-          <input type="hidden" name="disposal[kind]" value={@list_kind} />
-          <%= if site = locked_site(@sites, @current_scope) do %>
-            <.input field={@form[:site_id]} type="hidden" value={site.id} />
-          <% else %>
-            <.input
-              field={@form[:site_id]}
-              type="select"
-              label="Site"
-              options={Enum.map(@sites, &{&1.name, &1.id})}
-              prompt="Choose a site"
-              required
-            />
-          <% end %>
-          <.input field={@form[:notes]} type="textarea" label="Notes" rows="3" />
-          <div class="mt-4">
-            <.button variant="primary" class="w-full">Start disposal</.button>
-          </div>
-        </.form>
-      </.modal>
-
-      <.table id="disposals" rows={@streams.disposals}>
-        <:col :let={{_id, d}} :if={is_nil(locked_site(@sites, @current_scope))} label="Site">
-          {site_name(@sites_by_id, d.site_id)}
-        </:col>
-        <:col :let={{_id, d}} label="Status">
-          <.status_badge status={d.status} />
-        </:col>
-        <:col :let={{_id, d}} label="Started">
-          {ThamaniDawaWeb.TimeFormat.date(d.inserted_at)}
-        </:col>
-        <:action :let={{_id, d}}>
-          <.button variant="ghost" navigate={ThamaniDawaWeb.ReturnTo.with_query(CarePortal.disposal(@portal, d.id), kind_path(@portal, :index, @list_kind))} class="gap-2">
-            <.icon
-              name={if d.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
-              class="size-4"
-            />
-            {continue_label(d.status)}
-          </.button>
-        </:action>
-        <:empty_state>
-          <div class="td-empty-state">
-            <.td_icon name="trash" class="td-empty-state-icon" />
-            <p class="td-empty-state-title">{empty_title(@list_kind)}</p>
-            <p class="td-empty-state-text">{empty_body(@list_kind)}</p>
-            <div class="td-empty-state-actions">
-              <.td_button
-                id="new-disposal"
-                variant="primary"
-                label={if @list_kind == "returned", do: "Start a supplier return", else: "Start an expiry write-off"}
-                patch={new_path(@portal, @list_kind)}
+        <.modal
+          :if={@live_action == :new}
+          id="disposal-modal"
+          show
+          on_cancel={JS.patch(kind_path(@portal, :index, @list_kind))}
+        >
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
+            {if @list_kind == "returned",
+              do: "Start a supplier return",
+              else: "Start an expiry write-off"}
+          </h2>
+          <.form for={@form} id="disposal-form" phx-submit="save" phx-change="validate" class="mt-4">
+            <input type="hidden" name="disposal[requested_by_id]" value={@current_scope.user.id} />
+            <input type="hidden" name="disposal[kind]" value={@list_kind} />
+            <%= if site = locked_site(@sites, @current_scope) do %>
+              <.input field={@form[:site_id]} type="hidden" value={site.id} />
+            <% else %>
+              <.input
+                field={@form[:site_id]}
+                type="select"
+                label="Site"
+                options={Enum.map(@sites, &{&1.name, &1.id})}
+                prompt="Choose a site"
+                required
               />
+            <% end %>
+            <.input field={@form[:notes]} type="textarea" label="Notes" rows="3" />
+            <div class="mt-4">
+              <.button variant="primary" class="w-full">Start disposal</.button>
             </div>
-          </div>
-        </:empty_state>
-      </.table>
+          </.form>
+        </.modal>
+
+        <.table id="disposals" rows={@streams.disposals}>
+          <:col :let={{_id, d}} :if={is_nil(locked_site(@sites, @current_scope))} label="Site">
+            {site_name(@sites_by_id, d.site_id)}
+          </:col>
+          <:col :let={{_id, d}} label="Status">
+            <.status_badge status={d.status} />
+          </:col>
+          <:col :let={{_id, d}} label="Started">
+            {ThamaniDawaWeb.TimeFormat.date(d.inserted_at)}
+          </:col>
+          <:action :let={{_id, d}}>
+            <.button
+              variant="ghost"
+              navigate={
+                ThamaniDawaWeb.ReturnTo.with_query(
+                  CarePortal.disposal(@portal, d.id),
+                  kind_path(@portal, :index, @list_kind)
+                )
+              }
+              class="gap-2"
+            >
+              <.icon
+                name={if d.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
+                class="size-4"
+              />
+              {continue_label(d.status)}
+            </.button>
+          </:action>
+          <:empty_state>
+            <div class="td-empty-state">
+              <.td_icon name="trash" class="td-empty-state-icon" />
+              <p class="td-empty-state-title">{empty_title(@list_kind)}</p>
+              <p class="td-empty-state-text">{empty_body(@list_kind)}</p>
+              <div class="td-empty-state-actions">
+                <.td_button
+                  id="new-disposal"
+                  variant="primary"
+                  label={
+                    if @list_kind == "returned",
+                      do: "Start a supplier return",
+                      else: "Start an expiry write-off"
+                  }
+                  patch={new_path(@portal, @list_kind)}
+                />
+              </div>
+            </div>
+          </:empty_state>
+        </.table>
       </.td_list_page>
     </Layouts.care_shell>
     """

@@ -35,7 +35,12 @@
           required
         />
         <div class="td-auth-row">
-          <.td_checkbox id="login-remember" name="remember_me" label="Keep me logged in" on={@remember} />
+          <.td_checkbox
+            id="login-remember"
+            name="remember_me"
+            label="Keep me logged in"
+            on={@remember}
+          />
           <.link navigate={~p"/reset-password"}>Forgot password?</.link>
         </div>
         <.td_button id="login-submit" type="submit" variant="primary" size="lg" label="Log in" />

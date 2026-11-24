@@ -293,7 +293,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.SsccShow do
       >
         <.td_icon name="arrow-left" /> {if @sscc.pallet, do: "Pallet", else: "Aggregation"}
       </.link>
-      <.td_page_header title={"Shipper SSCC"} subtitle={@sscc.code}>
+      <.td_page_header title="Shipper SSCC" subtitle={@sscc.code}>
         <:actions>
           <.td_button
             id="upload-sscc-gtins"
@@ -335,8 +335,20 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.SsccShow do
           subtitle="Add several batches and enter serials one at a time or in bulk."
         >
           <:actions>
-            <.td_button id="add-sscc-batch" variant="secondary" label="Add batch" phx-click="open" phx-value-mode="batch" />
-            <.td_button id="add-sscc-serials" variant="secondary" label="Add serials" phx-click="open" phx-value-mode="serials" />
+            <.td_button
+              id="add-sscc-batch"
+              variant="secondary"
+              label="Add batch"
+              phx-click="open"
+              phx-value-mode="batch"
+            />
+            <.td_button
+              id="add-sscc-serials"
+              variant="secondary"
+              label="Add serials"
+              phx-click="open"
+              phx-value-mode="serials"
+            />
           </:actions>
         </.td_card_header>
         <div :if={@sscc.batches == []} class="td-empty-card">
@@ -471,8 +483,18 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.SsccShow do
               </span>
             </div>
             <div class="flex justify-end gap-2 pt-3">
-              <.td_button variant="secondary" label="Back" phx-click="open" phx-value-mode="bulk_gtins" />
-              <.td_button id="save-bulk-gtins" variant="primary" label="Save ready GTINs" phx-click="save_bulk_gtins" />
+              <.td_button
+                variant="secondary"
+                label="Back"
+                phx-click="open"
+                phx-value-mode="bulk_gtins"
+              />
+              <.td_button
+                id="save-bulk-gtins"
+                variant="primary"
+                label="Save ready GTINs"
+                phx-click="save_bulk_gtins"
+              />
             </div>
           </div>
         </div>

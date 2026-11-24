@@ -70,138 +70,145 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Show do
           </.button>
         </:actions>
         <:body>
+          <div class="mt-5 grid gap-4 sm:grid-cols-3">
+            <.stat_tile
+              icon="hero-archive-box"
+              label="Batches"
+              value={@batch_count}
+              sublabel="Across your warehouses"
+            />
+            <.stat_tile
+              icon="hero-cube-transparent"
+              label="Remaining stock"
+              value={@remaining_stock}
+              sublabel="Units across all batches"
+            />
+            <.stat_tile
+              icon="hero-tag"
+              label="Reorder level"
+              value={@product.reorder_level || "—"}
+              sublabel="Units"
+            />
+          </div>
 
-      <div class="mt-5 grid gap-4 sm:grid-cols-3">
-        <.stat_tile
-          icon="hero-archive-box"
-          label="Batches"
-          value={@batch_count}
-          sublabel="Across your warehouses"
-        />
-        <.stat_tile
-          icon="hero-cube-transparent"
-          label="Remaining stock"
-          value={@remaining_stock}
-          sublabel="Units across all batches"
-        />
-        <.stat_tile
-          icon="hero-tag"
-          label="Reorder level"
-          value={@product.reorder_level || "—"}
-          sublabel="Units"
-        />
-      </div>
+          <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
+            <h2 class="text-lg font-semibold text-thamani-forest">Product details</h2>
+            <dl class="mt-4 grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Brand</dt><dd class="mt-1 text-sm text-thamani-ink">
+                  {@product.brand_name || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Category
+                </dt><dd class="mt-1 text-sm text-thamani-ink">
+                  {@product.category || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Strength
+                </dt><dd class="mt-1 text-sm text-thamani-ink">
+                  {@product.strength || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Each pack contains
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">
+                  {Products.format_net_content(@product) || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Manufacturer
+                </dt><dd class="mt-1 text-sm text-thamani-ink">{@product.manufacturer || "—"}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">GTIN</dt><dd class="mt-1 text-sm text-thamani-ink">
+                  {@product.gtin || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Price
+                </dt><dd class="mt-1 text-sm text-thamani-ink">
+                  {if @product.price, do: "KES #{@product.price}", else: "—"}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Status
+                </dt><dd class="mt-1 text-sm text-thamani-ink">
+                  {if @product.is_active, do: "Active", else: "Inactive"}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Reorder level
+                </dt><dd class="mt-1 text-sm text-thamani-ink">{@product.reorder_level || "—"}</dd>
+              </div>
+            </dl>
+          </section>
 
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
-        <h2 class="text-lg font-semibold text-thamani-forest">Product details</h2>
-        <dl class="mt-4 grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Brand</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {@product.brand_name || "—"}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Category</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {@product.category || "—"}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Strength</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {@product.strength || "—"}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Each pack contains
-            </dt>
-            <dd class="mt-1 text-sm text-thamani-ink">
-              {Products.format_net_content(@product) || "—"}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Manufacturer
-            </dt><dd class="mt-1 text-sm text-thamani-ink">{@product.manufacturer || "—"}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">GTIN</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {@product.gtin || "—"}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Price
-            </dt><dd class="mt-1 text-sm text-thamani-ink">
-              {if @product.price, do: "KES #{@product.price}", else: "—"}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Status</dt><dd class="mt-1 text-sm text-thamani-ink">
-              {if @product.is_active, do: "Active", else: "Inactive"}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Reorder level
-            </dt><dd class="mt-1 text-sm text-thamani-ink">{@product.reorder_level || "—"}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <.td_card_header
-        title="Batches"
-        subtitle="Batch numbers, warehouse locations, expiry dates, and remaining quantities."
-      />
-      <.table
-        id="distributor-product-batches"
-        rows={@streams.batches}
-      >
-        <:col :let={{_id, batch}} label="Warehouse">
-          {if batch.site, do: batch.site.name, else: "—"}
-        </:col>
-        <:col :let={{_id, batch}} label="Batch / lot">
-          <span class="font-mono">{batch.batch_no}</span>
-        </:col>
-        <:col :let={{_id, batch}} label="Serials">
-          <span :if={batch.serials == []} class="text-sm text-thamani-subtle">—</span>
-          <details :if={batch.serials != []} class="group">
-            <summary class="flex w-fit cursor-pointer list-none items-center gap-1 text-sm font-semibold text-thamani-forest">
-              {length(batch.serials)}
-              <.icon
-                name="hero-chevron-down"
-                class="size-3.5 transition-transform duration-200 group-open:rotate-180"
-              />
-            </summary>
-            <div class="mt-1.5 grid gap-1.5 sm:grid-cols-2">
-              <span
-                :for={serial <- batch.serials}
-                class="truncate rounded border border-thamani-stone bg-td-surface px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
-                title={serial}
-              >
-                {serial}
-              </span>
-            </div>
-          </details>
-        </:col>
-        <:col :let={{_id, batch}} label="Manufactured">{date_or_dash(batch.manufacture_date)}</:col>
-        <:col :let={{_id, batch}} label="Expires">{date_or_dash(batch.expiry_date)}</:col>
-        <:col :let={{_id, batch}} label="Supplier">{supplier_name(batch.supplier)}</:col>
-        <:col :let={{_id, batch}} label="Remaining / received">
-          {batch.remaining_quantity} / {batch.quantity}
-        </:col>
-        <:col :let={{_id, batch}} label="Status">
-          <.status_badge status={if batch.approver_id, do: :active, else: :pending} />
-        </:col>
-        <:empty_state>
-          <.blank_state icon="hero-archive-box" title="No batches for this product yet">
-            Batches will appear here after you receive this product into a warehouse.
-          </.blank_state>
-        </:empty_state>
-      </.table>
-      <.pagination
-        page={@page_info}
-        path={~p"/distributor/products/#{@product.id}"}
-      />
+          <.td_card_header
+            title="Batches"
+            subtitle="Batch numbers, warehouse locations, expiry dates, and remaining quantities."
+          />
+          <.table
+            id="distributor-product-batches"
+            rows={@streams.batches}
+          >
+            <:col :let={{_id, batch}} label="Warehouse">
+              {if batch.site, do: batch.site.name, else: "—"}
+            </:col>
+            <:col :let={{_id, batch}} label="Batch / lot">
+              <span class="font-mono">{batch.batch_no}</span>
+            </:col>
+            <:col :let={{_id, batch}} label="Serials">
+              <span :if={batch.serials == []} class="text-sm text-thamani-subtle">—</span>
+              <details :if={batch.serials != []} class="group">
+                <summary class="flex w-fit cursor-pointer list-none items-center gap-1 text-sm font-semibold text-thamani-forest">
+                  {length(batch.serials)}
+                  <.icon
+                    name="hero-chevron-down"
+                    class="size-3.5 transition-transform duration-200 group-open:rotate-180"
+                  />
+                </summary>
+                <div class="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                  <span
+                    :for={serial <- batch.serials}
+                    class="truncate rounded border border-thamani-stone bg-td-surface px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
+                    title={serial}
+                  >
+                    {serial}
+                  </span>
+                </div>
+              </details>
+            </:col>
+            <:col :let={{_id, batch}} label="Manufactured">
+              {date_or_dash(batch.manufacture_date)}
+            </:col>
+            <:col :let={{_id, batch}} label="Expires">{date_or_dash(batch.expiry_date)}</:col>
+            <:col :let={{_id, batch}} label="Supplier">{supplier_name(batch.supplier)}</:col>
+            <:col :let={{_id, batch}} label="Remaining / received">
+              {batch.remaining_quantity} / {batch.quantity}
+            </:col>
+            <:col :let={{_id, batch}} label="Status">
+              <.status_badge status={if batch.approver_id, do: :active, else: :pending} />
+            </:col>
+            <:empty_state>
+              <.blank_state icon="hero-archive-box" title="No batches for this product yet">
+                Batches will appear here after you receive this product into a warehouse.
+              </.blank_state>
+            </:empty_state>
+          </.table>
+          <.pagination
+            page={@page_info}
+            path={~p"/distributor/products/#{@product.id}"}
+          />
         </:body>
       </.td_detail_page>
     </Layouts.distributor_shell>

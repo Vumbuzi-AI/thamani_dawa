@@ -200,10 +200,6 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
   defp parse_date(%Date{} = d), do: {:ok, d}
   defp parse_date(_), do: {:error, :invalid}
 
-  defp to_date_val(%DateTime{} = dt), do: DateTime.to_date(dt)
-  defp to_date_val(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_date(ndt)
-  defp to_date_val(%Date{} = d), do: d
-
   defp money(amount), do: ThamaniDawaWeb.Money.ksh(amount)
 
   defp range_chip_label("custom", {from, to}) do
@@ -235,8 +231,6 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
     end)
   end
 
-  defp axis_labels([]), do: []
-
   defp axis_labels(marks) do
     last = length(marks) - 1
     mid = div(last, 2)
@@ -252,7 +246,6 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
   defp tick_count(%Decimal{} = d), do: d |> Decimal.round(0) |> Decimal.to_integer() |> abs()
   defp tick_count(n) when is_number(n), do: n |> round() |> abs()
   defp tick_count(_), do: 0
-
 
   defp combined_search_items(results) do
     patients =
@@ -333,7 +326,6 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
         style="background: var(--color-td-scrim);"
         phx-click="dismiss_search"
       />
-
 
       <section
         :if={@setup_required?}
@@ -589,92 +581,94 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
         </:strip>
 
         <div id="admin-dashboard-charts">
-        <.td_dash_row>
-          <.td_dash_card
-            id="daily-revenue-chart"
-            title="Daily revenue"
-            subtitle="Wallet credits collected per day in the selected window"
-          >
-            <div class="td-bars" aria-label="Daily revenue in the selected window">
-              <i
-                :for={bar <- @daily_bars}
-                class={bar.recent && "is-now"}
-                style={"height: #{bar.height}%"}
-              >
-              </i>
-            </div>
-            <div :if={@daily_bars != []} class="td-axis">
-              <span :for={label <- axis_labels(@daily_bars)}>{label}</span>
-            </div>
-          </.td_dash_card>
-          <.td_dash_card
-            id="monthly-revenue-chart"
-            title="Monthly revenue"
-            subtitle="Total wallet credits collected in the last 12 months"
-            width={380}
-          >
-            <div class="td-bars" aria-label="Monthly revenue over the last 12 months">
-              <i
-                :for={bar <- @monthly_bars}
-                class={bar.recent && "is-now"}
-                style={"height: #{bar.height}%"}
-              >
-              </i>
-            </div>
-            <div :if={@monthly_bars != []} class="td-axis">
-              <span :for={label <- axis_labels(@monthly_bars)}>{label}</span>
-            </div>
-          </.td_dash_card>
-        </.td_dash_row>
+          <.td_dash_row>
+            <.td_dash_card
+              id="daily-revenue-chart"
+              title="Daily revenue"
+              subtitle="Wallet credits collected per day in the selected window"
+            >
+              <div class="td-bars" aria-label="Daily revenue in the selected window">
+                <i
+                  :for={bar <- @daily_bars}
+                  class={bar.recent && "is-now"}
+                  style={"height: #{bar.height}%"}
+                ></i>
+              </div>
+              <div :if={@daily_bars != []} class="td-axis">
+                <span :for={label <- axis_labels(@daily_bars)}>{label}</span>
+              </div>
+            </.td_dash_card>
+            <.td_dash_card
+              id="monthly-revenue-chart"
+              title="Monthly revenue"
+              subtitle="Total wallet credits collected in the last 12 months"
+              width={380}
+            >
+              <div class="td-bars" aria-label="Monthly revenue over the last 12 months">
+                <i
+                  :for={bar <- @monthly_bars}
+                  class={bar.recent && "is-now"}
+                  style={"height: #{bar.height}%"}
+                ></i>
+              </div>
+              <div :if={@monthly_bars != []} class="td-axis">
+                <span :for={label <- axis_labels(@monthly_bars)}>{label}</span>
+              </div>
+            </.td_dash_card>
+          </.td_dash_row>
         </div>
 
         <div id="org-analytics-charts">
-        <.td_dash_row>
-          <.td_dash_card
-            id="org-site-performance-chart"
-            title="Revenue and cost by site"
-            subtitle="All-time site comparison. Profit is revenue less stock cost."
-          >
-            <table class="td-rows td-ticks">
-              <thead>
-                <tr>
-                  <th>Site</th>
-                  <th>Revenue</th>
-                  <th>Stock cost</th>
-                  <th>Profit</th>
-                  <th class="td-ticks-col"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr :if={@site_profitability == []}>
-                  <td colspan="5" class="td-muted">No site revenue yet.</td>
-                </tr>
-                <tr
-                  :for={row <- @site_profitability}
-                  id={"org-site-row-#{row.site.id}"}
-                  class="is-link"
-                  phx-click={JS.navigate("/org/sites/#{row.site.id}?return_to=" <> URI.encode_www_form("/org/dashboard"))}
-                >
-                  <td><span class="td-cell" title={row.site.name}>{row.site.name}</span></td>
-                  <td class="is-num">{money(row.revenue)}</td>
-                  <td class="is-num">{money(row.cost_of_goods)}</td>
-                  <td class="is-num">{money(row.profit)}</td>
-                  <td>
-                    <.td_ticks
-                      count={tick_count(row.revenue)}
-                      max={@site_tick_max}
-                      tone="success"
-                    />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <div id="org-site-profit-chart" class="hidden" aria-hidden="true"></div>
-          </.td_dash_card>
-        </.td_dash_row>
+          <.td_dash_row>
+            <.td_dash_card
+              id="org-site-performance-chart"
+              title="Revenue and cost by site"
+              subtitle="All-time site comparison. Profit is revenue less stock cost."
+            >
+              <table class="td-rows td-ticks">
+                <thead>
+                  <tr>
+                    <th>Site</th>
+                    <th>Revenue</th>
+                    <th>Stock cost</th>
+                    <th>Profit</th>
+                    <th class="td-ticks-col"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :if={@site_profitability == []}>
+                    <td colspan="5" class="td-muted">No site revenue yet.</td>
+                  </tr>
+                  <tr
+                    :for={row <- @site_profitability}
+                    id={"org-site-row-#{row.site.id}"}
+                    class="is-link"
+                    phx-click={
+                      JS.navigate(
+                        "/org/sites/#{row.site.id}?return_to=" <>
+                          URI.encode_www_form("/org/dashboard")
+                      )
+                    }
+                  >
+                    <td><span class="td-cell" title={row.site.name}>{row.site.name}</span></td>
+                    <td class="is-num">{money(row.revenue)}</td>
+                    <td class="is-num">{money(row.cost_of_goods)}</td>
+                    <td class="is-num">{money(row.profit)}</td>
+                    <td>
+                      <.td_ticks
+                        count={tick_count(row.revenue)}
+                        max={@site_tick_max}
+                        tone="success"
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div id="org-site-profit-chart" class="hidden" aria-hidden="true"></div>
+            </.td_dash_card>
+          </.td_dash_row>
         </div>
       </.td_dashboard>
-
 
       <div
         :if={not @setup_required?}

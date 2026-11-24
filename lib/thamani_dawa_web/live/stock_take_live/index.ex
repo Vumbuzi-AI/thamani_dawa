@@ -163,65 +163,65 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
           />
         </:actions>
 
-      <.modal
-        :if={@live_action == :new}
-        id="stock-take-modal"
-        show
-        on_cancel={JS.patch(CarePortal.stock_takes(@portal))}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Start a new stock take
-        </h2>
-        <.form for={@form} id="stock-take-form" phx-submit="save" phx-change="validate">
-          <input type="hidden" name="stock_take[requested_by_id]" value={@current_scope.user.id} />
-          <%= if length(@sites) == 1 do %>
-            <% site = hd(@sites) %>
-            <.input field={@form[:site_id]} type="hidden" value={site.id} />
-            <div class="mb-3">
-              <span class="thamani-label">Site</span>
-              <p class="text-sm font-medium text-td-ink">{site.name}</p>
+        <.modal
+          :if={@live_action == :new}
+          id="stock-take-modal"
+          show
+          on_cancel={JS.patch(CarePortal.stock_takes(@portal))}
+        >
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            Start a new stock take
+          </h2>
+          <.form for={@form} id="stock-take-form" phx-submit="save" phx-change="validate">
+            <input type="hidden" name="stock_take[requested_by_id]" value={@current_scope.user.id} />
+            <%= if length(@sites) == 1 do %>
+              <% site = hd(@sites) %>
+              <.input field={@form[:site_id]} type="hidden" value={site.id} />
+              <div class="mb-3">
+                <span class="thamani-label">Site</span>
+                <p class="text-sm font-medium text-td-ink">{site.name}</p>
+              </div>
+            <% else %>
+              <.input
+                field={@form[:site_id]}
+                type="select"
+                label="Site"
+                options={Enum.map(@sites, &{&1.name, &1.id})}
+                prompt="Choose a site"
+                required
+              />
+            <% end %>
+            <.input field={@form[:notes]} type="textarea" label="Notes" rows="3" />
+            <div class="mt-4">
+              <.button variant="primary" class="w-full">Start counting</.button>
             </div>
-          <% else %>
-            <.input
-              field={@form[:site_id]}
-              type="select"
-              label="Site"
-              options={Enum.map(@sites, &{&1.name, &1.id})}
-              prompt="Choose a site"
-              required
-            />
-          <% end %>
-          <.input field={@form[:notes]} type="textarea" label="Notes" rows="3" />
-          <div class="mt-4">
-            <.button variant="primary" class="w-full">Start counting</.button>
-          </div>
-        </.form>
-      </.modal>
+          </.form>
+        </.modal>
 
-      <.table id="stock-takes" rows={@streams.stock_takes}>
-        <:col :let={{_id, take}} label="Site">{site_name(@sites_by_id, take.site_id)}</:col>
-        <:col :let={{_id, take}} label="Status">
-          <.status_badge status={take.status} />
-        </:col>
-        <:col :let={{_id, take}} label="Notes">{take.notes || "—"}</:col>
-        <:col :let={{_id, take}} label="Started">
-          {ThamaniDawaWeb.TimeFormat.date(take.inserted_at)}
-        </:col>
-        <:action :let={{_id, take}}>
-          <.button variant="ghost" navigate={CarePortal.stock_take(@portal, take.id)} class="gap-2">
-            <.icon
-              name={if take.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
-              class="size-4"
-            />
-            {continue_label(take.status)}
-          </.button>
-        </:action>
-        <:empty_state>
-          <.blank_state icon="hero-clipboard-document-list" title="No stock takes yet">
-            Start a stock take to count and reconcile your physical inventory.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        <.table id="stock-takes" rows={@streams.stock_takes}>
+          <:col :let={{_id, take}} label="Site">{site_name(@sites_by_id, take.site_id)}</:col>
+          <:col :let={{_id, take}} label="Status">
+            <.status_badge status={take.status} />
+          </:col>
+          <:col :let={{_id, take}} label="Notes">{take.notes || "—"}</:col>
+          <:col :let={{_id, take}} label="Started">
+            {ThamaniDawaWeb.TimeFormat.date(take.inserted_at)}
+          </:col>
+          <:action :let={{_id, take}}>
+            <.button variant="ghost" navigate={CarePortal.stock_take(@portal, take.id)} class="gap-2">
+              <.icon
+                name={if take.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
+                class="size-4"
+              />
+              {continue_label(take.status)}
+            </.button>
+          </:action>
+          <:empty_state>
+            <.blank_state icon="hero-clipboard-document-list" title="No stock takes yet">
+              Start a stock take to count and reconcile your physical inventory.
+            </.blank_state>
+          </:empty_state>
+        </.table>
       </.td_list_page>
     </Layouts.care_shell>
     """

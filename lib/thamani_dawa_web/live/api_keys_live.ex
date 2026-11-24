@@ -441,104 +441,113 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
         subtitle="Credentials this organization uses with PPB Track & Trace and GS1."
       >
         <:body>
-      <div class="td-pad is-account">
-
-        <section
-          id="epcis-api-key-settings"
-          class="td-card"
-        >
-          <.td_card_header
-            title={if(@keys_needed?, do: "Add your TNT API key", else: "TNT API key")}
-            subtitle={
-              if @keys_needed? do
-                "Events are reported with your organization's TNT API key. Add it before you send anything. The TrackIQ Partner Portal is where you register and copy the key."
-              else
-                "Events are reported with the key saved here."
-              end
-            }
-          >
-            <:actions>
-              <.td_button
-                variant="secondary"
-                label="Partner Portal"
-                glyph="arrow-up-right"
-                href="https://trackiq.apeiro-digital.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-              />
-            </:actions>
-          </.td_card_header>
-
-          <div :if={@tiers == []} class="td-key-row">
-            <div class="td-key-row-value is-empty">
-              This organization has no distributor or facility reporting tier yet.
-            </div>
-          </div>
-
-          <.api_key_row
-            :for={tier <- @tiers}
-            tier={tier}
-            last4={key_last4(@organization, tier)}
-            editing={@editing_key_tier == tier}
-          />
-        </section>
-
-        <section id="gs1-api-key-settings" class="td-card">
-          <.td_card_header
-            title="GS1 API key"
-            subtitle="Bearer token for the GS1 member API, used when creating an SSCC and fetching the serials in a case. Leave it empty to use the platform token."
-          />
-
-          <div id="gs1-api-key-row" class={["td-key-row", @editing_gs1 && "is-editing"]}>
-            <div class="td-key-row-meta">
-              <b>Member API</b>
-              <span>SSCC creation and case contents</span>
-            </div>
-
-            <form :if={@editing_gs1} id="gs1-api-key-form" phx-submit="save_gs1_key" class="td-key-row-form">
-              <.td_input
-                id="gs1-api-key-input"
-                type="password"
-                name="key"
-                label="GS1 API key"
-                autocomplete="off"
-                placeholder="Paste the GS1 member API key"
-              />
-              <.td_button type="submit" variant="primary" label="Save" />
-              <.td_button type="button" variant="secondary" label="Cancel" phx-click="cancel_gs1_key" />
-            </form>
-
-            <div
-              :if={!@editing_gs1}
-              class={["td-key-row-value", is_nil(@organization.gs1_api_key_last4) && "is-empty"]}
+          <div class="td-pad is-account">
+            <section
+              id="epcis-api-key-settings"
+              class="td-card"
             >
-              <%= if @organization.gs1_api_key_last4 do %>
-                Key ending <code>{@organization.gs1_api_key_last4}</code>
-              <% else %>
-                No key saved
-              <% end %>
-            </div>
-            <div :if={!@editing_gs1} class="td-key-row-actions">
-              <.td_button
-                type="button"
-                id="edit-gs1-key"
-                phx-click="edit_gs1_key"
-                variant={if(@organization.gs1_api_key_last4, do: "secondary", else: "primary")}
-                glyph={if(@organization.gs1_api_key_last4, do: nil, else: "plus")}
-                label={if(@organization.gs1_api_key_last4, do: "Replace", else: "Add key")}
+              <.td_card_header
+                title={if(@keys_needed?, do: "Add your TNT API key", else: "TNT API key")}
+                subtitle={
+                  if @keys_needed? do
+                    "Events are reported with your organization's TNT API key. Add it before you send anything. The TrackIQ Partner Portal is where you register and copy the key."
+                  else
+                    "Events are reported with the key saved here."
+                  end
+                }
+              >
+                <:actions>
+                  <.td_button
+                    variant="secondary"
+                    label="Partner Portal"
+                    glyph="arrow-up-right"
+                    href="https://trackiq.apeiro-digital.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                </:actions>
+              </.td_card_header>
+
+              <div :if={@tiers == []} class="td-key-row">
+                <div class="td-key-row-value is-empty">
+                  This organization has no distributor or facility reporting tier yet.
+                </div>
+              </div>
+
+              <.api_key_row
+                :for={tier <- @tiers}
+                tier={tier}
+                last4={key_last4(@organization, tier)}
+                editing={@editing_key_tier == tier}
               />
-              <.td_button
-                :if={@organization.gs1_api_key_last4}
-                type="button"
-                id="clear-gs1-key"
-                variant="secondary"
-                label="Clear"
-                phx-click="prompt_clear_gs1_key"
+            </section>
+
+            <section id="gs1-api-key-settings" class="td-card">
+              <.td_card_header
+                title="GS1 API key"
+                subtitle="Bearer token for the GS1 member API, used when creating an SSCC and fetching the serials in a case. Leave it empty to use the platform token."
               />
-            </div>
+
+              <div id="gs1-api-key-row" class={["td-key-row", @editing_gs1 && "is-editing"]}>
+                <div class="td-key-row-meta">
+                  <b>Member API</b>
+                  <span>SSCC creation and case contents</span>
+                </div>
+
+                <form
+                  :if={@editing_gs1}
+                  id="gs1-api-key-form"
+                  phx-submit="save_gs1_key"
+                  class="td-key-row-form"
+                >
+                  <.td_input
+                    id="gs1-api-key-input"
+                    type="password"
+                    name="key"
+                    label="GS1 API key"
+                    autocomplete="off"
+                    placeholder="Paste the GS1 member API key"
+                  />
+                  <.td_button type="submit" variant="primary" label="Save" />
+                  <.td_button
+                    type="button"
+                    variant="secondary"
+                    label="Cancel"
+                    phx-click="cancel_gs1_key"
+                  />
+                </form>
+
+                <div
+                  :if={!@editing_gs1}
+                  class={["td-key-row-value", is_nil(@organization.gs1_api_key_last4) && "is-empty"]}
+                >
+                  <%= if @organization.gs1_api_key_last4 do %>
+                    Key ending <code>{@organization.gs1_api_key_last4}</code>
+                  <% else %>
+                    No key saved
+                  <% end %>
+                </div>
+                <div :if={!@editing_gs1} class="td-key-row-actions">
+                  <.td_button
+                    type="button"
+                    id="edit-gs1-key"
+                    phx-click="edit_gs1_key"
+                    variant={if(@organization.gs1_api_key_last4, do: "secondary", else: "primary")}
+                    glyph={if(@organization.gs1_api_key_last4, do: nil, else: "plus")}
+                    label={if(@organization.gs1_api_key_last4, do: "Replace", else: "Add key")}
+                  />
+                  <.td_button
+                    :if={@organization.gs1_api_key_last4}
+                    type="button"
+                    id="clear-gs1-key"
+                    variant="secondary"
+                    label="Clear"
+                    phx-click="prompt_clear_gs1_key"
+                  />
+                </div>
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
         </:body>
       </.td_detail_page>
       <.clear_key_modal clearing_key={@clearing_key} />

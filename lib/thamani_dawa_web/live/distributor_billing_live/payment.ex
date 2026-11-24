@@ -170,148 +170,153 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
         back={~p"/distributor/billing"}
       >
         <:body>
-
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <section class="rounded-2xl ff-surface-card p-5 sm:p-6">
-          <%= if @pending_payment do %>
-            <div id="distributor-payment-pending" class="py-6 text-center">
-              <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-td-accent-tint">
-                <.icon
-                  name={
-                    if @pending_payment.method == "manual",
-                      do: "hero-clock",
-                      else: "hero-device-phone-mobile"
-                  }
-                  class="size-7 text-thamani-forest"
-                />
-              </div>
-              <h2 class="mt-4 text-lg font-semibold text-thamani-forest">Check your phone</h2>
-              <p class="mt-1 text-sm text-thamani-pewter">
-                Enter your M-Pesa PIN on {@pending_payment.phone} to pay {kes(@pending_payment.amount)}.
-                This page updates as soon as the payment is confirmed.
-              </p>
-              <.button id="cancel-pending-payment" class="mt-5" phx-click="cancel_pending">
-                Cancel
-              </.button>
-            </div>
-          <% else %>
-            <.form for={@form} id="distributor-payment-form" phx-change="change" phx-submit="pay">
-              <.input
-                :if={@live_action == :prepay}
-                field={@form[:quantity]}
-                type="number"
-                label="Serials to buy"
-                min={Pricing.minimum_prepay_quantity()}
-                step="1"
-                required
-              />
-              <fieldset class="mb-3">
-                <legend class="thamani-label">Payment method</legend>
-                <div class="mt-1 grid gap-2 sm:grid-cols-2">
-                  <label
-                    :for={
-                      {value, label, icon} <-
-                        [{"manual", "Bank / manual reference", "hero-building-library"}] ++
-                          if(Billing.mpesa_enabled?(),
-                            do: [{"mpesa", "M-Pesa", "hero-device-phone-mobile"}],
-                            else: []
-                          )
-                    }
-                    class={[
-                      "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors duration-150",
-                      if(@params["method"] == value,
-                        do: "border-thamani-forest bg-td-accent-tint text-thamani-forest",
-                        else: "border-thamani-stone hover:border-thamani-forest/40"
-                      )
-                    ]}
-                  >
-                    <input
-                      type="radio"
-                      name="payment[method]"
-                      value={value}
-                      checked={@params["method"] == value}
-                      class="sr-only"
+          <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <section class="rounded-2xl ff-surface-card p-5 sm:p-6">
+              <%= if @pending_payment do %>
+                <div id="distributor-payment-pending" class="py-6 text-center">
+                  <div class="mx-auto flex size-14 items-center justify-center rounded-full bg-td-accent-tint">
+                    <.icon
+                      name={
+                        if @pending_payment.method == "manual",
+                          do: "hero-clock",
+                          else: "hero-device-phone-mobile"
+                      }
+                      class="size-7 text-thamani-forest"
                     />
-                    <.icon name={icon} class="size-5" />
-                    <span class="font-medium">{label}</span>
-                  </label>
+                  </div>
+                  <h2 class="mt-4 text-lg font-semibold text-thamani-forest">Check your phone</h2>
+                  <p class="mt-1 text-sm text-thamani-pewter">
+                    Enter your M-Pesa PIN on {@pending_payment.phone} to pay {kes(
+                      @pending_payment.amount
+                    )}.
+                    This page updates as soon as the payment is confirmed.
+                  </p>
+                  <.button id="cancel-pending-payment" class="mt-5" phx-click="cancel_pending">
+                    Cancel
+                  </.button>
                 </div>
-              </fieldset>
-              <.input
-                :if={@params["method"] == "mpesa"}
-                field={@form[:phone]}
-                type="tel"
-                label="M-Pesa phone number"
-                placeholder="0712 345 678"
-                required
-              />
-              <.input
-                :if={@params["method"] == "manual"}
-                field={@form[:manual_reference]}
-                label="Payment reference"
-                placeholder="e.g. bank transfer or M-Pesa paybill confirmation code"
-                required
-              />
-              <p
-                :if={@error}
-                id="distributor-payment-error"
-                class="mb-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800"
-              >
-                {@error}
-              </p>
-              <.button
-                id="submit-distributor-payment"
-                variant="primary"
-                class="w-full"
-                phx-disable-with="Processing…"
-                disabled={is_nil(@charge) or @charge.quantity == 0}
-              >
-                {if @params["method"] == "manual", do: "Confirm payment", else: "Pay"} {if @charge,
-                  do: kes(@charge.amount),
-                  else: kes(nil)}
-              </.button>
-            </.form>
-          <% end %>
-        </section>
+              <% else %>
+                <.form for={@form} id="distributor-payment-form" phx-change="change" phx-submit="pay">
+                  <.input
+                    :if={@live_action == :prepay}
+                    field={@form[:quantity]}
+                    type="number"
+                    label="Serials to buy"
+                    min={Pricing.minimum_prepay_quantity()}
+                    step="1"
+                    required
+                  />
+                  <fieldset class="mb-3">
+                    <legend class="thamani-label">Payment method</legend>
+                    <div class="mt-1 grid gap-2 sm:grid-cols-2">
+                      <label
+                        :for={
+                          {value, label, icon} <-
+                            [{"manual", "Bank / manual reference", "hero-building-library"}] ++
+                              if(Billing.mpesa_enabled?(),
+                                do: [{"mpesa", "M-Pesa", "hero-device-phone-mobile"}],
+                                else: []
+                              )
+                        }
+                        class={[
+                          "flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-colors duration-150",
+                          if(@params["method"] == value,
+                            do: "border-thamani-forest bg-td-accent-tint text-thamani-forest",
+                            else: "border-thamani-stone hover:border-thamani-forest/40"
+                          )
+                        ]}
+                      >
+                        <input
+                          type="radio"
+                          name="payment[method]"
+                          value={value}
+                          checked={@params["method"] == value}
+                          class="sr-only"
+                        />
+                        <.icon name={icon} class="size-5" />
+                        <span class="font-medium">{label}</span>
+                      </label>
+                    </div>
+                  </fieldset>
+                  <.input
+                    :if={@params["method"] == "mpesa"}
+                    field={@form[:phone]}
+                    type="tel"
+                    label="M-Pesa phone number"
+                    placeholder="0712 345 678"
+                    required
+                  />
+                  <.input
+                    :if={@params["method"] == "manual"}
+                    field={@form[:manual_reference]}
+                    label="Payment reference"
+                    placeholder="e.g. bank transfer or M-Pesa paybill confirmation code"
+                    required
+                  />
+                  <p
+                    :if={@error}
+                    id="distributor-payment-error"
+                    class="mb-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800"
+                  >
+                    {@error}
+                  </p>
+                  <.button
+                    id="submit-distributor-payment"
+                    variant="primary"
+                    class="w-full"
+                    phx-disable-with="Processing…"
+                    disabled={is_nil(@charge) or @charge.quantity == 0}
+                  >
+                    {if @params["method"] == "manual", do: "Confirm payment", else: "Pay"} {if @charge,
+                      do: kes(@charge.amount),
+                      else: kes(nil)}
+                  </.button>
+                </.form>
+              <% end %>
+            </section>
 
-        <aside id="distributor-payment-summary" class="h-fit rounded-2xl ff-surface-card p-5">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">Summary</h2>
-          <%= if @charge do %>
-            <dl class="mt-3 space-y-2 text-sm">
-              <div class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">
-                  {if @live_action == :prepay, do: "Bundle", else: "Generated this cycle"}
-                </dt>
-                <dd>{number(@charge.purchased_quantity)} serials</dd>
-              </div>
-              <div :if={@charge.buffer_quantity > 0} class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">Buffer carried in</dt>
-                <dd>{number(@charge.buffer_quantity)} serials</dd>
-              </div>
-              <div class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">Rate</dt>
-                <dd>{kes(@charge.unit_price)} / serial</dd>
-              </div>
-              <div class="flex justify-between gap-3 border-t border-thamani-stone pt-2">
-                <dt class="text-thamani-pewter">Subtotal</dt>
-                <dd>{kes(@charge.amount_excl_vat)}</dd>
-              </div>
-              <div class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">
-                  VAT {if @charge.vat_applicable, do: "(#{vat_percent()}%)", else: "(not applicable)"}
-                </dt>
-                <dd>{kes(@charge.vat_amount)}</dd>
-              </div>
-              <div class="flex justify-between gap-3 border-t border-thamani-stone pt-2 text-base font-semibold text-thamani-forest">
-                <dt>Total</dt>
-                <dd>{kes(@charge.amount)}</dd>
-              </div>
-            </dl>
-          <% else %>
-            <p class="mt-3 text-sm text-thamani-pewter">Nothing to settle yet.</p>
-          <% end %>
-        </aside>
-      </div>
+            <aside id="distributor-payment-summary" class="h-fit rounded-2xl ff-surface-card p-5">
+              <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">
+                Summary
+              </h2>
+              <%= if @charge do %>
+                <dl class="mt-3 space-y-2 text-sm">
+                  <div class="flex justify-between gap-3">
+                    <dt class="text-thamani-pewter">
+                      {if @live_action == :prepay, do: "Bundle", else: "Generated this cycle"}
+                    </dt>
+                    <dd>{number(@charge.purchased_quantity)} serials</dd>
+                  </div>
+                  <div :if={@charge.buffer_quantity > 0} class="flex justify-between gap-3">
+                    <dt class="text-thamani-pewter">Buffer carried in</dt>
+                    <dd>{number(@charge.buffer_quantity)} serials</dd>
+                  </div>
+                  <div class="flex justify-between gap-3">
+                    <dt class="text-thamani-pewter">Rate</dt>
+                    <dd>{kes(@charge.unit_price)} / serial</dd>
+                  </div>
+                  <div class="flex justify-between gap-3 border-t border-thamani-stone pt-2">
+                    <dt class="text-thamani-pewter">Subtotal</dt>
+                    <dd>{kes(@charge.amount_excl_vat)}</dd>
+                  </div>
+                  <div class="flex justify-between gap-3">
+                    <dt class="text-thamani-pewter">
+                      VAT {if @charge.vat_applicable,
+                        do: "(#{vat_percent()}%)",
+                        else: "(not applicable)"}
+                    </dt>
+                    <dd>{kes(@charge.vat_amount)}</dd>
+                  </div>
+                  <div class="flex justify-between gap-3 border-t border-thamani-stone pt-2 text-base font-semibold text-thamani-forest">
+                    <dt>Total</dt>
+                    <dd>{kes(@charge.amount)}</dd>
+                  </div>
+                </dl>
+              <% else %>
+                <p class="mt-3 text-sm text-thamani-pewter">Nothing to settle yet.</p>
+              <% end %>
+            </aside>
+          </div>
         </:body>
       </.td_detail_page>
     </Layouts.distributor_shell>

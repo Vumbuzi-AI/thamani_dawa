@@ -23,7 +23,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
       |> assign(:page_number, DistributorPagination.page_number(params))
       |> assign(:search, Map.get(params, "search", socket.assigns.search))
       |> assign(:view_mode, view_mode(params, socket.assigns.view_mode))
-      |> assign(:serials_filter, if(params["serials"] in ["with", "none"], do: params["serials"], else: ""))
+      |> assign(
+        :serials_filter,
+        if(params["serials"] in ["with", "none"], do: params["serials"], else: "")
+      )
       |> load_products()
 
     {:noreply, apply_action(socket, socket.assigns.live_action, params)}
@@ -51,7 +54,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
   end
 
   def handle_event("set_filter", %{"field" => "serials", "value" => value}, socket) do
-    query = Enum.reject([search: socket.assigns.search, serials: value], fn {_k, v} -> v in [nil, ""] end)
+    query =
+      Enum.reject([search: socket.assigns.search, serials: value], fn {_k, v} ->
+        v in [nil, ""]
+      end)
+
     {:noreply, push_patch(socket, to: ~p"/manufacturer/products?#{query}")}
   end
 
@@ -117,9 +124,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
     {:noreply, put_flash(socket, :error, generation_error(reason))}
   end
 
-  defp sync_error_message(:unconfigured), do: "Add your GS1 API key in organization settings, then sync again."
-  defp sync_error_message(reason) when reason in [:unauthorized, :forbidden], do: "GS1 rejected your API key. Check it in organization settings."
-  defp sync_error_message(_reason), do: "Thamani couldn't reach GS1. Your products are unchanged. Try again in a moment."
+  defp sync_error_message(:unconfigured),
+    do: "Add your GS1 API key in organization settings, then sync again."
+
+  defp sync_error_message(reason) when reason in [:unauthorized, :forbidden],
+    do: "GS1 rejected your API key. Check it in organization settings."
+
+  defp sync_error_message(_reason),
+    do: "Thamani couldn't reach GS1. Your products are unchanged. Try again in a moment."
 
   defp filter_rows(rows, "with"), do: Enum.filter(rows, &(&1.serial_count > 0))
   defp filter_rows(rows, "none"), do: Enum.filter(rows, &(&1.serial_count == 0))
@@ -261,8 +273,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
               <.td_button id="products-clear-filters" phx-click="reset" label="Clear filters" />
             <% else %>
               <p class="td-empty-title">No products yet</p>
-              <p class="td-note">Products come from your GS1 member account. Sync to bring in your GTINs, then generate serials for a batch.</p>
-              <.td_button id="products-empty-sync" variant="primary" glyph="arrows-clockwise" label="Sync from GS1" phx-click="sync_products" />
+              <p class="td-note">
+                Products come from your GS1 member account. Sync to bring in your GTINs, then generate serials for a batch.
+              </p>
+              <.td_button
+                id="products-empty-sync"
+                variant="primary"
+                glyph="arrows-clockwise"
+                label="Sync from GS1"
+                phx-click="sync_products"
+              />
             <% end %>
           </div>
         </div>
@@ -288,7 +308,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
                   <.link
                     id={"product-#{product.id}-open"}
                     class="td-link"
-                    navigate={~p"/manufacturer/products/#{product.id}?#{%{return_to: "/manufacturer/products"}}"}
+                    navigate={
+                      ~p"/manufacturer/products/#{product.id}?#{%{return_to: "/manufacturer/products"}}"
+                    }
                   >
                     {product.name}
                   </.link>
@@ -298,21 +320,38 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
                   <.td_pid id={"product-#{product.id}-gtin"} label={product.gtin} mono>
                     <:peek>
                       <.td_peek kind="GTIN" title={product.gtin} subtitle={product.name} mono>
-                        <:row :if={product.brand_owner} label="Brand owner">{product.brand_owner}</:row>
+                        <:row :if={product.brand_owner} label="Brand owner">
+                          {product.brand_owner}
+                        </:row>
                         <:row label="Serials">{serials}</:row>
                         <:row label="Shipper SSCCs">{ssccs}</:row>
-                        <:row label="Added">{ThamaniDawaWeb.TimeFormat.date(product.inserted_at)}</:row>
+                        <:row label="Added">
+                          {ThamaniDawaWeb.TimeFormat.date(product.inserted_at)}
+                        </:row>
                         <:action>
-                          <.td_button :if={serials > 0} navigate={~p"/manufacturer/products/#{product.gtin}/serials"} label="View serials" />
-                          <.td_button patch={~p"/manufacturer/products/#{product.gtin}/serials/new"} label="Generate serials" />
+                          <.td_button
+                            :if={serials > 0}
+                            navigate={~p"/manufacturer/products/#{product.gtin}/serials"}
+                            label="View serials"
+                          />
+                          <.td_button
+                            patch={~p"/manufacturer/products/#{product.gtin}/serials/new"}
+                            label="Generate serials"
+                          />
                         </:action>
                       </.td_peek>
                     </:peek>
                   </.td_pid>
                 </td>
-                <td class="is-num"><span id={"product-#{product.id}-serial-count"}>{serials}</span></td>
                 <td class="is-num">
-                  <.link id={"product-#{product.id}-ssccs"} navigate={~p"/manufacturer/products/#{product.gtin}/ssccs"} class="td-link">
+                  <span id={"product-#{product.id}-serial-count"}>{serials}</span>
+                </td>
+                <td class="is-num">
+                  <.link
+                    id={"product-#{product.id}-ssccs"}
+                    navigate={~p"/manufacturer/products/#{product.gtin}/ssccs"}
+                    class="td-link"
+                  >
                     <span id={"product-#{product.id}-sscc-count"}>{ssccs}</span>
                   </.link>
                 </td>
@@ -334,7 +373,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
             </tbody>
           </table>
         </div>
-
       </.td_list_page>
 
       <.pagination

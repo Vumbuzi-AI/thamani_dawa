@@ -266,7 +266,8 @@ defmodule ThamaniDawa.Distributor do
                 s.status == "approved",
             distinct: s.destination_gln,
             order_by: [asc: s.destination_gln, desc: s.approved_at, desc: s.id],
-            select: {s.destination_gln, %{id: s.id, reference: s.reference, approved_at: s.approved_at}}
+            select:
+              {s.destination_gln, %{id: s.id, reference: s.reference, approved_at: s.approved_at}}
         )
         |> Map.new()
 

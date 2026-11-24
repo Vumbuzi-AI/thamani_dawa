@@ -155,71 +155,71 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Index do
         title="Stock takes"
         subtitle="Physical inventory counts raised by your sites, awaiting review."
       >
-      <nav class="mt-4 flex gap-2 border-b border-thamani-stone">
-        <.link
-          :for={{status, label} <- @tabs}
-          patch={filter_path_for(@filters, %{"status" => status})}
-          class={[
-            "px-3 py-2 text-sm font-medium",
-            if(@filters["status"] == status,
-              do: "border-b-2 border-thamani-forest text-thamani-forest",
-              else: "text-thamani-pewter hover:text-thamani-forest"
-            )
-          ]}
+        <nav class="mt-4 flex gap-2 border-b border-thamani-stone">
+          <.link
+            :for={{status, label} <- @tabs}
+            patch={filter_path_for(@filters, %{"status" => status})}
+            class={[
+              "px-3 py-2 text-sm font-medium",
+              if(@filters["status"] == status,
+                do: "border-b-2 border-thamani-forest text-thamani-forest",
+                else: "text-thamani-pewter hover:text-thamani-forest"
+              )
+            ]}
+          >
+            {label} ({@tab_counts[status]})
+          </.link>
+        </nav>
+
+        <.modal
+          :if={@live_action == :reject and not is_nil(@reject_stock_take)}
+          id="reject-stock-take-modal"
+          show
+          on_cancel={JS.patch(~p"/org/stock-takes")}
         >
-          {label} ({@tab_counts[status]})
-        </.link>
-      </nav>
-
-      <.modal
-        :if={@live_action == :reject and not is_nil(@reject_stock_take)}
-        id="reject-stock-take-modal"
-        show
-        on_cancel={JS.patch(~p"/org/stock-takes")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Reject stock take
-        </h2>
-        <.form for={@reject_form} id="reject-form" phx-submit="reject" class="flex flex-col gap-4">
-          <.input field={@reject_form[:rejection_reason]} type="textarea" label="Reason" required />
-          <.button variant="danger-confirm" phx-disable-with="Rejecting…" class="w-full">
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
             Reject stock take
-          </.button>
-        </.form>
-      </.modal>
+          </h2>
+          <.form for={@reject_form} id="reject-form" phx-submit="reject" class="flex flex-col gap-4">
+            <.input field={@reject_form[:rejection_reason]} type="textarea" label="Reason" required />
+            <.button variant="danger-confirm" phx-disable-with="Rejecting…" class="w-full">
+              Reject stock take
+            </.button>
+          </.form>
+        </.modal>
 
-      <.table
-        id="stock-takes"
-        rows={@streams.stock_takes}
-        row_click={fn {_id, st} -> JS.navigate(~p"/org/stock-takes/#{st.id}") end}
-      >
-        <:col :let={{_id, st}} label="Site">{site_name(@sites_by_id, st.site_id)}</:col>
-        <:col :let={{_id, st}} label="Type">{Phoenix.Naming.humanize(st.inventory_type)}</:col>
-        <:col :let={{_id, st}} label="Requested by">{requester_label(st)}</:col>
-        <:col :let={{_id, st}} label="Items">{counted_summary(st.items)}</:col>
-        <:col :let={{_id, st}} label="Status">
-          <.status_badge status={st.status} />
-        </:col>
-        <:action :let={{_id, st}}>
-          <div :if={st.status in [:draft, :pending]} class="flex gap-2">
-            <.button type="button" variant="primary" phx-click="approve" phx-value-id={st.id}>
-              Approve
-            </.button>
-            <.button
-              :if={st.status == :pending}
-              variant="ghost"
-              patch={~p"/org/stock-takes/#{st.id}/reject"}
-            >
-              Reject
-            </.button>
-          </div>
-        </:action>
-        <:empty_state>
-          <.blank_state icon="hero-clipboard-document-list" title="No stock takes yet">
-            Stock takes raised by sites will appear here.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        <.table
+          id="stock-takes"
+          rows={@streams.stock_takes}
+          row_click={fn {_id, st} -> JS.navigate(~p"/org/stock-takes/#{st.id}") end}
+        >
+          <:col :let={{_id, st}} label="Site">{site_name(@sites_by_id, st.site_id)}</:col>
+          <:col :let={{_id, st}} label="Type">{Phoenix.Naming.humanize(st.inventory_type)}</:col>
+          <:col :let={{_id, st}} label="Requested by">{requester_label(st)}</:col>
+          <:col :let={{_id, st}} label="Items">{counted_summary(st.items)}</:col>
+          <:col :let={{_id, st}} label="Status">
+            <.status_badge status={st.status} />
+          </:col>
+          <:action :let={{_id, st}}>
+            <div :if={st.status in [:draft, :pending]} class="flex gap-2">
+              <.button type="button" variant="primary" phx-click="approve" phx-value-id={st.id}>
+                Approve
+              </.button>
+              <.button
+                :if={st.status == :pending}
+                variant="ghost"
+                patch={~p"/org/stock-takes/#{st.id}/reject"}
+              >
+                Reject
+              </.button>
+            </div>
+          </:action>
+          <:empty_state>
+            <.blank_state icon="hero-clipboard-document-list" title="No stock takes yet">
+              Stock takes raised by sites will appear here.
+            </.blank_state>
+          </:empty_state>
+        </.table>
       </.td_list_page>
     </Layouts.org_shell>
     """

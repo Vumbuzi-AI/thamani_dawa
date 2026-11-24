@@ -50,7 +50,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.OrderFormComponent do
             company: shipment.destination_company,
             address: shipment.destination_address,
             po_box: shipment.destination_po_box,
-            source: if(shipment.destination_site_id && own_site?(origins, shipment.destination_gln), do: :site, else: :gs1)
+            source:
+              if(shipment.destination_site_id && own_site?(origins, shipment.destination_gln),
+                do: :site,
+                else: :gs1
+              )
           }
 
       {:ok,
@@ -66,7 +70,12 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.OrderFormComponent do
   end
 
   def handle_event("validate", %{"shipment" => attrs}, socket) do
-    attrs = Map.put(attrs, "destination_gln", socket.assigns.destination && socket.assigns.destination.gln)
+    attrs =
+      Map.put(
+        attrs,
+        "destination_gln",
+        socket.assigns.destination && socket.assigns.destination.gln
+      )
 
     changeset =
       socket.assigns.shipment
@@ -112,7 +121,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.OrderFormComponent do
       {:ok, saved} ->
         {message, query} =
           if action == :new,
-            do: {"Order #{saved.order_number} created. Your mobile team can start packing it.", %{"return_to" => "/distributor/orders"}},
+            do:
+              {"Order #{saved.order_number} created. Your mobile team can start packing it.",
+               %{"return_to" => "/distributor/orders"}},
             else: {"Order details saved.", %{}}
 
         query = Map.merge(socket.assigns[:return_query] || %{}, query)
@@ -126,7 +137,8 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.OrderFormComponent do
         {:noreply, assign(socket, :form, to_form(changeset, as: :shipment))}
 
       {:error, :not_editable} ->
-        {:noreply, assign(socket, :error, "This order has already been submitted and can't be edited.")}
+        {:noreply,
+         assign(socket, :error, "This order has already been submitted and can't be edited.")}
     end
   end
 

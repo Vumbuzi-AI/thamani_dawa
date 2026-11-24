@@ -84,80 +84,82 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Show do
           </.button>
         </:actions>
         <:body>
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
-        <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Status</dt>
-            <dd class="mt-1"><.status_badge status={@stock_take.status} /></dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Requested by
-            </dt>
-            <dd class="mt-1 text-sm text-thamani-ink">{requester_label(@stock_take)}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Started
-            </dt>
-            <dd class="mt-1 text-sm text-thamani-ink">
-              {ThamaniDawaWeb.TimeFormat.datetime(@stock_take.inserted_at)}
-            </dd>
-          </div>
-          <div :if={@stock_take.approved_at}>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Reviewed by
-            </dt>
-            <dd class="mt-1 text-sm text-thamani-ink">{person_name(@stock_take.approved_by)}</dd>
-          </div>
-        </dl>
+          <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
+            <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Status
+                </dt>
+                <dd class="mt-1"><.status_badge status={@stock_take.status} /></dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Requested by
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">{requester_label(@stock_take)}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Started
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">
+                  {ThamaniDawaWeb.TimeFormat.datetime(@stock_take.inserted_at)}
+                </dd>
+              </div>
+              <div :if={@stock_take.approved_at}>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Reviewed by
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">{person_name(@stock_take.approved_by)}</dd>
+              </div>
+            </dl>
 
-        <div :if={@stock_take.notes} class="mt-5 border-t border-thamani-stone pt-5">
-          <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Notes</dt>
-          <dd class="mt-1 text-sm text-thamani-ink">{@stock_take.notes}</dd>
-        </div>
+            <div :if={@stock_take.notes} class="mt-5 border-t border-thamani-stone pt-5">
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Notes</dt>
+              <dd class="mt-1 text-sm text-thamani-ink">{@stock_take.notes}</dd>
+            </div>
 
-        <div
-          :if={@stock_take.status == :rejected and @stock_take.rejection_reason}
-          class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4"
-        >
-          <p class="text-sm font-semibold text-rose-800">Rejected</p>
-          <p class="mt-1 text-sm text-rose-700">{@stock_take.rejection_reason}</p>
-        </div>
-      </section>
+            <div
+              :if={@stock_take.status == :rejected and @stock_take.rejection_reason}
+              class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4"
+            >
+              <p class="text-sm font-semibold text-rose-800">Rejected</p>
+              <p class="mt-1 text-sm text-rose-700">{@stock_take.rejection_reason}</p>
+            </div>
+          </section>
 
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
-        <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-subtle">Items</h2>
+          <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
+            <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-subtle">Items</h2>
 
-        <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone">
-          <table class="w-full table-fixed text-left text-sm">
-            <thead class="bg-thamani-canvas text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
-              <tr>
-                <th class="px-3 py-2">Product</th>
-                <th class="px-3 py-2">Batch</th>
-                <th class="px-3 py-2 text-right">Expected</th>
-                <th class="px-3 py-2 text-right">Counted</th>
-                <th class="px-3 py-2 text-right">Variance</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-thamani-stone">
-              <tr :for={item <- @stock_take.items}>
-                <td class="px-3 py-2 font-medium text-thamani-forest">
-                  {product_name(@products_by_id, item.batch && item.batch.product_id)}
-                </td>
-                <td class="px-3 py-2 font-mono text-xs">{item.batch && item.batch.batch_no}</td>
-                <td class="px-3 py-2 text-right tabular-nums">{item.expected_quantity}</td>
-                <td class="px-3 py-2 text-right tabular-nums">{item.counted_quantity || "—"}</td>
-                <td class={["px-3 py-2 text-right tabular-nums", variance_class(item.variance)]}>
-                  {if item.variance,
-                    do: if(item.variance >= 0, do: "+#{item.variance}", else: "#{item.variance}"),
-                    else: "—"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+            <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone">
+              <table class="w-full table-fixed text-left text-sm">
+                <thead class="bg-thamani-canvas text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+                  <tr>
+                    <th class="px-3 py-2">Product</th>
+                    <th class="px-3 py-2">Batch</th>
+                    <th class="px-3 py-2 text-right">Expected</th>
+                    <th class="px-3 py-2 text-right">Counted</th>
+                    <th class="px-3 py-2 text-right">Variance</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-thamani-stone">
+                  <tr :for={item <- @stock_take.items}>
+                    <td class="px-3 py-2 font-medium text-thamani-forest">
+                      {product_name(@products_by_id, item.batch && item.batch.product_id)}
+                    </td>
+                    <td class="px-3 py-2 font-mono text-xs">{item.batch && item.batch.batch_no}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{item.expected_quantity}</td>
+                    <td class="px-3 py-2 text-right tabular-nums">{item.counted_quantity || "—"}</td>
+                    <td class={["px-3 py-2 text-right tabular-nums", variance_class(item.variance)]}>
+                      {if item.variance,
+                        do: if(item.variance >= 0, do: "+#{item.variance}", else: "#{item.variance}"),
+                        else: "—"}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </:body>
       </.td_detail_page>
     </Layouts.org_shell>

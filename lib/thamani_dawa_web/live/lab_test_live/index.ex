@@ -532,265 +532,265 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
           />
         </:filters>
 
-      <.modal
-        :if={@live_action in [:new, :edit]}
-        id="lab-test-modal"
-        show
-        class="max-w-3xl"
-        on_cancel={JS.patch(~p"/lab/tests")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          {if @live_action == :new, do: "New test template", else: "Edit test template"}
-        </h2>
-
-        <form id="lab-test-preset-form" phx-change="select_preset" class="mb-5">
-          <.input
-            type="select"
-            name="preset"
-            value={@selected_preset}
-            label="Preset template (optional)"
-            options={FieldDefinitionPresets.options()}
-            prompt="No preset, enter everything manually"
-          />
-        </form>
-
-        <.form
-          for={@form}
-          id="lab-test-form"
-          phx-submit="save"
-          phx-change="validate"
-          class="space-y-5"
+        <.modal
+          :if={@live_action in [:new, :edit]}
+          id="lab-test-modal"
+          show
+          class="max-w-3xl"
+          on_cancel={JS.patch(~p"/lab/tests")}
         >
-          <%!-- Step 1: Test Details --%>
-          <.form_block title="1. Test details">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <.input field={@form[:name]} label="Test name" required />
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            {if @live_action == :new, do: "New test template", else: "Edit test template"}
+          </h2>
 
-              <.input
-                field={@form[:category_id]}
-                type="select"
-                label="Category"
-                options={@categories}
-                prompt="Choose a category"
-                required
-              />
-            </div>
+          <form id="lab-test-preset-form" phx-change="select_preset" class="mb-5">
+            <.input
+              type="select"
+              name="preset"
+              value={@selected_preset}
+              label="Preset template (optional)"
+              options={FieldDefinitionPresets.options()}
+              prompt="No preset, enter everything manually"
+            />
+          </form>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <.input
-                field={@form[:price]}
-                type="number"
-                label="Price (KES)"
-                step="0.01"
-                min="0"
-                required
-              />
-              <div class="flex items-center pt-6">
-                <.input field={@form[:is_active]} type="checkbox" label="Active catalog entry" />
+          <.form
+            for={@form}
+            id="lab-test-form"
+            phx-submit="save"
+            phx-change="validate"
+            class="space-y-5"
+          >
+            <%!-- Step 1: Test Details --%>
+            <.form_block title="1. Test details">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <.input field={@form[:name]} label="Test name" required />
+
+                <.input
+                  field={@form[:category_id]}
+                  type="select"
+                  label="Category"
+                  options={@categories}
+                  prompt="Choose a category"
+                  required
+                />
               </div>
-            </div>
-          </.form_block>
 
-          <%!-- Step 2: Result Fields & Options --%>
-          <.form_block title="2. Result fields & options">
-            <:actions>
-              <.button
-                id="add-field-row-btn"
-                type="button"
-                phx-click="add_field_row"
-                variant="ghost"
-                class="text-xs py-1 px-2.5 h-auto min-h-0"
-              >
-                + Add Field
-              </.button>
-            </:actions>
-
-            <p class="text-xs text-thamani-pewter mb-3">
-              Configure each result field. Multiple choice fields let you define specific options below.
-            </p>
-
-            <div class="space-y-4">
-              <%= for row <- @field_defs_rows do %>
-                <% opts = if is_list(row["options"]), do: row["options"], else: ["Option 1"] %>
-                <% opts = if opts == [], do: ["Option 1"], else: opts %>
-                <div class="rounded-xl border border-thamani-stone bg-thamani-canvas p-4 space-y-3">
-                  <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
-                    <div class={
-                      if row["type"] == "select", do: "md:col-span-6", else: "md:col-span-5"
-                    }>
-                      <.input
-                        type="text"
-                        name={"field_defs[#{row["idx"]}][key]"}
-                        value={row["key"]}
-                        label="Field name"
-                        placeholder="e.g. Haemoglobin, Result, Species"
-                        required
-                      />
-                    </div>
-                    <div class={
-                      if row["type"] == "select", do: "md:col-span-5", else: "md:col-span-4"
-                    }>
-                      <.input
-                        type="select"
-                        name={"field_defs[#{row["idx"]}][type]"}
-                        value={row["type"]}
-                        label="Result type"
-                        options={[
-                          {"Number", "number"},
-                          {"Text", "text"},
-                          {"Multiple choice", "select"}
-                        ]}
-                      />
-                    </div>
-                    <div :if={row["type"] != "select"} class="md:col-span-2">
-                      <.input
-                        type="text"
-                        name={"field_defs[#{row["idx"]}][unit]"}
-                        value={row["unit"]}
-                        label="Unit"
-                        placeholder="e.g. g/dL"
-                      />
-                    </div>
-                    <div class="md:col-span-1 flex justify-end pt-7">
-                      <button
-                        :if={length(@field_defs_rows) > 1}
-                        type="button"
-                        phx-click="remove_field_row"
-                        phx-value-idx={row["idx"]}
-                        class="flex size-7 items-center justify-center rounded-md text-thamani-error hover:bg-thamani-error/10 transition-colors"
-                        aria-label="Remove field"
-                      >
-                        <.icon name="hero-trash" class="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <%!-- Choice options for Multiple choice (select) & Checkbox types --%>
-                  <%= if row["type"] in ["select", "checkbox"] do %>
-                    <div class="border-t border-thamani-stone/60 pt-3 mt-2">
-                      <div class="flex items-center justify-between mb-2">
-                        <span class="thamani-label" style="margin-bottom: 0;">
-                          {if row["type"] == "checkbox",
-                            do: "Checkbox options",
-                            else: "Choice options"}
-                        </span>
-                        <.button
-                          type="button"
-                          phx-click="add_field_option"
-                          phx-value-field_idx={row["idx"]}
-                          variant="ghost"
-                          class="text-xs py-1 px-2.5 h-auto min-h-0 text-thamani-accent font-medium hover:bg-thamani-accent/10"
-                        >
-                          + Add option
-                        </.button>
-                      </div>
-
-                      <div class="space-y-2">
-                        <%= for {opt_val, opt_idx} <- Enum.with_index(opts) do %>
-                          <div class="flex items-center gap-2">
-                            <div class="flex items-center gap-1 min-w-6 justify-end text-thamani-pewter">
-                              <.icon
-                                name={
-                                  if row["type"] == "checkbox",
-                                    do: "hero-check-square",
-                                    else: "hero-check-circle"
-                                }
-                                class="w-3.5 h-3.5 opacity-60 text-thamani-accent"
-                              />
-                              <span class="text-xs font-mono">{opt_idx + 1}.</span>
-                            </div>
-                            <.input
-                              type="text"
-                              id={"field-def-#{row["idx"]}-opt-#{opt_idx}"}
-                              name={"field_defs[#{row["idx"]}][options][#{opt_idx}]"}
-                              value={opt_val}
-                              placeholder={"Option #{opt_idx + 1}"}
-                              class="flex-1 py-1.5 px-3 text-xs h-9"
-                              phx-debounce="blur"
-                            />
-                            <button
-                              :if={length(opts) > 1}
-                              type="button"
-                              phx-click="remove_field_option"
-                              phx-value-field_idx={row["idx"]}
-                              phx-value-opt_idx={opt_idx}
-                              class="flex size-7 items-center justify-center rounded-md text-thamani-error hover:bg-thamani-error/10 transition-colors"
-                              aria-label="Remove option"
-                            >
-                              <.icon name="hero-trash" class="w-4 h-4" />
-                            </button>
-                          </div>
-                        <% end %>
-                      </div>
-                    </div>
-                  <% end %>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <.input
+                  field={@form[:price]}
+                  type="number"
+                  label="Price (KES)"
+                  step="0.01"
+                  min="0"
+                  required
+                />
+                <div class="flex items-center pt-6">
+                  <.input field={@form[:is_active]} type="checkbox" label="Active catalog entry" />
                 </div>
-              <% end %>
-            </div>
+              </div>
+            </.form_block>
 
-            <p :if={@field_defs_error} class="mt-2 text-sm text-thamani-error font-medium">
-              {@field_defs_error}
-            </p>
-            <p
-              :if={!@field_defs_error && @form[:field_definitions].errors != []}
-              class="mt-2 text-sm text-thamani-error font-medium"
+            <%!-- Step 2: Result Fields & Options --%>
+            <.form_block title="2. Result fields & options">
+              <:actions>
+                <.button
+                  id="add-field-row-btn"
+                  type="button"
+                  phx-click="add_field_row"
+                  variant="ghost"
+                  class="text-xs py-1 px-2.5 h-auto min-h-0"
+                >
+                  + Add Field
+                </.button>
+              </:actions>
+
+              <p class="text-xs text-thamani-pewter mb-3">
+                Configure each result field. Multiple choice fields let you define specific options below.
+              </p>
+
+              <div class="space-y-4">
+                <%= for row <- @field_defs_rows do %>
+                  <% opts = if is_list(row["options"]), do: row["options"], else: ["Option 1"] %>
+                  <% opts = if opts == [], do: ["Option 1"], else: opts %>
+                  <div class="rounded-xl border border-thamani-stone bg-thamani-canvas p-4 space-y-3">
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                      <div class={
+                        if row["type"] == "select", do: "md:col-span-6", else: "md:col-span-5"
+                      }>
+                        <.input
+                          type="text"
+                          name={"field_defs[#{row["idx"]}][key]"}
+                          value={row["key"]}
+                          label="Field name"
+                          placeholder="e.g. Haemoglobin, Result, Species"
+                          required
+                        />
+                      </div>
+                      <div class={
+                        if row["type"] == "select", do: "md:col-span-5", else: "md:col-span-4"
+                      }>
+                        <.input
+                          type="select"
+                          name={"field_defs[#{row["idx"]}][type]"}
+                          value={row["type"]}
+                          label="Result type"
+                          options={[
+                            {"Number", "number"},
+                            {"Text", "text"},
+                            {"Multiple choice", "select"}
+                          ]}
+                        />
+                      </div>
+                      <div :if={row["type"] != "select"} class="md:col-span-2">
+                        <.input
+                          type="text"
+                          name={"field_defs[#{row["idx"]}][unit]"}
+                          value={row["unit"]}
+                          label="Unit"
+                          placeholder="e.g. g/dL"
+                        />
+                      </div>
+                      <div class="md:col-span-1 flex justify-end pt-7">
+                        <button
+                          :if={length(@field_defs_rows) > 1}
+                          type="button"
+                          phx-click="remove_field_row"
+                          phx-value-idx={row["idx"]}
+                          class="flex size-7 items-center justify-center rounded-md text-thamani-error hover:bg-thamani-error/10 transition-colors"
+                          aria-label="Remove field"
+                        >
+                          <.icon name="hero-trash" class="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <%!-- Choice options for Multiple choice (select) & Checkbox types --%>
+                    <%= if row["type"] in ["select", "checkbox"] do %>
+                      <div class="border-t border-thamani-stone/60 pt-3 mt-2">
+                        <div class="flex items-center justify-between mb-2">
+                          <span class="thamani-label" style="margin-bottom: 0;">
+                            {if row["type"] == "checkbox",
+                              do: "Checkbox options",
+                              else: "Choice options"}
+                          </span>
+                          <.button
+                            type="button"
+                            phx-click="add_field_option"
+                            phx-value-field_idx={row["idx"]}
+                            variant="ghost"
+                            class="text-xs py-1 px-2.5 h-auto min-h-0 text-thamani-accent font-medium hover:bg-thamani-accent/10"
+                          >
+                            + Add option
+                          </.button>
+                        </div>
+
+                        <div class="space-y-2">
+                          <%= for {opt_val, opt_idx} <- Enum.with_index(opts) do %>
+                            <div class="flex items-center gap-2">
+                              <div class="flex items-center gap-1 min-w-6 justify-end text-thamani-pewter">
+                                <.icon
+                                  name={
+                                    if row["type"] == "checkbox",
+                                      do: "hero-check-square",
+                                      else: "hero-check-circle"
+                                  }
+                                  class="w-3.5 h-3.5 opacity-60 text-thamani-accent"
+                                />
+                                <span class="text-xs font-mono">{opt_idx + 1}.</span>
+                              </div>
+                              <.input
+                                type="text"
+                                id={"field-def-#{row["idx"]}-opt-#{opt_idx}"}
+                                name={"field_defs[#{row["idx"]}][options][#{opt_idx}]"}
+                                value={opt_val}
+                                placeholder={"Option #{opt_idx + 1}"}
+                                class="flex-1 py-1.5 px-3 text-xs h-9"
+                                phx-debounce="blur"
+                              />
+                              <button
+                                :if={length(opts) > 1}
+                                type="button"
+                                phx-click="remove_field_option"
+                                phx-value-field_idx={row["idx"]}
+                                phx-value-opt_idx={opt_idx}
+                                class="flex size-7 items-center justify-center rounded-md text-thamani-error hover:bg-thamani-error/10 transition-colors"
+                                aria-label="Remove option"
+                              >
+                                <.icon name="hero-trash" class="w-4 h-4" />
+                              </button>
+                            </div>
+                          <% end %>
+                        </div>
+                      </div>
+                    <% end %>
+                  </div>
+                <% end %>
+              </div>
+
+              <p :if={@field_defs_error} class="mt-2 text-sm text-thamani-error font-medium">
+                {@field_defs_error}
+              </p>
+              <p
+                :if={!@field_defs_error && @form[:field_definitions].errors != []}
+                class="mt-2 text-sm text-thamani-error font-medium"
+              >
+                Add at least one field definition.
+              </p>
+            </.form_block>
+
+            <.button type="submit" variant="primary" class="w-full">
+              Save Test
+            </.button>
+          </.form>
+        </.modal>
+
+        <.table id="lab-tests" rows={@streams.lab_tests}>
+          <:col :let={{_id, test}} label="Name">{test.name}</:col>
+          <:col :let={{_id, test}} label="Category">{category_name(test)}</:col>
+          <:col :let={{_id, test}} label="Price">{test.price && "KES #{test.price}"}</:col>
+          <:col :let={{_id, test}} label="Status">
+            <.status_badge status={if test.is_active, do: :active, else: :inactive} />
+          </:col>
+          <:action :let={{_id, test}}>
+            <.button
+              variant="ghost-edit"
+              patch={~p"/lab/tests/#{test.id}/edit"}
+              class="px-3 py-1.5 text-xs"
+              id={"btn-edit-test-#{test.id}"}
             >
-              Add at least one field definition.
-            </p>
-          </.form_block>
+              Edit
+            </.button>
+          </:action>
+          <:action :let={{_id, test}}>
+            <.button
+              type="button"
+              phx-click="toggle_active"
+              phx-value-id={test.id}
+              class="px-3 py-1.5 text-xs"
+              variant={if test.is_active, do: "destructive", else: "ghost"}
+              id={"btn-toggle-test-#{test.id}"}
+            >
+              {if test.is_active, do: "Deactivate", else: "Reactivate"}
+            </.button>
+          </:action>
+          <:empty_state>
+            <.blank_state
+              icon="hero-beaker"
+              title={
+                if @search != "" or active_filter_count(@filters) > 0,
+                  do: "No tests match your search or filters",
+                  else: "No tests yet"
+              }
+            >
+              {if @search != "" or active_filter_count(@filters) > 0,
+                do: "Try a different search term, or clear the applied filters.",
+                else: "Tests you add to the catalog will appear here."}
+            </.blank_state>
+          </:empty_state>
+        </.table>
 
-          <.button type="submit" variant="primary" class="w-full">
-            Save Test
-          </.button>
-        </.form>
-      </.modal>
-
-      <.table id="lab-tests" rows={@streams.lab_tests}>
-        <:col :let={{_id, test}} label="Name">{test.name}</:col>
-        <:col :let={{_id, test}} label="Category">{category_name(test)}</:col>
-        <:col :let={{_id, test}} label="Price">{test.price && "KES #{test.price}"}</:col>
-        <:col :let={{_id, test}} label="Status">
-          <.status_badge status={if test.is_active, do: :active, else: :inactive} />
-        </:col>
-        <:action :let={{_id, test}}>
-          <.button
-            variant="ghost-edit"
-            patch={~p"/lab/tests/#{test.id}/edit"}
-            class="px-3 py-1.5 text-xs"
-            id={"btn-edit-test-#{test.id}"}
-          >
-            Edit
-          </.button>
-        </:action>
-        <:action :let={{_id, test}}>
-          <.button
-            type="button"
-            phx-click="toggle_active"
-            phx-value-id={test.id}
-            class="px-3 py-1.5 text-xs"
-            variant={if test.is_active, do: "destructive", else: "ghost"}
-            id={"btn-toggle-test-#{test.id}"}
-          >
-            {if test.is_active, do: "Deactivate", else: "Reactivate"}
-          </.button>
-        </:action>
-        <:empty_state>
-          <.blank_state
-            icon="hero-beaker"
-            title={
-              if @search != "" or active_filter_count(@filters) > 0,
-                do: "No tests match your search or filters",
-                else: "No tests yet"
-            }
-          >
-            {if @search != "" or active_filter_count(@filters) > 0,
-              do: "Try a different search term, or clear the applied filters.",
-              else: "Tests you add to the catalog will appear here."}
-          </.blank_state>
-        </:empty_state>
-      </.table>
-
-      <.pagination page={@page_info} path={pagination_path(@search, @filters)} />
+        <.pagination page={@page_info} path={pagination_path(@search, @filters)} />
       </.td_list_page>
     </Layouts.lab_shell>
     """

@@ -394,262 +394,273 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
         }
       >
         <:body>
+          <section
+            :if={@direct_receipt?}
+            id="direct-lab-stock-receipt"
+            class="rounded-2xl ff-surface-card p-5 sm:p-6"
+          >
+            <div class="mb-5">
+              <h2 class="text-lg font-semibold text-thamani-forest">Receive stock directly</h2>
+              <p class="mt-1 max-w-3xl text-sm leading-6 text-thamani-pewter">
+                This organization has one lab-capable site. Record the delivery straight into {@direct_receipt_site.name}; no warehouse dispatch or second receipt step is needed.
+              </p>
+            </div>
 
-      <section
-        :if={@direct_receipt?}
-        id="direct-lab-stock-receipt"
-        class="rounded-2xl ff-surface-card p-5 sm:p-6"
-      >
-        <div class="mb-5">
-          <h2 class="text-lg font-semibold text-thamani-forest">Receive stock directly</h2>
-          <p class="mt-1 max-w-3xl text-sm leading-6 text-thamani-pewter">
-            This organization has one lab-capable site. Record the delivery straight into {@direct_receipt_site.name}; no warehouse dispatch or second receipt step is needed.
-          </p>
-        </div>
-
-        <p
-          :if={@lab_products == []}
-          class="rounded-xl bg-thamani-canvas px-4 py-3 text-sm text-thamani-pewter"
-        >
-          Create an active lab consumable product before receiving stock.
-        </p>
-
-        <.form
-          :if={@lab_products != []}
-          for={@form}
-          id="direct-lab-stock-form"
-          phx-change="validate_direct_receipt"
-          phx-submit="save_direct_receipt"
-          class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
-        >
-          <.input
-            field={@form[:product_id]}
-            id="direct-lab-product-id"
-            type="select"
-            label="Lab consumable"
-            options={Enum.map(@lab_products, &{product_name(&1), &1.id})}
-            prompt="Choose product"
-            required
-          />
-          <.input field={@form[:gtin]} type="hidden" />
-          <.input
-            field={@form[:batch_no]}
-            id="direct-lab-batch-no"
-            label="Batch / lot number"
-            required
-          />
-          <.date_picker
-            field={@form[:expiry_date]}
-            id="direct-lab-expiry-date"
-            label="Expiry date"
-            required
-          />
-          <.input
-            field={@form[:quantity]}
-            id="direct-lab-quantity"
-            type="number"
-            label="Quantity received"
-            min="1"
-            required
-          />
-          <.input
-            field={@form[:supplier_id]}
-            id="direct-lab-supplier-id"
-            type="select"
-            label="Supplier (optional)"
-            options={Enum.map(@suppliers, &{&1.name, &1.id})}
-            prompt="Choose supplier"
-          />
-          <.input field={@form[:serial]} id="direct-lab-serial" label="Serial number (optional)" />
-          <.date_picker
-            field={@form[:manufacture_date]}
-            id="direct-lab-manufacture-date"
-            label="Manufacture date (optional)"
-          />
-          <.input
-            field={@form[:manufacturer]}
-            id="direct-lab-manufacturer"
-            label="Manufacturer (optional)"
-          />
-          <.input
-            field={@form[:cost_per_unit]}
-            id="direct-lab-cost-per-unit"
-            type="number"
-            label="Cost per unit (optional)"
-            min="0"
-            step="0.01"
-          />
-          <div class="flex items-end sm:col-span-2 xl:col-span-3">
-            <.button
-              id="direct-lab-stock-submit"
-              type="submit"
-              variant="primary"
-              phx-disable-with="Receiving stock…"
-              class="w-full sm:w-auto"
+            <p
+              :if={@lab_products == []}
+              class="rounded-xl bg-thamani-canvas px-4 py-3 text-sm text-thamani-pewter"
             >
-              Receive stock at site
+              Create an active lab consumable product before receiving stock.
+            </p>
+
+            <.form
+              :if={@lab_products != []}
+              for={@form}
+              id="direct-lab-stock-form"
+              phx-change="validate_direct_receipt"
+              phx-submit="save_direct_receipt"
+              class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+            >
+              <.input
+                field={@form[:product_id]}
+                id="direct-lab-product-id"
+                type="select"
+                label="Lab consumable"
+                options={Enum.map(@lab_products, &{product_name(&1), &1.id})}
+                prompt="Choose product"
+                required
+              />
+              <.input field={@form[:gtin]} type="hidden" />
+              <.input
+                field={@form[:batch_no]}
+                id="direct-lab-batch-no"
+                label="Batch / lot number"
+                required
+              />
+              <.date_picker
+                field={@form[:expiry_date]}
+                id="direct-lab-expiry-date"
+                label="Expiry date"
+                required
+              />
+              <.input
+                field={@form[:quantity]}
+                id="direct-lab-quantity"
+                type="number"
+                label="Quantity received"
+                min="1"
+                required
+              />
+              <.input
+                field={@form[:supplier_id]}
+                id="direct-lab-supplier-id"
+                type="select"
+                label="Supplier (optional)"
+                options={Enum.map(@suppliers, &{&1.name, &1.id})}
+                prompt="Choose supplier"
+              />
+              <.input field={@form[:serial]} id="direct-lab-serial" label="Serial number (optional)" />
+              <.date_picker
+                field={@form[:manufacture_date]}
+                id="direct-lab-manufacture-date"
+                label="Manufacture date (optional)"
+              />
+              <.input
+                field={@form[:manufacturer]}
+                id="direct-lab-manufacturer"
+                label="Manufacturer (optional)"
+              />
+              <.input
+                field={@form[:cost_per_unit]}
+                id="direct-lab-cost-per-unit"
+                type="number"
+                label="Cost per unit (optional)"
+                min="0"
+                step="0.01"
+              />
+              <div class="flex items-end sm:col-span-2 xl:col-span-3">
+                <.button
+                  id="direct-lab-stock-submit"
+                  type="submit"
+                  variant="primary"
+                  phx-disable-with="Receiving stock…"
+                  class="w-full sm:w-auto"
+                >
+                  Receive stock at site
+                </.button>
+              </div>
+            </.form>
+          </section>
+
+          <.modal
+            :if={@live_action == :receive and not is_nil(@receive_batch)}
+            id="receive-batch-modal"
+            show
+            on_cancel={JS.patch(~p"/lab/receive-stock")}
+          >
+            <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+              Receive batch
+            </h2>
+            <p class="mb-4 text-sm text-thamani-pewter">
+              Confirm receipt of this pending delivery.
+            </p>
+            <dl class="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Product
+                </dt>
+                <dd class="mt-0.5 font-medium text-td-ink">
+                  {product_display(@receive_batch, @products_by_id)}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Batch / lot
+                </dt>
+                <dd class="mt-0.5 font-mono">{@receive_batch.batch_no}</dd>
+              </div>
+              <div :if={@receive_batch.serial}>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Serial
+                </dt>
+                <dd class="mt-0.5 font-mono">{@receive_batch.serial}</dd>
+              </div>
+              <div :if={@receive_batch.manufacture_date}>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Manufacture date
+                </dt>
+                <dd class="mt-0.5">{@receive_batch.manufacture_date}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Expiry
+                </dt>
+                <dd class="mt-0.5">{@receive_batch.expiry_date}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Quantity
+                </dt>
+                <dd class="mt-0.5 tabular-nums">{@receive_batch.quantity}</dd>
+              </div>
+            </dl>
+            <.form
+              for={@receive_form}
+              id="receive-batch-form"
+              phx-submit="receive"
+            >
+              <.button variant="primary" phx-disable-with="Receiving…" class="w-full">Approve receipt</.button>
+            </.form>
+          </.modal>
+
+          <div class="mb-8">
+            <h2 class="text-base font-semibold mb-3">Pending deliveries</h2>
+            <.table id="pending-batches" rows={@streams.pending_batches}>
+              <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
+              <:col :let={{_id, batch}} label="GTIN"><code>{batch.gtin}</code></:col>
+              <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
+              <:col :let={{_id, batch}} label="Manufacture date">
+                {batch.manufacture_date || "—"}
+              </:col>
+              <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
+              <:col :let={{_id, batch}} label="Qty">{batch.quantity}</:col>
+              <:col :let={{_id, batch}} label="Supplier">
+                {supplier_display(batch, @suppliers_by_id)}
+              </:col>
+              <:action :let={{_id, batch}}>
+                <.button
+                  variant="ghost"
+                  patch={~p"/lab/receive-stock/#{batch.id}/receive"}
+                  class="gap-2"
+                >
+                  <.icon name="hero-arrow-down-tray" class="size-4" /> Receive
+                </.button>
+              </:action>
+              <:empty_state>
+                <.blank_state icon="hero-check-circle" title="Nothing pending delivery">
+                  {if @direct_receipt?,
+                    do: "New stock is received directly into your site's inventory above.",
+                    else: "Batches dispatched to this site will appear here for review."}
+                </.blank_state>
+              </:empty_state>
+            </.table>
+          </div>
+
+          <div
+            :if={@selected_batch}
+            id="batch-review-panel"
+            class="rounded-2xl bg-thamani-stone p-6 mb-8"
+          >
+            <div class="flex items-start justify-between mb-5">
+              <h2 class="text-base font-semibold text-thamani-forest">
+                Review batch before receiving
+              </h2>
+              <.button phx-click="cancel_view">Cancel</.button>
+            </div>
+
+            <dl class="grid grid-cols-2 gap-x-10 gap-y-3 mb-6 text-sm">
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+                  Product
+                </dt>
+                <dd class="font-medium text-thamani-forest">
+                  {product_display(@selected_batch, @products_by_id)}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+                  Batch / lot
+                </dt>
+                <dd><code>{@selected_batch.batch_no}</code></dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+                  GTIN
+                </dt>
+                <dd><code>{@selected_batch.gtin}</code></dd>
+              </div>
+              <div :if={@selected_batch.serial}>
+                <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+                  Serial
+                </dt>
+                <dd>{@selected_batch.serial}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+                  Expiry date
+                </dt>
+                <dd>{@selected_batch.expiry_date}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+                  Quantity
+                </dt>
+                <dd>{@selected_batch.quantity}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+                  Destination site
+                </dt>
+                <dd>{@selected_batch.site.name}</dd>
+              </div>
+              <div :if={@selected_batch.supplier_id}>
+                <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+                  Supplier
+                </dt>
+                <dd>{@selected_batch.supplier.name}</dd>
+              </div>
+              <div :if={@selected_batch.manufacture_date}>
+                <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
+                  Manufacture date
+                </dt>
+                <dd>{@selected_batch.manufacture_date}</dd>
+              </div>
+            </dl>
+
+            <.button phx-click="receive_batch" phx-value-id={@selected_batch.id} variant="primary">
+              Approve receipt
             </.button>
           </div>
-        </.form>
-      </section>
-
-      <.modal
-        :if={@live_action == :receive and not is_nil(@receive_batch)}
-        id="receive-batch-modal"
-        show
-        on_cancel={JS.patch(~p"/lab/receive-stock")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">Receive batch</h2>
-        <p class="mb-4 text-sm text-thamani-pewter">
-          Confirm receipt of this pending delivery.
-        </p>
-        <dl class="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Product</dt>
-            <dd class="mt-0.5 font-medium text-td-ink">
-              {product_display(@receive_batch, @products_by_id)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Batch / lot
-            </dt>
-            <dd class="mt-0.5 font-mono">{@receive_batch.batch_no}</dd>
-          </div>
-          <div :if={@receive_batch.serial}>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Serial</dt>
-            <dd class="mt-0.5 font-mono">{@receive_batch.serial}</dd>
-          </div>
-          <div :if={@receive_batch.manufacture_date}>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Manufacture date
-            </dt>
-            <dd class="mt-0.5">{@receive_batch.manufacture_date}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Expiry</dt>
-            <dd class="mt-0.5">{@receive_batch.expiry_date}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Quantity</dt>
-            <dd class="mt-0.5 tabular-nums">{@receive_batch.quantity}</dd>
-          </div>
-        </dl>
-        <.form
-          for={@receive_form}
-          id="receive-batch-form"
-          phx-submit="receive"
-        >
-          <.button variant="primary" phx-disable-with="Receiving…" class="w-full">Approve receipt</.button>
-        </.form>
-      </.modal>
-
-      <div class="mb-8">
-        <h2 class="text-base font-semibold mb-3">Pending deliveries</h2>
-        <.table id="pending-batches" rows={@streams.pending_batches}>
-          <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
-          <:col :let={{_id, batch}} label="GTIN"><code>{batch.gtin}</code></:col>
-          <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
-          <:col :let={{_id, batch}} label="Manufacture date">{batch.manufacture_date || "—"}</:col>
-          <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
-          <:col :let={{_id, batch}} label="Qty">{batch.quantity}</:col>
-          <:col :let={{_id, batch}} label="Supplier">
-            {supplier_display(batch, @suppliers_by_id)}
-          </:col>
-          <:action :let={{_id, batch}}>
-            <.button
-              variant="ghost"
-              patch={~p"/lab/receive-stock/#{batch.id}/receive"}
-              class="gap-2"
-            >
-              <.icon name="hero-arrow-down-tray" class="size-4" /> Receive
-            </.button>
-          </:action>
-          <:empty_state>
-            <.blank_state icon="hero-check-circle" title="Nothing pending delivery">
-              {if @direct_receipt?,
-                do: "New stock is received directly into your site's inventory above.",
-                else: "Batches dispatched to this site will appear here for review."}
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
-
-      <div
-        :if={@selected_batch}
-        id="batch-review-panel"
-        class="rounded-2xl bg-thamani-stone p-6 mb-8"
-      >
-        <div class="flex items-start justify-between mb-5">
-          <h2 class="text-base font-semibold text-thamani-forest">
-            Review batch before receiving
-          </h2>
-          <.button phx-click="cancel_view">Cancel</.button>
-        </div>
-
-        <dl class="grid grid-cols-2 gap-x-10 gap-y-3 mb-6 text-sm">
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
-              Product
-            </dt>
-            <dd class="font-medium text-thamani-forest">
-              {product_display(@selected_batch, @products_by_id)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
-              Batch / lot
-            </dt>
-            <dd><code>{@selected_batch.batch_no}</code></dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
-              GTIN
-            </dt>
-            <dd><code>{@selected_batch.gtin}</code></dd>
-          </div>
-          <div :if={@selected_batch.serial}>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
-              Serial
-            </dt>
-            <dd>{@selected_batch.serial}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
-              Expiry date
-            </dt>
-            <dd>{@selected_batch.expiry_date}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
-              Quantity
-            </dt>
-            <dd>{@selected_batch.quantity}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
-              Destination site
-            </dt>
-            <dd>{@selected_batch.site.name}</dd>
-          </div>
-          <div :if={@selected_batch.supplier_id}>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
-              Supplier
-            </dt>
-            <dd>{@selected_batch.supplier.name}</dd>
-          </div>
-          <div :if={@selected_batch.manufacture_date}>
-            <dt class="text-xs font-medium uppercase tracking-wide mb-0.5 text-thamani-pewter">
-              Manufacture date
-            </dt>
-            <dd>{@selected_batch.manufacture_date}</dd>
-          </div>
-        </dl>
-
-        <.button phx-click="receive_batch" phx-value-id={@selected_batch.id} variant="primary">
-          Approve receipt
-        </.button>
-      </div>
         </:body>
       </.td_detail_page>
     </Layouts.lab_shell>

@@ -416,8 +416,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   defp filter_by_custom_range(lab_orders, date_from, date_to) do
     Enum.filter(lab_orders, fn lab_order ->
       date = to_date(lab_order.inserted_at)
-      after_from = date_from == "" or parse_date(date_from) in [nil, date] or Date.compare(date, parse_date(date_from)) != :lt
-      before_to = date_to == "" or parse_date(date_to) in [nil, date] or Date.compare(date, parse_date(date_to)) != :gt
+
+      after_from =
+        date_from == "" or parse_date(date_from) in [nil, date] or
+          Date.compare(date, parse_date(date_from)) != :lt
+
+      before_to =
+        date_to == "" or parse_date(date_to) in [nil, date] or
+          Date.compare(date, parse_date(date_to)) != :gt
+
       after_from and before_to
     end)
   end
@@ -425,6 +432,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   defp parse_date(""), do: nil
   defp parse_date(nil), do: nil
   defp parse_date(%Date{} = date), do: date
+
   defp parse_date(value) when is_binary(value) do
     case Date.from_iso8601(value) do
       {:ok, date} -> date

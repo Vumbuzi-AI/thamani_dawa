@@ -365,8 +365,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
             phx-value-view="products"
             aria-current={@view == "products" && "page"}
           >
-            Products
-            <.td_count value={@product_count} />
+            Products <.td_count value={@product_count} />
           </button>
           <button
             id="distributor-batches-tab"
@@ -376,8 +375,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
             phx-value-view="batches"
             aria-current={@view == "batches" && "page"}
           >
-            Batches
-            <.td_count value={@batch_count} />
+            Batches <.td_count value={@batch_count} />
           </button>
         </:tabs>
         <:filters :if={@view == "batches"}>
@@ -404,144 +402,144 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           />
         </:filters>
 
-      <.modal
-        :if={@live_action == :new}
-        id="distributor-product-modal"
-        show
-        on_cancel={JS.patch(~p"/distributor/products")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">Add product</h2>
-        <.form
-          for={@form}
-          id="distributor-product-form"
-          phx-change="validate"
-          phx-submit="save"
-          class="mt-4"
+        <.modal
+          :if={@live_action == :new}
+          id="distributor-product-modal"
+          show
+          on_cancel={JS.patch(~p"/distributor/products")}
         >
-          <div class="grid gap-x-4 sm:grid-cols-2">
-            <input type="hidden" name="product[uom]" value="C62" />
-            <.input field={@form[:generic_name]} label="Generic name" />
-            <.input field={@form[:brand_name]} label="Brand name" />
-            <.input field={@form[:gtin]} label="GTIN" required />
-            <.input
-              field={@form[:net_content_quantity]}
-              type="number"
-              label="Each pack contains (optional)"
-              placeholder="e.g. 20"
-              min="1"
-            />
-            <.input
-              field={@form[:net_content_uom]}
-              type="select"
-              label="What's inside"
-              prompt="Tablets, capsules, ml"
-              options={[
-                {"Tablets", "U2"},
-                {"Capsules", "AV"},
-                {"Millilitres", "MLT"},
-                {"Pieces", "H87"}
-              ]}
-            />
-            <.input field={@form[:category]} label="Category" />
-            <.input field={@form[:manufacturer]} label="Manufacturer" />
-            <.input field={@form[:price]} type="number" label="Price (KSh)" min="0" required />
-            <.input field={@form[:reorder_level]} type="number" label="Reorder level" min="0" />
-          </div>
-          <.button class="mt-2" variant="primary">Add product</.button>
-        </.form>
-      </.modal>
-
-      <div :if={@view == "products"} class="mt-5">
-        <.table
-          id="distributor-products"
-          rows={@streams.products}
-          row_click={fn {_id, row} -> JS.navigate(~p"/distributor/products/#{row.product.id}") end}
-        >
-          <:col :let={{_id, product}} label="Product">
-            <span class="font-medium text-thamani-forest">
-              {product_name(product.product)}
-            </span>
-          </:col>
-          <:col :let={{_id, row}} label="Category">{row.product.category || "—"}</:col>
-          <:col :let={{_id, row}} label="Brand">{row.product.brand_name || "—"}</:col>
-          <:col :let={{_id, row}} label="Strength" mobile="hidden" tablet="hidden">
-            {row.product.strength || "—"}
-          </:col>
-          <:col :let={{_id, row}} label="Price">{money(row.product.price)}</:col>
-          <:col :let={{_id, row}} label="Batches">{row.batch_count}</:col>
-          <:col :let={{_id, row}} label="Status">
-            <.status_badge status={if row.product.is_active, do: :active, else: :inactive} />
-          </:col>
-          <:col :let={{_id, row}} label="GTIN">
-            <span class="font-mono">{row.product.gtin}</span>
-          </:col>
-          <:col :let={{_id, row}} label="Unit">{Products.unit_label(row.product.uom)}</:col>
-          <:col :let={{_id, row}} label="Reorder level">{row.product.reorder_level || "—"}</:col>
-          <:empty_state>
-            <.blank_state icon="hero-cube" title="No distributor products yet">
-              {if @search == "",
-                do: "Add a GTIN-identified product before receiving stock.",
-                else: "Try a different product name, GTIN, or category."}
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
-
-      <div :if={@view == "batches"} class="mt-5">
-        <.table
-          id="distributor-batches"
-          rows={@streams.batches}
-          row_click={fn {_id, batch} -> JS.navigate(~p"/distributor/batches/#{batch.id}") end}
-        >
-          <:col :let={{_id, batch}} label="Product">
-            {product_name(@products_by_id[batch.product_id])}
-          </:col>
-          <:col :let={{_id, batch}} label="Batch">
-            <span class="font-mono">{batch.batch_no}</span>
-          </:col>
-          <:col
-            :let={{_id, batch}}
-            :if={is_nil(SiteScoping.default_site_id(@current_scope))}
-            label="Warehouse"
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">Add product</h2>
+          <.form
+            for={@form}
+            id="distributor-product-form"
+            phx-change="validate"
+            phx-submit="save"
+            class="mt-4"
           >
-            {site_name(@sites_by_id[batch.site_id])}
-          </:col>
-          <:col :let={{_id, batch}} label="Expiry">
-            <span class="text-thamani-pewter">{date_or_dash(batch.expiry_date)}</span>
-            <span
-              :if={tier = expiry_tier(batch, @today)}
-              class={[
-                "ml-1.5 rounded-full px-2 py-0.5 text-xs font-semibold",
-                expiry_badge_class(tier)
-              ]}
+            <div class="grid gap-x-4 sm:grid-cols-2">
+              <input type="hidden" name="product[uom]" value="C62" />
+              <.input field={@form[:generic_name]} label="Generic name" />
+              <.input field={@form[:brand_name]} label="Brand name" />
+              <.input field={@form[:gtin]} label="GTIN" required />
+              <.input
+                field={@form[:net_content_quantity]}
+                type="number"
+                label="Each pack contains (optional)"
+                placeholder="e.g. 20"
+                min="1"
+              />
+              <.input
+                field={@form[:net_content_uom]}
+                type="select"
+                label="What's inside"
+                prompt="Tablets, capsules, ml"
+                options={[
+                  {"Tablets", "U2"},
+                  {"Capsules", "AV"},
+                  {"Millilitres", "MLT"},
+                  {"Pieces", "H87"}
+                ]}
+              />
+              <.input field={@form[:category]} label="Category" />
+              <.input field={@form[:manufacturer]} label="Manufacturer" />
+              <.input field={@form[:price]} type="number" label="Price (KSh)" min="0" required />
+              <.input field={@form[:reorder_level]} type="number" label="Reorder level" min="0" />
+            </div>
+            <.button class="mt-2" variant="primary">Add product</.button>
+          </.form>
+        </.modal>
+
+        <div :if={@view == "products"} class="mt-5">
+          <.table
+            id="distributor-products"
+            rows={@streams.products}
+            row_click={fn {_id, row} -> JS.navigate(~p"/distributor/products/#{row.product.id}") end}
+          >
+            <:col :let={{_id, product}} label="Product">
+              <span class="font-medium text-thamani-forest">
+                {product_name(product.product)}
+              </span>
+            </:col>
+            <:col :let={{_id, row}} label="Category">{row.product.category || "—"}</:col>
+            <:col :let={{_id, row}} label="Brand">{row.product.brand_name || "—"}</:col>
+            <:col :let={{_id, row}} label="Strength" mobile="hidden" tablet="hidden">
+              {row.product.strength || "—"}
+            </:col>
+            <:col :let={{_id, row}} label="Price">{money(row.product.price)}</:col>
+            <:col :let={{_id, row}} label="Batches">{row.batch_count}</:col>
+            <:col :let={{_id, row}} label="Status">
+              <.status_badge status={if row.product.is_active, do: :active, else: :inactive} />
+            </:col>
+            <:col :let={{_id, row}} label="GTIN">
+              <span class="font-mono">{row.product.gtin}</span>
+            </:col>
+            <:col :let={{_id, row}} label="Unit">{Products.unit_label(row.product.uom)}</:col>
+            <:col :let={{_id, row}} label="Reorder level">{row.product.reorder_level || "—"}</:col>
+            <:empty_state>
+              <.blank_state icon="hero-cube" title="No distributor products yet">
+                {if @search == "",
+                  do: "Add a GTIN-identified product before receiving stock.",
+                  else: "Try a different product name, GTIN, or category."}
+              </.blank_state>
+            </:empty_state>
+          </.table>
+        </div>
+
+        <div :if={@view == "batches"} class="mt-5">
+          <.table
+            id="distributor-batches"
+            rows={@streams.batches}
+            row_click={fn {_id, batch} -> JS.navigate(~p"/distributor/batches/#{batch.id}") end}
+          >
+            <:col :let={{_id, batch}} label="Product">
+              {product_name(@products_by_id[batch.product_id])}
+            </:col>
+            <:col :let={{_id, batch}} label="Batch">
+              <span class="font-mono">{batch.batch_no}</span>
+            </:col>
+            <:col
+              :let={{_id, batch}}
+              :if={is_nil(SiteScoping.default_site_id(@current_scope))}
+              label="Warehouse"
             >
-              {expiry_badge_label(tier)}
-            </span>
-          </:col>
-          <:col :let={{_id, batch}} label="Qty">
-            {quantity_with_unit(batch.remaining_quantity, @products_by_id[batch.product_id])}
-          </:col>
-          <:col :let={{_id, batch}} label="Status">
-            <.status_badge status={batch.status} label={batch_status_label(batch.status)} />
-          </:col>
-          <:empty_state>
-            <.blank_state
-              icon="hero-archive-box"
-              title={
-                if @search == "", do: "No stock batches yet", else: "No batches match your search"
-              }
-            >
-              {if @search == "",
-                do: "Received stock batches will appear here after inventory is checked in.",
-                else: "Try another product name, GTIN, or batch number."}
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
-      <.pagination
-        page={@page_info}
-        path={pagination_path(@view, @search, @expiry_filter, @hold_filter)}
-      />
+              {site_name(@sites_by_id[batch.site_id])}
+            </:col>
+            <:col :let={{_id, batch}} label="Expiry">
+              <span class="text-thamani-pewter">{date_or_dash(batch.expiry_date)}</span>
+              <span
+                :if={tier = expiry_tier(batch, @today)}
+                class={[
+                  "ml-1.5 rounded-full px-2 py-0.5 text-xs font-semibold",
+                  expiry_badge_class(tier)
+                ]}
+              >
+                {expiry_badge_label(tier)}
+              </span>
+            </:col>
+            <:col :let={{_id, batch}} label="Qty">
+              {quantity_with_unit(batch.remaining_quantity, @products_by_id[batch.product_id])}
+            </:col>
+            <:col :let={{_id, batch}} label="Status">
+              <.status_badge status={batch.status} label={batch_status_label(batch.status)} />
+            </:col>
+            <:empty_state>
+              <.blank_state
+                icon="hero-archive-box"
+                title={
+                  if @search == "", do: "No stock batches yet", else: "No batches match your search"
+                }
+              >
+                {if @search == "",
+                  do: "Received stock batches will appear here after inventory is checked in.",
+                  else: "Try another product name, GTIN, or batch number."}
+              </.blank_state>
+            </:empty_state>
+          </.table>
+        </div>
+        <.pagination
+          page={@page_info}
+          path={pagination_path(@view, @search, @expiry_filter, @hold_filter)}
+        />
       </.td_list_page>
     </Layouts.distributor_shell>
     """

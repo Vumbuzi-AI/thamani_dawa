@@ -116,6 +116,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLiveTest do
     {:ok, view, _html} = live(log_in(conn, admin), ~p"/org/mobile-users")
 
     view |> element("#resend-pin-#{id}") |> render_click()
+
     assert view |> element("#resend-pin-modal button", "Send new PIN") |> render_click() =~
              "new PIN was emailed"
 

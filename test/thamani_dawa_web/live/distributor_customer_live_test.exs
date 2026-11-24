@@ -18,7 +18,10 @@ defmodule ThamaniDawaWeb.DistributorCustomerLiveTest do
     assert has_element?(view, "#customers-empty-add")
   end
 
-  test "lists customers with order stats and opens the side panel", %{conn: conn, distributor: distributor} do
+  test "lists customers with order stats and opens the side panel", %{
+    conn: conn,
+    distributor: distributor
+  } do
     org_id = distributor.organization_id
     destination = destination_fixture(org_id)
 
@@ -30,7 +33,11 @@ defmodule ThamaniDawaWeb.DistributorCustomerLiveTest do
         "address" => "Oginga Odinga St, Kisumu"
       })
 
-    shipment = shipment_fixture(org_id, distributor, %{destination: destination, order_number: "PO-KMC-0412"})
+    shipment =
+      shipment_fixture(org_id, distributor, %{
+        destination: destination,
+        order_number: "PO-KMC-0412"
+      })
 
     {:ok, view, _html} = live(conn, ~p"/distributor/customers")
     assert has_element?(view, "#distributor-customers", "Kisumu Medical Centre")
@@ -48,7 +55,10 @@ defmodule ThamaniDawaWeb.DistributorCustomerLiveTest do
 
   test "editing a customer saves from the modal footer", %{conn: conn, distributor: distributor} do
     {:ok, customer} =
-      Customers.create_customer(distributor.organization_id, %{"name" => "Coast Diagnostics", "customer_type" => "other"})
+      Customers.create_customer(distributor.organization_id, %{
+        "name" => "Coast Diagnostics",
+        "customer_type" => "other"
+      })
 
     {:ok, view, _html} = live(conn, ~p"/distributor/customers/#{customer.id}/edit")
     assert has_element?(view, "#distributor-customer-modal", "Edit customer")
@@ -70,7 +80,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerLiveTest do
     refute has_element?(view, "#save-customer[disabled]")
 
     view
-    |> form("#distributor-customer-form", customer: %{name: "Nakuru Town Pharmacy", customer_type: "pharmacy"})
+    |> form("#distributor-customer-form",
+      customer: %{name: "Nakuru Town Pharmacy", customer_type: "pharmacy"}
+    )
     |> render_submit()
 
     assert_patch(view, ~p"/distributor/customers")

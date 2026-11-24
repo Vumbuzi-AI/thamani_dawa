@@ -144,7 +144,6 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
     max(length(out) + length(low) + length(near) + pending, 1)
   end
 
-  defp top_products_max([]), do: 1
   defp top_products_max(products), do: products |> Enum.map(&elem(&1, 1)) |> Enum.max() |> max(1)
 
   def render(assigns) do
@@ -163,14 +162,20 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         <:actions>
           <.td_button variant="secondary" label="Scan" navigate={~p"/pharmacy/scan"} />
           <.td_button variant="secondary" label="Quick sale" navigate={~p"/pharmacy/quick-sale"} />
-          <.td_button variant="primary" label="New prescription" navigate={~p"/pharmacy/prescriptions/new"} />
+          <.td_button
+            variant="primary"
+            label="New prescription"
+            navigate={~p"/pharmacy/prescriptions/new"}
+          />
         </:actions>
 
         <:strip id="pharmacy-glances">
           <.td_glance_cell
             navigate={~p"/pharmacy/prescriptions"}
             tone="warning"
-            value={phrase(length(@pending_prescriptions), "pending prescription", "pending prescriptions")}
+            value={
+              phrase(length(@pending_prescriptions), "pending prescription", "pending prescriptions")
+            }
             caption="Awaiting dispensing"
           >
             <:icon><.td_icon name="clipboard-text" class="size-[18px]" /></:icon>
@@ -267,54 +272,81 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
         </.td_dash_row>
 
         <.td_dash_row>
-          <.td_dash_card id="out-of-stock-table" title="Out of stock" subtitle="Products with no remaining stock at your site.">
+          <.td_dash_card
+            id="out-of-stock-table"
+            title="Out of stock"
+            subtitle="Products with no remaining stock at your site."
+          >
             <.table
               id="out-of-stock"
               rows={@out_of_stock}
               row_click={fn _row -> JS.navigate(~p"/pharmacy/receive-stock") end}
             >
               <:col :let={{product, _total}} label="Product">{product_name(product)}</:col>
-              <:col :let={{product, _total}} label="Reorder level">{product && product.reorder_level}</:col>
+              <:col :let={{product, _total}} label="Reorder level">
+                {product && product.reorder_level}
+              </:col>
               <:col :let={{_product, total}} label="Remaining">{total}</:col>
               <:empty_state>
-                <.td_empty title="Nothing out of stock" hint="Every product at your site has remaining stock." />
+                <.td_empty
+                  title="Nothing out of stock"
+                  hint="Every product at your site has remaining stock."
+                />
               </:empty_state>
             </.table>
           </.td_dash_card>
         </.td_dash_row>
 
         <.td_dash_row>
-          <.td_dash_card id="low-stock-table" title="Low stock" subtitle="Products at or below their reorder level.">
+          <.td_dash_card
+            id="low-stock-table"
+            title="Low stock"
+            subtitle="Products at or below their reorder level."
+          >
             <.table
               id="low-stock"
               rows={@low_stock}
               row_click={fn _row -> JS.navigate(~p"/pharmacy/receive-stock") end}
             >
               <:col :let={{product, _total}} label="Product">{product_name(product)}</:col>
-              <:col :let={{product, _total}} label="Reorder level">{product && product.reorder_level}</:col>
+              <:col :let={{product, _total}} label="Reorder level">
+                {product && product.reorder_level}
+              </:col>
               <:col :let={{_product, total}} label="Remaining">{total}</:col>
               <:empty_state>
-                <.td_empty title="No products are low on stock" hint="Products will show up here once they drop to their reorder level." />
+                <.td_empty
+                  title="No products are low on stock"
+                  hint="Products will show up here once they drop to their reorder level."
+                />
               </:empty_state>
             </.table>
           </.td_dash_card>
         </.td_dash_row>
 
         <.td_dash_row>
-          <.td_dash_card id="near-expiry-table" title="Near-expiry batches" subtitle={"Expiring within #{@near_expiry_days} days"}>
+          <.td_dash_card
+            id="near-expiry-table"
+            title="Near-expiry batches"
+            subtitle={"Expiring within #{@near_expiry_days} days"}
+          >
             <.table
               id="near-expiry"
               rows={@near_expiry}
               row_click={fn batch -> JS.navigate(~p"/pharmacy/scan?gtin=#{batch.gtin}") end}
             >
-              <:col :let={batch} label="Product">{product_name(@products_by_id[batch.product_id])}</:col>
+              <:col :let={batch} label="Product">
+                {product_name(@products_by_id[batch.product_id])}
+              </:col>
               <:col :let={batch} label="Batch no.">
                 <span class="td-mono">{batch.batch_no}</span>
               </:col>
               <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
               <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
               <:empty_state>
-                <.td_empty title="No batches expiring soon" hint={"Batches will appear here within #{@near_expiry_days} days of their expiry date."} />
+                <.td_empty
+                  title="No batches expiring soon"
+                  hint={"Batches will appear here within #{@near_expiry_days} days of their expiry date."}
+                />
               </:empty_state>
             </.table>
           </.td_dash_card>
@@ -328,7 +360,9 @@ defmodule ThamaniDawaWeb.PharmacyDashboardLive do
             <.table
               id="pending-prescriptions"
               rows={@pending_prescriptions}
-              row_click={fn prescription -> JS.navigate(~p"/pharmacy/prescriptions/#{prescription.id}") end}
+              row_click={
+                fn prescription -> JS.navigate(~p"/pharmacy/prescriptions/#{prescription.id}") end
+              }
             >
               <:col :let={prescription} label="Patient">{patient_label(prescription)}</:col>
               <:col :let={prescription} label="Status">

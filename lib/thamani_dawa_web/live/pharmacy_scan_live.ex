@@ -145,147 +145,148 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
         subtitle="Check approved stock, location, expiry, and traceability details."
       >
         <:body>
+          <section
+            id="scan-lookup-panel"
+            class="mb-5 rounded-xl ff-surface-card p-4 sm:p-5"
+          >
+            <.form
+              for={@scan_form}
+              id="scan-form"
+              phx-submit="decode"
+              class="flex flex-col gap-3 sm:flex-row sm:items-end"
+            >
+              <div class="flex-1 [&>div]:mb-0">
+                <.input
+                  field={@scan_form[:gtin]}
+                  label="GTIN or barcode"
+                  placeholder="00614141000012"
+                  autocomplete="off"
+                />
+              </div>
+              <.button id="scan-submit" variant="primary">
+                <.icon name="hero-magnifying-glass" class="mr-1 size-4" /> Look up stock
+              </.button>
+            </.form>
+            <p
+              :if={@decode_error}
+              id="scan-decode-error"
+              role="alert"
+              class="mt-2 flex items-center gap-2 text-sm text-thamani-error"
+            >
+              <.icon name="hero-exclamation-circle" class="size-4 shrink-0" />
+              {@decode_error}
+            </p>
+          </section>
 
-      <section
-        id="scan-lookup-panel"
-        class="mb-5 rounded-xl ff-surface-card p-4 sm:p-5"
-      >
-        <.form
-          for={@scan_form}
-          id="scan-form"
-          phx-submit="decode"
-          class="flex flex-col gap-3 sm:flex-row sm:items-end"
-        >
-          <div class="flex-1 [&>div]:mb-0">
-            <.input
-              field={@scan_form[:gtin]}
-              label="GTIN or barcode"
-              placeholder="00614141000012"
-              autocomplete="off"
-            />
-          </div>
-          <.button id="scan-submit" variant="primary">
-            <.icon name="hero-magnifying-glass" class="mr-1 size-4" /> Look up stock
-          </.button>
-        </.form>
-        <p
-          :if={@decode_error}
-          id="scan-decode-error"
-          role="alert"
-          class="mt-2 flex items-center gap-2 text-sm text-thamani-error"
-        >
-          <.icon name="hero-exclamation-circle" class="size-4 shrink-0" />
-          {@decode_error}
-        </p>
-      </section>
+          <%!-- Approved batch found at this site --%>
+          <div :if={@scan_state == :found} id="scan-result-found">
+            <div class="space-y-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:p-6">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-widest mb-1 text-emerald-700">
+                    Approved stock found
+                  </p>
+                  <h2 id="result-product-name" class="text-xl font-semibold text-thamani-forest">
+                    {product_display_name(@product)}
+                  </h2>
+                  <p class="text-sm mt-0.5 text-emerald-700">
+                    {if @product.category, do: @product.category}
+                    {if @product.uom, do: "· #{@product.uom}"}
+                  </p>
+                </div>
+                <span class="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                  <.icon name="hero-check-circle" class="size-3.5" />Approved
+                </span>
+              </div>
 
-      <%!-- Approved batch found at this site --%>
-      <div :if={@scan_state == :found} id="scan-result-found">
-        <div class="space-y-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 sm:p-6">
-          <div class="flex items-start justify-between gap-4">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-widest mb-1 text-emerald-700">
-                Approved stock found
-              </p>
-              <h2 id="result-product-name" class="text-xl font-semibold text-thamani-forest">
-                {product_display_name(@product)}
-              </h2>
-              <p class="text-sm mt-0.5 text-emerald-700">
-                {if @product.category, do: @product.category}
-                {if @product.uom, do: "· #{@product.uom}"}
-              </p>
-            </div>
-            <span class="shrink-0 inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-              <.icon name="hero-check-circle" class="size-3.5" />Approved
-            </span>
-          </div>
-
-          <dl class="grid grid-cols-1 gap-x-8 gap-y-4 border-t border-emerald-200 pt-4 sm:grid-cols-3">
-            <div>
-              <dt class="text-xs font-medium text-emerald-800/70">GTIN</dt>
-              <dd id="result-gtin" class="mt-1 break-all font-mono text-sm font-medium">{@gtin}</dd>
-            </div>
-            <div>
-              <dt class="text-xs font-medium text-emerald-800/70">Batch / lot</dt>
-              <dd id="result-batch-no" class="mt-1 text-sm font-medium">
-                {if @batch_count > 1, do: "#{@batch_count} batches", else: hd(@batches).batch_no}
-              </dd>
-            </div>
-            <div>
-              <dt class="text-xs font-medium text-emerald-800/70">Earliest expiry</dt>
-              <dd
-                id="result-expiry"
-                class={[
-                  "mt-1 text-sm font-medium tabular-nums",
-                  Date.compare(@earliest_expiry, Date.utc_today()) == :lt && "text-thamani-error"
-                ]}
-              >
-                {ThamaniDawaWeb.TimeFormat.date(@earliest_expiry)} {if @batch_count > 1,
-                  do: "(Earliest)"}
-              </dd>
-            </div>
-            <div>
-              <dt class="text-xs font-medium text-emerald-800/70">Site</dt>
-              <dd id="result-site" class="mt-1 text-sm font-medium">{@site.name}</dd>
-            </div>
-            <div>
-              <dt class="text-xs font-medium text-emerald-800/70">Remaining quantity</dt>
-              <dd id="result-quantity" class="mt-1 text-lg font-semibold tabular-nums">
-                {@total_qty}
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-
-      <%!-- Batch exists in org but not at this pharmacist's site --%>
-      <div :if={@scan_state == :not_at_site} id="scan-result-not-at-site">
-        <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-          <div class="flex items-start gap-4">
-            <div class="shrink-0 rounded-full bg-amber-100 p-2">
-              <.icon name="hero-building-office-2" class="size-5 text-amber-800" />
-            </div>
-            <div>
-              <p id="scan-not-at-site-heading" class="font-semibold text-base text-amber-800">
-                Not at your site
-              </p>
-              <p class="text-sm mt-1 text-amber-700">
-                This product GTIN
-                (<span class="font-mono font-semibold">{@gtin}</span>)
-                is approved stock in your organisation but is held at a different site.
-                Contact your admin if a transfer is needed.
-              </p>
+              <dl class="grid grid-cols-1 gap-x-8 gap-y-4 border-t border-emerald-200 pt-4 sm:grid-cols-3">
+                <div>
+                  <dt class="text-xs font-medium text-emerald-800/70">GTIN</dt>
+                  <dd id="result-gtin" class="mt-1 break-all font-mono text-sm font-medium">
+                    {@gtin}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs font-medium text-emerald-800/70">Batch / lot</dt>
+                  <dd id="result-batch-no" class="mt-1 text-sm font-medium">
+                    {if @batch_count > 1, do: "#{@batch_count} batches", else: hd(@batches).batch_no}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs font-medium text-emerald-800/70">Earliest expiry</dt>
+                  <dd
+                    id="result-expiry"
+                    class={[
+                      "mt-1 text-sm font-medium tabular-nums",
+                      Date.compare(@earliest_expiry, Date.utc_today()) == :lt && "text-thamani-error"
+                    ]}
+                  >
+                    {ThamaniDawaWeb.TimeFormat.date(@earliest_expiry)} {if @batch_count > 1,
+                      do: "(Earliest)"}
+                  </dd>
+                </div>
+                <div>
+                  <dt class="text-xs font-medium text-emerald-800/70">Site</dt>
+                  <dd id="result-site" class="mt-1 text-sm font-medium">{@site.name}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs font-medium text-emerald-800/70">Remaining quantity</dt>
+                  <dd id="result-quantity" class="mt-1 text-lg font-semibold tabular-nums">
+                    {@total_qty}
+                  </dd>
+                </div>
+              </dl>
             </div>
           </div>
-        </div>
-      </div>
 
-      <%!-- Code decoded but no approved stock found anywhere in org --%>
-      <div :if={@scan_state == :unavailable} id="scan-result-unavailable">
-        <div class="rounded-2xl border border-rose-200 bg-rose-50 p-6">
-          <div class="flex items-start gap-4">
-            <div class="shrink-0 rounded-full bg-rose-100 p-2">
-              <.icon name="hero-no-symbol" class="size-5 text-rose-700" />
-            </div>
-            <div>
-              <p id="scan-unavailable-heading" class="font-semibold text-base text-rose-800">
-                No approved stock found
-              </p>
-              <p class="text-sm mt-1 text-rose-700">
-                Product GTIN <span class="font-mono font-semibold">{@gtin}</span>
-                was not found in approved stock.
-              </p>
+          <%!-- Batch exists in org but not at this pharmacist's site --%>
+          <div :if={@scan_state == :not_at_site} id="scan-result-not-at-site">
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+              <div class="flex items-start gap-4">
+                <div class="shrink-0 rounded-full bg-amber-100 p-2">
+                  <.icon name="hero-building-office-2" class="size-5 text-amber-800" />
+                </div>
+                <div>
+                  <p id="scan-not-at-site-heading" class="font-semibold text-base text-amber-800">
+                    Not at your site
+                  </p>
+                  <p class="text-sm mt-1 text-amber-700">
+                    This product GTIN
+                    (<span class="font-mono font-semibold">{@gtin}</span>)
+                    is approved stock in your organisation but is held at a different site.
+                    Contact your admin if a transfer is needed.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <%!-- Idle — nothing scanned yet --%>
-      <div :if={@scan_state == :idle} id="scan-idle-hint">
-        <.blank_state icon="hero-qr-code" title="Ready to scan">
-          Scan or paste a GTIN or barcode above to look up approved stock.
-        </.blank_state>
-      </div>
+          <%!-- Code decoded but no approved stock found anywhere in org --%>
+          <div :if={@scan_state == :unavailable} id="scan-result-unavailable">
+            <div class="rounded-2xl border border-rose-200 bg-rose-50 p-6">
+              <div class="flex items-start gap-4">
+                <div class="shrink-0 rounded-full bg-rose-100 p-2">
+                  <.icon name="hero-no-symbol" class="size-5 text-rose-700" />
+                </div>
+                <div>
+                  <p id="scan-unavailable-heading" class="font-semibold text-base text-rose-800">
+                    No approved stock found
+                  </p>
+                  <p class="text-sm mt-1 text-rose-700">
+                    Product GTIN <span class="font-mono font-semibold">{@gtin}</span>
+                    was not found in approved stock.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <%!-- Idle — nothing scanned yet --%>
+          <div :if={@scan_state == :idle} id="scan-idle-hint">
+            <.blank_state icon="hero-qr-code" title="Ready to scan">
+              Scan or paste a GTIN or barcode above to look up approved stock.
+            </.blank_state>
+          </div>
         </:body>
       </.td_detail_page>
     </Layouts.pharmacy_shell>

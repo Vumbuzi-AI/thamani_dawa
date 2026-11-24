@@ -143,7 +143,13 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLiveTest do
 
       view |> element("#goods-receipt-print") |> render_click()
       assert has_element?(view, "#goods-receipt-print-dialog", "Print")
-      assert has_element?(view, "#goods-receipt-print-dialog", "Send this document to a printer at your site.")
+
+      assert has_element?(
+               view,
+               "#goods-receipt-print-dialog",
+               "Send this document to a printer at your site."
+             )
+
       assert has_element?(view, "#goods-receipt-print-dialog-printer", "This computer")
 
       view |> form("#goods-receipt-print-dialog-form") |> render_submit()

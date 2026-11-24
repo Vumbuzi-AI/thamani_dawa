@@ -367,7 +367,11 @@ defmodule ThamaniDawaWeb.DistributorDashboardLive do
                   :for={shipment <- @analytics.recent_shipments}
                   id={"recent-shipment-#{shipment.id}"}
                   class="is-link"
-                  phx-click={JS.navigate(~p"/distributor/shipments/#{shipment.id}?#{%{return_to: "/distributor"}}")}
+                  phx-click={
+                    JS.navigate(
+                      ~p"/distributor/shipments/#{shipment.id}?#{%{return_to: "/distributor"}}"
+                    )
+                  }
                 >
                   <td class="td-mono">{shipment.order_number || shipment.reference}</td>
                   <td>

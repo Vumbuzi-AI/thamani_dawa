@@ -1260,7 +1260,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
                 />
               </:action>
               <:empty_state>
-                <.td_empty title="No specimens collected yet" hint="Collect a specimen to start tracking samples for this order." />
+                <.td_empty
+                  title="No specimens collected yet"
+                  hint="Collect a specimen to start tracking samples for this order."
+                />
               </:empty_state>
             </.table>
           </div>
@@ -1349,7 +1352,10 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
                 </.button>
               </:action>
               <:empty_state>
-                <.td_empty title="No tests on this order yet" hint="Add a test to this order to enter results." />
+                <.td_empty
+                  title="No tests on this order yet"
+                  hint="Add a test to this order to enter results."
+                />
               </:empty_state>
             </.table>
           </div>

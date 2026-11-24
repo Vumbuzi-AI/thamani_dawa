@@ -147,99 +147,98 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
         title="Receive stock"
         subtitle="Confirm dispatched batches at your site by reviewing the delivery."
       >
-
-      <.modal
-        :if={@live_action == :receive and not is_nil(@receive_batch)}
-        id="receive-batch-modal"
-        show
-        on_cancel={JS.patch(~p"/pharmacy/receive-stock")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">Receive batch</h2>
-        <p class="mb-4 text-sm text-thamani-pewter">
-          Confirm the quantity actually received for this batch.
-        </p>
-        <dl class="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Product</dt>
-            <dd class="mt-0.5 font-medium text-td-ink">
-              {product_name(@products_by_id, @receive_batch.product_id)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Batch / lot
-            </dt>
-            <dd class="mt-0.5 font-mono">{@receive_batch.batch_no}</dd>
-          </div>
-          <div :if={@receive_batch.serial}>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Serial</dt>
-            <dd class="mt-0.5 font-mono">{@receive_batch.serial}</dd>
-          </div>
-          <div :if={@receive_batch.manufacture_date}>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Manufacture date
-            </dt>
-            <dd class="mt-0.5">{@receive_batch.manufacture_date}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Expiry</dt>
-            <dd class="mt-0.5">{@receive_batch.expiry_date}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Site</dt>
-            <dd class="mt-0.5">{site_name(@sites_by_id, @receive_batch.site_id)}</dd>
-          </div>
-        </dl>
-        <.form
-          for={@receive_form}
-          id="receive-batch-form"
-          phx-submit="receive"
-          class="flex flex-col gap-4"
+        <.modal
+          :if={@live_action == :receive and not is_nil(@receive_batch)}
+          id="receive-batch-modal"
+          show
+          on_cancel={JS.patch(~p"/pharmacy/receive-stock")}
         >
-          <.input
-            field={@receive_form[:quantity]}
-            type="number"
-            label="Quantity received"
-            min="0"
-            required
-          />
-          <.button variant="primary" phx-disable-with="Receiving…" class="w-full">Confirm receipt</.button>
-        </.form>
-      </.modal>
-
-      <.table id="pending-batches" rows={@streams.pending_batches}>
-        <:col :let={{_id, batch}} label="Product">
-          <div class="font-medium text-thamani-forest">
-            {product_name(@products_by_id, batch.product_id)}
-          </div>
-          <div class="mt-0.5 font-mono text-xs text-thamani-subtle">{batch.gtin}</div>
-        </:col>
-        <:col :let={{_id, batch}} label="Site">{site_name(@sites_by_id, batch.site_id)}</:col>
-        <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
-        <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
-        <:col :let={{_id, batch}} label="Manufacture date">{batch.manufacture_date || "—"}</:col>
-        <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
-        <:col :let={{_id, batch}} label="Expected">
-          <span class="tabular-nums">{batch.quantity}</span>
-        </:col>
-        <:col :let={{_id, batch}} label="Supplier">
-          {supplier_name(@suppliers_by_id, batch.supplier_id)}
-        </:col>
-        <:action :let={{_id, batch}}>
-          <.button
-            variant="ghost"
-            patch={~p"/pharmacy/receive-stock/#{batch.id}/receive"}
-            class="gap-2"
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">Receive batch</h2>
+          <p class="mb-4 text-sm text-thamani-pewter">
+            Confirm the quantity actually received for this batch.
+          </p>
+          <dl class="mb-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+            <div>
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Product</dt>
+              <dd class="mt-0.5 font-medium text-td-ink">
+                {product_name(@products_by_id, @receive_batch.product_id)}
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                Batch / lot
+              </dt>
+              <dd class="mt-0.5 font-mono">{@receive_batch.batch_no}</dd>
+            </div>
+            <div :if={@receive_batch.serial}>
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Serial</dt>
+              <dd class="mt-0.5 font-mono">{@receive_batch.serial}</dd>
+            </div>
+            <div :if={@receive_batch.manufacture_date}>
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                Manufacture date
+              </dt>
+              <dd class="mt-0.5">{@receive_batch.manufacture_date}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Expiry</dt>
+              <dd class="mt-0.5">{@receive_batch.expiry_date}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Site</dt>
+              <dd class="mt-0.5">{site_name(@sites_by_id, @receive_batch.site_id)}</dd>
+            </div>
+          </dl>
+          <.form
+            for={@receive_form}
+            id="receive-batch-form"
+            phx-submit="receive"
+            class="flex flex-col gap-4"
           >
-            <.icon name="hero-arrow-down-tray" class="size-4" /> Receive
-          </.button>
-        </:action>
-        <:empty_state>
-          <.blank_state icon="hero-check-circle" title="Nothing awaiting receipt">
-            Batches dispatched to your site will appear here for confirmation.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+            <.input
+              field={@receive_form[:quantity]}
+              type="number"
+              label="Quantity received"
+              min="0"
+              required
+            />
+            <.button variant="primary" phx-disable-with="Receiving…" class="w-full">Confirm receipt</.button>
+          </.form>
+        </.modal>
+
+        <.table id="pending-batches" rows={@streams.pending_batches}>
+          <:col :let={{_id, batch}} label="Product">
+            <div class="font-medium text-thamani-forest">
+              {product_name(@products_by_id, batch.product_id)}
+            </div>
+            <div class="mt-0.5 font-mono text-xs text-thamani-subtle">{batch.gtin}</div>
+          </:col>
+          <:col :let={{_id, batch}} label="Site">{site_name(@sites_by_id, batch.site_id)}</:col>
+          <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
+          <:col :let={{_id, batch}} label="Serial">{batch.serial || "—"}</:col>
+          <:col :let={{_id, batch}} label="Manufacture date">{batch.manufacture_date || "—"}</:col>
+          <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
+          <:col :let={{_id, batch}} label="Expected">
+            <span class="tabular-nums">{batch.quantity}</span>
+          </:col>
+          <:col :let={{_id, batch}} label="Supplier">
+            {supplier_name(@suppliers_by_id, batch.supplier_id)}
+          </:col>
+          <:action :let={{_id, batch}}>
+            <.button
+              variant="ghost"
+              patch={~p"/pharmacy/receive-stock/#{batch.id}/receive"}
+              class="gap-2"
+            >
+              <.icon name="hero-arrow-down-tray" class="size-4" /> Receive
+            </.button>
+          </:action>
+          <:empty_state>
+            <.blank_state icon="hero-check-circle" title="Nothing awaiting receipt">
+              Batches dispatched to your site will appear here for confirmation.
+            </.blank_state>
+          </:empty_state>
+        </.table>
       </.td_list_page>
     </Layouts.pharmacy_shell>
     """

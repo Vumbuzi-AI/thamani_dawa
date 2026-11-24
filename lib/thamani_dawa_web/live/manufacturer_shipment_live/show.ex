@@ -46,7 +46,9 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
         {:noreply, put_flash(socket, :info, "This shipment has already been dispatched.")}
 
       {:error, _reason} ->
-        {:noreply, assign(socket, confirming?: false) |> put_flash(:error, "Shipment could not be dispatched.")}
+        {:noreply,
+         assign(socket, confirming?: false)
+         |> put_flash(:error, "Shipment could not be dispatched.")}
     end
   end
 
@@ -101,7 +103,11 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
       current_scope={@current_scope}
       current_path={~p"/manufacturer/shipments"}
     >
-      <.td_back_link id="packed-shipment-back" to={~p"/manufacturer/shipments"} label="Back to Shipments" />
+      <.td_back_link
+        id="packed-shipment-back"
+        to={~p"/manufacturer/shipments"}
+        label="Back to Shipments"
+      />
       <.td_page_header
         title={@shipment.reference}
         subtitle={"Order #{@shipment.order_number} · #{length(@shipment.shipper_ssccs)} shippers"}

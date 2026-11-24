@@ -46,210 +46,211 @@ defmodule ThamaniDawaWeb.EpcisReporting do
         subtitle="Report supply-chain events to the PPB National Track and Trace Hub."
       />
       <div class="td-pad is-account">
-
-      <div
-        :if={!@submission_enabled?}
-        id="epcis-submission-disabled"
-        class="td-bnr is-info"
-      >
-        <.td_icon name="info" />
-        <p>
-          PPB submission is not active yet. Events are safely recorded here, but will not be sent until your system administrator enables the Hub connection.
-        </p>
-      </div>
-
-      <div
-        :if={@queue_halted?}
-        id="epcis-queue-halted"
-        role="alert"
-        class="td-bnr is-danger"
-      >
-        <.td_icon name="warning" />
-        <p>
-          <b>Reporting is halted.</b>
-          A failed event is blocking this organization's queue. Resolve it below and resubmit it with its original event ID.
-        </p>
-      </div>
-
-      <p :if={@tnt_keys_missing?} id="epcis-api-keys-link" class="td-hint">
-        <.td_icon name="key" />
-        Add your TNT API key on
-        <.link navigate={@api_keys_path} class="td-hint-link">API keys</.link>
-        before you send events.
-      </p>
-
-      <section id="epcis-reporting-controls" class="td-card">
-        <.td_card_header
-          title="How events are sent"
-          subtitle={
-            if @organization.epcis_submission_mode == :automatic,
-              do: "Events go to PPB as soon as they are queued.",
-              else: "Events wait here until you send them."
-          }
-        />
-        <div class="td-tnt-controls">
-          <.td_segmented>
-            <.td_segment
-              id="epcis-mode-automatic"
-              label="Automatic"
-              active={@organization.epcis_submission_mode == :automatic}
-              aria-pressed={to_string(@organization.epcis_submission_mode == :automatic)}
-              phx-click="set_submission_mode"
-              phx-value-mode="automatic"
-            />
-            <.td_segment
-              id="epcis-mode-manual"
-              label="Manual"
-              active={@organization.epcis_submission_mode == :manual}
-              aria-pressed={to_string(@organization.epcis_submission_mode == :manual)}
-              phx-click="set_submission_mode"
-              phx-value-mode="manual"
-            />
-          </.td_segmented>
-          <p class="td-tnt-waiting">
-            <b>{@pending_count}</b>
-            {if @pending_count == 1, do: "event waiting", else: "events waiting"}
+        <div
+          :if={!@submission_enabled?}
+          id="epcis-submission-disabled"
+          class="td-bnr is-info"
+        >
+          <.td_icon name="info" />
+          <p>
+            PPB submission is not active yet. Events are safely recorded here, but will not be sent until your system administrator enables the Hub connection.
           </p>
-          <.td_button
-            id="epcis-send-now"
-            variant="primary"
-            label="Send pending now"
-            glyph="paper-plane-tilt"
-            phx-click="prompt_send_now"
-            disabled={
-              @organization.epcis_submission_mode != :manual or @pending_count == 0 or
-                @tnt_keys_missing?
+        </div>
+
+        <div
+          :if={@queue_halted?}
+          id="epcis-queue-halted"
+          role="alert"
+          class="td-bnr is-danger"
+        >
+          <.td_icon name="warning" />
+          <p>
+            <b>Reporting is halted.</b>
+            A failed event is blocking this organization's queue. Resolve it below and resubmit it with its original event ID.
+          </p>
+        </div>
+
+        <p :if={@tnt_keys_missing?} id="epcis-api-keys-link" class="td-hint">
+          <.td_icon name="key" /> Add your TNT API key on
+          <.link navigate={@api_keys_path} class="td-hint-link">API keys</.link>
+          before you send events.
+        </p>
+
+        <section id="epcis-reporting-controls" class="td-card">
+          <.td_card_header
+            title="How events are sent"
+            subtitle={
+              if @organization.epcis_submission_mode == :automatic,
+                do: "Events go to PPB as soon as they are queued.",
+                else: "Events wait here until you send them."
             }
           />
-        </div>
-      </section>
-
-      <section class="td-card">
-        <.td_card_header title="Events" subtitle="What has been queued or sent for this organization.">
-          <:actions>
+          <div class="td-tnt-controls">
+            <.td_segmented>
+              <.td_segment
+                id="epcis-mode-automatic"
+                label="Automatic"
+                active={@organization.epcis_submission_mode == :automatic}
+                aria-pressed={to_string(@organization.epcis_submission_mode == :automatic)}
+                phx-click="set_submission_mode"
+                phx-value-mode="automatic"
+              />
+              <.td_segment
+                id="epcis-mode-manual"
+                label="Manual"
+                active={@organization.epcis_submission_mode == :manual}
+                aria-pressed={to_string(@organization.epcis_submission_mode == :manual)}
+                phx-click="set_submission_mode"
+                phx-value-mode="manual"
+              />
+            </.td_segmented>
+            <p class="td-tnt-waiting">
+              <b>{@pending_count}</b>
+              {if @pending_count == 1, do: "event waiting", else: "events waiting"}
+            </p>
             <.td_button
-              id="refresh-epcis-events"
-              variant="secondary"
-              label="Refresh"
-              glyph="arrows-clockwise"
-              phx-click="refresh"
+              id="epcis-send-now"
+              variant="primary"
+              label="Send pending now"
+              glyph="paper-plane-tilt"
+              phx-click="prompt_send_now"
+              disabled={
+                @organization.epcis_submission_mode != :manual or @pending_count == 0 or
+                  @tnt_keys_missing?
+              }
             />
-          </:actions>
-        </.td_card_header>
+          </div>
+        </section>
 
-        <div class="td-tnt-toolbar">
-          <div id="epcis-status-filters" class="td-chip-wrap">
-            <button
-              id="status-filter-dropdown-button"
-              type="button"
-              phx-click={JS.toggle(to: "#status-filter-dropdown-menu")}
-              class="td-chip"
-              aria-haspopup="menu"
-              aria-expanded="false"
-            >
-              <.td_icon name="funnel" />
-              <span class="td-chip-value">{selected_filter_label(@selected_status)}</span>
-              <.td_icon name="caret-down" />
-            </button>
-            <div
-              id="status-filter-dropdown-menu"
-              class="td-popover td-filter-menu hidden"
-              role="menu"
-              aria-labelledby="status-filter-dropdown-button"
-            >
-              <.status_filter_option
-                status="all"
-                label="All events"
-                count={total_events(@status_counts)}
-                selected_status={@selected_status}
-                icon="list"
+        <section class="td-card">
+          <.td_card_header
+            title="Events"
+            subtitle="What has been queued or sent for this organization."
+          >
+            <:actions>
+              <.td_button
+                id="refresh-epcis-events"
+                variant="secondary"
+                label="Refresh"
+                glyph="arrows-clockwise"
+                phx-click="refresh"
               />
-              <.status_filter_option
-                status="pending"
-                label="Pending"
-                count={@status_counts["pending"]}
-                selected_status={@selected_status}
-                icon="clock"
-              />
-              <.status_filter_option
-                status="warning"
-                label="Warning"
-                count={@status_counts["warning"]}
-                selected_status={@selected_status}
-                icon="warning"
-              />
-              <.status_filter_option
-                status="blocked"
-                label="Blocked"
-                count={@status_counts["blocked"]}
-                selected_status={@selected_status}
-                icon="hand"
-              />
-              <.status_filter_option
-                status="rejected"
-                label="Rejected"
-                count={@status_counts["rejected"]}
-                selected_status={@selected_status}
-                icon="x-circle"
-              />
-              <.status_filter_option
-                status="dead"
-                label="Dead"
-                count={@status_counts["dead"]}
-                selected_status={@selected_status}
-                icon="minus-circle"
-              />
-              <.status_filter_option
-                status="accepted"
-                label="Accepted"
-                count={@status_counts["accepted"]}
-                selected_status={@selected_status}
-                icon="check-circle"
-              />
+            </:actions>
+          </.td_card_header>
+
+          <div class="td-tnt-toolbar">
+            <div id="epcis-status-filters" class="td-chip-wrap">
+              <button
+                id="status-filter-dropdown-button"
+                type="button"
+                phx-click={JS.toggle(to: "#status-filter-dropdown-menu")}
+                class="td-chip"
+                aria-haspopup="menu"
+                aria-expanded="false"
+              >
+                <.td_icon name="funnel" />
+                <span class="td-chip-value">{selected_filter_label(@selected_status)}</span>
+                <.td_icon name="caret-down" />
+              </button>
+              <div
+                id="status-filter-dropdown-menu"
+                class="td-popover td-filter-menu hidden"
+                role="menu"
+                aria-labelledby="status-filter-dropdown-button"
+              >
+                <.status_filter_option
+                  status="all"
+                  label="All events"
+                  count={total_events(@status_counts)}
+                  selected_status={@selected_status}
+                  icon="list"
+                />
+                <.status_filter_option
+                  status="pending"
+                  label="Pending"
+                  count={@status_counts["pending"]}
+                  selected_status={@selected_status}
+                  icon="clock"
+                />
+                <.status_filter_option
+                  status="warning"
+                  label="Warning"
+                  count={@status_counts["warning"]}
+                  selected_status={@selected_status}
+                  icon="warning"
+                />
+                <.status_filter_option
+                  status="blocked"
+                  label="Blocked"
+                  count={@status_counts["blocked"]}
+                  selected_status={@selected_status}
+                  icon="hand"
+                />
+                <.status_filter_option
+                  status="rejected"
+                  label="Rejected"
+                  count={@status_counts["rejected"]}
+                  selected_status={@selected_status}
+                  icon="x-circle"
+                />
+                <.status_filter_option
+                  status="dead"
+                  label="Dead"
+                  count={@status_counts["dead"]}
+                  selected_status={@selected_status}
+                  icon="minus-circle"
+                />
+                <.status_filter_option
+                  status="accepted"
+                  label="Accepted"
+                  count={@status_counts["accepted"]}
+                  selected_status={@selected_status}
+                  icon="check-circle"
+                />
+              </div>
             </div>
           </div>
-        </div>
 
-        <div>
-          <table class="td-rows">
-            <thead>
-              <tr>
-                <th>Event</th>
-                <th>Time (EAT)</th>
-                <th>Event ID</th>
-                <th>Status</th>
-                <th>Location</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="epcis-events" phx-update="stream">
-              <tr id="epcis-events-empty" class="hidden only:table-row">
-                <td colspan="6">
-                  <div class="td-empty">
-                    <p class="td-empty-title">No events yet</p>
-                    <p class="td-note">{@empty_copy}</p>
-                  </div>
-                </td>
-              </tr>
-              <.event_row
-                :for={{id, event} <- @streams.events}
-                id={id}
-                event={event}
-                site_names={@site_names}
-              />
-            </tbody>
-          </table>
-        </div>
-      </section>
+          <div>
+            <table class="td-rows">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Time (EAT)</th>
+                  <th>Event ID</th>
+                  <th>Status</th>
+                  <th>Location</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="epcis-events" phx-update="stream">
+                <tr id="epcis-events-empty" class="hidden only:table-row">
+                  <td colspan="6">
+                    <div class="td-empty">
+                      <p class="td-empty-title">No events yet</p>
+                      <p class="td-note">{@empty_copy}</p>
+                    </div>
+                  </td>
+                </tr>
+                <.event_row
+                  :for={{id, event} <- @streams.events}
+                  id={id}
+                  event={event}
+                  site_names={@site_names}
+                />
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-      <.details_modal
-        :if={@inspecting_event}
-        event={@inspecting_event}
-        tab={@inspection_tab}
-        site_names={@site_names}
-      />
+        <.details_modal
+          :if={@inspecting_event}
+          event={@inspecting_event}
+          tab={@inspection_tab}
+          site_names={@site_names}
+        />
 
-      <.confirm_modal :if={@confirm_action} action={@confirm_action} pending_count={@pending_count} />
+        <.confirm_modal :if={@confirm_action} action={@confirm_action} pending_count={@pending_count} />
       </div>
     </section>
     """
@@ -424,7 +425,8 @@ defmodule ThamaniDawaWeb.EpcisReporting do
     assigns =
       assign(assigns,
         title: "Send this event now?",
-        body: "It goes to the PPB Hub ahead of its place in the queue, with its original event ID.",
+        body:
+          "It goes to the PPB Hub ahead of its place in the queue, with its original event ID.",
         confirm_id: "send-epcis-event-#{id}-confirm",
         confirm_label: "Send",
         confirm_event: "send_event",
@@ -515,7 +517,10 @@ defmodule ThamaniDawaWeb.EpcisReporting do
 
   def display_status("pending"), do: {"Pending", "warning"}
   def display_status(status) when status in ["accepted", "warning"], do: {"Sent", "success"}
-  def display_status(status) when status in ["rejected", "dead", "blocked"], do: {"Failed", "danger"}
+
+  def display_status(status) when status in ["rejected", "dead", "blocked"],
+    do: {"Failed", "danger"}
+
   def display_status(status), do: {Phoenix.Naming.humanize(status), "neutral"}
 
   def event_detail(%OutboxEvent{status: "blocked", blocked_reason: reason})
@@ -580,7 +585,9 @@ defmodule ThamaniDawaWeb.EpcisReporting do
 
   defp batch_of(_), do: nil
 
-  defp disposition_of(%OutboxEvent{payload: %{"disposition" => disp}}) when is_binary(disp), do: disp
+  defp disposition_of(%OutboxEvent{payload: %{"disposition" => disp}}) when is_binary(disp),
+    do: disp
+
   defp disposition_of(_), do: nil
 
   defp total_events(counts), do: counts |> Map.values() |> Enum.sum()

@@ -51,7 +51,10 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
       current_path={~p"/manufacturer/aggregations"}
     >
       <.td_back_link id="pallet-back" to={@back_path} label="Back to Aggregation" />
-      <.td_page_header title={@pallet.code} subtitle={"Pallet SSCC · #{length(@pallet.shipper_ssccs)} shippers · #{@total_serials} serials"}>
+      <.td_page_header
+        title={@pallet.code}
+        subtitle={"Pallet SSCC · #{length(@pallet.shipper_ssccs)} shippers · #{@total_serials} serials"}
+      >
         <:actions>
           <.td_button
             id="print-pallet-label"
@@ -63,7 +66,9 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
             id="ship-pallet"
             variant="primary"
             label="Ship this pallet"
-            navigate={~p"/manufacturer/shipments/new?#{[pallet_id: @pallet.id, return_to: ~p"/manufacturer/aggregations/pallets/#{@pallet.id}"]}"}
+            navigate={
+              ~p"/manufacturer/shipments/new?#{[pallet_id: @pallet.id, return_to: ~p"/manufacturer/aggregations/pallets/#{@pallet.id}"]}"
+            }
           />
           <.td_button
             id="add-pallet-shipper"
@@ -90,7 +95,10 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
       </div>
 
       <section id="pallet-shippers" class="td-card">
-        <.td_card_header title="Shipper SSCCs" subtitle="Each shipper inherits this pallet's parties." />
+        <.td_card_header
+          title="Shipper SSCCs"
+          subtitle="Each shipper inherits this pallet's parties."
+        />
 
         <div :if={@pallet.shipper_ssccs == []} id="pallet-shippers-empty" class="td-empty-card">
           <p class="td-empty-title">No shipper SSCCs on this pallet</p>

@@ -60,75 +60,74 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Options do
         title="Choose a serialisation plan"
         subtitle="Approving a shipment issues one SSCC per shipper, drawn from your serialisation allowance."
       >
-
-      <div class="grid gap-5 md:grid-cols-2">
-        <section
-          id="plan-prepay"
-          class="group flex flex-col rounded-2xl ff-surface-card p-6 transition-shadow duration-200 hover:shadow-lg"
-        >
-          <div class="flex items-center gap-3">
-            <span class="flex size-10 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
-              <.icon name="hero-cube" class="size-5" />
-            </span>
-            <div>
-              <h2 class="text-lg font-semibold text-thamani-forest">Prepay bundle</h2>
-              <p class="text-sm text-thamani-pewter">Buy serials up front at tiered rates.</p>
+        <div class="grid gap-5 md:grid-cols-2">
+          <section
+            id="plan-prepay"
+            class="group flex flex-col rounded-2xl ff-surface-card p-6 transition-shadow duration-200 hover:shadow-lg"
+          >
+            <div class="flex items-center gap-3">
+              <span class="flex size-10 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
+                <.icon name="hero-cube" class="size-5" />
+              </span>
+              <div>
+                <h2 class="text-lg font-semibold text-thamani-forest">Prepay bundle</h2>
+                <p class="text-sm text-thamani-pewter">Buy serials up front at tiered rates.</p>
+              </div>
             </div>
-          </div>
-          <ul class="mt-5 space-y-2 text-sm">
-            <li
-              :for={{minimum, price} <- @tiers}
-              class="flex justify-between gap-3 border-b border-thamani-stone pb-2"
+            <ul class="mt-5 space-y-2 text-sm">
+              <li
+                :for={{minimum, price} <- @tiers}
+                class="flex justify-between gap-3 border-b border-thamani-stone pb-2"
+              >
+                <span>From {number(minimum)} serials</span>
+                <span class="font-semibold text-thamani-forest">{kes(price)} / serial</span>
+              </li>
+            </ul>
+            <p class="mt-3 text-xs text-thamani-pewter">
+              Prices exclude VAT. Any overage on a bundle is added to your next purchase.
+            </p>
+            <.button
+              id="choose-prepay"
+              variant="primary"
+              class="mt-6 w-full"
+              phx-click="choose_prepay"
+              phx-disable-with="Setting up…"
             >
-              <span>From {number(minimum)} serials</span>
-              <span class="font-semibold text-thamani-forest">{kes(price)} / serial</span>
-            </li>
-          </ul>
-          <p class="mt-3 text-xs text-thamani-pewter">
-            Prices exclude VAT. Any overage on a bundle is added to your next purchase.
-          </p>
-          <.button
-            id="choose-prepay"
-            variant="primary"
-            class="mt-6 w-full"
-            phx-click="choose_prepay"
-            phx-disable-with="Setting up…"
-          >
-            Choose prepay
-          </.button>
-        </section>
+              Choose prepay
+            </.button>
+          </section>
 
-        <section
-          id="plan-flex"
-          class="group flex flex-col rounded-2xl ff-surface-card p-6 transition-shadow duration-200 hover:shadow-lg"
-        >
-          <div class="flex items-center gap-3">
-            <span class="flex size-10 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest">
-              <.icon name="hero-arrow-path" class="size-5" />
-            </span>
-            <div>
-              <h2 class="text-lg font-semibold text-thamani-forest">Flex pay-as-you-go</h2>
-              <p class="text-sm text-thamani-pewter">No upfront cost. Pay for what you approve.</p>
-            </div>
-          </div>
-          <p class="mt-5 text-3xl font-semibold tracking-tight text-thamani-forest">
-            {kes(@flex_rate)} <span class="text-sm font-normal text-thamani-pewter">/ serial</span>
-          </p>
-          <p class="mt-2 text-sm text-thamani-ink">
-            Billed every {@cycle_days} days for exactly what you generated. Overdue cycles are capped
-            until settled.
-          </p>
-          <div class="flex-1"></div>
-          <.button
-            id="choose-flex"
-            class="mt-6 w-full"
-            phx-click="choose_flex"
-            phx-disable-with="Setting up…"
+          <section
+            id="plan-flex"
+            class="group flex flex-col rounded-2xl ff-surface-card p-6 transition-shadow duration-200 hover:shadow-lg"
           >
-            Choose flex
-          </.button>
-        </section>
-      </div>
+            <div class="flex items-center gap-3">
+              <span class="flex size-10 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest">
+                <.icon name="hero-arrow-path" class="size-5" />
+              </span>
+              <div>
+                <h2 class="text-lg font-semibold text-thamani-forest">Flex pay-as-you-go</h2>
+                <p class="text-sm text-thamani-pewter">No upfront cost. Pay for what you approve.</p>
+              </div>
+            </div>
+            <p class="mt-5 text-3xl font-semibold tracking-tight text-thamani-forest">
+              {kes(@flex_rate)} <span class="text-sm font-normal text-thamani-pewter">/ serial</span>
+            </p>
+            <p class="mt-2 text-sm text-thamani-ink">
+              Billed every {@cycle_days} days for exactly what you generated. Overdue cycles are capped
+              until settled.
+            </p>
+            <div class="flex-1"></div>
+            <.button
+              id="choose-flex"
+              class="mt-6 w-full"
+              phx-click="choose_flex"
+              phx-disable-with="Setting up…"
+            >
+              Choose flex
+            </.button>
+          </section>
+        </div>
       </.td_list_page>
     </Layouts.distributor_shell>
     """

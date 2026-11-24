@@ -28,41 +28,40 @@ defmodule ThamaniDawaWeb.PatientLive.Show do
     >
       <.td_detail_page title={@patient.full_name} subtitle="Patient details and visit history.">
         <:body>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="rounded-xl ff-surface-card p-4">
+              <div class="text-xs text-thamani-pewter">Phone</div>
+              <div class="font-semibold">{@patient.phone}</div>
+            </div>
+            <div class="rounded-xl ff-surface-card p-4">
+              <div class="text-xs text-thamani-pewter">Gender</div>
+              <div class="font-semibold">{@patient.gender}</div>
+            </div>
+            <div class="rounded-xl ff-surface-card p-4">
+              <div class="text-xs text-thamani-pewter">Age</div>
+              <div class="font-semibold">{Patient.age(@patient)}</div>
+            </div>
+            <div class="rounded-xl ff-surface-card p-4">
+              <div class="text-xs text-thamani-pewter">National ID</div>
+              <div class="font-semibold">{@patient.national_id || "-"}</div>
+            </div>
+          </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div class="rounded-xl ff-surface-card p-4">
-          <div class="text-xs text-thamani-pewter">Phone</div>
-          <div class="font-semibold">{@patient.phone}</div>
-        </div>
-        <div class="rounded-xl ff-surface-card p-4">
-          <div class="text-xs text-thamani-pewter">Gender</div>
-          <div class="font-semibold">{@patient.gender}</div>
-        </div>
-        <div class="rounded-xl ff-surface-card p-4">
-          <div class="text-xs text-thamani-pewter">Age</div>
-          <div class="font-semibold">{Patient.age(@patient)}</div>
-        </div>
-        <div class="rounded-xl ff-surface-card p-4">
-          <div class="text-xs text-thamani-pewter">National ID</div>
-          <div class="font-semibold">{@patient.national_id || "-"}</div>
-        </div>
-      </div>
+          <h3 class="text-base font-semibold text-thamani-forest mb-2">Visit history</h3>
 
-      <h3 class="text-base font-semibold text-thamani-forest mb-2">Visit history</h3>
-
-      <.table id="patient-visit-history" rows={@visits}>
-        <:col :let={visit} label="Site">{visit.site_name}</:col>
-        <:col :let={visit} label="Seen by">{visit.user_name}</:col>
-        <:col :let={visit} label="Visit type">{Phoenix.Naming.humanize(visit.visit_type)}</:col>
-        <:col :let={visit} label="Date">
-          {ThamaniDawaWeb.TimeFormat.short_datetime(visit.inserted_at)}
-        </:col>
-        <:empty_state>
-          <.blank_state icon="hero-user-group" title="No visits yet">
-            No visits recorded for this patient yet.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+          <.table id="patient-visit-history" rows={@visits}>
+            <:col :let={visit} label="Site">{visit.site_name}</:col>
+            <:col :let={visit} label="Seen by">{visit.user_name}</:col>
+            <:col :let={visit} label="Visit type">{Phoenix.Naming.humanize(visit.visit_type)}</:col>
+            <:col :let={visit} label="Date">
+              {ThamaniDawaWeb.TimeFormat.short_datetime(visit.inserted_at)}
+            </:col>
+            <:empty_state>
+              <.blank_state icon="hero-user-group" title="No visits yet">
+                No visits recorded for this patient yet.
+              </.blank_state>
+            </:empty_state>
+          </.table>
         </:body>
       </.td_detail_page>
     </Layouts.care_shell>

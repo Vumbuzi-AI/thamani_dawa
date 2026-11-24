@@ -60,76 +60,75 @@ defmodule ThamaniDawaWeb.LabScanLive do
         subtitle="Decode a GS1 barcode and match it to lab stock or a registered site."
       >
         <:body>
+          <section
+            id="lab-scan-panel"
+            class="rounded-xl ff-surface-card p-4 sm:p-5"
+          >
+            <.form
+              for={@scan_form}
+              id="lab-scan-form"
+              phx-submit="decode"
+              class="flex flex-col gap-3 sm:flex-row sm:items-end"
+            >
+              <div class="flex-1 [&>div]:mb-0">
+                <.input
+                  field={@scan_form[:raw_gs1]}
+                  label="GS1 barcode"
+                  placeholder="Scan a GS1 DataMatrix or enter (01)…(10)…"
+                  autocomplete="off"
+                  phx-hook="ScanCapture"
+                  phx-update="ignore"
+                  data-scan-event="decode"
+                />
+              </div>
+              <.button variant="primary" phx-disable-with="Decoding…">
+                Decode barcode
+              </.button>
+            </.form>
+          </section>
 
-      <section
-        id="lab-scan-panel"
-        class="rounded-xl ff-surface-card p-4 sm:p-5"
-      >
-        <.form
-          for={@scan_form}
-          id="lab-scan-form"
-          phx-submit="decode"
-          class="flex flex-col gap-3 sm:flex-row sm:items-end"
-        >
-          <div class="flex-1 [&>div]:mb-0">
-            <.input
-              field={@scan_form[:raw_gs1]}
-              label="GS1 barcode"
-              placeholder="Scan a GS1 DataMatrix or enter (01)…(10)…"
-              autocomplete="off"
-              phx-hook="ScanCapture"
-              phx-update="ignore"
-              data-scan-event="decode"
-            />
+          <div :if={@parsed} id="lab-scan-result" class="mt-5 space-y-5">
+            <div>
+              <h2 class="mb-3 text-base font-semibold text-thamani-forest">Decoded identifiers</h2>
+              <.list>
+                <:item title="GTIN">{@parsed.gtin}</:item>
+                <:item title="Batch/lot">{@parsed.batch_no}</:item>
+                <:item title="Production date">{@parsed.production_date}</:item>
+                <:item title="Expiry date">{@parsed.expiry_date}</:item>
+                <:item title="Serial">{@parsed.serial}</:item>
+                <:item title="GLN">{@parsed.gln}</:item>
+              </.list>
+            </div>
+
+            <section :if={@batch} id="lab-scan-batch-match">
+              <h2 class="mb-3 text-base font-semibold text-thamani-forest">Matching batch</h2>
+              <.list>
+                <:item title="Product">{product_name(@product)}</:item>
+                <:item title="Remaining quantity">{@batch.remaining_quantity}</:item>
+                <:item title="Expiry">{@batch.expiry_date}</:item>
+              </.list>
+            </section>
+
+            <section :if={@site} id="lab-scan-site-match">
+              <h2 class="mb-3 text-base font-semibold text-thamani-forest">Matching site</h2>
+              <.list>
+                <:item title="Name">{@site.name}</:item>
+                <:item title="Activities">{activity_labels(@site)}</:item>
+              </.list>
+            </section>
+
+            <div
+              :if={is_nil(@batch) and is_nil(@site)}
+              id="lab-scan-no-match"
+              class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
+            >
+              <.icon name="hero-exclamation-triangle" class="mt-0.5 size-5 shrink-0" />
+              <div>
+                <p class="font-medium">Barcode decoded, but no match was found</p>
+                <p class="mt-1">Check the batch or site registration before using this consumable.</p>
+              </div>
+            </div>
           </div>
-          <.button variant="primary" phx-disable-with="Decoding…">
-            Decode barcode
-          </.button>
-        </.form>
-      </section>
-
-      <div :if={@parsed} id="lab-scan-result" class="mt-5 space-y-5">
-        <div>
-          <h2 class="mb-3 text-base font-semibold text-thamani-forest">Decoded identifiers</h2>
-          <.list>
-            <:item title="GTIN">{@parsed.gtin}</:item>
-            <:item title="Batch/lot">{@parsed.batch_no}</:item>
-            <:item title="Production date">{@parsed.production_date}</:item>
-            <:item title="Expiry date">{@parsed.expiry_date}</:item>
-            <:item title="Serial">{@parsed.serial}</:item>
-            <:item title="GLN">{@parsed.gln}</:item>
-          </.list>
-        </div>
-
-        <section :if={@batch} id="lab-scan-batch-match">
-          <h2 class="mb-3 text-base font-semibold text-thamani-forest">Matching batch</h2>
-          <.list>
-            <:item title="Product">{product_name(@product)}</:item>
-            <:item title="Remaining quantity">{@batch.remaining_quantity}</:item>
-            <:item title="Expiry">{@batch.expiry_date}</:item>
-          </.list>
-        </section>
-
-        <section :if={@site} id="lab-scan-site-match">
-          <h2 class="mb-3 text-base font-semibold text-thamani-forest">Matching site</h2>
-          <.list>
-            <:item title="Name">{@site.name}</:item>
-            <:item title="Activities">{activity_labels(@site)}</:item>
-          </.list>
-        </section>
-
-        <div
-          :if={is_nil(@batch) and is_nil(@site)}
-          id="lab-scan-no-match"
-          class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800"
-        >
-          <.icon name="hero-exclamation-triangle" class="mt-0.5 size-5 shrink-0" />
-          <div>
-            <p class="font-medium">Barcode decoded, but no match was found</p>
-            <p class="mt-1">Check the batch or site registration before using this consumable.</p>
-          </div>
-        </div>
-      </div>
         </:body>
       </.td_detail_page>
     </Layouts.lab_shell>

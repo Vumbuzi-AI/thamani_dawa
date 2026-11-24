@@ -1420,14 +1420,11 @@ defmodule ThamaniDawaWeb.CoreComponents do
   # {"yyyy-mm-dd", "HH:MM"} from a Date, DateTime, NaiveDateTime or form string.
   defp date_time_parts(%Date{} = date), do: {Date.to_iso8601(date), ""}
 
-  defp date_time_parts(%DateTime{} = dt), do: dt |> ThamaniDawaWeb.TimeFormat.to_eat() |> eat_parts()
+  defp date_time_parts(%DateTime{} = dt),
+    do: dt |> ThamaniDawaWeb.TimeFormat.to_eat() |> eat_parts()
 
   defp date_time_parts(%NaiveDateTime{} = dt),
     do: dt |> ThamaniDawaWeb.TimeFormat.to_eat() |> eat_parts()
-
-  defp eat_parts(%NaiveDateTime{} = eat) do
-    {eat |> NaiveDateTime.to_date() |> Date.to_iso8601(), Calendar.strftime(eat, "%H:%M")}
-  end
 
   defp date_time_parts(value) when is_binary(value) do
     case String.split(value, ["T", " "], parts: 2) do
@@ -1437,6 +1434,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   defp date_time_parts(_), do: {"", ""}
+
+  defp eat_parts(%NaiveDateTime{} = eat) do
+    {eat |> NaiveDateTime.to_date() |> Date.to_iso8601(), Calendar.strftime(eat, "%H:%M")}
+  end
 
   defp date_time_value("", _time), do: ""
   defp date_time_value(date, ""), do: date <> "T00:00"

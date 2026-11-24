@@ -39,12 +39,15 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
         socket |> assign(:selected, nil) |> assign(:recent_orders, [])
 
       customer ->
-        orders = if customer.gln, do: Distributor.list_shipments_to(org_id, customer.gln, 5), else: []
+        orders =
+          if customer.gln, do: Distributor.list_shipments_to(org_id, customer.gln, 5), else: []
+
         socket |> assign(:selected, customer) |> assign(:recent_orders, orders)
     end
   end
 
-  defp select_customer(socket, _id), do: socket |> assign(:selected, nil) |> assign(:recent_orders, [])
+  defp select_customer(socket, _id),
+    do: socket |> assign(:selected, nil) |> assign(:recent_orders, [])
 
   defp apply_action(socket, :new, params) do
     customer = %Customer{}
@@ -221,13 +224,19 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
         do: all,
         else:
           Enum.filter(all, fn c ->
-            Enum.any?([c.name, c.gln, c.address], &(is_binary(&1) and String.contains?(String.downcase(&1), query)))
+            Enum.any?(
+              [c.name, c.gln, c.address],
+              &(is_binary(&1) and String.contains?(String.downcase(&1), query))
+            )
           end)
 
     socket
     |> assign(:all_customers, all)
     |> assign(:shown_count, length(shown))
-    |> assign(:summaries, Distributor.destination_summaries(organization_id, Enum.map(all, & &1.gln)))
+    |> assign(
+      :summaries,
+      Distributor.destination_summaries(organization_id, Enum.map(all, & &1.gln))
+    )
     |> stream(:customers, shown, reset: true)
   end
 
@@ -238,9 +247,16 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
   end
 
   defp summary_for(summaries, %{gln: gln}) when is_binary(gln),
-    do: Map.get(summaries, gln, %{open_orders: 0, order_count: 0, last_order_at: nil, last_shipment: nil})
+    do:
+      Map.get(summaries, gln, %{
+        open_orders: 0,
+        order_count: 0,
+        last_order_at: nil,
+        last_shipment: nil
+      })
 
-  defp summary_for(_summaries, _customer), do: %{open_orders: 0, order_count: 0, last_order_at: nil, last_shipment: nil}
+  defp summary_for(_summaries, _customer),
+    do: %{open_orders: 0, order_count: 0, last_order_at: nil, last_shipment: nil}
 
   defp type_label(nil), do: nil
   defp type_label(type), do: Phoenix.Naming.humanize(type)
@@ -251,7 +267,11 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
   defp order_tone(_), do: "neutral"
 
   defp order_path(shipment, customer),
-    do: ThamaniDawaWeb.ReturnTo.with_query(~p"/distributor/shipments/#{shipment.id}", "/distributor/customers?customer=#{customer.id}")
+    do:
+      ThamaniDawaWeb.ReturnTo.with_query(
+        ~p"/distributor/shipments/#{shipment.id}",
+        "/distributor/customers?customer=#{customer.id}"
+      )
 
   def render(assigns) do
     ~H"""
@@ -277,7 +297,13 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
           subtitle="Pharmacies, hospitals and labs you ship to. A verified GLN lets you pick them quickly on new orders."
         >
           <:actions>
-            <.td_button id="add-customer" variant="primary" glyph="plus" patch={~p"/distributor/customers/new"} label="Add customer" />
+            <.td_button
+              id="add-customer"
+              variant="primary"
+              glyph="plus"
+              patch={~p"/distributor/customers/new"}
+              label="Add customer"
+            />
           </:actions>
         </.td_page_header>
       </div>
@@ -288,7 +314,11 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
         show
         on_cancel={JS.patch(~p"/distributor/customers")}
         title={if @live_action == :new, do: "Add customer", else: "Edit customer"}
-        subtitle={if @live_action == :new, do: "Look up the GLN in GS1. Verified customers are quicker to pick on orders.", else: nil}
+        subtitle={
+          if @live_action == :new,
+            do: "Look up the GLN in GS1. Verified customers are quicker to pick on orders.",
+            else: nil
+        }
       >
         <.form for={@form} id="distributor-customer-form" phx-change="validate" phx-submit="save">
           <div :if={@live_action == :new and @gln_check != :skipped} class="mb-6">
@@ -414,12 +444,15 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
               </div>
               <.input field={@form[:contact_phone]} label="Contact phone" />
             </div>
-
-
           </div>
         </.form>
         <:footer>
-          <.td_button type="button" variant="secondary" label="Cancel" phx-click={JS.patch(~p"/distributor/customers")} />
+          <.td_button
+            type="button"
+            variant="secondary"
+            label="Cancel"
+            phx-click={JS.patch(~p"/distributor/customers")}
+          />
           <.td_button
             id="save-customer"
             type="submit"
@@ -437,12 +470,23 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
             <div class="td-card td-empty-card">
               <%= if @all_customers == [] do %>
                 <p class="td-empty-title">No customers yet</p>
-                <p class="td-note">Add the pharmacies, hospitals and labs you ship to, so you can pick them quickly on new orders.</p>
-                <.td_button id="customers-empty-add" variant="primary" patch={~p"/distributor/customers/new"} label="Add customer" />
+                <p class="td-note">
+                  Add the pharmacies, hospitals and labs you ship to, so you can pick them quickly on new orders.
+                </p>
+                <.td_button
+                  id="customers-empty-add"
+                  variant="primary"
+                  patch={~p"/distributor/customers/new"}
+                  label="Add customer"
+                />
               <% else %>
                 <p class="td-empty-title">Nothing matches</p>
                 <p class="td-note">Try a different name or GLN.</p>
-                <.td_button id="customers-clear-search" patch={~p"/distributor/customers"} label="Clear search" />
+                <.td_button
+                  id="customers-clear-search"
+                  patch={~p"/distributor/customers"}
+                  label="Clear search"
+                />
               <% end %>
             </div>
           </div>
@@ -467,7 +511,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
                 >
                   <td>
                     <b>{customer.name}</b>
-                    <span :if={customer.customer_type} class="td-sub td-s12">{type_label(customer.customer_type)}</span>
+                    <span :if={customer.customer_type} class="td-sub td-s12">{type_label(
+                      customer.customer_type
+                    )}</span>
                   </td>
                   <td>
                     <.td_pid :if={customer.gln} id={"#{dom_id}-gln"} label={customer.gln} mono>
@@ -476,8 +522,12 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
                           <:row label="Address">{customer.address || "—"}</:row>
                           <:row label="Party type">{type_label(customer.customer_type) || "—"}</:row>
                           <:row label="Saved as">Customer</:row>
-                          <:row label="Used on">{summary_for(@summaries, customer).order_count} orders</:row>
-                          <:row label="Open orders">{summary_for(@summaries, customer).open_orders}</:row>
+                          <:row label="Used on">
+                            {summary_for(@summaries, customer).order_count} orders
+                          </:row>
+                          <:row label="Open orders">
+                            {summary_for(@summaries, customer).open_orders}
+                          </:row>
                           <:action>
                             <.td_button patch={panel_path(customer, @search)} label="Open customer" />
                           </:action>
@@ -500,17 +550,34 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <h2 class="td-idh-title"><span>{@selected.name}</span></h2>
-                <p :if={@selected.customer_type} class="td-idh-sub">{type_label(@selected.customer_type)}</p>
+                <p :if={@selected.customer_type} class="td-idh-sub">
+                  {type_label(@selected.customer_type)}
+                </p>
               </div>
-              <.link patch={~p"/distributor/customers?#{if @search == "", do: %{}, else: %{"search" => @search}}"} class="td-icon-btn" aria-label="Close" id="customer-panel-close">
+              <.link
+                patch={
+                  ~p"/distributor/customers?#{if @search == "", do: %{}, else: %{"search" => @search}}"
+                }
+                class="td-icon-btn"
+                aria-label="Close"
+                id="customer-panel-close"
+              >
                 <.td_icon name="x" class="size-4" />
               </.link>
             </div>
             <dl class="td-kv-list mt-3" id="customer-panel-details">
-              <div><dt>GLN</dt><dd class="td-mono">{@selected.gln || "—"}</dd></div>
-              <div><dt>Address</dt><dd>{@selected.address || "—"}</dd></div>
-              <div><dt>Contact</dt><dd>{@selected.contact_name || "—"}</dd></div>
-              <div><dt>Phone</dt><dd>{@selected.contact_phone || "—"}</dd></div>
+              <div>
+                <dt>GLN</dt><dd class="td-mono">{@selected.gln || "—"}</dd>
+              </div>
+              <div>
+                <dt>Address</dt><dd>{@selected.address || "—"}</dd>
+              </div>
+              <div>
+                <dt>Contact</dt><dd>{@selected.contact_name || "—"}</dd>
+              </div>
+              <div>
+                <dt>Phone</dt><dd>{@selected.contact_phone || "—"}</dd>
+              </div>
             </dl>
             <dl class="td-kv-grid is-2 mt-4" id="customer-stats">
               <div class="td-kv">
@@ -523,7 +590,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
               </div>
               <div class="td-kv">
                 <dt class="td-kv-label">Last order (EAT)</dt>
-                <dd class="td-kv-value">{TimeFormat.datetime(summary_for(@summaries, @selected).last_order_at)}</dd>
+                <dd class="td-kv-value">
+                  {TimeFormat.datetime(summary_for(@summaries, @selected).last_order_at)}
+                </dd>
               </div>
               <div class="td-kv">
                 <dt class="td-kv-label">Last shipment</dt>
@@ -533,8 +602,18 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
               </div>
             </dl>
             <div class="mt-4 flex gap-2">
-              <.td_button id="customer-panel-edit" glyph="pencil-simple" patch={~p"/distributor/customers/#{@selected.id}/edit"} label="Edit" />
-              <.td_button id="customer-panel-new-order" variant="primary" navigate={~p"/distributor/orders/new"} label="New order" />
+              <.td_button
+                id="customer-panel-edit"
+                glyph="pencil-simple"
+                patch={~p"/distributor/customers/#{@selected.id}/edit"}
+                label="Edit"
+              />
+              <.td_button
+                id="customer-panel-new-order"
+                variant="primary"
+                navigate={~p"/distributor/orders/new"}
+                label="New order"
+              />
             </div>
           </div>
           <.td_card_header
@@ -557,7 +636,10 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
                 <b>{order.order_number || order.reference}</b>
                 <span class="td-sub td-s12">{TimeFormat.datetime(order.updated_at)}</span>
               </span>
-              <.td_badge tone={order_tone(order.status)} label={Phoenix.Naming.humanize(order.status)} />
+              <.td_badge
+                tone={order_tone(order.status)}
+                label={Phoenix.Naming.humanize(order.status)}
+              />
             </.link>
           </div>
         </aside>

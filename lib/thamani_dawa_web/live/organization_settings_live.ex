@@ -291,7 +291,10 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
   defp status_label(:pending), do: "Pending verification"
 
   defp status_tone(:verified), do: "success"
-  defp status_tone(status) when status in [:not_found, :unavailable, :invalid_check_digit, :inactive], do: "warning"
+
+  defp status_tone(status)
+       when status in [:not_found, :unavailable, :invalid_check_digit, :inactive], do: "warning"
+
   defp status_tone(_status), do: "neutral"
 
   attr :portal, :atom, required: true
@@ -392,9 +395,10 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
                     id={@form[:vat_registered].id}
                     name={@form[:vat_registered].name}
                     value="true"
-                    checked={Phoenix.HTML.Form.normalize_value("checkbox", @form[:vat_registered].value)}
-                  />
-                  VAT registered
+                    checked={
+                      Phoenix.HTML.Form.normalize_value("checkbox", @form[:vat_registered].value)
+                    }
+                  /> VAT registered
                 </label>
                 <p id="gs1-verification-status" class="td-hint">
                   <.td_badge

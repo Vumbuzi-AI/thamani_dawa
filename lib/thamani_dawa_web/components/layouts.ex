@@ -527,7 +527,7 @@ defmodule ThamaniDawaWeb.Layouts do
         >
           <div
             class="td-switch is-static"
-            data-tooltip={@current_picker_option && @current_picker_option.name}
+            data-tooltip={@current_picker_option.name}
           >
             <.site_switch_face option={@current_picker_option} static />
           </div>
@@ -653,8 +653,8 @@ defmodule ThamaniDawaWeb.Layouts do
                 role="menuitem"
                 phx-click={
                   JS.hide(to: "#sidebar-account-dropdown")
-                    |> JS.dispatch("td:open-command-palette")
-                    |> JS.focus(to: "#td-command-search")
+                  |> JS.dispatch("td:open-command-palette")
+                  |> JS.focus(to: "#td-command-search")
                 }
               >
                 <.td_icon name="keyboard" />

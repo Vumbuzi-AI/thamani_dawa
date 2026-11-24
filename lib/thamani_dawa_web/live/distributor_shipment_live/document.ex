@@ -50,13 +50,18 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
         <header class="td-idh">
           <div class="td-idh-text">
             <h1 class="td-idh-title"><span>{document_title(@live_action)}</span></h1>
-            <p class="td-idh-sub">Shipment {@shipment.reference} to {@shipment.destination_company || @shipment.destination_gln}</p>
+            <p class="td-idh-sub">
+              Shipment {@shipment.reference} to {@shipment.destination_company ||
+                @shipment.destination_gln}
+            </p>
           </div>
           <div class="td-idh-actions">
             <nav aria-label="Shipment document" class="td-seg">
               <.link
                 id="switch-delivery-note"
-                navigate={~p"/distributor/shipments/#{@shipment.id}/delivery-note?#{%{return_to: @back_to}}"}
+                navigate={
+                  ~p"/distributor/shipments/#{@shipment.id}/delivery-note?#{%{return_to: @back_to}}"
+                }
                 aria-current={@live_action == :delivery_note && "page"}
                 class={["td-seg-item", @live_action == :delivery_note && "is-active"]}
               >
@@ -64,14 +69,23 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Document do
               </.link>
               <.link
                 id="switch-packing-list"
-                navigate={~p"/distributor/shipments/#{@shipment.id}/packing-list?#{%{return_to: @back_to}}"}
+                navigate={
+                  ~p"/distributor/shipments/#{@shipment.id}/packing-list?#{%{return_to: @back_to}}"
+                }
                 aria-current={@live_action == :packing_list && "page"}
                 class={["td-seg-item", @live_action == :packing_list && "is-active"]}
               >
                 Packing list
               </.link>
             </nav>
-            <.td_button id="print-shipment-document" variant="primary" type="button" glyph="printer" label="Print" onclick="window.print()" />
+            <.td_button
+              id="print-shipment-document"
+              variant="primary"
+              type="button"
+              glyph="printer"
+              label="Print"
+              onclick="window.print()"
+            />
           </div>
         </header>
       </div>

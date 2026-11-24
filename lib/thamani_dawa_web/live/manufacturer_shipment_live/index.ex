@@ -82,75 +82,76 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Index do
         title="Manufacturer shipments"
         subtitle="Dispatch packed SSCCs and report the EPCIS shipping event."
       >
-
-      <section
-        id="new-manufacturer-shipment"
-        class="mt-6 rounded-2xl border border-td-hairline bg-td-surface p-6 shadow-sm"
-      >
-        <h2 class="text-lg font-semibold text-thamani-forest">Prepare a shipment</h2>
-        <.form
-          for={@form}
-          id="manufacturer-shipment-form"
-          phx-change="validate"
-          phx-submit="create"
-          class="mt-5 space-y-5"
+        <section
+          id="new-manufacturer-shipment"
+          class="mt-6 rounded-2xl border border-td-hairline bg-td-surface p-6 shadow-sm"
         >
-          <div class="grid gap-4 md:grid-cols-3">
-            <.input field={@form[:order_number]} label="Order / dispatch number" />
-            <.input field={@form[:origin_gln]} label="Ship-from GLN" readonly />
-            <.input field={@form[:destination_gln]} label="Destination GLN" />
-          </div>
-
-          <fieldset>
-            <legend class="text-sm font-semibold text-thamani-forest">Available packed SSCCs</legend>
-            <div
-              id="manufacturer-shipment-ssccs"
-              class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
-            >
-              <label
-                :for={sscc <- @available_ssccs}
-                class="flex cursor-pointer items-start gap-3 rounded-xl border border-td-hairline p-4 transition hover:border-td-warning-line hover:bg-td-warning-tint"
-              >
-                <input
-                  type="checkbox"
-                  name="shipment[sscc_ids][]"
-                  value={sscc.id}
-                  class="mt-1 size-4 rounded border-td-hairline text-thamani-forest"
-                />
-                <span>
-                  <span class="block font-mono text-sm font-semibold text-thamani-forest">{sscc.code}</span>
-                  <span class="mt-1 block text-xs text-thamani-pewter">GTIN {sscc.gtin || "—"} · {sscc.count_of_trade_items ||
-                    0} units</span>
-                </span>
-              </label>
-              <p :if={@available_ssccs == []} class="text-sm text-thamani-pewter">
-                No unshipped SSCCs are available. Pack an SSCC first.
-              </p>
+          <h2 class="text-lg font-semibold text-thamani-forest">Prepare a shipment</h2>
+          <.form
+            for={@form}
+            id="manufacturer-shipment-form"
+            phx-change="validate"
+            phx-submit="create"
+            class="mt-5 space-y-5"
+          >
+            <div class="grid gap-4 md:grid-cols-3">
+              <.input field={@form[:order_number]} label="Order / dispatch number" />
+              <.input field={@form[:origin_gln]} label="Ship-from GLN" readonly />
+              <.input field={@form[:destination_gln]} label="Destination GLN" />
             </div>
-          </fieldset>
-          <.button id="create-manufacturer-shipment" type="submit" disabled={@available_ssccs == []}>
-            <.icon name="hero-plus" class="size-4" /> Create shipment
-          </.button>
-        </.form>
-      </section>
 
-      <section class="mt-8">
-        <h2 class="dashboard-section-label">Shipment history</h2>
-        <.table id="manufacturer-shipments" rows={@shipments}>
-          <:col :let={shipment} label="Reference">
-            <.link
-              navigate={~p"/manufacturer/shipments/#{shipment.id}"}
-              class="font-semibold text-thamani-forest hover:underline"
-            >{shipment.reference}</.link>
-          </:col>
-          <:col :let={shipment} label="Order">{shipment.order_number}</:col>
-          <:col :let={shipment} label="Destination">{shipment.destination_company}</:col>
-          <:col :let={shipment} label="SSCCs">{length(shipment.shipper_ssccs)}</:col>
-          <:col :let={shipment} label="Status">
-            <.shipment_status_badge status={shipment.status} />
-          </:col>
-        </.table>
-      </section>
+            <fieldset>
+              <legend class="text-sm font-semibold text-thamani-forest">
+                Available packed SSCCs
+              </legend>
+              <div
+                id="manufacturer-shipment-ssccs"
+                class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+              >
+                <label
+                  :for={sscc <- @available_ssccs}
+                  class="flex cursor-pointer items-start gap-3 rounded-xl border border-td-hairline p-4 transition hover:border-td-warning-line hover:bg-td-warning-tint"
+                >
+                  <input
+                    type="checkbox"
+                    name="shipment[sscc_ids][]"
+                    value={sscc.id}
+                    class="mt-1 size-4 rounded border-td-hairline text-thamani-forest"
+                  />
+                  <span>
+                    <span class="block font-mono text-sm font-semibold text-thamani-forest">{sscc.code}</span>
+                    <span class="mt-1 block text-xs text-thamani-pewter">GTIN {sscc.gtin || "—"} · {sscc.count_of_trade_items ||
+                      0} units</span>
+                  </span>
+                </label>
+                <p :if={@available_ssccs == []} class="text-sm text-thamani-pewter">
+                  No unshipped SSCCs are available. Pack an SSCC first.
+                </p>
+              </div>
+            </fieldset>
+            <.button id="create-manufacturer-shipment" type="submit" disabled={@available_ssccs == []}>
+              <.icon name="hero-plus" class="size-4" /> Create shipment
+            </.button>
+          </.form>
+        </section>
+
+        <section class="mt-8">
+          <h2 class="dashboard-section-label">Shipment history</h2>
+          <.table id="manufacturer-shipments" rows={@shipments}>
+            <:col :let={shipment} label="Reference">
+              <.link
+                navigate={~p"/manufacturer/shipments/#{shipment.id}"}
+                class="font-semibold text-thamani-forest hover:underline"
+              >{shipment.reference}</.link>
+            </:col>
+            <:col :let={shipment} label="Order">{shipment.order_number}</:col>
+            <:col :let={shipment} label="Destination">{shipment.destination_company}</:col>
+            <:col :let={shipment} label="SSCCs">{length(shipment.shipper_ssccs)}</:col>
+            <:col :let={shipment} label="Status">
+              <.shipment_status_badge status={shipment.status} />
+            </:col>
+          </.table>
+        </section>
       </.td_list_page>
     </Layouts.manufacturer_shell>
     """

@@ -28,7 +28,10 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
      |> assign(:addable_batches, addable_batches(org_id, disposal))
      |> assign(:expanded_batches, MapSet.new())
      |> assign(:confirm_submit, false)
-     |> assign(:return_to, ThamaniDawaWeb.ReturnTo.safe(params["return_to"], ~p"/distributor/returns"))}
+     |> assign(
+       :return_to,
+       ThamaniDawaWeb.ReturnTo.safe(params["return_to"], ~p"/distributor/returns")
+     )}
   end
 
   defp addable_batches(org_id, disposal) do
@@ -287,7 +290,9 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
             </div>
             <div class="td-kv">
               <dt class="td-kv-label">Units</dt>
-              <dd class="td-kv-value">{@disposal.items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()}</dd>
+              <dd class="td-kv-value">
+                {@disposal.items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()}
+              </dd>
             </div>
             <div class="td-kv">
               <dt class="td-kv-label">Created (EAT)</dt>
@@ -364,11 +369,14 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
 
         <section id="disposal-items" class="td-card">
           <.td_card_header
-            title={if @disposal.kind == :expiry, do: "Lots to write off", else: "Batches in this return"}
+            title={
+              if @disposal.kind == :expiry, do: "Lots to write off", else: "Batches in this return"
+            }
             subtitle={
               if @disposal.status in [:draft, :pending],
                 do: "Units are held from sale while the return is open.",
-                else: "#{length(@disposal.items)} #{if length(@disposal.items) == 1, do: "batch", else: "batches"}"
+                else:
+                  "#{length(@disposal.items)} #{if length(@disposal.items) == 1, do: "batch", else: "batches"}"
             }
           >
             <:actions>
@@ -392,7 +400,9 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
 
           <div :if={@disposal.items == []} class="td-pad td-empty-wrap">
             <div class="td-empty-card">
-              <p class="td-empty-title">{if(@no_lots_to_add, do: "No expired stock", else: "No batches added yet")}</p>
+              <p class="td-empty-title">
+                {if(@no_lots_to_add, do: "No expired stock", else: "No batches added yet")}
+              </p>
               <p class="td-note">
                 {cond do
                   @no_lots_to_add -> "This warehouse has no lot past its date."
@@ -428,16 +438,25 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
                       class="td-link td-s12"
                       phx-click="toggle_batch_serials"
                       phx-value-batch={batch.id}
-                      aria-expanded={to_string(MapSet.member?(@expanded_batches, to_string(batch.id)))}
+                      aria-expanded={
+                        to_string(MapSet.member?(@expanded_batches, to_string(batch.id)))
+                      }
                     >
-                      {length(batch.serials)} {if length(batch.serials) == 1, do: "serial", else: "serials"}
+                      {length(batch.serials)} {if length(batch.serials) == 1,
+                        do: "serial",
+                        else: "serials"}
                     </button>
-                    <div :if={batch && batch.serials != [] and MapSet.member?(@expanded_batches, to_string(batch.id))}>
+                    <div :if={
+                      (batch && batch.serials != []) and
+                        MapSet.member?(@expanded_batches, to_string(batch.id))
+                    }>
                       <span :for={serial <- batch.serials} class="td-chip is-tag td-mono">{serial}</span>
                     </div>
                   </td>
                   <td class="td-mono">{batch && batch.batch_no}</td>
-                  <td>{batch && batch.expiry_date && ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}</td>
+                  <td>
+                    {batch && batch.expiry_date && ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}
+                  </td>
                   <td :if={@disposal.kind == :returned}>{supplier_name(item)}</td>
                   <td class="is-num">{item.available_quantity}</td>
                   <td class="is-num">{item.quantity}</td>
@@ -465,22 +484,40 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
           id="confirm-submit-modal"
           show
           size="confirm"
-          title={if @disposal.kind == :expiry, do: "Submit this write-off?", else: "Submit this return for approval?"}
+          title={
+            if @disposal.kind == :expiry,
+              do: "Submit this write-off?",
+              else: "Submit this return for approval?"
+          }
           subtitle={
             if @disposal.kind == :expiry,
-              do: "An admin will review this write-off. Once approved, the remaining quantity of each lot leaves stock.",
-              else: "Your organisation admin reviews it. Once approved, the requested quantities leave stock."
+              do:
+                "An admin will review this write-off. Once approved, the remaining quantity of each lot leaves stock.",
+              else:
+                "Your organisation admin reviews it. Once approved, the requested quantities leave stock."
           }
           on_cancel={JS.push("cancel_submit")}
         >
           <dl class="td-kv-list">
-            <div><dt>Batches</dt><dd>{length(@disposal.items)}</dd></div>
-            <div><dt>Units</dt><dd>{@disposal.items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()}</dd></div>
-            <div :if={@disposal.kind == :returned}><dt>Supplier</dt><dd>{disposal_supplier(@disposal)}</dd></div>
+            <div>
+              <dt>Batches</dt><dd>{length(@disposal.items)}</dd>
+            </div>
+            <div>
+              <dt>Units</dt><dd>{@disposal.items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()}</dd>
+            </div>
+            <div :if={@disposal.kind == :returned}>
+              <dt>Supplier</dt><dd>{disposal_supplier(@disposal)}</dd>
+            </div>
           </dl>
           <:footer>
             <.td_button type="button" label="Cancel" phx-click="cancel_submit" />
-            <.td_button id="confirm-submit" variant="primary" label="Submit for approval" phx-click="submit" phx-disable-with="Submitting…" />
+            <.td_button
+              id="confirm-submit"
+              variant="primary"
+              label="Submit for approval"
+              phx-click="submit"
+              phx-disable-with="Submitting…"
+            />
           </:footer>
         </.modal>
 

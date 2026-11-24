@@ -86,7 +86,9 @@ defmodule ThamaniDawaWeb.ManufacturerSsccSerialsLiveTest do
 
     assert has_element?(lv, "#sscc-serials-back", "Back to Batches")
 
-    {:ok, lv, _html} = live(conn, ~p"/manufacturer/sscc/#{sscc.id}/serials?#{%{return_to: "//evil.example"}}")
+    {:ok, lv, _html} =
+      live(conn, ~p"/manufacturer/sscc/#{sscc.id}/serials?#{%{return_to: "//evil.example"}}")
+
     refute has_element?(lv, "#sscc-serials-back[href*='evil']")
   end
 

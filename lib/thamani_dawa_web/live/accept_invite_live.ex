@@ -9,15 +9,20 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
   def mount(%{"token" => token}, _session, socket) do
     case Accounts.get_user_by_invite_token(token) do
       nil ->
-        {:ok, assign(socket, invalid: true, user: nil, organization: nil, form: to_form(%{}, as: :user))}
+        {:ok,
+         assign(socket,
+           invalid: true,
+           user: nil,
+           organization: nil,
+           form: to_form(%{}, as: :user)
+         )}
 
       user ->
         user = Repo.preload(user, [:invited_by, :sites])
         organization = Organizations.get_organization!(user.organization_id)
         form = to_form(User.accept_invite_changeset(user, %{}), as: :user)
 
-        {:ok,
-         assign(socket, invalid: false, user: user, organization: organization, form: form)}
+        {:ok, assign(socket, invalid: false, user: user, organization: organization, form: form)}
     end
   end
 
@@ -93,8 +98,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLive do
               <span>
                 I agree to the
                 <a href={~p"/terms"} target="_blank" rel="noopener noreferrer">Terms of Service</a>
-                and acknowledge the
-                <a href={~p"/privacy"} target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+                and acknowledge the <a href={~p"/privacy"} target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
               </span>
             </label>
             <p :for={error <- @form[:accepted_legal_terms].errors} class="td-field-error">

@@ -76,7 +76,8 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
         {:noreply, put_flash(socket, :error, "Enter an order number.")}
 
       {:error, :already_shipped} ->
-        {:noreply, put_flash(socket, :error, "A shipper on this pallet is already on a shipment.")}
+        {:noreply,
+         put_flash(socket, :error, "A shipper on this pallet is already on a shipment.")}
 
       {:error, :no_shippers} ->
         {:noreply, put_flash(socket, :error, "This pallet has no shippers to ship.")}
@@ -147,7 +148,8 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
         subtitle={
           if @pallet,
             do: "From pallet #{@pallet.code}. Review opens one shipment for these shippers.",
-            else: "The mobile team finds this shipment by its order number, then scans units into shippers."
+            else:
+              "The mobile team finds this shipment by its order number, then scans units into shippers."
         }
       />
 
@@ -155,7 +157,13 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
         <form id="pallet-shipment-form" phx-submit="review_pallet" class="td-card td-pad">
           <label class="td-field" for="pallet-order-number">
             <span class="td-field-label">Order number</span>
-            <input id="pallet-order-number" name="order_number" type="text" class="td-field-control" required />
+            <input
+              id="pallet-order-number"
+              name="order_number"
+              type="text"
+              class="td-field-control"
+              required
+            />
           </label>
           <div class="td-kv-grid is-pad">
             <div class="td-kv">
@@ -171,7 +179,9 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
           </div>
           <table class="td-rows is-static" id="pallet-shipment-shippers">
             <thead>
-              <tr><th>Shipper SSCC</th><th>GTIN</th><th class="td-num">Units</th></tr>
+              <tr>
+                <th>Shipper SSCC</th><th>GTIN</th><th class="td-num">Units</th>
+              </tr>
             </thead>
             <tbody>
               <tr :for={shipper <- @pallet.shipper_ssccs} id={"pallet-shipment-shipper-#{shipper.id}"}>

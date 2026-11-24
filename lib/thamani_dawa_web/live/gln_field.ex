@@ -118,7 +118,13 @@ defmodule ThamaniDawaWeb.GlnField do
     do: {:noreply, assign(socket, state: :error, gs1_error?: true)}
 
   defp apply_resolved(socket, {party, {:ok, resolved}}) do
-    party = Map.merge(party, %{company: resolved.company || party.company, address: resolved.address || party.address, gs1_verified: true})
+    party =
+      Map.merge(party, %{
+        company: resolved.company || party.company,
+        address: resolved.address || party.address,
+        gs1_verified: true
+      })
+
     notify(socket, party)
     assign(socket, party: party, state: :verified)
   end
@@ -134,8 +140,11 @@ defmodule ThamaniDawaWeb.GlnField do
   @doc false
   def search(_organization_id, api_token, :gs1, _exclude_gln, query) do
     case GlnLookup.search_destination(api_token, query, @limit) do
-      {:ok, results} -> {Enum.map(results, &Map.merge(&1, %{source: :gs1, gs1_verified: true})), false}
-      {:error, _reason} -> {[], true}
+      {:ok, results} ->
+        {Enum.map(results, &Map.merge(&1, %{source: :gs1, gs1_verified: true})), false}
+
+      {:error, _reason} ->
+        {[], true}
     end
   end
 
@@ -144,7 +153,15 @@ defmodule ThamaniDawaWeb.GlnField do
       organization_id
       |> GlnLookup.search_origin(query, @limit)
       |> Enum.map(
-        &%{gln: &1.gln, company: &1.name, address: &1.address, po_box: nil, site_id: &1.id, source: :site, gs1_verified: true}
+        &%{
+          gln: &1.gln,
+          company: &1.name,
+          address: &1.address,
+          po_box: nil,
+          site_id: &1.id,
+          source: :site,
+          gs1_verified: true
+        }
       )
 
     if scope == :sites do
@@ -156,13 +173,23 @@ defmodule ThamaniDawaWeb.GlnField do
         |> Enum.filter(&customer_match?(&1, query))
         |> Enum.take(@limit)
         |> Enum.map(
-          &%{gln: &1.gln, company: &1.name, address: &1.address, po_box: nil, site_id: nil, source: :customer}
+          &%{
+            gln: &1.gln,
+            company: &1.name,
+            address: &1.address,
+            po_box: nil,
+            site_id: nil,
+            source: :customer
+          }
         )
 
       {gs1, gs1_error?} =
         case GlnLookup.search_destination(api_token, query, @limit) do
-          {:ok, results} -> {Enum.map(results, &Map.merge(&1, %{source: :gs1, gs1_verified: true})), false}
-          {:error, _reason} -> {[], true}
+          {:ok, results} ->
+            {Enum.map(results, &Map.merge(&1, %{source: :gs1, gs1_verified: true})), false}
+
+          {:error, _reason} ->
+            {[], true}
         end
 
       results =
@@ -213,7 +240,8 @@ defmodule ThamaniDawaWeb.GlnField do
     do: "GS1 has no record of this GLN. Pick a party GS1 knows to continue."
 
   defp hint_text(:error, _party, _hint),
-    do: "The GS1 directory is unavailable. Your sites and saved customers still show. Try again in a moment."
+    do:
+      "The GS1 directory is unavailable. Your sites and saved customers still show. Try again in a moment."
 
   defp hint_text(_state, _party, nil),
     do: "Your sites and saved customers are searched first, then the GS1 directory."
@@ -273,7 +301,8 @@ defmodule ThamaniDawaWeb.GlnField do
         </p>
       </div>
       <div :if={@state in [:verified, :unverified] and @party} class="td-gln-party">
-        <span>{@party.company}{@party.address && " · #{@party.address}"}{@party.source == :customer && " · saved customer"}</span>
+        <span>{@party.company}{@party.address && " · #{@party.address}"}{@party.source == :customer &&
+          " · saved customer"}</span>
         <span class="td-mono">{@party.gln}</span>
       </div>
       <span class="td-gln-hint">{hint_text(@state, @party, @hint)}</span>

@@ -1071,7 +1071,12 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
             options={[{"", "Any"} | Enum.map(@categories, &{&1, &1})]}
           />
           <%!-- Kept for product_live_test, which submits #products-filters-form. --%>
-          <form id="products-filters-form" phx-change="apply_filters" phx-submit="apply_filters" class="sr-only">
+          <form
+            id="products-filters-form"
+            phx-change="apply_filters"
+            phx-submit="apply_filters"
+            class="sr-only"
+          >
             <select name="filters[category]">
               <option value="" selected={@filters.category == ""}>Any</option>
               <option
@@ -1082,7 +1087,12 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
                 {category}
               </option>
             </select>
-            <.input type="checkbox" name="filters[is_otc]" value={@filters.is_otc} label="Over-the-counter" />
+            <.input
+              type="checkbox"
+              name="filters[is_otc]"
+              value={@filters.is_otc}
+              label="Over-the-counter"
+            />
             <.input
               type="checkbox"
               name="filters[is_dangerous_drug]"
@@ -1100,118 +1110,123 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           </div>
         </div>
 
-      <.modal
-        :if={@live_action in [:new, :edit]}
-        id="product-modal"
-        show
-        on_cancel={
-          if @back_path == ~p"/org/products",
-            do: JS.patch(~p"/org/products"),
-            else: JS.navigate(@back_path)
-        }
-      >
-        <div class="space-y-6">
-          <div>
-            <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-              {if @live_action == :new, do: "Add a product", else: "Edit product"}
-            </h2>
-          </div>
+        <.modal
+          :if={@live_action in [:new, :edit]}
+          id="product-modal"
+          show
+          on_cancel={
+            if @back_path == ~p"/org/products",
+              do: JS.patch(~p"/org/products"),
+              else: JS.navigate(@back_path)
+          }
+        >
+          <div class="space-y-6">
+            <div>
+              <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+                {if @live_action == :new, do: "Add a product", else: "Edit product"}
+              </h2>
+            </div>
 
-          <.product_form_steps
-            gtin_step={@gtin_step}
-            gtin_search={@gtin_search}
-            gtin_lookup={@gtin_lookup}
-            live_action={@live_action}
-            lab_enabled={@lab_enabled}
-            categories={@categories}
-            units={@units}
-            form={@form}
-          />
-        </div>
-      </.modal>
-
-      <div
-        :if={@page_info.total_entries == 0}
-        id="products-empty"
-        class="td-pad td-empty-wrap"
-      >
-        <div class="td-card td-empty-card">
-          <%= if @search != "" or active_filter_count(@filters) > 0 do %>
-            <p class="td-empty-title">No products match</p>
-            <p class="td-note">Try a different search, or clear the applied filters.</p>
-            <button type="button" id="products-clear-filters" class="td-btn is-secondary" phx-click="clear_filters">
-              Clear filters
-            </button>
-          <% else %>
-            <p class="td-empty-title">No products yet</p>
-            <p class="td-note">Products you add will appear here.</p>
-            <.td_button
-              id="products-empty-new"
-              variant="secondary"
-              label="Add product"
-              patch={~p"/org/products/new"}
+            <.product_form_steps
+              gtin_step={@gtin_step}
+              gtin_search={@gtin_search}
+              gtin_lookup={@gtin_lookup}
+              live_action={@live_action}
+              lab_enabled={@lab_enabled}
+              categories={@categories}
+              units={@units}
+              form={@form}
             />
-          <% end %>
-        </div>
-      </div>
+          </div>
+        </.modal>
 
-      <table class="td-rows">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Category</th>
-            <th>GTIN</th>
-            <th class="is-num">Org-wide stock</th>
-            <th class="is-num">Batches</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="products" phx-update="stream">
-          <tr
-            :for={{id, row} <- @streams.products}
-            id={id}
-            phx-click={JS.navigate(~p"/org/products/#{row.product.id}")}
-            class="td-row-link"
-          >
-            <td data-label="Name">{product_name(row.product)}</td>
-            <td data-label="Category">{row.product.category || "Uncategorized"}</td>
-            <td data-label="GTIN" class="is-num">{row.product.gtin}</td>
-            <td data-label="Org-wide stock" class="is-num">
-              <span
-                id={"stock-total-#{row.product.id}"}
-                aria-label={"#{row.total_stock} #{uom_label(row.total_stock, row.product.uom)} in stock"}
-                class={row.total_stock == 0 && "td-danger"}
+        <div
+          :if={@page_info.total_entries == 0}
+          id="products-empty"
+          class="td-pad td-empty-wrap"
+        >
+          <div class="td-card td-empty-card">
+            <%= if @search != "" or active_filter_count(@filters) > 0 do %>
+              <p class="td-empty-title">No products match</p>
+              <p class="td-note">Try a different search, or clear the applied filters.</p>
+              <button
+                type="button"
+                id="products-clear-filters"
+                class="td-btn is-secondary"
+                phx-click="clear_filters"
               >
-                {row.total_stock} {uom_label(row.total_stock, row.product.uom)}
-              </span>
-            </td>
-            <td data-label="Batches" class="is-num">{row.batch_count}</td>
-            <td data-label="Status">
-              <.status_badge status={if row.product.is_active, do: :active, else: :inactive} />
-            </td>
-            <td>
-              <div class="td-row-actions" onclick="event.stopPropagation()">
-                <.td_button
-                  id={"btn-add-stock-#{row.product.id}"}
-                  variant="primary"
-                  size="md"
-                  label="Add stock"
-                  navigate={~p"/org/products/#{row.product.id}/batches/new"}
-                />
-                <.td_button
-                  id={"btn-edit-#{row.product.id}"}
-                  variant="secondary"
-                  label="Edit"
-                  patch={~p"/org/products/#{row.product.id}/edit"}
-                />
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+                Clear filters
+              </button>
+            <% else %>
+              <p class="td-empty-title">No products yet</p>
+              <p class="td-note">Products you add will appear here.</p>
+              <.td_button
+                id="products-empty-new"
+                variant="secondary"
+                label="Add product"
+                patch={~p"/org/products/new"}
+              />
+            <% end %>
+          </div>
+        </div>
 
-      <.pagination page={@page_info} path={~p"/org/products"} />
+        <table class="td-rows">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Category</th>
+              <th>GTIN</th>
+              <th class="is-num">Org-wide stock</th>
+              <th class="is-num">Batches</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="products" phx-update="stream">
+            <tr
+              :for={{id, row} <- @streams.products}
+              id={id}
+              phx-click={JS.navigate(~p"/org/products/#{row.product.id}")}
+              class="td-row-link"
+            >
+              <td data-label="Name">{product_name(row.product)}</td>
+              <td data-label="Category">{row.product.category || "Uncategorized"}</td>
+              <td data-label="GTIN" class="is-num">{row.product.gtin}</td>
+              <td data-label="Org-wide stock" class="is-num">
+                <span
+                  id={"stock-total-#{row.product.id}"}
+                  aria-label={"#{row.total_stock} #{uom_label(row.total_stock, row.product.uom)} in stock"}
+                  class={row.total_stock == 0 && "td-danger"}
+                >
+                  {row.total_stock} {uom_label(row.total_stock, row.product.uom)}
+                </span>
+              </td>
+              <td data-label="Batches" class="is-num">{row.batch_count}</td>
+              <td data-label="Status">
+                <.status_badge status={if row.product.is_active, do: :active, else: :inactive} />
+              </td>
+              <td>
+                <div class="td-row-actions" onclick="event.stopPropagation()">
+                  <.td_button
+                    id={"btn-add-stock-#{row.product.id}"}
+                    variant="primary"
+                    size="md"
+                    label="Add stock"
+                    navigate={~p"/org/products/#{row.product.id}/batches/new"}
+                  />
+                  <.td_button
+                    id={"btn-edit-#{row.product.id}"}
+                    variant="secondary"
+                    label="Edit"
+                    patch={~p"/org/products/#{row.product.id}/edit"}
+                  />
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <.pagination page={@page_info} path={~p"/org/products"} />
       </section>
     </Layouts.org_shell>
     """

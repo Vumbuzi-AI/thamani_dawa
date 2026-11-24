@@ -129,7 +129,10 @@ defmodule ThamaniDawaWeb.ManufacturerPalletNewLiveTest do
     shipper = shipper!(organization.id, "SHIP-FROM")
 
     {:ok, view, _html} =
-      live(conn, ~p"/manufacturer/aggregations/pallets/new?#{[sscc: shipper.id, return_to: ~p"/manufacturer/sscc/#{shipper.id}/serials"]}")
+      live(
+        conn,
+        ~p"/manufacturer/aggregations/pallets/new?#{[sscc: shipper.id, return_to: ~p"/manufacturer/sscc/#{shipper.id}/serials"]}"
+      )
 
     assert has_element?(view, "#pallet-back", "Back to shipper SHIP-FROM")
     assert has_element?(view, "#pallet-scanned-#{shipper.id}")

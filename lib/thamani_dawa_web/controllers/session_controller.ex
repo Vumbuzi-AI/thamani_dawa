@@ -10,7 +10,7 @@ defmodule ThamaniDawaWeb.SessionController do
   alias ThamaniDawaWeb.Portals
 
   import Phoenix.Component, only: [to_form: 2]
-  import ThamaniDawaWeb.UserAuth, only: [log_in_user: 2, log_in_user: 3, log_out_user: 1]
+  import ThamaniDawaWeb.UserAuth, only: [log_in_user: 3, log_out_user: 1]
 
   plug :put_layout, [html: {ThamaniDawaWeb.Layouts, :root}] when action in [:new, :create]
 
@@ -70,13 +70,20 @@ defmodule ThamaniDawaWeb.SessionController do
       {:error, :rate_limited} ->
         conn
         |> put_flash(:error, "Too many login attempts. Please wait before trying again.")
-        |> render_login(%{"email" => email, "password" => "", "remember_me" => remember_value(remember?)})
+        |> render_login(%{
+          "email" => email,
+          "password" => "",
+          "remember_me" => remember_value(remember?)
+        })
     end
   end
 
   defp invalid_login(conn, email, remember?) do
     conn
-    |> put_flash(:error, "Invalid email or password. Check both and try again, or reset your password.")
+    |> put_flash(
+      :error,
+      "Invalid email or password. Check both and try again, or reset your password."
+    )
     |> render_login(%{
       "email" => email,
       "password" => "",

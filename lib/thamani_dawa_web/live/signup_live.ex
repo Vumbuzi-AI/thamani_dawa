@@ -97,7 +97,9 @@ defmodule ThamaniDawaWeb.SignupLive do
       |> restore_site_params()
       |> apply_activity_choice(organization_params)
 
-    step = restorable_step(Map.get(draft, "step"), organization_params, site_params)
+    # Credentials and verification state are never persisted in the browser draft,
+    # so restoring always starts at the first safe step.
+    step = :operating_model
 
     org_changeset = Organization.signup_changeset(%Organization{}, organization_params)
     site_changeset = Site.signup_changeset(%Site{}, site_params)
@@ -106,10 +108,9 @@ defmodule ThamaniDawaWeb.SignupLive do
       socket
       |> assign(:step, step)
       |> assign(:organization_params, organization_params)
-      |> assign(:site_params, if(step == :administrator, do: site_params, else: nil))
+      |> assign(:site_params, nil)
       |> assign(:org_form, to_form(org_changeset, as: :organization))
       |> assign(:site_form, to_form(site_changeset, as: :site))
-      |> reverify_restored_gln(site_params, step)
 
     {:reply, %{restored: true}, socket}
   end
@@ -556,15 +557,6 @@ defmodule ThamaniDawaWeb.SignupLive do
     |> String.trim()
     |> String.slice(0, max_length)
   end
-
-  defp restorable_step(_step, _organization_params, _site_params), do: :operating_model
-
-  defp reverify_restored_gln(socket, site_params, step)
-       when step in [:main_location, :administrator] do
-    check_gln(socket, site_params)
-  end
-
-  defp reverify_restored_gln(socket, _site_params, _step), do: socket
 
   defp compose_admin_name(admin_params) do
     first = admin_params |> Map.get("first_name", "") |> to_string() |> String.trim()
@@ -1089,7 +1081,8 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <div class="td-oc-hrow">
                       <span>Select all that apply</span>
                       <span id="operating-model-selection-count">
-                        <span class="td-oc-cnt">{selected_operating_model_count(@org_form)}</span> selected
+                        <span class="td-oc-cnt">{selected_operating_model_count(@org_form)}</span>
+                        selected
                       </span>
                     </div>
                     <input type="hidden" name="organization[operating_models][]" value="" />
@@ -1176,8 +1169,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                             rel="noopener noreferrer"
                             class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[var(--thamani-forest)] underline decoration-[color-mix(in_srgb,var(--thamani-forest)_35%,transparent)] underline-offset-4 transition hover:decoration-[var(--thamani-forest)]"
                           >
-                            Get one from GS1 Kenya
-                            <.td_icon name="arrow-up-right" class="size-3.5" />
+                            Get one from GS1 Kenya <.td_icon name="arrow-up-right" class="size-3.5" />
                           </a>
                         </div>
                       </div>
@@ -1208,7 +1200,11 @@ defmodule ThamaniDawaWeb.SignupLive do
                       </span>
                       <.td_icon name="check-circle" class="size-5 shrink-0" />
                     </div>
-                    <p :if={blank?(@gs1_company_name) or @gs1_key_check == :name_not_found} class="mb-4 text-xs" style="color: var(--color-td-danger)">
+                    <p
+                      :if={blank?(@gs1_company_name) or @gs1_key_check == :name_not_found}
+                      class="mb-4 text-xs"
+                      style="color: var(--color-td-danger)"
+                    >
                       Check the company details on your GS1 Kenya account, then verify again.
                     </p>
                     <.form for={@gs1_form} id="gs1-continue-form" phx-submit="continue_gs1_key">

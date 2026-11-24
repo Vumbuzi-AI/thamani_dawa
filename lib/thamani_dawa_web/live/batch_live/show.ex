@@ -84,57 +84,57 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
           </span>
         </:actions>
         <:body>
-      <.batch_label_card batch={@batch} class="my-6" />
+          <.batch_label_card batch={@batch} class="my-6" />
 
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-base-200 text-sm mb-6">
-        <div>
-          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">GTIN</div>
-          <div class="font-medium font-mono">{@batch.gtin || "—"}</div>
-        </div>
-        <div>
-          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Serial</div>
-          <div class="font-medium">{@batch.serial || "—"}</div>
-        </div>
-        <div>
-          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Manufacture date</div>
-          <div class="font-medium">{@batch.manufacture_date || "—"}</div>
-        </div>
-        <div>
-          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Expiry</div>
-          <div class="font-medium">{@batch.expiry_date}</div>
-        </div>
-        <div>
-          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Supplier</div>
-          <div class="font-medium">{(@batch.supplier && @batch.supplier.name) || "—"}</div>
-        </div>
-        <div>
-          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Cost per unit</div>
-          <div class="font-medium">{@batch.cost_per_unit || "—"}</div>
-        </div>
-        <div>
-          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Stock</div>
-          <div class="font-medium">{@batch.remaining_quantity} / {@batch.quantity}</div>
-        </div>
-        <div>
-          <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Received by</div>
-          <div class="font-medium">{user_display(@batch.approver)}</div>
-        </div>
-      </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-base-200 text-sm mb-6">
+            <div>
+              <div class="text-xs uppercase tracking-wide opacity-50 mb-1">GTIN</div>
+              <div class="font-medium font-mono">{@batch.gtin || "—"}</div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Serial</div>
+              <div class="font-medium">{@batch.serial || "—"}</div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Manufacture date</div>
+              <div class="font-medium">{@batch.manufacture_date || "—"}</div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Expiry</div>
+              <div class="font-medium">{@batch.expiry_date}</div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Supplier</div>
+              <div class="font-medium">{(@batch.supplier && @batch.supplier.name) || "—"}</div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Cost per unit</div>
+              <div class="font-medium">{@batch.cost_per_unit || "—"}</div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Stock</div>
+              <div class="font-medium">{@batch.remaining_quantity} / {@batch.quantity}</div>
+            </div>
+            <div>
+              <div class="text-xs uppercase tracking-wide opacity-50 mb-1">Received by</div>
+              <div class="font-medium">{user_display(@batch.approver)}</div>
+            </div>
+          </div>
 
-      <.td_card_header
-        title="History"
-        subtitle="Everything that has touched this batch's stock, newest first"
-      />
-      <.table id="batch-timeline" rows={@timeline}>
-        <:col :let={event} label="Event">{event.label}</:col>
-        <:col :let={event} label="Detail">{event.detail}</:col>
-        <:col :let={event} label="When">{event.at}</:col>
-        <:empty_state>
-          <.blank_state icon="hero-clock" title="No activity recorded yet">
-            Receiving, dispensing, and lab usage events will appear here.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+          <.td_card_header
+            title="History"
+            subtitle="Everything that has touched this batch's stock, newest first"
+          />
+          <.table id="batch-timeline" rows={@timeline}>
+            <:col :let={event} label="Event">{event.label}</:col>
+            <:col :let={event} label="Detail">{event.detail}</:col>
+            <:col :let={event} label="When">{event.at}</:col>
+            <:empty_state>
+              <.blank_state icon="hero-clock" title="No activity recorded yet">
+                Receiving, dispensing, and lab usage events will appear here.
+              </.blank_state>
+            </:empty_state>
+          </.table>
         </:body>
       </.td_detail_page>
     </Layouts.org_shell>

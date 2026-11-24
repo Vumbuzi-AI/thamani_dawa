@@ -37,7 +37,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
 
   # Old links to /distributor/shipments?status=draft|submitted|rejected now
   # live on Orders.
-  def handle_params(%{"status" => status} = params, _url, %{assigns: %{live_action: :index}} = socket)
+  def handle_params(
+        %{"status" => status} = params,
+        _url,
+        %{assigns: %{live_action: :index}} = socket
+      )
       when status in @order_statuses do
     {:noreply, push_navigate(socket, to: ~p"/distributor/orders?#{params}", replace: true)}
   end
@@ -59,7 +63,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
      socket
      |> assign(:mode, mode)
      |> assign(:page_title, if(mode == :orders, do: "Orders", else: "Shipments"))
-     |> assign(:base_path, if(mode == :orders, do: "/distributor/orders", else: "/distributor/shipments"))
+     |> assign(
+       :base_path,
+       if(mode == :orders, do: "/distributor/orders", else: "/distributor/shipments")
+     )
      |> assign(:filters, filters)
      |> assign(:page, page_number(params))
      |> safe_load_shipments()}
@@ -115,7 +122,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
   defp load_shipments(socket) do
     organization_id = socket.assigns.current_scope.organization_id
     %{filters: filters, mode: mode} = socket.assigns
-    {from, to} = DateRangeFilter.resolve(filters["date"], filters["date_from"], filters["date_to"])
+
+    {from, to} =
+      DateRangeFilter.resolve(filters["date"], filters["date_from"], filters["date_to"])
 
     status =
       cond do
@@ -147,7 +156,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
 
     summaries =
       if mode == :orders,
-        do: Distributor.destination_summaries(organization_id, Enum.map(result.entries, & &1.destination_gln)),
+        do:
+          Distributor.destination_summaries(
+            organization_id,
+            Enum.map(result.entries, & &1.destination_gln)
+          ),
         else: %{}
 
     socket
@@ -198,7 +211,8 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
   end
 
   defp filtered?(filters),
-    do: Enum.any?(["search", "customer", "mobile_user_id", "date"], &(filters[&1] not in [nil, ""]))
+    do:
+      Enum.any?(["search", "customer", "mobile_user_id", "date"], &(filters[&1] not in [nil, ""]))
 
   defp unit_count(shipment), do: shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum()
 
@@ -209,7 +223,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
 
   defp products(shipment) do
     shipment.shippers
-    |> Enum.flat_map(fn shipper -> [shipper.product_name | Enum.map(shipper.items, & &1.product_name)] end)
+    |> Enum.flat_map(fn shipper ->
+      [shipper.product_name | Enum.map(shipper.items, & &1.product_name)]
+    end)
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.map(&(&1 |> String.split(" ") |> List.first()))
     |> Enum.uniq()
@@ -245,12 +261,14 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
   defp customer_for(customers, gln), do: Enum.find(customers, &(&1.gln == gln))
 
   defp detail_path(shipment, mode),
-    do: ~p"/distributor/shipments/#{shipment.id}?#{%{return_to: if(mode == :orders, do: "/distributor/orders", else: "/distributor/shipments")}}"
+    do:
+      ~p"/distributor/shipments/#{shipment.id}?#{%{return_to: if(mode == :orders, do: "/distributor/orders", else: "/distributor/shipments")}}"
 
   defp short_time(nil), do: "—"
   defp short_time(value), do: TimeFormat.short_datetime(value)
 
-  defp count_for(counts, statuses), do: statuses |> Enum.map(&Map.get(counts, &1, 0)) |> Enum.sum()
+  defp count_for(counts, statuses),
+    do: statuses |> Enum.map(&Map.get(counts, &1, 0)) |> Enum.sum()
 
   def render(assigns) do
     ~H"""
@@ -261,7 +279,12 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
       crumb={@page_title}
     >
       <:search>
-        <form id="distributor-shipment-search" phx-change="search" phx-submit="search" onsubmit="return false">
+        <form
+          id="distributor-shipment-search"
+          phx-change="search"
+          phx-submit="search"
+          onsubmit="return false"
+        >
           <.td_search
             name="search"
             value={@filters["search"]}
@@ -290,8 +313,10 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
           title={@page_title}
           subtitle={
             if @mode == :orders,
-              do: "Customer orders your mobile team is packing or has sent for approval. Approving an order issues its SSCCs and turns it into a shipment.",
-              else: "Approved orders with SSCCs issued. Print the shipper labels and dispatch documents from here."
+              do:
+                "Customer orders your mobile team is packing or has sent for approval. Approving an order issues its SSCCs and turns it into a shipment.",
+              else:
+                "Approved orders with SSCCs issued. Print the shipper labels and dispatch documents from here."
           }
         />
 
@@ -305,7 +330,13 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
               patch={tab_path(@base_path, @filters, "")}
             />
             <.td_tab
-              :for={{status, label} <- [{"draft", "Draft"}, {"submitted", "Submitted"}, {"rejected", "Rejected"}]}
+              :for={
+                {status, label} <- [
+                  {"draft", "Draft"},
+                  {"submitted", "Submitted"},
+                  {"rejected", "Rejected"}
+                ]
+              }
               id={"tab-#{status}"}
               label={label}
               count={Map.get(@counts, status, 0)}
@@ -363,7 +394,9 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
                 <p class="td-empty-title" id="list-load-error">
                   {if @mode == :orders, do: "Orders didn't load", else: "Shipments didn't load"}
                 </p>
-                <p class="td-note">Thamani couldn't reach the server. Check your connection, then try again.</p>
+                <p class="td-note">
+                  Thamani couldn't reach the server. Check your connection, then try again.
+                </p>
                 <.td_button id="retry-load" phx-click="retry_load" label="Try again" />
               <% filtered?(@filters) -> %>
                 <p class="td-empty-title">Nothing matches</p>
@@ -371,12 +404,24 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
                 <.td_button id="clear-filters" phx-click="clear_filters" label="Clear filters" />
               <% @mode == :orders -> %>
                 <p class="td-empty-title">No orders yet</p>
-                <p class="td-note">Record a customer order and your mobile team can start packing it.</p>
-                <.td_button id="empty-new-order" patch={~p"/distributor/orders/new"} label="New order" />
+                <p class="td-note">
+                  Record a customer order and your mobile team can start packing it.
+                </p>
+                <.td_button
+                  id="empty-new-order"
+                  patch={~p"/distributor/orders/new"}
+                  label="New order"
+                />
               <% true -> %>
                 <p class="td-empty-title">Nothing ready to dispatch</p>
-                <p class="td-note">Approved orders appear here with their SSCCs, labels and dispatch documents.</p>
-                <.td_button id="empty-open-orders" navigate={~p"/distributor/orders"} label="Open orders" />
+                <p class="td-note">
+                  Approved orders appear here with their SSCCs, labels and dispatch documents.
+                </p>
+                <.td_button
+                  id="empty-open-orders"
+                  navigate={~p"/distributor/orders"}
+                  label="Open orders"
+                />
             <% end %>
           </div>
         </div>
@@ -416,17 +461,35 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
                         <.td_peek
                           kind="Order"
                           title={shipment.order_number}
-                          subtitle={Enum.join(Enum.reject([shipment.destination_company, shipment.destination_address], &is_nil/1), " · ")}
+                          subtitle={
+                            Enum.join(
+                              Enum.reject(
+                                [shipment.destination_company, shipment.destination_address],
+                                &is_nil/1
+                              ),
+                              " · "
+                            )
+                          }
                         >
                           <:badge><.order_badge status={shipment.status} /></:badge>
                           <:row label="Shipment">{shipment.reference}</:row>
                           <:row label="Status">{status_long(shipment.status)}</:row>
-                          <:row label="Shippers / units">{length(shipment.shippers)} / {unit_count(shipment)}</:row>
+                          <:row label="Shippers / units">
+                            {length(shipment.shippers)} / {unit_count(shipment)}
+                          </:row>
                           <:row label="Products">{products(shipment)}</:row>
-                          <:row label="Packed by">{(holder(shipment) && holder(shipment).name) || "Not started"}</:row>
-                          <:row :if={shipment.submitted_at} label="Submitted">{TimeFormat.datetime(shipment.submitted_at)} EAT</:row>
+                          <:row label="Packed by">
+                            {(holder(shipment) && holder(shipment).name) || "Not started"}
+                          </:row>
+                          <:row :if={shipment.submitted_at} label="Submitted">
+                            {TimeFormat.datetime(shipment.submitted_at)} EAT
+                          </:row>
                           <:action>
-                            <.td_button navigate={detail_path(shipment, @mode)} label="Open order" glyph="arrow-right" />
+                            <.td_button
+                              navigate={detail_path(shipment, @mode)}
+                              label="Open order"
+                              glyph="arrow-right"
+                            />
                           </:action>
                         </.td_peek>
                       </:peek>
@@ -448,7 +511,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
                   <td><.order_badge status={shipment.status} /></td>
                   <td class="is-num">{length(shipment.shippers)} / {unit_count(shipment)}</td>
                   <td>
-                    <.td_person_cell :if={holder(shipment)} name={holder(shipment).name} seed={holder(shipment).id} />
+                    <.td_person_cell
+                      :if={holder(shipment)}
+                      name={holder(shipment).name}
+                      seed={holder(shipment).id}
+                    />
                     <span :if={!holder(shipment)} class="td-muted">Not started</span>
                   </td>
                   <td>{short_time(shipment.updated_at)}</td>
@@ -460,19 +527,39 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
                           kind="Shipment"
                           icon="truck"
                           title={shipment.reference}
-                          subtitle={Enum.join(Enum.reject([shipment.destination_company, shipment.destination_address], &is_nil/1), " · ")}
+                          subtitle={
+                            Enum.join(
+                              Enum.reject(
+                                [shipment.destination_company, shipment.destination_address],
+                                &is_nil/1
+                              ),
+                              " · "
+                            )
+                          }
                         >
                           <:badge><.order_badge status={shipment.status} /></:badge>
                           <:row label="Order">{shipment.order_number}</:row>
-                          <:row label="SSCCs / units">{length(shipment.shippers)} / {unit_count(shipment)}</:row>
-                          <:row label="Approved">{if shipment.approved_at, do: "#{TimeFormat.datetime(shipment.approved_at)} EAT", else: "Not yet"}</:row>
+                          <:row label="SSCCs / units">
+                            {length(shipment.shippers)} / {unit_count(shipment)}
+                          </:row>
+                          <:row label="Approved">
+                            {if shipment.approved_at,
+                              do: "#{TimeFormat.datetime(shipment.approved_at)} EAT",
+                              else: "Not yet"}
+                          </:row>
                           <:action>
-                            <.td_button navigate={detail_path(shipment, @mode)} label="Open shipment" glyph="arrow-right" />
+                            <.td_button
+                              navigate={detail_path(shipment, @mode)}
+                              label="Open shipment"
+                              glyph="arrow-right"
+                            />
                           </:action>
                         </.td_peek>
                       </:peek>
                     </.td_pid>
-                    <span :if={shipment.status != "approved"} class="td-sub"><.order_badge status={shipment.status} /></span>
+                    <span :if={shipment.status != "approved"} class="td-sub"><.order_badge status={
+                      shipment.status
+                    } /></span>
                   </td>
                   <td>{shipment.order_number}</td>
                   <td>
@@ -483,7 +570,11 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
                   <td class="is-num">{unit_count(shipment)}</td>
                   <td>{short_time(shipment.approved_at)}</td>
                   <td>
-                    <.td_person_cell :if={shipment.approved_by} name={shipment.approved_by.name || shipment.approved_by.email} seed={shipment.approved_by.id} />
+                    <.td_person_cell
+                      :if={shipment.approved_by}
+                      name={shipment.approved_by.name || shipment.approved_by.email}
+                      seed={shipment.approved_by.id}
+                    />
                     <span :if={!shipment.approved_by} class="td-muted">—</span>
                   </td>
                 <% end %>
@@ -492,20 +583,27 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
           </table>
           <div class="td-tfoot">
             <span>
-              <b>{(@page_info.page_number - 1) * @page_info.page_size + 1} to {min(@page_info.page_number * @page_info.page_size, @page_info.total_entries)}</b>
+              <b>{(@page_info.page_number - 1) * @page_info.page_size + 1} to {min(
+                @page_info.page_number * @page_info.page_size,
+                @page_info.total_entries
+              )}</b>
               of {@page_info.total_entries} {if @mode == :orders, do: "orders", else: "shipments"}
             </span>
             <span :if={@page_info.total_pages > 1} class="td-tfoot-pager">
               <.link
                 :if={@page_info.page_number > 1}
                 class="td-icon-btn"
-                patch={pagination_path(@base_path, Map.put(@filters, "page", @page_info.page_number - 1))}
+                patch={
+                  pagination_path(@base_path, Map.put(@filters, "page", @page_info.page_number - 1))
+                }
                 aria-label="Previous page"
               ><.td_icon name="caret-left" /></.link>
               <.link
                 :if={@page_info.page_number < @page_info.total_pages}
                 class="td-icon-btn"
-                patch={pagination_path(@base_path, Map.put(@filters, "page", @page_info.page_number + 1))}
+                patch={
+                  pagination_path(@base_path, Map.put(@filters, "page", @page_info.page_number + 1))
+                }
                 aria-label="Next page"
               ><.td_icon name="caret-right" /></.link>
             </span>
@@ -545,10 +643,13 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
       <:row label="Open orders">{(@summary && @summary.open_orders) || 0}</:row>
       <:row label="Last shipment">
         {if @summary && @summary.last_shipment,
-          do: "#{@summary.last_shipment.reference}, #{TimeFormat.date(@summary.last_shipment.approved_at)}",
+          do:
+            "#{@summary.last_shipment.reference}, #{TimeFormat.date(@summary.last_shipment.approved_at)}",
           else: "None yet"}
       </:row>
-      <:row :if={@customer && @customer.contact_phone} label="Contact">{@customer.contact_phone}</:row>
+      <:row :if={@customer && @customer.contact_phone} label="Contact">
+        {@customer.contact_phone}
+      </:row>
       <:action>
         <.td_button
           :if={@customer}

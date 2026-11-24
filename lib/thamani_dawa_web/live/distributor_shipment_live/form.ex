@@ -184,148 +184,151 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
         }
       >
         <:body>
+          <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <section class="rounded-2xl ff-surface-card p-5 sm:p-6">
+              <.form
+                for={@form}
+                id="distributor-shipment-form"
+                phx-change="validate"
+                phx-submit="save"
+                class="space-y-6"
+              >
+                <div>
+                  <.input
+                    field={@form[:order_number]}
+                    label="Order number"
+                    placeholder="e.g. PO-2026-0142"
+                    required
+                  />
+                </div>
 
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <section class="rounded-2xl ff-surface-card p-5 sm:p-6">
-          <.form
-            for={@form}
-            id="distributor-shipment-form"
-            phx-change="validate"
-            phx-submit="save"
-            class="space-y-6"
-          >
-            <div>
-              <.input
-                field={@form[:order_number]}
-                label="Order number"
-                placeholder="e.g. PO-2026-0142"
-                required
-              />
-            </div>
-
-            <div class="space-y-3 border-t border-thamani-stone pt-5">
-              <.input
-                field={@form[:origin_gln]}
-                type="select"
-                label="Origin (ship from)"
-                prompt="Choose one of your sites"
-                options={Enum.map(@origins, &{"#{&1.name} · #{&1.gln}", &1.gln})}
-                required
-              />
-              <p :if={@origins == []} class="text-xs leading-5 text-thamani-pewter">
-                No sites with a GLN yet. <.link
-                  navigate={~p"/org/sites/new"}
-                  class="font-semibold text-thamani-forest hover:underline"
-                >
+                <div class="space-y-3 border-t border-thamani-stone pt-5">
+                  <.input
+                    field={@form[:origin_gln]}
+                    type="select"
+                    label="Origin (ship from)"
+                    prompt="Choose one of your sites"
+                    options={Enum.map(@origins, &{"#{&1.name} · #{&1.gln}", &1.gln})}
+                    required
+                  />
+                  <p :if={@origins == []} class="text-xs leading-5 text-thamani-pewter">
+                    No sites with a GLN yet. <.link
+                      navigate={~p"/org/sites/new"}
+                      class="font-semibold text-thamani-forest hover:underline"
+                    >
                   Add a warehouse
                 </.link>.
-              </p>
-            </div>
+                  </p>
+                </div>
 
-            <div class="space-y-3 border-t border-thamani-stone pt-5">
-              <div>
-                <p class="text-sm font-medium text-thamani-forest">Destination</p>
-                <label class="mt-2 flex min-h-8 w-fit cursor-pointer items-center gap-2.5 text-sm font-medium text-thamani-forest">
-                  <input
-                    type="checkbox"
-                    checked={@transfer_mode}
-                    phx-click="toggle_transfer_mode"
-                    class="size-4 rounded border-thamani-stone accent-thamani-forest"
-                  /> Destination is one of your sites
-                </label>
-              </div>
+                <div class="space-y-3 border-t border-thamani-stone pt-5">
+                  <div>
+                    <p class="text-sm font-medium text-thamani-forest">Destination</p>
+                    <label class="mt-2 flex min-h-8 w-fit cursor-pointer items-center gap-2.5 text-sm font-medium text-thamani-forest">
+                      <input
+                        type="checkbox"
+                        checked={@transfer_mode}
+                        phx-click="toggle_transfer_mode"
+                        class="size-4 rounded border-thamani-stone accent-thamani-forest"
+                      /> Destination is one of your sites
+                    </label>
+                  </div>
 
-              <.input
-                :if={@transfer_mode}
-                field={@form[:destination_gln]}
-                type="select"
-                label="Destination site"
-                prompt="Choose one of your sites"
-                options={
-                  Enum.map(
-                    other_origins(@origins, @form[:origin_gln].value),
-                    &{"#{&1.name} · #{&1.gln}", &1.gln}
-                  )
+                  <.input
+                    :if={@transfer_mode}
+                    field={@form[:destination_gln]}
+                    type="select"
+                    label="Destination site"
+                    prompt="Choose one of your sites"
+                    options={
+                      Enum.map(
+                        other_origins(@origins, @form[:origin_gln].value),
+                        &{"#{&1.name} · #{&1.gln}", &1.gln}
+                      )
+                    }
+                    phx-debounce="0"
+                    required
+                  />
+                  <p
+                    :if={@transfer_mode and other_origins(@origins, @form[:origin_gln].value) == []}
+                    class="text-xs leading-5 text-thamani-pewter"
+                  >
+                    No other sites with a GLN yet.
+                  </p>
+                  <.live_component
+                    :if={!@transfer_mode}
+                    module={ThamaniDawaWeb.GlnSearchField}
+                    id="destination-gln-search"
+                    name="shipment[destination_gln]"
+                    label="Destination GLN (ship to)"
+                    api_token={@gs1_api_key}
+                    selected={destination_selection(@destination_check, @shipment.destination_gln)}
+                    required
+                  />
+
+                  <label class="flex min-h-8 w-fit cursor-pointer items-center gap-2.5 pt-2 text-sm font-medium text-thamani-forest">
+                    <input
+                      type="checkbox"
+                      name="shipment[is_return]"
+                      value="true"
+                      checked={@form[:is_return].value in [true, "true"]}
+                      class="size-4 rounded border-thamani-stone accent-thamani-forest"
+                    /> This is a return
+                  </label>
+
+                  <.input
+                    :if={@form[:is_return].value in [true, "true"]}
+                    field={@form[:reference_shipment_id]}
+                    type="select"
+                    label="Returning against shipment"
+                    prompt="Choose the original shipment (optional)"
+                    options={Enum.map(@referenceable_shipments, &{&1.order_number, &1.id})}
+                  />
+                </div>
+
+                <div class="flex flex-col-reverse gap-3 border-t border-thamani-stone pt-6 sm:flex-row sm:justify-end">
+                  <.button
+                    id="cancel-distributor-shipment"
+                    variant="ghost"
+                    navigate={
+                      if @live_action == :edit,
+                        do: ~p"/distributor/shipments/#{@shipment.id}",
+                        else: ~p"/distributor/shipments"
+                    }
+                  >
+                    Cancel
+                  </.button>
+                  <.button
+                    id="save-distributor-shipment"
+                    variant="primary"
+                    phx-disable-with="Saving…"
+                  >
+                    {if @live_action == :new, do: "Create draft shipment", else: "Save changes"}
+                  </.button>
+                </div>
+              </.form>
+            </section>
+
+            <aside class="space-y-4">
+              <.gln_card
+                title="Ship from"
+                icon="hero-building-office-2"
+                record={selected(@origins, @form[:origin_gln].value)}
+              />
+              <.gln_card
+                title="Ship to"
+                icon="hero-building-storefront"
+                record={
+                  destination_record(@destination_check, @form[:destination_gln].value) ||
+                    (@transfer_mode && selected(@origins, @form[:destination_gln].value))
                 }
-                phx-debounce="0"
-                required
               />
-              <p
-                :if={@transfer_mode and other_origins(@origins, @form[:origin_gln].value) == []}
-                class="text-xs leading-5 text-thamani-pewter"
-              >
-                No other sites with a GLN yet.
+              <p class="px-1 text-xs leading-5 text-thamani-pewter">
+                The company name, address and P.O. box are copied onto the shipment when you save, so
+                labels keep the details as they were at the time of shipping.
               </p>
-              <.live_component
-                :if={!@transfer_mode}
-                module={ThamaniDawaWeb.GlnSearchField}
-                id="destination-gln-search"
-                name="shipment[destination_gln]"
-                label="Destination GLN (ship to)"
-                api_token={@gs1_api_key}
-                selected={destination_selection(@destination_check, @shipment.destination_gln)}
-                required
-              />
-
-              <label class="flex min-h-8 w-fit cursor-pointer items-center gap-2.5 pt-2 text-sm font-medium text-thamani-forest">
-                <input
-                  type="checkbox"
-                  name="shipment[is_return]"
-                  value="true"
-                  checked={@form[:is_return].value in [true, "true"]}
-                  class="size-4 rounded border-thamani-stone accent-thamani-forest"
-                /> This is a return
-              </label>
-
-              <.input
-                :if={@form[:is_return].value in [true, "true"]}
-                field={@form[:reference_shipment_id]}
-                type="select"
-                label="Returning against shipment"
-                prompt="Choose the original shipment (optional)"
-                options={Enum.map(@referenceable_shipments, &{&1.order_number, &1.id})}
-              />
-            </div>
-
-            <div class="flex flex-col-reverse gap-3 border-t border-thamani-stone pt-6 sm:flex-row sm:justify-end">
-              <.button
-                id="cancel-distributor-shipment"
-                variant="ghost"
-                navigate={
-                  if @live_action == :edit,
-                    do: ~p"/distributor/shipments/#{@shipment.id}",
-                    else: ~p"/distributor/shipments"
-                }
-              >
-                Cancel
-              </.button>
-              <.button id="save-distributor-shipment" variant="primary" phx-disable-with="Saving…">
-                {if @live_action == :new, do: "Create draft shipment", else: "Save changes"}
-              </.button>
-            </div>
-          </.form>
-        </section>
-
-        <aside class="space-y-4">
-          <.gln_card
-            title="Ship from"
-            icon="hero-building-office-2"
-            record={selected(@origins, @form[:origin_gln].value)}
-          />
-          <.gln_card
-            title="Ship to"
-            icon="hero-building-storefront"
-            record={
-              destination_record(@destination_check, @form[:destination_gln].value) ||
-                (@transfer_mode && selected(@origins, @form[:destination_gln].value))
-            }
-          />
-          <p class="px-1 text-xs leading-5 text-thamani-pewter">
-            The company name, address and P.O. box are copied onto the shipment when you save, so
-            labels keep the details as they were at the time of shipping.
-          </p>
-        </aside>
-      </div>
+            </aside>
+          </div>
         </:body>
       </.td_detail_page>
     </Layouts.distributor_shell>

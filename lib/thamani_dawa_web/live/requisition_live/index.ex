@@ -74,7 +74,10 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
       |> Requisitions.list_requisitions()
       |> SiteScoping.for_current_site(scope)
       |> Enum.filter(fn r ->
-        Enum.any?(all_sites, &(&1.id == r.site_id and CarePortal.site?(socket.assigns.portal, &1)))
+        Enum.any?(
+          all_sites,
+          &(&1.id == r.site_id and CarePortal.site?(socket.assigns.portal, &1))
+        )
       end)
 
     requisitions =
@@ -108,28 +111,6 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
     CarePortal.requisitions_query(socket.assigns.portal, query)
   end
 
-  def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
-  end
-
-  def handle_event("set_filter", %{"field" => "status", "value" => value}, socket) do
-    {:noreply, push_patch(socket, to: filter_path(socket, %{"status" => value}))}
-  end
-
-  def handle_event("set_date_preset", %{"value" => value}, socket) do
-    {:noreply,
-     push_patch(socket, to: filter_path(socket, %{"date" => value, "date_from" => "", "date_to" => ""}))}
-  end
-
-  def handle_event("apply_date_range", params, socket) do
-    from = params["date_from"] || ""
-    to = params["date_to"] || ""
-    preset = if from == "" and to == "", do: "", else: "custom"
-
-    {:noreply,
-     push_patch(socket, to: filter_path(socket, %{"date" => preset, "date_from" => from, "date_to" => to}))}
-  end
-
   defp date_preset(params) do
     case ThamaniDawaWeb.DateRangeFilter.valid_preset(params["date"]) do
       "" ->
@@ -151,6 +132,32 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
 
   defp iso_date(nil), do: ""
   defp iso_date(%Date{} = date), do: Date.to_iso8601(date)
+
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
+  end
+
+  def handle_event("set_filter", %{"field" => "status", "value" => value}, socket) do
+    {:noreply, push_patch(socket, to: filter_path(socket, %{"status" => value}))}
+  end
+
+  def handle_event("set_date_preset", %{"value" => value}, socket) do
+    {:noreply,
+     push_patch(socket,
+       to: filter_path(socket, %{"date" => value, "date_from" => "", "date_to" => ""})
+     )}
+  end
+
+  def handle_event("apply_date_range", params, socket) do
+    from = params["date_from"] || ""
+    to = params["date_to"] || ""
+    preset = if from == "" and to == "", do: "", else: "custom"
+
+    {:noreply,
+     push_patch(socket,
+       to: filter_path(socket, %{"date" => preset, "date_from" => from, "date_to" => to})
+     )}
+  end
 
   def handle_event(
         "add_item",
@@ -321,7 +328,13 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
     >
       <:search>
         <form id="requisition-search" phx-change="search" phx-submit="search" onsubmit="return false">
-          <.td_search name="search" value={@filters["search"]} placeholder="Search by reference" shortcut="⌘K" phx-debounce="200" />
+          <.td_search
+            name="search"
+            value={@filters["search"]}
+            placeholder="Search by reference"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
         </form>
       </:search>
       <.td_list_page
@@ -353,162 +366,162 @@ defmodule ThamaniDawaWeb.RequisitionLive.Index do
           />
         </:filters>
 
-      <.modal
-        :if={@live_action == :new}
-        id="new-requisition-modal"
-        show
-        on_cancel={JS.patch(CarePortal.requisitions(@portal))}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          New requisition
-        </h2>
-
-        <%= if length(@sites) == 1 do %>
-          <% site = hd(@sites) %>
-          <div class="mb-4">
-            <span class="thamani-label">Site</span>
-            <p class="text-sm font-medium text-td-ink">{site.name}</p>
-          </div>
-        <% end %>
-
-        <form phx-submit="add_item" id="add-item-form" class="mt-1">
-          <.input
-            type="select"
-            name="product_id"
-            label="Choose product"
-            options={
-              Enum.map(
-                available_products(@products_by_id, @draft_items, @editing_item_id),
-                &{product_name(@products_by_id, &1.id), &1.id}
-              )
-            }
-            value={
-              case editing_item(@draft_items, @editing_item_id) do
-                nil -> nil
-                item -> item.product_id
-              end
-            }
-            prompt="Choose a product"
-          />
-          <.input
-            type="number"
-            name="requested_quantity"
-            label="Quantity"
-            min="1"
-            value={
-              case editing_item(@draft_items, @editing_item_id) do
-                nil -> nil
-                item -> item.requested_quantity
-              end
-            }
-          />
-          <p :if={@item_error} class="mt-2 text-sm text-thamani-error">{@item_error}</p>
-          <div class="mt-3 flex items-center gap-3">
-            <.button variant="primary" class="flex-1">
-              {if @editing_item_id, do: "Save item changes", else: "Add item"}
-            </.button>
-            <button
-              :if={@editing_item_id}
-              type="button"
-              phx-click="cancel_edit_item"
-              class="text-sm font-semibold text-thamani-pewter hover:underline"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-
-        <div
-          :if={@draft_items != []}
-          class="mt-5 rounded-xl border border-thamani-stone bg-thamani-canvas p-4"
+        <.modal
+          :if={@live_action == :new}
+          id="new-requisition-modal"
+          show
+          on_cancel={JS.patch(CarePortal.requisitions(@portal))}
         >
-          <h3 class="text-sm font-semibold text-thamani-forest">Items in this requisition</h3>
-          <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone bg-td-surface">
-            <table class="w-full table-fixed text-left text-sm">
-              <thead class="bg-thamani-canvas text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
-                <tr>
-                  <th class="w-[55%] px-3 py-2">Product</th>
-                  <th class="w-[20%] px-3 py-2">Quantity</th>
-                  <th class="w-[25%] px-3 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-thamani-stone">
-                <tr :for={item <- @draft_items} id={"draft-item-#{item.id}"}>
-                  <td class="truncate px-3 py-2 font-medium text-thamani-forest">
-                    {product_name(@products_by_id, item.product_id)}
-                  </td>
-                  <td class="px-3 py-2 whitespace-nowrap">{item.requested_quantity}</td>
-                  <td class="px-3 py-2">
-                    <div class="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        phx-click="edit_item"
-                        phx-value-id={item.id}
-                        class="text-xs font-semibold text-thamani-forest hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        phx-click="remove_item"
-                        phx-value-id={item.id}
-                        class="text-xs font-semibold text-thamani-error hover:underline"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            New requisition
+          </h2>
 
-        <form phx-submit="save" id="requisition-form" class="mt-5 flex flex-col gap-4">
-          <%= if length(@sites) > 1 do %>
+          <%= if length(@sites) == 1 do %>
+            <% site = hd(@sites) %>
+            <div class="mb-4">
+              <span class="thamani-label">Site</span>
+              <p class="text-sm font-medium text-td-ink">{site.name}</p>
+            </div>
+          <% end %>
+
+          <form phx-submit="add_item" id="add-item-form" class="mt-1">
             <.input
               type="select"
-              name="site_id"
-              label="Site"
-              options={Enum.map(@sites, &{&1.name, &1.id})}
-              prompt="Choose a site"
-              required
+              name="product_id"
+              label="Choose product"
+              options={
+                Enum.map(
+                  available_products(@products_by_id, @draft_items, @editing_item_id),
+                  &{product_name(@products_by_id, &1.id), &1.id}
+                )
+              }
+              value={
+                case editing_item(@draft_items, @editing_item_id) do
+                  nil -> nil
+                  item -> item.product_id
+                end
+              }
+              prompt="Choose a product"
             />
-          <% else %>
-            <input type="hidden" name="site_id" value={hd(@sites).id} />
-          <% end %>
-          <.input type="textarea" name="notes" label="Notes (optional)" />
-          <.button
-            variant="primary"
-            phx-disable-with="Sending…"
-            disabled={@draft_items == []}
-            class="w-full"
-          >
-            Send requisition{if @draft_items != [], do: " (#{length(@draft_items)} items)"}
-          </.button>
-        </form>
-      </.modal>
+            <.input
+              type="number"
+              name="requested_quantity"
+              label="Quantity"
+              min="1"
+              value={
+                case editing_item(@draft_items, @editing_item_id) do
+                  nil -> nil
+                  item -> item.requested_quantity
+                end
+              }
+            />
+            <p :if={@item_error} class="mt-2 text-sm text-thamani-error">{@item_error}</p>
+            <div class="mt-3 flex items-center gap-3">
+              <.button variant="primary" class="flex-1">
+                {if @editing_item_id, do: "Save item changes", else: "Add item"}
+              </.button>
+              <button
+                :if={@editing_item_id}
+                type="button"
+                phx-click="cancel_edit_item"
+                class="text-sm font-semibold text-thamani-pewter hover:underline"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
 
-      <.table
-        id="requisitions"
-        rows={@streams.requisitions}
-        row_click={fn {_id, r} -> JS.navigate(CarePortal.requisition(@portal, r.id)) end}
-      >
-        <:col :let={{_id, r}} label="Reference">
-          <span class="font-semibold text-thamani-forest">{r.number}</span>
-        </:col>
-        <:col :let={{_id, r}} label="Items">{requisition_summary(@products_by_id, r)}</:col>
-        <:col :let={{_id, r}} label="Site">{site_name(@sites_by_id, r.site_id)}</:col>
-        <:col :let={{_id, r}} label="Status">
-          <.status_badge status={r.status} />
-        </:col>
-        <:col :let={{_id, r}} label="Requested">{r.inserted_at}</:col>
-        <:empty_state>
-          <.blank_state icon="hero-clipboard-document-list" title="No requisitions yet">
-            Raise a requisition when your site needs more stock than it currently has.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+          <div
+            :if={@draft_items != []}
+            class="mt-5 rounded-xl border border-thamani-stone bg-thamani-canvas p-4"
+          >
+            <h3 class="text-sm font-semibold text-thamani-forest">Items in this requisition</h3>
+            <div class="mt-3 overflow-hidden rounded-lg border border-thamani-stone bg-td-surface">
+              <table class="w-full table-fixed text-left text-sm">
+                <thead class="bg-thamani-canvas text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+                  <tr>
+                    <th class="w-[55%] px-3 py-2">Product</th>
+                    <th class="w-[20%] px-3 py-2">Quantity</th>
+                    <th class="w-[25%] px-3 py-2 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-thamani-stone">
+                  <tr :for={item <- @draft_items} id={"draft-item-#{item.id}"}>
+                    <td class="truncate px-3 py-2 font-medium text-thamani-forest">
+                      {product_name(@products_by_id, item.product_id)}
+                    </td>
+                    <td class="px-3 py-2 whitespace-nowrap">{item.requested_quantity}</td>
+                    <td class="px-3 py-2">
+                      <div class="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          phx-click="edit_item"
+                          phx-value-id={item.id}
+                          class="text-xs font-semibold text-thamani-forest hover:underline"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          phx-click="remove_item"
+                          phx-value-id={item.id}
+                          class="text-xs font-semibold text-thamani-error hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <form phx-submit="save" id="requisition-form" class="mt-5 flex flex-col gap-4">
+            <%= if length(@sites) > 1 do %>
+              <.input
+                type="select"
+                name="site_id"
+                label="Site"
+                options={Enum.map(@sites, &{&1.name, &1.id})}
+                prompt="Choose a site"
+                required
+              />
+            <% else %>
+              <input type="hidden" name="site_id" value={hd(@sites).id} />
+            <% end %>
+            <.input type="textarea" name="notes" label="Notes (optional)" />
+            <.button
+              variant="primary"
+              phx-disable-with="Sending…"
+              disabled={@draft_items == []}
+              class="w-full"
+            >
+              Send requisition{if @draft_items != [], do: " (#{length(@draft_items)} items)"}
+            </.button>
+          </form>
+        </.modal>
+
+        <.table
+          id="requisitions"
+          rows={@streams.requisitions}
+          row_click={fn {_id, r} -> JS.navigate(CarePortal.requisition(@portal, r.id)) end}
+        >
+          <:col :let={{_id, r}} label="Reference">
+            <span class="font-semibold text-thamani-forest">{r.number}</span>
+          </:col>
+          <:col :let={{_id, r}} label="Items">{requisition_summary(@products_by_id, r)}</:col>
+          <:col :let={{_id, r}} label="Site">{site_name(@sites_by_id, r.site_id)}</:col>
+          <:col :let={{_id, r}} label="Status">
+            <.status_badge status={r.status} />
+          </:col>
+          <:col :let={{_id, r}} label="Requested">{r.inserted_at}</:col>
+          <:empty_state>
+            <.blank_state icon="hero-clipboard-document-list" title="No requisitions yet">
+              Raise a requisition when your site needs more stock than it currently has.
+            </.blank_state>
+          </:empty_state>
+        </.table>
       </.td_list_page>
     </Layouts.care_shell>
     """

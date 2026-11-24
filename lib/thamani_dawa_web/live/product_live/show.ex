@@ -299,330 +299,332 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
           </div>
         </:actions>
         <:body>
-      <dl
-        id="product-details"
-        class="mb-6 grid grid-cols-2 gap-x-6 gap-y-5 rounded-2xl border border-thamani-stone bg-thamani-surface p-4 text-sm shadow-[0_1px_3px_rgba(28,58,19,0.06)] sm:grid-cols-4 sm:p-5"
-      >
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">Status</dt>
-          <dd><.status_badge status={if @product.is_active, do: :active, else: :inactive} /></dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">Brand</dt>
-          <dd class="font-medium text-thamani-forest">{@product.brand_name || "—"}</dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">Category</dt>
-          <dd class="font-medium text-thamani-forest">{@product.category || "—"}</dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">Manufacturer</dt>
-          <dd class="font-medium text-thamani-forest">{@product.manufacturer || "—"}</dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">Unit</dt>
-          <dd class="font-medium text-thamani-forest">{Products.unit_label(@product.uom)}</dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">GTIN</dt>
-          <dd class="truncate font-mono font-medium text-thamani-forest">
-            {@product.gtin || "—"}
-          </dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">Price</dt>
-          <dd class="font-medium text-thamani-forest">{@product.price}</dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">Reorder level</dt>
-          <dd class="font-medium text-thamani-forest">{@product.reorder_level || "—"}</dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">OTC</dt>
-          <dd class="font-medium text-thamani-forest">
-            {if @product.is_otc, do: "Yes", else: "No"}
-          </dd>
-        </div>
-        <div>
-          <dt class="mb-1 text-sm text-thamani-pewter">Dangerous drug</dt>
-          <dd class="font-medium text-thamani-forest">
-            {if @product.is_dangerous_drug, do: "Yes", else: "No"}
-          </dd>
-        </div>
-      </dl>
-
-      <.modal
-        :if={@live_action == :new_batch}
-        id="batch-modal"
-        show
-        on_cancel={JS.patch(~p"/org/products/#{@product.id}")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Add stock
-        </h2>
-        <.form for={@form} id="batch-form" phx-submit="save" phx-change="validate">
-          <div class="grid grid-cols-2 gap-x-4">
-            <.input field={@form[:gtin]} label="GTIN" required />
-            <.input field={@form[:batch_no]} label="Batch / lot number" required />
-            <.input field={@form[:serial]} label="Serial" />
-            <.date_picker
-              field={@form[:manufacture_date]}
-              label="Manufacture date"
-              placeholder="Choose date"
-            />
-            <.date_picker
-              field={@form[:expiry_date]}
-              label="Expiry date"
-              placeholder="Choose expiry date"
-              required
-            />
-            <.input field={@form[:quantity]} type="number" label="Quantity" required />
-            <.input field={@form[:cost_per_unit]} type="number" label="Cost per unit" step="0.01" />
-            <.input
-              field={@form[:supplier_id]}
-              type="select"
-              label="Supplier"
-              options={Enum.map(@suppliers, &{&1.name, &1.id})}
-              prompt="No supplier"
-            />
-          </div>
-          <div class="pt-4">
-            <.button variant="primary" class="w-full">Add to stock</.button>
-          </div>
-        </.form>
-      </.modal>
-
-      <.modal
-        :if={@live_action == :dispatch_batch and not is_nil(@dispatch_batch)}
-        id="dispatch-batch-modal"
-        show
-        on_cancel={JS.patch(~p"/org/products/#{@product.id}")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Dispatch batch to site
-        </h2>
-        <p class="mb-4 text-sm text-thamani-pewter">
-          Batch / lot <span class="font-mono">{@dispatch_batch.batch_no}</span>
-          · {@dispatch_batch.remaining_quantity} units available.
-        </p>
-        <.form for={@dispatch_form} id="dispatch-batch-form" phx-submit="dispatch">
-          <.input
-            field={@dispatch_form[:quantity]}
-            type="number"
-            label="Quantity to dispatch"
-            min="1"
-            max={@dispatch_batch.remaining_quantity}
-            required
-          />
-          <.input
-            field={@dispatch_form[:site_id]}
-            type="select"
-            label="Destination site"
-            options={Enum.map(@sites_by_id, fn {_id, s} -> {s.name, s.id} end)}
-            prompt="Choose a site"
-            required
-          />
-          <div class="pt-4">
-            <.button variant="primary" class="w-full">Dispatch batch</.button>
-          </div>
-        </.form>
-      </.modal>
-
-      <.batch_label_modal
-        :if={@selected_batch}
-        batch={@selected_batch}
-        on_close={JS.push("close_datamatrix")}
-      />
-
-      <nav :if={@show_warehouse_section?} class="td-tabs" aria-label="Where the stock sits">
-        <button
-          id="warehouse-stock-tab"
-          type="button"
-          role="tab"
-          class={["td-tab", @stock_tab == "warehouse" && "is-active"]}
-          phx-click="switch_stock_tab"
-          phx-value-tab="warehouse"
-          aria-selected={to_string(@stock_tab == "warehouse")}
-          aria-controls="warehouse-stock-panel"
-        >
-          Warehouse stock
-        </button>
-        <button
-          id="sites-stock-tab"
-          type="button"
-          role="tab"
-          class={["td-tab", @stock_tab == "sites" && "is-active"]}
-          phx-click="switch_stock_tab"
-          phx-value-tab="sites"
-          aria-selected={to_string(@stock_tab == "sites")}
-          aria-controls="sites-stock-panel"
-        >
-          Stock at sites
-        </button>
-      </nav>
-
-      <div
-        :if={@show_warehouse_section?}
-        id="warehouse-stock-panel"
-        role="tabpanel"
-        aria-labelledby="warehouse-stock-tab"
-        class={@stock_tab != "warehouse" && "hidden"}
-      >
-        <p class="mb-4 text-sm text-thamani-pewter">
-          Stock held in the organization warehouse. Dispatch a batch when it is ready to move to a site.
-        </p>
-        <section
-          id="undispatched-batches"
-          phx-update="stream"
-          aria-label="Warehouse batches"
-          class="grid gap-3 lg:hidden"
-        >
-          <div id="undispatched-batches-empty" class="hidden only:block lg:col-span-2">
-            <.blank_state icon="hero-archive-box" title="No organization warehouse stock">
-              Stock added here remains in the warehouse until you dispatch it to a site.
-            </.blank_state>
-          </div>
-
-          <article
-            :for={{id, batch} <- @streams.undispatched_batches}
-            id={id}
-            class="group overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-thamani-forest/20 hover:shadow-[0_10px_30px_rgba(28,58,19,0.08)]"
+          <dl
+            id="product-details"
+            class="mb-6 grid grid-cols-2 gap-x-6 gap-y-5 rounded-2xl border border-thamani-stone bg-thamani-surface p-4 text-sm shadow-[0_1px_3px_rgba(28,58,19,0.06)] sm:grid-cols-4 sm:p-5"
           >
-            <div class="p-4 sm:p-5">
-              <div class="flex items-start gap-3.5">
-                <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest ring-1 ring-thamani-stone transition-colors duration-200 group-hover:bg-td-accent-tint">
-                  <.icon name="hero-archive-box" class="size-5" />
-                </div>
-                <div class="min-w-0 flex-1 pt-0.5">
-                  <p class="text-sm text-thamani-pewter">Batch / lot</p>
-                  <h3 class="mt-0.5 truncate text-base font-semibold text-thamani-forest">
-                    {batch.batch_no}
-                  </h3>
-                </div>
-                <span class="shrink-0 rounded-full bg-td-accent-tint px-3 py-1 text-sm font-semibold tabular-nums text-thamani-forest">
-                  {batch.remaining_quantity} units
-                </span>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">Status</dt>
+              <dd><.status_badge status={if @product.is_active, do: :active, else: :inactive} /></dd>
+            </div>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">Brand</dt>
+              <dd class="font-medium text-thamani-forest">{@product.brand_name || "—"}</dd>
+            </div>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">Category</dt>
+              <dd class="font-medium text-thamani-forest">{@product.category || "—"}</dd>
+            </div>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">Manufacturer</dt>
+              <dd class="font-medium text-thamani-forest">{@product.manufacturer || "—"}</dd>
+            </div>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">Unit</dt>
+              <dd class="font-medium text-thamani-forest">{Products.unit_label(@product.uom)}</dd>
+            </div>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">GTIN</dt>
+              <dd class="truncate font-mono font-medium text-thamani-forest">
+                {@product.gtin || "—"}
+              </dd>
+            </div>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">Price</dt>
+              <dd class="font-medium text-thamani-forest">{@product.price}</dd>
+            </div>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">Reorder level</dt>
+              <dd class="font-medium text-thamani-forest">{@product.reorder_level || "—"}</dd>
+            </div>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">OTC</dt>
+              <dd class="font-medium text-thamani-forest">
+                {if @product.is_otc, do: "Yes", else: "No"}
+              </dd>
+            </div>
+            <div>
+              <dt class="mb-1 text-sm text-thamani-pewter">Dangerous drug</dt>
+              <dd class="font-medium text-thamani-forest">
+                {if @product.is_dangerous_drug, do: "Yes", else: "No"}
+              </dd>
+            </div>
+          </dl>
+
+          <.modal
+            :if={@live_action == :new_batch}
+            id="batch-modal"
+            show
+            on_cancel={JS.patch(~p"/org/products/#{@product.id}")}
+          >
+            <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+              Add stock
+            </h2>
+            <.form for={@form} id="batch-form" phx-submit="save" phx-change="validate">
+              <div class="grid grid-cols-2 gap-x-4">
+                <.input field={@form[:gtin]} label="GTIN" required />
+                <.input field={@form[:batch_no]} label="Batch / lot number" required />
+                <.input field={@form[:serial]} label="Serial" />
+                <.date_picker
+                  field={@form[:manufacture_date]}
+                  label="Manufacture date"
+                  placeholder="Choose date"
+                />
+                <.date_picker
+                  field={@form[:expiry_date]}
+                  label="Expiry date"
+                  placeholder="Choose expiry date"
+                  required
+                />
+                <.input field={@form[:quantity]} type="number" label="Quantity" required />
+                <.input field={@form[:cost_per_unit]} type="number" label="Cost per unit" step="0.01" />
+                <.input
+                  field={@form[:supplier_id]}
+                  type="select"
+                  label="Supplier"
+                  options={Enum.map(@suppliers, &{&1.name, &1.id})}
+                  prompt="No supplier"
+                />
+              </div>
+              <div class="pt-4">
+                <.button variant="primary" class="w-full">Add to stock</.button>
+              </div>
+            </.form>
+          </.modal>
+
+          <.modal
+            :if={@live_action == :dispatch_batch and not is_nil(@dispatch_batch)}
+            id="dispatch-batch-modal"
+            show
+            on_cancel={JS.patch(~p"/org/products/#{@product.id}")}
+          >
+            <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+              Dispatch batch to site
+            </h2>
+            <p class="mb-4 text-sm text-thamani-pewter">
+              Batch / lot <span class="font-mono">{@dispatch_batch.batch_no}</span>
+              · {@dispatch_batch.remaining_quantity} units available.
+            </p>
+            <.form for={@dispatch_form} id="dispatch-batch-form" phx-submit="dispatch">
+              <.input
+                field={@dispatch_form[:quantity]}
+                type="number"
+                label="Quantity to dispatch"
+                min="1"
+                max={@dispatch_batch.remaining_quantity}
+                required
+              />
+              <.input
+                field={@dispatch_form[:site_id]}
+                type="select"
+                label="Destination site"
+                options={Enum.map(@sites_by_id, fn {_id, s} -> {s.name, s.id} end)}
+                prompt="Choose a site"
+                required
+              />
+              <div class="pt-4">
+                <.button variant="primary" class="w-full">Dispatch batch</.button>
+              </div>
+            </.form>
+          </.modal>
+
+          <.batch_label_modal
+            :if={@selected_batch}
+            batch={@selected_batch}
+            on_close={JS.push("close_datamatrix")}
+          />
+
+          <nav :if={@show_warehouse_section?} class="td-tabs" aria-label="Where the stock sits">
+            <button
+              id="warehouse-stock-tab"
+              type="button"
+              role="tab"
+              class={["td-tab", @stock_tab == "warehouse" && "is-active"]}
+              phx-click="switch_stock_tab"
+              phx-value-tab="warehouse"
+              aria-selected={to_string(@stock_tab == "warehouse")}
+              aria-controls="warehouse-stock-panel"
+            >
+              Warehouse stock
+            </button>
+            <button
+              id="sites-stock-tab"
+              type="button"
+              role="tab"
+              class={["td-tab", @stock_tab == "sites" && "is-active"]}
+              phx-click="switch_stock_tab"
+              phx-value-tab="sites"
+              aria-selected={to_string(@stock_tab == "sites")}
+              aria-controls="sites-stock-panel"
+            >
+              Stock at sites
+            </button>
+          </nav>
+
+          <div
+            :if={@show_warehouse_section?}
+            id="warehouse-stock-panel"
+            role="tabpanel"
+            aria-labelledby="warehouse-stock-tab"
+            class={@stock_tab != "warehouse" && "hidden"}
+          >
+            <p class="mb-4 text-sm text-thamani-pewter">
+              Stock held in the organization warehouse. Dispatch a batch when it is ready to move to a site.
+            </p>
+            <section
+              id="undispatched-batches"
+              phx-update="stream"
+              aria-label="Warehouse batches"
+              class="grid gap-3 lg:hidden"
+            >
+              <div id="undispatched-batches-empty" class="hidden only:block lg:col-span-2">
+                <.blank_state icon="hero-archive-box" title="No organization warehouse stock">
+                  Stock added here remains in the warehouse until you dispatch it to a site.
+                </.blank_state>
               </div>
 
-              <dl class="mt-4 grid grid-cols-2 border-t border-thamani-stone/80 pt-4">
-                <div class="min-w-0 pr-4">
-                  <dt class="text-sm text-thamani-pewter">Expiry</dt>
-                  <dd class="mt-1 text-sm font-medium tabular-nums text-td-ink">
-                    {batch.expiry_date}
-                  </dd>
-                </div>
-                <div class="min-w-0 border-l border-thamani-stone/80 pl-4">
-                  <dt class="text-sm text-thamani-pewter">Supplier</dt>
-                  <dd class="mt-1 truncate text-sm font-medium text-td-ink">
-                    {(batch.supplier && batch.supplier.name) || "—"}
-                  </dd>
-                </div>
-              </dl>
-            </div>
-
-            <div class="border-t border-thamani-stone bg-thamani-canvas/60 p-3 sm:px-5">
-              <.button
-                variant="ghost-edit"
-                patch={~p"/org/products/#{@product.id}/batches/#{batch.id}/dispatch"}
-                id={"btn-dispatch-batch-#{batch.id}"}
-                class="w-full gap-2 px-4 py-2 text-sm"
+              <article
+                :for={{id, batch} <- @streams.undispatched_batches}
+                id={id}
+                class="group overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:border-thamani-forest/20 hover:shadow-[0_10px_30px_rgba(28,58,19,0.08)]"
               >
-                <.icon name="hero-paper-airplane" class="size-4" /> Dispatch to site
-              </.button>
-            </div>
-          </article>
-        </section>
+                <div class="p-4 sm:p-5">
+                  <div class="flex items-start gap-3.5">
+                    <div class="flex size-11 shrink-0 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest ring-1 ring-thamani-stone transition-colors duration-200 group-hover:bg-td-accent-tint">
+                      <.icon name="hero-archive-box" class="size-5" />
+                    </div>
+                    <div class="min-w-0 flex-1 pt-0.5">
+                      <p class="text-sm text-thamani-pewter">Batch / lot</p>
+                      <h3 class="mt-0.5 truncate text-base font-semibold text-thamani-forest">
+                        {batch.batch_no}
+                      </h3>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-td-accent-tint px-3 py-1 text-sm font-semibold tabular-nums text-thamani-forest">
+                      {batch.remaining_quantity} units
+                    </span>
+                  </div>
 
-        <div class="hidden lg:block">
-          <.table
-            id="warehouse-batches-table"
-            rows={@streams.undispatched_batches}
-            row_id={fn {id, _batch} -> "warehouse-table-#{id}" end}
+                  <dl class="mt-4 grid grid-cols-2 border-t border-thamani-stone/80 pt-4">
+                    <div class="min-w-0 pr-4">
+                      <dt class="text-sm text-thamani-pewter">Expiry</dt>
+                      <dd class="mt-1 text-sm font-medium tabular-nums text-td-ink">
+                        {batch.expiry_date}
+                      </dd>
+                    </div>
+                    <div class="min-w-0 border-l border-thamani-stone/80 pl-4">
+                      <dt class="text-sm text-thamani-pewter">Supplier</dt>
+                      <dd class="mt-1 truncate text-sm font-medium text-td-ink">
+                        {(batch.supplier && batch.supplier.name) || "—"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div class="border-t border-thamani-stone bg-thamani-canvas/60 p-3 sm:px-5">
+                  <.button
+                    variant="ghost-edit"
+                    patch={~p"/org/products/#{@product.id}/batches/#{batch.id}/dispatch"}
+                    id={"btn-dispatch-batch-#{batch.id}"}
+                    class="w-full gap-2 px-4 py-2 text-sm"
+                  >
+                    <.icon name="hero-paper-airplane" class="size-4" /> Dispatch to site
+                  </.button>
+                </div>
+              </article>
+            </section>
+
+            <div class="hidden lg:block">
+              <.table
+                id="warehouse-batches-table"
+                rows={@streams.undispatched_batches}
+                row_id={fn {id, _batch} -> "warehouse-table-#{id}" end}
+              >
+                <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
+                <:col :let={{_id, batch}} label="Available stock">
+                  {batch.remaining_quantity} units
+                </:col>
+                <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
+                <:col :let={{_id, batch}} label="Supplier">
+                  {(batch.supplier && batch.supplier.name) || "—"}
+                </:col>
+                <:action :let={{_id, batch}}>
+                  <.button
+                    variant="ghost-edit"
+                    patch={~p"/org/products/#{@product.id}/batches/#{batch.id}/dispatch"}
+                    id={"btn-dispatch-batch-table-#{batch.id}"}
+                  >
+                    <.icon name="hero-paper-airplane" class="size-4" /> Dispatch to site
+                  </.button>
+                </:action>
+                <:empty_state>
+                  <.blank_state icon="hero-archive-box" title="No organization warehouse stock">
+                    Stock added here remains in the warehouse until you dispatch it to a site.
+                  </.blank_state>
+                </:empty_state>
+              </.table>
+            </div>
+          </div>
+
+          <div
+            id="sites-stock-panel"
+            role={@show_warehouse_section? && "tabpanel"}
+            aria-labelledby={@show_warehouse_section? && "sites-stock-tab"}
+            class={@show_warehouse_section? && @stock_tab != "sites" && "hidden"}
           >
-            <:col :let={{_id, batch}} label="Batch / lot">{batch.batch_no}</:col>
-            <:col :let={{_id, batch}} label="Available stock">
-              {batch.remaining_quantity} units
-            </:col>
-            <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
-            <:col :let={{_id, batch}} label="Supplier">
-              {(batch.supplier && batch.supplier.name) || "—"}
-            </:col>
-            <:action :let={{_id, batch}}>
-              <.button
-                variant="ghost-edit"
-                patch={~p"/org/products/#{@product.id}/batches/#{batch.id}/dispatch"}
-                id={"btn-dispatch-batch-table-#{batch.id}"}
-              >
-                <.icon name="hero-paper-airplane" class="size-4" /> Dispatch to site
-              </.button>
-            </:action>
-            <:empty_state>
-              <.blank_state icon="hero-archive-box" title="No organization warehouse stock">
-                Stock added here remains in the warehouse until you dispatch it to a site.
-              </.blank_state>
-            </:empty_state>
-          </.table>
-        </div>
-      </div>
-
-      <div
-        id="sites-stock-panel"
-        role={@show_warehouse_section? && "tabpanel"}
-        aria-labelledby={@show_warehouse_section? && "sites-stock-tab"}
-        class={@show_warehouse_section? && @stock_tab != "sites" && "hidden"}
-      >
-        <p class="mb-4 text-sm text-thamani-pewter">
-          <%= if @single_site do %>
-            Stock received at {@single_site.name}.
-          <% else %>
-            These batches are already assigned to a site, including stock received before centralized
-            stock tracking was introduced.
-          <% end %>
-        </p>
-        <.table
-          id="batches"
-          rows={@streams.batches}
-          row_click={fn {_id, batch} -> JS.navigate(~p"/org/batches/#{batch.id}") end}
-        >
-          <:col :let={{_id, batch}} label="Site">{batch.site.name}</:col>
-          <:col :let={{_id, batch}} label="Batch details">
-            <div class="font-medium text-td-ink">{batch.batch_no}</div>
-            <div
-              :if={batch.serial || batch.manufacture_date}
-              class="mt-1 text-xs font-normal text-thamani-pewter"
+            <p class="mb-4 text-sm text-thamani-pewter">
+              <%= if @single_site do %>
+                Stock received at {@single_site.name}.
+              <% else %>
+                These batches are already assigned to a site, including stock received before centralized
+                stock tracking was introduced.
+              <% end %>
+            </p>
+            <.table
+              id="batches"
+              rows={@streams.batches}
+              row_click={fn {_id, batch} -> JS.navigate(~p"/org/batches/#{batch.id}") end}
             >
-              <span :if={batch.serial}>Serial {batch.serial}</span>
-              <span :if={batch.serial && batch.manufacture_date}> · </span>
-              <span :if={batch.manufacture_date}>Mfd {batch.manufacture_date}</span>
-            </div>
-          </:col>
-          <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
-          <:col :let={{_id, batch}} label="Stock">{batch.remaining_quantity} / {batch.quantity}</:col>
-          <:col :let={{_id, batch}} label="Received by" mobile="hidden">
-            {user_display(batch.approver)}
-          </:col>
-          <:col :let={{_id, batch}} label="Status" mobile="aside">
-            <.status_badge status={if batch.approver_id, do: :active, else: :pending_receipt} />
-          </:col>
-          <:action :let={{_id, batch}}>
-            <.button
-              type="button"
-              variant="ghost-edit"
-              phx-click="show_datamatrix"
-              phx-value-id={batch.id}
-              phx-stop-propagation
-              id={"btn-datamatrix-#{batch.id}"}
-            >
-              <.icon name="hero-qr-code" class="w-4 h-4 mr-1" /> Print Label
-            </.button>
-          </:action>
-          <:empty_state>
-            <.blank_state icon="hero-archive-box" title="No batches yet">
-              Batches dispatched to a site will appear here.
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
+              <:col :let={{_id, batch}} label="Site">{batch.site.name}</:col>
+              <:col :let={{_id, batch}} label="Batch details">
+                <div class="font-medium text-td-ink">{batch.batch_no}</div>
+                <div
+                  :if={batch.serial || batch.manufacture_date}
+                  class="mt-1 text-xs font-normal text-thamani-pewter"
+                >
+                  <span :if={batch.serial}>Serial {batch.serial}</span>
+                  <span :if={batch.serial && batch.manufacture_date}> · </span>
+                  <span :if={batch.manufacture_date}>Mfd {batch.manufacture_date}</span>
+                </div>
+              </:col>
+              <:col :let={{_id, batch}} label="Expiry">{batch.expiry_date}</:col>
+              <:col :let={{_id, batch}} label="Stock">
+                {batch.remaining_quantity} / {batch.quantity}
+              </:col>
+              <:col :let={{_id, batch}} label="Received by" mobile="hidden">
+                {user_display(batch.approver)}
+              </:col>
+              <:col :let={{_id, batch}} label="Status" mobile="aside">
+                <.status_badge status={if batch.approver_id, do: :active, else: :pending_receipt} />
+              </:col>
+              <:action :let={{_id, batch}}>
+                <.button
+                  type="button"
+                  variant="ghost-edit"
+                  phx-click="show_datamatrix"
+                  phx-value-id={batch.id}
+                  phx-stop-propagation
+                  id={"btn-datamatrix-#{batch.id}"}
+                >
+                  <.icon name="hero-qr-code" class="w-4 h-4 mr-1" /> Print Label
+                </.button>
+              </:action>
+              <:empty_state>
+                <.blank_state icon="hero-archive-box" title="No batches yet">
+                  Batches dispatched to a site will appear here.
+                </.blank_state>
+              </:empty_state>
+            </.table>
+          </div>
         </:body>
       </.td_detail_page>
     </Layouts.org_shell>

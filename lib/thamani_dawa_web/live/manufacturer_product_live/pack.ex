@@ -18,7 +18,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
   @page_size 10
 
   def mount(%{"gtin" => gtin}, _session, socket) do
-    product = Manufacturing.get_product_by_gtin!(socket.assigns.current_scope.organization_id, gtin)
+    product =
+      Manufacturing.get_product_by_gtin!(socket.assigns.current_scope.organization_id, gtin)
 
     {:ok,
      socket
@@ -70,7 +71,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
     if valid_destination?(socket.assigns.pack_form.params["to_gln"]) do
       {:noreply, patch_step(socket, "review")}
     else
-      {:noreply, assign(socket, :pack_error, {:invalid, "Enter the 13-digit GLN the shipper is going to."})}
+      {:noreply,
+       assign(socket, :pack_error, {:invalid, "Enter the 13-digit GLN the shipper is going to."})}
     end
   end
 
@@ -130,7 +132,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
     do: {:noreply, assign(socket, :page, socket.assigns.page + 1)}
 
   def handle_event("validate_pack", %{"pack" => params}, socket) do
-    {:noreply, assign(socket, :pack_form, pack_form(Map.merge(socket.assigns.pack_form.params, params)))}
+    {:noreply,
+     assign(socket, :pack_form, pack_form(Map.merge(socket.assigns.pack_form.params, params)))}
   end
 
   def handle_event("search_pack_to_gln", %{"value" => query}, socket) do
@@ -195,7 +198,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Shipper SSCC #{shipper.code} created with #{length(serials)} serials.")
+         |> put_flash(
+           :info,
+           "Shipper SSCC #{shipper.code} created with #{length(serials)} serials."
+         )
          |> push_navigate(to: ~p"/manufacturer/sscc/#{shipper.id}/serials?#{%{return_to: back}}")}
 
       {:error, reason} ->
@@ -209,14 +215,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
 
   def handle_async(:to_gln_search, {:ok, {query, {:ok, results}}}, socket) do
     if socket.assigns.to_gln_query == query do
-      {:noreply, socket |> assign(:to_gln_results, results) |> assign(:to_gln_search_status, :complete)}
+      {:noreply,
+       socket |> assign(:to_gln_results, results) |> assign(:to_gln_search_status, :complete)}
     else
       {:noreply, socket}
     end
   end
 
   def handle_async(:to_gln_search, _result, socket) do
-    {:noreply, socket |> assign(:to_gln_results, []) |> assign(:to_gln_search_status, :unavailable)}
+    {:noreply,
+     socket |> assign(:to_gln_results, []) |> assign(:to_gln_search_status, :unavailable)}
   end
 
   defp load_pack(%{assigns: %{batch_no: batch_no}} = socket) when batch_no in [nil, ""] do
@@ -246,8 +254,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
         |> assign(:load_error, nil)
         |> assign(:loaded_batch, batch_no)
       else
-        nil -> assign(socket, load_error: {:invalid, "That batch is not on this product."}, pack_serials: [])
-        {:error, reason} -> assign(socket, load_error: reason, pack_serials: [])
+        nil ->
+          assign(socket,
+            load_error: {:invalid, "That batch is not on this product."},
+            pack_serials: []
+          )
+
+        {:error, reason} ->
+          assign(socket, load_error: reason, pack_serials: [])
       end
     else
       socket
@@ -259,7 +273,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
       [batch: socket.assigns.batch_no, step: step, return_to: socket.assigns.return_to]
       |> Enum.reject(fn {_k, v} -> v in [nil, ""] end)
 
-    push_patch(socket, to: ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials/pack?#{query}")
+    push_patch(socket,
+      to: ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials/pack?#{query}"
+    )
   end
 
   defp put_pack_parties(params, assigns) do
@@ -292,7 +308,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
   defp match_serial("", _serials), do: nil
 
   defp match_serial(query, serials) do
-    Enum.find(serials, fn serial -> query == serial or String.contains?(query, "(21)#{serial}") end)
+    Enum.find(serials, fn serial ->
+      query == serial or String.contains?(query, "(21)#{serial}")
+    end)
   end
 
   defp valid_destination?(gln), do: is_binary(gln) and Regex.match?(~r/^\d{13}$/, gln)
@@ -323,10 +341,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
   defp long_date(nil), do: "—"
   defp long_date(date), do: ThamaniDawaWeb.TimeFormat.date(date)
 
-  defp error_message(:unconfigured), do: "Add your GS1 API key in organization settings to pack serials."
-  defp error_message(reason) when reason in [:unauthorized, :forbidden], do: "GS1 rejected your API key."
+  defp error_message(:unconfigured),
+    do: "Add your GS1 API key in organization settings to pack serials."
+
+  defp error_message(reason) when reason in [:unauthorized, :forbidden],
+    do: "GS1 rejected your API key."
+
   defp error_message({:invalid, message}), do: message
-  defp error_message(_reason), do: "GS1 didn't issue an SSCC, so nothing was packed. Try again in a moment."
+
+  defp error_message(_reason),
+    do: "GS1 didn't issue an SSCC, so nothing was packed. Try again in a moment."
 
   defp step_state(current, name, order) do
     current_at = Enum.find_index(order, &(&1 == current)) || 0
@@ -363,9 +387,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
       |> assign(:pages, pages)
       |> assign(:chosen, chosen)
       |> assign(:preview, preview)
-      |> assign(:first_on, serials != [] and MapSet.equal?(assigns.pack_selected, MapSet.new(first)))
+      |> assign(
+        :first_on,
+        serials != [] and MapSet.equal?(assigns.pack_selected, MapSet.new(first))
+      )
       |> assign(:meter, min(round(selected / @shipper_size * 100), 100))
-      |> assign(:from_party, Enum.find(assigns.pack_facilities, &(&1.gln == assigns.pack_form[:from_gln].value)))
+      |> assign(
+        :from_party,
+        Enum.find(assigns.pack_facilities, &(&1.gln == assigns.pack_form[:from_gln].value))
+      )
 
     ~H"""
     <Layouts.manufacturer_shell
@@ -384,14 +414,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
         <div>
           <h1 class="td-idh-title">Pack a shipper</h1>
           <p class="td-idh-sub">
-            {@product.name} · batch <span class="font-mono">{@batch_no}</span> · {@shipper_size} units per shipper
+            {@product.name} · batch <span class="font-mono">{@batch_no}</span>
+            · {@shipper_size} units per shipper
           </p>
         </div>
       </div>
 
       <div class="td-steps" id="pack-steps">
         <.td_step
-          :for={{name, label, number} <- [{"serials", "Select serials", 1}, {"parties", "Parties", 2}, {"review", "Review", 3}]}
+          :for={
+            {name, label, number} <- [
+              {"serials", "Select serials", 1},
+              {"parties", "Parties", 2},
+              {"review", "Review", 3}
+            ]
+          }
           state={step_state(@step, name, ~w(serials parties review))}
           number={number}
           label={label}
@@ -429,7 +466,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
                 />
               </label>
             </form>
-            <p :if={@scan_error} id="pack-scan-error" class="td-ban is-danger td-pad">{@scan_error}</p>
+            <p :if={@scan_error} id="pack-scan-error" class="td-ban is-danger td-pad">
+              {@scan_error}
+            </p>
             <div class="td-pad" style="display:flex;justify-content:space-between;gap:12px;">
               <button id="pack-select-first" type="button" class="td-check" phx-click="select_first">
                 <input type="checkbox" checked={@first_on} tabindex="-1" style="pointer-events:none" />
@@ -441,7 +480,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
             </div>
             <table class="td-rows is-static">
               <thead>
-                <tr><th></th><th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>State</th></tr>
+                <tr>
+                  <th></th><th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>State</th>
+                </tr>
               </thead>
               <tbody>
                 <tr :for={serial <- @window}>
@@ -467,20 +508,38 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
               Showing {@from_index} to {@to_index} of {length(@serials)} unpacked serials
             </p>
             <div class="td-pad" style="display:flex;justify-content:flex-end;gap:8px;">
-              <.td_button id="pack-page-prev" label="Previous" disabled={@page <= 1} phx-click="page_prev" />
-              <.td_button id="pack-page-next" label="Next" disabled={@page >= @pages} phx-click="page_next" />
+              <.td_button
+                id="pack-page-prev"
+                label="Previous"
+                disabled={@page <= 1}
+                phx-click="page_prev"
+              />
+              <.td_button
+                id="pack-page-next"
+                label="Next"
+                disabled={@page >= @pages}
+                phx-click="page_next"
+              />
             </div>
           </div>
           <aside class="td-card td-pad td-pack-side">
             <h2 class="td-idh-title">This shipper</h2>
             <p class="td-note">One shipper SSCC holds the serials you select.</p>
-            <div class="td-kv"><span class="td-kv-label">Batch</span><span class="td-kv-value is-mono">{@batch.batch_no}</span></div>
-            <div class="td-kv"><span class="td-kv-label">Units per shipper</span><span class="td-kv-value">{@shipper_size}</span></div>
+            <div class="td-kv">
+              <span class="td-kv-label">Batch</span><span class="td-kv-value is-mono">{@batch.batch_no}</span>
+            </div>
+            <div class="td-kv">
+              <span class="td-kv-label">Units per shipper</span><span class="td-kv-value">{@shipper_size}</span>
+            </div>
             <div class="td-kv">
               <span class="td-kv-label">Selected</span>
               <span id="pack-selected-count" class="td-kv-value">{@selected_count} of {@shipper_size}</span>
             </div>
-            <div class="td-kv"><span class="td-kv-label">Unpacked in batch</span><span class="td-kv-value">{length(@serials)}</span></div>
+            <div class="td-kv">
+              <span class="td-kv-label">Unpacked in batch</span><span class="td-kv-value">{length(
+                @serials
+              )}</span>
+            </div>
             <div class="td-meter" aria-hidden="true"><span style={"width: #{@meter}%"}></span></div>
           </aside>
         </div>
@@ -496,8 +555,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
                 options={Enum.map(@pack_facilities, &{"#{&1.name} · #{&1.gln}", &1.gln})}
               />
               <div :if={@from_party} class="td-kv-grid is-pad">
-                <div class="td-kv"><span class="td-kv-label">Company</span><span class="td-kv-value">{@from_party.name}</span></div>
-                <div class="td-kv"><span class="td-kv-label">Address</span><span class="td-kv-value">{@from_party.address}</span></div>
+                <div class="td-kv">
+                  <span class="td-kv-label">Company</span><span class="td-kv-value">{@from_party.name}</span>
+                </div>
+                <div class="td-kv">
+                  <span class="td-kv-label">Address</span><span class="td-kv-value">{@from_party.address}</span>
+                </div>
               </div>
               <h2 class="td-idh-title">To</h2>
               <label class="td-field" for="pack_to_gln_search">
@@ -531,42 +594,79 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
                 <strong>{@pack_to_party.company}</strong>
                 <span class="td-note font-mono">{@pack_to_party.gln} · {@pack_to_party.address}</span>
               </div>
-              <p :if={@to_gln_search_status == :unavailable} class="td-note">The GS1 GLN directory is unavailable. Try again in a moment.</p>
+              <p :if={@to_gln_search_status == :unavailable} class="td-note">
+                The GS1 GLN directory is unavailable. Try again in a moment.
+              </p>
               <.td_input field={@pack_form[:order_number]} label="Order number (optional)" />
-              <p class="td-note">Printed on the shipper label. You can ship to a different order later.</p>
+              <p class="td-note">
+                Printed on the shipper label. You can ship to a different order later.
+              </p>
             </.form>
-            <p :if={@pack_error && @step == "parties"} class="td-ban is-danger">{error_message(@pack_error)}</p>
+            <p :if={@pack_error && @step == "parties"} class="td-ban is-danger">
+              {error_message(@pack_error)}
+            </p>
           </div>
           <aside class="td-card td-pad">
             <h2 class="td-idh-title">What packing does</h2>
             <p class="td-note">GS1 issues one shipper SSCC for the {@selected_count} serials.</p>
             <p class="td-note">Thamani records an EPCIS Pack event.</p>
-            <p class="td-note">Nothing ships yet. You put shippers on a pallet and ship the pallet.</p>
+            <p class="td-note">
+              Nothing ships yet. You put shippers on a pallet and ship the pallet.
+            </p>
           </aside>
         </div>
 
         <div :if={@step == "review"} class="td-pack">
-          <.form for={@pack_form} id="pack-serials-form" phx-submit="submit_pack" class="td-card td-pad">
+          <.form
+            for={@pack_form}
+            id="pack-serials-form"
+            phx-submit="submit_pack"
+            class="td-card td-pad"
+          >
             <input type="hidden" name="pack[from_gln]" value={@pack_form[:from_gln].value} />
             <input type="hidden" name="pack[to_gln]" value={@pack_form[:to_gln].value} />
             <input type="hidden" name="pack[order_number]" value={@pack_form[:order_number].value} />
             <p :if={is_nil(@pack_error)} id="pack-review-note" class="td-ban">
               Creating the shipper asks GS1 for a new SSCC and records an EPCIS Pack event for these {@selected_count} serials.
             </p>
-            <p :if={match?({:invalid, _}, @pack_error)} id="pack-review-invalid" class="td-ban is-danger">
+            <p
+              :if={match?({:invalid, _}, @pack_error)}
+              id="pack-review-invalid"
+              class="td-ban is-danger"
+            >
               {error_message(@pack_error)}
             </p>
-            <p :if={@pack_error && !match?({:invalid, _}, @pack_error)} id="pack-gs1-error" class="td-ban is-danger">
+            <p
+              :if={@pack_error && !match?({:invalid, _}, @pack_error)}
+              id="pack-gs1-error"
+              class="td-ban is-danger"
+            >
               GS1 didn't issue an SSCC, so nothing was packed. Your {@selected_count} serials are still unpacked. Try again in a moment.
             </p>
             <h2 class="td-idh-title">Shipper</h2>
             <div class="td-kv-grid">
-              <div class="td-kv"><span class="td-kv-label">Product</span><span class="td-kv-value">{@product.name}</span></div>
-              <div class="td-kv"><span class="td-kv-label">GTIN</span><span class="td-kv-value is-mono">{@product.gtin}</span></div>
-              <div class="td-kv"><span class="td-kv-label">Batch</span><span class="td-kv-value is-mono">{@batch.batch_no}</span></div>
-              <div class="td-kv"><span class="td-kv-label">Units</span><span class="td-kv-value">{@selected_count}</span></div>
-              <div class="td-kv"><span class="td-kv-label">Expires</span><span class="td-kv-value">{long_date(@batch.expiry_date)}</span></div>
-              <div class="td-kv"><span class="td-kv-label">Order</span><span class="td-kv-value">{@pack_form[:order_number].value}</span></div>
+              <div class="td-kv">
+                <span class="td-kv-label">Product</span><span class="td-kv-value">{@product.name}</span>
+              </div>
+              <div class="td-kv">
+                <span class="td-kv-label">GTIN</span><span class="td-kv-value is-mono">{@product.gtin}</span>
+              </div>
+              <div class="td-kv">
+                <span class="td-kv-label">Batch</span><span class="td-kv-value is-mono">{@batch.batch_no}</span>
+              </div>
+              <div class="td-kv">
+                <span class="td-kv-label">Units</span><span class="td-kv-value">{@selected_count}</span>
+              </div>
+              <div class="td-kv">
+                <span class="td-kv-label">Expires</span><span class="td-kv-value">{long_date(
+                  @batch.expiry_date
+                )}</span>
+              </div>
+              <div class="td-kv">
+                <span class="td-kv-label">Order</span><span class="td-kv-value">{@pack_form[
+                  :order_number
+                ].value}</span>
+              </div>
             </div>
             <div class="td-kv-grid">
               <div id="pack-review-from" class="td-choice">
@@ -587,17 +687,31 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
             <h2 class="td-idh-title">Serials</h2>
             <p class="td-note">{@selected_count} selected, all unpacked</p>
             <p :for={serial <- @preview} class="font-mono">{sgtin(@product, serial)}</p>
-            <p :if={length(@chosen) > length(@preview)} class="td-note">Showing {length(@preview)} of {length(@chosen)}</p>
+            <p :if={length(@chosen) > length(@preview)} class="td-note">
+              Showing {length(@preview)} of {length(@chosen)}
+            </p>
           </aside>
         </div>
 
         <div class="td-pack-foot">
           <span id="pack-foot-count">
-            {if @step == "parties" && @pack_to_party, do: "Shipper for #{@pack_to_party.company}", else: "#{@selected_count} serials selected for 1 shipper SSCC"}
+            {if @step == "parties" && @pack_to_party,
+              do: "Shipper for #{@pack_to_party.company}",
+              else: "#{@selected_count} serials selected for 1 shipper SSCC"}
           </span>
           <div style="display:flex;gap:8px;">
-            <.td_button :if={@step == "serials"} id="pack-cancel" label="Cancel" navigate={@back_path} />
-            <.td_button :if={@step != "serials"} id="pack-back-step" label="Back" phx-click={if @step == "review", do: "to_parties", else: "to_serials"} />
+            <.td_button
+              :if={@step == "serials"}
+              id="pack-cancel"
+              label="Cancel"
+              navigate={@back_path}
+            />
+            <.td_button
+              :if={@step != "serials"}
+              id="pack-back-step"
+              label="Back"
+              phx-click={if @step == "review", do: "to_parties", else: "to_serials"}
+            />
             <.td_button
               :if={@step == "serials"}
               id="pack-next"
@@ -606,7 +720,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
               disabled={@selected_count == 0}
               phx-click="to_parties"
             />
-            <.td_button :if={@step == "parties"} id="pack-next" variant="primary" label="Next" phx-click="to_review" />
+            <.td_button
+              :if={@step == "parties"}
+              id="pack-next"
+              variant="primary"
+              label="Next"
+              phx-click="to_review"
+            />
             <.td_button
               :if={@step == "review"}
               id="submit-pack-serials"

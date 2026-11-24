@@ -50,7 +50,10 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
   end
 
   def handle_params(params, _url, socket) do
-    status = if params["status"] in ~w(draft received inspected completed), do: params["status"], else: ""
+    status =
+      if params["status"] in ~w(draft received inspected completed),
+        do: params["status"],
+        else: ""
 
     {:noreply,
      socket
@@ -833,7 +836,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
   defp condition_totals(items) do
     items
     |> Enum.group_by(&(&1.condition || "unset"))
-    |> Enum.map(fn {condition, rows} -> {to_string(condition), rows |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()} end)
+    |> Enum.map(fn {condition, rows} ->
+      {to_string(condition), rows |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()}
+    end)
   end
 
   defp reason_label(nil), do: "—"
@@ -986,7 +991,11 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
       <div :if={@customer_return.items != []} class="td-card" id="customer-return-items">
         <.td_card_header
           title="Returned items"
-          subtitle={if @customer_return.status == :received, do: "Set the condition of each item after inspection.", else: "#{length(@customer_return.items)} on this return"}
+          subtitle={
+            if @customer_return.status == :received,
+              do: "Set the condition of each item after inspection.",
+              else: "#{length(@customer_return.items)} on this return"
+          }
         />
         <div class="td-list-table">
           <table class="td-rows is-static">
@@ -1010,7 +1019,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
                 </td>
                 <td>
                   <span class="td-mono">{item.batch_no}</span>
-                  <span :if={item.expiry_date} class="td-sub td-s12">Exp {ThamaniDawaWeb.TimeFormat.date(item.expiry_date)}</span>
+                  <span :if={item.expiry_date} class="td-sub td-s12">Exp {ThamaniDawaWeb.TimeFormat.date(
+                    item.expiry_date
+                  )}</span>
                 </td>
                 <td class="is-num">{item.quantity}</td>
                 <td>
@@ -1026,7 +1037,12 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
                         id={"condition-#{item.id}"}
                         name="condition"
                         value={item.condition}
-                        options={Enum.map(CustomerReturnItem.conditions(), &{Phoenix.Naming.humanize(&1), &1})}
+                        options={
+                          Enum.map(
+                            CustomerReturnItem.conditions(),
+                            &{Phoenix.Naming.humanize(&1), &1}
+                          )
+                        }
                         prompt="Needs a condition"
                         phx-change="set_condition"
                       />
@@ -1127,7 +1143,10 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
             id="confirm-complete-return"
             variant="primary"
             label="Complete return"
-            phx-click={JS.push("complete", value: %{id: to_string(@customer_return.id)}) |> hide_modal("complete-return-modal")}
+            phx-click={
+              JS.push("complete", value: %{id: to_string(@customer_return.id)})
+              |> hide_modal("complete-return-modal")
+            }
           />
         </:footer>
       </.modal>
@@ -1156,7 +1175,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
                 <.status_badge status={@customer_return.status} />
               </h1>
               <p class="td-idh-sub">
-                {@customer_return.customer.name} · {@customer_return.site.name} · {status_message(@customer_return.status)}
+                {@customer_return.customer.name} · {@customer_return.site.name} · {status_message(
+                  @customer_return.status
+                )}
               </p>
             </div>
           </header>
@@ -1175,7 +1196,12 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
                 <dd class="td-kv-value">
                   <.link
                     :if={@customer_return.shipment}
-                    navigate={ThamaniDawaWeb.ReturnTo.with_query(~p"/distributor/shipments/#{@customer_return.shipment.id}", "/distributor/customer-returns/#{@customer_return.id}")}
+                    navigate={
+                      ThamaniDawaWeb.ReturnTo.with_query(
+                        ~p"/distributor/shipments/#{@customer_return.shipment.id}",
+                        "/distributor/customer-returns/#{@customer_return.id}"
+                      )
+                    }
                   >
                     {@customer_return.shipment.order_number || @customer_return.shipment.reference}
                   </.link>
@@ -1193,7 +1219,9 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
               </div>
               <div class="td-kv">
                 <dt class="td-kv-label">Created (EAT)</dt>
-                <dd class="td-kv-value">{ThamaniDawaWeb.TimeFormat.datetime(@customer_return.inserted_at)}</dd>
+                <dd class="td-kv-value">
+                  {ThamaniDawaWeb.TimeFormat.datetime(@customer_return.inserted_at)}
+                </dd>
               </div>
             </dl>
           </section>
@@ -1208,7 +1236,13 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
             subtitle="Stock your customers send back. Receive it, inspect each item, then complete the return."
           >
             <:actions>
-              <.td_button id="new-customer-return" variant="primary" glyph="plus" patch={~p"/distributor/customer-returns/new"} label="New customer return" />
+              <.td_button
+                id="new-customer-return"
+                variant="primary"
+                glyph="plus"
+                patch={~p"/distributor/customer-returns/new"}
+                label="New customer return"
+              />
             </:actions>
           </.td_page_header>
         </div>
@@ -1455,9 +1489,22 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
 
         <div class="td-list-page" id="customer-returns-page">
           <nav class="td-tabs" aria-label="Customer return status">
-            <.td_tab id="cr-tab-all" label="All" count={length(@returns)} active={@cr_status == ""} patch={~p"/distributor/customer-returns"} />
             <.td_tab
-              :for={{status, label} <- [{"draft", "Draft"}, {"received", "Received"}, {"inspected", "Inspected"}, {"completed", "Completed"}]}
+              id="cr-tab-all"
+              label="All"
+              count={length(@returns)}
+              active={@cr_status == ""}
+              patch={~p"/distributor/customer-returns"}
+            />
+            <.td_tab
+              :for={
+                {status, label} <- [
+                  {"draft", "Draft"},
+                  {"received", "Received"},
+                  {"inspected", "Inspected"},
+                  {"completed", "Completed"}
+                ]
+              }
               id={"cr-tab-#{status}"}
               label={label}
               count={Enum.count(@returns, &(Atom.to_string(&1.status) == status))}
@@ -1465,13 +1512,19 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
               patch={~p"/distributor/customer-returns?#{%{status: status}}"}
             />
           </nav>
-          <% shown = Enum.filter(@returns, &(@cr_status == "" or Atom.to_string(&1.status) == @cr_status)) %>
+          <% shown =
+            Enum.filter(@returns, &(@cr_status == "" or Atom.to_string(&1.status) == @cr_status)) %>
           <div :if={shown == []} id="customer-returns-empty" class="td-pad td-empty-wrap">
             <div class="td-card td-empty-card">
               <%= if @returns == [] do %>
                 <p class="td-empty-title">No customer returns yet</p>
                 <p class="td-note">Start a return when a customer sends stock back.</p>
-                <.td_button id="customer-returns-empty-new" variant="primary" patch={~p"/distributor/customer-returns/new"} label="New customer return" />
+                <.td_button
+                  id="customer-returns-empty-new"
+                  variant="primary"
+                  patch={~p"/distributor/customer-returns/new"}
+                  label="New customer return"
+                />
               <% else %>
                 <p class="td-empty-title">Nothing here</p>
                 <p class="td-note">No returns are at this step right now.</p>
@@ -1499,9 +1552,15 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
                   class="is-link"
                   phx-click={open_return(customer_return)}
                 >
-                  <td><b>Return #{customer_return.id}</b><span class="td-sub td-s12">{customer_return.site.name}</span></td>
+                  <td>
+                    <b>Return #{customer_return.id}</b><span class="td-sub td-s12">{customer_return.site.name}</span>
+                  </td>
                   <td>{customer_return.customer.name}</td>
-                  <td>{(customer_return.shipment && (customer_return.shipment.order_number || customer_return.shipment.reference)) || "—"}</td>
+                  <td>
+                    {(customer_return.shipment &&
+                        (customer_return.shipment.order_number || customer_return.shipment.reference)) ||
+                      "—"}
+                  </td>
                   <td>{reason_label(customer_return.reason)}</td>
                   <td class="is-num">{item_count(customer_return.items)}</td>
                   <td><.status_badge status={customer_return.status} /></td>

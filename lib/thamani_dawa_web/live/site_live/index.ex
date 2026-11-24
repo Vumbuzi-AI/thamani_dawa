@@ -176,7 +176,8 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
       when field in ["activities", "status"] do
     key = String.to_existing_atom(field)
 
-    {:noreply, socket |> assign(:filters, %{socket.assigns.filters | key => value}) |> assign_sites()}
+    {:noreply,
+     socket |> assign(:filters, %{socket.assigns.filters | key => value}) |> assign_sites()}
   end
 
   def handle_event("clear_filters", _params, socket) do
@@ -1056,7 +1057,13 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/sites"}>
       <:search>
         <form phx-change="search" id="search-form" onsubmit="return false">
-          <.td_search name="search" value={@search} placeholder="Search by name or address" shortcut="⌘K" phx-debounce="200" />
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search by name or address"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
         </form>
       </:search>
       <.td_list_page title="Sites" subtitle="Search, filter, and manage your sites.">
@@ -1083,151 +1090,99 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           />
         </:filters>
 
-      <.modal
-        :if={@live_action in [:new, :edit]}
-        id="site-modal"
-        class="max-w-3xl"
-        show
-        on_cancel={
-          if @back_path in [~p"/org/dashboard", ~p"/onboarding"],
-            do: JS.navigate(@back_path),
-            else: JS.patch(@back_path)
-        }
-      >
-        <h2 class="pr-10 text-2xl font-medium tracking-tight text-thamani-forest">
-          {if @live_action == :new, do: "Add a site", else: "Edit site"}
-        </h2>
-        <p class="mt-1 text-sm text-thamani-pewter">
-          Configure the location identity, activities, and map position.
-        </p>
-        <div class="mt-6">
-          <.site_form
-            form={@form}
-            gln_check={@gln_check}
-            operating_models={@operating_models}
-            gs1_glns={@gs1_glns}
-            taken_glns={@taken_glns}
-            gln_query={@gln_query}
-          />
-        </div>
-      </.modal>
-
-      <section id="sites" aria-label="Sites" class="space-y-3 sm:hidden">
-        <article
-          :for={site <- @sites}
-          id={"site-card-#{site.id}"}
-          class="group overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200"
+        <.modal
+          :if={@live_action in [:new, :edit]}
+          id="site-modal"
+          class="max-w-3xl"
+          show
+          on_cancel={
+            if @back_path in [~p"/org/dashboard", ~p"/onboarding"],
+              do: JS.navigate(@back_path),
+              else: JS.patch(@back_path)
+          }
         >
-          <div class="p-4">
-            <div class="flex items-start gap-3.5">
-              <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest ring-1 ring-thamani-stone transition-colors duration-200 group-hover:bg-td-accent-tint">
-                <.icon name="hero-building-office-2" class="size-6" />
+          <h2 class="pr-10 text-2xl font-medium tracking-tight text-thamani-forest">
+            {if @live_action == :new, do: "Add a site", else: "Edit site"}
+          </h2>
+          <p class="mt-1 text-sm text-thamani-pewter">
+            Configure the location identity, activities, and map position.
+          </p>
+          <div class="mt-6">
+            <.site_form
+              form={@form}
+              gln_check={@gln_check}
+              operating_models={@operating_models}
+              gs1_glns={@gs1_glns}
+              taken_glns={@taken_glns}
+              gln_query={@gln_query}
+            />
+          </div>
+        </.modal>
+
+        <section id="sites" aria-label="Sites" class="space-y-3 sm:hidden">
+          <article
+            :for={site <- @sites}
+            id={"site-card-#{site.id}"}
+            class="group overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface shadow-[0_1px_3px_rgba(28,58,19,0.08)] transition-all duration-200"
+          >
+            <div class="p-4">
+              <div class="flex items-start gap-3.5">
+                <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-thamani-canvas text-thamani-forest ring-1 ring-thamani-stone transition-colors duration-200 group-hover:bg-td-accent-tint">
+                  <.icon name="hero-building-office-2" class="size-6" />
+                </div>
+                <div class="min-w-0 flex-1 pt-0.5">
+                  <h2 class="truncate text-base font-semibold leading-6 text-thamani-forest">
+                    {site.name}
+                  </h2>
+                  <p class="mt-0.5 text-sm text-thamani-pewter">
+                    {activity_labels(site)}
+                  </p>
+                </div>
+                <.status_badge
+                  status={if site.is_active, do: :active, else: :inactive}
+                  class="shrink-0"
+                />
               </div>
-              <div class="min-w-0 flex-1 pt-0.5">
-                <h2 class="truncate text-base font-semibold leading-6 text-thamani-forest">
-                  {site.name}
-                </h2>
-                <p class="mt-0.5 text-sm text-thamani-pewter">
-                  {activity_labels(site)}
-                </p>
-              </div>
-              <.status_badge
-                status={if site.is_active, do: :active, else: :inactive}
-                class="shrink-0"
-              />
+
+              <dl class="mt-4 grid grid-cols-2 border-t border-thamani-stone/80 pt-4">
+                <div class="min-w-0 pr-4">
+                  <dt class="text-sm text-thamani-pewter">GLN</dt>
+                  <dd class="mt-1 truncate text-sm font-medium tabular-nums text-td-ink">
+                    {site.gln}
+                  </dd>
+                </div>
+                <div class="min-w-0 border-l border-thamani-stone/80 pl-4">
+                  <dt class="text-sm text-thamani-pewter">Address</dt>
+                  <dd class="mt-1 line-clamp-2 text-sm font-medium leading-5 text-td-ink">
+                    {site.address}
+                  </dd>
+                </div>
+              </dl>
             </div>
 
-            <dl class="mt-4 grid grid-cols-2 border-t border-thamani-stone/80 pt-4">
-              <div class="min-w-0 pr-4">
-                <dt class="text-sm text-thamani-pewter">GLN</dt>
-                <dd class="mt-1 truncate text-sm font-medium tabular-nums text-td-ink">
-                  {site.gln}
-                </dd>
-              </div>
-              <div class="min-w-0 border-l border-thamani-stone/80 pl-4">
-                <dt class="text-sm text-thamani-pewter">Address</dt>
-                <dd class="mt-1 line-clamp-2 text-sm font-medium leading-5 text-td-ink">
-                  {site.address}
-                </dd>
-              </div>
-            </dl>
-          </div>
+            <div class="flex gap-2 border-t border-thamani-stone bg-thamani-canvas/60 p-3">
+              <.button
+                variant="ghost-edit"
+                patch={~p"/org/sites/#{site.id}/edit"}
+                class="min-h-10 flex-1 gap-2 px-4 py-2 text-sm"
+                id={"btn-edit-site-#{site.id}"}
+              >
+                <.icon name="hero-pencil-square" class="size-4" /> Edit
+              </.button>
+              <.button
+                type="button"
+                phx-click="toggle_active"
+                phx-value-id={site.id}
+                class="min-h-10 flex-1 px-4 py-2 text-sm"
+                variant={if site.is_active, do: "destructive", else: "ghost"}
+                id={"btn-toggle-site-#{site.id}"}
+              >
+                {if site.is_active, do: "Deactivate", else: "Reactivate"}
+              </.button>
+            </div>
+          </article>
 
-          <div class="flex gap-2 border-t border-thamani-stone bg-thamani-canvas/60 p-3">
-            <.button
-              variant="ghost-edit"
-              patch={~p"/org/sites/#{site.id}/edit"}
-              class="min-h-10 flex-1 gap-2 px-4 py-2 text-sm"
-              id={"btn-edit-site-#{site.id}"}
-            >
-              <.icon name="hero-pencil-square" class="size-4" /> Edit
-            </.button>
-            <.button
-              type="button"
-              phx-click="toggle_active"
-              phx-value-id={site.id}
-              class="min-h-10 flex-1 px-4 py-2 text-sm"
-              variant={if site.is_active, do: "destructive", else: "ghost"}
-              id={"btn-toggle-site-#{site.id}"}
-            >
-              {if site.is_active, do: "Deactivate", else: "Reactivate"}
-            </.button>
-          </div>
-        </article>
-
-        <div :if={@sites == []} id="sites-empty">
-          <.blank_state
-            icon="hero-building-office-2"
-            title={
-              if @search != "" or active_filter_count(@filters) > 0,
-                do: "No sites match your search or filters",
-                else: "No sites yet"
-            }
-          >
-            {if @search != "" or active_filter_count(@filters) > 0,
-              do: "Try a different search term, or clear the applied filters.",
-              else: "Sites you add to your organization will appear here."}
-          </.blank_state>
-        </div>
-      </section>
-
-      <div class="hidden sm:block">
-        <.table
-          id="sites-table"
-          rows={@sites}
-          row_id={fn site -> "site-row-#{site.id}" end}
-          row_click={fn site -> JS.navigate(~p"/org/sites/#{site.id}") end}
-        >
-          <:col :let={site} label="Name">{site.name}</:col>
-          <:col :let={site} label="Activities">{activity_labels(site)}</:col>
-          <:col :let={site} label="GLN"><span class="tabular-nums">{site.gln}</span></:col>
-          <:col :let={site} label="Address">{site.address}</:col>
-          <:col :let={site} label="Status" mobile="aside">
-            <.status_badge status={if site.is_active, do: :active, else: :inactive} />
-          </:col>
-          <:action :let={site}>
-            <.button
-              variant="ghost-edit"
-              patch={~p"/org/sites/#{site.id}/edit"}
-              class="min-h-10 gap-2 px-4 py-2 text-sm"
-              id={"btn-edit-site-desktop-#{site.id}"}
-            >
-              <.icon name="hero-pencil-square" class="size-4" /> Edit
-            </.button>
-          </:action>
-          <:action :let={site}>
-            <.button
-              type="button"
-              phx-click="toggle_active"
-              phx-value-id={site.id}
-              class="px-3 py-1.5 text-xs"
-              variant={if site.is_active, do: "destructive", else: "ghost"}
-              id={"btn-toggle-site-desktop-#{site.id}"}
-            >
-              {if site.is_active, do: "Deactivate", else: "Reactivate"}
-            </.button>
-          </:action>
-          <:empty_state>
+          <div :if={@sites == []} id="sites-empty">
             <.blank_state
               icon="hero-building-office-2"
               title={
@@ -1240,11 +1195,63 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
                 do: "Try a different search term, or clear the applied filters.",
                 else: "Sites you add to your organization will appear here."}
             </.blank_state>
-          </:empty_state>
-        </.table>
-      </div>
+          </div>
+        </section>
 
-      <.pagination page={@page_info} path={~p"/org/sites"} />
+        <div class="hidden sm:block">
+          <.table
+            id="sites-table"
+            rows={@sites}
+            row_id={fn site -> "site-row-#{site.id}" end}
+            row_click={fn site -> JS.navigate(~p"/org/sites/#{site.id}") end}
+          >
+            <:col :let={site} label="Name">{site.name}</:col>
+            <:col :let={site} label="Activities">{activity_labels(site)}</:col>
+            <:col :let={site} label="GLN"><span class="tabular-nums">{site.gln}</span></:col>
+            <:col :let={site} label="Address">{site.address}</:col>
+            <:col :let={site} label="Status" mobile="aside">
+              <.status_badge status={if site.is_active, do: :active, else: :inactive} />
+            </:col>
+            <:action :let={site}>
+              <.button
+                variant="ghost-edit"
+                patch={~p"/org/sites/#{site.id}/edit"}
+                class="min-h-10 gap-2 px-4 py-2 text-sm"
+                id={"btn-edit-site-desktop-#{site.id}"}
+              >
+                <.icon name="hero-pencil-square" class="size-4" /> Edit
+              </.button>
+            </:action>
+            <:action :let={site}>
+              <.button
+                type="button"
+                phx-click="toggle_active"
+                phx-value-id={site.id}
+                class="px-3 py-1.5 text-xs"
+                variant={if site.is_active, do: "destructive", else: "ghost"}
+                id={"btn-toggle-site-desktop-#{site.id}"}
+              >
+                {if site.is_active, do: "Deactivate", else: "Reactivate"}
+              </.button>
+            </:action>
+            <:empty_state>
+              <.blank_state
+                icon="hero-building-office-2"
+                title={
+                  if @search != "" or active_filter_count(@filters) > 0,
+                    do: "No sites match your search or filters",
+                    else: "No sites yet"
+                }
+              >
+                {if @search != "" or active_filter_count(@filters) > 0,
+                  do: "Try a different search term, or clear the applied filters.",
+                  else: "Sites you add to your organization will appear here."}
+              </.blank_state>
+            </:empty_state>
+          </.table>
+        </div>
+
+        <.pagination page={@page_info} path={~p"/org/sites"} />
       </.td_list_page>
     </Layouts.org_shell>
     """

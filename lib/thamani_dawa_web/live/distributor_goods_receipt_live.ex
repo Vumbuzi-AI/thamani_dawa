@@ -8,7 +8,9 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
     receipt = GoodsReceipts.get_receipt!(socket.assigns.current_scope.organization_id, id)
 
     portal = if socket.assigns.live_action == :org_show, do: :organization, else: :distributor
-    index_path = if portal == :organization, do: ~p"/org/receiving", else: ~p"/distributor/receiving"
+
+    index_path =
+      if portal == :organization, do: ~p"/org/receiving", else: ~p"/distributor/receiving"
 
     {:ok,
      socket
@@ -166,7 +168,8 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
             expiry: expiry,
             uom: uom,
             quantity: batch_lines |> Enum.map(&(&1.quantity || 0)) |> Enum.sum(),
-            location: batch_lines |> Enum.map(& &1.location) |> Enum.find(&(&1 not in [nil, "—"])) || "—",
+            location:
+              batch_lines |> Enum.map(& &1.location) |> Enum.find(&(&1 not in [nil, "—"])) || "—",
             lines: batch_lines
           }
         end)
@@ -558,8 +561,7 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
                     :if={line.resolution_reference not in [nil, ""]}
                     class="mt-2 text-xs text-thamani-pewter"
                   >
-                    Reference
-                    <span class="font-medium">{line.resolution_reference}</span>
+                    Reference <span class="font-medium">{line.resolution_reference}</span>
                   </p>
                   <div
                     :if={line.resolvable}
@@ -656,147 +658,178 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
           />
         </div>
       <% else %>
-      <.td_back_link id="receipt-back" to={@back_path} label={ThamaniDawaWeb.ReturnTo.label(@back_path, "Back to Receiving")} />
-      <div class="td-recipe td-detail-page" id="distributor-receipt">
-        <header class="td-idh">
-          <div class="td-idh-text">
-            <h1 class="td-idh-title">
-              <span>{@receipt.number}</span>
-              <.td_badge
-                :if={open_count(@receipt) > 0}
-                tone="warning"
-                label={"#{open_count(@receipt)} open #{if open_count(@receipt) == 1, do: "discrepancy", else: "discrepancies"}"}
-              />
-              <.td_badge :if={open_count(@receipt) == 0} tone="success" label="Received" />
-            </h1>
-            <p class="td-idh-sub">
-              Accepted by {received_by_label(@receipt)} on {ThamaniDawaWeb.TimeFormat.datetime(@receipt.received_at)} EAT
-            </p>
-          </div>
-        </header>
-        <section class="td-card" id="receipt-summary">
-          <dl class="td-kv-grid is-pad is-6">
-            <div class="td-kv"><dt class="td-kv-label">Received from</dt><dd class="td-kv-value">{supplier_summary(@receipt)}</dd></div>
-            <div class="td-kv"><dt class="td-kv-label">Supplier GLN</dt><dd class="td-kv-value td-mono">{@receipt.origin_gln || "—"}</dd></div>
-            <div class="td-kv"><dt class="td-kv-label">Warehouse</dt><dd class="td-kv-value">{warehouse_summary(@receipt.items)}</dd></div>
-            <div class="td-kv"><dt class="td-kv-label">Received by</dt><dd class="td-kv-value">{received_by_label(@receipt)}</dd></div>
-            <div class="td-kv"><dt class="td-kv-label">Received (EAT)</dt><dd class="td-kv-value">{ThamaniDawaWeb.TimeFormat.datetime(@receipt.received_at)}</dd></div>
-            <div class="td-kv"><dt class="td-kv-label">Units</dt><dd class="td-kv-value">{ThamaniDawaWeb.DistributorComponents.number(Enum.sum(Enum.map(@receipt.items, &(&1.quantity || 0))))}</dd></div>
-          </dl>
-        </section>
-        <div :if={open_count(@receipt) > 0} class="td-ban is-warning" id="receipt-open-banner">
-          <.td_icon name="warning" class="size-4" />
-          <span>Resolve each open line once you have agreed it with the supplier.</span>
-        </div>
-      </div>
-
-      <section class="mt-6 td-card" id="receipt-items-card">
-        <.td_card_header
-          title="Items received"
-          subtitle="Confirmed units sit with their shipper. Anything still missing is listed under it."
+        <.td_back_link
+          id="receipt-back"
+          to={@back_path}
+          label={ThamaniDawaWeb.ReturnTo.label(@back_path, "Back to Receiving")}
         />
-        <div class="td-pad">
+        <div class="td-recipe td-detail-page" id="distributor-receipt">
+          <header class="td-idh">
+            <div class="td-idh-text">
+              <h1 class="td-idh-title">
+                <span>{@receipt.number}</span>
+                <.td_badge
+                  :if={open_count(@receipt) > 0}
+                  tone="warning"
+                  label={"#{open_count(@receipt)} open #{if open_count(@receipt) == 1, do: "discrepancy", else: "discrepancies"}"}
+                />
+                <.td_badge :if={open_count(@receipt) == 0} tone="success" label="Received" />
+              </h1>
+              <p class="td-idh-sub">
+                Accepted by {received_by_label(@receipt)} on {ThamaniDawaWeb.TimeFormat.datetime(
+                  @receipt.received_at
+                )} EAT
+              </p>
+            </div>
+          </header>
+          <section class="td-card" id="receipt-summary">
+            <dl class="td-kv-grid is-pad is-6">
+              <div class="td-kv">
+                <dt class="td-kv-label">Received from</dt><dd class="td-kv-value">
+                  {supplier_summary(@receipt)}
+                </dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Supplier GLN</dt><dd class="td-kv-value td-mono">
+                  {@receipt.origin_gln || "—"}
+                </dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Warehouse</dt><dd class="td-kv-value">
+                  {warehouse_summary(@receipt.items)}
+                </dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Received by</dt><dd class="td-kv-value">
+                  {received_by_label(@receipt)}
+                </dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Received (EAT)</dt><dd class="td-kv-value">
+                  {ThamaniDawaWeb.TimeFormat.datetime(@receipt.received_at)}
+                </dd>
+              </div>
+              <div class="td-kv">
+                <dt class="td-kv-label">Units</dt><dd class="td-kv-value">
+                  {ThamaniDawaWeb.DistributorComponents.number(
+                    Enum.sum(Enum.map(@receipt.items, &(&1.quantity || 0)))
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </section>
+          <div :if={open_count(@receipt) > 0} class="td-ban is-warning" id="receipt-open-banner">
+            <.td_icon name="warning" class="size-4" />
+            <span>Resolve each open line once you have agreed it with the supplier.</span>
+          </div>
+        </div>
 
-        <.blank_state
-          :if={@receipt_groups == []}
-          icon="hero-archive-box"
-          title="Nothing on this receipt"
-        >
-          Received batches and missing lines will show here.
-        </.blank_state>
+        <section class="mt-6 td-card" id="receipt-items-card">
+          <.td_card_header
+            title="Items received"
+            subtitle="Confirmed units sit with their shipper. Anything still missing is listed under it."
+          />
+          <div class="td-pad">
+            <.blank_state
+              :if={@receipt_groups == []}
+              icon="hero-archive-box"
+              title="Nothing on this receipt"
+            >
+              Received batches and missing lines will show here.
+            </.blank_state>
 
-        <div id="goods-receipt-items" class="space-y-4">
-          <article
-            :for={{group, group_index} <- Enum.with_index(@receipt_groups)}
-            id={"goods-receipt-case-#{group_index}"}
-            class="overflow-hidden rounded-2xl ff-surface-card"
-          >
-            <header class="flex flex-wrap items-center justify-between gap-3 border-b border-thamani-stone px-4 py-3 sm:px-5">
-              <div class="flex items-center gap-3">
-                <span class="flex size-8 items-center justify-center rounded-lg bg-thamani-canvas text-sm font-semibold text-thamani-forest">
-                  {group_index + 1}
+            <div id="goods-receipt-items" class="space-y-4">
+              <article
+                :for={{group, group_index} <- Enum.with_index(@receipt_groups)}
+                id={"goods-receipt-case-#{group_index}"}
+                class="overflow-hidden rounded-2xl ff-surface-card"
+              >
+                <header class="flex flex-wrap items-center justify-between gap-3 border-b border-thamani-stone px-4 py-3 sm:px-5">
+                  <div class="flex items-center gap-3">
+                    <span class="flex size-8 items-center justify-center rounded-lg bg-thamani-canvas text-sm font-semibold text-thamani-forest">
+                      {group_index + 1}
+                    </span>
+                    <div>
+                      <p class="font-medium text-thamani-evergreen">
+                        {if group.sscc, do: "Case", else: "No case label"}
+                      </p>
+                      <p class="text-xs tabular-nums text-thamani-pewter">
+                        {case_units(group)} {if case_units(group) == 1, do: "unit", else: "units"}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <span
+                      :if={group.sscc}
+                      class="rounded-lg bg-td-accent-tint px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
+                    >
+                      SSCC {group.sscc}
+                    </span>
+                  </div>
+                </header>
+
+                <.receipt_batch :for={batch <- group.batches} batch={batch} />
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section :if={@receipt.attachments != []} class="mt-6">
+          <.td_card_header
+            title="Documents"
+            subtitle="GRN, invoice, and any other documents attached to this delivery."
+          />
+          <ul id="goods-receipt-documents" class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <li
+              :for={attachment <- @receipt.attachments}
+              id={"goods-receipt-document-#{attachment.id}"}
+              class="group flex min-w-0 flex-col rounded-2xl border border-thamani-stone bg-td-surface p-4 shadow-[0_1px_2px_rgba(23,48,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-thamani-forest hover:shadow-md"
+            >
+              <div class="flex min-w-0 items-start gap-3">
+                <span class={[
+                  "flex size-11 shrink-0 items-center justify-center rounded-xl",
+                  document_icon_class(attachment)
+                ]}>
+                  <.icon name={document_icon(attachment)} class="size-5" />
                 </span>
-                <div>
-                  <p class="font-medium text-thamani-evergreen">
-                    {if group.sscc, do: "Case", else: "No case label"}
+                <div class="min-w-0 flex-1">
+                  <span class="inline-flex rounded-full bg-thamani-canvas px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-thamani-pewter">
+                    {doc_type_label(attachment.doc_type)}
+                  </span>
+                  <p
+                    class="mt-2 truncate text-sm font-semibold text-thamani-forest"
+                    title={attachment.filename}
+                  >
+                    {attachment.filename}
                   </p>
-                  <p class="text-xs tabular-nums text-thamani-pewter">
-                    {case_units(group)} {if case_units(group) == 1, do: "unit", else: "units"}
+                  <p class="mt-1 text-xs text-thamani-subtle">
+                    {document_kind(attachment)} · {format_file_size(attachment.byte_size)}
                   </p>
                 </div>
               </div>
-              <div class="flex items-center gap-2">
-                <span
-                  :if={group.sscc}
-                  class="rounded-lg bg-td-accent-tint px-3 py-1 text-xs font-semibold tabular-nums tracking-tight text-thamani-forest"
+
+              <div class="mt-4 grid grid-cols-2 gap-2 border-t border-thamani-stone pt-3">
+                <a
+                  href={attachment.path}
+                  target="_blank"
+                  rel="noopener"
+                  aria-label={"Preview #{attachment.filename}"}
+                  class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-td-focus"
                 >
-                  SSCC {group.sscc}
-                </span>
-              </div>
-            </header>
-
-            <.receipt_batch :for={batch <- group.batches} batch={batch} />
-          </article>
-        </div>
-        </div>
-      </section>
-
-      <section :if={@receipt.attachments != []} class="mt-6">
-        <.td_card_header
-          title="Documents"
-          subtitle="GRN, invoice, and any other documents attached to this delivery."
-        />
-        <ul id="goods-receipt-documents" class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <li
-            :for={attachment <- @receipt.attachments}
-            id={"goods-receipt-document-#{attachment.id}"}
-            class="group flex min-w-0 flex-col rounded-2xl border border-thamani-stone bg-td-surface p-4 shadow-[0_1px_2px_rgba(23,48,42,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-thamani-forest hover:shadow-md"
-          >
-            <div class="flex min-w-0 items-start gap-3">
-              <span class={[
-                "flex size-11 shrink-0 items-center justify-center rounded-xl",
-                document_icon_class(attachment)
-              ]}>
-                <.icon name={document_icon(attachment)} class="size-5" />
-              </span>
-              <div class="min-w-0 flex-1">
-                <span class="inline-flex rounded-full bg-thamani-canvas px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-thamani-pewter">
-                  {doc_type_label(attachment.doc_type)}
-                </span>
-                <p
-                  class="mt-2 truncate text-sm font-semibold text-thamani-forest"
-                  title={attachment.filename}
+                  <.icon name="hero-eye" class="size-4" /> Preview
+                </a>
+                <a
+                  href={attachment.path}
+                  download={attachment.filename}
+                  aria-label={"Download #{attachment.filename}"}
+                  class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-thamani-forest px-3 text-xs font-semibold text-td-on-accent transition-all hover:-translate-y-px hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-td-focus focus-visible:ring-offset-2"
                 >
-                  {attachment.filename}
-                </p>
-                <p class="mt-1 text-xs text-thamani-subtle">
-                  {document_kind(attachment)} · {format_file_size(attachment.byte_size)}
-                </p>
+                  <.icon name="hero-arrow-down-tray" class="size-4" /> Download
+                </a>
               </div>
-            </div>
-
-            <div class="mt-4 grid grid-cols-2 gap-2 border-t border-thamani-stone pt-3">
-              <a
-                href={attachment.path}
-                target="_blank"
-                rel="noopener"
-                aria-label={"Preview #{attachment.filename}"}
-                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-td-focus"
-              >
-                <.icon name="hero-eye" class="size-4" /> Preview
-              </a>
-              <a
-                href={attachment.path}
-                download={attachment.filename}
-                aria-label={"Download #{attachment.filename}"}
-                class="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg bg-thamani-forest px-3 text-xs font-semibold text-td-on-accent transition-all hover:-translate-y-px hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-td-focus focus-visible:ring-offset-2"
-              >
-                <.icon name="hero-arrow-down-tray" class="size-4" /> Download
-              </a>
-            </div>
-          </li>
-        </ul>
-      </section>
+            </li>
+          </ul>
+        </section>
       <% end %>
 
       <.modal
@@ -807,7 +840,13 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
         subtitle={"Close this line as #{condition_label(String.to_existing_atom(@resolving_status))}. Found means the goods turned up; lost and stolen need an investigation reference."}
         on_cancel={JS.push("close_resolve")}
       >
-        <.form for={%{}} as={:resolve} id="resolve-discrepancy-form" class="td-modal-form" phx-submit="confirm_resolve">
+        <.form
+          for={%{}}
+          as={:resolve}
+          id="resolve-discrepancy-form"
+          class="td-modal-form"
+          phx-submit="confirm_resolve"
+        >
           <.input
             type="select"
             name="outcome"
@@ -842,7 +881,13 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
         </.form>
         <:footer>
           <.td_button type="button" label="Cancel" phx-click="close_resolve" />
-          <.td_button id="confirm-resolve" type="submit" form="resolve-discrepancy-form" variant="primary" label="Mark as resolved" />
+          <.td_button
+            id="confirm-resolve"
+            type="submit"
+            form="resolve-discrepancy-form"
+            variant="primary"
+            label="Mark as resolved"
+          />
         </:footer>
       </.modal>
     </.receipt_shell>

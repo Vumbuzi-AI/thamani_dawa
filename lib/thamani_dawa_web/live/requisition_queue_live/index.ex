@@ -166,28 +166,6 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
     |> assign(:fulfill_batches_by_product, %{})
   end
 
-  def handle_event("search", %{"search" => search}, socket) do
-    {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
-  end
-
-  def handle_event("set_filter", %{"field" => "status", "value" => value}, socket) do
-    {:noreply, push_patch(socket, to: filter_path(socket, %{"status" => value}))}
-  end
-
-  def handle_event("set_date_preset", %{"value" => value}, socket) do
-    {:noreply,
-     push_patch(socket, to: filter_path(socket, %{"date" => value, "date_from" => "", "date_to" => ""}))}
-  end
-
-  def handle_event("apply_date_range", params, socket) do
-    from = params["date_from"] || ""
-    to = params["date_to"] || ""
-    preset = if from == "" and to == "", do: "", else: "custom"
-
-    {:noreply,
-     push_patch(socket, to: filter_path(socket, %{"date" => preset, "date_from" => from, "date_to" => to}))}
-  end
-
   defp date_preset(params) do
     case ThamaniDawaWeb.DateRangeFilter.valid_preset(params["date"]) do
       "" ->
@@ -209,6 +187,32 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
 
   defp iso_date(nil), do: ""
   defp iso_date(%Date{} = date), do: Date.to_iso8601(date)
+
+  def handle_event("search", %{"search" => search}, socket) do
+    {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
+  end
+
+  def handle_event("set_filter", %{"field" => "status", "value" => value}, socket) do
+    {:noreply, push_patch(socket, to: filter_path(socket, %{"status" => value}))}
+  end
+
+  def handle_event("set_date_preset", %{"value" => value}, socket) do
+    {:noreply,
+     push_patch(socket,
+       to: filter_path(socket, %{"date" => value, "date_from" => "", "date_to" => ""})
+     )}
+  end
+
+  def handle_event("apply_date_range", params, socket) do
+    from = params["date_from"] || ""
+    to = params["date_to"] || ""
+    preset = if from == "" and to == "", do: "", else: "custom"
+
+    {:noreply,
+     push_patch(socket,
+       to: filter_path(socket, %{"date" => preset, "date_from" => from, "date_to" => to})
+     )}
+  end
 
   def handle_event("approve", %{"id" => id}, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -486,7 +490,13 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path="/org/requisitions">
       <:search>
         <form id="requisition-search" phx-change="search" phx-submit="search" onsubmit="return false">
-          <.td_search name="search" value={@filters["search"]} placeholder="Search by reference" shortcut="⌘K" phx-debounce="200" />
+          <.td_search
+            name="search"
+            value={@filters["search"]}
+            placeholder="Search by reference"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
         </form>
       </:search>
       <.td_list_page
@@ -510,275 +520,276 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
           />
         </:filters>
 
-      <.modal
-        :if={@live_action == :review and not is_nil(@review_requisition)}
-        id="review-requisition-modal"
-        show
-        on_cancel={JS.patch(~p"/org/requisitions")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Review requisition
-        </h2>
-        <p class="mb-1 text-sm text-thamani-pewter">
-          {site_name(@sites_by_id, @review_requisition.site_id)} · {lines_summary(
-            @review_requisition.lines
-          )}
-        </p>
-        <p class="mb-4 text-xs text-thamani-pewter">
-          Set each line's approved quantity: leave it at what was requested to approve in full, lower it to approve partially, or set it to 0 to decline that item.
-        </p>
-        <form phx-submit="review_lines" class="flex flex-col gap-4">
-          <div
-            :for={line <- @review_requisition.lines}
-            class="rounded-xl border border-thamani-stone p-4"
-          >
-            <p class="text-sm font-medium text-thamani-forest">
-              {product_name(@products_by_id, line.product_id)}
-            </p>
-            <p class="text-xs text-thamani-pewter">Requested {line.requested_quantity}</p>
-            <.input
-              type="number"
-              name={"decisions[#{line.id}]"}
-              label="Approved quantity"
-              value={line.requested_quantity}
-              min="0"
-              max={line.requested_quantity}
-              required
-            />
-          </div>
-          <.button variant="primary" phx-disable-with="Approving…" class="w-full">
-            Approve requisition
-          </.button>
-        </form>
-      </.modal>
-
-      <.modal
-        :if={@live_action == :reject and not is_nil(@reject_requisition)}
-        id="reject-requisition-modal"
-        show
-        on_cancel={JS.patch(~p"/org/requisitions")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Reject requisition
-        </h2>
-        <.form for={@reject_form} id="reject-form" phx-submit="reject" class="flex flex-col gap-4">
-          <.input
-            field={@reject_form[:rejection_reason]}
-            type="textarea"
-            label="Reason"
-            required
-          />
-          <.button variant="danger-confirm" phx-disable-with="Rejecting…" class="w-full">
-            Reject requisition
-          </.button>
-        </.form>
-      </.modal>
-
-      <.modal
-        :if={
-          @live_action == :fulfill and not is_nil(@fulfill_requisition) and
-            @fulfill_requisition.lines == []
-        }
-        id="fulfill-requisition-modal"
-        show
-        on_cancel={JS.patch(~p"/org/requisitions")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Fulfill requisition
-        </h2>
-        <p class="mb-4 text-sm text-thamani-pewter">
-          {product_name(@products_by_id, @fulfill_requisition.product_id)} · {site_name(
-            @sites_by_id,
-            @fulfill_requisition.site_id
-          )} · {@fulfill_requisition.quantity} requested
-        </p>
-        <.form
-          :if={@fulfill_org_batches != []}
-          for={@fulfill_form}
-          id="fulfill-form"
-          phx-submit="fulfill"
-          class="flex flex-col gap-4"
+        <.modal
+          :if={@live_action == :review and not is_nil(@review_requisition)}
+          id="review-requisition-modal"
+          show
+          on_cancel={JS.patch(~p"/org/requisitions")}
         >
-          <.input
-            field={@fulfill_form[:org_batch_id]}
-            type="select"
-            label="Warehouse batch"
-            options={
-              Enum.map(@fulfill_org_batches, fn b ->
-                {"#{b.batch_no} · #{b.remaining_quantity} available · expires #{b.expiry_date}", b.id}
-              end)
-            }
-            prompt="Choose a batch"
-            required
-          />
-          <.input
-            field={@fulfill_form[:quantity]}
-            type="number"
-            label="Quantity to dispatch"
-            min="1"
-            required
-          />
-          <.button variant="primary" phx-disable-with="Dispatching…" class="w-full">
-            Dispatch to site
-          </.button>
-        </.form>
-        <.blank_state
-          :if={@fulfill_org_batches == []}
-          icon="hero-archive-box"
-          title="No warehouse stock"
-        >
-          There's no organization-level stock for this product. Order more before fulfilling.
-        </.blank_state>
-      </.modal>
-
-      <.modal
-        :if={
-          @live_action == :fulfill and not is_nil(@fulfill_requisition) and
-            @fulfill_requisition.lines != []
-        }
-        id="fulfill-lines-modal"
-        show
-        on_cancel={JS.patch(~p"/org/requisitions")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Fulfill requisition
-        </h2>
-        <p class="mb-4 text-sm text-thamani-pewter">
-          {site_name(@sites_by_id, @fulfill_requisition.site_id)}
-        </p>
-        <.form
-          for={%{}}
-          as={:fulfillment}
-          id="fulfill-lines-form"
-          phx-submit="fulfill_lines"
-          class="flex flex-col gap-4"
-        >
-          <div
-            :for={line <- fulfillable_lines(@fulfill_requisition.lines)}
-            class="rounded-xl border border-thamani-stone p-4"
-          >
-            <p class="text-sm font-medium text-thamani-forest">
-              {product_name(@products_by_id, line.product_id)}
-            </p>
-            <p class="text-xs text-thamani-pewter">
-              {line_outstanding(line)} of {line.approved_quantity} still outstanding
-            </p>
-            <.blank_state
-              :if={Map.get(@fulfill_batches_by_product, line.product_id, []) == []}
-              icon="hero-archive-box"
-              title="No warehouse stock"
-            >
-              There's no organization-level stock for this product yet.
-            </.blank_state>
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            Review requisition
+          </h2>
+          <p class="mb-1 text-sm text-thamani-pewter">
+            {site_name(@sites_by_id, @review_requisition.site_id)} · {lines_summary(
+              @review_requisition.lines
+            )}
+          </p>
+          <p class="mb-4 text-xs text-thamani-pewter">
+            Set each line's approved quantity: leave it at what was requested to approve in full, lower it to approve partially, or set it to 0 to decline that item.
+          </p>
+          <form phx-submit="review_lines" class="flex flex-col gap-4">
             <div
-              :if={Map.get(@fulfill_batches_by_product, line.product_id, []) != []}
-              class="mt-2 flex flex-col gap-3"
+              :for={line <- @review_requisition.lines}
+              class="rounded-xl border border-thamani-stone p-4"
             >
-              <.input
-                type="select"
-                id={"org_batch_id-#{line.id}"}
-                name={"fulfillment[dispatches][#{line.id}][org_batch_id]"}
-                label="Warehouse batch"
-                options={
-                  Enum.map(Map.get(@fulfill_batches_by_product, line.product_id, []), fn b ->
-                    {"#{b.batch_no} · #{b.remaining_quantity} available · expires #{b.expiry_date}",
-                     b.id}
-                  end)
-                }
-                prompt="Choose a batch"
-                required
-              />
+              <p class="text-sm font-medium text-thamani-forest">
+                {product_name(@products_by_id, line.product_id)}
+              </p>
+              <p class="text-xs text-thamani-pewter">Requested {line.requested_quantity}</p>
               <.input
                 type="number"
-                id={"quantity-#{line.id}"}
-                name={"fulfillment[dispatches][#{line.id}][quantity]"}
-                label="Quantity to dispatch"
-                value={line_outstanding(line)}
-                min="1"
-                max={line_outstanding(line)}
+                name={"decisions[#{line.id}]"}
+                label="Approved quantity"
+                value={line.requested_quantity}
+                min="0"
+                max={line.requested_quantity}
                 required
               />
             </div>
-          </div>
-          <p
-            :if={fulfillable_lines(@fulfill_requisition.lines) == []}
-            class="text-sm text-thamani-pewter"
-          >
-            Every approved line has been fully dispatched.
-          </p>
-          <.button
-            :if={
-              fulfillable_lines(@fulfill_requisition.lines) != [] and
-                Enum.all?(
-                  fulfillable_lines(@fulfill_requisition.lines),
-                  &(Map.get(@fulfill_batches_by_product, &1.product_id, []) != [])
-                )
-            }
-            variant="primary"
-            phx-disable-with="Dispatching…"
-            class="w-full"
-          >
-            Dispatch all to site
-          </.button>
-        </.form>
-      </.modal>
+            <.button variant="primary" phx-disable-with="Approving…" class="w-full">
+              Approve requisition
+            </.button>
+          </form>
+        </.modal>
 
-      <.table
-        id="requisitions"
-        rows={@streams.requisitions}
-        row_click={fn {_id, r} -> JS.navigate(~p"/org/requisitions/#{r.id}") end}
-      >
-        <:col :let={{_id, r}} label="Reference">
-          <span class="font-semibold text-thamani-forest">{r.number}</span>
-        </:col>
-        <:col :let={{_id, r}} label="Items">
-          <%= if r.lines == [] do %>
-            {product_name(@products_by_id, r.product_id)}
-          <% else %>
-            {lines_count_summary(r.lines)}
-          <% end %>
-        </:col>
-        <:col :let={{_id, r}} label="Site">{site_name(@sites_by_id, r.site_id)}</:col>
-        <:col :let={{_id, r}} label="Quantity">
-          <span class="tabular-nums">
-            {if r.lines == [], do: r.quantity, else: lines_total(r.lines)}
-          </span>
-        </:col>
-        <:col :let={{_id, r}} label="Status">
-          <div class="flex items-center gap-2">
-            <.status_badge status={r.status} />
-            <span :if={r.needs_reorder} class="text-xs font-medium text-thamani-error">
-              Needs reorder
-            </span>
-          </div>
-        </:col>
-        <:action :let={{_id, r}}>
-          <div :if={r.status == :pending and r.lines == []} class="flex gap-2">
-            <.button type="button" variant="primary" phx-click="approve" phx-value-id={r.id}>
-              Approve
+        <.modal
+          :if={@live_action == :reject and not is_nil(@reject_requisition)}
+          id="reject-requisition-modal"
+          show
+          on_cancel={JS.patch(~p"/org/requisitions")}
+        >
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            Reject requisition
+          </h2>
+          <.form for={@reject_form} id="reject-form" phx-submit="reject" class="flex flex-col gap-4">
+            <.input
+              field={@reject_form[:rejection_reason]}
+              type="textarea"
+              label="Reason"
+              required
+            />
+            <.button variant="danger-confirm" phx-disable-with="Rejecting…" class="w-full">
+              Reject requisition
             </.button>
-            <.button variant="ghost" patch={~p"/org/requisitions/#{r.id}/reject"}>Reject</.button>
-          </div>
-          <div :if={r.status == :pending and r.lines != []} class="flex gap-2">
-            <.button variant="primary" patch={~p"/org/requisitions/#{r.id}/review"}>
-              Review
-            </.button>
-            <.button variant="ghost" patch={~p"/org/requisitions/#{r.id}/reject"}>Reject</.button>
-          </div>
-          <.button
-            :if={r.status in [:approved, :partially_approved, :partially_fulfilled]}
-            variant="primary"
-            patch={~p"/org/requisitions/#{r.id}/fulfill"}
+          </.form>
+        </.modal>
+
+        <.modal
+          :if={
+            @live_action == :fulfill and not is_nil(@fulfill_requisition) and
+              @fulfill_requisition.lines == []
+          }
+          id="fulfill-requisition-modal"
+          show
+          on_cancel={JS.patch(~p"/org/requisitions")}
+        >
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            Fulfill requisition
+          </h2>
+          <p class="mb-4 text-sm text-thamani-pewter">
+            {product_name(@products_by_id, @fulfill_requisition.product_id)} · {site_name(
+              @sites_by_id,
+              @fulfill_requisition.site_id
+            )} · {@fulfill_requisition.quantity} requested
+          </p>
+          <.form
+            :if={@fulfill_org_batches != []}
+            for={@fulfill_form}
+            id="fulfill-form"
+            phx-submit="fulfill"
+            class="flex flex-col gap-4"
           >
-            Fulfill
-          </.button>
-        </:action>
-        <:empty_state>
-          <.blank_state icon="hero-clipboard-document-list" title="No requisitions yet">
-            Stock requests raised by sites will appear here.
+            <.input
+              field={@fulfill_form[:org_batch_id]}
+              type="select"
+              label="Warehouse batch"
+              options={
+                Enum.map(@fulfill_org_batches, fn b ->
+                  {"#{b.batch_no} · #{b.remaining_quantity} available · expires #{b.expiry_date}",
+                   b.id}
+                end)
+              }
+              prompt="Choose a batch"
+              required
+            />
+            <.input
+              field={@fulfill_form[:quantity]}
+              type="number"
+              label="Quantity to dispatch"
+              min="1"
+              required
+            />
+            <.button variant="primary" phx-disable-with="Dispatching…" class="w-full">
+              Dispatch to site
+            </.button>
+          </.form>
+          <.blank_state
+            :if={@fulfill_org_batches == []}
+            icon="hero-archive-box"
+            title="No warehouse stock"
+          >
+            There's no organization-level stock for this product. Order more before fulfilling.
           </.blank_state>
-        </:empty_state>
-      </.table>
+        </.modal>
+
+        <.modal
+          :if={
+            @live_action == :fulfill and not is_nil(@fulfill_requisition) and
+              @fulfill_requisition.lines != []
+          }
+          id="fulfill-lines-modal"
+          show
+          on_cancel={JS.patch(~p"/org/requisitions")}
+        >
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            Fulfill requisition
+          </h2>
+          <p class="mb-4 text-sm text-thamani-pewter">
+            {site_name(@sites_by_id, @fulfill_requisition.site_id)}
+          </p>
+          <.form
+            for={%{}}
+            as={:fulfillment}
+            id="fulfill-lines-form"
+            phx-submit="fulfill_lines"
+            class="flex flex-col gap-4"
+          >
+            <div
+              :for={line <- fulfillable_lines(@fulfill_requisition.lines)}
+              class="rounded-xl border border-thamani-stone p-4"
+            >
+              <p class="text-sm font-medium text-thamani-forest">
+                {product_name(@products_by_id, line.product_id)}
+              </p>
+              <p class="text-xs text-thamani-pewter">
+                {line_outstanding(line)} of {line.approved_quantity} still outstanding
+              </p>
+              <.blank_state
+                :if={Map.get(@fulfill_batches_by_product, line.product_id, []) == []}
+                icon="hero-archive-box"
+                title="No warehouse stock"
+              >
+                There's no organization-level stock for this product yet.
+              </.blank_state>
+              <div
+                :if={Map.get(@fulfill_batches_by_product, line.product_id, []) != []}
+                class="mt-2 flex flex-col gap-3"
+              >
+                <.input
+                  type="select"
+                  id={"org_batch_id-#{line.id}"}
+                  name={"fulfillment[dispatches][#{line.id}][org_batch_id]"}
+                  label="Warehouse batch"
+                  options={
+                    Enum.map(Map.get(@fulfill_batches_by_product, line.product_id, []), fn b ->
+                      {"#{b.batch_no} · #{b.remaining_quantity} available · expires #{b.expiry_date}",
+                       b.id}
+                    end)
+                  }
+                  prompt="Choose a batch"
+                  required
+                />
+                <.input
+                  type="number"
+                  id={"quantity-#{line.id}"}
+                  name={"fulfillment[dispatches][#{line.id}][quantity]"}
+                  label="Quantity to dispatch"
+                  value={line_outstanding(line)}
+                  min="1"
+                  max={line_outstanding(line)}
+                  required
+                />
+              </div>
+            </div>
+            <p
+              :if={fulfillable_lines(@fulfill_requisition.lines) == []}
+              class="text-sm text-thamani-pewter"
+            >
+              Every approved line has been fully dispatched.
+            </p>
+            <.button
+              :if={
+                fulfillable_lines(@fulfill_requisition.lines) != [] and
+                  Enum.all?(
+                    fulfillable_lines(@fulfill_requisition.lines),
+                    &(Map.get(@fulfill_batches_by_product, &1.product_id, []) != [])
+                  )
+              }
+              variant="primary"
+              phx-disable-with="Dispatching…"
+              class="w-full"
+            >
+              Dispatch all to site
+            </.button>
+          </.form>
+        </.modal>
+
+        <.table
+          id="requisitions"
+          rows={@streams.requisitions}
+          row_click={fn {_id, r} -> JS.navigate(~p"/org/requisitions/#{r.id}") end}
+        >
+          <:col :let={{_id, r}} label="Reference">
+            <span class="font-semibold text-thamani-forest">{r.number}</span>
+          </:col>
+          <:col :let={{_id, r}} label="Items">
+            <%= if r.lines == [] do %>
+              {product_name(@products_by_id, r.product_id)}
+            <% else %>
+              {lines_count_summary(r.lines)}
+            <% end %>
+          </:col>
+          <:col :let={{_id, r}} label="Site">{site_name(@sites_by_id, r.site_id)}</:col>
+          <:col :let={{_id, r}} label="Quantity">
+            <span class="tabular-nums">
+              {if r.lines == [], do: r.quantity, else: lines_total(r.lines)}
+            </span>
+          </:col>
+          <:col :let={{_id, r}} label="Status">
+            <div class="flex items-center gap-2">
+              <.status_badge status={r.status} />
+              <span :if={r.needs_reorder} class="text-xs font-medium text-thamani-error">
+                Needs reorder
+              </span>
+            </div>
+          </:col>
+          <:action :let={{_id, r}}>
+            <div :if={r.status == :pending and r.lines == []} class="flex gap-2">
+              <.button type="button" variant="primary" phx-click="approve" phx-value-id={r.id}>
+                Approve
+              </.button>
+              <.button variant="ghost" patch={~p"/org/requisitions/#{r.id}/reject"}>Reject</.button>
+            </div>
+            <div :if={r.status == :pending and r.lines != []} class="flex gap-2">
+              <.button variant="primary" patch={~p"/org/requisitions/#{r.id}/review"}>
+                Review
+              </.button>
+              <.button variant="ghost" patch={~p"/org/requisitions/#{r.id}/reject"}>Reject</.button>
+            </div>
+            <.button
+              :if={r.status in [:approved, :partially_approved, :partially_fulfilled]}
+              variant="primary"
+              patch={~p"/org/requisitions/#{r.id}/fulfill"}
+            >
+              Fulfill
+            </.button>
+          </:action>
+          <:empty_state>
+            <.blank_state icon="hero-clipboard-document-list" title="No requisitions yet">
+              Stock requests raised by sites will appear here.
+            </.blank_state>
+          </:empty_state>
+        </.table>
       </.td_list_page>
     </Layouts.org_shell>
     """

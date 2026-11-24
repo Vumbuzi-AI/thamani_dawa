@@ -443,339 +443,353 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
           </.button>
         </:actions>
         <:body>
-
-      <section
-        :if={@batch.logistic_unit && length(@case_lines) > 1}
-        id="case-contents"
-        class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6"
-      >
-        <div class="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 class="text-sm font-semibold text-thamani-forest">Case contents</h2>
-          <p class="font-mono text-xs text-thamani-subtle">SSCC {@batch.logistic_unit.sscc}</p>
-        </div>
-        <p class="mt-1 text-sm text-thamani-subtle">
-          This case holds {count_phrase(length(@case_lines), "product")}.
-          <.link
-            navigate={~p"/distributor/cases/#{@batch.logistic_unit_id}"}
-            class="font-semibold text-thamani-forest hover:underline"
+          <section
+            :if={@batch.logistic_unit && length(@case_lines) > 1}
+            id="case-contents"
+            class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6"
           >
-            Break the whole case
-          </.link>
-          to split every line into mini-SSCCs at once and retire its SSCC.
-        </p>
-        <ul class="mt-4 divide-y divide-thamani-stone">
-          <li
-            :for={line <- @case_lines}
-            class="flex items-center justify-between gap-3 py-2.5 text-sm"
-          >
-            <span class={[line.id == @batch.id && "font-semibold text-thamani-forest"]}>
-              {product_name(line.product)}
-              <span class="text-thamani-subtle">· {line.batch_no}</span>
-            </span>
-            <.link
-              :if={line.id != @batch.id}
-              navigate={~p"/distributor/batches/#{line.id}"}
-              class="shrink-0 font-semibold text-thamani-forest hover:underline"
-            >
-              Open
-            </.link>
-            <span :if={line.id == @batch.id} class="shrink-0 text-xs text-thamani-subtle">
-              Viewing
-            </span>
-          </li>
-        </ul>
-      </section>
-
-      <section
-        :if={@minted_mini_ssccs != []}
-        id="minted-mini-ssccs"
-        class="mt-5 rounded-2xl border border-thamani-forest/20 bg-thamani-canvas p-5 sm:p-6"
-      >
-        <h2 class="text-sm font-semibold text-thamani-forest">New mini-SSCCs</h2>
-        <p class="mt-1 text-sm text-thamani-subtle">
-          Print each code on the physical carton. These units are in storage and can be shipped or split again.
-        </p>
-        <ul class="mt-4 grid gap-3 sm:grid-cols-2">
-          <li
-            :for={child <- @minted_mini_ssccs}
-            class="rounded-xl border border-thamani-stone bg-td-surface p-4"
-          >
-            <p class="font-mono text-sm font-semibold tracking-wide text-thamani-ink">{child.sscc}</p>
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="text-sm font-semibold text-thamani-forest">Case contents</h2>
+              <p class="font-mono text-xs text-thamani-subtle">SSCC {@batch.logistic_unit.sscc}</p>
+            </div>
             <p class="mt-1 text-sm text-thamani-subtle">
-              {child.batch_no} · {Products.format_unit_count(child.quantity)}
+              This case holds {count_phrase(length(@case_lines), "product")}.
+              <.link
+                navigate={~p"/distributor/cases/#{@batch.logistic_unit_id}"}
+                class="font-semibold text-thamani-forest hover:underline"
+              >
+                Break the whole case
+              </.link>
+              to split every line into mini-SSCCs at once and retire its SSCC.
             </p>
-            <.link
-              navigate={~p"/distributor/batches/#{child.id}"}
-              class="mt-3 inline-flex text-sm font-semibold text-thamani-forest hover:underline"
-            >
-              Open mini-SSCC
-            </.link>
-          </li>
-        </ul>
-      </section>
-
-      <section
-        :if={@split_open}
-        id="mini-sscc-panel"
-        class="mt-5 overflow-hidden rounded-2xl border border-thamani-stone bg-td-surface"
-      >
-        <% claimed = claimed_units(@split_groups) %>
-        <div class="border-b border-thamani-stone px-5 py-5 sm:px-6">
-          <h2 class="text-base font-semibold text-thamani-forest">
-            Break this case into mini-SSCCs
-          </h2>
-          <p class="mt-2 max-w-2xl text-sm leading-6 text-thamani-pewter">
-            Choose how many units go in each carton.
-            <%= if @batch.serials != [] do %>
-              Then pick that many serials for the carton.
-            <% end %>
-            Units you do not place become their own remainder carton.
-          </p>
-          <p class="mt-1 max-w-2xl text-sm leading-6 text-thamani-pewter">
-            This retires
-            <span class="font-semibold tracking-tight text-thamani-forest tabular-nums">{@batch.batch_no}</span>
-            and its inbound SSCC. The case can no longer ship as one carton.
-          </p>
-          <p
-            id="split-tally"
-            class="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-thamani-pewter"
-          >
-            <span>
-              <span class="font-semibold tabular-nums text-thamani-forest">{@batch.remaining_quantity}</span>
-              on hand
-            </span>
-            <span>
-              <span class="font-semibold tabular-nums text-thamani-forest">{claimed}</span> in cartons
-            </span>
-            <%= if claimed > @batch.remaining_quantity do %>
-              <span class="font-semibold text-thamani-error">
-                {claimed - @batch.remaining_quantity} over the case
-              </span>
-            <% else %>
-              <span>
-                <span class="font-semibold tabular-nums text-thamani-forest">
-                  {@batch.remaining_quantity - claimed}
+            <ul class="mt-4 divide-y divide-thamani-stone">
+              <li
+                :for={line <- @case_lines}
+                class="flex items-center justify-between gap-3 py-2.5 text-sm"
+              >
+                <span class={[line.id == @batch.id && "font-semibold text-thamani-forest"]}>
+                  {product_name(line.product)}
+                  <span class="text-thamani-subtle">· {line.batch_no}</span>
                 </span>
-                left over
-              </span>
-            <% end %>
-          </p>
-        </div>
-        <.form
-          for={to_form(%{}, as: :even)}
-          id="even-split-form"
-          phx-submit="split_evenly"
-          class="flex flex-col gap-3 border-b border-thamani-stone bg-thamani-canvas/50 px-5 py-4 sm:flex-row sm:items-end sm:px-6"
-        >
-          <div class="min-w-0 sm:w-56">
-            <.input
-              type="number"
-              name="carton_size"
-              id="even-carton-size"
-              label="Units per carton"
-              value=""
-              min="1"
-            />
-          </div>
-          <.button id="even-split-apply" variant="ghost" type="submit">
-            <.icon name="hero-squares-plus" class="size-4" /> Fill cartons evenly
-          </.button>
-        </.form>
-        <.form
-          for={to_form(%{}, as: :split)}
-          id="mini-sscc-form"
-          phx-change="sync_split_groups"
-          phx-submit="break_into_mini_ssccs"
-          class="space-y-3 px-5 py-4 sm:px-6"
-        >
-          <.split_group
-            :for={group <- @split_groups}
-            group={group}
-            groups={@split_groups}
-            batch={@batch}
-          />
-          <p :if={@split_groups == []} id="split-groups-empty" class="text-sm text-thamani-pewter">
-            Add a carton to start the split.
-          </p>
-          <div class="flex flex-wrap items-center gap-2 pt-1">
-            <button
-              type="button"
-              id="add-split-group"
-              phx-click="add_group"
-              class="td-btn is-secondary is-md"
-            >
-              <.icon name="hero-plus" class="size-4" /> Add carton
-            </button>
-            <.button id="confirm-mini-sscc-split" variant="primary" type="submit">
-              Mint mini-SSCCs
-            </.button>
-          </div>
-        </.form>
-      </section>
-
-      <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
-        <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">GTIN</dt>
-            <dd class="mt-1 text-sm text-thamani-ink">{@batch.gtin}</dd>
-          </div>
-          <div :if={@batch.sscc}>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">SSCC</dt>
-            <dd id="batch-sscc" class="mt-1 text-sm text-thamani-ink">{@batch.sscc}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Manufacturer
-            </dt>
-            <dd class="mt-1 text-sm text-thamani-ink">
-              {@batch.manufacturer || @batch.product.manufacturer || "—"}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Manufactured
-            </dt>
-            <dd class="mt-1 text-sm text-thamani-ink">{date_or_dash(@batch.manufacture_date)}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Expiry</dt>
-            <dd class="mt-1 text-sm text-thamani-ink">{date_or_dash(@batch.expiry_date)}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Warehouse</dt>
-            <dd class="mt-1 text-sm text-thamani-ink">{@batch.site.name}</dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Received</dt>
-            <dd class="mt-1 text-sm text-thamani-ink">
-              {Products.format_unit_count(@batch.quantity)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">On hand</dt>
-            <dd id="batch-on-hand" class="mt-1 text-sm text-thamani-ink">
-              {Products.format_unit_count(@batch.remaining_quantity)}
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
-              Goods receipt
-            </dt>
-            <dd class="mt-1 text-sm text-thamani-ink">
-              <.link
-                :if={@batch.goods_receipt}
-                navigate={~p"/distributor/receiving/#{@batch.goods_receipt.id}"}
-                class="font-mono font-semibold text-thamani-forest hover:underline"
-              >
-                {@batch.goods_receipt.number}
-              </.link>
-              <span :if={is_nil(@batch.goods_receipt)}>Legacy receipt</span>
-            </dd>
-          </div>
-          <div>
-            <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">Serials</dt>
-            <dd class="mt-1 text-sm text-thamani-ink">
-              <button
-                type="button"
-                phx-click={@batch.serials != [] && "toggle_batch_serials"}
-                disabled={@batch.serials == []}
-                class="flex items-center gap-1 text-sm font-semibold text-thamani-forest disabled:cursor-default"
-                aria-expanded={to_string(@serials_expanded)}
-              >
-                {if @batch.serials == [], do: "—", else: length(@batch.serials)}
-                <.icon
-                  :if={@batch.serials != []}
-                  name="hero-chevron-down"
-                  class={[
-                    "size-3.5 transition-transform duration-200",
-                    @serials_expanded && "rotate-180"
-                  ]}
-                />
-              </button>
-            </dd>
-          </div>
-        </dl>
-
-        <div id="batch-status" class="mt-5 border-t border-thamani-stone pt-4">
-          <div class="flex flex-wrap items-center gap-3">
-            <span class="text-xs font-medium text-thamani-pewter">Status</span>
-            <.status_badge status={@batch.status} label={status_label(@batch.status)} />
-          </div>
-        </div>
-
-        <div
-          :if={@batch.serials != [] and @serials_expanded}
-          class="mt-5 grid gap-1.5 border-t border-thamani-stone pt-4 sm:grid-cols-3 lg:grid-cols-4"
-        >
-          <span
-            :for={serial <- @batch.serials}
-            class="truncate rounded border border-thamani-stone bg-td-surface px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
-            title={serial}
-          >
-            {serial}
-          </span>
-        </div>
-      </section>
-
-      <section
-        id="batch-trail"
-        class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6"
-      >
-        <h2 class="text-base font-medium tracking-tight text-thamani-forest">Trail</h2>
-        <ol class="mt-4">
-          <.trail_step icon="hero-arrow-down-tray" title="Received">
-            <%= if receipt = @batch.goods_receipt do %>
-              <p class="font-medium text-thamani-evergreen">
-                {receipt.origin_company || "Unknown origin"}
-              </p>
-              <p :if={receipt.origin_gln} class="mt-0.5 tracking-tight tabular-nums">
-                GLN {receipt.origin_gln}
-              </p>
-              <p class="mt-0.5">{ThamaniDawaWeb.TimeFormat.date(receipt.received_at)}</p>
-              <.link
-                navigate={~p"/distributor/receiving/#{receipt.id}"}
-                class="mt-1 inline-flex font-medium text-thamani-forest hover:underline"
-              >
-                {receipt.number}
-              </.link>
-            <% else %>
-              No goods receipt on record for this batch.
-            <% end %>
-          </.trail_step>
-          <.trail_step icon="hero-truck" title="Shipped">
-            <p :if={@trail_shipments == []}>This batch hasn't been shipped onward.</p>
-            <ul :if={@trail_shipments != []} class="space-y-3">
-              <li :for={%{shipment: shipment, unit_count: unit_count} <- @trail_shipments}>
                 <.link
-                  navigate={~p"/distributor/shipments/#{shipment.id}"}
-                  class="font-medium text-thamani-forest hover:underline"
+                  :if={line.id != @batch.id}
+                  navigate={~p"/distributor/batches/#{line.id}"}
+                  class="shrink-0 font-semibold text-thamani-forest hover:underline"
                 >
-                  {shipment.destination_company || "Unknown destination"}
+                  Open
                 </.link>
-                <p class="mt-0.5">
-                  {count_phrase(unit_count, "unit")} · {Phoenix.Naming.humanize(shipment.status)}
-                </p>
-                <p :if={shipment.destination_gln} class="mt-0.5 tracking-tight tabular-nums">
-                  GLN {shipment.destination_gln}
-                </p>
+                <span :if={line.id == @batch.id} class="shrink-0 text-xs text-thamani-subtle">
+                  Viewing
+                </span>
               </li>
             </ul>
-          </.trail_step>
-          <.trail_step icon="hero-clock" title="Status" last?={true}>
-            <p :if={@trail_events == []}>No status changes recorded yet.</p>
-            <ul :if={@trail_events != []} class="space-y-3">
-              <li :for={event <- @trail_events}>
-                <p class="font-medium text-thamani-evergreen">
-                  {humanize_step(event.payload["bizStep"])}
+          </section>
+
+          <section
+            :if={@minted_mini_ssccs != []}
+            id="minted-mini-ssccs"
+            class="mt-5 rounded-2xl border border-thamani-forest/20 bg-thamani-canvas p-5 sm:p-6"
+          >
+            <h2 class="text-sm font-semibold text-thamani-forest">New mini-SSCCs</h2>
+            <p class="mt-1 text-sm text-thamani-subtle">
+              Print each code on the physical carton. These units are in storage and can be shipped or split again.
+            </p>
+            <ul class="mt-4 grid gap-3 sm:grid-cols-2">
+              <li
+                :for={child <- @minted_mini_ssccs}
+                class="rounded-xl border border-thamani-stone bg-td-surface p-4"
+              >
+                <p class="font-mono text-sm font-semibold tracking-wide text-thamani-ink">
+                  {child.sscc}
                 </p>
-                <p class="mt-0.5">
-                  {humanize_step(event.payload["disposition"])} · {ThamaniDawaWeb.TimeFormat.date(event.occurred_at)}
+                <p class="mt-1 text-sm text-thamani-subtle">
+                  {child.batch_no} · {Products.format_unit_count(child.quantity)}
                 </p>
+                <.link
+                  navigate={~p"/distributor/batches/#{child.id}"}
+                  class="mt-3 inline-flex text-sm font-semibold text-thamani-forest hover:underline"
+                >
+                  Open mini-SSCC
+                </.link>
               </li>
             </ul>
-          </.trail_step>
-        </ol>
-      </section>
+          </section>
+
+          <section
+            :if={@split_open}
+            id="mini-sscc-panel"
+            class="mt-5 overflow-hidden rounded-2xl border border-thamani-stone bg-td-surface"
+          >
+            <% claimed = claimed_units(@split_groups) %>
+            <div class="border-b border-thamani-stone px-5 py-5 sm:px-6">
+              <h2 class="text-base font-semibold text-thamani-forest">
+                Break this case into mini-SSCCs
+              </h2>
+              <p class="mt-2 max-w-2xl text-sm leading-6 text-thamani-pewter">
+                Choose how many units go in each carton.
+                <%= if @batch.serials != [] do %>
+                  Then pick that many serials for the carton.
+                <% end %>
+                Units you do not place become their own remainder carton.
+              </p>
+              <p class="mt-1 max-w-2xl text-sm leading-6 text-thamani-pewter">
+                This retires
+                <span class="font-semibold tracking-tight text-thamani-forest tabular-nums">{@batch.batch_no}</span>
+                and its inbound SSCC. The case can no longer ship as one carton.
+              </p>
+              <p
+                id="split-tally"
+                class="mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm text-thamani-pewter"
+              >
+                <span>
+                  <span class="font-semibold tabular-nums text-thamani-forest">{@batch.remaining_quantity}</span>
+                  on hand
+                </span>
+                <span>
+                  <span class="font-semibold tabular-nums text-thamani-forest">{claimed}</span>
+                  in cartons
+                </span>
+                <%= if claimed > @batch.remaining_quantity do %>
+                  <span class="font-semibold text-thamani-error">
+                    {claimed - @batch.remaining_quantity} over the case
+                  </span>
+                <% else %>
+                  <span>
+                    <span class="font-semibold tabular-nums text-thamani-forest">
+                      {@batch.remaining_quantity - claimed}
+                    </span>
+                    left over
+                  </span>
+                <% end %>
+              </p>
+            </div>
+            <.form
+              for={to_form(%{}, as: :even)}
+              id="even-split-form"
+              phx-submit="split_evenly"
+              class="flex flex-col gap-3 border-b border-thamani-stone bg-thamani-canvas/50 px-5 py-4 sm:flex-row sm:items-end sm:px-6"
+            >
+              <div class="min-w-0 sm:w-56">
+                <.input
+                  type="number"
+                  name="carton_size"
+                  id="even-carton-size"
+                  label="Units per carton"
+                  value=""
+                  min="1"
+                />
+              </div>
+              <.button id="even-split-apply" variant="ghost" type="submit">
+                <.icon name="hero-squares-plus" class="size-4" /> Fill cartons evenly
+              </.button>
+            </.form>
+            <.form
+              for={to_form(%{}, as: :split)}
+              id="mini-sscc-form"
+              phx-change="sync_split_groups"
+              phx-submit="break_into_mini_ssccs"
+              class="space-y-3 px-5 py-4 sm:px-6"
+            >
+              <.split_group
+                :for={group <- @split_groups}
+                group={group}
+                groups={@split_groups}
+                batch={@batch}
+              />
+              <p :if={@split_groups == []} id="split-groups-empty" class="text-sm text-thamani-pewter">
+                Add a carton to start the split.
+              </p>
+              <div class="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  id="add-split-group"
+                  phx-click="add_group"
+                  class="td-btn is-secondary is-md"
+                >
+                  <.icon name="hero-plus" class="size-4" /> Add carton
+                </button>
+                <.button id="confirm-mini-sscc-split" variant="primary" type="submit">
+                  Mint mini-SSCCs
+                </.button>
+              </div>
+            </.form>
+          </section>
+
+          <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
+            <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">GTIN</dt>
+                <dd class="mt-1 text-sm text-thamani-ink">{@batch.gtin}</dd>
+              </div>
+              <div :if={@batch.sscc}>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">SSCC</dt>
+                <dd id="batch-sscc" class="mt-1 text-sm text-thamani-ink">{@batch.sscc}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Manufacturer
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">
+                  {@batch.manufacturer || @batch.product.manufacturer || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Manufactured
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">{date_or_dash(@batch.manufacture_date)}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Expiry
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">{date_or_dash(@batch.expiry_date)}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Warehouse
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">{@batch.site.name}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Received
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">
+                  {Products.format_unit_count(@batch.quantity)}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  On hand
+                </dt>
+                <dd id="batch-on-hand" class="mt-1 text-sm text-thamani-ink">
+                  {Products.format_unit_count(@batch.remaining_quantity)}
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Goods receipt
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">
+                  <.link
+                    :if={@batch.goods_receipt}
+                    navigate={~p"/distributor/receiving/#{@batch.goods_receipt.id}"}
+                    class="font-mono font-semibold text-thamani-forest hover:underline"
+                  >
+                    {@batch.goods_receipt.number}
+                  </.link>
+                  <span :if={is_nil(@batch.goods_receipt)}>Legacy receipt</span>
+                </dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium uppercase tracking-wide text-thamani-subtle">
+                  Serials
+                </dt>
+                <dd class="mt-1 text-sm text-thamani-ink">
+                  <button
+                    type="button"
+                    phx-click={@batch.serials != [] && "toggle_batch_serials"}
+                    disabled={@batch.serials == []}
+                    class="flex items-center gap-1 text-sm font-semibold text-thamani-forest disabled:cursor-default"
+                    aria-expanded={to_string(@serials_expanded)}
+                  >
+                    {if @batch.serials == [], do: "—", else: length(@batch.serials)}
+                    <.icon
+                      :if={@batch.serials != []}
+                      name="hero-chevron-down"
+                      class={[
+                        "size-3.5 transition-transform duration-200",
+                        @serials_expanded && "rotate-180"
+                      ]}
+                    />
+                  </button>
+                </dd>
+              </div>
+            </dl>
+
+            <div id="batch-status" class="mt-5 border-t border-thamani-stone pt-4">
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="text-xs font-medium text-thamani-pewter">Status</span>
+                <.status_badge status={@batch.status} label={status_label(@batch.status)} />
+              </div>
+            </div>
+
+            <div
+              :if={@batch.serials != [] and @serials_expanded}
+              class="mt-5 grid gap-1.5 border-t border-thamani-stone pt-4 sm:grid-cols-3 lg:grid-cols-4"
+            >
+              <span
+                :for={serial <- @batch.serials}
+                class="truncate rounded border border-thamani-stone bg-td-surface px-2 py-1 font-mono text-xs font-medium text-thamani-forest"
+                title={serial}
+              >
+                {serial}
+              </span>
+            </div>
+          </section>
+
+          <section
+            id="batch-trail"
+            class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6"
+          >
+            <h2 class="text-base font-medium tracking-tight text-thamani-forest">Trail</h2>
+            <ol class="mt-4">
+              <.trail_step icon="hero-arrow-down-tray" title="Received">
+                <%= if receipt = @batch.goods_receipt do %>
+                  <p class="font-medium text-thamani-evergreen">
+                    {receipt.origin_company || "Unknown origin"}
+                  </p>
+                  <p :if={receipt.origin_gln} class="mt-0.5 tracking-tight tabular-nums">
+                    GLN {receipt.origin_gln}
+                  </p>
+                  <p class="mt-0.5">{ThamaniDawaWeb.TimeFormat.date(receipt.received_at)}</p>
+                  <.link
+                    navigate={~p"/distributor/receiving/#{receipt.id}"}
+                    class="mt-1 inline-flex font-medium text-thamani-forest hover:underline"
+                  >
+                    {receipt.number}
+                  </.link>
+                <% else %>
+                  No goods receipt on record for this batch.
+                <% end %>
+              </.trail_step>
+              <.trail_step icon="hero-truck" title="Shipped">
+                <p :if={@trail_shipments == []}>This batch hasn't been shipped onward.</p>
+                <ul :if={@trail_shipments != []} class="space-y-3">
+                  <li :for={%{shipment: shipment, unit_count: unit_count} <- @trail_shipments}>
+                    <.link
+                      navigate={~p"/distributor/shipments/#{shipment.id}"}
+                      class="font-medium text-thamani-forest hover:underline"
+                    >
+                      {shipment.destination_company || "Unknown destination"}
+                    </.link>
+                    <p class="mt-0.5">
+                      {count_phrase(unit_count, "unit")} · {Phoenix.Naming.humanize(shipment.status)}
+                    </p>
+                    <p :if={shipment.destination_gln} class="mt-0.5 tracking-tight tabular-nums">
+                      GLN {shipment.destination_gln}
+                    </p>
+                  </li>
+                </ul>
+              </.trail_step>
+              <.trail_step icon="hero-clock" title="Status" last?={true}>
+                <p :if={@trail_events == []}>No status changes recorded yet.</p>
+                <ul :if={@trail_events != []} class="space-y-3">
+                  <li :for={event <- @trail_events}>
+                    <p class="font-medium text-thamani-evergreen">
+                      {humanize_step(event.payload["bizStep"])}
+                    </p>
+                    <p class="mt-0.5">
+                      {humanize_step(event.payload["disposition"])} · {ThamaniDawaWeb.TimeFormat.date(
+                        event.occurred_at
+                      )}
+                    </p>
+                  </li>
+                </ul>
+              </.trail_step>
+            </ol>
+          </section>
         </:body>
       </.td_detail_page>
     </Layouts.distributor_shell>

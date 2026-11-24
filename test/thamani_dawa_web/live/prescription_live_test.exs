@@ -22,7 +22,9 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       site = site_fixture(%{organization_id: organization.id})
       pharmacist = pharmacist_at_site(organization, site)
       visit = patient_visit_fixture(%{organization_id: organization.id, site_id: site.id})
-      _prescription = prescription_fixture(%{organization_id: organization.id, patient_visit_id: visit.id})
+
+      _prescription =
+        prescription_fixture(%{organization_id: organization.id, patient_visit_id: visit.id})
 
       conn = log_in_user(conn, pharmacist)
       {:ok, index_live, html} = live(conn, ~p"/pharmacy/prescriptions")

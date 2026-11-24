@@ -71,7 +71,8 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
   end
 
   def handle_event("remove", %{"id" => id}, socket) do
-    {:noreply, update(socket, :accepted, &Enum.reject(&1, fn shipper -> to_string(shipper.id) == id end))}
+    {:noreply,
+     update(socket, :accepted, &Enum.reject(&1, fn shipper -> to_string(shipper.id) == id end))}
   end
 
   def handle_event("dismiss", %{"code" => code}, socket) do
@@ -195,10 +196,13 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
         </form>
 
         <div :if={@rejections != []} id="pallet-scan-errors" class="td-pad">
-          <div :for={row <- @rejections} id={"pallet-rejection-#{dom_id(row.code)}"} class="td-ban is-danger">
+          <div
+            :for={row <- @rejections}
+            id={"pallet-rejection-#{dom_id(row.code)}"}
+            class="td-ban is-danger"
+          >
             <span>
-              <span class="font-mono">{row.code}</span>
-              · {row.message}
+              <span class="font-mono">{row.code}</span> · {row.message}
             </span>
             <button type="button" phx-click="dismiss" phx-value-code={row.code}>
               Dismiss

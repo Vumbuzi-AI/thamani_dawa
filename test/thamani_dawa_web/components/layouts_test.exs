@@ -110,7 +110,13 @@ defmodule ThamaniDawaWeb.LayoutsTest do
       assert has_element?(lv, "#sidebar-account-dropdown #account-settings", "Account settings")
       assert has_element?(lv, "#sidebar-account-dropdown #account-help-docs", "Help & docs")
       assert has_element?(lv, "#sidebar-account-dropdown #start-product-tour", "Product tour")
-      assert has_element?(lv, "#sidebar-account-dropdown #account-shortcuts", "Keyboard shortcuts")
+
+      assert has_element?(
+               lv,
+               "#sidebar-account-dropdown #account-shortcuts",
+               "Keyboard shortcuts"
+             )
+
       assert has_element?(lv, "#sidebar-account-dropdown #account-theme-dark[role=menuitemradio]")
 
       assert has_element?(
@@ -133,7 +139,11 @@ defmodule ThamaniDawaWeb.LayoutsTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
-      assert has_element?(lv, "#sidebar-brand-logo.td-br-word[src='/images/logo-transparent.png']")
+      assert has_element?(
+               lv,
+               "#sidebar-brand-logo.td-br-word[src='/images/logo-transparent.png']"
+             )
+
       assert has_element?(lv, "img.td-br-mark[src='/images/logo-mark.png']")
 
       assert has_element?(
@@ -178,6 +188,7 @@ defmodule ThamaniDawaWeb.LayoutsTest do
       |> render_click()
 
       assert_redirect(lv, ~p"/org/sites")
+
       assert_email_sent(fn email ->
         Enum.any?(email.to, fn {_name, addr} -> addr == admin.email end) and
           (email.text_body || email.html_body || "") =~ "reset-password"

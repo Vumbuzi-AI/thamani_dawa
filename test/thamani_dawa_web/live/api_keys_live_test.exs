@@ -49,10 +49,11 @@ defmodule ThamaniDawaWeb.ApiKeysLiveTest do
     conn: conn,
     distributor: distributor
   } do
-    {:ok, _} = Organizations.set_gs1_api_key(
-      Organizations.get_organization!(distributor.organization_id),
-      "gs1-secret-key-9876"
-    )
+    {:ok, _} =
+      Organizations.set_gs1_api_key(
+        Organizations.get_organization!(distributor.organization_id),
+        "gs1-secret-key-9876"
+      )
 
     {:ok, view, _html} = live(conn, ~p"/distributor/api-keys")
 

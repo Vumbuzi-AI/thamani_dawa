@@ -365,7 +365,10 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
           />
         </form>
       </:search>
-      <.td_list_page title="Suppliers" subtitle="Search, filter, and manage your organization's suppliers.">
+      <.td_list_page
+        title="Suppliers"
+        subtitle="Search, filter, and manage your organization's suppliers."
+      >
         <:actions>
           <.td_button
             id="supplier-new-button"
@@ -385,77 +388,77 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
           />
         </:filters>
 
-      <.modal
-        :if={@live_action in [:new, :edit]}
-        id="supplier-modal"
-        show
-        on_cancel={
-          if @back_path == ~p"/onboarding",
-            do: JS.navigate(@back_path),
-            else: JS.patch(~p"/org/suppliers")
-        }
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          {if @live_action == :new, do: "Add a supplier", else: "Edit supplier"}
-        </h2>
-        <.supplier_form form={@form} />
-      </.modal>
+        <.modal
+          :if={@live_action in [:new, :edit]}
+          id="supplier-modal"
+          show
+          on_cancel={
+            if @back_path == ~p"/onboarding",
+              do: JS.navigate(@back_path),
+              else: JS.patch(~p"/org/suppliers")
+          }
+        >
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
+            {if @live_action == :new, do: "Add a supplier", else: "Edit supplier"}
+          </h2>
+          <.supplier_form form={@form} />
+        </.modal>
 
-      <.table id="suppliers" rows={@streams.suppliers}>
-        <:col :let={{_id, supplier}} label="Name">{supplier.name}</:col>
-        <:col :let={{_id, supplier}} label="Contact">
-          <span class="block">
-            <span class="block">{supplier.contact}</span>
-            <span class="mt-0.5 block text-xs font-normal text-thamani-pewter sm:hidden">
-              {supplier.phone}
+        <.table id="suppliers" rows={@streams.suppliers}>
+          <:col :let={{_id, supplier}} label="Name">{supplier.name}</:col>
+          <:col :let={{_id, supplier}} label="Contact">
+            <span class="block">
+              <span class="block">{supplier.contact}</span>
+              <span class="mt-0.5 block text-xs font-normal text-thamani-pewter sm:hidden">
+                {supplier.phone}
+              </span>
             </span>
-          </span>
-        </:col>
-        <:col :let={{_id, supplier}} label="Phone" mobile="hidden">{supplier.phone}</:col>
-        <:col :let={{_id, supplier}} label="Email" mobile="hidden">{supplier.email}</:col>
-        <:col :let={{_id, supplier}} label="GLN" mobile="hidden">{supplier.gln}</:col>
-        <:col :let={{_id, supplier}} label="Status" mobile="aside">
-          <.status_badge status={if supplier.is_active, do: :active, else: :inactive} />
-        </:col>
-        <:action :let={{_id, supplier}}>
-          <.button
-            variant="ghost-edit"
-            patch={~p"/org/suppliers/#{supplier.id}/edit"}
-            class="px-3 py-1.5 text-xs"
-            id={"btn-edit-supplier-#{supplier.id}"}
-          >
-            Edit
-          </.button>
-        </:action>
-        <:action :let={{_id, supplier}}>
-          <.button
-            type="button"
-            phx-click="toggle_active"
-            phx-value-id={supplier.id}
-            class="px-3 py-1.5 text-xs"
-            variant={if supplier.is_active, do: "destructive", else: "ghost"}
-            id={"btn-toggle-supplier-#{supplier.id}"}
-          >
-            {if supplier.is_active, do: "Deactivate", else: "Reactivate"}
-          </.button>
-        </:action>
-        <:empty_state>
-          <.blank_state
-            icon="hero-truck"
-            title={
-              if @search != "" or active_filter_count(@filters) > 0,
-                do: "No suppliers match your search or filters",
-                else: "No suppliers yet"
-            }
-          >
-            {if @search != "" or active_filter_count(@filters) > 0,
-              do: "Try a different search term, or clear the applied filters.",
-              else: "Suppliers you add will appear here."}
-          </.blank_state>
-        </:empty_state>
-      </.table>
+          </:col>
+          <:col :let={{_id, supplier}} label="Phone" mobile="hidden">{supplier.phone}</:col>
+          <:col :let={{_id, supplier}} label="Email" mobile="hidden">{supplier.email}</:col>
+          <:col :let={{_id, supplier}} label="GLN" mobile="hidden">{supplier.gln}</:col>
+          <:col :let={{_id, supplier}} label="Status" mobile="aside">
+            <.status_badge status={if supplier.is_active, do: :active, else: :inactive} />
+          </:col>
+          <:action :let={{_id, supplier}}>
+            <.button
+              variant="ghost-edit"
+              patch={~p"/org/suppliers/#{supplier.id}/edit"}
+              class="px-3 py-1.5 text-xs"
+              id={"btn-edit-supplier-#{supplier.id}"}
+            >
+              Edit
+            </.button>
+          </:action>
+          <:action :let={{_id, supplier}}>
+            <.button
+              type="button"
+              phx-click="toggle_active"
+              phx-value-id={supplier.id}
+              class="px-3 py-1.5 text-xs"
+              variant={if supplier.is_active, do: "destructive", else: "ghost"}
+              id={"btn-toggle-supplier-#{supplier.id}"}
+            >
+              {if supplier.is_active, do: "Deactivate", else: "Reactivate"}
+            </.button>
+          </:action>
+          <:empty_state>
+            <.blank_state
+              icon="hero-truck"
+              title={
+                if @search != "" or active_filter_count(@filters) > 0,
+                  do: "No suppliers match your search or filters",
+                  else: "No suppliers yet"
+              }
+            >
+              {if @search != "" or active_filter_count(@filters) > 0,
+                do: "Try a different search term, or clear the applied filters.",
+                else: "Suppliers you add will appear here."}
+            </.blank_state>
+          </:empty_state>
+        </.table>
 
-      <.pagination page={@page_info} path={~p"/org/suppliers"} />
+        <.pagination page={@page_info} path={~p"/org/suppliers"} />
       </.td_list_page>
     </Layouts.org_shell>
     """

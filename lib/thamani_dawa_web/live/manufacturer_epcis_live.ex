@@ -8,7 +8,6 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
   alias ThamaniDawa.Epcis.Outbox
   alias ThamaniDawa.Epcis.OutboxEvent
   alias ThamaniDawa.Epcis.SubmissionWorker
-  alias ThamaniDawa.Epcis.Urn
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Sites
 
@@ -183,6 +182,18 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
     end
   end
 
+  def handle_event("prompt_send_now", _params, socket),
+    do: {:noreply, assign(socket, :confirm_action, :send_now)}
+
+  def handle_event("prompt_send_event", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, :confirm_action, {:send_event, id})}
+
+  def handle_event("prompt_resubmit", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, :confirm_action, {:resubmit, id})}
+
+  def handle_event("cancel_confirm", _params, socket),
+    do: {:noreply, assign(socket, :confirm_action, nil)}
+
   defp missing_key_message,
     do: "Add your PPB TNT API key before sending EPCIS events."
 
@@ -240,15 +251,6 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
     end
   end
 
-  defp event_site_name(%OutboxEvent{payload: %{"bizLocation" => %{"id" => urn}}}, site_names) do
-    case Urn.gln_from_sgln(urn) do
-      {:ok, gln} -> Map.get(site_names, gln)
-      :error -> nil
-    end
-  end
-
-  defp event_site_name(_event, _site_names), do: nil
-
   defp status_counts(organization_id) do
     counts = Outbox.count_by_status(organization_id, tier: "manufacturer")
 
@@ -268,74 +270,7 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
   defp filter_events(events, "all"), do: events
   defp filter_events(events, status), do: Enum.filter(events, &(&1.status == status))
 
-  defp total_events(counts), do: counts |> Map.values() |> Enum.sum()
-
-  defp selected_filter_label("all"), do: "All events"
-  defp selected_filter_label("accepted"), do: "Accepted"
-  defp selected_filter_label("warning"), do: "Warning"
-  defp selected_filter_label("pending"), do: "Pending"
-  defp selected_filter_label("blocked"), do: "Blocked"
-  defp selected_filter_label("rejected"), do: "Rejected"
-  defp selected_filter_label("dead"), do: "Dead"
-  defp selected_filter_label(status), do: String.capitalize(status)
-
-  defp status_label("accepted"), do: "Accepted"
-  defp status_label("warning"), do: "Warning"
-  defp status_label("pending"), do: "Pending"
-  defp status_label("blocked"), do: "Blocked"
-  defp status_label("rejected"), do: "Rejected"
-  defp status_label("dead"), do: "Dead"
-  defp status_label(status), do: String.capitalize(status)
-
-  defp status_class("accepted"), do: "bg-td-accent-tint text-thamani-forest"
-  defp status_class("warning"), do: "bg-amber-900 text-amber-50"
-  defp status_class("pending"), do: "bg-thamani-stone text-thamani-forest"
-  defp status_class("blocked"), do: "bg-amber-900 text-amber-50"
-  defp status_class("rejected"), do: "bg-thamani-error text-td-on-danger"
-  defp status_class("dead"), do: "bg-thamani-error text-td-on-danger"
-  defp status_class(_status), do: "bg-thamani-stone text-thamani-forest"
-
-  defp event_detail(%OutboxEvent{status: "blocked", blocked_reason: reason})
-       when is_binary(reason),
-       do: reason
-
-  defp event_detail(%OutboxEvent{status: "warning", response: %{"warnings" => warnings}})
-       when is_list(warnings),
-       do: warnings |> Enum.map(&warning_message/1) |> Enum.join(" · ")
-
-  defp event_detail(%OutboxEvent{status: status, response: response})
-       when status in ["rejected", "dead"] and is_map(response) do
-    cond do
-      response["error"] -> response["error"]
-      response["raw"] -> response["raw"]
-      true -> inspect(response)
-    end
-  end
-
-  defp event_detail(_event), do: nil
-
-  defp warning_message(%{"message" => message}) when is_binary(message), do: message
-  defp warning_message(message) when is_binary(message), do: message
-  defp warning_message(warning), do: inspect(warning)
-
   defp short_id(event_id), do: String.slice(event_id, -8, 8)
-
-
-  def handle_event("prompt_send_now", _params, socket) do
-    {:noreply, assign(socket, :confirm_action, :send_now)}
-  end
-
-  def handle_event("prompt_send_event", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :confirm_action, {:send_event, id})}
-  end
-
-  def handle_event("prompt_resubmit", %{"id" => id}, socket) do
-    {:noreply, assign(socket, :confirm_action, {:resubmit, id})}
-  end
-
-  def handle_event("cancel_confirm", _params, socket) do
-    {:noreply, assign(socket, :confirm_action, nil)}
-  end
 
   def render(%{epcis_portal: :organization} = assigns) do
     ~H"""
@@ -392,6 +327,7 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
     </Layouts.manufacturer_shell>
     """
   end
+
   defp relevant_tiers(organization) do
     models = organization.operating_models || []
 
@@ -402,5 +338,4 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
     ]
     |> Enum.filter(& &1)
   end
-
 end

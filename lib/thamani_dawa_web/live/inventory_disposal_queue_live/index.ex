@@ -157,72 +157,72 @@ defmodule ThamaniDawaWeb.InventoryDisposalQueueLive.Index do
         title="Disposals"
         subtitle="Expiry write-offs and supplier returns raised by your sites, awaiting review."
       >
-      <nav class="mt-4 flex gap-2 border-b border-thamani-stone">
-        <.link
-          :for={{status, label} <- @tabs}
-          patch={filter_path_for(@filters, %{"status" => status})}
-          class={[
-            "px-3 py-2 text-sm font-medium",
-            if(@filters["status"] == status,
-              do: "border-b-2 border-thamani-forest text-thamani-forest",
-              else: "text-thamani-pewter hover:text-thamani-forest"
-            )
-          ]}
+        <nav class="mt-4 flex gap-2 border-b border-thamani-stone">
+          <.link
+            :for={{status, label} <- @tabs}
+            patch={filter_path_for(@filters, %{"status" => status})}
+            class={[
+              "px-3 py-2 text-sm font-medium",
+              if(@filters["status"] == status,
+                do: "border-b-2 border-thamani-forest text-thamani-forest",
+                else: "text-thamani-pewter hover:text-thamani-forest"
+              )
+            ]}
+          >
+            {label} ({@tab_counts[status]})
+          </.link>
+        </nav>
+
+        <.modal
+          :if={@live_action == :reject and not is_nil(@reject_disposal)}
+          id="reject-disposal-modal"
+          show
+          on_cancel={JS.patch(~p"/org/disposals")}
         >
-          {label} ({@tab_counts[status]})
-        </.link>
-      </nav>
-
-      <.modal
-        :if={@live_action == :reject and not is_nil(@reject_disposal)}
-        id="reject-disposal-modal"
-        show
-        on_cancel={JS.patch(~p"/org/disposals")}
-      >
-        <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-          Reject disposal
-        </h2>
-        <.form for={@reject_form} id="reject-form" phx-submit="reject" class="flex flex-col gap-4">
-          <.input field={@reject_form[:rejection_reason]} type="textarea" label="Reason" required />
-          <.button variant="danger-confirm" phx-disable-with="Rejecting…" class="w-full">
+          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
             Reject disposal
-          </.button>
-        </.form>
-      </.modal>
+          </h2>
+          <.form for={@reject_form} id="reject-form" phx-submit="reject" class="flex flex-col gap-4">
+            <.input field={@reject_form[:rejection_reason]} type="textarea" label="Reason" required />
+            <.button variant="danger-confirm" phx-disable-with="Rejecting…" class="w-full">
+              Reject disposal
+            </.button>
+          </.form>
+        </.modal>
 
-      <.table
-        id="disposals"
-        rows={@streams.disposals}
-        row_click={fn {_id, d} -> JS.navigate(~p"/org/disposals/#{d.id}") end}
-      >
-        <:col :let={{_id, d}} label="Site">{site_name(@sites_by_id, d.site_id)}</:col>
-        <:col :let={{_id, d}} label="Kind">{kind_label(d.kind)}</:col>
-        <:col :let={{_id, d}} label="Type">{Phoenix.Naming.humanize(d.inventory_type)}</:col>
-        <:col :let={{_id, d}} label="Requested by">{requester_label(d)}</:col>
-        <:col :let={{_id, d}} label="Items">{total_quantity_summary(d.items)}</:col>
-        <:col :let={{_id, d}} label="Status">
-          <.status_badge status={d.status} />
-        </:col>
-        <:action :let={{_id, d}}>
-          <div :if={d.status in [:draft, :pending]} class="flex gap-2">
-            <.button type="button" variant="primary" phx-click="approve" phx-value-id={d.id}>
-              Approve
-            </.button>
-            <.button
-              :if={d.status == :pending}
-              variant="ghost"
-              patch={~p"/org/disposals/#{d.id}/reject"}
-            >
-              Reject
-            </.button>
-          </div>
-        </:action>
-        <:empty_state>
-          <.blank_state icon="hero-trash" title="No disposals yet">
-            Expiry write-offs and supplier returns raised by sites will appear here.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        <.table
+          id="disposals"
+          rows={@streams.disposals}
+          row_click={fn {_id, d} -> JS.navigate(~p"/org/disposals/#{d.id}") end}
+        >
+          <:col :let={{_id, d}} label="Site">{site_name(@sites_by_id, d.site_id)}</:col>
+          <:col :let={{_id, d}} label="Kind">{kind_label(d.kind)}</:col>
+          <:col :let={{_id, d}} label="Type">{Phoenix.Naming.humanize(d.inventory_type)}</:col>
+          <:col :let={{_id, d}} label="Requested by">{requester_label(d)}</:col>
+          <:col :let={{_id, d}} label="Items">{total_quantity_summary(d.items)}</:col>
+          <:col :let={{_id, d}} label="Status">
+            <.status_badge status={d.status} />
+          </:col>
+          <:action :let={{_id, d}}>
+            <div :if={d.status in [:draft, :pending]} class="flex gap-2">
+              <.button type="button" variant="primary" phx-click="approve" phx-value-id={d.id}>
+                Approve
+              </.button>
+              <.button
+                :if={d.status == :pending}
+                variant="ghost"
+                patch={~p"/org/disposals/#{d.id}/reject"}
+              >
+                Reject
+              </.button>
+            </div>
+          </:action>
+          <:empty_state>
+            <.blank_state icon="hero-trash" title="No disposals yet">
+              Expiry write-offs and supplier returns raised by sites will appear here.
+            </.blank_state>
+          </:empty_state>
+        </.table>
       </.td_list_page>
     </Layouts.org_shell>
     """

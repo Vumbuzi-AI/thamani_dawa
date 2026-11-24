@@ -140,7 +140,12 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
       current_path="/platform/audit"
     >
       <:search>
-        <form id="platform-audit-search" phx-change="search" phx-submit="search" onsubmit="return false">
+        <form
+          id="platform-audit-search"
+          phx-change="search"
+          phx-submit="search"
+          onsubmit="return false"
+        >
           <.td_search
             name="search"
             value={@filters["search"]}
@@ -183,64 +188,64 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
           />
         </:filters>
 
-      <div class="dashboard-stat-grid">
-        <.stat_tile
-          id="audit-stat-total"
-          icon="hero-clipboard-document-list"
-          label="Total changes"
-          value={@stats.total}
-        />
-        <.stat_tile
-          id="audit-stat-insert"
-          icon="hero-plus-circle"
-          label="Created"
-          value={@stats.insert}
-        />
-        <.stat_tile
-          id="audit-stat-update"
-          icon="hero-pencil-square"
-          label="Updated"
-          value={@stats.update}
-        />
-        <.stat_tile id="audit-stat-delete" icon="hero-trash" label="Deleted" value={@stats.delete} />
-      </div>
+        <div class="dashboard-stat-grid">
+          <.stat_tile
+            id="audit-stat-total"
+            icon="hero-clipboard-document-list"
+            label="Total changes"
+            value={@stats.total}
+          />
+          <.stat_tile
+            id="audit-stat-insert"
+            icon="hero-plus-circle"
+            label="Created"
+            value={@stats.insert}
+          />
+          <.stat_tile
+            id="audit-stat-update"
+            icon="hero-pencil-square"
+            label="Updated"
+            value={@stats.update}
+          />
+          <.stat_tile id="audit-stat-delete" icon="hero-trash" label="Deleted" value={@stats.delete} />
+        </div>
 
-      <.table id="platform-audit-list" rows={@page_info.entries}>
-        <:col :let={log} label="Action">
-          <div class="flex items-center gap-2">
-            <span class={[
-              "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
-              action_classes(log.action)
-            ]}>
-              <.icon name={action_icon(log.action)} class="size-3.5" /> {action_label(log.action)}
-            </span>
-          </div>
-          <p class="mt-1 text-xs text-thamani-pewter">{format_time(log.inserted_at)}</p>
-        </:col>
-        <:col :let={log} label="Table & record">
-          <p class="font-medium text-thamani-forest">{format_table_name(log.table_name)}</p>
-          <p class="text-xs text-thamani-pewter">Record #{log.record_id}</p>
-        </:col>
-        <:col :let={log} label="Organization">
-          <span class="text-sm">{organization_name(log)}</span>
-        </:col>
-        <:col :let={log} label="Actor">
-          <span class="text-sm">{actor_display(log)}</span>
-        </:col>
-        <:col :let={log} label="Changes" tablet="hidden">
-          <span class="text-xs text-thamani-pewter">{changed_fields_summary(log.changed_fields)}</span>
-        </:col>
-        <:empty_state>
-          <.blank_state icon="hero-clipboard-document-list" title="No audit activity found">
-            <%= if @filters["search"] != "" or active_filter_count(@filters) > 0 do %>
-              No changes match your current search and filters.
-            <% else %>
-              No audited activity has been recorded yet.
-            <% end %>
-          </.blank_state>
-        </:empty_state>
-      </.table>
-      <.pagination page={@page_info} path={pagination_path(@filters)} />
+        <.table id="platform-audit-list" rows={@page_info.entries}>
+          <:col :let={log} label="Action">
+            <div class="flex items-center gap-2">
+              <span class={[
+                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold",
+                action_classes(log.action)
+              ]}>
+                <.icon name={action_icon(log.action)} class="size-3.5" /> {action_label(log.action)}
+              </span>
+            </div>
+            <p class="mt-1 text-xs text-thamani-pewter">{format_time(log.inserted_at)}</p>
+          </:col>
+          <:col :let={log} label="Table & record">
+            <p class="font-medium text-thamani-forest">{format_table_name(log.table_name)}</p>
+            <p class="text-xs text-thamani-pewter">Record #{log.record_id}</p>
+          </:col>
+          <:col :let={log} label="Organization">
+            <span class="text-sm">{organization_name(log)}</span>
+          </:col>
+          <:col :let={log} label="Actor">
+            <span class="text-sm">{actor_display(log)}</span>
+          </:col>
+          <:col :let={log} label="Changes" tablet="hidden">
+            <span class="text-xs text-thamani-pewter">{changed_fields_summary(log.changed_fields)}</span>
+          </:col>
+          <:empty_state>
+            <.blank_state icon="hero-clipboard-document-list" title="No audit activity found">
+              <%= if @filters["search"] != "" or active_filter_count(@filters) > 0 do %>
+                No changes match your current search and filters.
+              <% else %>
+                No audited activity has been recorded yet.
+              <% end %>
+            </.blank_state>
+          </:empty_state>
+        </.table>
+        <.pagination page={@page_info} path={pagination_path(@filters)} />
       </.td_list_page>
     </Layouts.platform_shell>
     """

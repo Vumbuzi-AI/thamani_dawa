@@ -174,155 +174,157 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
           </.button>
         </:actions>
 
-      <.modal
-        :if={@live_action in [:new, :edit]}
-        id="distributor-mobile-user-modal"
-        show
-        on_cancel={JS.patch(~p"/distributor/mobile-users")}
-      >
-        <h2 class="mb-1 text-2xl font-medium tracking-tight text-thamani-forest">
-          {if @live_action == :new, do: "Add mobile user", else: "Edit mobile user"}
-        </h2>
-        <p :if={@live_action == :new} class="mb-4 text-sm text-thamani-pewter">
-          We'll email a 4-digit PIN to this address. They sign in to the app with their username and PIN.
-        </p>
-        <.form
-          for={@form}
-          id="distributor-mobile-user-form"
-          phx-change="validate"
-          phx-submit="save"
+        <.modal
+          :if={@live_action in [:new, :edit]}
+          id="distributor-mobile-user-modal"
+          show
+          on_cancel={JS.patch(~p"/distributor/mobile-users")}
         >
-          <.input field={@form[:name]} label="Full name" required />
-          <.input
-            field={@form[:username]}
-            label="Username"
-            autocomplete="off"
-            autocapitalize="none"
-            required
-          />
-          <div class="grid gap-x-4 sm:grid-cols-2">
-            <.input field={@form[:email]} type="email" label="Email (receives the PIN)" required />
+          <h2 class="mb-1 text-2xl font-medium tracking-tight text-thamani-forest">
+            {if @live_action == :new, do: "Add mobile user", else: "Edit mobile user"}
+          </h2>
+          <p :if={@live_action == :new} class="mb-4 text-sm text-thamani-pewter">
+            We'll email a 4-digit PIN to this address. They sign in to the app with their username and PIN.
+          </p>
+          <.form
+            for={@form}
+            id="distributor-mobile-user-form"
+            phx-change="validate"
+            phx-submit="save"
+          >
+            <.input field={@form[:name]} label="Full name" required />
             <.input
-              field={@form[:phone]}
-              type="tel"
-              label="Phone"
-              pattern="(?=.*[0-9])\\+?[0-9 ()-]+"
-              title="Use digits, spaces, hyphens, parentheses, and an optional leading +"
+              field={@form[:username]}
+              label="Username"
+              autocomplete="off"
+              autocapitalize="none"
+              required
             />
-          </div>
-          <.input
-            field={@form[:site_id]}
-            type="select"
-            label="Home site (optional)"
-            options={Enum.map(@sites, &{&1.name, &1.id})}
-            prompt="Leave blank to allow this account to see shipments from any of your warehouses."
-          />
-          <.button id="save-distributor-mobile-user" class="mt-3 w-full" variant="primary">
-            {if @live_action == :new, do: "Add and email PIN", else: "Save changes"}
-          </.button>
-        </.form>
-      </.modal>
-
-      <.modal
-        :if={@deactivate_user}
-        id="deactivate-distributor-mobile-user"
-        show
-        on_cancel={JS.push("cancel_deactivate")}
-      >
-        <h2 class="mb-1 pr-10 text-base font-medium" style="color: var(--color-td-ink);">
-          Deactivate {@deactivate_user.name}
-        </h2>
-        <p class="mb-4 text-sm" style="color: var(--color-td-ink-2);">
-          They will be signed out of the app and cannot sign in until you activate them again.
-        </p>
-        <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <.button type="button" variant="ghost" phx-click="cancel_deactivate">Cancel</.button>
-          <.button
-            id="confirm-deactivate-distributor-mobile-user"
-            variant="danger-confirm"
-            phx-click="confirm_deactivate"
-          >
-            Deactivate
-          </.button>
-        </div>
-      </.modal>
-
-      <.table id="distributor-mobile-users" rows={@streams.mobile_users}>
-        <:col :let={{_id, mobile_user}} label="Name">
-          <div class="min-w-0 max-w-full">
-            <p class="break-words font-medium text-thamani-forest">{mobile_user.name}</p>
-            <p class="break-words font-mono text-xs text-thamani-pewter">@{mobile_user.username}</p>
-          </div>
-        </:col>
-        <:col :let={{_id, mobile_user}} label="Status" mobile="aside">
-          <.status_badge status={if mobile_user.active, do: :active, else: :inactive} />
-        </:col>
-        <:col :let={{_id, mobile_user}} label="Contact" tablet="hidden">
-          <p class="max-w-full break-words text-sm">{mobile_user.email}</p>
-          <p class="max-w-full break-words text-xs text-thamani-pewter">{mobile_user.phone || "—"}</p>
-        </:col>
-        <:col :let={{_id, mobile_user}} label="Last sign-in">
-          <span class="text-sm">{date_time(mobile_user.last_login_at)}</span>
-        </:col>
-        <:col :let={{_id, mobile_user}} label="Shipments">
-          <span class="max-w-full break-words text-sm">
-            {activity(@activity, mobile_user, :total)} total
-            <span class="text-thamani-pewter">
-              · {activity(@activity, mobile_user, "approved")} approved
-            </span>
-          </span>
-        </:col>
-        <:action :let={{_id, mobile_user}}>
-          <div
-            id={"mobile-user-actions-#{mobile_user.id}"}
-            class="flex min-w-0 flex-wrap justify-start gap-2 sm:min-w-[19rem] sm:justify-end"
-          >
-            <.button
-              id={"edit-mobile-user-#{mobile_user.id}"}
-              variant="ghost-edit"
-              class="shrink-0 whitespace-nowrap"
-              patch={~p"/distributor/mobile-users/#{mobile_user.id}/edit"}
-            >
-              Edit
+            <div class="grid gap-x-4 sm:grid-cols-2">
+              <.input field={@form[:email]} type="email" label="Email (receives the PIN)" required />
+              <.input
+                field={@form[:phone]}
+                type="tel"
+                label="Phone"
+                pattern="(?=.*[0-9])\\+?[0-9 ()-]+"
+                title="Use digits, spaces, hyphens, parentheses, and an optional leading +"
+              />
+            </div>
+            <.input
+              field={@form[:site_id]}
+              type="select"
+              label="Home site (optional)"
+              options={Enum.map(@sites, &{&1.name, &1.id})}
+              prompt="Leave blank to allow this account to see shipments from any of your warehouses."
+            />
+            <.button id="save-distributor-mobile-user" class="mt-3 w-full" variant="primary">
+              {if @live_action == :new, do: "Add and email PIN", else: "Save changes"}
             </.button>
+          </.form>
+        </.modal>
+
+        <.modal
+          :if={@deactivate_user}
+          id="deactivate-distributor-mobile-user"
+          show
+          on_cancel={JS.push("cancel_deactivate")}
+        >
+          <h2 class="mb-1 pr-10 text-base font-medium" style="color: var(--color-td-ink);">
+            Deactivate {@deactivate_user.name}
+          </h2>
+          <p class="mb-4 text-sm" style="color: var(--color-td-ink-2);">
+            They will be signed out of the app and cannot sign in until you activate them again.
+          </p>
+          <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <.button type="button" variant="ghost" phx-click="cancel_deactivate">Cancel</.button>
             <.button
-              id={"resend-pin-#{mobile_user.id}"}
-              variant="ghost"
-              class="shrink-0 whitespace-nowrap"
-              phx-click="resend_pin"
-              phx-value-id={mobile_user.id}
-              data-confirm={"Email #{mobile_user.name} a new PIN? Their current PIN stops working and they'll be signed out."}
-            >
-              Resend PIN
-            </.button>
-            <.button
-              :if={mobile_user.active}
-              id={"deactivate-mobile-user-#{mobile_user.id}"}
-              variant="ghost-delete"
-              class="shrink-0 whitespace-nowrap"
-              phx-click="ask_deactivate"
-              phx-value-id={mobile_user.id}
+              id="confirm-deactivate-distributor-mobile-user"
+              variant="danger-confirm"
+              phx-click="confirm_deactivate"
             >
               Deactivate
             </.button>
-            <.button
-              :if={!mobile_user.active}
-              id={"activate-mobile-user-#{mobile_user.id}"}
-              variant="ghost"
-              class="shrink-0 whitespace-nowrap"
-              phx-click="activate"
-              phx-value-id={mobile_user.id}
-            >
-              Activate
-            </.button>
           </div>
-        </:action>
-        <:empty_state>
-          <.blank_state icon="hero-device-phone-mobile" title="No mobile users yet">
-            Add the people who pack shipments so they can sign in to the mobile app.
-          </.blank_state>
-        </:empty_state>
-      </.table>
+        </.modal>
+
+        <.table id="distributor-mobile-users" rows={@streams.mobile_users}>
+          <:col :let={{_id, mobile_user}} label="Name">
+            <div class="min-w-0 max-w-full">
+              <p class="break-words font-medium text-thamani-forest">{mobile_user.name}</p>
+              <p class="break-words font-mono text-xs text-thamani-pewter">@{mobile_user.username}</p>
+            </div>
+          </:col>
+          <:col :let={{_id, mobile_user}} label="Status" mobile="aside">
+            <.status_badge status={if mobile_user.active, do: :active, else: :inactive} />
+          </:col>
+          <:col :let={{_id, mobile_user}} label="Contact" tablet="hidden">
+            <p class="max-w-full break-words text-sm">{mobile_user.email}</p>
+            <p class="max-w-full break-words text-xs text-thamani-pewter">
+              {mobile_user.phone || "—"}
+            </p>
+          </:col>
+          <:col :let={{_id, mobile_user}} label="Last sign-in">
+            <span class="text-sm">{date_time(mobile_user.last_login_at)}</span>
+          </:col>
+          <:col :let={{_id, mobile_user}} label="Shipments">
+            <span class="max-w-full break-words text-sm">
+              {activity(@activity, mobile_user, :total)} total
+              <span class="text-thamani-pewter">
+                · {activity(@activity, mobile_user, "approved")} approved
+              </span>
+            </span>
+          </:col>
+          <:action :let={{_id, mobile_user}}>
+            <div
+              id={"mobile-user-actions-#{mobile_user.id}"}
+              class="flex min-w-0 flex-wrap justify-start gap-2 sm:min-w-[19rem] sm:justify-end"
+            >
+              <.button
+                id={"edit-mobile-user-#{mobile_user.id}"}
+                variant="ghost-edit"
+                class="shrink-0 whitespace-nowrap"
+                patch={~p"/distributor/mobile-users/#{mobile_user.id}/edit"}
+              >
+                Edit
+              </.button>
+              <.button
+                id={"resend-pin-#{mobile_user.id}"}
+                variant="ghost"
+                class="shrink-0 whitespace-nowrap"
+                phx-click="resend_pin"
+                phx-value-id={mobile_user.id}
+                data-confirm={"Email #{mobile_user.name} a new PIN? Their current PIN stops working and they'll be signed out."}
+              >
+                Resend PIN
+              </.button>
+              <.button
+                :if={mobile_user.active}
+                id={"deactivate-mobile-user-#{mobile_user.id}"}
+                variant="ghost-delete"
+                class="shrink-0 whitespace-nowrap"
+                phx-click="ask_deactivate"
+                phx-value-id={mobile_user.id}
+              >
+                Deactivate
+              </.button>
+              <.button
+                :if={!mobile_user.active}
+                id={"activate-mobile-user-#{mobile_user.id}"}
+                variant="ghost"
+                class="shrink-0 whitespace-nowrap"
+                phx-click="activate"
+                phx-value-id={mobile_user.id}
+              >
+                Activate
+              </.button>
+            </div>
+          </:action>
+          <:empty_state>
+            <.blank_state icon="hero-device-phone-mobile" title="No mobile users yet">
+              Add the people who pack shipments so they can sign in to the mobile app.
+            </.blank_state>
+          </:empty_state>
+        </.table>
       </.td_list_page>
     </Layouts.distributor_shell>
     """

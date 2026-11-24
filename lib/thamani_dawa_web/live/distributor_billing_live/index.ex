@@ -95,112 +95,113 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Index do
           </.button>
         </:actions>
 
-      <%= if @organization.serialisation_type == "prepay" do %>
-        <div class="dashboard-stat-grid" id="distributor-prepay-usage">
-          <.stat_tile
-            id="stat-serials-left"
-            icon="hero-cube"
-            label="Serials left"
-            value={number((@usage && SerialUsage.serials_left(@usage)) || 0)}
-            sublabel={
-              if @usage,
-                do: "of #{number(@usage.quantity_limit)} in this bundle",
-                else: "No bundle yet. Buy one to start approving"
-            }
-          />
-          <.stat_tile
-            id="stat-serials-used"
-            icon="hero-qr-code"
-            label="Used"
-            value={number((@usage && @usage.running_quantity) || 0)}
-            sublabel="SSCCs issued from this bundle"
-          />
-          <.stat_tile
-            id="stat-serials-buffer"
-            icon="hero-arrow-trending-up"
-            label="Buffer used"
-            value={number((@usage && @usage.running_buffer) || 0)}
-            sublabel={"Up to #{number(Pricing.buffer_limit())}, added to your next purchase"}
-          />
-          <.stat_tile
-            id="stat-pending-payments"
-            icon="hero-clock"
-            label="Pending payments"
-            value={@pending_payment_count}
-            sublabel="Awaiting confirmation"
-          />
-        </div>
-      <% else %>
-        <div class="dashboard-stat-grid" id="distributor-flex-usage">
-          <.stat_tile
-            id="stat-flex-generated"
-            icon="hero-qr-code"
-            label="Generated this cycle"
-            value={number((@usage && SerialUsage.generated(@usage)) || 0)}
-            sublabel={if @usage, do: "Since #{short_date(@usage.cycle_started_at)}", else: "—"}
-          />
-          <.stat_tile
-            id="stat-flex-due"
-            icon="hero-banknotes"
-            label="Amount due"
-            value={if @postpay_quote, do: kes(@postpay_quote.amount), else: kes(nil)}
-            sublabel={if @usage, do: "Billing date #{short_date(@usage.billing_date)}", else: "—"}
-          />
-          <.stat_tile
-            id="stat-flex-cap"
-            icon="hero-shield-exclamation"
-            label="Overdue cap"
-            value={number(Pricing.buffer_limit())}
-            sublabel={
-              if @overdue?,
-                do: "#{number((@usage && @usage.running_buffer) || 0)} used. Settle to lift the cap",
-                else: "Serials allowed once a cycle is overdue"
-            }
-          />
-          <.stat_tile
-            id="stat-pending-payments"
-            icon="hero-clock"
-            label="Pending payments"
-            value={@pending_payment_count}
-            sublabel="Awaiting confirmation"
-          />
-        </div>
-      <% end %>
+        <%= if @organization.serialisation_type == "prepay" do %>
+          <div class="dashboard-stat-grid" id="distributor-prepay-usage">
+            <.stat_tile
+              id="stat-serials-left"
+              icon="hero-cube"
+              label="Serials left"
+              value={number((@usage && SerialUsage.serials_left(@usage)) || 0)}
+              sublabel={
+                if @usage,
+                  do: "of #{number(@usage.quantity_limit)} in this bundle",
+                  else: "No bundle yet. Buy one to start approving"
+              }
+            />
+            <.stat_tile
+              id="stat-serials-used"
+              icon="hero-qr-code"
+              label="Used"
+              value={number((@usage && @usage.running_quantity) || 0)}
+              sublabel="SSCCs issued from this bundle"
+            />
+            <.stat_tile
+              id="stat-serials-buffer"
+              icon="hero-arrow-trending-up"
+              label="Buffer used"
+              value={number((@usage && @usage.running_buffer) || 0)}
+              sublabel={"Up to #{number(Pricing.buffer_limit())}, added to your next purchase"}
+            />
+            <.stat_tile
+              id="stat-pending-payments"
+              icon="hero-clock"
+              label="Pending payments"
+              value={@pending_payment_count}
+              sublabel="Awaiting confirmation"
+            />
+          </div>
+        <% else %>
+          <div class="dashboard-stat-grid" id="distributor-flex-usage">
+            <.stat_tile
+              id="stat-flex-generated"
+              icon="hero-qr-code"
+              label="Generated this cycle"
+              value={number((@usage && SerialUsage.generated(@usage)) || 0)}
+              sublabel={if @usage, do: "Since #{short_date(@usage.cycle_started_at)}", else: "—"}
+            />
+            <.stat_tile
+              id="stat-flex-due"
+              icon="hero-banknotes"
+              label="Amount due"
+              value={if @postpay_quote, do: kes(@postpay_quote.amount), else: kes(nil)}
+              sublabel={if @usage, do: "Billing date #{short_date(@usage.billing_date)}", else: "—"}
+            />
+            <.stat_tile
+              id="stat-flex-cap"
+              icon="hero-shield-exclamation"
+              label="Overdue cap"
+              value={number(Pricing.buffer_limit())}
+              sublabel={
+                if @overdue?,
+                  do:
+                    "#{number((@usage && @usage.running_buffer) || 0)} used. Settle to lift the cap",
+                  else: "Serials allowed once a cycle is overdue"
+              }
+            />
+            <.stat_tile
+              id="stat-pending-payments"
+              icon="hero-clock"
+              label="Pending payments"
+              value={@pending_payment_count}
+              sublabel="Awaiting confirmation"
+            />
+          </div>
+        <% end %>
 
-      <section class="mt-6">
-        <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-thamani-pewter">
-          Payment history
-        </h2>
-        <.table id="distributor-serial-payments" rows={@payments}>
-          <:col :let={payment} label="Date">
-            <span class="text-sm">{date_time(payment.paid_at || payment.inserted_at)}</span>
-          </:col>
-          <:col :let={payment} label="Status" mobile="aside">
-            <.payment_status_badge status={payment.status} />
-          </:col>
-          <:col :let={payment} label="Type">{kind_label(payment.kind)}</:col>
-          <:col :let={payment} label="Serials">
-            {number(payment.quantity + payment.buffer_quantity)}
-          </:col>
-          <:col :let={payment} label="Amount">{kes(payment.amount)}</:col>
-          <:col :let={payment} label="Method" tablet="hidden">{method_label(payment.method)}</:col>
-          <:action :let={payment}>
-            <.button
-              :if={payment.invoice_number}
-              id={"view-invoice-#{payment.id}"}
-              variant="ghost"
-              navigate={~p"/distributor/billing/invoices/#{payment.id}"}
-            >
-              {payment.invoice_number}
-            </.button>
-          </:action>
-          <:empty_state>
-            <.blank_state icon="hero-banknotes" title="No payments yet">
-              Payments and their invoices will appear here.
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </section>
+        <section class="mt-6">
+          <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-thamani-pewter">
+            Payment history
+          </h2>
+          <.table id="distributor-serial-payments" rows={@payments}>
+            <:col :let={payment} label="Date">
+              <span class="text-sm">{date_time(payment.paid_at || payment.inserted_at)}</span>
+            </:col>
+            <:col :let={payment} label="Status" mobile="aside">
+              <.payment_status_badge status={payment.status} />
+            </:col>
+            <:col :let={payment} label="Type">{kind_label(payment.kind)}</:col>
+            <:col :let={payment} label="Serials">
+              {number(payment.quantity + payment.buffer_quantity)}
+            </:col>
+            <:col :let={payment} label="Amount">{kes(payment.amount)}</:col>
+            <:col :let={payment} label="Method" tablet="hidden">{method_label(payment.method)}</:col>
+            <:action :let={payment}>
+              <.button
+                :if={payment.invoice_number}
+                id={"view-invoice-#{payment.id}"}
+                variant="ghost"
+                navigate={~p"/distributor/billing/invoices/#{payment.id}"}
+              >
+                {payment.invoice_number}
+              </.button>
+            </:action>
+            <:empty_state>
+              <.blank_state icon="hero-banknotes" title="No payments yet">
+                Payments and their invoices will appear here.
+              </.blank_state>
+            </:empty_state>
+          </.table>
+        </section>
       </.td_list_page>
     </Layouts.distributor_shell>
     """

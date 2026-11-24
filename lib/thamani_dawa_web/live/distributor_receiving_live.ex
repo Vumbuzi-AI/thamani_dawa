@@ -181,7 +181,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         to: ~p"/distributor/receiving/#{receipt.id}?#{%{return_to: "/distributor/receiving"}}"
       )
 
-  defp after_delivery(socket, _receipt), do: push_patch(socket, to: socket.assigns.receiving_index_path)
+  defp after_delivery(socket, _receipt),
+    do: push_patch(socket, to: socket.assigns.receiving_index_path)
 
   defp receiving_portal(action) when action in [:org_index, :org_new], do: :organization
   defp receiving_portal(_action), do: :distributor
@@ -194,7 +195,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   defp receiving_new_path(:organization), do: ~p"/org/receiving/new"
   defp receiving_new_path(_), do: ~p"/distributor/receiving/new"
 
-
   def handle_event("search", %{"search" => search}, socket),
     do: {:noreply, push_patch(socket, to: receipt_filter_path(socket, %{"search" => search}))}
 
@@ -203,13 +203,21 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       do: {:noreply, push_patch(socket, to: receipt_filter_path(socket, %{field => value}))}
 
   def handle_event("set_date_preset", %{"value" => value}, socket),
-    do: {:noreply, push_patch(socket, to: receipt_filter_path(socket, %{"date" => value, "date_from" => "", "date_to" => ""}))}
+    do:
+      {:noreply,
+       push_patch(socket,
+         to: receipt_filter_path(socket, %{"date" => value, "date_from" => "", "date_to" => ""})
+       )}
 
   def handle_event("apply_date_range", params, socket) do
     from = params["date_from"] || ""
     to = params["date_to"] || ""
     preset = if from == "" and to == "", do: "", else: "custom"
-    {:noreply, push_patch(socket, to: receipt_filter_path(socket, %{"date" => preset, "date_from" => from, "date_to" => to}))}
+
+    {:noreply,
+     push_patch(socket,
+       to: receipt_filter_path(socket, %{"date" => preset, "date_from" => from, "date_to" => to})
+     )}
   end
 
   def handle_event("clear_filters", _params, socket),
@@ -1400,7 +1408,12 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   end
 
   defp delivery_shipper_count(items),
-    do: items |> Enum.map(&Map.get(&1.attrs, "sscc")) |> Enum.reject(&(&1 in [nil, ""])) |> Enum.uniq() |> length()
+    do:
+      items
+      |> Enum.map(&Map.get(&1.attrs, "sscc"))
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.uniq()
+      |> length()
 
   defp damaged_caption(items) do
     case items |> Enum.filter(& &1[:flagged_damaged?]) |> shipper_units() do
@@ -1452,14 +1465,22 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             </span>
           </label>
         </.form>
-        <div :if={match?(:not_found, @entry_sscc_check) or match?(:unavailable, @entry_sscc_check)} class="td-ban is-warning mt-3" id="inline-scan-error">
+        <div
+          :if={match?(:not_found, @entry_sscc_check) or match?(:unavailable, @entry_sscc_check)}
+          class="td-ban is-warning mt-3"
+          id="inline-scan-error"
+        >
           <.td_icon name="warning" class="size-4" />
           <span>
             {if @entry_sscc_check == :not_found,
               do: "GS1 has no record of this SSCC. Check the label, or add the item by hand.",
               else: "GS1 could not be reached for this SSCC. Try again, or add the item by hand."}
           </span>
-          <.td_button id="inline-add-by-hand" phx-click={JS.push("open_add_item") |> JS.push("skip_to_manual_entry")} label="Add item by hand" />
+          <.td_button
+            id="inline-add-by-hand"
+            phx-click={JS.push("open_add_item") |> JS.push("skip_to_manual_entry")}
+            label="Add item by hand"
+          />
         </div>
         <div :if={match?({:duplicate, _}, @entry_sscc_check)} class="td-ban is-warning mt-3">
           <.td_icon name="warning" class="size-4" />
@@ -1545,10 +1566,24 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             </td>
             <td class="td-row-actions">
               <span :for={item <- line.items} class="inline-flex">
-                <button type="button" class="td-icon-btn" phx-click="edit_delivery_item" phx-value-id={item.id} aria-label={"Edit #{item.batch_no}"} title="Edit">
+                <button
+                  type="button"
+                  class="td-icon-btn"
+                  phx-click="edit_delivery_item"
+                  phx-value-id={item.id}
+                  aria-label={"Edit #{item.batch_no}"}
+                  title="Edit"
+                >
                   <.td_icon name="pencil-simple" class="size-4" />
                 </button>
-                <button type="button" class="td-icon-btn" phx-click="remove_delivery_item" phx-value-id={item.id} aria-label={"Remove #{item.batch_no}"} title="Remove">
+                <button
+                  type="button"
+                  class="td-icon-btn"
+                  phx-click="remove_delivery_item"
+                  phx-value-id={item.id}
+                  aria-label={"Remove #{item.batch_no}"}
+                  title="Remove"
+                >
                   <.td_icon name="trash" class="size-4" />
                 </button>
               </span>
@@ -1570,7 +1605,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
       missing =
         discrepancies
-        |> Enum.filter(&(&1["sscc"] == sscc and &1["gtin"] == batch.gtin and &1["batch_no"] == batch.batch_no))
+        |> Enum.filter(
+          &(&1["sscc"] == sscc and &1["gtin"] == batch.gtin and &1["batch_no"] == batch.batch_no)
+        )
         |> Enum.map(&(&1["quantity"] || 0))
         |> Enum.sum()
 
@@ -1597,7 +1634,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     present = MapSet.new(shipper.items, &{&1.attrs["gtin"], &1.batch_no})
 
     discrepancies
-    |> Enum.filter(&(&1["sscc"] == sscc and not MapSet.member?(present, {&1["gtin"], &1["batch_no"]})))
+    |> Enum.filter(
+      &(&1["sscc"] == sscc and not MapSet.member?(present, {&1["gtin"], &1["batch_no"]}))
+    )
     |> Enum.group_by(&{&1["gtin"], &1["batch_no"], &1["expiry_date"]})
     |> Enum.map(fn {{gtin, batch_no, expiry}, rows} ->
       missing = rows |> Enum.map(&(&1["quantity"] || 0)) |> Enum.sum()
@@ -1843,7 +1882,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     %{
       "search" => params["search"] || "",
       "supplier" => params["supplier"] || "",
-      "discrepancies" => if(params["discrepancies"] in ["open", "none"], do: params["discrepancies"], else: ""),
+      "discrepancies" =>
+        if(params["discrepancies"] in ["open", "none"], do: params["discrepancies"], else: ""),
       "date" => DateRangeFilter.valid_preset(params["date"]),
       "date_from" => params["date_from"] || "",
       "date_to" => params["date_to"] || ""
@@ -1857,13 +1897,16 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
       |> Map.new()
 
-    "#{socket.assigns.receiving_index_path}?#{URI.encode_query(query)}" |> String.trim_trailing("?")
+    "#{socket.assigns.receiving_index_path}?#{URI.encode_query(query)}"
+    |> String.trim_trailing("?")
   end
 
   defp receipts_filtered?(filters), do: Enum.any?(filters, fn {_k, v} -> v not in [nil, ""] end)
 
   defp apply_receipt_filters(receipts, filters) do
-    {from, to} = DateRangeFilter.resolve(filters["date"], filters["date_from"], filters["date_to"])
+    {from, to} =
+      DateRangeFilter.resolve(filters["date"], filters["date_from"], filters["date_to"])
+
     query = filters["search"] |> String.trim() |> String.downcase()
 
     Enum.filter(receipts, fn receipt ->
@@ -1889,13 +1932,20 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
   defp in_eat_range?(at, from, to) do
     day = at |> DateTime.add(3 * 3600) |> DateTime.to_date()
-    (is_nil(from) or Date.compare(day, from) != :lt) and (is_nil(to) or Date.compare(day, to) != :gt)
+
+    (is_nil(from) or Date.compare(day, from) != :lt) and
+      (is_nil(to) or Date.compare(day, to) != :gt)
   end
 
   defp receipt_units(receipt), do: receipt.items |> Enum.map(&(&1.quantity || 0)) |> Enum.sum()
 
   defp receipt_shippers(receipt),
-    do: receipt.items |> Enum.map(& &1.sscc) |> Enum.reject(&(&1 in [nil, ""])) |> Enum.uniq() |> length()
+    do:
+      receipt.items
+      |> Enum.map(& &1.sscc)
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.uniq()
+      |> length()
 
   defp reload_receipts(socket) do
     all_receipts =
@@ -1908,7 +1958,14 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
     socket =
       socket
-      |> assign(:receipt_suppliers, all_receipts |> Enum.map(&receipt_supplier/1) |> Enum.reject(&(&1 == "—")) |> Enum.uniq() |> Enum.sort())
+      |> assign(
+        :receipt_suppliers,
+        all_receipts
+        |> Enum.map(&receipt_supplier/1)
+        |> Enum.reject(&(&1 == "—"))
+        |> Enum.uniq()
+        |> Enum.sort()
+      )
       |> assign(:receipt_total, length(all_receipts))
 
     page_info = DistributorPagination.page(receipts, socket.assigns.page_number)
@@ -2239,25 +2296,30 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           </.td_page_header>
         </div>
       <% else %>
-      <div :if={@receiving_new?} class="td-recipe">
-        <.td_back_link id="receive-back" to={@receiving_index_path} label="Back to Receiving" />
-        <.td_page_header
-          title="Receive delivery"
-          subtitle="Scan each shipper SSCC or product barcode as it comes off the truck, then check it against what was sent."
-        >
-          <:actions>
-            <.td_button id="receive-cancel" variant="secondary" patch={@receiving_index_path} label="Cancel" />
-            <.td_button
-              :if={@receiving_portal != :organization}
-              id="accept-delivery"
-              variant="primary"
-              label="Accept delivery"
-              disabled={@delivery_items == []}
-              phx-click={show_modal("accept-delivery-modal")}
-            />
-          </:actions>
-        </.td_page_header>
-      </div>
+        <div :if={@receiving_new?} class="td-recipe">
+          <.td_back_link id="receive-back" to={@receiving_index_path} label="Back to Receiving" />
+          <.td_page_header
+            title="Receive delivery"
+            subtitle="Scan each shipper SSCC or product barcode as it comes off the truck, then check it against what was sent."
+          >
+            <:actions>
+              <.td_button
+                id="receive-cancel"
+                variant="secondary"
+                patch={@receiving_index_path}
+                label="Cancel"
+              />
+              <.td_button
+                :if={@receiving_portal != :organization}
+                id="accept-delivery"
+                variant="primary"
+                label="Accept delivery"
+                disabled={@delivery_items == []}
+                phx-click={show_modal("accept-delivery-modal")}
+              />
+            </:actions>
+          </.td_page_header>
+        </div>
       <% end %>
 
       <div :if={!@receiving_new?} class="td-recipe">
@@ -2266,7 +2328,8 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           subtitle={
             if @receiving_portal == :organization,
               do: "Check in a delivery directly into a site.",
-              else: "Deliveries checked in to your warehouse. Scan the shipper SSCCs as stock arrives to check it against what was sent."
+              else:
+                "Deliveries checked in to your warehouse. Scan the shipper SSCCs as stock arrives to check it against what was sent."
           }
         >
           <:actions>
@@ -2286,73 +2349,75 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         class="td-card mb-4"
         id="delivery-origin-card"
       >
-        <.td_card_header title="Delivery" subtitle="Who sent it, verified against your own sites and the GS1 registry." />
+        <.td_card_header
+          title="Delivery"
+          subtitle="Who sent it, verified against your own sites and the GS1 registry."
+        />
         <div class="td-pad">
-        <form id="distributor-origin-form" phx-change="validate_origin" class="mt-3">
-          <.input
-            id="origin-gln"
-            name="origin[gln]"
-            value={@origin_gln}
-            label="Origin GLN"
-            placeholder="13-digit GLN of the sender"
-            inputmode="numeric"
-            phx-debounce="500"
-            required
-          />
-        </form>
+          <form id="distributor-origin-form" phx-change="validate_origin" class="mt-3">
+            <.input
+              id="origin-gln"
+              name="origin[gln]"
+              value={@origin_gln}
+              label="Origin GLN"
+              placeholder="13-digit GLN of the sender"
+              inputmode="numeric"
+              phx-debounce="500"
+              required
+            />
+          </form>
 
-        <%= case @origin_check do %>
-          <% :checking -> %>
-            <p class="inline-flex items-center gap-1.5 text-xs font-medium text-thamani-pewter">
-              <.icon name="hero-arrow-path" class="size-3.5 motion-safe:animate-spin" />
-              Verifying&hellip;
-            </p>
-          <% {:matched, resolved} -> %>
-            <div class="rounded-lg bg-td-accent-tint px-3 py-2.5 text-xs font-semibold text-thamani-forest">
-              <p class="inline-flex items-center gap-1.5">
-                <.icon name="hero-check-circle" class="size-4" /> Verified · {resolved.company}
+          <%= case @origin_check do %>
+            <% :checking -> %>
+              <p class="inline-flex items-center gap-1.5 text-xs font-medium text-thamani-pewter">
+                <.icon name="hero-arrow-path" class="size-3.5 motion-safe:animate-spin" />
+                Verifying&hellip;
               </p>
-              <p :if={resolved.address} class="mt-1 font-normal">{resolved.address}</p>
-            </div>
-          <% {:invalid, message} -> %>
-            <p
-              id="origin-gln-error"
-              class="inline-flex items-center gap-1.5 rounded-lg bg-td-danger-tint px-3 py-2 text-xs font-semibold text-td-danger"
-            >
-              <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" />
-              {message}
-            </p>
-          <% :same_receiving_site -> %>
-            <p class="inline-flex items-center gap-1.5 rounded-lg bg-td-danger-tint px-3 py-2 text-xs font-semibold text-td-danger">
-              <.icon name="hero-exclamation-triangle" class="size-4" />
-              This is the GLN for the site receiving this delivery. Enter the GLN of the sending
-              site or supplier instead.
-            </p>
-          <% :not_found -> %>
-            <p class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-              <.icon name="hero-exclamation-triangle" class="size-4" />
-              We couldn't verify this GLN. Double-check the number before continuing.
-            </p>
-          <% :unavailable -> %>
-            <p class="text-xs text-thamani-pewter">
-              We couldn't verify this GLN right now. Try again in a moment.
-            </p>
-          <% _ -> %>
-        <% end %>
+            <% {:matched, resolved} -> %>
+              <div class="rounded-lg bg-td-accent-tint px-3 py-2.5 text-xs font-semibold text-thamani-forest">
+                <p class="inline-flex items-center gap-1.5">
+                  <.icon name="hero-check-circle" class="size-4" /> Verified · {resolved.company}
+                </p>
+                <p :if={resolved.address} class="mt-1 font-normal">{resolved.address}</p>
+              </div>
+            <% {:invalid, message} -> %>
+              <p
+                id="origin-gln-error"
+                class="inline-flex items-center gap-1.5 rounded-lg bg-td-danger-tint px-3 py-2 text-xs font-semibold text-td-danger"
+              >
+                <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" />
+                {message}
+              </p>
+            <% :same_receiving_site -> %>
+              <p class="inline-flex items-center gap-1.5 rounded-lg bg-td-danger-tint px-3 py-2 text-xs font-semibold text-td-danger">
+                <.icon name="hero-exclamation-triangle" class="size-4" />
+                This is the GLN for the site receiving this delivery. Enter the GLN of the sending
+                site or supplier instead.
+              </p>
+            <% :not_found -> %>
+              <p class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                <.icon name="hero-exclamation-triangle" class="size-4" />
+                We couldn't verify this GLN. Double-check the number before continuing.
+              </p>
+            <% :unavailable -> %>
+              <p class="text-xs text-thamani-pewter">
+                We couldn't verify this GLN right now. Try again in a moment.
+              </p>
+            <% _ -> %>
+          <% end %>
 
-        <label
-          :if={@receiving_portal == :organization}
-          class="td-return-toggle mt-4"
-        >
-          <input
-            type="checkbox"
-            id="org-receiving-is-return"
-            name="is_return"
-            checked={@is_return}
-            phx-click="toggle_is_return"
-          />
-          This is a return
-        </label>
+          <label
+            :if={@receiving_portal == :organization}
+            class="td-return-toggle mt-4"
+          >
+            <input
+              type="checkbox"
+              id="org-receiving-is-return"
+              name="is_return"
+              checked={@is_return}
+              phx-click="toggle_is_return"
+            /> This is a return
+          </label>
         </div>
       </div>
 
@@ -2413,18 +2478,27 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           </:actions>
         </.td_card_header>
         <.inline_scanner
-          :if={@receiving_portal != :organization and not @add_item_open and @receipt_step in [:sscc, :confirm_shipper]}
+          :if={
+            @receiving_portal != :organization and not @add_item_open and
+              @receipt_step in [:sscc, :confirm_shipper]
+          }
           {assigns}
         />
-        <div :if={@delivery_items == [] and @receipt_step != :confirm_shipper} class="td-pad td-empty-wrap">
+        <div
+          :if={@delivery_items == [] and @receipt_step != :confirm_shipper}
+          class="td-pad td-empty-wrap"
+        >
           <div class="td-empty-card">
             <p class="td-empty-title">
-              {if @receiving_portal == :organization, do: "No items added yet", else: "Scan the first shipper"}
+              {if @receiving_portal == :organization,
+                do: "No items added yet",
+                else: "Scan the first shipper"}
             </p>
             <p class="td-note">
               {if @receiving_portal == :organization,
                 do: "Scan or select the first product in this delivery.",
-                else: "Scanning a shipper SSCC loads everything packed inside it. No label? Add the item by hand."}
+                else:
+                  "Scanning a shipper SSCC loads everything packed inside it. No label? Add the item by hand."}
             </p>
             <.td_button
               id="open-add-item-empty"
@@ -2436,10 +2510,16 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           </div>
         </div>
         <div :if={@delivery_items != []} class="td-pad">
-          <div :if={@pending_discrepancies != []} id="delivery-discrepancy-banner" class="td-ban is-warning mb-3">
+          <div
+            :if={@pending_discrepancies != []}
+            id="delivery-discrepancy-banner"
+            class="td-ban is-warning mb-3"
+          >
             <.td_icon name="warning" class="size-4" />
             <span>
-              {length(@pending_discrepancies)} {if length(@pending_discrepancies) == 1, do: "line doesn't", else: "lines don't"} match what was sent. They will be recorded as discrepancies on the receipt for you to resolve.
+              {length(@pending_discrepancies)} {if length(@pending_discrepancies) == 1,
+                do: "line doesn't",
+                else: "lines don't"} match what was sent. They will be recorded as discrepancies on the receipt for you to resolve.
             </span>
           </div>
           <.expected_vs_received
@@ -2490,18 +2570,38 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         subtitle="You are about to add this stock to your warehouse."
       >
         <dl class="td-kv-list" id="accept-delivery-summary">
-          <div><dt>From</dt><dd>{accept_origin_name(@origin_check)}</dd></div>
-          <div><dt>Supplier GLN</dt><dd class="td-mono">{blank_dash(@origin_gln)}</dd></div>
-          <div><dt>Shippers</dt><dd>{delivery_shipper_count(@delivery_items)} scanned</dd></div>
-          <div><dt>Units received</dt><dd>{ThamaniDawaWeb.DistributorComponents.number(shipper_units(@delivery_items))}</dd></div>
-          <div><dt>Damaged</dt><dd>{damaged_caption(@delivery_items)}</dd></div>
+          <div>
+            <dt>From</dt><dd>{accept_origin_name(@origin_check)}</dd>
+          </div>
+          <div>
+            <dt>Supplier GLN</dt><dd class="td-mono">{blank_dash(@origin_gln)}</dd>
+          </div>
+          <div>
+            <dt>Shippers</dt><dd>{delivery_shipper_count(@delivery_items)} scanned</dd>
+          </div>
+          <div>
+            <dt>Units received</dt><dd>
+              {ThamaniDawaWeb.DistributorComponents.number(shipper_units(@delivery_items))}
+            </dd>
+          </div>
+          <div>
+            <dt>Damaged</dt><dd>{damaged_caption(@delivery_items)}</dd>
+          </div>
           <div>
             <dt>Discrepancies</dt>
-            <dd>{if @pending_discrepancies == [], do: "None", else: "#{length(@pending_discrepancies)} to resolve"}</dd>
+            <dd>
+              {if @pending_discrepancies == [],
+                do: "None",
+                else: "#{length(@pending_discrepancies)} to resolve"}
+            </dd>
           </div>
         </dl>
         <:footer>
-          <.td_button variant="secondary" label="Keep checking" phx-click={hide_modal("accept-delivery-modal")} />
+          <.td_button
+            variant="secondary"
+            label="Keep checking"
+            phx-click={hide_modal("accept-delivery-modal")}
+          />
           <.td_button
             id="finish-distributor-delivery"
             variant="primary"
@@ -2543,7 +2643,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
         <.add_item_steps {assigns} />
       </.modal>
 
-
       <div :if={!@receiving_new?} class="td-list-page" id="receiving-list">
         <div class="td-toolbar">
           <.td_filter_menu
@@ -2575,7 +2674,11 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
             <%= if receipts_filtered?(@receipt_filters) and @receipt_total > 0 do %>
               <p class="td-empty-title">Nothing matches</p>
               <p class="td-note">Try a different search, or clear the filters.</p>
-              <.td_button id="receiving-clear-filters" phx-click="clear_filters" label="Clear filters" />
+              <.td_button
+                id="receiving-clear-filters"
+                phx-click="clear_filters"
+                label="Clear filters"
+              />
             <% else %>
               <p class="td-empty-title">No deliveries received yet</p>
               <p class="td-note">
@@ -2609,7 +2712,11 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                 :for={{dom_id, receipt} <- @streams.receipts}
                 id={dom_id}
                 class="is-link"
-                phx-click={JS.navigate("#{@receiving_index_path}/#{receipt.id}?return_to=#{URI.encode_www_form(@receiving_index_path)}")}
+                phx-click={
+                  JS.navigate(
+                    "#{@receiving_index_path}/#{receipt.id}?return_to=#{URI.encode_www_form(@receiving_index_path)}"
+                  )
+                }
               >
                 <td>
                   <b>{receipt.number}</b>
@@ -2620,10 +2727,18 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
                   <span :if={receipt.origin_gln} class="td-sub td-mono td-s12">{receipt.origin_gln}</span>
                 </td>
                 <td class="is-num">{receipt_shippers(receipt)}</td>
-                <td class="is-num">{ThamaniDawaWeb.DistributorComponents.number(receipt_units(receipt))}</td>
+                <td class="is-num">
+                  {ThamaniDawaWeb.DistributorComponents.number(receipt_units(receipt))}
+                </td>
                 <td>
-                  <span :if={open_discrepancy_count(receipt) > 0} id={"receipt-open-lines-#{receipt.id}"}>
-                    <.td_badge tone="warning" label={"#{open_discrepancy_count(receipt)} not confirmed"} />
+                  <span
+                    :if={open_discrepancy_count(receipt) > 0}
+                    id={"receipt-open-lines-#{receipt.id}"}
+                  >
+                    <.td_badge
+                      tone="warning"
+                      label={"#{open_discrepancy_count(receipt)} not confirmed"}
+                    />
                   </span>
                   <.td_badge
                     :if={open_discrepancy_count(receipt) == 0 and receipt.discrepancies != []}
@@ -2651,8 +2766,9 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     """
   end
 
+  defp add_item_modal_title(:new_product, portal) when portal != :organization,
+    do: "Add to catalog"
 
-  defp add_item_modal_title(:new_product, portal) when portal != :organization, do: "Add to catalog"
   defp add_item_modal_title(:sscc, _), do: "Enter SSCC"
   defp add_item_modal_title(:confirm_shipper, _), do: "Confirm this case's contents"
   defp add_item_modal_title(_, _), do: "Add item"
@@ -2667,494 +2783,503 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     do: "Scan or select the product, then add its batch details."
 
   defp add_item_modal_subtitle(:new_product, _),
-    do: "This GTIN is not in your catalog yet. Save the product and its batch stays on this delivery."
+    do:
+      "This GTIN is not in your catalog yet. Save the product and its batch stays on this delivery."
 
   defp add_item_modal_subtitle(_, _),
     do: "Scan or select the product, then add its batch details."
 
   defp add_item_steps(assigns) do
     ~H"""
-        <%= cond do %>
-          <% @receipt_step == :sscc -> %>
-            <.form
-              for={@entry_sscc_form}
-              id="distributor-entry-sscc-form"
-              phx-change="validate_entry_sscc"
-              class="mt-5"
-            >
-              <.input
-                field={@entry_sscc_form[:sscc]}
-                label="Case label SSCC"
-                placeholder="e.g. 007923810000000013"
-                autocomplete="off"
-                phx-debounce="350"
-                class="font-medium tabular-nums tracking-tight text-thamani-forest"
-              />
-            </.form>
+    <%= cond do %>
+      <% @receipt_step == :sscc -> %>
+        <.form
+          for={@entry_sscc_form}
+          id="distributor-entry-sscc-form"
+          phx-change="validate_entry_sscc"
+          class="mt-5"
+        >
+          <.input
+            field={@entry_sscc_form[:sscc]}
+            label="Case label SSCC"
+            placeholder="e.g. 007923810000000013"
+            autocomplete="off"
+            phx-debounce="350"
+            class="font-medium tabular-nums tracking-tight text-thamani-forest"
+          />
+        </.form>
 
-            <%= case @entry_sscc_check do %>
-              <% :checking -> %>
-                <p class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-thamani-pewter">
-                  <.icon name="hero-arrow-path" class="size-3.5 motion-safe:animate-spin" />
-                  Looking up this SSCC&hellip;
-                </p>
-              <% {:matched, _shipper} -> %>
-                <p class="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-thamani-forest">
-                  <.icon name="hero-check-circle" class="size-4" /> Found it — contents loaded below.
-                </p>
-              <% :not_found -> %>
-                <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                  <.icon name="hero-exclamation-triangle" class="size-4" />
-                  GS1 has no record of this SSCC. Add the item manually instead.
-                </p>
-              <% :unavailable -> %>
-                <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                  <.icon name="hero-exclamation-triangle" class="size-4" />
-                  GS1 could not be reached for this SSCC. Try again, or add the item manually.
-                </p>
-              <% {:duplicate, sscc} -> %>
-                <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                  <.icon name="hero-exclamation-triangle" class="size-4" />
-                  Case {sscc} has already been added to this delivery — check "Items in this delivery" below.
-                </p>
-              <% _ -> %>
-                <p class="mt-2 text-xs text-thamani-pewter">
-                  Recognized SSCCs auto-fill their batch, quantity, and expiry details.
-                </p>
-            <% end %>
-
-            <div class="my-5 flex items-center gap-3 text-xs font-semibold tracking-widest text-thamani-subtle">
-              <span class="h-px flex-1 bg-thamani-stone"></span>OR<span class="h-px flex-1 bg-thamani-stone"></span>
-            </div>
-            <button
-              type="button"
-              phx-click="skip_to_manual_entry"
-              class="text-sm font-semibold text-thamani-forest hover:underline"
-            >
-              Scan or select the product instead
-            </button>
-          <% @receipt_step == :confirm_shipper -> %>
-            <div class="mt-5">
-              <div class="mt-4 max-h-[min(28rem,55vh)] overflow-y-auto overscroll-contain rounded-2xl border border-thamani-frosted bg-td-surface">
-                <section
-                  :for={section <- product_sections(@pending_shipper.groups)}
-                  class="border-b border-thamani-frosted last:border-b-0"
-                >
-                  <header class="bg-thamani-canvas px-4 py-3">
-                    <h3 class="text-sm font-semibold tracking-tight text-thamani-evergreen">
-                      {section.product_name}
-                    </h3>
-                    <p :if={section.shared_expiry} class="mt-0.5 text-sm text-thamani-pewter">
-                      Expires
-                      <span class="font-medium tabular-nums text-thamani-evergreen">
-                        {format_group_expiry(section.shared_expiry)}
-                      </span>
-                    </p>
-                  </header>
-
-                  <div
-                    :for={group <- section.groups}
-                    id={"pending-group-#{group.key}"}
-                    class="border-t border-thamani-frosted"
-                  >
-                    <div
-                      :if={group.small_group? and length(group.serials) == 1}
-                      id={"pending-serial-#{serial_dom_id(hd(group.serials))}"}
-                      class={[
-                        "relative isolate flex flex-col gap-2 overflow-hidden px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
-                        serial_needs_review?(@pending_shipper, hd(group.serials)) && "bg-amber-50"
-                      ]}
-                    >
-                      <.serial_row_flash
-                        serial={hd(group.serials)}
-                        last_serial={@last_scanned_serial}
-                        tick={@serial_confirm_tick}
-                      />
-                      <p class="relative z-[1] min-w-0 text-sm text-thamani-pewter">
-                        <span class="font-medium tabular-nums tracking-tight text-thamani-evergreen">
-                          {group.batch_no}
-                        </span>
-                        <span class="mx-1.5 text-thamani-pewter" aria-hidden="true">·</span>
-                        <span
-                          class="font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]"
-                          title={hd(group.serials)}
-                        >
-                          {hd(group.serials)}
-                        </span>
-                        <.serial_status pending={@pending_shipper} serial={hd(group.serials)} />
-                        <span :if={is_nil(section.shared_expiry)} class="ml-1.5 tabular-nums">
-                          {format_group_expiry(group.expiry_date)}
-                        </span>
-                      </p>
-                      <.condition_control group={group} serial={hd(group.serials)} />
-                    </div>
-
-                    <div :if={group.small_group? and length(group.serials) != 1} class="px-4 py-3">
-                      <p class="text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen">
-                        {group.batch_no}
-                      </p>
-                      <p
-                        :if={is_nil(section.shared_expiry)}
-                        class="mt-0.5 text-xs tabular-nums text-thamani-pewter"
-                      >
-                        Expires {format_group_expiry(group.expiry_date)}
-                      </p>
-                      <div
-                        :for={serial <- group.serials}
-                        id={"pending-serial-#{serial_dom_id(serial)}"}
-                        class={[
-                          "relative isolate mt-2 flex flex-col gap-2 overflow-hidden sm:flex-row sm:items-center sm:justify-between sm:gap-4",
-                          serial_needs_review?(@pending_shipper, serial) &&
-                            "-mx-4 bg-amber-50 px-4 py-2"
-                        ]}
-                      >
-                        <.serial_row_flash
-                          serial={serial}
-                          last_serial={@last_scanned_serial}
-                          tick={@serial_confirm_tick}
-                        />
-                        <span
-                          class="relative z-[1] min-w-0 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]"
-                          title={serial}
-                        >
-                          {serial}
-                          <.serial_status pending={@pending_shipper} serial={serial} />
-                        </span>
-                        <.condition_control group={group} serial={serial} />
-                      </div>
-                    </div>
-
-                    <div :if={!group.small_group?} class="px-4 py-3">
-                      <div class="flex items-baseline justify-between gap-3">
-                        <p class="min-w-0 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen">
-                          {group.batch_no}
-                        </p>
-                        <p class="shrink-0 text-xs text-thamani-pewter">
-                          Expected
-                          <span class="font-semibold tabular-nums text-thamani-evergreen">
-                            {group.expected_quantity}
-                          </span>
-                        </p>
-                      </div>
-                      <p
-                        :if={is_nil(section.shared_expiry)}
-                        class="mt-0.5 text-xs tabular-nums text-thamani-pewter"
-                      >
-                        Expires {format_group_expiry(group.expiry_date)}
-                      </p>
-                      <form
-                        id={"pending-group-quantities-#{group.key}"}
-                        class="mt-3 grid gap-3 sm:grid-cols-2"
-                        phx-value-key={group.key}
-                      >
-                        <label class="block">
-                          <span class="text-xs font-medium text-thamani-pewter">Received</span>
-                          <input
-                            type="number"
-                            min="0"
-                            max={group.expected_quantity}
-                            value={group.received_quantity}
-                            phx-change="set_group_received_quantity"
-                            name="value"
-                            class="thamani-input mt-1 w-full"
-                          />
-                        </label>
-                        <label class="block">
-                          <span class="text-xs font-medium text-thamani-pewter">
-                            Damaged, of those received
-                          </span>
-                          <input
-                            type="number"
-                            min="0"
-                            max={group.received_quantity}
-                            value={group.damaged_quantity}
-                            phx-change="set_group_damaged_quantity"
-                            name="value"
-                            class="thamani-input mt-1 w-full"
-                          />
-                        </label>
-                        <p
-                          :if={group.received_quantity < group.expected_quantity}
-                          class="text-xs font-medium text-amber-900 sm:col-span-2"
-                        >
-                          {group.expected_quantity - group.received_quantity} not received. These are flagged missing without serials.
-                        </p>
-                      </form>
-                    </div>
-                  </div>
-                </section>
-              </div>
-
-              <div class="mt-4 flex gap-3">
-                <button
-                  type="button"
-                  id="cancel-pending-shipper"
-                  phx-click="cancel_pending_shipper"
-                  class="flex-1 rounded-full border border-thamani-stone px-4 py-2.5 text-sm font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  id="confirm-pending-shipper"
-                  phx-click="confirm_pending_shipper"
-                  class="flex-1 rounded-full bg-thamani-forest px-4 py-2.5 text-sm font-semibold text-td-on-accent transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
-                >
-                  Accept all and add to delivery
-                </button>
-              </div>
-            </div>
-          <% @receipt_step == :product -> %>
-            <.form
-              for={@scan_form}
-              id="distributor-scan-gtin-form"
-              phx-change="scan_gtin"
-              phx-submit="scan_gtin"
-              class="mt-5"
-            >
-              <.input
-                field={@scan_form[:gtin]}
-                label="Scan GTIN to identify product"
-                placeholder="Scan the product barcode, then press Enter"
-                autocomplete="off"
-                phx-debounce="350"
-              />
-              <p
-                :if={@scan_error}
-                id="distributor-scan-error"
-                role="alert"
-                class="mt-2 text-sm text-thamani-error"
-              >
-                {@scan_error}
-              </p>
-            </.form>
-            <div class="my-5 flex items-center gap-3 text-xs font-semibold tracking-widest text-thamani-subtle">
-              <span class="h-px flex-1 bg-thamani-stone"></span>OR CHOOSE MANUALLY<span class="h-px flex-1 bg-thamani-stone"></span>
-            </div>
-            <form id="distributor-choose-product-form" phx-change="choose_product">
-              <.input
-                name="product_id"
-                type="select"
-                label="Choose a product manually"
-                prompt="Select product"
-                options={Enum.map(@products, &{product_name(@products, &1.id), &1.id})}
-              />
-            </form>
-          <% @receipt_step == :new_product -> %>
-            <div class="mt-5 mb-4 flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
-                  New product
-                </p>
-                <p class="mt-0.5 font-mono text-xs text-thamani-pewter">
-                  GTIN {@new_product_form[:gtin].value}
-                </p>
-                <p :if={@receiving_portal == :organization} class="mt-1 text-xs font-medium text-thamani-pewter">
-                  Not in your catalogue
-                </p>
-              </div>
-              <button
-                type="button"
-                phx-click="cancel_new_product"
-                class="text-sm font-semibold text-thamani-forest hover:underline"
-              >
-                Cancel
-              </button>
-            </div>
-            <.form
-              for={@new_product_form}
-              id="distributor-new-product-form"
-              phx-change="validate_new_product"
-              phx-submit="save_new_product"
-            >
-              <input type="hidden" name="product[gtin]" value={@new_product_form[:gtin].value} />
-              <input type="hidden" name="product[uom]" value="C62" />
-              <div class="grid gap-x-4 sm:grid-cols-2">
-                <.input field={@new_product_form[:generic_name]} label="Generic name" />
-                <.input field={@new_product_form[:brand_name]} label="Brand name" />
-                <.input
-                  field={@new_product_form[:net_content_uom]}
-                  type="select"
-                  label={if @receiving_portal == :organization, do: "Base inventory unit", else: "Unit of measure (UOM)"}
-                  prompt="Tablets, capsules, ml"
-                  options={[
-                    {"Tablets", "U2"},
-                    {"Capsules", "AV"},
-                    {"Millilitres", "MLT"},
-                    {"Pieces", "H87"}
-                  ]}
-                />
-                <.input
-                  field={@new_product_form[:net_content_quantity]}
-                  type="number"
-                  label="Qty (optional)"
-                  placeholder="e.g. 20"
-                  min="1"
-                />
-                <.input field={@new_product_form[:category]} label="Category" />
-                <.input
-                  field={@new_product_form[:price]}
-                  type="number"
-                  label={if @receiving_portal == :organization, do: "Unit price (KSh)", else: "Price (KSh)"}
-                  min="0"
-                  required
-                />
-                <.input
-                  field={@new_product_form[:reorder_level]}
-                  label="Reorder level"
-                  type="number"
-                  min="0"
-                />
-              </div>
-              <.button class="mt-3 w-full" variant="primary">
-                Add product and continue
-              </.button>
-            </.form>
-          <% true -> %>
-            <div class="mt-5 mb-4 flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3">
-              <div>
-                <p class="text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
-                  Product
-                </p>
-                <p class="text-sm font-medium text-thamani-forest">
-                  {product_name(@products, @selected_product.id)}
-                </p>
-                <p class="mt-0.5 font-mono text-xs text-thamani-pewter">
-                  GTIN {@selected_product.gtin}
-                </p>
-              </div>
-              <button
-                type="button"
-                phx-click="change_product"
-                class="text-sm font-semibold text-thamani-forest hover:underline"
-              >
-                Change
-              </button>
-            </div>
-            <div
-              :if={@adding_supplier}
-              class="rounded-xl border border-thamani-stone bg-thamani-canvas p-4"
-            >
-              <div class="mb-3 flex items-center justify-between">
-                <p class="text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
-                  New supplier
-                </p>
-                <button
-                  type="button"
-                  phx-click="cancel_new_supplier"
-                  class="text-sm font-semibold text-thamani-forest hover:underline"
-                >
-                  Cancel
-                </button>
-              </div>
-              <.form
-                for={@new_supplier_form}
-                id="distributor-new-supplier-form"
-                phx-change="validate_new_supplier"
-                phx-submit="save_new_supplier"
-              >
-                <.input field={@new_supplier_form[:name]} label="Supplier name" required />
-                <div class="grid gap-x-4 sm:grid-cols-2">
-                  <.input field={@new_supplier_form[:phone]} label="Phone" required />
-                  <.input field={@new_supplier_form[:email]} label="Email" required />
-                </div>
-                <.button class="mt-3 w-full" variant="primary">Add supplier</.button>
-              </.form>
-            </div>
-            <.form
-              :if={!@adding_supplier}
-              for={@form}
-              id="distributor-receipt-form"
-              phx-change="validate"
-              phx-submit="add_to_delivery"
-            >
-              <input type="hidden" name="batch[product_id]" value={@selected_product.id} />
-              <input type="hidden" name="batch[gtin]" value={@selected_product.gtin} />
-              <input type="hidden" name="batch[site_id]" value={@form[:site_id].value} />
-              <div :if={!@distributor_org?}>
-                <.input
-                  field={@form[:supplier_id]}
-                  type="select"
-                  label="Supplier"
-                  options={Enum.map(@suppliers, &{&1.name, &1.id})}
-                  prompt="Select supplier"
-                  required
-                />
-                <button
-                  type="button"
-                  phx-click="toggle_new_supplier"
-                  class="-mt-2 mb-3 text-xs font-semibold text-thamani-forest hover:underline"
-                >
-                  + Add new supplier
-                </button>
-              </div>
-              <div class="grid gap-x-4 sm:grid-cols-2">
-                <.input field={@form[:batch_no]} label="Batch number" required />
-                <.date_picker field={@form[:expiry_date]} label="Expiry date" required />
-              </div>
-              <div class="grid gap-x-4 sm:grid-cols-2">
-                <.input field={@form[:manufacturer]} label="Manufacturer (optional)" />
-                <.date_picker
-                  field={@form[:manufacture_date]}
-                  label="Manufacture date (optional)"
-                />
-              </div>
-              <p
-                :if={Products.format_net_content(@selected_product)}
-                id="unit-net-content"
-                class="mb-3 text-xs text-thamani-pewter"
-              >
-                Each pack contains {Products.format_net_content(@selected_product)}.
-              </p>
-              <div class="grid gap-x-4 sm:grid-cols-2">
-                <div :if={@locked_unit_quantity} id="locked-unit-quantity">
-                  <p class="mb-1 text-sm font-medium text-thamani-forest">Quantity received</p>
-                  <p class="mb-3 text-sm font-medium tabular-nums text-thamani-evergreen">
-                    {Products.format_unit_count(@locked_unit_quantity)}
-                  </p>
-                  <input type="hidden" name="batch[quantity]" value={@locked_unit_quantity} />
-                </div>
-                <.input
-                  :if={is_nil(@locked_unit_quantity)}
-                  field={@form[:quantity]}
-                  type="number"
-                  label="Quantity received (units)"
-                  min="1"
-                  required
-                />
-                <.input
-                  field={@form[:cost_per_unit]}
-                  type="number"
-                  step="0.01"
-                  label="Cost per unit (optional)"
-                  min="0"
-                />
-              </div>
-              <.input
-                field={@form[:sscc]}
-                label="Case label SSCC"
-                placeholder="Scan the pallet/case label, or type its 18-digit SSCC"
-                autocomplete="off"
-                required
-                class="font-medium tabular-nums tracking-tight text-thamani-forest"
-              />
-              <p
-                :if={@sscc_warning}
-                id="sscc-destination-warning"
-                class="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800"
-              >
-                <.icon name="hero-exclamation-triangle" class="size-4" /> {@sscc_warning}
-              </p>
-              <.button class="mt-3 w-full" variant="primary" id="add-to-delivery">
-                {cond do
-                  not is_nil(@editing_delivery_item_id) -> "Save item changes"
-                  @receiving_portal == :organization -> "Add to delivery"
-                  true -> "Add received item"
-                end}
-              </.button>
-            </.form>
+        <%= case @entry_sscc_check do %>
+          <% :checking -> %>
+            <p class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-thamani-pewter">
+              <.icon name="hero-arrow-path" class="size-3.5 motion-safe:animate-spin" />
+              Looking up this SSCC&hellip;
+            </p>
+          <% {:matched, _shipper} -> %>
+            <p class="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-thamani-forest">
+              <.icon name="hero-check-circle" class="size-4" /> Found it — contents loaded below.
+            </p>
+          <% :not_found -> %>
+            <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <.icon name="hero-exclamation-triangle" class="size-4" />
+              GS1 has no record of this SSCC. Add the item manually instead.
+            </p>
+          <% :unavailable -> %>
+            <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <.icon name="hero-exclamation-triangle" class="size-4" />
+              GS1 could not be reached for this SSCC. Try again, or add the item manually.
+            </p>
+          <% {:duplicate, sscc} -> %>
+            <p class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+              <.icon name="hero-exclamation-triangle" class="size-4" />
+              Case {sscc} has already been added to this delivery — check "Items in this delivery" below.
+            </p>
+          <% _ -> %>
+            <p class="mt-2 text-xs text-thamani-pewter">
+              Recognized SSCCs auto-fill their batch, quantity, and expiry details.
+            </p>
         <% end %>
 
+        <div class="my-5 flex items-center gap-3 text-xs font-semibold tracking-widest text-thamani-subtle">
+          <span class="h-px flex-1 bg-thamani-stone"></span>OR<span class="h-px flex-1 bg-thamani-stone"></span>
+        </div>
+        <button
+          type="button"
+          phx-click="skip_to_manual_entry"
+          class="text-sm font-semibold text-thamani-forest hover:underline"
+        >
+          Scan or select the product instead
+        </button>
+      <% @receipt_step == :confirm_shipper -> %>
+        <div class="mt-5">
+          <div class="mt-4 max-h-[min(28rem,55vh)] overflow-y-auto overscroll-contain rounded-2xl border border-thamani-frosted bg-td-surface">
+            <section
+              :for={section <- product_sections(@pending_shipper.groups)}
+              class="border-b border-thamani-frosted last:border-b-0"
+            >
+              <header class="bg-thamani-canvas px-4 py-3">
+                <h3 class="text-sm font-semibold tracking-tight text-thamani-evergreen">
+                  {section.product_name}
+                </h3>
+                <p :if={section.shared_expiry} class="mt-0.5 text-sm text-thamani-pewter">
+                  Expires
+                  <span class="font-medium tabular-nums text-thamani-evergreen">
+                    {format_group_expiry(section.shared_expiry)}
+                  </span>
+                </p>
+              </header>
+
+              <div
+                :for={group <- section.groups}
+                id={"pending-group-#{group.key}"}
+                class="border-t border-thamani-frosted"
+              >
+                <div
+                  :if={group.small_group? and length(group.serials) == 1}
+                  id={"pending-serial-#{serial_dom_id(hd(group.serials))}"}
+                  class={[
+                    "relative isolate flex flex-col gap-2 overflow-hidden px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4",
+                    serial_needs_review?(@pending_shipper, hd(group.serials)) && "bg-amber-50"
+                  ]}
+                >
+                  <.serial_row_flash
+                    serial={hd(group.serials)}
+                    last_serial={@last_scanned_serial}
+                    tick={@serial_confirm_tick}
+                  />
+                  <p class="relative z-[1] min-w-0 text-sm text-thamani-pewter">
+                    <span class="font-medium tabular-nums tracking-tight text-thamani-evergreen">
+                      {group.batch_no}
+                    </span>
+                    <span class="mx-1.5 text-thamani-pewter" aria-hidden="true">·</span>
+                    <span
+                      class="font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]"
+                      title={hd(group.serials)}
+                    >
+                      {hd(group.serials)}
+                    </span>
+                    <.serial_status pending={@pending_shipper} serial={hd(group.serials)} />
+                    <span :if={is_nil(section.shared_expiry)} class="ml-1.5 tabular-nums">
+                      {format_group_expiry(group.expiry_date)}
+                    </span>
+                  </p>
+                  <.condition_control group={group} serial={hd(group.serials)} />
+                </div>
+
+                <div :if={group.small_group? and length(group.serials) != 1} class="px-4 py-3">
+                  <p class="text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen">
+                    {group.batch_no}
+                  </p>
+                  <p
+                    :if={is_nil(section.shared_expiry)}
+                    class="mt-0.5 text-xs tabular-nums text-thamani-pewter"
+                  >
+                    Expires {format_group_expiry(group.expiry_date)}
+                  </p>
+                  <div
+                    :for={serial <- group.serials}
+                    id={"pending-serial-#{serial_dom_id(serial)}"}
+                    class={[
+                      "relative isolate mt-2 flex flex-col gap-2 overflow-hidden sm:flex-row sm:items-center sm:justify-between sm:gap-4",
+                      serial_needs_review?(@pending_shipper, serial) &&
+                        "-mx-4 bg-amber-50 px-4 py-2"
+                    ]}
+                  >
+                    <.serial_row_flash
+                      serial={serial}
+                      last_serial={@last_scanned_serial}
+                      tick={@serial_confirm_tick}
+                    />
+                    <span
+                      class="relative z-[1] min-w-0 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen [overflow-wrap:anywhere]"
+                      title={serial}
+                    >
+                      {serial}
+                      <.serial_status pending={@pending_shipper} serial={serial} />
+                    </span>
+                    <.condition_control group={group} serial={serial} />
+                  </div>
+                </div>
+
+                <div :if={!group.small_group?} class="px-4 py-3">
+                  <div class="flex items-baseline justify-between gap-3">
+                    <p class="min-w-0 text-sm font-medium tabular-nums tracking-tight text-thamani-evergreen">
+                      {group.batch_no}
+                    </p>
+                    <p class="shrink-0 text-xs text-thamani-pewter">
+                      Expected
+                      <span class="font-semibold tabular-nums text-thamani-evergreen">
+                        {group.expected_quantity}
+                      </span>
+                    </p>
+                  </div>
+                  <p
+                    :if={is_nil(section.shared_expiry)}
+                    class="mt-0.5 text-xs tabular-nums text-thamani-pewter"
+                  >
+                    Expires {format_group_expiry(group.expiry_date)}
+                  </p>
+                  <form
+                    id={"pending-group-quantities-#{group.key}"}
+                    class="mt-3 grid gap-3 sm:grid-cols-2"
+                    phx-value-key={group.key}
+                  >
+                    <label class="block">
+                      <span class="text-xs font-medium text-thamani-pewter">Received</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={group.expected_quantity}
+                        value={group.received_quantity}
+                        phx-change="set_group_received_quantity"
+                        name="value"
+                        class="thamani-input mt-1 w-full"
+                      />
+                    </label>
+                    <label class="block">
+                      <span class="text-xs font-medium text-thamani-pewter">
+                        Damaged, of those received
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={group.received_quantity}
+                        value={group.damaged_quantity}
+                        phx-change="set_group_damaged_quantity"
+                        name="value"
+                        class="thamani-input mt-1 w-full"
+                      />
+                    </label>
+                    <p
+                      :if={group.received_quantity < group.expected_quantity}
+                      class="text-xs font-medium text-amber-900 sm:col-span-2"
+                    >
+                      {group.expected_quantity - group.received_quantity} not received. These are flagged missing without serials.
+                    </p>
+                  </form>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="mt-4 flex gap-3">
+            <button
+              type="button"
+              id="cancel-pending-shipper"
+              phx-click="cancel_pending_shipper"
+              class="flex-1 rounded-full border border-thamani-stone px-4 py-2.5 text-sm font-semibold text-thamani-forest transition-colors hover:bg-thamani-canvas focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              id="confirm-pending-shipper"
+              phx-click="confirm_pending_shipper"
+              class="flex-1 rounded-full bg-thamani-forest px-4 py-2.5 text-sm font-semibold text-td-on-accent transition-colors hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent"
+            >
+              Accept all and add to delivery
+            </button>
+          </div>
+        </div>
+      <% @receipt_step == :product -> %>
+        <.form
+          for={@scan_form}
+          id="distributor-scan-gtin-form"
+          phx-change="scan_gtin"
+          phx-submit="scan_gtin"
+          class="mt-5"
+        >
+          <.input
+            field={@scan_form[:gtin]}
+            label="Scan GTIN to identify product"
+            placeholder="Scan the product barcode, then press Enter"
+            autocomplete="off"
+            phx-debounce="350"
+          />
+          <p
+            :if={@scan_error}
+            id="distributor-scan-error"
+            role="alert"
+            class="mt-2 text-sm text-thamani-error"
+          >
+            {@scan_error}
+          </p>
+        </.form>
+        <div class="my-5 flex items-center gap-3 text-xs font-semibold tracking-widest text-thamani-subtle">
+          <span class="h-px flex-1 bg-thamani-stone"></span>OR CHOOSE MANUALLY<span class="h-px flex-1 bg-thamani-stone"></span>
+        </div>
+        <form id="distributor-choose-product-form" phx-change="choose_product">
+          <.input
+            name="product_id"
+            type="select"
+            label="Choose a product manually"
+            prompt="Select product"
+            options={Enum.map(@products, &{product_name(@products, &1.id), &1.id})}
+          />
+        </form>
+      <% @receipt_step == :new_product -> %>
+        <div class="mt-5 mb-4 flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+              New product
+            </p>
+            <p class="mt-0.5 font-mono text-xs text-thamani-pewter">
+              GTIN {@new_product_form[:gtin].value}
+            </p>
+            <p
+              :if={@receiving_portal == :organization}
+              class="mt-1 text-xs font-medium text-thamani-pewter"
+            >
+              Not in your catalogue
+            </p>
+          </div>
+          <button
+            type="button"
+            phx-click="cancel_new_product"
+            class="text-sm font-semibold text-thamani-forest hover:underline"
+          >
+            Cancel
+          </button>
+        </div>
+        <.form
+          for={@new_product_form}
+          id="distributor-new-product-form"
+          phx-change="validate_new_product"
+          phx-submit="save_new_product"
+        >
+          <input type="hidden" name="product[gtin]" value={@new_product_form[:gtin].value} />
+          <input type="hidden" name="product[uom]" value="C62" />
+          <div class="grid gap-x-4 sm:grid-cols-2">
+            <.input field={@new_product_form[:generic_name]} label="Generic name" />
+            <.input field={@new_product_form[:brand_name]} label="Brand name" />
+            <.input
+              field={@new_product_form[:net_content_uom]}
+              type="select"
+              label={
+                if @receiving_portal == :organization,
+                  do: "Base inventory unit",
+                  else: "Unit of measure (UOM)"
+              }
+              prompt="Tablets, capsules, ml"
+              options={[
+                {"Tablets", "U2"},
+                {"Capsules", "AV"},
+                {"Millilitres", "MLT"},
+                {"Pieces", "H87"}
+              ]}
+            />
+            <.input
+              field={@new_product_form[:net_content_quantity]}
+              type="number"
+              label="Qty (optional)"
+              placeholder="e.g. 20"
+              min="1"
+            />
+            <.input field={@new_product_form[:category]} label="Category" />
+            <.input
+              field={@new_product_form[:price]}
+              type="number"
+              label={
+                if @receiving_portal == :organization, do: "Unit price (KSh)", else: "Price (KSh)"
+              }
+              min="0"
+              required
+            />
+            <.input
+              field={@new_product_form[:reorder_level]}
+              label="Reorder level"
+              type="number"
+              min="0"
+            />
+          </div>
+          <.button class="mt-3 w-full" variant="primary">
+            Add product and continue
+          </.button>
+        </.form>
+      <% true -> %>
+        <div class="mt-5 mb-4 flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+              Product
+            </p>
+            <p class="text-sm font-medium text-thamani-forest">
+              {product_name(@products, @selected_product.id)}
+            </p>
+            <p class="mt-0.5 font-mono text-xs text-thamani-pewter">
+              GTIN {@selected_product.gtin}
+            </p>
+          </div>
+          <button
+            type="button"
+            phx-click="change_product"
+            class="text-sm font-semibold text-thamani-forest hover:underline"
+          >
+            Change
+          </button>
+        </div>
+        <div
+          :if={@adding_supplier}
+          class="rounded-xl border border-thamani-stone bg-thamani-canvas p-4"
+        >
+          <div class="mb-3 flex items-center justify-between">
+            <p class="text-xs font-semibold uppercase tracking-wide text-thamani-subtle">
+              New supplier
+            </p>
+            <button
+              type="button"
+              phx-click="cancel_new_supplier"
+              class="text-sm font-semibold text-thamani-forest hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
+          <.form
+            for={@new_supplier_form}
+            id="distributor-new-supplier-form"
+            phx-change="validate_new_supplier"
+            phx-submit="save_new_supplier"
+          >
+            <.input field={@new_supplier_form[:name]} label="Supplier name" required />
+            <div class="grid gap-x-4 sm:grid-cols-2">
+              <.input field={@new_supplier_form[:phone]} label="Phone" required />
+              <.input field={@new_supplier_form[:email]} label="Email" required />
+            </div>
+            <.button class="mt-3 w-full" variant="primary">Add supplier</.button>
+          </.form>
+        </div>
+        <.form
+          :if={!@adding_supplier}
+          for={@form}
+          id="distributor-receipt-form"
+          phx-change="validate"
+          phx-submit="add_to_delivery"
+        >
+          <input type="hidden" name="batch[product_id]" value={@selected_product.id} />
+          <input type="hidden" name="batch[gtin]" value={@selected_product.gtin} />
+          <input type="hidden" name="batch[site_id]" value={@form[:site_id].value} />
+          <div :if={!@distributor_org?}>
+            <.input
+              field={@form[:supplier_id]}
+              type="select"
+              label="Supplier"
+              options={Enum.map(@suppliers, &{&1.name, &1.id})}
+              prompt="Select supplier"
+              required
+            />
+            <button
+              type="button"
+              phx-click="toggle_new_supplier"
+              class="-mt-2 mb-3 text-xs font-semibold text-thamani-forest hover:underline"
+            >
+              + Add new supplier
+            </button>
+          </div>
+          <div class="grid gap-x-4 sm:grid-cols-2">
+            <.input field={@form[:batch_no]} label="Batch number" required />
+            <.date_picker field={@form[:expiry_date]} label="Expiry date" required />
+          </div>
+          <div class="grid gap-x-4 sm:grid-cols-2">
+            <.input field={@form[:manufacturer]} label="Manufacturer (optional)" />
+            <.date_picker
+              field={@form[:manufacture_date]}
+              label="Manufacture date (optional)"
+            />
+          </div>
+          <p
+            :if={Products.format_net_content(@selected_product)}
+            id="unit-net-content"
+            class="mb-3 text-xs text-thamani-pewter"
+          >
+            Each pack contains {Products.format_net_content(@selected_product)}.
+          </p>
+          <div class="grid gap-x-4 sm:grid-cols-2">
+            <div :if={@locked_unit_quantity} id="locked-unit-quantity">
+              <p class="mb-1 text-sm font-medium text-thamani-forest">Quantity received</p>
+              <p class="mb-3 text-sm font-medium tabular-nums text-thamani-evergreen">
+                {Products.format_unit_count(@locked_unit_quantity)}
+              </p>
+              <input type="hidden" name="batch[quantity]" value={@locked_unit_quantity} />
+            </div>
+            <.input
+              :if={is_nil(@locked_unit_quantity)}
+              field={@form[:quantity]}
+              type="number"
+              label="Quantity received (units)"
+              min="1"
+              required
+            />
+            <.input
+              field={@form[:cost_per_unit]}
+              type="number"
+              step="0.01"
+              label="Cost per unit (optional)"
+              min="0"
+            />
+          </div>
+          <.input
+            field={@form[:sscc]}
+            label="Case label SSCC"
+            placeholder="Scan the pallet/case label, or type its 18-digit SSCC"
+            autocomplete="off"
+            required
+            class="font-medium tabular-nums tracking-tight text-thamani-forest"
+          />
+          <p
+            :if={@sscc_warning}
+            id="sscc-destination-warning"
+            class="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800"
+          >
+            <.icon name="hero-exclamation-triangle" class="size-4" /> {@sscc_warning}
+          </p>
+          <.button class="mt-3 w-full" variant="primary" id="add-to-delivery">
+            {cond do
+              not is_nil(@editing_delivery_item_id) -> "Save item changes"
+              @receiving_portal == :organization -> "Add to delivery"
+              true -> "Add received item"
+            end}
+          </.button>
+        </.form>
+    <% end %>
     """
   end
 

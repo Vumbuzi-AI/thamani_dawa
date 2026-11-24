@@ -215,7 +215,11 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
             </span>
           </div>
 
-          <div :if={@shipment.status == "rejected"} id="manufacturer-rejection" class="td-ban is-danger">
+          <div
+            :if={@shipment.status == "rejected"}
+            id="manufacturer-rejection"
+            class="td-ban is-danger"
+          >
             <.td_icon name="x-circle" />
             <span>
               <b>Rejected.</b>

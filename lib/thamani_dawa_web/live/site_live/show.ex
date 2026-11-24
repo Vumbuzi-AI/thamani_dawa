@@ -37,7 +37,9 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
   def handle_params(params, _url, socket) do
     default = ~p"/org/sites"
     return_to = ThamaniDawaWeb.ReturnTo.safe(params["return_to"], default)
-    back_label = if return_to == ~p"/org/dashboard", do: "Back to Dashboard", else: "Back to Sites"
+
+    back_label =
+      if return_to == ~p"/org/dashboard", do: "Back to Dashboard", else: "Back to Sites"
 
     {:noreply,
      socket
@@ -202,10 +204,6 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
   defp parse_date(%Date{} = d), do: {:ok, d}
   defp parse_date(_), do: {:error, :invalid}
 
-  defp to_date_val(%DateTime{} = dt), do: DateTime.to_date(dt)
-  defp to_date_val(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_date(ndt)
-  defp to_date_val(%Date{} = d), do: d
-
   defp money(amount) do
     grouped =
       amount
@@ -257,7 +255,10 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp daily_revenue_chart_data(daily_revenue) do
     %{
-      labels: Enum.map(daily_revenue, fn {date, _amount} -> ThamaniDawaWeb.TimeFormat.month_day(date) end),
+      labels:
+        Enum.map(daily_revenue, fn {date, _amount} ->
+          ThamaniDawaWeb.TimeFormat.month_day(date)
+        end),
       datasets: [
         %{
           label: "KSh Collected",
@@ -274,7 +275,8 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp monthly_revenue_chart_data(monthly_revenue) do
     %{
-      labels: Enum.map(monthly_revenue, fn {date, _n} -> ThamaniDawaWeb.TimeFormat.month_year(date) end),
+      labels:
+        Enum.map(monthly_revenue, fn {date, _n} -> ThamaniDawaWeb.TimeFormat.month_year(date) end),
       datasets: [
         %{
           label: "Revenue",
@@ -437,7 +439,10 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp tab_path(site, tab, return_to) do
     path = ~p"/org/sites/#{site.id}?tab=#{tab}"
-    if return_to in [nil, "", ~p"/org/sites"], do: path, else: ThamaniDawaWeb.ReturnTo.with_query(path, return_to)
+
+    if return_to in [nil, "", ~p"/org/sites"],
+      do: path,
+      else: ThamaniDawaWeb.ReturnTo.with_query(path, return_to)
   end
 
   defp site_subtitle(site) do
@@ -506,39 +511,39 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
             autocomplete="off"
             class="td-input td-org-dash-search-input"
           />
-            <div
-              :if={
-                @search_query != "" and String.trim(@search_query) != "" and
-                  Map.get(assigns, :search_active, true)
-              }
-              class="td-popover td-org-dash-search-pop"
-            >
-              <% items = combined_search_items(@search_results) %>
-              <div class="td-org-dash-search-hd">
-                <p class="td-popover-label">Search hits at {@site.name} for "{@search_query}"</p>
-                <button type="button" phx-click="clear_search" class="td-text-btn">
-                  Clear search
-                </button>
-              </div>
-              <p class="td-org-dash-search-hint">
-                Site metrics below filtered for "{@search_query}"
-                <span>
-                  {@stats.total_patients} patients • {@stats.patient_visits} visits • {money(
-                    @stats.revenue_collected
-                  )}
-                </span>
-              </p>
-              <div :if={items == []} class="td-empty-inline">
-                No matching records found at {@site.name} for "{@search_query}"
-              </div>
-              <div :for={item <- items} class="td-org-dash-search-item">
-                <div>
-                  <p class="td-org-dash-search-title">{item.title}</p>
-                  <p class="td-muted">{item.subtitle}</p>
-                </div>
-                <span class="td-chip is-quiet">{item.badge}</span>
-              </div>
+          <div
+            :if={
+              @search_query != "" and String.trim(@search_query) != "" and
+                Map.get(assigns, :search_active, true)
+            }
+            class="td-popover td-org-dash-search-pop"
+          >
+            <% items = combined_search_items(@search_results) %>
+            <div class="td-org-dash-search-hd">
+              <p class="td-popover-label">Search hits at {@site.name} for "{@search_query}"</p>
+              <button type="button" phx-click="clear_search" class="td-text-btn">
+                Clear search
+              </button>
             </div>
+            <p class="td-org-dash-search-hint">
+              Site metrics below filtered for "{@search_query}"
+              <span>
+                {@stats.total_patients} patients • {@stats.patient_visits} visits • {money(
+                  @stats.revenue_collected
+                )}
+              </span>
+            </p>
+            <div :if={items == []} class="td-empty-inline">
+              No matching records found at {@site.name} for "{@search_query}"
+            </div>
+            <div :for={item <- items} class="td-org-dash-search-item">
+              <div>
+                <p class="td-org-dash-search-title">{item.title}</p>
+                <p class="td-muted">{item.subtitle}</p>
+              </div>
+              <span class="td-chip is-quiet">{item.badge}</span>
+            </div>
+          </div>
         </div>
 
         <div id="site-dashboard-range-filter" class="td-view-menu">

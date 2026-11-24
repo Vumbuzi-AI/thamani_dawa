@@ -169,7 +169,8 @@ defmodule ThamaniDawaWeb.EarningsLive do
   end
 
   def handle_event("clear_filters", _params, socket) do
-    {:noreply, socket |> assign(:filters, @default_filters) |> assign(:page, 1) |> reload_transactions()}
+    {:noreply,
+     socket |> assign(:filters, @default_filters) |> assign(:page, 1) |> reload_transactions()}
   end
 
   def handle_event("search_transactions", %{"search" => search}, socket) do
@@ -181,10 +182,14 @@ defmodule ThamaniDawaWeb.EarningsLive do
   end
 
   def handle_event("page", %{"to" => to}, socket) do
-    page = to |> to_string() |> Integer.parse() |> case do
-      {n, ""} -> n
-      _ -> socket.assigns.page
-    end
+    page =
+      to
+      |> to_string()
+      |> Integer.parse()
+      |> case do
+        {n, ""} -> n
+        _ -> socket.assigns.page
+      end
 
     {:noreply, socket |> assign(:page, page) |> reload_transactions()}
   end
@@ -563,8 +568,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
               class="td-menu-item"
               navigate={~p"/lab/orders/#{@selected.lab_order.id}"}
             >
-              <.td_icon name="arrow-up-right" />
-              Open {LabOrders.reference(@selected.lab_order)}
+              <.td_icon name="arrow-up-right" /> Open {LabOrders.reference(@selected.lab_order)}
             </.link>
             <button
               id="transaction-copy-reference"
@@ -756,7 +760,9 @@ defmodule ThamaniDawaWeb.EarningsLive do
             field="site"
             label="Site"
             value={@filters.site}
-            options={[{"", "Any"} | Enum.map(@site_options, fn {name, id} -> {to_string(id), name} end)]}
+            options={[
+              {"", "Any"} | Enum.map(@site_options, fn {name, id} -> {to_string(id), name} end)
+            ]}
           />
           <.td_filter_menu
             id="earnings"
@@ -770,7 +776,10 @@ defmodule ThamaniDawaWeb.EarningsLive do
             field="status"
             label="Status"
             value={@filters.status}
-            options={[{"", "Any"} | Enum.map(@status_options, fn {label, value} -> {to_string(value), label} end)]}
+            options={[
+              {"", "Any"}
+              | Enum.map(@status_options, fn {label, value} -> {to_string(value), label} end)
+            ]}
           />
           <.td_date_filter
             id="earnings-date"
@@ -782,80 +791,83 @@ defmodule ThamaniDawaWeb.EarningsLive do
           <span class="flex-1"></span>
         </div>
 
-      <.table
-        id="transactions"
-        rows={@streams.transactions}
-        row_click={
-          if @portal == :lab,
-            do: fn {_id, payment} -> JS.patch(~p"/lab/transactions/#{payment.id}") end
-        }
-      >
-        <:col :let={{_id, payment}} label="Date">
-          {ThamaniDawaWeb.TimeFormat.datetime(payment.inserted_at)}
-        </:col>
-        <:col :let={{_id, payment}} :if={@multi_site?} label="Site">
-          <span title={site_name(@sites_by_id, payment.site_id)}>
-            {site_name(@sites_by_id, payment.site_id)}
+        <.table
+          id="transactions"
+          rows={@streams.transactions}
+          row_click={
+            if @portal == :lab,
+              do: fn {_id, payment} -> JS.patch(~p"/lab/transactions/#{payment.id}") end
+          }
+        >
+          <:col :let={{_id, payment}} label="Date">
+            {ThamaniDawaWeb.TimeFormat.datetime(payment.inserted_at)}
+          </:col>
+          <:col :let={{_id, payment}} :if={@multi_site?} label="Site">
+            <span title={site_name(@sites_by_id, payment.site_id)}>
+              {site_name(@sites_by_id, payment.site_id)}
+            </span>
+          </:col>
+          <:col :let={{_id, payment}} label="Method">{payment.payment_type}</:col>
+          <:col :let={{_id, payment}} label="Amount">{ThamaniDawaWeb.Money.ksh(payment.amount)}</:col>
+          <:col :let={{_id, payment}} label="Status">
+            <.status_badge status={payment.status} />
+          </:col>
+          <:col :let={{_id, payment}} label="Order">
+            <% {label, path} = order_link(payment) %>
+            <%= if path do %>
+              <.link navigate={path} class="link">{label}</.link>
+            <% else %>
+              <span>{label}</span>
+            <% end %>
+          </:col>
+          <:empty_state>
+            <.td_empty
+              title={
+                if active_filter_count(@filters) > 0,
+                  do: "No transactions match your filters",
+                  else: "No transactions yet"
+              }
+              hint={
+                if active_filter_count(@filters) > 0,
+                  do: "Try a different date range, or clear the applied filters.",
+                  else: "Completed, pending, and failed payments will appear here."
+              }
+            />
+          </:empty_state>
+        </.table>
+
+        <div :if={@page_info.total > 0} id="transactions-pager" class="td-tfoot">
+          <span><b>{@page_info.from} to {@page_info.to}</b> of {@page_info.total} payments</span>
+          <span class="td-tfoot-pager">
+            <button
+              type="button"
+              class="td-icon-btn"
+              aria-label="Previous page"
+              disabled={@page == 1}
+              phx-click="page"
+              phx-value-to={@page - 1}
+            >
+              <.td_icon name="caret-left" />
+            </button>
+            <button
+              type="button"
+              class="td-icon-btn"
+              aria-label="Next page"
+              disabled={@page >= @page_info.pages}
+              phx-click="page"
+              phx-value-to={@page + 1}
+            >
+              <.td_icon name="caret-right" />
+            </button>
           </span>
-        </:col>
-        <:col :let={{_id, payment}} label="Method">{payment.payment_type}</:col>
-        <:col :let={{_id, payment}} label="Amount">{ThamaniDawaWeb.Money.ksh(payment.amount)}</:col>
-        <:col :let={{_id, payment}} label="Status">
-          <.status_badge status={payment.status} />
-        </:col>
-        <:col :let={{_id, payment}} label="Order">
-          <% {label, path} = order_link(payment) %>
-          <%= if path do %>
-            <.link navigate={path} class="link">{label}</.link>
-          <% else %>
-            <span>{label}</span>
-          <% end %>
-        </:col>
-        <:empty_state>
-          <.td_empty
-            title={
-              if active_filter_count(@filters) > 0,
-                do: "No transactions match your filters",
-                else: "No transactions yet"
-            }
-            hint={
-              if active_filter_count(@filters) > 0,
-                do: "Try a different date range, or clear the applied filters.",
-                else: "Completed, pending, and failed payments will appear here."
-            }
-          />
-        </:empty_state>
-      </.table>
+        </div>
 
-      <div :if={@page_info.total > 0} id="transactions-pager" class="td-tfoot">
-        <span><b>{@page_info.from} to {@page_info.to}</b> of {@page_info.total} payments</span>
-        <span class="td-tfoot-pager">
-          <button
-            type="button"
-            class="td-icon-btn"
-            aria-label="Previous page"
-            disabled={@page == 1}
-            phx-click="page"
-            phx-value-to={@page - 1}
-          >
-            <.td_icon name="caret-left" />
-          </button>
-          <button
-            type="button"
-            class="td-icon-btn"
-            aria-label="Next page"
-            disabled={@page >= @page_info.pages}
-            phx-click="page"
-            phx-value-to={@page + 1}
-          >
-            <.td_icon name="caret-right" />
-          </button>
-        </span>
-      </div>
-
-      <.transaction_modal :if={@live_action == :lab_show && @selected} selected={@selected} />
-      <.refund_modal :if={@live_action == :lab_show && @selected && @refund_open} selected={@selected} />
-      <.receipt_sheet :if={@live_action == :lab_receipt && @selected} selected={@selected} />
+        <.transaction_modal :if={@live_action == :lab_show && @selected} selected={@selected} />
+        <.refund_modal
+          :if={@live_action == :lab_show && @selected && @refund_open}
+          selected={@selected}
+        />
+        <.receipt_sheet :if={@live_action == :lab_receipt && @selected} selected={@selected} />
       </section>
     </.portal_shell>
     """
