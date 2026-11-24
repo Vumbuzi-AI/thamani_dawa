@@ -70,6 +70,11 @@ defmodule ThamaniDawaWeb.ManufacturerSsccSerialsLiveTest do
     assert has_element?(lv, "#sscc-serials-back[href$='/ssccs']")
     assert has_element?(lv, "#sscc-primary-06141411234567-GS1-LOT-SN-1")
     assert has_element?(lv, "#sscc-primary-06141411234567-GS1-LOT-SN-2")
+
+    assert has_element?(
+             lv,
+             "#print-sscc-serial-06141411234567-GS1-LOT-SN-1[data-print-target='#sscc-primary-label-06141411234567-GS1-LOT-SN-1']"
+           )
   end
 
   test "the back link honours a safe return_to", %{conn: conn, sscc: sscc} do
