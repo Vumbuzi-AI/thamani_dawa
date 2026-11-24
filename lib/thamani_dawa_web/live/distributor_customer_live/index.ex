@@ -260,6 +260,17 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
       current_scope={@current_scope}
       current_path={~p"/distributor/customers"}
     >
+      <:search>
+        <form id="customer-search" phx-change="search" phx-submit="search" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search customer name or GLN"
+            shortcut="⌘K"
+            phx-debounce="250"
+          />
+        </form>
+      </:search>
       <div class="td-recipe td-list-page">
         <.td_page_header
           title="Customers"
@@ -422,24 +433,6 @@ defmodule ThamaniDawaWeb.DistributorCustomerLive.Index do
 
       <div class={["td-list-page", @selected && "td-detail-row"]} id="customers-page">
         <div class="min-w-0">
-          <div class="td-toolbar">
-            <form id="customer-search" phx-change="search" phx-submit="search" onsubmit="return false">
-              <label class="td-search">
-                <.td_icon name="magnifying-glass" />
-                <input
-                  type="search"
-                  name="search"
-                  value={@search}
-                  placeholder="Search customer name or GLN"
-                  phx-debounce="250"
-                  autocomplete="off"
-                />
-                <kbd>/</kbd>
-              </label>
-            </form>
-            <span class="flex-1"></span>
-          </div>
-
           <div :if={@shown_count == 0} id="customers-empty" class="td-pad td-empty-wrap">
             <div class="td-card td-empty-card">
               <%= if @all_customers == [] do %>

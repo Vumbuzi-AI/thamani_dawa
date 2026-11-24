@@ -140,27 +140,15 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
     {:noreply, socket |> assign(:search, search) |> assign_lists()}
   end
 
-  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
-    filters = %{
-      role: Map.get(filter_params, "role", ""),
-      site_id: Map.get(filter_params, "site_id", ""),
-      status: Map.get(filter_params, "status", "")
-    }
+  def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
+      when field in ["role", "site_id", "status"] do
+    key = String.to_existing_atom(field)
 
-    {:noreply, socket |> assign(:filters, filters) |> assign_lists()}
+    {:noreply, socket |> assign(:filters, %{socket.assigns.filters | key => value}) |> assign_lists()}
   end
 
   def handle_event("clear_filters", _params, socket) do
     {:noreply, socket |> assign(:filters, @default_filters) |> assign_lists()}
-  end
-
-  def handle_event("clear_chip", %{"field" => field}, socket) do
-    key = String.to_existing_atom(field)
-
-    {:noreply,
-     socket
-     |> assign(:filters, %{socket.assigns.filters | key => ""})
-     |> assign_lists()}
   end
 
   def handle_event("toggle_active", %{"id" => id}, socket) do
@@ -301,7 +289,6 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
     organization_id = socket.assigns.current_scope.organization_id
     page = socket.assigns.page
     sites = Sites.list_sites(organization_id)
-    sites_by_id = Map.new(sites, &{&1.id, &1})
 
     page_result = Accounts.list_users_paginated(organization_id, page)
     users = page_result.entries
@@ -316,7 +303,6 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
     socket
     |> assign(:users, filtered)
     |> assign(:sites, sites)
-    |> assign(:sites_by_id, sites_by_id)
     |> assign(:page_info, page_result)
     |> assign_new(:organization, fn -> Organizations.get_organization!(organization_id) end)
   end
@@ -355,27 +341,6 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
     Enum.count([filters.role != "", filters.site_id != "", filters.status != ""], & &1)
   end
 
-  defp filter_chips(filters, sites_by_id) do
-    [
-      filters.role != "" &&
-        %{label: "Role: #{Phoenix.Naming.humanize(filters.role)}", field: "role"},
-      filters.site_id != "" &&
-        %{
-          label: "Site: #{site_name(sites_by_id, String.to_integer(filters.site_id))}",
-          field: "site_id"
-        },
-      filters.status != "" &&
-        %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"}
-    ]
-    |> Enum.filter(& &1)
-  end
-
-  defp site_name(sites_by_id, site_id) do
-    case sites_by_id[site_id] do
-      nil -> "—"
-      site -> site.name
-    end
-  end
 
   defp sites_summary([]), do: "—"
   defp sites_summary(sites), do: Enum.map_join(sites, ", ", & &1.name)
@@ -760,54 +725,42 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       </Layouts.app>
     <% else %>
       <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/team"}>
+        <:search>
+          <form phx-change="search" id="search-form" onsubmit="return false">
+            <.td_search name="search" value={@search} placeholder="Search by name or email" shortcut="⌘K" phx-debounce="200" />
+          </form>
+        </:search>
         <.td_list_page title="Team" subtitle="Search, filter, and manage your team.">
           <:actions>
             <.td_button variant="primary" label="Invite staff" glyph="plus" patch={~p"/org/team/new"} />
           </:actions>
           <:filters>
-            <form phx-change="search" class="flex-1" id="search-form">
-              <.search_input name="search" value={@search} placeholder="Search by name or email" />
-            </form>
-
-            <.filter_drawer
-              id="team-filters"
-              title="Filter team"
-              apply_event="apply_filters"
-              active_count={active_filter_count(@filters)}
-            >
-              <:group label="Role">
-                <.input
-                  type="select"
-                  name="filters[role]"
-                  value={@filters.role}
-                  options={Enum.map(User.assignable_roles(), &{Phoenix.Naming.humanize(&1), &1})}
-                  prompt="All roles"
-                />
-              </:group>
-              <:group label="Home site">
-                <.input
-                  type="select"
-                  name="filters[site_id]"
-                  value={@filters.site_id}
-                  options={Enum.map(@sites, &{&1.name, &1.id})}
-                  prompt="All sites"
-                />
-              </:group>
-              <:group label="Status">
-                <.input
-                  type="select"
-                  name="filters[status]"
-                  value={@filters.status}
-                  options={[{"Active", "active"}, {"Invited", "invited"}, {"Inactive", "inactive"}]}
-                  prompt="All statuses"
-                />
-              </:group>
-              <:chip
-                :for={chip <- filter_chips(@filters, @sites_by_id)}
-                label={chip.label}
-                clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-              />
-            </.filter_drawer>
+            <.td_filter_menu
+              id="team"
+              field="role"
+              label="Role"
+              value={@filters.role}
+              options={[{"", "Any"} | Enum.map(User.assignable_roles(), &{to_string(&1), Phoenix.Naming.humanize(&1)})]}
+            />
+            <.td_filter_menu
+              id="team"
+              field="site_id"
+              label="Site"
+              value={to_string(@filters.site_id)}
+              options={[{"", "Any"} | Enum.map(@sites, &{to_string(&1.id), &1.name})]}
+            />
+            <.td_filter_menu
+              id="team"
+              field="status"
+              label="Status"
+              value={@filters.status}
+              options={[
+                {"", "Any"},
+                {"active", "Active"},
+                {"invited", "Invited"},
+                {"inactive", "Inactive"}
+              ]}
+            />
           </:filters>
 
         <.td_overlay_form

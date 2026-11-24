@@ -139,9 +139,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
 
     {:ok, view, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
 
-    view |> element("button", "Filters") |> render_click()
-
-    # one TD range picker submits both ends
+    # the custom range sits in the date chip, not a second Filters panel
     assert has_element?(view, "#filter-dates-dp.is-range[data-max='today']")
     assert has_element?(view, ~s(#filter-dates-dp [data-dp-input="from"][name="from"]))
     assert has_element?(view, ~s(#filter-dates-dp [data-dp-input="to"][name="to"]))

@@ -37,9 +37,9 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
     {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
   end
 
-  def handle_event("apply_filters", %{"filters" => filters}, socket) do
-    changes = Map.take(filters, ["table", "user", "action"])
-    {:noreply, push_patch(socket, to: filter_path(socket, changes))}
+  def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
+      when field in ["table", "user", "action"] do
+    {:noreply, push_patch(socket, to: filter_path(socket, %{field => value}))}
   end
 
   def handle_event("clear_filters", _params, socket) do
@@ -102,13 +102,6 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
   defp active_filter_count(filters),
     do: Enum.count(["table", "user", "action"], &(filters[&1] not in [nil, ""]))
 
-  defp actor_name(actors, id) do
-    case Enum.find(actors, &(Integer.to_string(&1.id) == id)) do
-      nil -> id
-      actor -> actor.name
-    end
-  end
-
   defp organization_name(%{organization: %{name: name}}), do: name
   defp organization_name(_log), do: "Platform"
 
@@ -146,70 +139,48 @@ defmodule ThamaniDawaWeb.PlatformAuditLive do
       current_scope={@current_scope}
       current_path="/platform/audit"
     >
+      <:search>
+        <form id="platform-audit-search" phx-change="search" phx-submit="search" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@filters["search"]}
+            placeholder="Search table, organization, or actor"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
       <.td_list_page
         title="Audit activity"
         subtitle="Every audited change across all organizations. Patient-identifying values are not shown."
       >
         <:filters>
-          <form id="platform-audit-search" phx-change="search" phx-submit="search">
-            <.search_input
-              name="search"
-              value={@filters["search"]}
-              placeholder="Search table, organization, or actor"
-            />
-          </form>
-          <.filter_drawer
-            id="platform-audit-filters"
-            title="Filter audit activity"
-            apply_event="apply_filters"
-            active_count={active_filter_count(@filters)}
-          >
-            <:group label="Table">
-              <.input
-                type="select"
-                id="filter-table"
-                name="filters[table]"
-                value={@filters["table"]}
-                prompt="Any table"
-                options={Enum.map(@tables, &{format_table_name(&1), &1})}
-              />
-            </:group>
-            <:group label="Actor">
-              <.input
-                type="select"
-                id="filter-user"
-                name="filters[user]"
-                value={@filters["user"]}
-                prompt="Anyone"
-                options={Enum.map(@actors, &{&1.name, &1.id})}
-              />
-            </:group>
-            <:group label="Action">
-              <.input
-                type="select"
-                id="filter-action"
-                name="filters[action]"
-                value={@filters["action"]}
-                prompt="Any action"
-                options={[{"Created", "insert"}, {"Updated", "update"}, {"Deleted", "delete"}]}
-              />
-            </:group>
-            <:chip
-              :if={@filters["table"] != ""}
-              label={"Table: #{format_table_name(@filters["table"])}"}
-              clear={JS.push("clear_filter", value: %{filter: "table"})}
-            />
-            <:chip
-              :if={@filters["user"] != ""}
-              label={"Actor: #{actor_name(@actors, @filters["user"])}"}
-              clear={JS.push("clear_filter", value: %{filter: "user"})}
-            />
-            <:chip
-              :if={@filters["action"] != ""}
-              label={"Action: #{action_label(@filters["action"])}"}
-              clear={JS.push("clear_filter", value: %{filter: "action"})}
-            />
-          </.filter_drawer>
+          <.td_filter_menu
+            id="audit"
+            field="table"
+            label="Table"
+            value={@filters["table"]}
+            options={[{"", "Any"} | Enum.map(@tables, &{&1, format_table_name(&1)})]}
+          />
+          <.td_filter_menu
+            id="audit"
+            field="user"
+            label="Actor"
+            value={to_string(@filters["user"])}
+            options={[{"", "Any"} | Enum.map(@actors, &{to_string(&1.id), &1.name})]}
+          />
+          <.td_filter_menu
+            id="audit"
+            field="action"
+            label="Action"
+            value={@filters["action"]}
+            options={[
+              {"", "Any"},
+              {"insert", "Created"},
+              {"update", "Updated"},
+              {"delete", "Deleted"}
+            ]}
+          />
         </:filters>
 
       <div class="dashboard-stat-grid">

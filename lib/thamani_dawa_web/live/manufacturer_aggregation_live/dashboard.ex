@@ -61,6 +61,12 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Dashboard do
           <div :if={@pallets == []} id="aggregation-pallets-empty" class="td-empty-card">
             <p class="td-empty-title">No pallet SSCCs yet</p>
             <p class="td-note">Add an SSCC or group existing shippers into a pallet.</p>
+            <.td_button
+              id="aggregation-pallets-empty-build"
+              variant="secondary"
+              label="Build a pallet"
+              navigate={~p"/manufacturer/aggregations/pallets/new"}
+            />
           </div>
 
           <div :if={@pallets != []} class="td-table">

@@ -319,6 +319,17 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       current_scope={@current_scope}
       current_path={~p"/manufacturer/products"}
     >
+      <:search :if={@view == "serials" and @selected_batch}>
+        <form id="manufacturer-serial-search" phx-change="search">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search serials"
+            shortcut="⌘K"
+            phx-debounce="300"
+          />
+        </form>
+      </:search>
       <%= if @view == "serials" and @selected_batch do %>
         {view_serials(assigns)}
       <% else %>
@@ -742,9 +753,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     </div>
 
     <div class="td-toolbar">
-      <form id="manufacturer-serial-search" phx-change="search">
-        <.td_search name="search" value={@search} placeholder="Search serials" phx-debounce="300" />
-      </form>
       <.td_filter_menu
         id="serials"
         field="state"

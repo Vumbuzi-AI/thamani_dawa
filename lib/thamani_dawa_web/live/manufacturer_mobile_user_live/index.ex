@@ -199,9 +199,19 @@ defmodule ThamaniDawaWeb.ManufacturerMobileUserLive.Index do
           </:action>
           <:empty>
             <.td_empty
+              icon="user"
               title="No mobile users yet"
               hint="Add the people who scan and pack so they can sign in to the mobile app."
-            />
+            >
+              <:action>
+                <.td_button
+                  id="empty-add-manufacturer-mobile-user"
+                  variant="secondary"
+                  label="Add mobile user"
+                  patch={~p"/manufacturer/mobile-users/new"}
+                />
+              </:action>
+            </.td_empty>
           </:empty>
         </.td_data_table>
       </.td_list_page>

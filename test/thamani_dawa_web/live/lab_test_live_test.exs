@@ -147,9 +147,7 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
 
-      lv
-      |> form("#lab-tests-filters-form", filters: %{category: "Cat A"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "category", "value" => "Cat A"})
 
       assert render(lv) =~ test1.name
       refute render(lv) =~ test2.name
@@ -167,13 +165,11 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/lab/tests")
 
-      lv
-      |> form("#lab-tests-filters-form", filters: %{category: "Cat X"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "category", "value" => "Cat X"})
 
       assert render(lv) =~ test.name
 
-      lv |> element("button[aria-label='Remove Category: Cat X filter']") |> render_click()
+      render_click(lv, "set_filter", %{"field" => "category", "value" => ""})
 
       assert render(lv) =~ test.name
     end

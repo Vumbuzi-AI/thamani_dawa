@@ -546,6 +546,7 @@ defmodule ThamaniDawaWeb.SiteStock do
   attr :product_path, :any, required: true, doc: "fn product_id -> path"
   attr :batch_path, :any, required: true, doc: "fn batch_id -> path"
   attr :empty_hint, :string, required: true
+  attr :receive_path, :string, default: nil
 
   attr :sites, :list,
     default: [],
@@ -649,20 +650,6 @@ defmodule ThamaniDawaWeb.SiteStock do
       </nav>
 
       <div id={"#{@id}-toolbar"} class="td-toolbar">
-        <form phx-change="search" id="search-form" onsubmit="return false">
-          <label class="td-search">
-            <.td_icon name="magnifying-glass" />
-            <input
-              type="search"
-              name="search"
-              value={@search}
-              placeholder="Search product, GTIN or batch"
-              phx-debounce="200"
-              autocomplete="off"
-            />
-            <kbd>/</kbd>
-          </label>
-        </form>
         <.td_filter_menu
           :if={length(@sites) > 1}
           id={@id}
@@ -711,6 +698,13 @@ defmodule ThamaniDawaWeb.SiteStock do
           <% else %>
             <p class="td-empty-title">No stock yet</p>
             <p class="td-note">{@empty_hint}</p>
+            <.td_button
+              :if={@receive_path}
+              id={"#{@id}-empty-receive"}
+              variant="secondary"
+              label="Receive stock"
+              navigate={@receive_path}
+            />
           <% end %>
         </div>
       </div>

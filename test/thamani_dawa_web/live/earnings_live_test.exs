@@ -32,7 +32,7 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
       {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/earnings")
 
       assert html =~ "No transactions yet"
-      assert has_element?(lv, "select[name='filters[site]']")
+      assert has_element?(lv, "#earnings-chip-site", "Site")
       assert has_element?(lv, "th", "Site")
     end
 
@@ -259,9 +259,7 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
     } do
       {:ok, lv, _html} = live(conn, ~p"/org/earnings")
 
-      lv
-      |> form("#earnings-filters-form", filters: %{site: to_string(site_a.id)})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "site", "value" => to_string(site_a.id)})
 
       assert has_element?(lv, "#transactions-#{completed_cash.id}")
       refute has_element?(lv, "#transactions-#{failed_mobile.id}")
@@ -274,9 +272,7 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
     } do
       {:ok, lv, _html} = live(conn, ~p"/org/earnings")
 
-      lv
-      |> form("#earnings-filters-form", filters: %{method: "Mobile Money"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "method", "value" => "Mobile Money"})
 
       assert has_element?(lv, "#transactions-#{failed_mobile.id}")
       refute has_element?(lv, "#transactions-#{completed_cash.id}")
@@ -304,9 +300,7 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
     } do
       {:ok, lv, _html} = live(conn, ~p"/org/earnings")
 
-      lv
-      |> form("#earnings-filters-form", filters: %{status: "failed"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "failed"})
 
       assert has_element?(lv, "#transactions-#{failed_mobile.id}")
       refute has_element?(lv, "#transactions-#{completed_cash.id}")
@@ -328,7 +322,7 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
       today = Date.utc_today() |> Date.to_iso8601()
 
       lv
-      |> form("#earnings-filters-form", filters: %{date_from: today})
+      |> form("#earnings-date-form", %{date_from: today, date_to: today})
       |> render_submit()
 
       assert has_element?(lv, "#transactions-#{failed_mobile.id}")
@@ -343,13 +337,11 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
     } do
       {:ok, lv, _html} = live(conn, ~p"/org/earnings")
 
-      lv
-      |> form("#earnings-filters-form", filters: %{site: to_string(site_a.id)})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "site", "value" => to_string(site_a.id)})
 
       refute has_element?(lv, "#transactions-#{failed_mobile.id}")
 
-      lv |> element("button", "Clear filters") |> render_click()
+      render_click(lv, "set_filter", %{"field" => "site", "value" => ""})
 
       assert has_element?(lv, "#transactions-#{completed_cash.id}")
       assert has_element?(lv, "#transactions-#{failed_mobile.id}")
@@ -361,9 +353,8 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
     } do
       {:ok, lv, _html} = live(conn, ~p"/org/earnings")
 
-      lv
-      |> form("#earnings-filters-form", filters: %{site: to_string(site_a.id), status: "failed"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "site", "value" => to_string(site_a.id)})
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "failed"})
 
       assert render(lv) =~ "No transactions match your filters"
     end
@@ -376,15 +367,11 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
     } do
       {:ok, lv, _html} = live(conn, ~p"/org/earnings")
 
-      lv
-      |> form("#earnings-filters-form", filters: %{site: to_string(site_a.id)})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "site", "value" => to_string(site_a.id)})
 
       refute has_element?(lv, "#transactions-#{failed_mobile.id}")
 
-      lv
-      |> element("button[aria-label='Remove Site: Branch A filter']")
-      |> render_click()
+      render_click(lv, "set_filter", %{"field" => "site", "value" => ""})
 
       assert has_element?(lv, "#transactions-#{completed_cash.id}")
       assert has_element?(lv, "#transactions-#{failed_mobile.id}")
@@ -397,9 +384,9 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
     } do
       {:ok, lv, _html} = live(conn, ~p"/org/earnings")
 
-      html = render_submit(lv, "apply_filters", %{"filters" => %{"date_from" => "not-a-date"}})
+      html = render_submit(lv, "apply_date_range", %{"date_from" => "not-a-date"})
 
-      assert html =~ "From: not-a-date"
+      assert html =~ "Any time"
       assert has_element?(lv, "#transactions-#{completed_cash.id}")
       assert has_element?(lv, "#transactions-#{failed_mobile.id}")
     end
@@ -409,9 +396,9 @@ defmodule ThamaniDawaWeb.EarningsLiveTest do
     } do
       {:ok, lv, _html} = live(conn, ~p"/org/earnings")
 
-      html = render_submit(lv, "apply_filters", %{"filters" => %{"site" => "999999"}})
+      html = render_click(lv, "set_filter", %{"field" => "site", "value" => "999999"})
 
-      assert html =~ "Site: 999999"
+      assert html =~ "999999"
     end
   end
 end

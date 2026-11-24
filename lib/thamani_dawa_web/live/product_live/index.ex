@@ -1047,25 +1047,22 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           <:icon><.td_icon name="plus" /></:icon>
         </.td_button>
       </:tools>
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search by name, GTIN, or category"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
 
       <section class="td-recipe td-list-page">
         <.td_page_header title="Products" />
 
         <div class="td-toolbar">
-          <form phx-change="search" id="search-form" onsubmit="return false">
-            <label class="td-search">
-              <.td_icon name="magnifying-glass" />
-              <input
-                type="search"
-                name="search"
-                value={@search}
-                placeholder="Search by name, GTIN, or category"
-                phx-debounce="200"
-                autocomplete="off"
-              />
-              <kbd>/</kbd>
-            </label>
-          </form>
           <.td_filter_menu
             id="products"
             field="category"
@@ -1094,7 +1091,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
             />
           </form>
           <div :if={filter_chips(@filters) != []} class="td-filter-chips">
-            <span :for={chip <- filter_chips(@filters)} class="td-chip">
+            <span :for={chip <- filter_chips(@filters)} class="td-chip is-tag">
               {chip.label}
             </span>
             <button type="button" class="td-btn is-secondary" phx-click="clear_filters">
@@ -1148,6 +1145,12 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           <% else %>
             <p class="td-empty-title">No products yet</p>
             <p class="td-note">Products you add will appear here.</p>
+            <.td_button
+              id="products-empty-new"
+              variant="secondary"
+              label="Add product"
+              patch={~p"/org/products/new"}
+            />
           <% end %>
         </div>
       </div>

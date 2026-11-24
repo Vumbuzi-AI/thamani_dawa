@@ -141,6 +141,17 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
       current_path={~p"/manufacturer/shipments"}
       crumb="Shipments"
     >
+      <:search>
+        <form id="manufacturer-shipment-search" phx-change="search" phx-submit="search">
+          <.td_search
+            name="search"
+            value={@filters["search"]}
+            placeholder="Search order, reference, GLN, customer, GTIN or SSCC"
+            shortcut="⌘K"
+            phx-debounce="300"
+          />
+        </form>
+      </:search>
       <.td_list_page
         title="Shipments"
         subtitle="Create shipments, then review packed SSCCs and approve them for dispatch."
@@ -154,14 +165,6 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
           />
         </:actions>
         <:filters>
-          <form id="manufacturer-shipment-search" phx-change="search" phx-submit="search">
-            <.td_search
-              name="search"
-              value={@filters["search"]}
-              placeholder="Search order, reference, GLN, customer, GTIN or SSCC"
-              phx-debounce="300"
-            />
-          </form>
           <form id="manufacturer-shipment-filters" phx-change="apply_filters" class="td-filter-row">
             <.td_select
               id="filter-status"
@@ -236,9 +239,19 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
           </:action>
           <:empty>
             <.td_empty
+              icon="truck"
               title="No shipments here"
               hint="Nothing matches this status and filter combination yet."
-            />
+            >
+              <:action>
+                <.td_button
+                  id="empty-new-manufacturer-shipment"
+                  variant="secondary"
+                  label="New shipment"
+                  navigate={~p"/manufacturer/shipments/new"}
+                />
+              </:action>
+            </.td_empty>
           </:empty>
         </.td_data_table>
       </.td_list_page>

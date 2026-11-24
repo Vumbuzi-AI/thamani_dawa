@@ -208,6 +208,17 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
       current_path={~p"/manufacturer/products"}
       crumb="Products"
     >
+      <:search>
+        <form id="manufacturer-product-search" phx-change="search">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search GTINs or product names"
+            shortcut="⌘K"
+            phx-debounce="300"
+          />
+        </form>
+      </:search>
       <.td_list_page
         title="Products"
         subtitle="GTINs registered to this organization and their serialisation activity."
@@ -221,14 +232,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
           />
         </:actions>
         <:filters>
-          <form id="manufacturer-product-search" phx-change="search">
-            <.td_search
-              name="search"
-              value={@search}
-              placeholder="Search GTIN, brand or description"
-              phx-debounce="300"
-            />
-          </form>
           <.td_filter_menu
             id="products"
             field="serials"
@@ -236,27 +239,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
             value={@serials_filter}
             options={[{"", "All"}, {"with", "Has serials"}, {"none", "No serials yet"}]}
           />
-          <.td_segmented>
-            <.td_segment
-              id="manufacturer-list-view"
-              label="List"
-              active={@view_mode == "list"}
-              phx-click="set_view"
-              phx-value-view="list"
-            />
-            <.td_segment
-              id="manufacturer-grid-view"
-              label="Grid"
-              active={@view_mode == "grid"}
-              phx-click="set_view"
-              phx-value-view="grid"
-            />
-          </.td_segmented>
-          <.td_button
-            id="reset-manufacturer-products"
-            variant="secondary"
-            label="Reset"
-            phx-click="reset"
+          <.td_toolbar_count
+            id="manufacturer-products-count"
+            shown={length(@rows)}
+            total={@page_info.total_entries}
+            noun={if @page_info.total_entries == 1, do: "product", else: "products"}
           />
         </:filters>
 
@@ -266,7 +253,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
           <.td_button id="retry-sync-products" label="Retry sync" phx-click="sync_products" />
         </div>
 
-        <div :if={@view_mode == "list" and @rows == []} id="manufacturer-products-empty" class="td-pad td-empty-wrap">
+        <div :if={@rows == []} id="manufacturer-products-empty" class="td-pad td-empty-wrap">
           <div class="td-card td-empty-card">
             <%= if @search != "" or @serials_filter != "" do %>
               <p class="td-empty-title">Nothing matches</p>
@@ -280,7 +267,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
           </div>
         </div>
 
-        <div :if={@view_mode == "list"} class="td-list-table" hidden={@rows == []}>
+        <div class="td-list-table" hidden={@rows == []}>
           <table class="td-rows" id="manufacturer-products">
             <thead>
               <tr>
@@ -348,39 +335,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
           </table>
         </div>
 
-        <div
-          :if={@view_mode == "grid"}
-          id="manufacturer-products-grid"
-          class="td-stats"
-        >
-          <article
-            :for={row <- @rows}
-            id={"manufacturer-product-card-#{row.product.id}"}
-            class="td-stat"
-          >
-            <span class="td-kv-value is-mono">{row.product.gtin}</span>
-            <span class="td-stat-value">{row.product.name}</span>
-            <span class="td-stat-sub">{row.product.description || "No description"}</span>
-            <.td_key_value label="SSCC" value={row.sscc_count} />
-            <.td_key_value label="Serials" value={row.serial_count} />
-            <div class="td-row-actions">
-              <.td_button
-                :if={row.serial_count > 0}
-                label="View serials"
-                navigate={~p"/manufacturer/products/#{row.product.gtin}/serials"}
-              />
-              <.td_button
-                label="Generate serials"
-                patch={~p"/manufacturer/products/#{row.product.gtin}/serials/new"}
-              />
-            </div>
-          </article>
-          <.td_empty
-            :if={@rows == []}
-            title="No products found"
-            hint="Add or sync a GTIN to start generating primary serials."
-          />
-        </div>
       </.td_list_page>
 
       <.pagination

@@ -190,34 +190,20 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     {:noreply, socket |> assign(:search, search) |> assign(:page, 1) |> reload_lab_tests()}
   end
 
-  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
-    filters = %{
-      category: Map.get(filter_params, "category", ""),
-      status: Map.get(filter_params, "status", "")
-    }
+  def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
+      when field in ["category", "status"] do
+    key = String.to_existing_atom(field)
 
-    {:noreply, socket |> assign(:filters, filters) |> assign(:page, 1) |> reload_lab_tests()}
+    {:noreply,
+     socket
+     |> assign(:filters, %{socket.assigns.filters | key => value})
+     |> assign(:page, 1)
+     |> reload_lab_tests()}
   end
 
   def handle_event("clear_filters", _params, socket) do
     {:noreply,
      socket |> assign(:filters, @default_filters) |> assign(:page, 1) |> reload_lab_tests()}
-  end
-
-  def handle_event("clear_chip", %{"field" => "category"}, socket) do
-    {:noreply,
-     socket
-     |> assign(:filters, %{socket.assigns.filters | category: ""})
-     |> assign(:page, 1)
-     |> reload_lab_tests()}
-  end
-
-  def handle_event("clear_chip", %{"field" => "status"}, socket) do
-    {:noreply,
-     socket
-     |> assign(:filters, %{socket.assigns.filters | status: ""})
-     |> assign(:page, 1)
-     |> reload_lab_tests()}
   end
 
   defp update_row_add_option(%{"idx" => idx} = row, target_idx) when idx == target_idx do
@@ -508,63 +494,42 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
     Enum.count([filters.category != "", filters.status != ""], & &1)
   end
 
-  defp filter_chips(filters) do
-    [
-      filters.category != "" && %{label: "Category: #{filters.category}", field: "category"},
-      filters.status != "" &&
-        %{
-          label: "Status: #{Phoenix.Naming.humanize(filters.status)}",
-          field: "status"
-        }
-    ]
-    |> Enum.filter(& &1)
-  end
-
   defp category_name(%{category: nil}), do: "(unknown category)"
   defp category_name(%{category: %LabTestCategory{name: name}}), do: name
 
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/tests"}>
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search by name or category"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
       <.td_list_page title="Test catalog" subtitle="Search, filter, and manage your lab test catalog.">
         <:actions>
           <.td_button variant="primary" label="New test" glyph="plus" patch={~p"/lab/tests/new"} />
         </:actions>
         <:filters>
-          <form phx-change="search" class="flex-1" id="search-form">
-            <.search_input name="search" value={@search} placeholder="Search by name or category" />
-          </form>
-
-          <.filter_drawer
-            id="lab-tests-filters"
-            title="Filter tests"
-            apply_event="apply_filters"
-            active_count={active_filter_count(@filters)}
-          >
-            <:group label="Category">
-              <.input
-                type="select"
-                name="filters[category]"
-                value={@filters.category}
-                options={@category_filter_options}
-                prompt="All categories"
-              />
-            </:group>
-            <:group label="Status">
-              <.input
-                type="select"
-                name="filters[status]"
-                value={@filters.status}
-                options={[{"Active", "active"}, {"Inactive", "inactive"}]}
-                prompt="All statuses"
-              />
-            </:group>
-            <:chip
-              :for={chip <- filter_chips(@filters)}
-              label={chip.label}
-              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-            />
-          </.filter_drawer>
+          <.td_filter_menu
+            id="lab-tests"
+            field="category"
+            label="Category"
+            value={@filters.category}
+            options={[{"", "Any"} | Enum.map(@category_filter_options, &{&1, &1})]}
+          />
+          <.td_filter_menu
+            id="lab-tests"
+            field="status"
+            label="Status"
+            value={@filters.status}
+            options={[{"", "Any"}, {"active", "Active"}, {"inactive", "Inactive"}]}
+          />
         </:filters>
 
       <.modal

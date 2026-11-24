@@ -57,15 +57,12 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
-      lv
-      |> form("#sites-filters-form", filters: %{activities: "laboratory"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "activities", "value" => "laboratory"})
 
-      html = render(lv)
       table_html = render(element(lv, "#sites-table"))
       assert table_html =~ "Lab One"
       refute table_html =~ "Pharmacy One"
-      assert html =~ "Activity: Laboratory"
+      assert has_element?(lv, "#sites-chip-activities", "Laboratory")
     end
 
     test "filters by active status", %{conn: conn, admin: admin} do
@@ -80,15 +77,12 @@ defmodule ThamaniDawaWeb.SiteLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites")
 
-      lv
-      |> form("#sites-filters-form", filters: %{status: "inactive"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "inactive"})
 
-      html = render(lv)
       table_html = render(element(lv, "#sites-table"))
       assert table_html =~ inactive.name
       refute table_html =~ active.name
-      assert html =~ "Status: Inactive"
+      assert has_element?(lv, "#sites-chip-status", "Inactive")
     end
 
     test "a stray validate event on the plain index view is a no-op", %{conn: conn, admin: admin} do

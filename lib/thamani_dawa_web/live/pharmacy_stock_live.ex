@@ -60,6 +60,17 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
       current_path="/pharmacy/stock"
       crumb="Stock"
     >
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search product, GTIN or batch"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
       <:tools>
         <.td_button
           id="pharmacy-stock-receive"
@@ -97,6 +108,7 @@ defmodule ThamaniDawaWeb.PharmacyStockLive do
         product_path={fn id -> ~p"/pharmacy/stock/products/#{id}" end}
         batch_path={fn id -> ~p"/pharmacy/stock/batches/#{id}" end}
         empty_hint="Batches received at your site appear here."
+        receive_path={~p"/pharmacy/receive-stock"}
       />
     </Layouts.pharmacy_shell>
     """

@@ -342,248 +342,166 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
     >
       <.td_detail_page
         title="Organization settings"
-        subtitle="Your organization's identity and the GS1 identifiers it issues or reports under."
+        subtitle="GS1 prefixes, GLN and how this organization appears to trading partners."
       >
-        <:body>
-      <.form
-        for={@form}
-        id="distributor-gs1-settings-form"
-        phx-change="validate"
-        phx-submit="save"
-        class="mt-6 overflow-hidden rounded-2xl border border-[var(--color-td-hairline)] bg-[var(--color-td-surface)]"
-      >
-        <div class="p-6 lg:p-8">
-          <section
-            class="border-b border-thamani-stone pb-8"
-            aria-labelledby="organization-details-heading"
-          >
-            <div class="mb-5">
-              <h2
-                id="organization-details-heading"
-                class="text-base font-semibold text-thamani-forest"
-              >
-                Organization details
-              </h2>
-              <p class="mt-1 text-sm text-thamani-pewter">
-                Business identity and statutory information.
-              </p>
-            </div>
-
-            <div class="grid gap-x-7 lg:grid-cols-2">
-              <div>
-                <span class="thamani-label">Name</span>
-                <div class="flex min-h-11 items-center rounded-lg border border-thamani-border-nav bg-thamani-canvas px-3.5 text-sm font-medium text-thamani-forest">
-                  {@organization.name}
-                </div>
-              </div>
-              <.input field={@form[:license_number]} label="License number" required />
-              <div>
-                <span class="thamani-label">Operating model</span>
-                <div class="flex min-h-11 items-center rounded-lg border border-thamani-border-nav bg-thamani-canvas px-3.5 text-sm font-medium text-thamani-forest">
-                  {operating_models_label(@organization)}
-                </div>
-              </div>
-              <div class="flex items-center pt-2 lg:pt-7">
-                <.input
-                  field={@form[:vat_registered]}
-                  type="checkbox"
-                  label="VAT registered"
-                  class="relative h-7 w-12 shrink-0 cursor-pointer appearance-none rounded-full bg-td-hairline transition-colors before:absolute before:left-1 before:top-1 before:size-5 before:rounded-full before:bg-td-surface before:shadow-sm before:transition-transform checked:bg-thamani-forest checked:before:translate-x-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent focus-visible:ring-offset-2"
-                />
-              </div>
-            </div>
-          </section>
-
-          <section
-            class="pt-8"
-            aria-labelledby="gs1-identifiers-heading"
-          >
-            <div class="mb-5">
-              <h2 id="gs1-identifiers-heading" class="text-base font-semibold text-thamani-forest">
-                GS1 identifiers
-              </h2>
-              <p class="mt-1 text-sm leading-5 text-thamani-pewter">
-                Used for globally unique logistics identifiers and organization-level events.
-              </p>
-            </div>
-
-            <div class="grid gap-x-7 lg:grid-cols-2">
-              <div class="relative">
-                <.input
-                  field={@form[:gln]}
-                  label="Organization GLN (optional)"
-                  placeholder="13-digit Global Location Number"
-                  maxlength="13"
-                  inputmode="numeric"
-                />
-                <.icon
-                  :if={@gln_check == :checking}
-                  name="hero-arrow-path"
-                  class="absolute right-3 top-10 size-5 animate-spin text-thamani-pewter"
-                />
-                <.icon
-                  :if={gln_status(@organization, @gln_check) == :verified}
-                  name="hero-check"
-                  class="absolute right-3 top-10 size-5 text-td-success"
-                />
-              </div>
-            </div>
-
-            <div
-              id="gs1-verification-status"
-              class="mt-3 grid gap-1.5 rounded-xl bg-thamani-canvas px-4 py-3 text-xs leading-5 sm:grid-cols-2"
-            >
-              <p>
-                Organization GLN:
-                <.td_badge
-                  tone={status_tone(gln_status(@organization, @gln_check))}
-                  label={status_label(gln_status(@organization, @gln_check))}
-                />
-                <span :if={matched_name(@gln_check)} class="text-thamani-pewter">
-                  · matches {matched_name(@gln_check)}
-                </span>
-              </p>
-            </div>
-          </section>
-        </div>
-
-        <div class="flex justify-end border-t border-thamani-stone bg-thamani-canvas/40 px-6 py-4 lg:px-8">
+        <:actions>
           <.td_button
             id="save-organization-settings"
             type="submit"
+            form="distributor-gs1-settings-form"
             variant="primary"
-            label="Save changes"
+            label="Save"
           />
-        </div>
-      </.form>
-
-      <section
-        class="mt-6 overflow-hidden rounded-2xl border border-[var(--color-td-hairline)] bg-[var(--color-td-surface)]"
-        aria-labelledby="gs1-prefixes-heading"
-      >
-        <div class="p-6 lg:p-8">
-          <div class="mb-5">
-            <h2 id="gs1-prefixes-heading" class="text-base font-semibold text-thamani-forest">
-              GS1 company prefixes
-            </h2>
-            <p class="mt-1 text-sm leading-5 text-thamani-pewter">
-              Used to build GTINs and SSCCs. The primary prefix is the one new identifiers are issued under.
-            </p>
-          </div>
-
-          <ul
-            :if={@organization_gs1_prefixes != []}
-            id="gs1-prefixes-list"
-            class="divide-y divide-thamani-stone rounded-xl border border-thamani-stone"
-          >
-            <li
-              :for={prefix <- @organization_gs1_prefixes}
-              class="flex items-center justify-between gap-4 px-4 py-3"
+        </:actions>
+        <:body>
+          <div class="td-pad is-account">
+            <.form
+              for={@form}
+              id="distributor-gs1-settings-form"
+              phx-change="validate"
+              phx-submit="save"
+              class="td-card"
             >
-              <div>
-                <p class="font-mono text-sm font-medium text-thamani-forest">
-                  {prefix.prefix}
-                  <span
-                    :if={prefix.is_primary}
-                    class="ml-2 rounded-full bg-td-accent-tint px-2 py-0.5 text-xs font-semibold text-thamani-forest"
-                  >
-                    Primary
-                  </span>
-                </p>
-                <p class="mt-0.5">
-                  <.td_badge tone={status_tone(prefix_status(prefix))} label={status_label(prefix_status(prefix))} />
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                <.button
-                  :if={!prefix.is_primary}
-                  type="button"
-                  variant="ghost-edit"
-                  phx-click="set_primary_gs1_prefix"
-                  phx-value-id={prefix.id}
-                >
-                  Make primary
-                </.button>
-                <.button
-                  type="button"
-                  variant="ghost-delete"
-                  phx-click="ask_remove_prefix"
-                  phx-value-id={prefix.id}
-                >
-                  Remove
-                </.button>
-              </div>
-            </li>
-          </ul>
-          <p :if={@organization_gs1_prefixes == []} class="text-sm text-thamani-pewter">
-            No GS1 company prefixes yet.
-          </p>
-
-          <.form
-            for={@add_prefix_form}
-            id="add-gs1-prefix-form"
-            phx-submit="add_gs1_prefix"
-            class="mt-5 flex items-end gap-3"
-          >
-            <div class="flex-1">
-              <.input
-                field={@add_prefix_form[:prefix]}
-                label="Add a GS1 company prefix"
-                placeholder="e.g. 0614141"
-                maxlength="10"
-                inputmode="numeric"
+              <.td_card_header
+                title="Identity"
+                subtitle="Used on SSCCs, serials and EPCIS events."
               />
-            </div>
-            <.button variant="primary" class="h-11">Add prefix</.button>
-          </.form>
-        </div>
-      </section>
-      <section
-        id="epcis-submission-settings"
-        class="mt-6 overflow-hidden rounded-2xl border border-[var(--color-td-hairline)] bg-[var(--color-td-surface)]"
-        aria-labelledby="epcis-submission-heading"
-      >
-        <div class="flex flex-col gap-5 p-6 lg:flex-row lg:items-center lg:justify-between lg:p-8">
-          <div>
-            <h2 id="epcis-submission-heading" class="text-base font-semibold text-thamani-forest">
-              EPCIS event reporting
-            </h2>
-            <p class="mt-1 text-sm leading-5 text-thamani-pewter">
-              {if @organization.epcis_submission_mode == :automatic,
-                do: "Events are sent to PPB as soon as they are recorded.",
-                else: "Events stay pending until someone approves and sends them."}
-            </p>
+              <div class="td-card-body">
+                <div class="td-g2">
+                  <label class="td-field">
+                    <span class="td-field-label">Legal name</span>
+                    <span class="td-field-static">{@organization.name}</span>
+                  </label>
+                  <.td_input field={@form[:license_number]} label="License number" required />
+                  <label class="td-field">
+                    <span class="td-field-label">Operating model</span>
+                    <span class="td-field-static">{operating_models_label(@organization)}</span>
+                  </label>
+                  <.td_input
+                    field={@form[:gln]}
+                    label="Organization GLN"
+                    placeholder="13-digit Global Location Number"
+                    maxlength="13"
+                    inputmode="numeric"
+                  />
+                </div>
+                <label class="td-cb">
+                  <input type="hidden" name={@form[:vat_registered].name} value="false" />
+                  <input
+                    type="checkbox"
+                    id={@form[:vat_registered].id}
+                    name={@form[:vat_registered].name}
+                    value="true"
+                    checked={Phoenix.HTML.Form.normalize_value("checkbox", @form[:vat_registered].value)}
+                  />
+                  VAT registered
+                </label>
+                <p id="gs1-verification-status" class="td-hint">
+                  <.td_badge
+                    tone={status_tone(gln_status(@organization, @gln_check))}
+                    label={status_label(gln_status(@organization, @gln_check))}
+                  />
+                  <span :if={matched_name(@gln_check)}>Matches {matched_name(@gln_check)}</span>
+                </p>
+              </div>
+            </.form>
+
+            <section class="td-card">
+              <.td_card_header
+                title="GS1 company prefixes"
+                subtitle="Used to build GTINs and SSCCs. The primary prefix is the one new identifiers are issued under."
+              />
+              <table :if={@organization_gs1_prefixes != []} id="gs1-prefixes-list" class="td-rows">
+                <thead>
+                  <tr>
+                    <th>Prefix</th>
+                    <th>Status</th>
+                    <th><span class="sr-only">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={prefix <- @organization_gs1_prefixes} id={"gs1-prefix-#{prefix.id}"}>
+                    <td>
+                      <span class="td-mono">{prefix.prefix}</span>
+                      <.td_badge :if={prefix.is_primary} tone="neutral" label="Primary" />
+                    </td>
+                    <td>
+                      <.td_badge
+                        tone={status_tone(prefix_status(prefix))}
+                        label={status_label(prefix_status(prefix))}
+                      />
+                    </td>
+                    <td class="td-row-actions">
+                      <.td_button
+                        :if={!prefix.is_primary}
+                        type="button"
+                        variant="secondary"
+                        label="Make primary"
+                        phx-click="set_primary_gs1_prefix"
+                        phx-value-id={prefix.id}
+                      />
+                      <.td_button
+                        type="button"
+                        variant="danger"
+                        label="Remove"
+                        phx-click="ask_remove_prefix"
+                        phx-value-id={prefix.id}
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <p :if={@organization_gs1_prefixes == []} class="td-card-body td-note">
+                No GS1 company prefixes yet.
+              </p>
+              <.form
+                for={@add_prefix_form}
+                id="add-gs1-prefix-form"
+                phx-submit="add_gs1_prefix"
+                class="td-card-body is-row"
+              >
+                <.td_input
+                  field={@add_prefix_form[:prefix]}
+                  label="Add a GS1 company prefix"
+                  placeholder="e.g. 0614141"
+                  maxlength="10"
+                  inputmode="numeric"
+                />
+                <.td_button type="submit" variant="primary" label="Add prefix" />
+              </.form>
+            </section>
+
+            <section id="epcis-submission-settings" class="td-card">
+              <.td_card_header
+                title="How events are sent"
+                subtitle={
+                  if @organization.epcis_submission_mode == :automatic,
+                    do: "Events go to PPB as soon as they are queued.",
+                    else: "Events stay pending until someone approves and sends them."
+                }
+              />
+              <div class="td-tnt-controls">
+                <.td_segmented>
+                  <.td_segment
+                    id="settings-epcis-mode-automatic"
+                    label="Automatic"
+                    active={@organization.epcis_submission_mode == :automatic}
+                    phx-click="set_submission_mode"
+                    phx-value-mode="automatic"
+                    aria-pressed={to_string(@organization.epcis_submission_mode == :automatic)}
+                  />
+                  <.td_segment
+                    id="settings-epcis-mode-manual"
+                    label="Manual"
+                    active={@organization.epcis_submission_mode == :manual}
+                    phx-click="set_submission_mode"
+                    phx-value-mode="manual"
+                    aria-pressed={to_string(@organization.epcis_submission_mode == :manual)}
+                  />
+                </.td_segmented>
+              </div>
+            </section>
           </div>
-          <div
-            role="group"
-            aria-label="EPCIS submission mode"
-            class="inline-flex shrink-0 items-center gap-1 self-start rounded-full bg-thamani-stone p-1 lg:self-auto"
-          >
-            <button
-              :for={
-                {mode, label, icon} <- [
-                  {:automatic, "Automatic", "hero-bolt"},
-                  {:manual, "Manual approval", "hero-hand-raised"}
-                ]
-              }
-              type="button"
-              id={"settings-epcis-mode-#{mode}"}
-              phx-click="set_submission_mode"
-              phx-value-mode={mode}
-              aria-pressed={to_string(@organization.epcis_submission_mode == mode)}
-              class={[
-                "inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent",
-                if(@organization.epcis_submission_mode == mode,
-                  do: "bg-thamani-forest text-td-on-accent shadow-sm",
-                  else: "text-thamani-pewter hover:text-thamani-forest"
-                )
-              ]}
-            >
-              <.icon name={icon} class="size-4" /> {label}
-            </button>
-          </div>
-        </div>
-      </section>
         </:body>
       </.td_detail_page>
 

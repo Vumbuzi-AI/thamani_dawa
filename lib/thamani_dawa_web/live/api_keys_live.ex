@@ -441,11 +441,11 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
         subtitle="Credentials this organization uses with PPB Track & Trace and GS1."
       >
         <:body>
-      <div class="space-y-4">
+      <div class="td-pad is-account">
 
         <section
           id="epcis-api-key-settings"
-          class={["td-card", @keys_needed? && "is-needed"]}
+          class="td-card"
         >
           <.td_card_header
             title={if(@keys_needed?, do: "Add your TNT API key", else: "TNT API key")}

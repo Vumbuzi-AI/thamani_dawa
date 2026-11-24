@@ -269,6 +269,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
           <% is_nil(@api_key) -> %>
             <div id="mobile-users-unconfigured">
               <.td_empty
+                icon="key"
                 title="Connect GS1 first"
                 hint="Mobile users are created on your GS1 member account. Add your GS1 API key in Org settings."
               >
@@ -284,9 +285,19 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
           <% @users == [] -> %>
             <div id="mobile-users-empty">
               <.td_empty
+                icon="user"
                 title="No mobile users yet"
                 hint="Add a user, pick distribution or manufacturing, and GS1 emails them a PIN."
-              />
+              >
+                <:action>
+                  <.td_button
+                    id="empty-add-mobile-user"
+                    variant="secondary"
+                    label="Add mobile user"
+                    patch={~p"/org/mobile-users/new"}
+                  />
+                </:action>
+              </.td_empty>
             </div>
           <% true -> %>
             <.table id="mobile-users" rows={@users} row_id={&"mobile-user-#{&1["id"]}"}>

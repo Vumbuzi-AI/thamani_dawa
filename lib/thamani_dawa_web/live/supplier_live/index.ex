@@ -55,18 +55,12 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
     {:noreply, socket |> assign(:search, search) |> reload_suppliers()}
   end
 
-  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
-    filters = %{status: Map.get(filter_params, "status", "")}
-    {:noreply, socket |> assign(:filters, filters) |> reload_suppliers()}
+  def handle_event("set_filter", %{"field" => "status", "value" => value}, socket) do
+    {:noreply, socket |> assign(:filters, %{status: value}) |> reload_suppliers()}
   end
 
   def handle_event("clear_filters", _params, socket) do
     {:noreply, socket |> assign(:filters, @default_filters) |> reload_suppliers()}
-  end
-
-  def handle_event("clear_chip", %{"field" => "status"}, socket) do
-    {:noreply,
-     socket |> assign(:filters, %{socket.assigns.filters | status: ""}) |> reload_suppliers()}
   end
 
   def handle_event("validate", %{"supplier" => attrs}, socket) do
@@ -188,14 +182,6 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
 
   defp active_filter_count(filters) do
     Enum.count([filters.status != ""], & &1)
-  end
-
-  defp filter_chips(filters) do
-    [
-      filters.status != "" &&
-        %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"}
-    ]
-    |> Enum.filter(& &1)
   end
 
   attr :form, :map, required: true
@@ -368,6 +354,17 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
   defp render_index(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/suppliers"}>
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search by name, contact, email, or GLN"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
       <.td_list_page title="Suppliers" subtitle="Search, filter, and manage your organization's suppliers.">
         <:actions>
           <.td_button
@@ -379,35 +376,13 @@ defmodule ThamaniDawaWeb.SupplierLive.Index do
           />
         </:actions>
         <:filters>
-          <form phx-change="search" class="flex-1" id="search-form">
-            <.search_input
-              name="search"
-              value={@search}
-              placeholder="Search by name, contact, email, or GLN"
-            />
-          </form>
-
-          <.filter_drawer
-            id="suppliers-filters"
-            title="Filter suppliers"
-            apply_event="apply_filters"
-            active_count={active_filter_count(@filters)}
-          >
-            <:group label="Status">
-              <.input
-                type="select"
-                name="filters[status]"
-                value={@filters.status}
-                options={[{"Active", "active"}, {"Inactive", "inactive"}]}
-                prompt="All statuses"
-              />
-            </:group>
-            <:chip
-              :for={chip <- filter_chips(@filters)}
-              label={chip.label}
-              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-            />
-          </.filter_drawer>
+          <.td_filter_menu
+            id="suppliers"
+            field="status"
+            label="Status"
+            value={@filters.status}
+            options={[{"", "Any"}, {"active", "Active"}, {"inactive", "Inactive"}]}
+          />
         </:filters>
 
       <.modal

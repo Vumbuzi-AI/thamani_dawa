@@ -172,26 +172,15 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
     {:noreply, socket |> assign(:search, search) |> assign_sites()}
   end
 
-  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
-    filters = %{
-      activities: Map.get(filter_params, "activities", ""),
-      status: Map.get(filter_params, "status", "")
-    }
+  def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
+      when field in ["activities", "status"] do
+    key = String.to_existing_atom(field)
 
-    {:noreply, socket |> assign(:filters, filters) |> assign_sites()}
+    {:noreply, socket |> assign(:filters, %{socket.assigns.filters | key => value}) |> assign_sites()}
   end
 
   def handle_event("clear_filters", _params, socket) do
     {:noreply, socket |> assign(:filters, @default_filters) |> assign_sites()}
-  end
-
-  def handle_event("clear_chip", %{"field" => field}, socket) do
-    key = String.to_existing_atom(field)
-
-    {:noreply,
-     socket
-     |> assign(:filters, %{socket.assigns.filters | key => ""})
-     |> assign_sites()}
   end
 
   def handle_event("toggle_active", %{"id" => id}, socket) do
@@ -403,16 +392,6 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   defp active_filter_count(filters) do
     Enum.count([filters.activities != "", filters.status != ""], & &1)
-  end
-
-  defp filter_chips(filters) do
-    [
-      filters.activities != "" &&
-        %{label: "Activity: #{Phoenix.Naming.humanize(filters.activities)}", field: "activities"},
-      filters.status != "" &&
-        %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"}
-    ]
-    |> Enum.filter(& &1)
   end
 
   defp activity_options do
@@ -1075,45 +1054,33 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   defp render_index(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/sites"}>
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search name="search" value={@search} placeholder="Search by name or address" shortcut="⌘K" phx-debounce="200" />
+        </form>
+      </:search>
       <.td_list_page title="Sites" subtitle="Search, filter, and manage your sites.">
         <:actions>
           <.td_button variant="primary" label="Add site" glyph="plus" patch={~p"/org/sites/new"} />
         </:actions>
         <:filters>
-          <form phx-change="search" class="flex-1" id="search-form">
-            <.search_input name="search" value={@search} placeholder="Search by name or address" />
-          </form>
-
-          <.filter_drawer
-            id="sites-filters"
-            title="Filter sites"
-            apply_event="apply_filters"
-            active_count={active_filter_count(@filters)}
-          >
-            <:group label="Activity">
-              <.input
-                type="select"
-                name="filters[activities]"
-                value={@filters.activities}
-                options={Enum.map(activity_options(), fn {label, _desc, value} -> {label, value} end)}
-                prompt="All activities"
-              />
-            </:group>
-            <:group label="Status">
-              <.input
-                type="select"
-                name="filters[status]"
-                value={@filters.status}
-                options={[{"Active", "active"}, {"Inactive", "inactive"}]}
-                prompt="All statuses"
-              />
-            </:group>
-            <:chip
-              :for={chip <- filter_chips(@filters)}
-              label={chip.label}
-              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-            />
-          </.filter_drawer>
+          <.td_filter_menu
+            id="sites"
+            field="activities"
+            label="Activity"
+            value={@filters.activities}
+            options={[
+              {"", "Any"}
+              | Enum.map(activity_options(), fn {label, _desc, value} -> {to_string(value), label} end)
+            ]}
+          />
+          <.td_filter_menu
+            id="sites"
+            field="status"
+            label="Status"
+            value={@filters.status}
+            options={[{"", "Any"}, {"active", "Active"}, {"inactive", "Inactive"}]}
+          />
         </:filters>
 
       <.modal
