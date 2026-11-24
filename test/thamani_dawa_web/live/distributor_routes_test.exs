@@ -144,12 +144,8 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
 
       assert has_element?(view, ".td-tabs #distributor-products-tab", "Products")
       assert has_element?(view, ".td-tabs #distributor-batches-tab", "Batches")
-      refute has_element?(view, "#distributor-product-toolbar #distributor-products-tab")
-
-      assert has_element?(
-               view,
-               "#distributor-product-toolbar #distributor-product-search"
-             )
+      refute has_element?(view, "#distributor-product-search #distributor-products-tab")
+      assert has_element?(view, "#distributor-product-search")
     end
   end
 

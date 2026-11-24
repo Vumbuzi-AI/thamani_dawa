@@ -15,13 +15,14 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLiveTest do
     conn |> init_test_session(%{}) |> ThamaniDawaWeb.UserAuth.log_in_user(user)
   end
 
-  test "returns has supplier and customer tabs, and a supplier return follows the supplier tab",
+  test "a supplier return starts from the supplier returns list",
        %{conn: conn, distributor: distributor} do
     {:ok, view, _html} = live(conn, ~p"/distributor/returns")
 
     assert has_element?(view, "#supplier-returns-empty", "No supplier returns yet")
-    assert has_element?(view, "#returns-tab-supplier[aria-selected='true']")
-    assert has_element?(view, "#returns-tab-customer")
+    assert has_element?(view, ".td-tabs #sr-tab-all", "All")
+    refute has_element?(view, "#returns-tab-supplier")
+    refute has_element?(view, "#returns-tab-customer")
 
     view |> element("#new-supplier-return") |> render_click()
     refute has_element?(view, "#supplier-return-form select[name='disposal[site_id]']")

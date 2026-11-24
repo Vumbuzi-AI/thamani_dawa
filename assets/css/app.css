@@ -3071,6 +3071,8 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-tab .td-count { font-weight: 400; }
 .td-toolbar { flex: none; border-bottom: 1px solid var(--color-td-hairline); background: var(--color-td-surface); }
 .td-toolbar form { display: contents; }
+.td-toolbar form.td-search-grow { display: flex; flex: 1; min-width: 280px; }
+.td-toolbar form.td-search-grow .td-search { width: 100%; }
 .td-chip-wrap { position: relative; align-self: center; height: fit-content; }
 .td-chip { line-height: 1; }
 .td-filter-menu { width: 220px; }

@@ -2104,50 +2104,6 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   @doc """
-  The two sides of Returns. Supplier returns and customer returns are
-  separate LiveViews, so the tabs navigate between them.
-  """
-  attr :active, :atom, required: true, values: [:supplier, :customer]
-
-  def returns_tabs(assigns) do
-    ~H"""
-    <div
-      role="tablist"
-      class="mb-5 inline-flex rounded-lg border border-thamani-stone bg-thamani-surface p-1"
-    >
-      <.link
-        id="returns-tab-supplier"
-        role="tab"
-        navigate={~p"/distributor/returns"}
-        aria-selected={to_string(@active == :supplier)}
-        class={[
-          "rounded-md px-3 py-2 text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
-          @active == :supplier && "bg-td-accent-tint text-thamani-forest",
-          @active != :supplier &&
-            "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
-        ]}
-      >
-        Supplier returns
-      </.link>
-      <.link
-        id="returns-tab-customer"
-        role="tab"
-        navigate={~p"/distributor/customer-returns"}
-        aria-selected={to_string(@active == :customer)}
-        class={[
-          "rounded-md px-3 py-2 text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
-          @active == :customer && "bg-td-accent-tint text-thamani-forest",
-          @active != :customer &&
-            "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
-        ]}
-      >
-        Customer returns
-      </.link>
-    </div>
-    """
-  end
-
-  @doc """
   Renders a pill-style tab group, e.g. the "Patients / Patient visits" toggle.
 
   ## Examples

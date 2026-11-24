@@ -473,24 +473,22 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           <section class="rounded-xl ff-surface-card">
             <div class="flex flex-col gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 class="text-base font-semibold text-thamani-forest">1. Patient</h3>
-              <.tab_group>
-                <:tab
+              <.td_segmented>
+                <.td_segment
                   id="existing-patient-mode"
+                  label="Existing patient"
                   active={@patient_mode == :existing}
-                  phx_click="toggle_patient_mode"
-                  phx_value_tab="existing"
-                >
-                  Existing Patient
-                </:tab>
-                <:tab
+                  phx-click="toggle_patient_mode"
+                  phx-value-tab="existing"
+                />
+                <.td_segment
                   id="new-patient-mode"
+                  label="New patient"
                   active={@patient_mode == :new}
-                  phx_click="toggle_patient_mode"
-                  phx_value_tab="new"
-                >
-                  New Patient
-                </:tab>
-              </.tab_group>
+                  phx-click="toggle_patient_mode"
+                  phx-value-tab="new"
+                />
+              </.td_segmented>
             </div>
             <div class="p-4 sm:p-5">
               <div :if={@patient_mode == :existing}>
