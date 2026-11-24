@@ -28,6 +28,7 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
      |> assign(:organization, organization)
      |> assign(:gln_check, :idle)
      |> assign(:gln_check_value, nil)
+     |> assign(:remove_prefix, nil)
      |> assign(
        :form,
        to_form(Organizations.change_organization_settings(organization), as: :organization)
@@ -137,16 +138,27 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
     end
   end
 
-  def handle_event("delete_gs1_prefix", %{"id" => id}, socket) do
-    case find_prefix(socket, id) do
+  def handle_event("ask_remove_prefix", %{"id" => id}, socket) do
+    {:noreply, assign(socket, :remove_prefix, find_prefix(socket, id))}
+  end
+
+  def handle_event("cancel_remove_prefix", _params, socket) do
+    {:noreply, assign(socket, :remove_prefix, nil)}
+  end
+
+  def handle_event("confirm_remove_prefix", _params, socket) do
+    case socket.assigns.remove_prefix do
       %OrganizationGs1Prefix{} = prefix ->
         {:ok, _} = Organizations.delete_gs1_prefix(prefix)
 
         {:noreply,
-         socket |> put_flash(:info, "GS1 company prefix removed.") |> assign_gs1_prefixes()}
+         socket
+         |> assign(:remove_prefix, nil)
+         |> put_flash(:info, "GS1 company prefix removed.")
+         |> assign_gs1_prefixes()}
 
-      nil ->
-        {:noreply, socket}
+      _ ->
+        {:noreply, assign(socket, :remove_prefix, nil)}
     end
   end
 
@@ -278,13 +290,9 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
   defp status_label(:not_set), do: "Not set"
   defp status_label(:pending), do: "Pending verification"
 
-  defp status_class(status) when status in [:verified], do: "text-green-700"
-
-  defp status_class(status)
-       when status in [:not_found, :unavailable, :invalid_check_digit, :inactive],
-       do: "text-amber-700"
-
-  defp status_class(_status), do: "text-thamani-pewter"
+  defp status_tone(:verified), do: "success"
+  defp status_tone(status) when status in [:not_found, :unavailable, :invalid_check_digit, :inactive], do: "warning"
+  defp status_tone(_status), do: "neutral"
 
   attr :portal, :atom, required: true
   attr :flash, :map, required: true
@@ -332,11 +340,11 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
       current_scope={@current_scope}
       current_path={@current_path}
     >
-      <.td_page_header
+      <.td_detail_page
         title="Organization settings"
         subtitle="Your organization's identity and the GS1 identifiers it issues or reports under."
-      />
-
+      >
+        <:body>
       <.form
         for={@form}
         id="distributor-gs1-settings-form"
@@ -416,7 +424,7 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
                 <.icon
                   :if={gln_status(@organization, @gln_check) == :verified}
                   name="hero-check"
-                  class="absolute right-3 top-10 size-5 text-green-700"
+                  class="absolute right-3 top-10 size-5 text-td-success"
                 />
               </div>
             </div>
@@ -427,9 +435,10 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
             >
               <p>
                 Organization GLN:
-                <span class={status_class(gln_status(@organization, @gln_check))}>
-                  {status_label(gln_status(@organization, @gln_check))}
-                </span>
+                <.td_badge
+                  tone={status_tone(gln_status(@organization, @gln_check))}
+                  label={status_label(gln_status(@organization, @gln_check))}
+                />
                 <span :if={matched_name(@gln_check)} class="text-thamani-pewter">
                   · matches {matched_name(@gln_check)}
                 </span>
@@ -481,10 +490,8 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
                     Primary
                   </span>
                 </p>
-                <p class="mt-0.5 text-xs">
-                  <span class={status_class(prefix_status(prefix))}>
-                    {status_label(prefix_status(prefix))}
-                  </span>
+                <p class="mt-0.5">
+                  <.td_badge tone={status_tone(prefix_status(prefix))} label={status_label(prefix_status(prefix))} />
                 </p>
               </div>
               <div class="flex items-center gap-2">
@@ -500,9 +507,8 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
                 <.button
                   type="button"
                   variant="ghost-delete"
-                  phx-click="delete_gs1_prefix"
+                  phx-click="ask_remove_prefix"
                   phx-value-id={prefix.id}
-                  data-confirm="Remove this GS1 company prefix?"
                 >
                   Remove
                 </.button>
@@ -578,6 +584,18 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
           </div>
         </div>
       </section>
+        </:body>
+      </.td_detail_page>
+
+      <.td_confirm
+        :if={@remove_prefix}
+        id="remove-gs1-prefix-modal"
+        title={"Remove prefix #{@remove_prefix.prefix}?"}
+        body="New GTINs and SSCCs will not be issued under this prefix. Existing identifiers stay as they are."
+        confirm="Remove prefix"
+        confirm_click="confirm_remove_prefix"
+        on_cancel={JS.push("cancel_remove_prefix")}
+      />
     </.settings_shell>
     """
   end

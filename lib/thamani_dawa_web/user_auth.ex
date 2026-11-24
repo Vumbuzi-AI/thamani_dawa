@@ -21,10 +21,19 @@ defmodule ThamaniDawaWeb.UserAuth do
   Code.ensure_compiled!(Portals)
 
   @user_token_key "user_token"
+  @remember_cookie "_thamani_dawa_remember"
+  @remember_max_age 60 * 60 * 24 * 60
 
-  @doc "Stores the user's session token and starts a fresh session."
-  def log_in_user(conn, user) do
-    token = Accounts.generate_user_session_token(user)
+  @doc """
+  Stores the user's session token and starts a fresh session.
+
+  `remember: true` keeps that login for 60 days, including across a closed
+  browser, and skips the 30 minute idle cutoff. The default stays a browser
+  session that ends after 30 idle minutes.
+  """
+  def log_in_user(conn, user, opts \\ []) do
+    remember? = Keyword.get(opts, :remember, false)
+    token = Accounts.generate_user_session_token(user, remember: remember?)
 
     Accounts.update_user_last_logged_in(user)
     Accounts.create_login_session(user.id)
@@ -33,6 +42,7 @@ defmodule ThamaniDawaWeb.UserAuth do
     |> renew_session()
     |> put_session(@user_token_key, token)
     |> configure_session(renew: true)
+    |> write_remember_cookie(token, remember?)
   end
 
   @doc "Deletes the session token and ends the session."
@@ -50,6 +60,45 @@ defmodule ThamaniDawaWeb.UserAuth do
 
     conn
     |> renew_session()
+    |> delete_resp_cookie(@remember_cookie)
+  end
+
+  defp write_remember_cookie(conn, token, true) do
+    put_resp_cookie(
+      conn,
+      @remember_cookie,
+      Base.url_encode64(token, padding: false),
+      sign: true,
+      max_age: @remember_max_age,
+      same_site: "Lax",
+      http_only: true
+    )
+  end
+
+  defp write_remember_cookie(conn, _token, false), do: delete_resp_cookie(conn, @remember_cookie)
+
+  defp ensure_session_token(conn) do
+    case get_session(conn, @user_token_key) do
+      token when is_binary(token) and token != "" ->
+        {conn, token}
+
+      _ ->
+        case remembered_token(conn) do
+          nil -> {conn, nil}
+          token -> {put_session(conn, @user_token_key, token), token}
+        end
+    end
+  end
+
+  defp remembered_token(conn) do
+    conn = fetch_cookies(conn, signed: [@remember_cookie])
+
+    with encoded when is_binary(encoded) <- conn.cookies[@remember_cookie],
+         {:ok, token} <- Base.url_decode64(encoded, padding: false) do
+      token
+    else
+      _ -> nil
+    end
   end
 
   defp renew_session(conn) do
@@ -60,7 +109,7 @@ defmodule ThamaniDawaWeb.UserAuth do
 
   @doc "Plug that assigns `current_scope` on the conn for every browser request."
   def fetch_current_scope_for_user(conn, _opts) do
-    token = get_session(conn, @user_token_key)
+    {conn, token} = ensure_session_token(conn)
 
     user =
       case token do

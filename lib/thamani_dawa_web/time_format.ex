@@ -28,6 +28,16 @@ defmodule ThamaniDawaWeb.TimeFormat do
 
   def date(value), do: value |> to_eat() |> Calendar.strftime("%-d %b %Y")
 
+  @doc "`18 Nov`, for a chart axis. Timestamps are converted to EAT first."
+  def month_day(nil), do: "—"
+  def month_day(%Date{} = date), do: Calendar.strftime(date, "%-d %b")
+  def month_day(value), do: value |> to_eat() |> Calendar.strftime("%-d %b")
+
+  @doc "`Nov 2026`, for a chart axis. Timestamps are converted to EAT first."
+  def month_year(nil), do: "—"
+  def month_year(%Date{} = date), do: Calendar.strftime(date, "%b %Y")
+  def month_year(value), do: value |> to_eat() |> Calendar.strftime("%b %Y")
+
   @doc "Shifts a UTC timestamp to EAT wall-clock time."
   def to_eat(%DateTime{} = dt),
     do:

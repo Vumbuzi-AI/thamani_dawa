@@ -56,12 +56,10 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Options do
       current_scope={@current_scope}
       current_path={~p"/distributor/billing"}
     >
-      <.header icon="hero-credit-card">
-        Choose a serialisation plan
-        <:subtitle>
-          Approving a shipment issues one SSCC per shipper, drawn from your serialisation allowance.
-        </:subtitle>
-      </.header>
+      <.td_list_page
+        title="Choose a serialisation plan"
+        subtitle="Approving a shipment issues one SSCC per shipper, drawn from your serialisation allowance."
+      >
 
       <div class="grid gap-5 md:grid-cols-2">
         <section
@@ -131,6 +129,7 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Options do
           </.button>
         </section>
       </div>
+      </.td_list_page>
     </Layouts.distributor_shell>
     """
   end

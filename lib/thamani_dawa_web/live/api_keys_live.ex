@@ -436,11 +436,12 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
       current_scope={@current_scope}
       current_path={@current_path}
     >
+      <.td_detail_page
+        title="API keys"
+        subtitle="Credentials this organization uses with PPB Track & Trace and GS1."
+      >
+        <:body>
       <div class="space-y-4">
-        <.td_page_header
-          title="API keys"
-          subtitle="Credentials this organization uses with PPB Track & Trace and GS1."
-        />
 
         <section
           id="epcis-api-key-settings"
@@ -538,6 +539,8 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
           </div>
         </section>
       </div>
+        </:body>
+      </.td_detail_page>
       <.clear_key_modal clearing_key={@clearing_key} />
     </.keys_shell>
     """

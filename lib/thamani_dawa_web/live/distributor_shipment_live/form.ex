@@ -174,19 +174,16 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
       current_scope={@current_scope}
       current_path={~p"/distributor/shipments"}
     >
-      <.header
-        icon="hero-truck"
+      <.td_detail_page
+        title={@page_title}
+        subtitle="The mobile team finds this shipment by its order number, then scans units into shippers."
         back={
           if @live_action == :edit,
             do: ~p"/distributor/shipments/#{@shipment.id}",
             else: ~p"/distributor/shipments"
         }
       >
-        {@page_title}
-        <:subtitle>
-          The mobile team finds this shipment by its order number, then scans units into shippers.
-        </:subtitle>
-      </.header>
+        <:body>
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <section class="rounded-2xl ff-surface-card p-5 sm:p-6">
@@ -329,6 +326,8 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Form do
           </p>
         </aside>
       </div>
+        </:body>
+      </.td_detail_page>
     </Layouts.distributor_shell>
     """
   end

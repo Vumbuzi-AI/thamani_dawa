@@ -1075,15 +1075,11 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
   defp render_index(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/sites"}>
-      <.header icon="hero-building-office-2">
-        Sites
-        <:subtitle>Search, filter, and manage your sites.</:subtitle>
+      <.td_list_page title="Sites" subtitle="Search, filter, and manage your sites.">
         <:actions>
-          <.button variant="primary" patch={~p"/org/sites/new"}>
-            <.icon name="hero-plus" class="size-4" /> Add site
-          </.button>
+          <.td_button variant="primary" label="Add site" glyph="plus" patch={~p"/org/sites/new"} />
         </:actions>
-        <:toolbar>
+        <:filters>
           <form phx-change="search" class="flex-1" id="search-form">
             <.search_input name="search" value={@search} placeholder="Search by name or address" />
           </form>
@@ -1118,8 +1114,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               clear={JS.push("clear_chip", value: %{"field" => chip.field})}
             />
           </.filter_drawer>
-        </:toolbar>
-      </.header>
+        </:filters>
 
       <.modal
         :if={@live_action in [:new, :edit]}
@@ -1283,6 +1278,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
       </div>
 
       <.pagination page={@page_info} path={~p"/org/sites"} />
+      </.td_list_page>
     </Layouts.org_shell>
     """
   end

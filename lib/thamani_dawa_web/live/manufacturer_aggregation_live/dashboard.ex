@@ -26,6 +26,13 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Dashboard do
       >
         <:actions>
           <.td_button
+            id="build-pallet"
+            variant="secondary"
+            glyph="stack"
+            label="Build a pallet"
+            navigate={~p"/manufacturer/aggregations/pallets/new"}
+          />
+          <.td_button
             id="add-sscc"
             variant="primary"
             label="Add SSCC"
@@ -45,7 +52,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Dashboard do
               <.td_button
                 id="create-pallet"
                 variant="secondary"
-                label="Group shippers"
+                label="Build a pallet"
                 navigate={~p"/manufacturer/aggregations/pallets/new"}
               />
             </:actions>
@@ -93,7 +100,17 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Dashboard do
           <.td_card_header
             title="Standalone shipper SSCCs"
             subtitle="Cases that are not grouped under a pallet."
-          />
+          >
+            <:actions>
+              <.td_button
+                :if={@shippers != []}
+                id="build-pallet-from-shippers"
+                variant="secondary"
+                label="Build a pallet"
+                navigate={~p"/manufacturer/aggregations/pallets/new"}
+              />
+            </:actions>
+          </.td_card_header>
 
           <div :if={@shippers == []} id="aggregation-shippers-empty" class="td-empty-card">
             <p class="td-empty-title">No standalone shippers yet</p>

@@ -53,6 +53,25 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
     Agent.update(__MODULE__, &Map.put(&1, :glns, glns))
   end
 
+  @doc "Adds directory rows without dropping the defaults other tests search for."
+  def add_glns(glns) when is_list(glns) do
+    ensure_started()
+
+    Agent.update(__MODULE__, fn state ->
+      merged = Enum.uniq_by(glns ++ state.glns, & &1["gln"])
+      %{state | glns: merged}
+    end)
+  end
+
+  def remove_glns(glns) when is_list(glns) do
+    ensure_started()
+    drop = MapSet.new(glns, & &1["gln"])
+
+    Agent.update(__MODULE__, fn state ->
+      %{state | glns: Enum.reject(state.glns, &MapSet.member?(drop, &1["gln"]))}
+    end)
+  end
+
   def fail_next(reason) do
     Process.put({__MODULE__, :fail}, reason)
     :ok

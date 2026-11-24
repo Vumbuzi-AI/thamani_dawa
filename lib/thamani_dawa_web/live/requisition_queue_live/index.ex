@@ -460,10 +460,11 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path="/org/requisitions">
-      <.header icon="hero-clipboard-document-list">
-        Requisitions
-        <:subtitle>Stock requests raised by your sites, awaiting review or fulfillment.</:subtitle>
-        <:toolbar>
+      <.td_list_page
+        title="Requisitions"
+        subtitle="Stock requests raised by your sites, awaiting review or fulfillment."
+      >
+        <:filters>
           <form id="requisition-search" phx-change="search" phx-submit="search">
             <.search_input
               name="search"
@@ -514,8 +515,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
               clear={JS.push("clear_filter", value: %{filter: "date_to"})}
             />
           </.filter_drawer>
-        </:toolbar>
-      </.header>
+        </:filters>
 
       <.modal
         :if={@live_action == :review and not is_nil(@review_requisition)}
@@ -786,6 +786,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+      </.td_list_page>
     </Layouts.org_shell>
     """
   end

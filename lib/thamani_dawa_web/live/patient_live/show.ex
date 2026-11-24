@@ -4,6 +4,7 @@ defmodule ThamaniDawaWeb.PatientLive.Show do
   alias ThamaniDawa.Patients
   alias ThamaniDawa.Patients.Patient
   alias ThamaniDawa.PatientVisits
+  alias ThamaniDawaWeb.CarePortal
 
   def mount(%{"id" => id}, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -18,16 +19,15 @@ defmodule ThamaniDawaWeb.PatientLive.Show do
 
   def render(assigns) do
     ~H"""
-    <Layouts.pharmacy_shell
+    <Layouts.care_shell
+      portal={@portal}
       flash={@flash}
       current_scope={@current_scope}
-      current_path="/pharmacy/patients"
-      back={~p"/pharmacy/patients"}
+      current_path={CarePortal.patients(@portal)}
+      back={CarePortal.patients(@portal)}
     >
-      <.header icon="hero-user">
-        {@patient.full_name}
-        <:subtitle>Patient details and visit history.</:subtitle>
-      </.header>
+      <.td_detail_page title={@patient.full_name} subtitle="Patient details and visit history.">
+        <:body>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div class="rounded-xl ff-surface-card p-4">
@@ -55,7 +55,7 @@ defmodule ThamaniDawaWeb.PatientLive.Show do
         <:col :let={visit} label="Seen by">{visit.user_name}</:col>
         <:col :let={visit} label="Visit type">{Phoenix.Naming.humanize(visit.visit_type)}</:col>
         <:col :let={visit} label="Date">
-          {Calendar.strftime(visit.inserted_at, "%b %d, %H:%M")}
+          {ThamaniDawaWeb.TimeFormat.short_datetime(visit.inserted_at)}
         </:col>
         <:empty_state>
           <.blank_state icon="hero-user-group" title="No visits yet">
@@ -63,7 +63,9 @@ defmodule ThamaniDawaWeb.PatientLive.Show do
           </.blank_state>
         </:empty_state>
       </.table>
-    </Layouts.pharmacy_shell>
+        </:body>
+      </.td_detail_page>
+    </Layouts.care_shell>
     """
   end
 end

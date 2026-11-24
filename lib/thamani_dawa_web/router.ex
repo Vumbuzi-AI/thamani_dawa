@@ -225,7 +225,11 @@ defmodule ThamaniDawaWeb.Router do
       live "/platform/recalls", PlatformRecallLive, :index
     end
 
-    live_session :pharmacy, on_mount: [{ThamaniDawaWeb.UserAuth, :require_pharmacy_access}] do
+    live_session :pharmacy,
+      on_mount: [
+        {ThamaniDawaWeb.UserAuth, :require_pharmacy_access},
+        {ThamaniDawaWeb.CarePortal, :pharmacy}
+      ] do
       live "/pharmacy", PharmacyDashboardLive, :index
       live "/pharmacy/transactions", EarningsLive, :pharmacy
       live "/pharmacy/scan", PharmacyScanLive, :index
@@ -260,15 +264,19 @@ defmodule ThamaniDawaWeb.Router do
       live "/pharmacy/patients/:id", PatientLive.Show, :show
     end
 
-    live_session :lab, on_mount: [{ThamaniDawaWeb.UserAuth, :require_lab_access}] do
+    live_session :lab,
+      on_mount: [
+        {ThamaniDawaWeb.UserAuth, :require_lab_access},
+        {ThamaniDawaWeb.CarePortal, :lab}
+      ] do
       live "/lab", LabDashboardLive, :index
       live "/lab/transactions", EarningsLive, :lab
       live "/lab/transactions/:id", EarningsLive, :lab_show
       live "/lab/transactions/:id/receipt", EarningsLive, :lab_receipt
       live "/lab/scan", LabScanLive, :index
 
-      live "/lab/patients", LabPatientLive.Index, :index
-      live "/lab/patients/:id", LabPatientLive.Show, :show
+      live "/lab/patients", PatientLive.Index, :index
+      live "/lab/patients/:id", PatientLive.Show, :show
 
       live "/lab/orders", LabOrderLive.Index, :index
       live "/lab/orders/new", LabOrderLive.Index, :new
@@ -288,21 +296,21 @@ defmodule ThamaniDawaWeb.Router do
       live "/lab/receive-stock", LabReceiveStockLive, :index
       live "/lab/receive-stock/:id/receive", LabReceiveStockLive, :receive
 
-      live "/lab/requisitions", LabRequisitionLive.Index, :index
-      live "/lab/requisitions/new", LabRequisitionLive.Index, :new
-      live "/lab/requisitions/:id", LabRequisitionLive.Show, :show
+      live "/lab/requisitions", RequisitionLive.Index, :index
+      live "/lab/requisitions/new", RequisitionLive.Index, :new
+      live "/lab/requisitions/:id", RequisitionLive.Show, :show
 
       live "/lab/stock", LabStockLive, :index
       live "/lab/stock/products/:id", LabStockProductLive, :show
       live "/lab/stock/batches/:id", LabStockBatchLive, :show
 
-      live "/lab/stock-takes", LabStockTakeLive.Index, :index
-      live "/lab/stock-takes/new", LabStockTakeLive.Index, :new
-      live "/lab/stock-takes/:id", LabStockTakeLive.Show, :show
+      live "/lab/stock-takes", StockTakeLive.Index, :index
+      live "/lab/stock-takes/new", StockTakeLive.Index, :new
+      live "/lab/stock-takes/:id", StockTakeLive.Show, :show
 
-      live "/lab/disposals", LabDisposalLive.Index, :index
-      live "/lab/disposals/new", LabDisposalLive.Index, :new
-      live "/lab/disposals/:id", LabDisposalLive.Show, :show
+      live "/lab/disposals", DisposalLive.Index, :index
+      live "/lab/disposals/new", DisposalLive.Index, :new
+      live "/lab/disposals/:id", DisposalLive.Show, :show
 
       live "/lab/tests", LabTestLive.Index, :index
       live "/lab/tests/new", LabTestLive.Index, :new
@@ -383,6 +391,8 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer/products", ManufacturerProductLive.Index, :index
       live "/manufacturer/products/:gtin/serials", ManufacturerProductLive.Serials, :index
 
+      live "/manufacturer/products/:gtin/serials/pack", ManufacturerProductLive.Pack, :pack
+
       live "/manufacturer/products/:gtin/serials/new",
            ManufacturerProductLive.Index,
            :new_serial
@@ -394,6 +404,8 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer/inventory", ManufacturerInventoryLive, :index
       live "/manufacturer/shipments", ManufacturerShipmentLive.List, :index
       live "/manufacturer/shipments/new", ManufacturerShipmentLive.Form, :new
+
+      live "/manufacturer/shipments/packed/:id", ManufacturerShipmentLive.Show, :show
 
       live "/manufacturer/shipments/:id/packing-list",
            ManufacturerShipmentLive.Review,
@@ -423,7 +435,7 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer/aggregations/:id", ManufacturerAggregationLive.Review, :show
 
       live "/manufacturer/sscc/:id/serials", ManufacturerSsccLive.Serials, :show
-      live "/manufacturer/sscc/:id/label", ManufacturerSsccLive.Label, :show
+      live "/manufacturer/sscc/:id/label", ManufacturerSsccLive.Serials, :label
       live "/manufacturer/epcis", ManufacturerEpcisLive, :index
     end
 

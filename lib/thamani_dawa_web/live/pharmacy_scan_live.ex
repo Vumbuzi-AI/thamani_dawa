@@ -140,10 +140,11 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
       current_scope={@current_scope}
       current_path="/pharmacy/scan"
     >
-      <.header icon="hero-qr-code">
-        Scan lookup
-        <:subtitle>Check approved stock, location, expiry, and traceability details.</:subtitle>
-      </.header>
+      <.td_detail_page
+        title="Scan lookup"
+        subtitle="Check approved stock, location, expiry, and traceability details."
+      >
+        <:body>
 
       <section
         id="scan-lookup-panel"
@@ -219,7 +220,7 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
                   Date.compare(@earliest_expiry, Date.utc_today()) == :lt && "text-thamani-error"
                 ]}
               >
-                {Calendar.strftime(@earliest_expiry, "%d %b %Y")} {if @batch_count > 1,
+                {ThamaniDawaWeb.TimeFormat.date(@earliest_expiry)} {if @batch_count > 1,
                   do: "(Earliest)"}
               </dd>
             </div>
@@ -285,6 +286,8 @@ defmodule ThamaniDawaWeb.PharmacyScanLive do
           Scan or paste a GTIN or barcode above to look up approved stock.
         </.blank_state>
       </div>
+        </:body>
+      </.td_detail_page>
     </Layouts.pharmacy_shell>
     """
   end

@@ -96,6 +96,14 @@ defmodule ThamaniDawaWeb.SessionControllerTest do
       assert redirected_to(conn) == ~p"/platform"
     end
 
+    test "sends a demo admin straight to the dashboard", %{conn: conn} do
+      admin = user_fixture(%{email: "admin@gmail.com"})
+
+      conn = post(conn, ~p"/login", %{email: admin.email, password: valid_user_password()})
+
+      assert redirected_to(conn) == ~p"/org/dashboard"
+    end
+
     test "sends a freshly-signed-up admin to the onboarding checklist when it's incomplete", %{
       conn: conn
     } do

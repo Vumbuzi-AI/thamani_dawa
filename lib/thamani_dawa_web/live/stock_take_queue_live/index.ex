@@ -151,11 +151,10 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path="/org/stock-takes">
-      <.header icon="hero-clipboard-document-list">
-        Stock takes
-        <:subtitle>Physical inventory counts raised by your sites, awaiting review.</:subtitle>
-      </.header>
-
+      <.td_list_page
+        title="Stock takes"
+        subtitle="Physical inventory counts raised by your sites, awaiting review."
+      >
       <nav class="mt-4 flex gap-2 border-b border-thamani-stone">
         <.link
           :for={{status, label} <- @tabs}
@@ -221,6 +220,7 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
+      </.td_list_page>
     </Layouts.org_shell>
     """
   end

@@ -1,0 +1,34 @@
+<div class="td-auth">
+  <div class="td-auth-corner">
+    <.td_button variant="secondary" label="Back to log in" navigate={~p"/login"} glyph="arrow-left" />
+  </div>
+
+  <div class="td-auth-col">
+    <a href="/" aria-label="Thamani Dawa home" class="td-auth-logo">
+      <img src="/images/logo-transparent.png" alt="Thamani Dawa" />
+    </a>
+
+    <div class="td-auth-panel">
+      <h1>Check your email</h1>
+      <p class="td-auth-lead">
+        If {@email} has an account, a reset link is on its way. The link works once and expires in 1 day.
+      </p>
+
+      <form action={~p"/reset-password"} method="post" class="td-auth-form">
+        <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+        <input type="hidden" name="email" value={@email} />
+        <.td_button type="submit" variant="secondary" size="lg" label="Resend link" />
+      </form>
+
+      <div class="td-auth-links">
+        <.link navigate={~p"/login"}>Back to log in</.link>
+        <.link navigate={~p"/reset-password"}>Use a different email</.link>
+      </div>
+    </div>
+  </div>
+
+  <div class="td-auth-page-foot">
+    <.link navigate={~p"/privacy"}>Privacy</.link>
+    <.link navigate={~p"/terms"}>Terms</.link>
+  </div>
+</div>

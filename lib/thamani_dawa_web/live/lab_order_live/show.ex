@@ -496,7 +496,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
   end
 
   defp format_date(nil), do: "—"
-  defp format_date(%Date{} = date), do: Calendar.strftime(date, "%d %b %Y")
+  defp format_date(%Date{} = date), do: ThamaniDawaWeb.TimeFormat.date(date)
   defp format_date(other), do: to_string(other)
 
   defp status_meta(:result, :pending),
@@ -1324,7 +1324,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Show do
                       style="color: var(--color-td-ink);"
                     >
                       <span style="color: var(--color-td-ink-3);">
-                        {Calendar.strftime(amendment.inserted_at, "%d %b %Y %H:%M")} · {user_name(
+                        {ThamaniDawaWeb.TimeFormat.datetime(amendment.inserted_at)} · {user_name(
                           amendment.amended_by
                         )}:
                       </span>

@@ -27,6 +27,8 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
      |> assign(:page_number, 1)
      |> assign(:expiry_filter, "all")
      |> assign(:hold_filter, "all")
+     |> assign(:product_count, 0)
+     |> assign(:batch_count, 0)
      |> assign(:today, Date.utc_today())
      |> assign(:products_by_id, Map.new(Products.list_products(organization_id), &{&1.id, &1}))
      |> assign(:sites_by_id, Map.new(sites, &{&1.id, &1}))
@@ -136,6 +138,8 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
     page_info = DistributorPagination.page(rows, socket.assigns.page_number)
 
     socket
+    |> assign(:product_count, length(products))
+    |> assign(:batch_count, inventory_batch_count(socket))
     |> assign(:page_info, page_info)
     |> stream(:products, page_info.entries, reset: true)
   end
@@ -146,23 +150,26 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
 
     site_ids = stock_site_ids(socket)
 
-    batches =
+    inventory =
       organization_id
       |> Batches.list_batches()
+      |> Enum.filter(&in_inventory?(&1, site_ids))
+
+    batches =
+      inventory
       |> Enum.filter(fn batch ->
         product = socket.assigns.products_by_id[batch.product_id]
 
-        in_inventory?(batch, site_ids) and
-          (search == "" or
-             Enum.any?(
-               [
-                 product && product.generic_name,
-                 product && product.brand_name,
-                 batch.gtin,
-                 batch.batch_no
-               ],
-               &(is_binary(&1) and String.contains?(String.downcase(&1), search))
-             ))
+        search == "" or
+          Enum.any?(
+            [
+              product && product.generic_name,
+              product && product.brand_name,
+              batch.gtin,
+              batch.batch_no
+            ],
+            &(is_binary(&1) and String.contains?(String.downcase(&1), search))
+          )
       end)
       |> filter_hold(socket.assigns.hold_filter)
       |> filter_expiry(socket.assigns.expiry_filter, socket.assigns.today)
@@ -171,6 +178,8 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
     page_info = DistributorPagination.page(batches, socket.assigns.page_number)
 
     socket
+    |> assign(:product_count, map_size(socket.assigns.products_by_id))
+    |> assign(:batch_count, length(inventory))
     |> assign(:page_info, page_info)
     |> stream(:batches, page_info.entries, reset: true)
   end
@@ -207,6 +216,14 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
       nil -> socket.assigns.warehouse_ids
       site_id -> [site_id]
     end
+  end
+
+  defp inventory_batch_count(socket) do
+    site_ids = stock_site_ids(socket)
+
+    socket.assigns.current_scope.organization_id
+    |> Batches.list_batches()
+    |> Enum.count(&in_inventory?(&1, site_ids))
   end
 
   defp in_inventory?(batch, site_ids) do
@@ -294,7 +311,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
   defp money(value), do: "KES #{value}"
 
   defp date_or_dash(nil), do: "—"
-  defp date_or_dash(date), do: Calendar.strftime(date, "%d %b %Y")
+  defp date_or_dash(date), do: ThamaniDawaWeb.TimeFormat.date(date)
 
   defp quantity_with_unit(quantity, _product), do: Products.format_unit_count(quantity)
 
@@ -309,13 +326,14 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
       current_scope={@current_scope}
       current_path={~p"/distributor/products"}
     >
-      <.header icon={if @view == "products", do: "hero-cube", else: "hero-archive-box"}>
-        Inventory
-        <:subtitle>
-          {if @view == "products",
+      <.td_list_page
+        title="Inventory"
+        subtitle={
+          if @view == "products",
             do: "The products this warehouse distributes, and how much of each is on hand.",
-            else: "Batches still in this warehouse."}
-        </:subtitle>
+            else: "Batches still in this warehouse."
+        }
+      >
         <:actions>
           <.button
             :if={@view == "products"}
@@ -326,33 +344,39 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
             <.icon name="hero-plus" class="size-4" /> Add product
           </.button>
         </:actions>
-        <:toolbar>
+        <:tabs>
+          <button
+            id="distributor-products-tab"
+            type="button"
+            class={["td-tab", @view == "products" && "is-active"]}
+            phx-click="set_view"
+            phx-value-view="products"
+            aria-current={@view == "products" && "page"}
+          >
+            Products
+            <.td_count value={@product_count} />
+          </button>
+          <button
+            id="distributor-batches-tab"
+            type="button"
+            class={["td-tab", @view == "batches" && "is-active"]}
+            phx-click="set_view"
+            phx-value-view="batches"
+            aria-current={@view == "batches" && "page"}
+          >
+            Batches
+            <.td_count value={@batch_count} />
+          </button>
+        </:tabs>
+        <:filters>
           <div
             id="distributor-product-toolbar"
-            class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2"
+            class="flex min-w-0 w-full flex-wrap items-center gap-x-3 gap-y-2"
           >
-            <.tab_group>
-              <:tab
-                id="distributor-products-tab"
-                active={@view == "products"}
-                phx_click="set_view"
-                phx_value_view="products"
-              >
-                Products
-              </:tab>
-              <:tab
-                id="distributor-batches-tab"
-                active={@view == "batches"}
-                phx_click="set_view"
-                phx_value_view="batches"
-              >
-                Batches
-              </:tab>
-            </.tab_group>
             <form
               phx-change="search"
               id="distributor-product-search"
-              class="min-w-48 flex-1"
+              class="min-w-64 flex-1"
             >
               <.search_input
                 name="search"
@@ -421,8 +445,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
               </div>
             </div>
           </div>
-        </:toolbar>
-      </.header>
+        </:filters>
 
       <.modal
         :if={@live_action == :new}
@@ -562,6 +585,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
         page={@page_info}
         path={pagination_path(@view, @search, @expiry_filter, @hold_filter)}
       />
+      </.td_list_page>
     </Layouts.distributor_shell>
     """
   end

@@ -3,12 +3,12 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
 
   alias ThamaniDawa.Accounts
   alias ThamaniDawa.Sites
-  alias ThamaniDawa.Sites.Site
   alias ThamaniDawa.StockTakes
   alias ThamaniDawa.StockTakes.StockTake
+  alias ThamaniDawaWeb.CarePortal
   alias ThamaniDawaWeb.SiteScoping
 
-  @inventory_type :medicine
+  defp inventory_type(socket), do: CarePortal.inventory_type(socket.assigns.portal)
 
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
@@ -16,7 +16,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
     sites =
       scope
       |> Accounts.list_sites_for_user()
-      |> Enum.filter(&Site.pharmacy?/1)
+      |> Enum.filter(&CarePortal.site?(socket.assigns.portal, &1))
 
     {:ok,
      socket
@@ -44,7 +44,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
         to_form(
           StockTakes.change_stock_take(%StockTake{}, %{
             requested_by_id: scope.user.id,
-            inventory_type: @inventory_type,
+            inventory_type: inventory_type(socket),
             site_id: default_site_id
           }),
           as: :stock_take
@@ -73,7 +73,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
     attrs =
       attrs
       |> Map.put_new("requested_by_id", to_string(scope.user.id))
-      |> Map.put("inventory_type", to_string(@inventory_type))
+      |> Map.put("inventory_type", to_string(inventory_type(socket)))
 
     changeset =
       %StockTake{}
@@ -86,7 +86,7 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
           {:noreply,
            socket
            |> put_flash(:info, "Stock take started.")
-           |> push_navigate(to: ~p"/pharmacy/stock-takes/#{stock_take.id}")}
+           |> push_navigate(to: CarePortal.stock_take(socket.assigns.portal, stock_take.id))}
 
         {:error, changeset} ->
           {:noreply, assign(socket, form: to_form(changeset, as: :stock_take))}
@@ -122,10 +122,10 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
         nil ->
           org_id
           |> StockTakes.list_stock_takes()
-          |> Enum.filter(&(&1.inventory_type == @inventory_type))
+          |> Enum.filter(&(&1.inventory_type == inventory_type(socket)))
 
         site_id ->
-          StockTakes.list_stock_takes_for_site(org_id, site_id, @inventory_type)
+          StockTakes.list_stock_takes_for_site(org_id, site_id, inventory_type(socket))
       end
 
     stream(socket, :stock_takes, stock_takes, reset: true)
@@ -144,26 +144,30 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.pharmacy_shell
+    <Layouts.care_shell
+      portal={@portal}
       flash={@flash}
       current_scope={@current_scope}
-      current_path="/pharmacy/stock-takes"
+      current_path={CarePortal.stock_takes(@portal)}
     >
-      <.header icon="hero-clipboard-document-list">
-        Stock takes
-        <:subtitle>Count physical inventory and reconcile it with recorded stock.</:subtitle>
+      <.td_list_page
+        title="Stock takes"
+        subtitle="Count physical inventory and reconcile it with recorded stock."
+      >
         <:actions>
-          <.button variant="primary" patch={~p"/pharmacy/stock-takes/new"}>
-            <.icon name="hero-plus" class="size-4" /> New stock take
-          </.button>
+          <.td_button
+            variant="primary"
+            label="New stock take"
+            glyph="plus"
+            patch={CarePortal.stock_takes_new(@portal)}
+          />
         </:actions>
-      </.header>
 
       <.modal
         :if={@live_action == :new}
         id="stock-take-modal"
         show
-        on_cancel={JS.patch(~p"/pharmacy/stock-takes")}
+        on_cancel={JS.patch(CarePortal.stock_takes(@portal))}
       >
         <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
           Start a new stock take
@@ -201,10 +205,10 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
         </:col>
         <:col :let={{_id, take}} label="Notes">{take.notes || "—"}</:col>
         <:col :let={{_id, take}} label="Started">
-          {Calendar.strftime(take.inserted_at, "%d %b %Y")}
+          {ThamaniDawaWeb.TimeFormat.date(take.inserted_at)}
         </:col>
         <:action :let={{_id, take}}>
-          <.button variant="ghost" navigate={~p"/pharmacy/stock-takes/#{take.id}"} class="gap-2">
+          <.button variant="ghost" navigate={CarePortal.stock_take(@portal, take.id)} class="gap-2">
             <.icon
               name={if take.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
               class="size-4"
@@ -218,7 +222,8 @@ defmodule ThamaniDawaWeb.StockTakeLive.Index do
           </.blank_state>
         </:empty_state>
       </.table>
-    </Layouts.pharmacy_shell>
+      </.td_list_page>
+    </Layouts.care_shell>
     """
   end
 end

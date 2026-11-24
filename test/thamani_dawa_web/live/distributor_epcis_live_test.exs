@@ -108,7 +108,8 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
     assert event.id == rejected.id
     assert event.event_id == rejected.event_id
 
-    assert has_element?(view, "#flash-group", "requeued")
+    assert has_element?(view, "#flash-group .td-toast.is-success", "requeued")
+    refute has_element?(view, ".alert-info")
   end
 
   test "resubmitting a blocked event requeues it and clears the blocked reason", %{
@@ -130,7 +131,8 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
     assert event.event_id == blocked.event_id
     assert event.blocked_reason == nil
 
-    assert has_element?(view, "#flash-group", "requeued")
+    assert has_element?(view, "#flash-group .td-toast.is-success", "requeued")
+    refute has_element?(view, ".alert-info")
   end
 
   test "warning events surface their stored warnings", %{conn: conn, distributor: distributor} do

@@ -143,12 +143,10 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
       current_scope={@current_scope}
       current_path="/pharmacy/receive-stock"
     >
-      <.header icon="hero-arrow-down-tray">
-        Receive stock
-        <:subtitle>
-          Confirm dispatched batches at your site by reviewing the delivery.
-        </:subtitle>
-      </.header>
+      <.td_list_page
+        title="Receive stock"
+        subtitle="Confirm dispatched batches at your site by reviewing the delivery."
+      >
 
       <.modal
         :if={@live_action == :receive and not is_nil(@receive_batch)}
@@ -242,6 +240,7 @@ defmodule ThamaniDawaWeb.ReceiveStockLive do
           </.blank_state>
         </:empty_state>
       </.table>
+      </.td_list_page>
     </Layouts.pharmacy_shell>
     """
   end

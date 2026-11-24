@@ -33,12 +33,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert html =~ "Products"
     assert has_element?(lv, "#manufacturer-products", product.gtin)
     assert has_element?(lv, "#manufacturer-products", product.name)
-    # A product with no serials offers Generate serials; View serials appears once serials exist.
+    # No serials yet: Generate serials only. View serials appears once a batch exists.
     refute has_element?(lv, "#product-#{product.id}-serials")
     assert has_element?(lv, "#product-#{product.id}-ssccs")
     assert has_element?(lv, "#product-#{product.id}-add-serial", "Generate serials")
-    assert has_element?(lv, "#manufacturer-number-generated")
-    assert has_element?(lv, "#manufacturer-maximum")
+    refute has_element?(lv, "#manufacturer-number-generated")
+    refute has_element?(lv, "#manufacturer-maximum")
     refute has_element?(lv, "#amount-to-pay")
   end
 
@@ -60,9 +60,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     assert has_element?(lv, "#product-#{product.id}-serial-count", "17")
     assert has_element?(lv, "#product-#{product.id}-serials", "View serials")
-    refute has_element?(lv, "#product-#{product.id}-add-serial")
+    assert has_element?(lv, "#product-#{product.id}-add-serial", "Generate serials")
     assert has_element?(lv, "#product-#{product.id}-sscc-count", "3")
-    assert has_element?(lv, "#manufacturer-number-generated", "20")
+    refute has_element?(lv, "#manufacturer-number-generated")
   end
 
   test "filters by serials and shows the empty and no-match states", %{conn: conn} do
@@ -96,11 +96,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials/new")
 
     assert has_element?(lv, "#serial-wizard-product", product.gtin)
+    assert has_element?(lv, "#manufacturer-serial-modal", "Generate serials")
+    assert has_element?(lv, "#serial-wizard-subtitle", "Choose how this batch leaves the plant.")
     refute has_element?(lv, "#manufacturer-serial-generation-form")
 
     lv |> element("#serial-wizard-mode-stock") |> render_click()
 
     assert has_element?(lv, "#manufacturer-serial-generation-form")
+    assert has_element?(lv, "#serial-wizard-subtitle", "Make to stock")
+    assert has_element?(lv, "#serial-wizard-prev", "Back")
+    assert has_element?(lv, "#manufacturer-serial-generation-form", "Batch number")
     # Step 2 dates are the TD date picker, never the browser's native calendar.
     assert has_element?(lv, ~s(.td-dp [data-dp-input][name="serial_generation[production_date]"]))
     assert has_element?(lv, ~s(.td-dp [data-dp-input][name="serial_generation[expiry_date]"]))
@@ -245,6 +250,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     lv |> element("#serial-wizard-next") |> render_click()
 
+    assert has_element?(lv, "#serial-wizard-subtitle", "Make to order")
+    assert has_element?(lv, "#manufacturer-serial-wizard", "From and To")
+    assert has_element?(lv, "#serial-wizard-submit", "Generate serials & SSCCs")
     assert has_element?(lv, ~s([name="serial_generation[from_gln]"]))
     assert has_element?(lv, "#serial_generation_from_gln-cb")
     assert has_element?(lv, "#serial_generation_from_gln-cb[data-options*='Secondary Plant']")

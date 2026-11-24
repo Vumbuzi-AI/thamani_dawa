@@ -59,9 +59,10 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Show do
   def render(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path="/org/stock-takes">
-      <.header icon="hero-clipboard-document-list">
-        Stock take — {@site.name}
-        <:subtitle>{Phoenix.Naming.humanize(@stock_take.inventory_type)} count details.</:subtitle>
+      <.td_detail_page
+        title={"Stock take — #{@site.name}"}
+        subtitle={"#{Phoenix.Naming.humanize(@stock_take.inventory_type)} count details."}
+      >
         <:actions>
           <.button
             :if={@stock_take.status in [:draft, :pending]}
@@ -82,8 +83,7 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Show do
             <.icon name="hero-arrow-left" class="size-4" /> Stock takes
           </.button>
         </:actions>
-      </.header>
-
+        <:body>
       <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -101,7 +101,7 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Show do
               Started
             </dt>
             <dd class="mt-1 text-sm text-thamani-ink">
-              {Calendar.strftime(@stock_take.inserted_at, "%d %b %Y, %H:%M UTC")}
+              {ThamaniDawaWeb.TimeFormat.datetime(@stock_take.inserted_at)}
             </dd>
           </div>
           <div :if={@stock_take.approved_at}>
@@ -158,6 +158,8 @@ defmodule ThamaniDawaWeb.StockTakeQueueLive.Show do
           </table>
         </div>
       </section>
+        </:body>
+      </.td_detail_page>
     </Layouts.org_shell>
     """
   end

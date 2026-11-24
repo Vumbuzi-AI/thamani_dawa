@@ -1,24 +1,43 @@
 defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
   @moduledoc """
-  Paginated list of primary serials packed under a shipper SSCC. The serials
-  are fetched from the GS1 member API (`get_sscc_contents`), not the local
-  database.
+  Shipper detail. Primary serials come from the GS1 member API
+  (`get_sscc_contents`), not the local database. Print label opens the
+  one shipper-label modal.
   """
 
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Manufacturing
+  alias ThamaniDawa.Manufacturing.Product
+  alias ThamaniDawa.Repo
 
-  @per_page 100
+  @per_page 8
 
   def mount(%{"id" => id}, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
-    sscc = Manufacturing.get_sscc_group!(organization_id, id)
+
+    sscc =
+      organization_id
+      |> Manufacturing.get_sscc_group!(id)
+      |> then(&Manufacturing.ensure_shipper_parties(organization_id, &1))
+
+    product =
+      if sscc.gtin, do: Repo.get_by(Product, organization_id: organization_id, gtin: sscc.gtin)
+
+    batch_count =
+      if sscc.gtin && sscc.batch do
+        {shippers, _} = Manufacturing.list_batch_shippers(organization_id, sscc.gtin, sscc.batch)
+        max(length(shippers), 1)
+      else
+        1
+      end
 
     {:ok,
      socket
-     |> assign(:page_title, "Serials")
+     |> assign(:page_title, "Shipper SSCC")
      |> assign(:sscc, sscc)
+     |> assign(:product, product)
+     |> assign(:batch_count, batch_count)
      |> assign(:serials, [])
      |> assign(:page, 1)
      |> assign(:per_page, @per_page)
@@ -62,10 +81,6 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
     serials |> Enum.drop((page - 1) * @per_page) |> Enum.take(@per_page)
   end
 
-  defp gs1_text(serial) do
-    "(01)#{gtin14(serial)}(10)#{serial.batch || ""}(11)#{date_ai(serial.production_date)}(17)#{date_ai(serial.expiry_date)}(21)#{serial.serial}"
-  end
-
   defp gtin14(serial), do: String.pad_leading(serial.gtin || "", 14, "0")
 
   defp dom_key(serial),
@@ -83,23 +98,39 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
 
   defp error_message(_reason), do: "Couldn't reach GS1 to load serials. Try again shortly."
 
-  defp date_ai(nil), do: ""
-  defp date_ai(date), do: Calendar.strftime(date, "%y%m%d")
+  defp long_date(nil), do: "—"
+  defp long_date(date), do: ThamaniDawaWeb.TimeFormat.date(date)
+
+  defp sgtin(serial), do: "(01)#{gtin14(serial)}(21)#{serial.serial}"
 
   def render(assigns) do
-    serials =
-      if assigns.remote_serials.ok?, do: assigns.remote_serials.result, else: []
+    serials = if assigns.remote_serials.ok?, do: assigns.remote_serials.result, else: []
+    pages = max(ceil(length(serials) / @per_page), 1)
+    page = min(assigns.page, pages)
+    page_serials = page_slice(serials, page)
+    from_index = if serials == [], do: 0, else: (page - 1) * @per_page + 1
+    to_index = min(page * @per_page, length(serials))
+    product_name = (assigns.product && assigns.product.name) || assigns.sscc.gtin
+    close_to = ~p"/manufacturer/sscc/#{assigns.sscc.id}/serials?#{%{return_to: assigns.back_path}}"
 
     assigns =
       assigns
       |> assign(:serials, serials)
-      |> assign(:page_serials, page_slice(serials, assigns.page))
+      |> assign(:page, page)
+      |> assign(:pages, pages)
+      |> assign(:page_serials, page_serials)
+      |> assign(:from_index, from_index)
+      |> assign(:to_index, to_index)
+      |> assign(:product_name, product_name)
+      |> assign(:close_to, close_to)
 
     ~H"""
     <Layouts.manufacturer_shell
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/products"}
+      crumb="Shipper SSCC"
+      crumb_parent={@product_name}
     >
       <.td_back_link
         id="sscc-serials-back"
@@ -108,122 +139,142 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
       />
       <div class="td-idh">
         <div>
-          <h1 class="td-idh-title font-mono">{@sscc.code}</h1>
+          <h1 class="td-idh-title font-mono">
+            {@sscc.code}
+            <.td_badge :if={@sscc.pallet} tone="success" label="On pallet" />
+            <.td_badge :if={!@sscc.pallet} tone="success" label="Packed" />
+          </h1>
           <p class="td-idh-sub">
-            Shipper SSCC<span :if={@sscc.batch}> · Batch <span class="font-mono">{@sscc.batch}</span></span>
-            <span :if={@remote_serials.ok?}> · {length(@serials)} serials</span>
+            Shipper SSCC · {@product_name}<span :if={@sscc.batch}> · batch <span class="font-mono">{@sscc.batch}</span></span>
           </p>
         </div>
         <div class="td-idh-actions">
+          <.td_button
+            :if={@product && @sscc.batch && !@sscc.pallet}
+            id="pack-another-shipper"
+            label="Pack another shipper"
+            navigate={~p"/manufacturer/products/#{@sscc.gtin}/serials/pack?#{%{batch: @sscc.batch, return_to: @back_path}}"}
+          />
+          <.td_button
+            :if={@sscc.pallet}
+            id="sscc-export"
+            glyph="download-simple"
+            label="Export CSV"
+            href={~p"/manufacturer/sscc/#{@sscc.id}/export"}
+          />
           <.td_button
             id="sscc-serials-print-label"
             variant="primary"
             glyph="printer"
             label="Print label"
-            navigate={~p"/manufacturer/sscc/#{@sscc.id}/label"}
+            navigate={~p"/manufacturer/sscc/#{@sscc.id}/label?#{%{return_to: @back_path}}"}
           />
         </div>
       </div>
 
-      <section class="mt-6 overflow-hidden rounded-2xl border border-thamani-stone bg-white shadow-sm">
-        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-thamani-stone bg-thamani-snow px-5 py-4">
-          <div class="flex items-center gap-3">
-            <span class="flex size-10 items-center justify-center rounded-xl bg-thamani-lime/35 text-thamani-forest"><.icon
-              name="hero-qr-code"
-              class="size-5"
-            /></span><div>
-              <p class="text-xs font-bold uppercase tracking-[0.16em] text-thamani-pewter">
-                Primary serials
-              </p><p class="font-mono text-sm font-semibold text-thamani-forest">SSCC {@sscc.code}</p>
+      <div class="td-pack">
+        <div>
+          <div class="td-card">
+            <div class="td-kv-grid is-pad">
+              <div class="td-kv"><span class="td-kv-label">SSCC</span><span class="td-kv-value is-mono">{@sscc.code}</span></div>
+              <div class="td-kv"><span class="td-kv-label">Units</span><span class="td-kv-value">{@sscc.count_of_trade_items}</span></div>
+              <div class="td-kv"><span class="td-kv-label">Batch</span><span class="td-kv-value is-mono">{@sscc.batch}</span></div>
+              <div class="td-kv"><span class="td-kv-label">GTIN</span><span class="td-kv-value is-mono">{@sscc.gtin}</span></div>
+              <div class="td-kv"><span class="td-kv-label">Destination</span><span class="td-kv-value">{@sscc.to_company_name || @sscc.to_gln}</span></div>
+              <div class="td-kv"><span class="td-kv-label">Order</span><span class="td-kv-value">{@sscc.order_number}</span></div>
+              <div class="td-kv"><span class="td-kv-label">Packed</span><span class="td-kv-value">{ThamaniDawaWeb.TimeFormat.datetime(@sscc.inserted_at)} EAT</span></div>
+              <div class="td-kv">
+                <span class="td-kv-label">Pallet</span>
+                <span class="td-kv-value is-mono">{if @sscc.pallet, do: @sscc.pallet.code, else: "Not on a pallet"}</span>
+              </div>
             </div>
           </div>
-          <span class="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-thamani-forest">{length(
-            @serials
-          )} items</span>
-        </div>
-        <div
-          :if={@remote_serials.loading}
-          id="sscc-serials-loading"
-          class="flex items-center gap-2 p-8 text-sm text-thamani-pewter"
-        >
-          <.icon name="hero-arrow-path" class="size-4 animate-spin" /> Loading serials from GS1…
-        </div>
-        <div
-          :if={@remote_serials.failed}
-          id="sscc-serials-error"
-          class="flex flex-wrap items-center justify-between gap-3 p-8 text-sm text-red-700"
-        >
-          <span>{error_message(elem(@remote_serials.failed, 1))}</span>
-          <.button id="retry-sscc-serials" type="button" phx-click="retry">Retry</.button>
-        </div>
-        <div
-          :if={@remote_serials.ok? and @serials == []}
-          id="sscc-serials-empty"
-          class="p-8 text-sm text-thamani-pewter"
-        >
-          GS1 reports no serials packed under this SSCC.
-        </div>
-        <div
-          :if={@remote_serials.ok? and @serials != []}
-          id="sscc-serials"
-          class="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3"
-        >
-          <article
-            :for={serial <- @page_serials}
-            id={"sscc-primary-#{dom_key(serial)}"}
-            class="rounded-xl border border-thamani-lime/60 bg-thamani-lime/10 p-4"
-          >
-            <p class="truncate font-mono text-sm font-semibold text-thamani-forest">
-              {serial.serial}
-            </p>
-            <p class="mt-0.5 text-xs text-thamani-pewter">serial</p>
-            <div class="mt-3 flex items-center gap-3">
-              <canvas
-                id={"sscc-serial-datamatrix-#{dom_key(serial)}"}
-                phx-hook="DataMatrix"
-                phx-update="ignore"
-                data-gs1-text={gs1_text(serial)}
-                class="size-28 shrink-0 bg-white p-1"
-              ></canvas>
-              <dl class="min-w-0 text-xs leading-5 text-thamani-forest">
-                <div>(01) {gtin14(serial)}</div><div>
-                  (10) {serial.batch}
-                </div><div>(17) {date_ai(serial.expiry_date)}</div><div>
-                  (11) {date_ai(serial.production_date)}
-                </div><div class="truncate">(21) {serial.serial}</div>
-              </dl>
-            </div>
-            <div class="mt-4 flex flex-wrap gap-2">
-              <button
-                id={"print-sscc-serial-#{dom_key(serial)}"}
-                type="button"
-                phx-hook="LabelPrint"
-                data-print-target={"#sscc-primary-#{dom_key(serial)}"}
-                class="inline-flex items-center gap-1.5 rounded-lg bg-thamani-forest px-3 py-2 text-xs font-semibold text-white transition hover:bg-thamani-forest/90"
-              ><.icon name="hero-printer" class="size-4" /> Print</button>
-              <button
-                id={"download-sscc-serial-#{dom_key(serial)}"}
-                type="button"
-                phx-hook="LabelSvgDownload"
-                data-role="download-serial-svg"
-                data-serial={serial.serial}
-                data-gs1-text={gs1_text(serial)}
-                data-gtin={serial.gtin}
-                data-batch={serial.batch}
-                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700"
-              ><.icon name="hero-arrow-down-tray" class="size-4" /> Download as SVG</button>
-            </div>
-          </article>
-        </div>
-      </section>
 
-      <div :if={@remote_serials.ok? and @serials != []} class="mt-4 flex items-center justify-between">
-        <.button type="button" phx-click="prev_page" disabled={@page == 1}>Previous</.button>
-        <span class="text-xs text-thamani-pewter">Page {@page}</span>
-        <.button type="button" phx-click="next_page" disabled={length(@page_serials) < @per_page}>
-          Next
-        </.button>
+          <div class="td-card">
+            <div class="td-pad">
+              <h2 class="td-idh-title">Serials in this shipper</h2>
+              <p class="td-note">{length(@serials)} units</p>
+            </div>
+            <div :if={@remote_serials.loading} id="sscc-serials-loading" class="td-note td-pad">
+              Loading serials from GS1…
+            </div>
+            <div :if={@remote_serials.failed} id="sscc-serials-error" class="td-ban is-danger td-pad">
+              <span>{error_message(elem(@remote_serials.failed, 1))}</span>
+              <.td_button id="retry-sscc-serials" label="Retry" phx-click="retry" />
+            </div>
+            <p :if={@remote_serials.ok? and @serials == []} id="sscc-serials-empty" class="td-note td-pad">
+              GS1 reports no serials packed under this SSCC.
+            </p>
+            <table :if={@remote_serials.ok? and @serials != []} id="sscc-serials" class="td-rows is-static">
+              <thead>
+                <tr><th>#</th><th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>State</th></tr>
+              </thead>
+              <tbody>
+                <tr :for={{serial, index} <- Enum.with_index(@page_serials, @from_index)} id={"sscc-primary-#{dom_key(serial)}"}>
+                  <td>{index}</td>
+                  <td class="font-mono">{sgtin(serial)}</td>
+                  <td class="font-mono">{serial.batch}</td>
+                  <td>{long_date(serial.expiry_date)}</td>
+                  <td><.td_badge tone="success" label="Packed" /></td>
+                </tr>
+              </tbody>
+            </table>
+            <div :if={@remote_serials.ok? and @serials != []} class="td-pad" style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="td-note">Showing {@from_index} to {@to_index} of {length(@serials)}</span>
+              <div style="display:flex;gap:8px;">
+                <.td_button id="sscc-page-prev" label="Previous" disabled={@page <= 1} phx-click="prev_page" />
+                <.td_button id="sscc-page-next" label="Next" disabled={@page >= @pages} phx-click="next_page" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="td-pack-side">
+          <div class="td-card td-pad">
+            <h2 class="td-idh-title">Shipper label</h2>
+            <p class="td-note">100 × 150 mm. Print it from the top right.</p>
+            <p><strong>{@sscc.to_company_name}</strong></p>
+            <p class="font-mono">{@sscc.code}</p>
+            <p class="font-mono">{@sscc.gtin}</p>
+            <p>{@sscc.batch} · {@sscc.count_of_trade_items} units</p>
+          </div>
+          <div :if={@sscc.pallet} class="td-card td-pad" id="sscc-on-pallet">
+            <h2 class="td-idh-title">On pallet {@sscc.pallet.code}</h2>
+            <p class="td-note">Packed with other shippers for {@sscc.to_company_name}.</p>
+            <.td_button
+              id="open-pallet"
+              label="Open pallet"
+              navigate={~p"/manufacturer/aggregations/pallets/#{@sscc.pallet.id}"}
+            />
+          </div>
+          <div :if={!@sscc.pallet} class="td-card td-pad" id="sscc-next-pallet">
+            <h2 class="td-idh-title">Next: build a pallet</h2>
+            <p class="td-note">
+              Scan this shipper and the others from {@sscc.batch} onto one pallet SSCC, then ship the pallet.
+            </p>
+            <.td_button
+              id="build-pallet"
+              label="Build a pallet"
+              glyph="stack"
+              navigate={~p"/manufacturer/aggregations/pallets/new?#{%{sscc: @sscc.id, return_to: ~p"/manufacturer/sscc/#{@sscc.id}/serials"}}"}
+            />
+            <.td_button
+              :if={@product}
+              id="view-batch-serials"
+              label="View serials"
+              navigate={~p"/manufacturer/products/#{@sscc.gtin}/serials?#{%{batch: @sscc.batch, view: "serials", return_to: @back_path}}"}
+            />
+          </div>
+        </aside>
       </div>
+
+      <ThamaniDawaWeb.ManufacturerSsccLive.Label.modal
+        :if={@live_action == :label}
+        sscc={@sscc}
+        product_name={@product_name}
+        batch_count={@batch_count}
+        on_cancel={JS.navigate(@close_to)}
+      />
     </Layouts.manufacturer_shell>
     """
   end

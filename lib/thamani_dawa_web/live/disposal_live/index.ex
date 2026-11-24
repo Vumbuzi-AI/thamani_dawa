@@ -6,9 +6,10 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
   alias ThamaniDawa.InventoryDisposals.InventoryDisposal
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
+  alias ThamaniDawaWeb.CarePortal
   alias ThamaniDawaWeb.SiteScoping
 
-  @inventory_type :medicine
+  defp inventory_type(socket), do: CarePortal.inventory_type(socket.assigns.portal)
 
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
@@ -16,7 +17,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
     sites =
       scope
       |> Accounts.list_sites_for_user()
-      |> Enum.filter(&Site.pharmacy?/1)
+      |> Enum.filter(&CarePortal.site?(socket.assigns.portal, &1))
 
     {:ok,
      socket
@@ -51,7 +52,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
         to_form(
           InventoryDisposals.change_disposal(%InventoryDisposal{}, %{
             requested_by_id: scope.user.id,
-            inventory_type: @inventory_type,
+            inventory_type: inventory_type(socket),
             site_id: default_site_id
           }),
           as: :disposal
@@ -64,7 +65,8 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
   end
 
   def handle_event("switch_kind", %{"tab" => kind}, socket) when kind in ["expiry", "returned"] do
-    {:noreply, push_patch(socket, to: kind_path(socket.assigns.live_action, kind))}
+    {:noreply,
+     push_patch(socket, to: kind_path(socket.assigns.portal, socket.assigns.live_action, kind))}
   end
 
   def handle_event("validate", %{"disposal" => attrs}, socket) do
@@ -84,7 +86,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
     attrs =
       attrs
       |> Map.put_new("requested_by_id", to_string(scope.user.id))
-      |> Map.put("inventory_type", to_string(@inventory_type))
+      |> Map.put("inventory_type", to_string(inventory_type(socket)))
       |> force_locked_site(socket.assigns.sites, scope)
 
     changeset =
@@ -101,8 +103,8 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
            |> push_navigate(
                to:
                  ThamaniDawaWeb.ReturnTo.with_query(
-                   ~p"/pharmacy/disposals/#{disposal.id}",
-                   kind_path(:index, socket.assigns.list_kind)
+                   CarePortal.disposal(socket.assigns.portal, disposal.id),
+                   kind_path(socket.assigns.portal, :index, socket.assigns.list_kind)
                  )
              )}
 
@@ -141,7 +143,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
           org_id
           |> InventoryDisposals.list_disposals()
           |> Enum.filter(
-            &(&1.inventory_type == @inventory_type and
+            &(&1.inventory_type == inventory_type(socket) and
                 &1.kind == kind_atom(socket.assigns.list_kind))
           )
 
@@ -150,7 +152,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
             org_id,
             site_id,
             kind_atom(socket.assigns.list_kind),
-            @inventory_type
+            inventory_type(socket)
           )
       end
 
@@ -186,10 +188,10 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
   defp kind_atom("returned"), do: :returned
   defp kind_atom(_kind), do: :expiry
 
-  defp kind_path(:new, kind), do: ~p"/pharmacy/disposals/new?#{%{kind: kind}}"
-  defp kind_path(_live_action, kind), do: ~p"/pharmacy/disposals?#{%{kind: kind}}"
+  defp kind_path(portal, :new, kind), do: CarePortal.disposals_new(portal, kind)
+  defp kind_path(portal, _live_action, kind), do: CarePortal.disposals_index(portal, kind)
 
-  defp new_path(kind), do: ~p"/pharmacy/disposals/new?#{%{kind: kind}}"
+  defp new_path(portal, kind), do: CarePortal.disposals_new(portal, kind)
 
   defp empty_title("returned"), do: "No supplier returns yet"
   defp empty_title(_kind), do: "No expiry write-offs yet"
@@ -199,20 +201,23 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
 
   def render(assigns) do
     ~H"""
-    <Layouts.pharmacy_shell
+    <Layouts.care_shell
+      portal={@portal}
       flash={@flash}
       current_scope={@current_scope}
-      current_path="/pharmacy/disposals"
+      current_path={CarePortal.disposals(@portal)}
     >
-      <.header icon="hero-trash">
-        Disposals
-        <:subtitle>Stock leaving this site, sent for approval.</:subtitle>
-        <:actions :if={@disposal_count > 0}>
-          <.button id="new-disposal" variant="primary" patch={new_path(@list_kind)}>
-            <.icon name="hero-plus" class="size-4" /> New disposal
-          </.button>
+      <.td_list_page title="Disposals" subtitle="Stock leaving this site, sent for approval.">
+        <:actions>
+          <.td_button
+            :if={@disposal_count > 0}
+            id="new-disposal"
+            variant="primary"
+            label="New disposal"
+            glyph="plus"
+            patch={new_path(@portal, @list_kind)}
+          />
         </:actions>
-      </.header>
 
       <.tab_group class="mb-5">
         <:tab
@@ -237,7 +242,7 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
         :if={@live_action == :new}
         id="disposal-modal"
         show
-        on_cancel={JS.patch(kind_path(:index, @list_kind))}
+        on_cancel={JS.patch(kind_path(@portal, :index, @list_kind))}
       >
         <h2 class="text-2xl font-medium tracking-tight text-thamani-forest">
           {if @list_kind == "returned",
@@ -274,10 +279,10 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
           <.status_badge status={d.status} />
         </:col>
         <:col :let={{_id, d}} label="Started">
-          {Calendar.strftime(d.inserted_at, "%d %b %Y")}
+          {ThamaniDawaWeb.TimeFormat.date(d.inserted_at)}
         </:col>
         <:action :let={{_id, d}}>
-          <.button variant="ghost" navigate={ThamaniDawaWeb.ReturnTo.with_query(~p"/pharmacy/disposals/#{d.id}", kind_path(:index, @list_kind))} class="gap-2">
+          <.button variant="ghost" navigate={ThamaniDawaWeb.ReturnTo.with_query(CarePortal.disposal(@portal, d.id), kind_path(@portal, :index, @list_kind))} class="gap-2">
             <.icon
               name={if d.status == :draft, do: "hero-pencil-square", else: "hero-eye"}
               class="size-4"
@@ -295,13 +300,14 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
                 id="new-disposal"
                 variant="primary"
                 label={if @list_kind == "returned", do: "Start a supplier return", else: "Start an expiry write-off"}
-                patch={new_path(@list_kind)}
+                patch={new_path(@portal, @list_kind)}
               />
             </div>
           </div>
         </:empty_state>
       </.table>
-    </Layouts.pharmacy_shell>
+      </.td_list_page>
+    </Layouts.care_shell>
     """
   end
 end

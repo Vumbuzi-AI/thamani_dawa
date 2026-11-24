@@ -433,7 +433,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
 
   defp display_filter_date(value) when is_binary(value) and value != "" do
     case Date.from_iso8601(value) do
-      {:ok, date} -> Calendar.strftime(date, "%-d %b %Y")
+      {:ok, date} -> ThamaniDawaWeb.TimeFormat.date(date)
       _ -> nil
     end
   end
@@ -830,7 +830,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
                     label="Date of birth"
                     value={
                       if patient.date_of_birth,
-                        do: Calendar.strftime(patient.date_of_birth, "%d %b %Y"),
+                        do: ThamaniDawaWeb.TimeFormat.date(patient.date_of_birth),
                         else: "—"
                     }
                   />

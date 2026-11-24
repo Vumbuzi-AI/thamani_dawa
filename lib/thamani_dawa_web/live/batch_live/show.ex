@@ -68,21 +68,22 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
   def render(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/products"}>
-      <.header>
-        Batch {@batch.batch_no}
-        <:subtitle>{product_name(@batch.product)} · {@batch.site.name}</:subtitle>
+      <.td_detail_page
+        title={"Batch #{@batch.batch_no}"}
+        subtitle={"#{product_name(@batch.product)} · #{@batch.site.name}"}
+      >
         <:actions>
-          <.button
-            type="button"
-            variant="primary"
-            onclick="window.print()"
-            class="no-print flex items-center gap-1.5"
-          >
-            <.icon name="hero-printer" class="w-4 h-4" /> Print Data Matrix
-          </.button>
+          <span class="no-print">
+            <.td_button
+              type="button"
+              variant="primary"
+              label="Print Data Matrix"
+              glyph="printer"
+              onclick="window.print()"
+            />
+          </span>
         </:actions>
-      </.header>
-
+        <:body>
       <.batch_label_card batch={@batch} class="my-6" />
 
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 py-4 border-b border-base-200 text-sm mb-6">
@@ -120,10 +121,10 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
         </div>
       </div>
 
-      <.header variant="plain" class="mt-6">
-        History
-        <:subtitle>Everything that has touched this batch's stock, newest first</:subtitle>
-      </.header>
+      <.td_card_header
+        title="History"
+        subtitle="Everything that has touched this batch's stock, newest first"
+      />
       <.table id="batch-timeline" rows={@timeline}>
         <:col :let={event} label="Event">{event.label}</:col>
         <:col :let={event} label="Detail">{event.detail}</:col>
@@ -134,6 +135,8 @@ defmodule ThamaniDawaWeb.BatchLive.Show do
           </.blank_state>
         </:empty_state>
       </.table>
+        </:body>
+      </.td_detail_page>
     </Layouts.org_shell>
     """
   end

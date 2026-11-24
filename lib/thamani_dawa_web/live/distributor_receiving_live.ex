@@ -1969,12 +1969,12 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
     end)
   end
 
-  defp format_group_expiry(%Date{} = date), do: Calendar.strftime(date, "%d %b %Y")
+  defp format_group_expiry(%Date{} = date), do: ThamaniDawaWeb.TimeFormat.date(date)
   defp format_group_expiry(nil), do: "—"
 
   defp format_group_expiry(other) do
     case Date.from_iso8601(to_string(other)) do
-      {:ok, date} -> Calendar.strftime(date, "%d %b %Y")
+      {:ok, date} -> ThamaniDawaWeb.TimeFormat.date(date)
       _ -> to_string(other)
     end
   end
@@ -2112,7 +2112,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           </div>
         </div>
         <label class="group inline-flex w-fit shrink-0 cursor-pointer items-center rounded-full border border-thamani-forest bg-td-surface px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-thamani-forest focus-within:ring-2 focus-within:ring-thamani-accent focus-within:ring-offset-2">
-          <span class="text-thamani-forest group-hover:text-white">
+          <span class="text-thamani-forest group-hover:text-thamani-on-accent">
             {if @upload.max_entries == 1 and @saved_attachments != [],
               do: "Replace file",
               else: "Choose file#{if @upload.max_entries > 1, do: "s"}"}
@@ -2297,7 +2297,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
               Verifying&hellip;
             </p>
           <% {:matched, resolved} -> %>
-            <div class="rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-thamani-forest">
+            <div class="rounded-lg bg-td-accent-tint px-3 py-2.5 text-xs font-semibold text-thamani-forest">
               <p class="inline-flex items-center gap-1.5">
                 <.icon name="hero-check-circle" class="size-4" /> Verified · {resolved.company}
               </p>
@@ -2306,13 +2306,13 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
           <% {:invalid, message} -> %>
             <p
               id="origin-gln-error"
-              class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800"
+              class="inline-flex items-center gap-1.5 rounded-lg bg-td-danger-tint px-3 py-2 text-xs font-semibold text-td-danger"
             >
               <.icon name="hero-exclamation-triangle" class="size-4 shrink-0" />
               {message}
             </p>
           <% :same_receiving_site -> %>
-            <p class="inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+            <p class="inline-flex items-center gap-1.5 rounded-lg bg-td-danger-tint px-3 py-2 text-xs font-semibold text-td-danger">
               <.icon name="hero-exclamation-triangle" class="size-4" />
               This is the GLN for the site receiving this delivery. Enter the GLN of the sending
               site or supplier instead.

@@ -47,9 +47,10 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Show do
   def render(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path="/org/requisitions">
-      <.header icon="hero-clipboard-document-list">
-        {@requisition.number}
-        <:subtitle>Stock request details, approval and fulfillment history.</:subtitle>
+      <.td_detail_page
+        title={@requisition.number}
+        subtitle="Stock request details, approval and fulfillment history."
+      >
         <:actions>
           <.button
             :if={@requisition.status == :pending}
@@ -69,8 +70,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Show do
             <.icon name="hero-arrow-left" class="size-4" /> Requisitions
           </.button>
         </:actions>
-      </.header>
-
+        <:body>
       <section class="mt-5 rounded-2xl border border-thamani-stone bg-td-surface p-5 sm:p-6">
         <dl class="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -99,7 +99,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Show do
               Requested
             </dt>
             <dd class="mt-1 text-sm text-thamani-ink">
-              {Calendar.strftime(@requisition.inserted_at, "%d %b %Y, %H:%M UTC")}
+              {ThamaniDawaWeb.TimeFormat.datetime(@requisition.inserted_at)}
             </dd>
           </div>
           <div :if={@requisition.reviewed_at}>
@@ -113,7 +113,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Show do
               Reviewed
             </dt>
             <dd class="mt-1 text-sm text-thamani-ink">
-              {Calendar.strftime(@requisition.reviewed_at, "%d %b %Y, %H:%M UTC")}
+              {ThamaniDawaWeb.TimeFormat.datetime(@requisition.reviewed_at)}
             </dd>
           </div>
         </dl>
@@ -192,6 +192,8 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Show do
           </div>
         <% end %>
       </section>
+        </:body>
+      </.td_detail_page>
     </Layouts.org_shell>
     """
   end

@@ -149,6 +149,14 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
     |> Decimal.to_string(:normal)
   end
 
+  defp payment_subtitle(:prepay, charge) do
+    "Tiered pricing applies to the whole bundle. #{Pricing.rate_label(:prepay, charge.quantity)}."
+  end
+
+  defp payment_subtitle(_action, _charge) do
+    "Billed at #{Pricing.rate_label(:flex)} for every serial generated this cycle."
+  end
+
   def render(assigns) do
     ~H"""
     <Layouts.distributor_shell
@@ -156,16 +164,12 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
       current_scope={@current_scope}
       current_path={~p"/distributor/billing"}
     >
-      <.header icon="hero-credit-card" back={~p"/distributor/billing"}>
-        {@page_title}
-        <:subtitle>
-          <%= if @live_action == :prepay do %>
-            Tiered pricing applies to the whole bundle. {Pricing.rate_label(:prepay, @charge.quantity)}.
-          <% else %>
-            Billed at {Pricing.rate_label(:flex)} for every serial generated this cycle.
-          <% end %>
-        </:subtitle>
-      </.header>
+      <.td_detail_page
+        title={@page_title}
+        subtitle={payment_subtitle(@live_action, @charge)}
+        back={~p"/distributor/billing"}
+      >
+        <:body>
 
       <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section class="rounded-2xl ff-surface-card p-5 sm:p-6">
@@ -308,6 +312,8 @@ defmodule ThamaniDawaWeb.DistributorBillingLive.Payment do
           <% end %>
         </aside>
       </div>
+        </:body>
+      </.td_detail_page>
     </Layouts.distributor_shell>
     """
   end

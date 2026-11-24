@@ -208,8 +208,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
         </:actions>
         <.td_key_value label="GTIN" value={@product.gtin} mono />
         <.td_key_value label="Description" value={@product.description} />
-      </.td_detail_page>
-
+        <:body>
       <section>
         <.td_card_header title="Batches" />
         <.td_data_table
@@ -217,12 +216,22 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
           rows={@batches}
           row_id={fn {batch, _} -> "manufacturer-batch-#{batch.id}" end}
         >
-          <:col :let={{batch, _serial_count}} label="Batch no.">{batch.batch_no}</:col>
+          <:col :let={{batch, serial_count}} label="Batch no.">
+            <.td_pid id={"manufacturer-batch-#{batch.id}-peek"} label={batch.batch_no} mono>
+              <:peek>
+                <.td_peek kind="Batch" title={batch.batch_no} subtitle={@product.name} icon="stack">
+                  <:row label="Production">{ThamaniDawaWeb.TimeFormat.date(batch.production_date)}</:row>
+                  <:row label="Expiry">{ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}</:row>
+                  <:row label="Serials">{serial_count}</:row>
+                </.td_peek>
+              </:peek>
+            </.td_pid>
+          </:col>
           <:col :let={{batch, _serial_count}} label="Production">
-            {Calendar.strftime(batch.production_date, "%d %b %Y")}
+            {ThamaniDawaWeb.TimeFormat.date(batch.production_date)}
           </:col>
           <:col :let={{batch, _serial_count}} label="Expiry">
-            {Calendar.strftime(batch.expiry_date, "%d %b %Y")}
+            {ThamaniDawaWeb.TimeFormat.date(batch.expiry_date)}
           </:col>
           <:col :let={{_batch, serial_count}} label="Serials">{serial_count}</:col>
           <:empty>
@@ -264,8 +273,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
                 <div>
                   <p class="text-xs text-thamani-pewter">Produced / Expires</p>
                   <p>
-                    {sscc.production_date && Calendar.strftime(sscc.production_date, "%d %b %Y")} – {sscc.expiry_date &&
-                      Calendar.strftime(sscc.expiry_date, "%d %b %Y")}
+                    {sscc.production_date && ThamaniDawaWeb.TimeFormat.date(sscc.production_date)} – {sscc.expiry_date &&
+                      ThamaniDawaWeb.TimeFormat.date(sscc.expiry_date)}
                   </p>
                 </div>
                 <div class="flex flex-wrap items-center gap-2 sm:justify-end">
@@ -296,6 +305,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
           />
         </div>
       </section>
+        </:body>
+      </.td_detail_page>
 
       <.td_overlay_form
         :if={@live_action == :create_sscc}

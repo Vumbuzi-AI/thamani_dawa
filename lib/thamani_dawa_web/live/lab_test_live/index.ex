@@ -526,15 +526,11 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell flash={@flash} current_scope={@current_scope} current_path={~p"/lab/tests"}>
-      <.header icon="hero-beaker">
-        Test catalog
-        <:subtitle>Search, filter, and manage your lab test catalog.</:subtitle>
+      <.td_list_page title="Test catalog" subtitle="Search, filter, and manage your lab test catalog.">
         <:actions>
-          <.button variant="primary" patch={~p"/lab/tests/new"}>
-            <.icon name="hero-plus" class="size-4" /> New test
-          </.button>
+          <.td_button variant="primary" label="New test" glyph="plus" patch={~p"/lab/tests/new"} />
         </:actions>
-        <:toolbar>
+        <:filters>
           <form phx-change="search" class="flex-1" id="search-form">
             <.search_input name="search" value={@search} placeholder="Search by name or category" />
           </form>
@@ -569,8 +565,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
               clear={JS.push("clear_chip", value: %{"field" => chip.field})}
             />
           </.filter_drawer>
-        </:toolbar>
-      </.header>
+        </:filters>
 
       <.modal
         :if={@live_action in [:new, :edit]}
@@ -831,6 +826,7 @@ defmodule ThamaniDawaWeb.LabTestLive.Index do
       </.table>
 
       <.pagination page={@page_info} path={pagination_path(@search, @filters)} />
+      </.td_list_page>
     </Layouts.lab_shell>
     """
   end

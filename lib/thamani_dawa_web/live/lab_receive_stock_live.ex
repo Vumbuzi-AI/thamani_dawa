@@ -385,14 +385,15 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
       current_scope={@current_scope}
       current_path={~p"/lab/receive-stock"}
     >
-      <.header icon="hero-arrow-down-tray">
-        Receive stock / consumables
-        <:subtitle>
-          {if @direct_receipt?,
+      <.td_detail_page
+        title="Receive stock / consumables"
+        subtitle={
+          if @direct_receipt?,
             do: "Record lab consumables directly at #{@direct_receipt_site.name}.",
-            else: "Confirm dispatched batches at your site by reviewing the delivery."}
-        </:subtitle>
-      </.header>
+            else: "Confirm dispatched batches at your site by reviewing the delivery."
+        }
+      >
+        <:body>
 
       <section
         :if={@direct_receipt?}
@@ -649,6 +650,8 @@ defmodule ThamaniDawaWeb.LabReceiveStockLive do
           Approve receipt
         </.button>
       </div>
+        </:body>
+      </.td_detail_page>
     </Layouts.lab_shell>
     """
   end

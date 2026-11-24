@@ -78,10 +78,10 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Index do
       current_scope={@current_scope}
       current_path={~p"/manufacturer/shipments"}
     >
-      <.header icon="hero-truck">
-        Manufacturer shipments
-        <:subtitle>Dispatch packed SSCCs and report the EPCIS shipping event.</:subtitle>
-      </.header>
+      <.td_list_page
+        title="Manufacturer shipments"
+        subtitle="Dispatch packed SSCCs and report the EPCIS shipping event."
+      >
 
       <section
         id="new-manufacturer-shipment"
@@ -151,6 +151,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Index do
           </:col>
         </.table>
       </section>
+      </.td_list_page>
     </Layouts.manufacturer_shell>
     """
   end

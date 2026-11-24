@@ -760,12 +760,11 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
       </Layouts.app>
     <% else %>
       <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={~p"/org/team"}>
-        <.td_page_header title="Team" subtitle="Search, filter, and manage your team.">
+        <.td_list_page title="Team" subtitle="Search, filter, and manage your team.">
           <:actions>
             <.td_button variant="primary" label="Invite staff" glyph="plus" patch={~p"/org/team/new"} />
           </:actions>
-        </.td_page_header>
-        <div class="flex items-center gap-3" style="margin: 0 0 16px">
+          <:filters>
             <form phx-change="search" class="flex-1" id="search-form">
               <.search_input name="search" value={@search} placeholder="Search by name or email" />
             </form>
@@ -809,21 +808,19 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
                 clear={JS.push("clear_chip", value: %{"field" => chip.field})}
               />
             </.filter_drawer>
-        </div>
+          </:filters>
 
-        <.modal
+        <.td_overlay_form
           :if={@live_action == :new}
-          id="invite-modal"
-          show
+          id="invite"
+          title="Invite a staff member"
+          submit="Send invite"
           on_cancel={
             if @back_path in [~p"/org/dashboard", ~p"/onboarding"],
               do: JS.navigate(@back_path),
               else: JS.patch(@back_path)
           }
         >
-          <h2 class="text-2xl font-medium tracking-tight text-thamani-forest mb-4">
-            Invite a staff member
-          </h2>
           <form id="invite-form" phx-submit="save" phx-change="form_change">
             <.input field={@form[:name]} label="Name" required />
             <.input field={@form[:email]} type="email" label="Email" required />
@@ -846,11 +843,8 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
               <.icon name="hero-information-circle" class="size-4 shrink-0 text-thamani-forest" />
               <span>Admins automatically have organization-wide access across all sites.</span>
             </div>
-            <div class="mt-4">
-              <.button variant="primary" class="w-full">Send invite</.button>
-            </div>
           </form>
-        </.modal>
+        </.td_overlay_form>
 
         <.td_modal
           :if={@live_action == :edit}
@@ -1001,31 +995,19 @@ defmodule ThamaniDawaWeb.TeamLive.Index do
 
         <.pagination page={@page_info} path={~p"/org/team"} />
 
-        <.td_modal
+        <.td_confirm
           :if={@confirming_user}
           id="deactivate-confirm"
-          show
           title="Deactivate this account?"
           subtitle={@confirming_user.name}
+          body="They lose access straight away. You can reactivate later."
+          confirm="Deactivate"
+          confirm_click="toggle_active"
+          confirm_id={"btn-toggle-active-user-#{@confirming_user.id}"}
+          confirm_value_id={@confirming_user.id}
           on_cancel={JS.push("cancel_deactivate")}
-        >
-          <:body>
-            <p class="td-note">
-              They lose access straight away. You can reactivate later.
-            </p>
-          </:body>
-          <:footer>
-            <.td_button type="button" variant="secondary" label="Cancel" phx-click="cancel_deactivate" />
-            <.td_button
-              id={"btn-toggle-active-user-#{@confirming_user.id}"}
-              type="button"
-              variant="danger-confirm"
-              label="Deactivate"
-              phx-click="toggle_active"
-              phx-value-id={@confirming_user.id}
-            />
-          </:footer>
-        </.td_modal>
+        />
+        </.td_list_page>
       </Layouts.org_shell>
     <% end %>
     """

@@ -18,7 +18,8 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationDashboardTest do
     {:ok, view, _html} = live(conn, ~p"/manufacturer/aggregations")
 
     assert has_element?(view, "#add-sscc", "Add SSCC")
-    assert has_element?(view, "#create-pallet", "Group shippers")
+    assert has_element?(view, "#build-pallet", "Build a pallet")
+    assert has_element?(view, "#create-pallet", "Build a pallet")
     assert has_element?(view, "#aggregation-pallets-empty")
     assert has_element?(view, "#aggregation-shippers-empty")
 

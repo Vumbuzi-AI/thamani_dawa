@@ -178,12 +178,12 @@ defmodule ThamaniDawaWeb.DistributorCaseLive do
       current_scope={@current_scope}
       current_path={~p"/distributor/receiving"}
     >
-      <.header icon="hero-cube" back={true}>
-        Break case
-        <:subtitle>
-          {@unit.sscc} · {@unit.site && @unit.site.name}
-        </:subtitle>
-      </.header>
+      <.td_detail_page
+        title="Break case"
+        subtitle={"#{@unit.sscc} · #{@unit.site && @unit.site.name}"}
+        back={true}
+      >
+        <:body>
 
       <section
         :if={@minted != []}
@@ -317,7 +317,7 @@ defmodule ThamaniDawaWeb.DistributorCaseLive do
                       phx-click="remove_shipper"
                       phx-value-batch_id={line.id}
                       phx-value-row_id={row.id}
-                      class="rounded-md p-1 text-thamani-subtle transition hover:bg-red-50 hover:text-red-700"
+                      class="rounded-md p-1 text-thamani-subtle transition hover:bg-td-danger-tint hover:text-td-danger"
                       aria-label={"Remove sub-shipper #{row.id}"}
                     >
                       <.icon name="hero-trash" class="size-4" />
@@ -365,6 +365,8 @@ defmodule ThamaniDawaWeb.DistributorCaseLive do
           </div>
         </.form>
       </section>
+        </:body>
+      </.td_detail_page>
     </Layouts.distributor_shell>
     """
   end

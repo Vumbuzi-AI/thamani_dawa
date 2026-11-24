@@ -5,7 +5,49 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    {:ok, load(socket, id)}
+    {:ok, socket |> load(id) |> assign(:confirming?, false)}
+  end
+
+  def handle_event("open_dispatch", _params, socket) do
+    {:noreply, assign(socket, :confirming?, true)}
+  end
+
+  def handle_event("cancel_dispatch", _params, socket) do
+    {:noreply, assign(socket, :confirming?, false)}
+  end
+
+  def handle_event("dispatch", _params, socket) do
+    scope = socket.assigns.current_scope
+    id = socket.assigns.shipment.id
+
+    result =
+      case socket.assigns.shipment.status do
+        "draft" ->
+          with {:ok, _} <- Manufacturing.submit_shipment(scope.organization_id, id) do
+            Manufacturing.approve_shipment(scope.organization_id, scope.user, id)
+          end
+
+        "submitted" ->
+          Manufacturing.approve_shipment(scope.organization_id, scope.user, id)
+
+        status ->
+          {:error, {:invalid_state, status}}
+      end
+
+    case result do
+      {:ok, shipment} ->
+        {:noreply,
+         socket
+         |> assign(:shipment, shipment)
+         |> assign(:confirming?, false)
+         |> put_flash(:info, "Shipment dispatched.")}
+
+      {:error, {:invalid_state, "approved"}} ->
+        {:noreply, put_flash(socket, :info, "This shipment has already been dispatched.")}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, confirming?: false) |> put_flash(:error, "Shipment could not be dispatched.")}
+    end
   end
 
   @impl true
@@ -59,29 +101,27 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
       current_scope={@current_scope}
       current_path={~p"/manufacturer/shipments"}
     >
-      <.header icon="hero-truck" back={~p"/manufacturer/shipments"}>
-        {@shipment.reference}
-        <:subtitle>
-          Order {@shipment.order_number} · {@shipment.reference} · {length(@shipment.shipper_ssccs)} shippers
-        </:subtitle>
+      <.td_back_link id="packed-shipment-back" to={~p"/manufacturer/shipments"} label="Back to Shipments" />
+      <.td_page_header
+        title={@shipment.reference}
+        subtitle={"Order #{@shipment.order_number} · #{length(@shipment.shipper_ssccs)} shippers"}
+      >
         <:actions>
-          <.button
-            :if={@shipment.status == "draft"}
-            id="submit-manufacturer-shipment"
-            phx-click="submit"
-          >
-            <.icon name="hero-paper-airplane" class="size-4" /> Submit for review
-          </.button>
-          <.button
-            :if={@shipment.status == "submitted"}
-            id="approve-manufacturer-shipment"
-            phx-click="approve"
-            data-confirm="Approve and dispatch this shipment?"
-          >
-            <.icon name="hero-check" class="size-4" /> Approve shipment
-          </.button>
+          <.td_button
+            :if={@shipment.status in ["draft", "submitted"]}
+            id="dispatch-shipment"
+            variant="primary"
+            label="Dispatch shipment"
+            phx-click="open_dispatch"
+          />
+          <.td_button
+            :if={pallet_id(@shipment)}
+            id="packed-shipment-pallet"
+            label="Pallet"
+            navigate={~p"/manufacturer/aggregations/pallets/#{pallet_id(@shipment)}"}
+          />
         </:actions>
-      </.header>
+      </.td_page_header>
 
       <div class="mt-4"><.shipment_status_badge status={@shipment.status} /></div>
 
@@ -113,7 +153,35 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
           </ul>
         </section>
       </div>
+
+      <.td_modal
+        :if={@confirming?}
+        id="dispatch-shipment-modal"
+        show
+        title="Dispatch shipment"
+        subtitle={@shipment.reference}
+        on_cancel={JS.push("cancel_dispatch")}
+      >
+        <:body>
+          <p class="td-note">
+            This dispatches {@shipment.reference} for order {@shipment.order_number}. It does not create another shipment.
+          </p>
+        </:body>
+        <:footer>
+          <.td_button label="Cancel" phx-click="cancel_dispatch" />
+          <.td_button
+            id="confirm-dispatch"
+            variant="primary"
+            label="Dispatch shipment"
+            phx-click="dispatch"
+          />
+        </:footer>
+      </.td_modal>
     </Layouts.manufacturer_shell>
     """
+  end
+
+  defp pallet_id(shipment) do
+    Enum.find_value(shipment.shipper_ssccs, fn sscc -> sscc.pallet && sscc.pallet.id end)
   end
 end

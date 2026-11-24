@@ -688,7 +688,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
   defp shipment_left_on(shipment) do
     case shipment.approved_at || shipment.inserted_at do
       nil -> "—"
-      datetime -> Calendar.strftime(datetime, "%d %b %Y")
+      datetime -> ThamaniDawaWeb.TimeFormat.date(datetime)
     end
   end
 
@@ -1409,7 +1409,7 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
                   </p>
                 </div>
                 <label class="group inline-flex cursor-pointer items-center rounded-full border border-thamani-forest bg-td-surface px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-thamani-forest">
-                  <span class="text-thamani-forest group-hover:text-white">Choose files</span>
+                  <span class="text-thamani-forest group-hover:text-thamani-on-accent">Choose files</span>
                   <.live_file_input upload={@uploads.return_documents} class="sr-only" />
                 </label>
               </div>

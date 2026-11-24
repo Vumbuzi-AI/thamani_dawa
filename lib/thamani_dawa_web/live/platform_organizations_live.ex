@@ -53,7 +53,7 @@ defmodule ThamaniDawaWeb.PlatformOrganizationsLive do
   defp status(%{is_active: false}), do: :inactive
 
   defp last_activity(nil), do: "No audited activity"
-  defp last_activity(timestamp), do: Calendar.strftime(timestamp, "%d %b %Y, %H:%M UTC")
+  defp last_activity(timestamp), do: ThamaniDawaWeb.TimeFormat.datetime(timestamp)
 
   def render(assigns) do
     ~H"""
@@ -63,22 +63,18 @@ defmodule ThamaniDawaWeb.PlatformOrganizationsLive do
       current_path="/platform/organizations"
       crumb={if @live_action == :show && @selected, do: @selected.organization.name, else: "Organizations"}
     >
-      <.header icon="hero-building-office-2">
-        Organizations
-        <:subtitle>
-          Businesses registered on the platform, with their sites, users, and recent activity.
-        </:subtitle>
+      <.td_list_page
+        title="Organizations"
+        subtitle="Businesses registered on the platform, with their sites, users, and recent activity."
+      >
         <:actions>
-          <span class="inline-flex items-center gap-2 rounded-full border border-thamani-stone bg-thamani-canvas px-3 py-2 text-xs font-medium text-thamani-forest">
-            <.icon name="hero-shield-check" class="size-4" /> Read-only access
-          </span>
+          <span class="td-badge">Read-only access</span>
         </:actions>
-        <:toolbar>
+        <:filters>
           <form phx-change="search" class="flex-1" id="search-form">
             <.search_input name="search" value={@search} placeholder="Search by organization name" />
           </form>
-        </:toolbar>
-      </.header>
+        </:filters>
 
       <.table
         id="platform-organizations"
@@ -144,6 +140,7 @@ defmodule ThamaniDawaWeb.PlatformOrganizationsLive do
         <p class="td-empty-state-title">Organization not found</p>
         <.td_button label="Back to organizations" navigate={~p"/platform/organizations"} />
       </div>
+      </.td_list_page>
     </Layouts.platform_shell>
     """
   end

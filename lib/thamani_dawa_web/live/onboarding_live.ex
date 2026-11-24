@@ -1,10 +1,20 @@
 defmodule ThamaniDawaWeb.OnboardingLive do
   use ThamaniDawaWeb, :live_view
 
+  alias ThamaniDawa.Accounts
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Sites
+  alias ThamaniDawaWeb.Portals
 
   def mount(params, _session, socket) do
+    if Accounts.demo_login_account?(socket.assigns.current_scope.user) do
+      {:ok, redirect(socket, to: Portals.default_path(socket.assigns.current_scope))}
+    else
+      mount_checklist(params, socket)
+    end
+  end
+
+  defp mount_checklist(params, socket) do
     skipped =
       case params["skip"] do
         "add_branch" -> [:add_branch]
@@ -238,7 +248,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
             </div>
 
             <div
-              class="relative flex size-24 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--color-td-accent-tint)_13%,white)] text-[var(--thamani-forest)] shadow-[0_18px_45px_rgba(30,57,48,0.08)]"
+              class="relative flex size-24 items-center justify-center rounded-full bg-td-accent-tint text-[var(--thamani-forest)] shadow-[0_18px_45px_rgba(30,57,48,0.08)]"
               aria-hidden="true"
             >
               <.icon name="hero-check" class="size-12 stroke-[2.2]" />
@@ -275,7 +285,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
             class="thamani-step-enter grid items-center gap-10 md:grid-cols-[0.9fr_1.1fr] md:gap-10 lg:gap-16"
           >
             <div class="flex flex-col items-center text-center md:block md:text-left">
-              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] text-[var(--thamani-forest)]">
+              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-td-accent-tint text-[var(--thamani-forest)]">
                 <.icon name="hero-sparkles" class="size-6" />
               </div>
 
@@ -320,7 +330,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
             class="thamani-step-enter grid items-center gap-10 md:grid-cols-[0.9fr_1.1fr] md:gap-10 lg:gap-16"
           >
             <div class="flex flex-col items-center text-center md:block md:text-left">
-              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] text-[var(--thamani-forest)]">
+              <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-td-accent-tint text-[var(--thamani-forest)]">
                 <.icon name="hero-sparkles" class="size-6" />
               </div>
 
@@ -377,8 +387,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
                   class={[
                     "flex min-h-16 items-center gap-4 rounded-2xl px-4 py-3 no-underline transition-colors hover:brightness-95",
                     if(item.key == @current.key,
-                      do:
-                        "bg-[color-mix(in_srgb,var(--color-td-accent-tint)_13%,white)] ring-1 ring-[color-mix(in_srgb,var(--thamani-forest)_18%,transparent)]",
+                      do: "bg-td-accent-tint ring-1 ring-td-accent/20",
                       else: "bg-[var(--thamani-canvas)]"
                     )
                   ]}
@@ -391,7 +400,7 @@ defmodule ThamaniDawaWeb.OnboardingLive do
                   </span>
                   <span
                     :if={item.done? or item.key in @skipped}
-                    class="flex size-6 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-white"
+                    class="flex size-6 shrink-0 items-center justify-center rounded-full bg-thamani-forest text-td-on-accent"
                     aria-label="Complete"
                   >
                     <.icon name="hero-check" class="size-4" />

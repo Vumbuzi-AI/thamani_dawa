@@ -890,8 +890,11 @@ defmodule ThamaniDawaWeb.SignupLive do
     ~H"""
     <label class={["td-option", @selected && "is-selected"]}>
       <input type={@type} name={@name} value={@value} checked={@selected} />
-      <span class="td-option-title">{@label}</span>
-      <span :if={@description} class="td-note">{@description}</span>
+      <span class="td-oc-rd" aria-hidden="true"></span>
+      <span class="td-oc-tx">
+        <span class="td-option-title">{@label}</span>
+        <span :if={@description} class="td-note">{@description}</span>
+      </span>
     </label>
     """
   end
@@ -900,7 +903,7 @@ defmodule ThamaniDawaWeb.SignupLive do
     ~H"""
     <div
       id="signup-onboarding"
-      class="td-auth"
+      class="td-auth is-wide"
       data-step={@step}
       data-signup-complete={to_string(@trigger_login)}
       phx-hook=".SignupDraft"
@@ -1039,7 +1042,7 @@ defmodule ThamaniDawaWeb.SignupLive do
         class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-[var(--thamani-surface)]"
       >
         <div class="flex flex-col items-center px-6 text-center">
-          <span class="flex size-12 items-center justify-center rounded-full bg-[color-mix(in_srgb,var(--color-td-accent-tint)_22%,white)] text-[var(--thamani-forest)]">
+          <span class="flex size-12 items-center justify-center rounded-full bg-td-accent-tint text-[var(--thamani-forest)]">
             <.td_icon name="arrows-clockwise" class="size-6 animate-spin" />
           </span>
           <p class="mt-4 text-base font-semibold text-[var(--thamani-forest)]">
@@ -1081,18 +1084,13 @@ defmodule ThamaniDawaWeb.SignupLive do
                   phx-change="validate_operating_model"
                   phx-submit="continue_operating_model"
                 >
-                  <fieldset class="mb-6">
+                  <fieldset class="td-oc-set">
                     <legend class="sr-only">Organization services</legend>
-                    <div class="mb-3 flex items-center justify-between gap-3">
-                      <p class="td-count-chip">Select all that apply</p>
-                      <%= if selected_operating_model_count(@org_form) > 0 do %>
-                        <span
-                          id="operating-model-selection-count"
-                          class="td-count-chip"
-                        >
-                          {selected_operating_model_count(@org_form)} selected
-                        </span>
-                      <% end %>
+                    <div class="td-oc-hrow">
+                      <span>Select all that apply</span>
+                      <span id="operating-model-selection-count">
+                        <span class="td-oc-cnt">{selected_operating_model_count(@org_form)}</span> selected
+                      </span>
                     </div>
                     <input type="hidden" name="organization[operating_models][]" value="" />
                     <div class="td-mode-grid">
@@ -1133,7 +1131,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                       <:badge :if={gs1_key_verified?(@gs1_key_check)}>
                         <span
                           id="gs1-key-verified-badge"
-                          class="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--thamani-forest)_12%,white)] px-2.5 py-1 text-xs font-semibold text-[var(--thamani-forest)]"
+                          class="inline-flex items-center gap-1 rounded-full bg-td-accent-tint px-2.5 py-1 text-xs font-semibold text-[var(--thamani-forest)]"
                         >
                           <.td_icon name="check-circle" class="size-3.5" /> Verified
                         </span>
@@ -1160,7 +1158,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                     <% end %>
                     <aside
                       :if={@gs1_key_check == :idle}
-                      class="mt-5 rounded-xl border border-[color-mix(in_srgb,var(--thamani-forest)_14%,white)] bg-[color-mix(in_srgb,var(--thamani-forest)_4%,white)] px-5 py-5"
+                      class="mt-5 rounded-xl border border-td-hairline bg-td-accent-tint px-5 py-5"
                     >
                       <div class="flex items-start gap-4">
                         <.td_icon name="info" class="mt-0.5 size-5 shrink-0" />
@@ -1270,7 +1268,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                           Checking with the GS1 registry&hellip;
                         </p>
                       <% {:matched, name, address} when is_binary(name) -> %>
-                        <div class="-mt-4 mb-2 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
+                        <div class="-mt-4 mb-2 rounded-lg bg-td-accent-tint px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
                           <p class="inline-flex items-center gap-1.5">
                             <.td_icon name="check-circle" class="size-4" /> Verified · {name}
                           </p>
@@ -1279,7 +1277,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                           </p>
                         </div>
                       <% {:matched, nil, address} -> %>
-                        <div class="-mt-4 mb-2 rounded-lg bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
+                        <div class="-mt-4 mb-2 rounded-lg bg-td-accent-tint px-3 py-2.5 text-xs font-semibold text-[var(--thamani-forest)]">
                           <p class="inline-flex items-center gap-1.5">
                             <.td_icon name="check-circle" class="size-4" /> Verified with GS1
                           </p>
@@ -1295,32 +1293,32 @@ defmodule ThamaniDawaWeb.SignupLive do
                           required
                         />
                       <% {:inactive, name, address} when is_binary(name) -> %>
-                        <div class="-mt-4 mb-2 rounded-lg bg-amber-50 px-3 py-2.5 text-xs font-semibold text-amber-800">
+                        <div class="-mt-4 mb-2 rounded-lg bg-td-warning-tint px-3 py-2.5 text-xs font-semibold text-td-warning">
                           <p class="inline-flex items-center gap-1.5">
                             <.td_icon name="warning" class="size-4" />
                             Found · {name} · not currently active in the GS1 registry.
                           </p>
-                          <p :if={address} class="mt-1 font-normal text-amber-700">
+                          <p :if={address} class="mt-1 font-normal text-td-warning">
                             {address}
                           </p>
                         </div>
                       <% {:inactive, nil, _address} -> %>
-                        <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                        <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-td-warning-tint px-3 py-2 text-xs font-semibold text-td-warning">
                           <.td_icon name="warning" class="size-4" />
                           Found in the GS1 registry, but not currently active.
                         </p>
                       <% {:taken, _name, _address} -> %>
-                        <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+                        <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-td-danger-tint px-3 py-2 text-xs font-semibold text-td-danger">
                           <.td_icon name="warning" class="size-4" />
                           This GLN is already registered to another location on Thamani Dawa. Choose another GLN.
                         </p>
                       <% :not_found -> %>
-                        <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                        <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-td-warning-tint px-3 py-2 text-xs font-semibold text-td-warning">
                           <.td_icon name="warning" class="size-4" />
                           We could not find this GLN in the GS1 registry. Double-check the number before continuing.
                         </p>
                       <% :invalid_check_digit -> %>
-                        <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                        <p class="-mt-4 inline-flex items-center gap-1.5 rounded-lg bg-td-warning-tint px-3 py-2 text-xs font-semibold text-td-warning">
                           <.td_icon name="warning" class="size-4" />
                           That does not look like a valid GLN. Double-check the digits.
                         </p>
@@ -1343,7 +1341,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                       <% choices -> %>
                         <fieldset class="mb-7">
                           <legend class="text-sm font-medium text-[var(--thamani-forest)]">
-                            What happens at this location?<span class="text-red-600">&nbsp;*</span>
+                            What happens at this location?<span class="text-td-danger">&nbsp;*</span>
                           </legend>
                           <p class="mb-3 mt-1 max-w-2xl text-xs leading-5 text-[var(--thamani-pewter)]">
                             Choose the option that matches how this premises is actually
@@ -1510,15 +1508,17 @@ defmodule ThamaniDawaWeb.SignupLive do
           </div>
 
           <:footer>
-            Already have an account? <.link navigate={~p"/login"}>Log in</.link>
+            <p class="td-auth-switch">
+              Already have an account? <.link navigate={~p"/login"}>Log in</.link>
+            </p>
           </:footer>
         </.td_auth_card>
-        <nav class="td-auth-legal" aria-label="Legal">
-          <.link href={~p"/privacy"}>Privacy</.link>
-          <.link href={~p"/terms"}>Terms</.link>
-          <.link href={~p"/contact"}>Help</.link>
-        </nav>
       </div>
+      <nav class="td-auth-legal" aria-label="Legal">
+        <.link href={~p"/privacy"}>Privacy</.link>
+        <.link href={~p"/terms"}>Terms</.link>
+        <.link href={~p"/contact"}>Help</.link>
+      </nav>
     </div>
     """
   end

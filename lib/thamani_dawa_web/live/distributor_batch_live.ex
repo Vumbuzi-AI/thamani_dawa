@@ -311,7 +311,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
 
   defp product_name(product), do: product.generic_name || product.brand_name || "Unknown product"
   defp date_or_dash(nil), do: "—"
-  defp date_or_dash(date), do: Calendar.strftime(date, "%d %b %Y")
+  defp date_or_dash(date), do: ThamaniDawaWeb.TimeFormat.date(date)
 
   attr :group, :map, required: true
   attr :groups, :list, required: true
@@ -419,9 +419,10 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
       current_scope={@current_scope}
       current_path={~p"/distributor/products"}
     >
-      <.header icon="hero-archive-box">
-        {@batch.batch_no}
-        <:subtitle>{product_name(@batch.product)} batch details and receiving record.</:subtitle>
+      <.td_detail_page
+        title={@batch.batch_no}
+        subtitle={"#{product_name(@batch.product)} batch details and receiving record."}
+      >
         <:actions>
           <.button
             :if={@batch.remaining_quantity > 0 and is_nil(@batch.logistic_unit_id)}
@@ -441,7 +442,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
             <.icon name="hero-arrow-left" class="size-4" /> All batches
           </.button>
         </:actions>
-      </.header>
+        <:body>
 
       <section
         :if={@batch.logistic_unit && length(@case_lines) > 1}
@@ -730,7 +731,7 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
               <p :if={receipt.origin_gln} class="mt-0.5 tracking-tight tabular-nums">
                 GLN {receipt.origin_gln}
               </p>
-              <p class="mt-0.5">{Calendar.strftime(receipt.received_at, "%d %b %Y")}</p>
+              <p class="mt-0.5">{ThamaniDawaWeb.TimeFormat.date(receipt.received_at)}</p>
               <.link
                 navigate={~p"/distributor/receiving/#{receipt.id}"}
                 class="mt-1 inline-flex font-medium text-thamani-forest hover:underline"
@@ -768,16 +769,15 @@ defmodule ThamaniDawaWeb.DistributorBatchLive do
                   {humanize_step(event.payload["bizStep"])}
                 </p>
                 <p class="mt-0.5">
-                  {humanize_step(event.payload["disposition"])} · {Calendar.strftime(
-                    event.occurred_at,
-                    "%d %b %Y"
-                  )}
+                  {humanize_step(event.payload["disposition"])} · {ThamaniDawaWeb.TimeFormat.date(event.occurred_at)}
                 </p>
               </li>
             </ul>
           </.trail_step>
         </ol>
       </section>
+        </:body>
+      </.td_detail_page>
     </Layouts.distributor_shell>
     """
   end
