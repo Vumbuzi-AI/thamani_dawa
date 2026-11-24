@@ -23,6 +23,7 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
      |> assign(:filters, %{
        "status" => "pending",
        "search" => "",
+       "date" => "",
        "date_from" => "",
        "date_to" => ""
      })
@@ -42,11 +43,15 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
   end
 
   def handle_params(params, _url, socket) do
+    preset = date_preset(params)
+    {from, to} = resolved_dates(preset, params)
+
     filters = %{
       "status" => params["status"] || "pending",
       "search" => params["search"] || "",
-      "date_from" => params["date_from"] || "",
-      "date_to" => params["date_to"] || ""
+      "date" => preset,
+      "date_from" => from,
+      "date_to" => to
     }
 
     {:noreply,
@@ -92,13 +97,6 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
 
     ~p"/org/requisitions?#{query}"
   end
-
-  defp active_filter_count(filters),
-    do:
-      Enum.count(
-        [filters["status"] != "pending", filters["date_from"] != "", filters["date_to"] != ""],
-        & &1
-      )
 
   defp apply_action(socket, :review, id) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -172,19 +170,45 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
     {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
   end
 
-  def handle_event("apply_filters", %{"filters" => filters}, socket) do
-    changes = Map.take(filters, ["status", "date_from", "date_to"])
-    {:noreply, push_patch(socket, to: filter_path(socket, changes))}
+  def handle_event("set_filter", %{"field" => "status", "value" => value}, socket) do
+    {:noreply, push_patch(socket, to: filter_path(socket, %{"status" => value}))}
   end
 
-  def handle_event("clear_filter", %{"filter" => "status"}, socket) do
-    {:noreply, push_patch(socket, to: filter_path(socket, %{"status" => "pending"}))}
+  def handle_event("set_date_preset", %{"value" => value}, socket) do
+    {:noreply,
+     push_patch(socket, to: filter_path(socket, %{"date" => value, "date_from" => "", "date_to" => ""}))}
   end
 
-  def handle_event("clear_filter", %{"filter" => filter}, socket)
-      when filter in ["date_from", "date_to"] do
-    {:noreply, push_patch(socket, to: filter_path(socket, %{filter => ""}))}
+  def handle_event("apply_date_range", params, socket) do
+    from = params["date_from"] || ""
+    to = params["date_to"] || ""
+    preset = if from == "" and to == "", do: "", else: "custom"
+
+    {:noreply,
+     push_patch(socket, to: filter_path(socket, %{"date" => preset, "date_from" => from, "date_to" => to}))}
   end
+
+  defp date_preset(params) do
+    case ThamaniDawaWeb.DateRangeFilter.valid_preset(params["date"]) do
+      "" ->
+        if (params["date_from"] || "") != "" or (params["date_to"] || "") != "",
+          do: "custom",
+          else: ""
+
+      preset ->
+        preset
+    end
+  end
+
+  defp resolved_dates("custom", params), do: {params["date_from"] || "", params["date_to"] || ""}
+
+  defp resolved_dates(preset, _params) do
+    {from, to} = ThamaniDawaWeb.DateRangeFilter.resolve(preset, "", "")
+    {iso_date(from), iso_date(to)}
+  end
+
+  defp iso_date(nil), do: ""
+  defp iso_date(%Date{} = date), do: Date.to_iso8601(date)
 
   def handle_event("approve", %{"id" => id}, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -460,61 +484,30 @@ defmodule ThamaniDawaWeb.RequisitionQueueLive.Index do
   def render(assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path="/org/requisitions">
+      <:search>
+        <form id="requisition-search" phx-change="search" phx-submit="search" onsubmit="return false">
+          <.td_search name="search" value={@filters["search"]} placeholder="Search by reference" shortcut="⌘K" phx-debounce="200" />
+        </form>
+      </:search>
       <.td_list_page
         title="Requisitions"
         subtitle="Stock requests raised by your sites, awaiting review or fulfillment."
       >
         <:filters>
-          <form id="requisition-search" phx-change="search" phx-submit="search">
-            <.search_input
-              name="search"
-              value={@filters["search"]}
-              placeholder="Search by reference"
-            />
-          </form>
-          <.filter_drawer
-            id="requisition-filters"
-            title="Filter requisitions"
-            apply_event="apply_filters"
-            active_count={active_filter_count(@filters)}
-          >
-            <:group label="Status">
-              <.input
-                type="select"
-                name="filters[status]"
-                value={@filters["status"]}
-                options={
-                  Enum.map(@tabs, fn {status, label} ->
-                    {"#{label} (#{@tab_counts[status]})", status}
-                  end)
-                }
-              />
-            </:group>
-            <:group label="Requested between">
-              <.date_range_picker
-                id="filter-dates"
-                from_name="filters[date_from]"
-                from_value={@filters["date_from"]}
-                to_name="filters[date_to]"
-                to_value={@filters["date_to"]}
-              />
-            </:group>
-            <:chip
-              :if={@filters["status"] != "pending"}
-              label={"Status: #{Phoenix.Naming.humanize(@filters["status"])}"}
-              clear={JS.push("clear_filter", value: %{filter: "status"})}
-            />
-            <:chip
-              :if={@filters["date_from"] != ""}
-              label={"From #{ThamaniDawaWeb.TimeFormat.date(@filters["date_from"])}"}
-              clear={JS.push("clear_filter", value: %{filter: "date_from"})}
-            />
-            <:chip
-              :if={@filters["date_to"] != ""}
-              label={"To #{ThamaniDawaWeb.TimeFormat.date(@filters["date_to"])}"}
-              clear={JS.push("clear_filter", value: %{filter: "date_to"})}
-            />
-          </.filter_drawer>
+          <.td_filter_menu
+            id="requisitions"
+            field="status"
+            label="Status"
+            value={@filters["status"]}
+            options={Enum.map(@tabs, fn {status, label} -> {status, label} end)}
+          />
+          <.td_date_filter
+            id="requisitions-date"
+            label="Date"
+            preset={@filters["date"]}
+            date_from={@filters["date_from"]}
+            date_to={@filters["date_to"]}
+          />
         </:filters>
 
       <.modal

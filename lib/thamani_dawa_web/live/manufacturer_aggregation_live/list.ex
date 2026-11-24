@@ -87,6 +87,17 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.List do
       current_path={~p"/manufacturer/aggregations"}
       crumb="Aggregations"
     >
+      <:search>
+        <form id="manufacturer-aggregation-search" phx-change="search" phx-submit="search">
+          <.td_search
+            name="search"
+            value={@filters["search"]}
+            placeholder="Search aggregation reference"
+            shortcut="⌘K"
+            phx-debounce="300"
+          />
+        </form>
+      </:search>
       <.td_list_page
         title="Aggregations"
         subtitle="Bind scanned serials to an existing shipper SSCC, then review and approve the pack."
@@ -100,14 +111,6 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.List do
           />
         </:actions>
         <:filters>
-          <form id="manufacturer-aggregation-search" phx-change="search" phx-submit="search">
-            <.td_search
-              name="search"
-              value={@filters["search"]}
-              placeholder="Search aggregation reference"
-              phx-debounce="300"
-            />
-          </form>
           <form id="manufacturer-aggregation-filters" phx-change="apply_filters">
             <.td_select
               id="filter-status"
@@ -150,9 +153,19 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.List do
           </:action>
           <:empty>
             <.td_empty
+              icon="stack"
               title="No aggregations here"
               hint="Nothing matches this status and filter combination yet."
-            />
+            >
+              <:action>
+                <.td_button
+                  id="empty-new-manufacturer-aggregation"
+                  variant="secondary"
+                  label="New aggregation"
+                  navigate={~p"/manufacturer/aggregations/new"}
+                />
+              </:action>
+            </.td_empty>
           </:empty>
         </.td_data_table>
       </.td_list_page>

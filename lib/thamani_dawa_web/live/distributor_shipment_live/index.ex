@@ -260,6 +260,21 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
       current_path={@base_path}
       crumb={@page_title}
     >
+      <:search>
+        <form id="distributor-shipment-search" phx-change="search" phx-submit="search" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@filters["search"]}
+            placeholder={
+              if @mode == :orders,
+                do: "Search order number, customer, GLN or batch",
+                else: "Search shipment, order, customer, SSCC or batch"
+            }
+            shortcut="⌘K"
+            phx-debounce="250"
+          />
+        </form>
+      </:search>
       <:tools>
         <.td_button
           id="new-distributor-shipment"
@@ -316,24 +331,6 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
         </nav>
 
         <div class="td-toolbar">
-          <form id="distributor-shipment-search" phx-change="search" phx-submit="search" onsubmit="return false">
-            <label class="td-search">
-              <.td_icon name="magnifying-glass" />
-              <input
-                type="search"
-                name="search"
-                value={@filters["search"]}
-                placeholder={
-                  if @mode == :orders,
-                    do: "Search order number, customer, GLN or batch",
-                    else: "Search shipment, order, customer, SSCC or batch"
-                }
-                phx-debounce="250"
-                autocomplete="off"
-              />
-              <kbd>/</kbd>
-            </label>
-          </form>
           <.td_filter_menu
             id="shipments"
             field="customer"

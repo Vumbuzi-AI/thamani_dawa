@@ -22,7 +22,17 @@ defmodule ThamaniDawaWeb.EarningsLive do
   alias ThamaniDawa.Sites
   alias ThamaniDawaWeb.SiteScoping
 
-  @default_filters %{site: "", method: "", status: "", date_from: "", date_to: "", search: ""}
+  @page_size 8
+
+  @default_filters %{
+    site: "",
+    method: "",
+    status: "",
+    date: "",
+    date_from: "",
+    date_to: "",
+    search: ""
+  }
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -46,6 +56,8 @@ defmodule ThamaniDawaWeb.EarningsLive do
        :show_site_filter?,
        multi_site? and is_nil(socket.assigns.current_scope.current_site_id)
      )
+     |> assign(:page, 1)
+     |> assign(:page_info, %{from: 0, to: 0, total: 0, pages: 1})
      |> assign(:filters, @default_filters)}
   end
 
@@ -122,35 +134,59 @@ defmodule ThamaniDawaWeb.EarningsLive do
     }
   end
 
-  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
+  def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
+      when field in ["site", "method", "status"] do
+    key = String.to_existing_atom(field)
+
+    {:noreply,
+     socket
+     |> assign(:filters, %{socket.assigns.filters | key => value})
+     |> assign(:page, 1)
+     |> reload_transactions()}
+  end
+
+  def handle_event("set_date_preset", %{"value" => value}, socket) do
+    {from, to} = ThamaniDawaWeb.DateRangeFilter.resolve(value, "", "")
+
     filters = %{
-      site: Map.get(filter_params, "site", ""),
-      method: Map.get(filter_params, "method", ""),
-      status: Map.get(filter_params, "status", ""),
-      date_from: Map.get(filter_params, "date_from", ""),
-      date_to: Map.get(filter_params, "date_to", ""),
-      search: socket.assigns.filters.search
+      socket.assigns.filters
+      | date: value,
+        date_from: iso_date(from),
+        date_to: iso_date(to)
     }
 
-    {:noreply, socket |> assign(:filters, filters) |> reload_transactions()}
+    {:noreply, socket |> assign(:filters, filters) |> assign(:page, 1) |> reload_transactions()}
+  end
+
+  def handle_event("apply_date_range", params, socket) do
+    from = params["date_from"] || ""
+    to = params["date_to"] || ""
+    preset = if from == "" and to == "", do: "", else: "custom"
+
+    filters = %{socket.assigns.filters | date: preset, date_from: from, date_to: to}
+
+    {:noreply, socket |> assign(:filters, filters) |> assign(:page, 1) |> reload_transactions()}
   end
 
   def handle_event("clear_filters", _params, socket) do
-    {:noreply, socket |> assign(:filters, @default_filters) |> reload_transactions()}
+    {:noreply, socket |> assign(:filters, @default_filters) |> assign(:page, 1) |> reload_transactions()}
   end
 
   def handle_event("search_transactions", %{"search" => search}, socket) do
     {:noreply,
      socket
      |> assign(:filters, %{socket.assigns.filters | search: search})
+     |> assign(:page, 1)
      |> reload_transactions()}
   end
 
-  def handle_event("clear_chip", %{"field" => field}, socket) do
-    key = String.to_existing_atom(field)
+  def handle_event("page", %{"to" => to}, socket) do
+    page = to |> to_string() |> Integer.parse() |> case do
+      {n, ""} -> n
+      _ -> socket.assigns.page
+    end
 
-    {:noreply,
-     socket |> assign(:filters, %{socket.assigns.filters | key => ""}) |> reload_transactions()}
+    {:noreply, socket |> assign(:page, page) |> reload_transactions()}
   end
 
   def handle_event("open_refund", _params, socket) do
@@ -189,9 +225,21 @@ defmodule ThamaniDawaWeb.EarningsLive do
         socket.assigns.sites_by_id
       )
 
+    total = length(transactions)
+    pages = max(ceil_div(total, @page_size), 1)
+    page = socket.assigns.page |> max(1) |> min(pages)
+    offset = (page - 1) * @page_size
+    rows = Enum.slice(transactions, offset, @page_size)
+    from = if total == 0, do: 0, else: offset + 1
+
     socket
-    |> stream(:transactions, transactions, reset: true)
+    |> assign(:page, page)
+    |> assign(:page_info, %{from: from, to: offset + length(rows), total: total, pages: pages})
+    |> stream(:transactions, rows, reset: true)
   end
+
+  defp ceil_div(_total, 0), do: 0
+  defp ceil_div(total, size), do: div(total + size - 1, size)
 
   defp filter_by_portal(transactions, :pharmacy),
     do: Enum.filter(transactions, &(&1.order_type in [:prescription, :sale]))
@@ -227,6 +275,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
   attr :portal, :atom, required: true
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
+  slot :search
   slot :inner_block, required: true
 
   defp portal_shell(%{portal: :pharmacy} = assigns) do
@@ -236,6 +285,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
       current_scope={@current_scope}
       current_path={portal_path(@portal)}
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       {render_slot(@inner_block)}
     </Layouts.pharmacy_shell>
     """
@@ -248,6 +298,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
       current_scope={@current_scope}
       current_path={portal_path(@portal)}
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       {render_slot(@inner_block)}
     </Layouts.lab_shell>
     """
@@ -260,6 +311,7 @@ defmodule ThamaniDawaWeb.EarningsLive do
       current_scope={@current_scope}
       current_path={portal_path(@portal)}
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       {render_slot(@inner_block)}
     </Layouts.org_shell>
     """
@@ -353,27 +405,8 @@ defmodule ThamaniDawaWeb.EarningsLive do
     )
   end
 
-  defp filter_chips(filters, sites_by_id) do
-    [
-      filters.site != "" &&
-        %{label: "Site: #{site_label(filters.site, sites_by_id)}", field: "site"},
-      filters.method != "" && %{label: "Method: #{filters.method}", field: "method"},
-      filters.status != "" &&
-        %{label: "Status: #{Phoenix.Naming.humanize(filters.status)}", field: "status"},
-      filters.date_from != "" &&
-        %{label: "From: #{ThamaniDawaWeb.TimeFormat.date(filters.date_from)}", field: "date_from"},
-      filters.date_to != "" &&
-        %{label: "To: #{ThamaniDawaWeb.TimeFormat.date(filters.date_to)}", field: "date_to"}
-    ]
-    |> Enum.filter(& &1)
-  end
-
-  defp site_label(site_id_str, sites_by_id) do
-    case sites_by_id[String.to_integer(site_id_str)] do
-      nil -> site_id_str
-      site -> site.name
-    end
-  end
+  defp iso_date(nil), do: ""
+  defp iso_date(%Date{} = date), do: Date.to_iso8601(date)
 
   defp site_name(sites_by_id, site_id) do
     case sites_by_id[site_id] do
@@ -703,64 +736,50 @@ defmodule ThamaniDawaWeb.EarningsLive do
   def render(assigns) do
     ~H"""
     <.portal_shell portal={@portal} flash={@flash} current_scope={@current_scope}>
+      <:search>
+        <form id="transaction-search-form" phx-change="search_transactions">
+          <.td_search
+            name="search"
+            value={@filters.search}
+            placeholder="Search method, reference, amount, or order"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
       <section class="td-recipe td-list-page">
         <.td_page_header title={portal_title(@portal)} subtitle={portal_description(@portal)} />
         <div class="td-toolbar">
-          <form id="transaction-search-form" phx-change="search_transactions" class="min-w-0">
-            <.search_input
-              name="search"
-              value={@filters.search}
-              placeholder="Search method, reference, amount, or order"
-            />
-          </form>
-          <.filter_drawer
-            id="earnings-filters"
-            title="Filter transactions"
-            apply_event="apply_filters"
-            active_count={active_filter_count(@filters)}
-          >
-            <:group :if={@show_site_filter?} label="Site">
-              <.input
-                type="select"
-                name="filters[site]"
-                value={@filters.site}
-                options={@site_options}
-                prompt="All sites"
-              />
-            </:group>
-            <:group label="Method">
-              <.input
-                type="select"
-                name="filters[method]"
-                value={@filters.method}
-                options={@method_options}
-                prompt="All methods"
-              />
-            </:group>
-            <:group label="Status">
-              <.input
-                type="select"
-                name="filters[status]"
-                value={@filters.status}
-                options={@status_options}
-                prompt="All statuses"
-              />
-            </:group>
-            <:group label="Date">
-              <.date_range_picker
-                id="earnings-filter-dates"
-                from_name="filters[date_from]"
-                from_value={@filters.date_from}
-                to_name="filters[date_to]"
-                to_value={@filters.date_to}
-              />
-            </:group>
-            <:chip
-              :for={chip <- filter_chips(@filters, @sites_by_id)}
-              label={chip.label}
-              clear={JS.push("clear_chip", value: %{"field" => chip.field})}
-            />
-          </.filter_drawer>
+          <.td_filter_menu
+            :if={@show_site_filter?}
+            id="earnings"
+            field="site"
+            label="Site"
+            value={@filters.site}
+            options={[{"", "Any"} | Enum.map(@site_options, fn {name, id} -> {to_string(id), name} end)]}
+          />
+          <.td_filter_menu
+            id="earnings"
+            field="method"
+            label="Method"
+            value={@filters.method}
+            options={[{"", "Any"} | Enum.map(@method_options, &{&1, &1})]}
+          />
+          <.td_filter_menu
+            id="earnings"
+            field="status"
+            label="Status"
+            value={@filters.status}
+            options={[{"", "Any"} | Enum.map(@status_options, fn {label, value} -> {to_string(value), label} end)]}
+          />
+          <.td_date_filter
+            id="earnings-date"
+            label="Date"
+            preset={@filters.date}
+            date_from={@filters.date_from}
+            date_to={@filters.date_to}
+          />
+          <span class="flex-1"></span>
         </div>
 
       <.table
@@ -775,7 +794,9 @@ defmodule ThamaniDawaWeb.EarningsLive do
           {ThamaniDawaWeb.TimeFormat.datetime(payment.inserted_at)}
         </:col>
         <:col :let={{_id, payment}} :if={@multi_site?} label="Site">
-          {site_name(@sites_by_id, payment.site_id)}
+          <span title={site_name(@sites_by_id, payment.site_id)}>
+            {site_name(@sites_by_id, payment.site_id)}
+          </span>
         </:col>
         <:col :let={{_id, payment}} label="Method">{payment.payment_type}</:col>
         <:col :let={{_id, payment}} label="Amount">{ThamaniDawaWeb.Money.ksh(payment.amount)}</:col>
@@ -805,6 +826,32 @@ defmodule ThamaniDawaWeb.EarningsLive do
           />
         </:empty_state>
       </.table>
+
+      <div :if={@page_info.total > 0} id="transactions-pager" class="td-tfoot">
+        <span><b>{@page_info.from} to {@page_info.to}</b> of {@page_info.total} payments</span>
+        <span class="td-tfoot-pager">
+          <button
+            type="button"
+            class="td-icon-btn"
+            aria-label="Previous page"
+            disabled={@page == 1}
+            phx-click="page"
+            phx-value-to={@page - 1}
+          >
+            <.td_icon name="caret-left" />
+          </button>
+          <button
+            type="button"
+            class="td-icon-btn"
+            aria-label="Next page"
+            disabled={@page >= @page_info.pages}
+            phx-click="page"
+            phx-value-to={@page + 1}
+          >
+            <.td_icon name="caret-right" />
+          </button>
+        </span>
+      </div>
 
       <.transaction_modal :if={@live_action == :lab_show && @selected} selected={@selected} />
       <.refund_modal :if={@live_action == :lab_show && @selected && @refund_open} selected={@selected} />

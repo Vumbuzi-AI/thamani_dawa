@@ -217,6 +217,17 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
       current_scope={@current_scope}
       current_path="/distributor/returns"
     >
+      <:search>
+        <form id="supplier-return-search" phx-change="search" phx-submit="search" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search return, supplier or batch"
+            shortcut="⌘K"
+            phx-debounce="250"
+          />
+        </form>
+      </:search>
       <div class="td-recipe td-list-page">
         <.td_page_header
           title="Supplier returns"
@@ -277,17 +288,6 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
             patch={list_path(status, @search)}
           />
         </nav>
-        <div class="td-toolbar">
-          <form id="supplier-return-search" phx-change="search" phx-submit="search" onsubmit="return false">
-            <label class="td-search">
-              <.td_icon name="magnifying-glass" />
-              <input type="search" name="search" value={@search} placeholder="Search return, supplier or batch" phx-debounce="250" autocomplete="off" />
-              <kbd>/</kbd>
-            </label>
-          </form>
-          <span class="flex-1"></span>
-        </div>
-
         <div :if={@shown_count == 0} id="supplier-returns-empty" class="td-pad td-empty-wrap">
           <div class="td-card td-empty-card">
             <%= if @return_count == 0 do %>

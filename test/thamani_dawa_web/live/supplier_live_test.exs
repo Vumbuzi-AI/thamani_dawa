@@ -209,9 +209,7 @@ defmodule ThamaniDawaWeb.SupplierLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/suppliers")
 
-      lv
-      |> form("#suppliers-filters-form", filters: %{status: "inactive"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "inactive"})
 
       html = render(lv)
       assert html =~ inactive.name
@@ -225,13 +223,11 @@ defmodule ThamaniDawaWeb.SupplierLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/suppliers")
 
-      lv
-      |> form("#suppliers-filters-form", filters: %{status: "active"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "active"})
 
       refute render(lv) =~ inactive.name
 
-      lv |> element("button", "Clear filters") |> render_click()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => ""})
 
       html = render(lv)
       assert html =~ active.name
@@ -245,13 +241,9 @@ defmodule ThamaniDawaWeb.SupplierLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/suppliers")
 
-      lv
-      |> form("#suppliers-filters-form", filters: %{status: "active"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "active"})
 
-      lv
-      |> element("button[aria-label='Remove Status: Active filter']")
-      |> render_click()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => ""})
 
       html = render(lv)
       assert html =~ active.name

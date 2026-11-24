@@ -90,14 +90,12 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
 
       {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
 
-      lv
-      |> form("#team-filters-form", filters: %{role: "lab_technician"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "role", "value" => "lab_technician"})
 
       html = render(lv)
       assert html =~ "Tech Tara"
       refute html =~ "Pharmacist Pat"
-      assert html =~ "Role: Lab technician"
+      assert has_element?(lv, "#team-chip-role", "Lab technician")
     end
 
     test "filters by home site", %{conn: conn} do
@@ -121,14 +119,12 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
 
       {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
 
-      lv
-      |> form("#team-filters-form", filters: %{site_id: to_string(site_a.id)})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "site_id", "value" => to_string(site_a.id)})
 
       html = render(lv)
       assert html =~ "At Site A"
       refute html =~ "At Site B"
-      assert html =~ "Site: Site A"
+      assert has_element?(lv, "#team-chip-site_id", "Site A")
     end
 
     test "filters by status", %{conn: conn} do
@@ -153,14 +149,12 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
 
       {:ok, lv, _html} = live(log_in(conn, admin), ~p"/org/team")
 
-      lv
-      |> form("#team-filters-form", filters: %{status: "invited"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "invited"})
 
       html = render(lv)
       assert html =~ "Invited Ivy"
       refute html =~ "Active Amina"
-      assert html =~ "Status: Invited"
+      assert has_element?(lv, "#team-chip-status", "Invited")
     end
   end
 
@@ -191,12 +185,10 @@ defmodule ThamaniDawaWeb.TeamLiveTest do
       assert has_element?(lv, "#btn-toggle-active-user-#{staff.id}", "Reactivate")
       assert %{is_active: false} = ThamaniDawa.Accounts.get_user!(admin.organization_id, staff.id)
 
-      lv
-      |> form("#team-filters-form", filters: %{status: "inactive"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "inactive"})
 
       assert has_element?(lv, "#users", "Amina Tester")
-      assert render(lv) =~ "Status: Inactive"
+      assert has_element?(lv, "#team-chip-status", "Inactive")
 
       lv |> element("#btn-toggle-active-user-#{staff.id}") |> render_click()
 

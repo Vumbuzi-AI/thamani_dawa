@@ -323,6 +323,21 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
       current_scope={@current_scope}
       current_path={~p"/distributor/products"}
     >
+      <:search>
+        <form phx-change="search" id="distributor-product-search">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder={
+              if @view == "products",
+                do: "Search by product, GTIN, or category",
+                else: "Search by product, GTIN, or batch number"
+            }
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
       <.td_list_page
         title="Inventory"
         subtitle={
@@ -365,19 +380,7 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
             <.td_count value={@batch_count} />
           </button>
         </:tabs>
-        <:filters>
-          <form phx-change="search" id="distributor-product-search" class="td-search-grow">
-            <.td_search
-              name="search"
-              value={@search}
-              placeholder={
-                if @view == "products",
-                  do: "Search by product, GTIN, or category",
-                  else: "Search by product, GTIN, or batch number"
-              }
-              phx-debounce="200"
-            />
-          </form>
+        <:filters :if={@view == "batches"}>
           <.td_filter_menu
             :if={@view == "batches"}
             id="distributor-batches"

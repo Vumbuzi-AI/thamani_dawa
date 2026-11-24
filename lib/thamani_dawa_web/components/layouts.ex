@@ -99,6 +99,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :crumb, :string, default: nil
   attr :crumb_parent, :string, default: nil
 
+  slot :search
   slot :tools
   slot :inner_block, required: true
 
@@ -123,6 +124,7 @@ defmodule ThamaniDawaWeb.Layouts do
       section_label={@section_label}
       base_path={@base_path}
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -137,6 +139,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :crumb, :string, default: nil
   attr :crumb_parent, :string, default: nil
 
+  slot :search
   slot :tools
   slot :inner_block, required: true
 
@@ -154,6 +157,7 @@ defmodule ThamaniDawaWeb.Layouts do
       section_label="Lab"
       base_path="/lab"
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -171,6 +175,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :crumb, :string, default: nil
   attr :crumb_parent, :string, default: nil
 
+  slot :search
   slot :tools
   slot :inner_block, required: true
 
@@ -188,6 +193,7 @@ defmodule ThamaniDawaWeb.Layouts do
       section_label="Pharmacy"
       base_path="/pharmacy"
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -240,6 +246,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :crumb, :string, default: nil
   attr :crumb_parent, :string, default: nil
 
+  slot :search
   slot :tools
   slot :inner_block, required: true
 
@@ -257,6 +264,7 @@ defmodule ThamaniDawaWeb.Layouts do
       section_label="Organization"
       base_path="/org"
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -271,6 +279,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :crumb, :string, default: nil
   attr :crumb_parent, :string, default: nil
 
+  slot :search
   slot :tools
   slot :inner_block, required: true
 
@@ -296,6 +305,7 @@ defmodule ThamaniDawaWeb.Layouts do
          ]}
       ]}
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -315,6 +325,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :crumb, :string, default: nil
   attr :crumb_parent, :string, default: nil
 
+  slot :search
   slot :tools
   slot :inner_block, required: true
 
@@ -332,6 +343,7 @@ defmodule ThamaniDawaWeb.Layouts do
       section_label="Distributor"
       base_path="/distributor"
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -351,6 +363,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :crumb, :string, default: nil
   attr :crumb_parent, :string, default: nil
 
+  slot :search
   slot :tools
   slot :inner_block, required: true
 
@@ -368,6 +381,7 @@ defmodule ThamaniDawaWeb.Layouts do
       section_label="Manufacturer"
       base_path="/manufacturer"
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       <:tools>{render_slot(@tools)}</:tools>
       {render_slot(@inner_block)}
     </.sidebar_shell>
@@ -396,6 +410,7 @@ defmodule ThamaniDawaWeb.Layouts do
   attr :crumb, :string, default: nil
   attr :crumb_parent, :string, default: nil
 
+  slot :search
   slot :tools
   slot :inner_block, required: true
 
@@ -429,6 +444,7 @@ defmodule ThamaniDawaWeb.Layouts do
       help_path={if(@show_product_tour, do: product_tour_path(@base_path))}
       base_path={@base_path}
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       <:tools :if={@tools != []}>
         {render_slot(@tools)}
       </:tools>

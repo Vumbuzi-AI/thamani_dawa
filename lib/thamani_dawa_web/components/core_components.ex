@@ -1807,7 +1807,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
                   @row_click && "cursor-pointer"
                 ]}
               >
-                {render_slot(col, @row_item.(row))}
+                <span class="td-cell">{render_slot(col, @row_item.(row))}</span>
               </td>
               <td
                 :if={@action != []}

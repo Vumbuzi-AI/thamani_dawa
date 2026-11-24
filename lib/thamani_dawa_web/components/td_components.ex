@@ -411,8 +411,8 @@ defmodule ThamaniDawaWeb.TDComponents do
   def td_page_header(assigns) do
     ~H"""
     <header class="td-page-header">
-      <div class="flex min-w-0 items-start gap-3">
-        <.link :if={is_binary(@back)} navigate={@back} aria-label="Go back" class="td-icon-btn mt-1">
+      <div class="td-page-title-wrap">
+        <.link :if={is_binary(@back)} navigate={@back} aria-label="Go back" class="td-icon-btn">
           <.td_icon name="arrow-left" />
         </.link>
         <button
@@ -420,11 +420,11 @@ defmodule ThamaniDawaWeb.TDComponents do
           type="button"
           aria-label="Go back"
           onclick="window.history.back()"
-          class="td-icon-btn mt-1"
+          class="td-icon-btn"
         >
           <.td_icon name="arrow-left" />
         </button>
-        <div class="min-w-0">
+        <div class="td-page-title">
           <h1>{@title}</h1>
           <p :if={@subtitle}>{@subtitle}</p>
         </div>
@@ -490,6 +490,17 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
+  attr :id, :string, default: nil
+  attr :shown, :integer, required: true
+  attr :total, :integer, required: true
+  attr :noun, :string, required: true
+
+  def td_toolbar_count(assigns) do
+    ~H"""
+    <span id={@id} class="td-toolbar-count"><b>{@shown}</b> of {@total} {@noun}</span>
+    """
+  end
+
   attr :label, :string, required: true
   attr :value, :string, default: nil
 
@@ -504,7 +515,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :label, :string, required: true
   attr :active, :boolean, default: false
-  attr :rest, :global, include: ~w(id type phx-click phx-value-mode phx-value-tab phx-value-source)
+  attr :rest, :global, include: ~w(id type phx-click phx-value-mode phx-value-tab phx-value-source aria-pressed)
 
   def td_segment(assigns) do
     ~H"""
@@ -774,14 +785,16 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :id, :string, default: nil
   attr :title, :string, required: true
   attr :hint, :string, default: nil
+  attr :icon, :string, default: "tray"
   slot :action
 
   def td_empty(assigns) do
     ~H"""
     <div id={@id} class="td-empty">
+      <span class="td-empty-tile" aria-hidden="true"><.td_icon name={@icon} /></span>
       <p class="td-empty-title">{@title}</p>
       <p :if={@hint} class="td-note">{@hint}</p>
-      <div :if={@action != []}>{render_slot(@action)}</div>
+      <div :if={@action != []} class="td-empty-action">{render_slot(@action)}</div>
     </div>
     """
   end
@@ -1164,6 +1177,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :help_path, :string, default: nil
   attr :nav_label, :string, default: "Navigation"
   attr :base_path, :string, default: "/"
+  slot :search
   slot :tools
   slot :side
   slot :content
@@ -1212,17 +1226,21 @@ defmodule ThamaniDawaWeb.TDComponents do
           </.td_icon_button>
           <%!-- Title bar (brief 4.6): global search with the K shortcut, help,
                notifications, a divider, then the page's primary action. --%>
-          <label class="td-search td-global-search" for="td-global-search">
-            <.td_icon name="magnifying-glass" />
-            <input
-              id="td-global-search"
-              type="search"
-              placeholder="Search products, GTINs, patients"
-              aria-label="Search"
-              autocomplete="off"
-            />
-            <kbd>⌘K</kbd>
-          </label>
+          <%= if @search != [] do %>
+            {render_slot(@search)}
+          <% else %>
+            <label class="td-search td-global-search" for="td-global-search">
+              <.td_icon name="magnifying-glass" />
+              <input
+                id="td-global-search"
+                type="search"
+                placeholder="Search products, GTINs, patients"
+                aria-label="Search"
+                autocomplete="off"
+              />
+              <kbd>⌘K</kbd>
+            </label>
+          <% end %>
           <.link
             :if={@help_path}
             navigate={@help_path}
@@ -1383,7 +1401,7 @@ defmodule ThamaniDawaWeb.TDComponents do
             if (metaK) {
               e.preventDefault();
               if (manufacturer) openPalette();
-              else global()?.focus();
+              else (global() || document.querySelector(".td-tl input[type='search']"))?.focus();
               return;
             }
             if (e.key === "Escape") {
@@ -1649,7 +1667,7 @@ defmodule ThamaniDawaWeb.TDComponents do
         <:actions>{render_slot(@actions)}</:actions>
       </.td_page_header>
       <nav :if={@tabs != []} class="td-tabs">{render_slot(@tabs)}</nav>
-      <div :if={@filters != []} class={[@tabs != [] && "td-toolbar", @tabs == [] && "td-filter-row"]}>
+      <div :if={@filters != []} class="td-toolbar">
         {render_slot(@filters)}
       </div>
       {render_slot(@inner_block)}

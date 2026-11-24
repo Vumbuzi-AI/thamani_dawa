@@ -91,8 +91,22 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
     {:noreply, set_filter(socket, :status, status)}
   end
 
-  def handle_event("set_filter", %{"field" => "created", "value" => "custom"}, socket) do
-    {:noreply, assign(socket, :date_range_open, true)}
+  def handle_event("set_date_preset", %{"value" => value}, socket) do
+    {from, to} = ThamaniDawaWeb.DateRangeFilter.resolve(value, "", "")
+
+    filters = %{
+      socket.assigns.filters
+      | created: value,
+        date_from: iso_date(from),
+        date_to: iso_date(to)
+    }
+
+    {:noreply,
+     socket
+     |> assign(:filters, filters)
+     |> assign(:date_range_open, false)
+     |> assign(:page, 1)
+     |> assign_lab_orders()}
   end
 
   def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
@@ -312,7 +326,7 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
       |> filter_by_search(socket.assigns.search, patient_by_visit_id)
       |> filter_by_urgency(filters.urgency)
       |> filter_by_paid(filters.paid)
-      |> filter_by_created(filters.created)
+      |> filter_by_created(filters)
       |> filter_by_custom_range(filters.date_from, filters.date_to)
 
     lab_orders = filter_by_status(scoped, filters.status)
@@ -374,18 +388,28 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   defp filter_by_paid(lab_orders, "paid"), do: Enum.filter(lab_orders, & &1.has_paid)
   defp filter_by_paid(lab_orders, "unpaid"), do: Enum.reject(lab_orders, & &1.has_paid)
 
-  defp filter_by_created(lab_orders, "custom") do
-    # Handled via date_from/date_to in the caller.
-    lab_orders
-  end
+  defp filter_by_created(lab_orders, %{date_from: from, date_to: to})
+       when from != "" or to != "", do: lab_orders
 
+  defp filter_by_created(lab_orders, %{created: created}),
+    do: filter_by_created(lab_orders, created)
+
+  defp filter_by_created(lab_orders, "custom"), do: lab_orders
   defp filter_by_created(lab_orders, ""), do: lab_orders
 
   defp filter_by_created(lab_orders, range) do
-    days = %{"today" => 0, "7d" => 6, "30d" => 29}[range]
-    from = Date.add(Date.utc_today(), -days)
-    Enum.filter(lab_orders, &(Date.compare(to_date(&1.inserted_at), from) != :lt))
+    case %{"today" => 0, "7d" => 6, "30d" => 29}[range] do
+      nil ->
+        lab_orders
+
+      days ->
+        from = Date.add(Date.utc_today(), -days)
+        Enum.filter(lab_orders, &(Date.compare(to_date(&1.inserted_at), from) != :lt))
+    end
   end
+
+  defp iso_date(nil), do: ""
+  defp iso_date(%Date{} = date), do: Date.to_iso8601(date)
 
   defp filter_by_custom_range(lab_orders, "", ""), do: lab_orders
 
@@ -412,33 +436,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   defp to_date(%NaiveDateTime{} = dt), do: NaiveDateTime.to_date(dt)
 
   defp filtered?(search, filters), do: search != "" or filters != @default_filters
-
-  defp option_label(options, value, filters \\ nil)
-  defp option_label(_options, "custom", filters) when is_map(filters) do
-    custom_range_label(filters.date_from, filters.date_to)
-  end
-
-  defp option_label(options, value, _filters) do
-    Enum.find_value(options, "Any", fn {v, label} -> if v == value, do: label end)
-  end
-
-  defp custom_range_label(from, to) do
-    case {display_filter_date(from), display_filter_date(to)} do
-      {nil, nil} -> "Custom"
-      {from, nil} -> "From #{from}"
-      {nil, to} -> "Until #{to}"
-      {from, to} -> "#{from} – #{to}"
-    end
-  end
-
-  defp display_filter_date(value) when is_binary(value) and value != "" do
-    case Date.from_iso8601(value) do
-      {:ok, date} -> ThamaniDawaWeb.TimeFormat.date(date)
-      _ -> nil
-    end
-  end
-
-  defp display_filter_date(_), do: nil
 
   defp created_label(dt), do: ThamaniDawaWeb.TimeFormat.short_datetime(dt)
 
@@ -483,50 +480,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   defp step_state(step, step), do: "current"
   defp step_state(_step, _current), do: "todo"
 
-  attr :field, :atom, required: true
-  attr :label, :string, required: true
-  attr :value, :string, required: true
-  attr :options, :list, required: true
-  attr :value_label, :string, default: nil
-
-  defp filter_chip(assigns) do
-    assigns = assign(assigns, :shown, assigns.value_label || option_label(assigns.options, assigns.value))
-    ~H"""
-    <div class="td-chip-wrap">
-      <button
-        type="button"
-        id={"lab-orders-chip-#{@field}"}
-        class="td-chip"
-        phx-click={JS.toggle(to: "#lab-orders-menu-#{@field}")}
-        phx-click-away={JS.hide(to: "#lab-orders-menu-#{@field}")}
-        aria-haspopup="menu"
-      >
-        <span class="td-chip-label">{@label}</span>
-        <span class="td-chip-value">{@shown}</span>
-        <.td_icon name="caret-down" />
-      </button>
-      <div id={"lab-orders-menu-#{@field}"} class="td-popover td-filter-menu hidden" role="menu">
-        <p class="td-popover-label">{@label}</p>
-        <button
-          :for={{value, label} <- @options}
-          type="button"
-          id={"lab-orders-#{@field}-#{if value == "", do: "any", else: value}"}
-          class={["td-menu-item", value == @value && "is-selected"]}
-          phx-click={
-            JS.push("set_filter", value: %{field: @field, value: value})
-            |> JS.hide(to: "#lab-orders-menu-#{@field}")
-          }
-          role="menuitemradio"
-          aria-checked={to_string(value == @value)}
-        >
-          <span>{label}</span>
-          <.td_icon :if={value == @value} name="check" class="size-4 td-menu-check" />
-        </button>
-      </div>
-    </div>
-    """
-  end
-
   def render(assigns) do
     ~H"""
     <Layouts.lab_shell
@@ -540,6 +493,17 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           <:icon><.td_icon name="plus" /></:icon>
         </.td_button>
       </:tools>
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search by patient name"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
 
       <section class="td-recipe td-list-page">
         <.td_page_header
@@ -577,38 +541,27 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
         </nav>
 
         <div class="td-toolbar">
-          <form phx-change="search" id="search-form" onsubmit="return false">
-            <label class="td-search">
-              <.td_icon name="magnifying-glass" />
-              <input
-                type="search"
-                name="search"
-                value={@search}
-                placeholder="Search by patient name"
-                phx-debounce="200"
-                autocomplete="off"
-              />
-              <kbd>/</kbd>
-            </label>
-          </form>
-          <.filter_chip
-            field={:urgency}
+          <.td_filter_menu
+            id="lab-orders"
+            field="urgency"
             label="Urgency"
             value={@filters.urgency}
             options={@filter_options.urgency}
           />
-          <.filter_chip
-            field={:paid}
+          <.td_filter_menu
+            id="lab-orders"
+            field="paid"
             label="Paid"
             value={@filters.paid}
             options={@filter_options.paid}
           />
-          <.filter_chip
-            field={:created}
+          <.td_date_filter
+            id="lab-orders-date"
+            field="created"
             label="Created"
-            value={@filters.created}
-            options={@filter_options.created}
-            value_label={option_label(@filter_options.created, @filters.created, @filters)}
+            preset={@filters.created}
+            date_from={@filters.date_from}
+            date_to={@filters.date_to}
           />
         </div>
 
@@ -719,39 +672,6 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           </span>
         </div>
       </section>
-
-
-      <.modal
-        :if={@date_range_open}
-        id="lab-orders-date-range"
-        show
-        title="Date range"
-        subtitle="Pick a preset or choose dates on the calendar."
-        on_cancel={JS.push("close_date_range")}
-      >
-        <form id="lab-orders-date-range-form" phx-submit="apply_date_range" class="td-form-steps">
-          <div class="td-fgrid is-2">
-            <.date_picker
-              id="lab-orders-date-from"
-              name="date_from"
-              label="From date"
-              value={@filters.date_from}
-              placeholder="Choose a date"
-            />
-            <.date_picker
-              id="lab-orders-date-to"
-              name="date_to"
-              label="To date"
-              value={@filters.date_to}
-              placeholder="Choose a date"
-            />
-          </div>
-        </form>
-        <:footer>
-          <.td_button type="button" label="Clear" phx-click="clear_date_range" />
-          <.td_button type="submit" form="lab-orders-date-range-form" variant="primary" label="Apply" />
-        </:footer>
-      </.modal>
 
       <.modal
         :if={@live_action == :new}

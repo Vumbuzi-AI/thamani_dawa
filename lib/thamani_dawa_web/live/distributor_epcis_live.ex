@@ -1,7 +1,7 @@
 defmodule ThamaniDawaWeb.DistributorEpcisLive do
   use ThamaniDawaWeb, :live_view
 
-  import ThamaniDawaWeb.EpcisReporting, only: [epcis_body: 1]
+  import ThamaniDawaWeb.EpcisReporting, only: [epcis_body: 1, epcis_search: 1]
 
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Epcis.Client
@@ -340,6 +340,9 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
   def render(%{epcis_portal: :organization} = assigns) do
     ~H"""
     <Layouts.org_shell flash={@flash} current_scope={@current_scope} current_path={@epcis_path}>
+      <:search>
+        <.epcis_search search_query={@search_query} />
+      </:search>
       <.epcis_body
         empty_copy="Receive a delivery or approve a shipment and its events will appear here."
         organization={@organization}
@@ -367,6 +370,9 @@ defmodule ThamaniDawaWeb.DistributorEpcisLive do
       current_scope={@current_scope}
       current_path={@epcis_path}
     >
+      <:search>
+        <.epcis_search search_query={@search_query} />
+      </:search>
       <.epcis_body
         empty_copy="Receive a delivery or approve a shipment and its events will appear here."
         organization={@organization}

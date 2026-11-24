@@ -19,24 +19,15 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
         {:noreply,
          socket
          |> assign_shipment(shipment)
-         |> put_flash(:info, "Shipment approved and manufacturer EPCIS shipping event queued.")}
+         |> put_flash(:info, "Shipment dispatched.")}
 
       {:error, {:invalid_state, "approved"}} ->
-        {:noreply, put_flash(socket, :info, "This shipment is already approved.")}
+        {:noreply, put_flash(socket, :info, "This shipment has already been dispatched.")}
 
       {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Shipment could not be approved.")}
+        {:noreply, put_flash(socket, :error, "Shipment could not be dispatched.")}
     end
   end
-
-  def handle_event("toggle_shipper", %{"id" => id}, socket),
-    do:
-      {:noreply,
-       update(socket, :expanded, fn expanded ->
-         if MapSet.member?(expanded, id),
-           do: MapSet.delete(expanded, id),
-           else: MapSet.put(expanded, id)
-       end)}
 
   defp load(socket, id) do
     shipment =
@@ -47,22 +38,64 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
       )
 
     socket
-    |> assign(:page_title, shipment.order_number)
-    |> assign(:expanded, MapSet.new())
+    |> assign(:page_title, shipment.reference)
     |> assign_shipment(shipment)
   end
 
-  defp assign_shipment(socket, shipment),
-    do:
-      socket
-      |> assign(:shipment, shipment)
-      |> assign(
-        :unit_count,
-        shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum()
-      )
+  defp assign_shipment(socket, shipment) do
+    socket
+    |> assign(:shipment, shipment)
+    |> assign(:unit_count, shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum())
+  end
 
   defp count_phrase(1, noun), do: "1 #{noun}"
   defp count_phrase(count, noun), do: "#{count} #{noun}s"
+
+  defp status_label("draft"), do: "Draft"
+  defp status_label("submitted"), do: "Ready to dispatch"
+  defp status_label("approved"), do: "Dispatched"
+  defp status_label("rejected"), do: "Rejected"
+  defp status_label(status), do: Phoenix.Naming.humanize(status || "unknown")
+
+  defp status_tone("draft"), do: "neutral"
+  defp status_tone("submitted"), do: "info"
+  defp status_tone("approved"), do: "success"
+  defp status_tone("rejected"), do: "danger"
+  defp status_tone(_), do: "neutral"
+
+  defp header_sub(shipment, unit_count) do
+    line =
+      [
+        "Order #{shipment.order_number}",
+        count_phrase(length(shipment.shippers), "shipper"),
+        count_phrase(unit_count, "unit")
+      ]
+      |> Enum.join(" · ")
+
+    case shipment.destination_company do
+      company when is_binary(company) and company != "" -> "#{line} to #{company}"
+      _ -> line
+    end
+  end
+
+  defp eat(nil), do: "—"
+  defp eat(datetime), do: "#{date_time(datetime)} EAT"
+
+  defp dispatched_at(%{status: "approved", approved_at: at}), do: eat(at)
+  defp dispatched_at(_shipment), do: "Not yet"
+
+  defp person(nil), do: "System"
+  defp person(%{name: name}) when is_binary(name) and name != "", do: name
+  defp person(_), do: "System"
+
+  defp contents(shipper) do
+    units = count_phrase(length(shipper.items), "unit")
+
+    case shipper.product_name do
+      name when is_binary(name) and name != "" -> "#{name} · #{units}"
+      _ -> units
+    end
+  end
 
   def render(%{live_action: :packing_list} = assigns) do
     ~H"""
@@ -70,42 +103,61 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/shipments"}
-      crumb="Shipments"
+      crumb_parent="Shipments"
+      crumb="Packing list"
     >
-      <.td_page_header title="Packing list" subtitle={@shipment.order_number}>
-        <:actions>
-          <.td_button
-            variant="secondary"
-            label="Back to shipment"
-            navigate={~p"/manufacturer/shipments/#{@shipment.id}"}
-          />
-        </:actions>
-      </.td_page_header>
-      <div class="td-kv-grid">
-        <.td_key_value label="Order" value={@shipment.order_number} mono />
-        <.td_key_value label="Reference" value={@shipment.reference} mono />
-        <.td_key_value label="From" value={@shipment.origin_company} />
-        <.td_key_value label="To" value={@shipment.destination_company} />
+      <div class="td-recipe td-list-page td-detail-page">
+        <.td_back_link
+          id="packing-list-back"
+          to={~p"/manufacturer/shipments/#{@shipment.id}"}
+          label="Back to shipment"
+        />
+        <header class="td-idh">
+          <div class="td-idh-text">
+            <h1 class="td-idh-title"><span>Packing list</span></h1>
+            <p class="td-idh-sub">{@shipment.reference} · Order {@shipment.order_number}</p>
+          </div>
+        </header>
+        <div class="td-pad td-stack">
+          <div class="td-card">
+            <dl class="td-kv-grid is-pad is-4">
+              <.td_key_value label="Shipment" value={@shipment.reference} mono />
+              <.td_key_value label="Order" value={@shipment.order_number} />
+              <.td_key_value label="From" value={@shipment.origin_company || "—"} />
+              <.td_key_value label="To" value={@shipment.destination_company || "—"} />
+            </dl>
+          </div>
+          <div class="td-card">
+            <.td_card_header title="Shippers" subtitle="Lines on this packing list" />
+            <div :if={@shipment.shippers == []} class="td-pad">
+              <.td_empty
+                title="Nothing packed yet"
+                hint="A mobile user scans units into shippers before this list has lines."
+              />
+            </div>
+            <table :if={@shipment.shippers != []} class="td-rows" id="manufacturer-packing-list">
+              <thead>
+                <tr>
+                  <th>Shipper</th>
+                  <th>SSCC</th>
+                  <th>Product</th>
+                  <th>Batch</th>
+                  <th class="is-num">Units</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :for={shipper <- @shipment.shippers} id={"packing-shipper-#{shipper.id}"}>
+                  <td>{shipper.name || "Shipper #{shipper.sequence}"}</td>
+                  <td><span class="td-mono">{shipper.sscc || "—"}</span></td>
+                  <td>{shipper.product_name || "Packed trade items"}</td>
+                  <td><span class="td-mono">{shipper.batch || "Mixed"}</span></td>
+                  <td class="is-num">{length(shipper.items)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-      <.td_data_table
-        id="manufacturer-packing-list"
-        rows={@shipment.shippers}
-        row_id={fn shipper -> "packing-shipper-#{shipper.id}" end}
-      >
-        <:col :let={shipper} label="Shipper">{shipper.name}</:col>
-        <:col :let={shipper} label="SSCC">
-          <span class="td-kv-value is-mono">{shipper.sscc}</span>
-        </:col>
-        <:col :let={shipper} label="Product">{shipper.product_name || "Packed trade items"}</:col>
-        <:col :let={shipper} label="Batch">{shipper.batch || "Mixed"}</:col>
-        <:col :let={shipper} label="Units">{length(shipper.items)}</:col>
-        <:empty>
-          <.td_empty
-            title="Nothing packed yet"
-            hint="A mobile user scans units into shippers before this list has lines."
-          />
-        </:empty>
-      </.td_data_table>
     </Layouts.manufacturer_shell>
     """
   end
@@ -116,196 +168,153 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
       flash={@flash}
       current_scope={@current_scope}
       current_path={~p"/manufacturer/shipments"}
+      crumb_parent="Shipments"
+      crumb={@shipment.reference}
     >
-      <div class="no-print">
-        <.td_page_header
-          title={@shipment.order_number}
-          subtitle={"#{@shipment.reference} · #{count_phrase(length(@shipment.shippers), "shipper")} · #{count_phrase(@unit_count, "unit")}"}
-        >
-          <:actions>
-            <.shipment_status_badge status={@shipment.status} />
+      <:tools>
+        <.td_button
+          :if={@shipment.status == "submitted"}
+          id="approve-manufacturer-shipment"
+          variant="primary"
+          glyph="truck"
+          label="Dispatch shipment"
+          phx-click="approve"
+        />
+      </:tools>
+
+      <div class="no-print td-recipe td-list-page td-detail-page" id="manufacturer-shipment-detail">
+        <.td_back_link
+          id="manufacturer-shipment-back"
+          to={~p"/manufacturer/shipments"}
+          label="Back to Shipments"
+        />
+
+        <header class="td-idh">
+          <div class="td-idh-text">
+            <h1 class="td-idh-title">
+              <span>{@shipment.reference}</span>
+              <.td_badge tone={status_tone(@shipment.status)} label={status_label(@shipment.status)} />
+            </h1>
+            <p class="td-idh-sub">{header_sub(@shipment, @unit_count)}</p>
+          </div>
+          <div class="td-idh-actions">
             <.td_button
-              :if={@shipment.status == "approved"}
               id="manufacturer-packing-list"
-              variant="secondary"
-              label="View packing list"
+              glyph="list-checks"
+              label="Packing list"
               navigate={~p"/manufacturer/shipments/#{@shipment.id}/packing-list"}
             />
-            <.td_button
-              :if={@shipment.status == "submitted"}
-              id="approve-manufacturer-shipment"
-              variant="primary"
-              label="Approve shipment"
-              phx-click="approve"
-            />
-          </:actions>
-        </.td_page_header>
+          </div>
+        </header>
 
-        <div class="grid gap-4 md:grid-cols-3">
-          <.party_card
-            title="Ship from"
-            icon="hero-building-office-2"
-            company={@shipment.origin_company}
-            address={@shipment.origin_address}
-            gln={@shipment.origin_gln}
-          />
-          <.party_card
-            title="Ship to"
-            icon="hero-building-storefront"
-            company={@shipment.destination_company}
-            address={@shipment.destination_address}
-            gln={@shipment.destination_gln}
-          />
-          <div class="rounded-2xl ff-surface-card p-4">
-            <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-thamani-pewter">
-              <.icon name="hero-user-group" class="size-4" /> Manufacturing team
-            </div>
-            <dl class="mt-2 space-y-1.5 text-sm">
-              <div class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">Created by</dt><dd class="text-right font-medium text-thamani-forest">
-                  {(@shipment.created_by && @shipment.created_by.name) || "—"}
-                </dd>
-              </div>
-              <div class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">Created</dt><dd class="text-right">
-                  {date_time(@shipment.inserted_at)}
-                </dd>
-              </div>
-              <div :if={@shipment.approved_at} class="flex justify-between gap-3">
-                <dt class="text-thamani-pewter">Approved</dt><dd class="text-right">
-                  {date_time(@shipment.approved_at)}<span
-                    :if={@shipment.approved_by}
-                    class="block text-xs text-thamani-pewter"
-                  >by {@shipment.approved_by.name}</span>
-                </dd>
-              </div>
+        <div class="td-pad td-stack">
+          <div :if={@shipment.status == "draft"} id="manufacturer-draft-note" class="td-ban is-info">
+            <.td_icon name="info" />
+            <span>
+              Nothing is packed yet. A mobile user finds this shipment by order {@shipment.order_number} and scans units into shippers.
+            </span>
+          </div>
+
+          <div :if={@shipment.status == "rejected"} id="manufacturer-rejection" class="td-ban is-danger">
+            <.td_icon name="x-circle" />
+            <span>
+              <b>Rejected.</b>
+              {@shipment.rejection_reason}
+            </span>
+          </div>
+
+          <div class="td-card">
+            <dl class="td-kv-grid is-pad is-4">
+              <.td_key_value label="Shipment" value={@shipment.reference} mono />
+              <.td_key_value label="Order" value={@shipment.order_number} />
+              <.td_key_value label="Shippers" value={length(@shipment.shippers)} />
+              <.td_key_value label="Units" value={@unit_count} />
+              <.td_key_value label="Created" value={eat(@shipment.inserted_at)} />
+              <.td_key_value label="Dispatched" value={dispatched_at(@shipment)} />
             </dl>
           </div>
-        </div>
 
-        <section class="mt-6 space-y-4" id="manufacturer-shippers">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">Shippers</h2>
-          <.td_empty
-            :if={@shipment.shippers == []}
-            title="Nothing packed yet"
-            hint={"A mobile user finds this shipment by order #{@shipment.order_number} and scans units into shippers."}
-          />
-          <article
-            :for={shipper <- @shipment.shippers}
-            id={"shipper-#{shipper.id}"}
-            class="overflow-hidden rounded-2xl ff-surface-card"
-          >
-            <header class="flex flex-wrap items-center justify-between gap-3 border-b border-thamani-stone px-4 py-3 sm:px-5">
-              <div class="flex items-center gap-3">
-                <span class="flex size-8 items-center justify-center rounded-lg bg-thamani-canvas text-sm font-semibold text-thamani-forest">{shipper.sequence}</span><div>
-                  <p class="font-medium text-thamani-forest">{shipper.name}</p><p class="text-xs text-thamani-pewter">
-                    {length(shipper.items)} unit(s)
-                  </p>
-                </div>
+          <div class="grid gap-4 md:grid-cols-2">
+            <section class="td-card td-party-card">
+              <span class="td-k"><.td_icon name="factory" /> From</span>
+              <span class="td-v">{@shipment.origin_company || "—"}</span>
+              <span class="td-mono">GLN {@shipment.origin_gln || "—"}</span>
+              <span :if={@shipment.origin_address} class="td-a">{@shipment.origin_address}</span>
+            </section>
+            <section class="td-card td-party-card">
+              <span class="td-k"><.td_icon name="warehouse" /> To</span>
+              <span class="td-v">{@shipment.destination_company || "—"}</span>
+              <span class="td-mono">GLN {@shipment.destination_gln || "—"}</span>
+              <span :if={@shipment.destination_address} class="td-a">{@shipment.destination_address}</span>
+            </section>
+          </div>
+
+          <div class="td-detail-row">
+            <div class="td-card" id="manufacturer-shippers">
+              <.td_card_header title="Contents" subtitle="Shippers on this shipment" />
+              <div :if={@shipment.shippers == []} class="td-pad">
+                <.td_empty
+                  title="Nothing packed yet"
+                  hint={"A mobile user finds this shipment by order #{@shipment.order_number} and scans units into shippers."}
+                />
               </div>
-              <span
-                :if={shipper.sscc}
-                class="rounded-lg bg-td-accent-tint px-3 py-1 font-mono text-xs font-semibold text-thamani-forest"
-              >SSCC {shipper.sscc}</span>
-            </header>
-            <button
-              type="button"
-              phx-click="toggle_shipper"
-              phx-value-id={Integer.to_string(shipper.id)}
-              class="grid w-full grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))_auto] items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-thamani-canvas"
-            >
-              <span><span class="block text-sm font-medium">{shipper.product_name ||
-                "Packed trade items"}</span><span class="font-mono text-xs text-thamani-pewter">{shipper.gtin ||
-                "Mixed contents"}</span></span>
-              <span class="text-sm"><span class="block text-xs text-thamani-pewter">Batch</span>{shipper.batch ||
-                "Mixed"}</span>
-              <span class="text-sm"><span class="block text-xs text-thamani-pewter">Expiry</span>{shipper.expiry_date ||
-                "—"}</span>
-              <span class="text-sm"><span class="block text-xs text-thamani-pewter">Units</span>{length(
-                shipper.items
-              )}</span>
-              <span class="flex items-center gap-1 text-xs font-semibold text-thamani-forest">{if MapSet.member?(
-                                                                                                    @expanded,
-                                                                                                    Integer.to_string(
-                                                                                                      shipper.id
-                                                                                                    )
-                                                                                                  ),
-                                                                                                  do:
-                                                                                                    "Hide details",
-                                                                                                  else:
-                                                                                                    "View details"}<.icon
-                name="hero-chevron-down"
-                class="size-4"
-              /></span>
-            </button>
-            <ul
-              :if={MapSet.member?(@expanded, Integer.to_string(shipper.id))}
-              class="grid gap-3 bg-thamani-canvas/60 px-5 py-4 sm:grid-cols-2 xl:grid-cols-3"
-            >
-              <li
-                :for={item <- shipper.items}
-                id={"shipment-item-#{item.id}"}
-                class="rounded-xl border border-thamani-stone bg-td-surface p-3 text-sm"
-              >
-                <p class="font-medium">{item.product_name || "Verified product"}</p><p class="font-mono text-xs text-thamani-pewter">
-                  {item.gtin} · {item.serial}
-                </p><p class="mt-1 text-xs">Batch {item.batch || "—"}</p>
-              </li>
-            </ul>
-          </article>
-        </section>
+              <table :if={@shipment.shippers != []} class="td-rows" id="manufacturer-contents">
+                <thead>
+                  <tr>
+                    <th>SSCC</th>
+                    <th>Level</th>
+                    <th>Contents</th>
+                    <th>Batch</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr :for={shipper <- @shipment.shippers} id={"shipper-#{shipper.id}"}>
+                    <td><span class="td-mono">{shipper.sscc || "Not issued yet"}</span></td>
+                    <td>Shipper</td>
+                    <td>{contents(shipper)}</td>
+                    <td><span class="td-mono">{shipper.batch || "Mixed"}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
-        <section class="mt-6 rounded-2xl ff-surface-card p-5" id="manufacturer-shipment-activity">
-          <h2 class="text-sm font-semibold uppercase tracking-wide text-thamani-pewter">Activity</h2>
-          <ol class="mt-4 border-l border-thamani-stone pl-5">
-            <li class="relative pb-5">
-              <span class="absolute -left-[1.55rem] top-1.5 size-3 rounded-full bg-thamani-forest"></span><p class="font-medium">
-                Created
-              </p><p class="text-xs text-thamani-pewter">
-                {(@shipment.created_by && @shipment.created_by.name) || "System"} · {date_time(
-                  @shipment.inserted_at
-                )}
-              </p>
-            </li>
-            <li :if={@shipment.status in ["submitted", "approved"]} class="relative pb-5">
-              <span class="absolute -left-[1.55rem] top-1.5 size-3 rounded-full bg-thamani-forest"></span><p class="font-medium">
-                Submitted for approval
-              </p><p class="text-xs text-thamani-pewter">Manufacturing team</p>
-            </li>
-            <li :if={@shipment.status == "approved"} class="relative">
-              <span class="absolute -left-[1.55rem] top-1.5 size-3 rounded-full bg-thamani-forest"></span><p class="font-medium">
-                Approved · EPCIS shipping event queued
-              </p><p class="text-xs text-thamani-pewter">
-                {(@shipment.approved_by && @shipment.approved_by.name) || "System"} · {date_time(
-                  @shipment.approved_at
-                )}
-              </p>
-            </li>
-          </ol>
-        </section>
+            <div class="td-card" id="manufacturer-shipment-activity">
+              <.td_card_header title="Activity" subtitle="Times in EAT" />
+              <ol class="td-list">
+                <li class="td-li">
+                  <.td_orb seed={person(@shipment.created_by)} size={24} />
+                  <div class="td-li-g">
+                    <b>Shipment created</b>
+                    <span>{person(@shipment.created_by)} · {eat(@shipment.inserted_at)}</span>
+                  </div>
+                </li>
+                <li :if={@shipment.status in ["submitted", "approved"]} class="td-li">
+                  <.td_orb seed="packer" size={24} />
+                  <div class="td-li-g">
+                    <b>{count_phrase(length(@shipment.shippers), "shipper")} packed</b>
+                    <span>{eat(@shipment.submitted_at)}</span>
+                  </div>
+                </li>
+                <li :if={@shipment.status == "approved"} class="td-li">
+                  <.td_orb seed={person(@shipment.approved_by)} size={24} />
+                  <div class="td-li-g">
+                    <b>Dispatched</b>
+                    <span>{person(@shipment.approved_by)} · {eat(@shipment.approved_at)}</span>
+                  </div>
+                </li>
+                <li :if={@shipment.status == "rejected"} class="td-li">
+                  <.td_orb seed="rejected" size={24} />
+                  <div class="td-li-g">
+                    <b>Rejected</b>
+                    <span>{eat(@shipment.rejected_at)}</span>
+                  </div>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </div>
       </div>
     </Layouts.manufacturer_shell>
-    """
-  end
-
-  attr :title, :string, required: true
-  attr :icon, :string, required: true
-  attr :company, :string, required: true
-  attr :address, :string, default: nil
-  attr :gln, :string, required: true
-
-  defp party_card(assigns) do
-    ~H"""
-    <div class="rounded-2xl ff-surface-card p-4">
-      <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-thamani-pewter">
-        <.icon name={@icon} class="size-4" /> {@title}
-      </div><p class="mt-2 font-medium text-thamani-forest">{@company}</p><p
-        :if={@address}
-        class="text-sm"
-      >
-        {@address}
-      </p><p class="mt-1 font-mono text-xs text-thamani-pewter">GLN {@gln}</p>
-    </div>
     """
   end
 end

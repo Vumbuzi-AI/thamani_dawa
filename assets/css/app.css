@@ -1620,8 +1620,8 @@ label {
     justify-content: center;
     color: var(--color-td-ink-3);
   }
-  .td-shl.is-collapsed .td-nav-item:hover,
-  .td-shl.is-collapsed .td-nav-item:focus-visible {
+  .td-shl.is-collapsed .td-nav-item:not(.is-active):hover,
+  .td-shl.is-collapsed .td-nav-item:not(.is-active):focus-visible {
     background: var(--color-td-hover);
     color: var(--color-td-ink-2);
   }
@@ -1696,6 +1696,7 @@ label {
   align-items: center;
   gap: 8px;
 }
+.td-tl form { display: contents; }
 
 .td-sd {
   display: flex;
@@ -1766,8 +1767,76 @@ label {
 .td-option-title { font-size: 14px; font-weight: 500; }
 .td-mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-.td-empty { padding: 24px 0; }
-.td-empty-title { margin: 0 0 4px; font-size: 14px; font-weight: 500; }
+:root {
+  --td-empty-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath fill='black' d='M208 32H48A16 16 0 0 0 32 48v160a16 16 0 0 0 16 16h160a16 16 0 0 0 16-16V48A16 16 0 0 0 208 32Zm0 176H48v-40h28.69a8 8 0 0 1 5.65 2.34l19.32 19.32a8 8 0 0 0 5.65 2.34h41.38a8 8 0 0 0 5.65-2.34l19.32-19.32a8 8 0 0 1 5.65-2.34H208Zm0-56h-28.69a24 24 0 0 0-17 7l-19.32 19.32a8 8 0 0 1-5.65 2.34h-41.38a8 8 0 0 1-5.65-2.34L93.69 159a24 24 0 0 0-17-7H48V48h160Z'/%3E%3C/svg%3E");
+}
+.td-empty,
+.td-empty-card,
+.td-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 32px 16px;
+  text-align: center;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.td-card.td-empty-card { border: 0; background: transparent; border-radius: 0; overflow: visible; }
+.td-empty-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  background: var(--color-td-canvas);
+  color: var(--color-td-ink-2);
+  flex: none;
+}
+.td-empty-tile svg { width: 16px; height: 16px; }
+.td-empty-title,
+.td-empty-state-title { margin: 0; font-size: 14px; font-weight: 500; line-height: 1.2; color: var(--color-td-ink); }
+.td-empty .td-note,
+.td-empty-card .td-note,
+.td-empty-state-text { max-width: 280px; margin: 0; font-size: 12px; line-height: 1.35; color: var(--color-td-ink-2); }
+.td-empty-action,
+.td-empty-card > .td-btn,
+.td-empty-state-actions { margin-top: 8px; display: flex; gap: 8px; justify-content: center; }
+.td-list-page:has(> .td-empty) { flex: 1; display: flex; flex-direction: column; }
+.td-list-page > .td-empty,
+.td-empty-wrap { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 280px; }
+.td-empty:not(:has(.td-empty-tile)),
+.td-empty-card:not(:has(.td-empty-tile)) { position: relative; }
+.td-empty:not(:has(.td-empty-tile))::before,
+.td-empty-card:not(:has(.td-empty-tile))::before {
+  content: "";
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+  border-radius: 10px;
+  background: var(--color-td-canvas);
+  flex: none;
+}
+.td-empty:not(:has(.td-empty-tile))::after,
+.td-empty-card:not(:has(.td-empty-tile))::after {
+  content: "";
+  position: absolute;
+  top: 42px;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  background: var(--color-td-ink-2);
+  pointer-events: none;
+  -webkit-mask: var(--td-empty-glyph) center / contain no-repeat;
+  mask: var(--td-empty-glyph) center / contain no-repeat;
+}
 .td-check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 
 
@@ -2151,9 +2220,7 @@ label {
   background: var(--color-td-canvas);
 }
 
-.td-dashboard .td-page-header { flex: none; }
 .td-dashboard .td-glance-cell { min-width: max-content; }
-.td-dashboard .td-page-header > div:first-child { gap: 8px; }
 
 .td-dashboard-pad {
   display: flex;
@@ -2312,6 +2379,17 @@ a.td-status-row:hover { background: var(--color-td-hover); }
   font-size: 14px;
   text-align: left;
   white-space: nowrap;
+  max-width: 36ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A hover card is position:absolute inside the cell. Clipping the cell
+   hides it. Only the ID cells opt out; other cells still ellipsis. */
+.td-rows td:has(.td-pid-wrap),
+.td-cell:has(.td-pid-wrap) {
+  overflow: visible;
+  max-width: none;
+  text-overflow: clip;
 }
 
 .td-rows th {
@@ -2356,6 +2434,15 @@ a.td-status-row:hover { background: var(--color-td-hover); }
   border-color: var(--color-td-hairline);
   color: var(--color-td-ink);
   box-shadow: none;
+}
+/* Long site names and joined lists stay inside the cell. The full
+   text remains on the title attribute of the cell content. */
+.td-cell {
+  display: block;
+  max-width: 36ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .td-table { width: 100%; border-collapse: collapse; overflow: hidden; }
 .td-table table { width: 100%; border-collapse: collapse; }
@@ -2767,12 +2854,14 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 
 /* Page and card headers */
 .td-page-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  height: 68px; padding: 0 16px; border-bottom: 1px solid var(--color-td-hairline); background: var(--color-td-surface);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  height: 68px; padding: 0 16px; box-sizing: border-box; flex: none;
+  border-bottom: 1px solid var(--color-td-hairline); background: var(--color-td-surface); line-height: 1;
 }
-.td-page-header > div:first-child { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.td-page-header h1 { margin: 0; font-size: 16px; font-weight: var(--weight-td-medium); line-height: 1.25; color: var(--color-td-ink); }
-.td-page-header p { margin: 0; font-size: 14px; line-height: 1.3; color: var(--color-td-ink-2); }
+.td-page-title-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.td-page-title { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.td-page-header h1 { margin: 0; font-size: 16px; font-weight: var(--weight-td-medium); line-height: 1; color: var(--color-td-ink); letter-spacing: 0; }
+.td-page-header p { margin: 0; font-size: 14px; line-height: 1; color: var(--color-td-ink-2); }
 .td-page-title-row { display: flex; align-items: center; gap: 8px; }
 .td-card-header {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -2793,7 +2882,11 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-chip:hover { background-image: linear-gradient(var(--color-td-hover), var(--color-td-hover)); }
 .td-chip-label { color: var(--color-td-ink-2); }
 .td-chip-value { color: var(--color-td-ink); }
-.td-chip svg { width: 16px; height: 16px; color: var(--color-td-ink-3); }
+.td-chip svg { width: 12px; height: 12px; color: var(--color-td-ink-3); }
+.td-chip.is-tag {
+  display: inline-block; height: auto; margin: 4px 4px 0 0; padding: 2px 6px;
+  border: 0; border-radius: 6px; background: var(--color-td-wash); font-size: 12px; font-weight: 400; cursor: default;
+}
 .td-search {
   display: inline-flex; align-items: center; gap: 6px; width: 304px; height: 30px; padding: 0 6px 0 10px;
   border: 1px solid var(--color-td-border); border-radius: 8px; background: var(--color-td-surface); color: var(--color-td-ink-3);
@@ -2964,8 +3057,8 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
   color: var(--color-td-ink-2); font-size: 14px; font-weight: var(--weight-td-medium); text-decoration: none; white-space: nowrap;
   transition: background-color .15s ease-out, color .15s ease-out;
 }
-.td-nav-item svg { width: 16px; height: 16px; flex: none; color: var(--color-td-ink-3); }
-.td-nav-item:hover { background: var(--color-td-hover); color: var(--color-td-ink); }
+.td-nav-item svg { width: 16px; height: 16px; flex: none; color: var(--color-td-ink-3); fill: currentColor; }
+.td-nav-item:not(.is-active):hover { background: var(--color-td-hover); color: var(--color-td-ink); }
 .td-nav-item.is-active { background: var(--color-td-selected); color: var(--color-td-ink); }
 .td-nav-item.is-active svg { color: var(--color-td-accent); }
 
@@ -2975,7 +3068,6 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; flex-wrap: wrap; }
 .td-pad { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
 .td-card { border: 1px solid var(--color-td-hairline); border-radius: 12px; background: var(--color-td-surface); overflow: hidden; }
-.td-card.is-needed { border-color: var(--color-td-accent); }
 .td-key-row {
   display: flex;
   align-items: center;
@@ -3061,8 +3153,6 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 
 /* ---- List page (Doop 3GldJbxDi_) ---- */
 .td-list-page { height: auto; min-height: 0; flex: none; }
-.td-list-page .td-page-header > div:first-child { gap: 8px; }
-.td-page-header h1, .td-page-header p { line-height: 1; }
 .td-tabs { flex: none; background: var(--color-td-surface); }
 .td-tab { border-bottom: 1px solid transparent; line-height: 1; transition: color .12s ease-out, border-color .12s ease-out; }
 .td-tab::after { display: none; }
@@ -3087,9 +3177,6 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-tfoot { flex: none; margin-top: auto; gap: 24px; border-top: 1px solid var(--color-td-hairline); line-height: 1; }
 .td-tfoot b { font-weight: var(--weight-td-medium); color: var(--color-td-ink); font-variant-numeric: tabular-nums; }
 .td-tfoot-pager .td-icon-btn:disabled { opacity: .4; pointer-events: none; }
-.td-empty-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding: 32px 16px; text-align: center; }
-.td-empty-card .td-empty-title { margin: 0 0 8px; font-size: 14px; font-weight: var(--weight-td-medium); color: var(--color-td-ink); line-height: 1.2; }
-.td-empty-card .td-note { max-width: 240px; margin: 0 0 12px; font-size: 12px; line-height: 1.4; color: var(--color-td-ink-2); }
 
 /* ---- Modal steps and form layout (Doop IGb-vyGRK9 / gBcldzvNa3 / ORIy7H5PbC) ---- */
 .td-modal-slot.is-wide { width: min(640px, 100%); }
@@ -3215,6 +3302,12 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
   .td-table tbody td.responsive-table-cell:first-child { font-weight: 400; }
   .td-table tbody tr.td-table-row { transition: background-color .12s ease-out; }
   .td-table tbody tr.td-table-row:hover { background: var(--color-td-hover); }
+  /* The card already draws the bottom edge. The empty-state row stays in
+     the DOM after the data, so :last-child is the wrong row. Drop the
+     border on the last real row or it stacks into a thick line. */
+  html:not([data-theme="dark"]) .td-table tbody tr.td-table-row:not(:has(+ tr.td-table-row)) td.responsive-table-cell {
+    border-bottom: 0;
+  }
 }
 
 /* ---- detail page anatomy (Doop: back row, identity header, pad, tabs) ---- */
@@ -3229,12 +3322,18 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-idh-sub { margin: 0; font-size: 14px; line-height: 1; color: var(--color-td-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .td-idh-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 .td-pad { padding: 16px; display: flex; flex-direction: column; gap: 16px; flex: none; }
+.td-ct:has(.td-pad.is-account) { background: var(--color-td-canvas); }
+.td-recipe:has(> .td-pad.is-account) { background: transparent; }
 .td-pad.is-flush-bottom { padding-bottom: 0; }
 .td-detail-scroll { flex: 1; min-height: 0; overflow: auto; }
 .td-detail-scroll .td-toolbar { border-bottom: 1px solid var(--color-td-hairline); }
 .td-sec { margin: 0; font-size: 12px; font-weight: var(--weight-td-medium); line-height: 1; color: var(--color-td-ink-2); }
+.td-kv-grid.is-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .td-kv-grid.is-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-@media (max-width: 1100px) { .td-kv-grid.is-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1100px) {
+  .td-kv-grid.is-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .td-kv-grid.is-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 .td-detail-scroll .td-table { border: 0; border-radius: 0; }
 .td-link { color: var(--color-td-accent); font-weight: var(--weight-td-medium); text-decoration: none; }
 .td-link:hover { text-decoration: underline; }
@@ -3273,12 +3372,16 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-report-table tr:last-child td { border-bottom: 0; }
 .td-mono-input { font-family: var(--font-mono); }
 .td-kv-grid.is-6 .td-kv { gap: 6px; }
-/* ---- empty states (Doop type-only empty: 24px icon, 16/500 title, muted line, primary) ---- */
-.td-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 48px 24px; text-align: center; }
-.td-empty-state-icon { width: 24px; height: 24px; color: var(--color-td-ink-3); margin-bottom: 4px; }
-.td-empty-state-title { margin: 0; font-size: 16px; font-weight: var(--weight-td-medium); line-height: 1.2; color: var(--color-td-ink); }
-.td-empty-state-text { margin: 0; max-width: 420px; font-size: 14px; line-height: 1.4; color: var(--color-td-ink-2); }
-.td-empty-state-actions { margin-top: 8px; display: flex; gap: 8px; justify-content: center; }
+.td-empty-state-icon:not([class*="animate-spin"]) {
+  width: 16px;
+  height: 16px;
+  padding: 10px;
+  box-sizing: content-box;
+  border-radius: 10px;
+  background: var(--color-td-canvas);
+  color: var(--color-td-ink-2);
+  margin: 0 0 4px;
+}
 
 /* ---- lab transaction detail + receipt (Doop 45FlJvpVyi / VRY0p3ZE2z) ---- */
 .td-txn-party { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 12px 16px; }
@@ -3527,12 +3630,27 @@ label.td-option > input { position: absolute; opacity: 0; pointer-events: none; 
 .td-org-badge span { display: block; font-size: 12px; color: var(--color-td-ink-2); }
 .td-count-chip { font-size: 12px; color: var(--color-td-ink-2); }
 
-.td-hint { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--color-td-ink-2); }
-.td-hint-link { color: var(--color-td-ink); text-decoration: underline; }
-.td-tnt-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 0 16px 16px; }
-.td-tnt-waiting { margin: 0; font-size: 14px; color: var(--color-td-ink-2); }
+.td-hint { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 14px; line-height: 20px; color: var(--color-td-ink-2); }
+.td-hint svg { width: 16px; height: 16px; flex: none; color: var(--color-td-ink-3); }
+.td-hint-link { color: var(--color-td-ink); text-decoration: underline; text-underline-offset: 2px; }
+.td-bnr { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--color-td-border); font-size: 14px; line-height: 20px; color: var(--color-td-ink); }
+.td-bnr svg { width: 16px; height: 16px; flex: none; margin-top: 2px; }
+.td-bnr p { margin: 0; }
+.td-bnr.is-info { background: var(--color-td-info-tint); border-color: var(--color-td-info-line); }
+.td-bnr.is-info svg { color: var(--color-td-info); }
+.td-bnr.is-danger { background: var(--color-td-danger-tint); border-color: var(--color-td-danger-line); }
+.td-bnr.is-danger svg { color: var(--color-td-danger); }
+.td-tnt-controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px; }
+.td-tnt-waiting { margin: 0 0 0 auto; font-size: 14px; color: var(--color-td-ink-2); }
 .td-tnt-waiting b { font-weight: 500; font-variant-numeric: tabular-nums; color: var(--color-td-ink); }
-.td-tnt-toolbar { display: flex; align-items: center; gap: 12px; padding: 0 16px 16px; }
+.td-tnt-toolbar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--color-td-hairline); }
+.td-card-body { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.td-card > form.td-card-body { border-top: 1px solid var(--color-td-hairline); }
+.td-card-body.is-row { flex-direction: row; align-items: flex-end; }
+.td-card-body.is-row .td-field { flex: 1; }
+.td-g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 800px) { .td-g2 { grid-template-columns: 1fr; } }
+.td-field-static { display: flex; align-items: center; min-height: 32px; padding: 0 10px; border: 1px solid var(--color-td-border); border-radius: 8px; background: var(--color-td-wash); color: var(--color-td-ink); font-size: 14px; }
 .td-filter-btn {
   display: inline-flex; align-items: center; gap: 8px;
   height: 36px; padding: 0 12px; border: 1px solid var(--color-td-border);
@@ -3790,7 +3908,6 @@ a.td-pid { cursor: pointer; }
 .td-scan-field[data-state="error"] .td-scan-status { color: var(--color-td-warning); }
 .td-scan-confirm { border-radius: 8px; }
 .td-rows.is-static tbody + tbody tr:first-child td { border-top: 1px solid var(--color-td-hairline); }
-.td-chip { display: inline-block; margin: 4px 4px 0 0; padding: 2px 6px; border-radius: 6px; background: var(--color-td-wash); font-size: 12px; }
 .td-row-actions { white-space: nowrap; text-align: right; }
 .td-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--color-td-wash); }
 .td-seg-item { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--color-td-ink-2); transition: background-color .15s ease, color .15s ease; }
@@ -3816,5 +3933,5 @@ a.td-pid { cursor: pointer; }
 .td-serial-label-tx span { font-family: var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
 /* Rendered off screen so html2canvas can rasterise every label for the print job. */
 .td-print-sheet { position: fixed; left: -10000px; top: 0; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
-.td-toolbar-count { margin-left: auto; font-size: 12px; color: var(--color-td-ink-2); }
+.td-toolbar-count { margin-left: auto; font-size: 14px; color: var(--color-td-ink-2); font-variant-numeric: tabular-nums; }
 .td-toolbar-count b { font-weight: var(--weight-td-medium); color: var(--color-td-ink); }

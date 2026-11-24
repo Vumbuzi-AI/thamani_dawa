@@ -63,6 +63,11 @@ defmodule ThamaniDawaWeb.PlatformOrganizationsLive do
       current_path="/platform/organizations"
       crumb={if @live_action == :show && @selected, do: @selected.organization.name, else: "Organizations"}
     >
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search name="search" value={@search} placeholder="Search by organization name" shortcut="⌘K" phx-debounce="200" />
+        </form>
+      </:search>
       <.td_list_page
         title="Organizations"
         subtitle="Businesses registered on the platform, with their sites, users, and recent activity."
@@ -70,12 +75,6 @@ defmodule ThamaniDawaWeb.PlatformOrganizationsLive do
         <:actions>
           <span class="td-badge">Read-only access</span>
         </:actions>
-        <:filters>
-          <form phx-change="search" class="flex-1" id="search-form">
-            <.search_input name="search" value={@search} placeholder="Search by organization name" />
-          </form>
-        </:filters>
-
       <.table
         id="platform-organizations"
         rows={@filtered}

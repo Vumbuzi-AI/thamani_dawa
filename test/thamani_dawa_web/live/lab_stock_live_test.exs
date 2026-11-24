@@ -123,7 +123,8 @@ defmodule ThamaniDawaWeb.LabStockLiveTest do
 
       assert html =~ "Lab stock"
       assert has_element?(view, "#lab-stock-toolbar")
-      assert has_element?(view, "#lab-stock-toolbar #search-form")
+      assert has_element?(view, ".td-tl #search-form")
+      refute has_element?(view, "#lab-stock-toolbar #search-form")
       assert has_element?(view, "#lab-stock-chip-category", "Category")
       assert has_element?(view, "#lab-stock-chip-status", "Status")
       assert has_element?(view, "#lab-stock-chip-expiry", "Expiry")

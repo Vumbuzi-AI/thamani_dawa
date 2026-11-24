@@ -513,9 +513,8 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
             </button>
             <div
               id="org-dashboard-range-filter-menu"
-              class="td-popover td-view-menu-pop"
+              class="td-popover td-view-menu-pop hidden"
               role="menu"
-              hidden
               phx-click-away={JS.hide(to: "#org-dashboard-range-filter-menu")}
             >
               <p class="td-popover-label">Date range</p>
@@ -532,49 +531,8 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
                 <span class="flex-1">{label}</span>
                 <.td_icon :if={key == @range} name="check" class="size-3.5" />
               </button>
-              <button
-                type="button"
-                role="menuitem"
-                class={["td-menu-item", @range == "custom" && "is-selected"]}
-                phx-click={
-                  JS.hide(to: "#org-dashboard-range-filter-menu")
-                  |> JS.push("toggle_filters")
-                }
-              >
-                <span class="flex-1">Custom…</span>
-                <.td_icon :if={@range == "custom"} name="check" class="size-3.5" />
-              </button>
-            </div>
-          </div>
-
-          <div class="relative">
-            <button type="button" phx-click="toggle_filters" class="td-chip">
-              <.td_icon name="funnel-simple" class="size-3.5" />
-              Filters
-              <span :if={@range == "custom"} class="td-chip-dot"></span>
-            </button>
-            <div
-              :if={@show_filters}
-              class="fixed inset-0 z-40"
-              phx-click="toggle_filters"
-            />
-            <div :if={@show_filters} class="td-popover td-org-dash-filters absolute right-0 top-full z-50 mt-2">
-              <form phx-submit="apply_custom_range">
-                <div class="td-org-dash-filters-hd">
-                  <h3>Filters</h3>
-                  <button type="button" phx-click="reset_filters" class="td-text-btn">
-                    Reset all
-                  </button>
-                  <button
-                    type="button"
-                    phx-click="toggle_filters"
-                    class="td-icon-btn"
-                    aria-label="Close filters"
-                  >
-                    <.td_icon name="x" class="size-3.5" />
-                  </button>
-                </div>
-                <p class="td-popover-label">Date range</p>
+              <form phx-submit="apply_custom_range" class="td-date-filter-custom">
+                <p class="td-popover-label">Custom</p>
                 <.date_range_picker
                   id="filter-dates"
                   from_name="from"
@@ -583,11 +541,12 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
                   to_value={elem(@dates, 1)}
                   max="today"
                 />
-                <div class="td-org-dash-filters-ft">
+                <div class="td-date-filter-ft">
+                  <span class="flex-1"></span>
                   <button type="button" phx-click="clear_filters" class="td-btn is-secondary">
-                    Clear filters
+                    Clear
                   </button>
-                  <button type="submit" class="td-btn is-primary">Apply filters</button>
+                  <button type="submit" class="td-btn is-primary">Apply</button>
                 </div>
               </form>
             </div>
@@ -696,7 +655,7 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
                   class="is-link"
                   phx-click={JS.navigate("/org/sites/#{row.site.id}?return_to=" <> URI.encode_www_form("/org/dashboard"))}
                 >
-                  <td>{row.site.name}</td>
+                  <td><span class="td-cell" title={row.site.name}>{row.site.name}</span></td>
                   <td class="is-num">{money(row.revenue)}</td>
                   <td class="is-num">{money(row.cost_of_goods)}</td>
                   <td class="is-num">{money(row.profit)}</td>

@@ -236,9 +236,19 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
           <:col :let={{_batch, serial_count}} label="Serials">{serial_count}</:col>
           <:empty>
             <.td_empty
+              icon="stack"
               title="No batches yet"
               hint="Generate serials to record the first batch for this product."
-            />
+            >
+              <:action>
+                <.td_button
+                  variant="secondary"
+                  glyph="arrow-right"
+                  label="Generate serials"
+                  patch={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
+                />
+              </:action>
+            </.td_empty>
           </:empty>
         </.td_data_table>
       </section>
@@ -300,9 +310,19 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
 
           <.td_empty
             :if={@pallet_groups == %{}}
+            icon="package"
             title="No SSCCs yet"
             hint="Create an SSCC to pack serialised units for shipping."
-          />
+          >
+            <:action>
+              <.td_button
+                variant="secondary"
+                glyph="arrow-right"
+                label="Create SSCC"
+                patch={~p"/manufacturer/products/#{@product.id}/sscc"}
+              />
+            </:action>
+          </.td_empty>
         </div>
       </section>
         </:body>

@@ -385,6 +385,17 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
       current_path="/pharmacy/prescriptions"
       crumb="Prescriptions"
     >
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search by patient name or phone"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
       <:tools>
         <.td_button
           id="prescription-new-button"
@@ -429,20 +440,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
         </nav>
 
         <div class="td-toolbar">
-          <form phx-change="search" id="search-form" onsubmit="return false">
-            <label class="td-search">
-              <.td_icon name="magnifying-glass" />
-              <input
-                type="search"
-                name="search"
-                value={@search}
-                placeholder="Search by patient name or phone"
-                phx-debounce="200"
-                autocomplete="off"
-              />
-              <kbd>/</kbd>
-            </label>
-          </form>
           <.td_filter_menu
             id="prescriptions"
             field="payment_type"
@@ -818,6 +815,12 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           <% else %>
             <p class="td-empty-title">No prescriptions yet</p>
             <p class="td-note">Prescriptions created at your site will appear here.</p>
+            <.td_button
+              id="prescriptions-empty-new"
+              variant="secondary"
+              label="New prescription"
+              patch={~p"/pharmacy/prescriptions/new"}
+            />
           <% end %>
         </div>
       </div>

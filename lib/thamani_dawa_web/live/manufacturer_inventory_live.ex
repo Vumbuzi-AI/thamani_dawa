@@ -64,9 +64,20 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLive do
         </section>
         <.td_empty
           :if={@groups == []}
+          icon="stack"
           title="No batches yet"
-          hint="Add a product and a batch to start tracking inventory."
-        />
+          hint="Generate serials for a product and the batch shows up here."
+        >
+          <:action>
+            <.td_button
+              id="inventory-go-products"
+              variant="secondary"
+              glyph="arrow-right"
+              label="Go to products"
+              navigate={~p"/manufacturer/products"}
+            />
+          </:action>
+        </.td_empty>
       </.td_list_page>
     </Layouts.manufacturer_shell>
     """

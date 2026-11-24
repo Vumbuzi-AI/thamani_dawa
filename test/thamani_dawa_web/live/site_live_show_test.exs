@@ -254,8 +254,6 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
       {:ok, lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
       assert stat_value(html, "Patient visits") == "0"
 
-      _html = lv |> element("button", "Filters") |> render_click()
-
       from = Date.utc_today() |> Date.add(-10) |> Date.to_iso8601()
       to = Date.utc_today() |> Date.to_iso8601()
 
@@ -270,8 +268,6 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
 
-      lv |> element("button", "Filters") |> render_click()
-
       html =
         render_submit(lv, "apply_custom_range", %{"from" => "not-a-date", "to" => "also-not"})
 
@@ -285,9 +281,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
 
-      lv |> element("button", "Filters") |> render_click()
-
-      # one TD range picker submits both ends
+      # the custom range sits in the date chip, not a second Filters panel
       assert has_element?(lv, "#site-filter-dates-dp.is-range[data-max='today']")
       assert has_element?(lv, ~s(#site-filter-dates-dp [data-dp-input="from"][name="from"]))
       assert has_element?(lv, ~s(#site-filter-dates-dp [data-dp-input="to"][name="to"]))

@@ -63,6 +63,17 @@ defmodule ThamaniDawaWeb.LabStockLive do
       current_path="/lab/stock"
       crumb="Stock"
     >
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder="Search product, GTIN or batch"
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
       <:tools>
         <.td_button
           id="lab-stock-receive"
@@ -100,6 +111,7 @@ defmodule ThamaniDawaWeb.LabStockLive do
         product_path={fn id -> ~p"/lab/stock/products/#{id}" end}
         batch_path={fn id -> ~p"/lab/stock/batches/#{id}" end}
         empty_hint="Batches received at your lab site appear here."
+        receive_path={~p"/lab/receive-stock"}
       />
     </Layouts.lab_shell>
     """

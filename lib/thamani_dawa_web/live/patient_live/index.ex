@@ -92,6 +92,21 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
       current_scope={@current_scope}
       current_path={CarePortal.patients(@portal)}
     >
+      <:search>
+        <form phx-change="search" id="search-form" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@search}
+            placeholder={
+              if @tab == "patients",
+                do: "Search by name, phone, or national ID",
+                else: "Search by patient name or phone"
+            }
+            shortcut="⌘K"
+            phx-debounce="200"
+          />
+        </form>
+      </:search>
       <.td_list_page title="Patients" subtitle="Patients recognized by your organization, and their visits.">
         <:tabs>
           <button
@@ -115,21 +130,6 @@ defmodule ThamaniDawaWeb.PatientLive.Index do
             Patient visits
           </button>
         </:tabs>
-        <:filters>
-          <div class="flex min-w-0 w-full items-center gap-3">
-            <form phx-change="search" class="min-w-0 flex-1" id="search-form">
-              <.search_input
-                name="search"
-                value={@search}
-                placeholder={
-                  if @tab == "patients",
-                    do: "Search by name, phone, or national ID",
-                    else: "Search by patient name or phone"
-                }
-              />
-            </form>
-          </div>
-        </:filters>
 
       <.table
         :if={@tab == "patients"}

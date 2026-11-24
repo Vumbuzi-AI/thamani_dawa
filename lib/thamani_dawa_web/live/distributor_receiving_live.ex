@@ -2205,6 +2205,17 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       current_scope={@current_scope}
       current_path={@receiving_index_path}
     >
+      <:search :if={!@receiving_new?}>
+        <form id="receiving-search" phx-change="search" phx-submit="search" onsubmit="return false">
+          <.td_search
+            name="search"
+            value={@receipt_filters["search"]}
+            placeholder="Search receipt, supplier, GLN, SSCC or batch"
+            shortcut="⌘K"
+            phx-debounce="250"
+          />
+        </form>
+      </:search>
       <%= if @receiving_new? and @receiving_portal == :organization do %>
         <div class="td-recipe">
           <div class="td-back">
@@ -2535,20 +2546,6 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
       <div :if={!@receiving_new?} class="td-list-page" id="receiving-list">
         <div class="td-toolbar">
-          <form id="receiving-search" phx-change="search" phx-submit="search" onsubmit="return false">
-            <label class="td-search">
-              <.td_icon name="magnifying-glass" />
-              <input
-                type="search"
-                name="search"
-                value={@receipt_filters["search"]}
-                placeholder="Search receipt, supplier, GLN, SSCC or batch"
-                phx-debounce="250"
-                autocomplete="off"
-              />
-              <kbd>/</kbd>
-            </label>
-          </form>
           <.td_filter_menu
             id="receiving"
             field="supplier"
@@ -3165,6 +3162,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
   attr :flash, :map, required: true
   attr :current_scope, :map, required: true
   attr :current_path, :string, required: true
+  slot :search
   slot :inner_block, required: true
 
   defp receiving_shell(%{portal: :organization} = assigns) do
@@ -3174,6 +3172,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       current_scope={@current_scope}
       current_path={@current_path}
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       {render_slot(@inner_block)}
     </Layouts.org_shell>
     """
@@ -3186,6 +3185,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
       current_scope={@current_scope}
       current_path={@current_path}
     >
+      <:search :if={@search != []}>{render_slot(@search)}</:search>
       {render_slot(@inner_block)}
     </Layouts.distributor_shell>
     """

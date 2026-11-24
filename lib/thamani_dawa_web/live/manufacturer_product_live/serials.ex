@@ -302,6 +302,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       current_scope={@current_scope}
       current_path={~p"/manufacturer/products"}
     >
+      <:search :if={@view == "serials" and @selected_batch}>
+        <form id="manufacturer-serial-search" phx-change="search">
+          <.td_search name="search" value={@search} placeholder="Search serials" shortcut="⌘K" phx-debounce="300" />
+        </form>
+      </:search>
       <%= if @view == "serials" and @selected_batch do %>
         {view_serials(assigns)}
       <% else %>
@@ -355,9 +360,20 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             <span>{error_message(@batches_error)}</span>
             <.td_button id="retry-serial-batches" label="Retry" phx-click="retry" />
           </div>
-          <div :if={@batches == [] and is_nil(@batches_error)} id="serial-batches-empty" class="td-pad">
-            <p class="td-empty-title">No serials yet</p>
-            <p class="td-note">Generate serials to create the first batch for this product.</p>
+          <div :if={@batches == [] and is_nil(@batches_error)} id="serial-batches-empty">
+            <.td_empty
+              icon="stack"
+              title="No serials yet"
+              hint="Generate serials to create the first batch for this product."
+            >
+              <:action>
+                <.td_button
+                  variant="secondary"
+                  label="Generate serials"
+                  patch={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
+                />
+              </:action>
+            </.td_empty>
           </div>
           <.link
             :for={batch <- @batches || []}
@@ -654,9 +670,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     </div>
 
     <div class="td-toolbar">
-      <form id="manufacturer-serial-search" phx-change="search">
-        <.td_search name="search" value={@search} placeholder="Search serials" phx-debounce="300" />
-      </form>
       <.td_filter_menu
         id="serials"
         field="state"

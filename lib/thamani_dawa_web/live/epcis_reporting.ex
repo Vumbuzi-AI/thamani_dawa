@@ -5,6 +5,22 @@ defmodule ThamaniDawaWeb.EpcisReporting do
   alias ThamaniDawa.Epcis.OutboxEvent
   alias ThamaniDawa.Epcis.Urn
 
+  attr :search_query, :string, required: true
+
+  def epcis_search(assigns) do
+    ~H"""
+    <form id="epcis-event-search-form" phx-change="search">
+      <.td_search
+        name="search"
+        value={@search_query}
+        placeholder="Search by action or event ID"
+        shortcut="⌘K"
+        phx-debounce="300"
+      />
+    </form>
+    """
+  end
+
   attr :empty_copy, :string, required: true
   attr :organization, :map, required: true
   attr :status_counts, :map, required: true
@@ -24,16 +40,17 @@ defmodule ThamaniDawaWeb.EpcisReporting do
     assigns = assign(assigns, :pending_count, assigns.status_counts["pending"] || 0)
 
     ~H"""
-    <div class="td-stack">
+    <section class="td-recipe">
       <.td_page_header
         title="TNT reporting"
         subtitle="Report supply-chain events to the PPB National Track and Trace Hub."
       />
+      <div class="td-pad is-account">
 
       <div
         :if={!@submission_enabled?}
         id="epcis-submission-disabled"
-        class="td-notice"
+        class="td-bnr is-info"
       >
         <.td_icon name="info" />
         <p>
@@ -45,7 +62,7 @@ defmodule ThamaniDawaWeb.EpcisReporting do
         :if={@queue_halted?}
         id="epcis-queue-halted"
         role="alert"
-        class="td-notice is-danger"
+        class="td-bnr is-danger"
       >
         <.td_icon name="warning" />
         <p>
@@ -121,27 +138,22 @@ defmodule ThamaniDawaWeb.EpcisReporting do
         </.td_card_header>
 
         <div class="td-tnt-toolbar">
-          <div id="epcis-status-filters" class="relative">
+          <div id="epcis-status-filters" class="td-chip-wrap">
             <button
               id="status-filter-dropdown-button"
               type="button"
-              phx-click={
-                JS.toggle(to: "#status-filter-dropdown-menu")
-                |> JS.toggle_class("rotate-180", to: "#status-dropdown-chevron")
-              }
-              class="td-filter-btn"
-              aria-haspopup="true"
+              phx-click={JS.toggle(to: "#status-filter-dropdown-menu")}
+              class="td-chip"
+              aria-haspopup="menu"
               aria-expanded="false"
             >
               <.td_icon name="funnel" />
-              <span>{selected_filter_label(@selected_status)}</span>
-              <span id="status-dropdown-chevron" class="inline-flex transition-transform">
-                <.td_icon name="caret-down" />
-              </span>
+              <span class="td-chip-value">{selected_filter_label(@selected_status)}</span>
+              <.td_icon name="caret-down" />
             </button>
             <div
               id="status-filter-dropdown-menu"
-              class="td-row-menu-list hidden"
+              class="td-popover td-filter-menu hidden"
               role="menu"
               aria-labelledby="status-filter-dropdown-button"
             >
@@ -196,13 +208,10 @@ defmodule ThamaniDawaWeb.EpcisReporting do
               />
             </div>
           </div>
-          <form phx-change="search" id="epcis-event-search-form" class="min-w-0 flex-1">
-            <.td_search name="search" value={@search_query} placeholder="Search by action or event ID" />
-          </form>
         </div>
 
-        <div class="td-table-wrap">
-          <table class="td-table">
+        <div>
+          <table class="td-rows">
             <thead>
               <tr>
                 <th>Event</th>
@@ -241,7 +250,8 @@ defmodule ThamaniDawaWeb.EpcisReporting do
       />
 
       <.confirm_modal :if={@confirm_action} action={@confirm_action} pending_count={@pending_count} />
-    </div>
+      </div>
+    </section>
     """
   end
 
@@ -478,7 +488,6 @@ defmodule ThamaniDawaWeb.EpcisReporting do
       phx-click={
         JS.push("filter_status", value: %{status: @status})
         |> JS.hide(to: "#status-filter-dropdown-menu")
-        |> JS.remove_class("rotate-180", to: "#status-dropdown-chevron")
       }
       role="menuitem"
       aria-pressed={to_string(@selected_status == @status)}
