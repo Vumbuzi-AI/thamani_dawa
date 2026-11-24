@@ -1438,7 +1438,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                     field={@admin_form[:password]}
                     type="password"
                     label="Password"
-                    hint="At least 12 characters"
+                    hint="At least 6 characters"
                     placeholder="••••••••"
                     autocomplete="new-password"
                     phx-debounce="blur"

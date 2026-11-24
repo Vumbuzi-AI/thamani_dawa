@@ -110,7 +110,7 @@ defmodule ThamaniDawaWeb.AcceptInviteLiveTest do
         )
         |> render_submit()
 
-      assert html =~ "Must be at least 12 characters"
+      assert html =~ "Must be at least 6 characters"
 
       assert %{hashed_password: nil} = Accounts.get_user!(organization.id, invited.id)
     end

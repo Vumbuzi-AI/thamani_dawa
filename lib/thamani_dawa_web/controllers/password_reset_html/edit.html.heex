@@ -15,7 +15,7 @@
 
     <div class="td-auth-panel">
       <h1>Choose a new password</h1>
-      <p class="td-auth-lead">Use at least 12 characters. You will log in with it from now on.</p>
+      <p class="td-auth-lead">Use at least 6 characters. You will log in with it from now on.</p>
       <p :if={msg = Phoenix.Flash.get(@flash, :error)} class="td-auth-error">{msg}</p>
 
       <.form
@@ -29,7 +29,7 @@
           field={@form[:password]}
           type="password"
           label="New password"
-          hint="At least 12 characters"
+          hint="At least 6 characters"
           placeholder="••••••••"
           autocomplete="new-password"
           required
