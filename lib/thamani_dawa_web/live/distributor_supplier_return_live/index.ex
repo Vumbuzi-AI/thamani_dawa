@@ -227,7 +227,6 @@ defmodule ThamaniDawaWeb.DistributorSupplierReturnLive.Index do
           </:actions>
         </.td_page_header>
       </div>
-      <.returns_tabs active={:supplier} />
 
       <.modal
         :if={@live_action == :new}

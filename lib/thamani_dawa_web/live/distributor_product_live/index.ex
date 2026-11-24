@@ -90,11 +90,13 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
     {:noreply, push_patch(socket, to: inventory_path(socket, %{view: view}))}
   end
 
-  def handle_event("filter_expiry", %{"expiry" => expiry}, socket) do
+  def handle_event("set_filter", %{"field" => "expiry", "value" => value}, socket) do
+    expiry = if value == "", do: "all", else: value
     {:noreply, push_patch(socket, to: inventory_path(socket, %{view: "batches", expiry: expiry}))}
   end
 
-  def handle_event("filter_hold", %{"hold" => hold}, socket) do
+  def handle_event("set_filter", %{"field" => "hold", "value" => value}, socket) do
+    hold = if value == "", do: "all", else: value
     {:noreply, push_patch(socket, to: inventory_path(socket, %{view: "batches", hold: hold}))}
   end
 
@@ -280,11 +282,6 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
     if Date.diff(expiry, today) < 0, do: :expired, else: nil
   end
 
-  defp expiry_filter_label("all"), do: "Any date"
-  defp expiry_filter_label("critical"), do: "Within 30 days"
-  defp expiry_filter_label("near"), do: "Within 90 days"
-  defp expiry_filter_label("expired"), do: "Expired"
-
   defp expiry_badge_label(:critical), do: "30 days or less"
   defp expiry_badge_label(:warning), do: "31–60 days"
   defp expiry_badge_label(:watch), do: "61–90 days"
@@ -369,82 +366,39 @@ defmodule ThamaniDawaWeb.DistributorProductLive.Index do
           </button>
         </:tabs>
         <:filters>
-          <div
-            id="distributor-product-toolbar"
-            class="flex min-w-0 w-full flex-wrap items-center gap-x-3 gap-y-2"
-          >
-            <form
-              phx-change="search"
-              id="distributor-product-search"
-              class="min-w-64 flex-1"
-            >
-              <.search_input
-                name="search"
-                value={@search}
-                placeholder={
-                  if @view == "products",
-                    do: "Search by product, GTIN, or category",
-                    else: "Search by product, GTIN, or batch number"
-                }
-              />
-            </form>
-            <div :if={@view == "batches"} class="flex flex-wrap items-center gap-2">
-              <div>
-                <span id="hold-filters-label" class="sr-only">Stock</span>
-                <div
-                  id="hold-filters"
-                  role="radiogroup"
-                  aria-labelledby="hold-filters-label"
-                  class="inline-flex rounded-lg border border-thamani-stone bg-thamani-surface p-1"
-                >
-                  <button
-                    :for={hold <- ["all", "quarantine"]}
-                    type="button"
-                    id={"hold-filter-#{hold}"}
-                    role="radio"
-                    aria-checked={to_string(@hold_filter == hold)}
-                    phx-click="filter_hold"
-                    phx-value-hold={hold}
-                    class={[
-                      "cursor-pointer rounded-md px-3 py-2 text-sm font-medium outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
-                      @hold_filter == hold && "bg-td-accent-tint text-thamani-forest",
-                      @hold_filter != hold &&
-                        "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
-                    ]}
-                  >
-                    {if hold == "all", do: "All stock", else: "Quarantine"}
-                  </button>
-                </div>
-              </div>
-              <div>
-                <span id="expiry-filters-label" class="sr-only">Expiry</span>
-                <div
-                  id="expiry-filters"
-                  role="radiogroup"
-                  aria-labelledby="expiry-filters-label"
-                  class="inline-flex max-w-full flex-wrap rounded-lg border border-thamani-stone bg-thamani-surface p-1"
-                >
-                  <button
-                    :for={expiry <- ["all", "critical", "near", "expired"]}
-                    type="button"
-                    id={"expiry-filter-#{expiry}"}
-                    role="radio"
-                    aria-checked={to_string(@expiry_filter == expiry)}
-                    phx-click="filter_expiry"
-                    phx-value-expiry={expiry}
-                    class={[
-                      "cursor-pointer rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap outline-none transition-all duration-200 focus-visible:ring-2 focus-visible:ring-thamani-forest focus-visible:ring-offset-2",
-                      @expiry_filter == expiry && "bg-td-accent-tint text-thamani-forest",
-                      @expiry_filter != expiry &&
-                        "text-thamani-pewter hover:bg-td-surface/60 hover:text-thamani-forest"
-                    ]}
-                  >
-                    {expiry_filter_label(expiry)}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <form phx-change="search" id="distributor-product-search" class="td-search-grow">
+            <.td_search
+              name="search"
+              value={@search}
+              placeholder={
+                if @view == "products",
+                  do: "Search by product, GTIN, or category",
+                  else: "Search by product, GTIN, or batch number"
+              }
+              phx-debounce="200"
+            />
+          </form>
+          <.td_filter_menu
+            :if={@view == "batches"}
+            id="distributor-batches"
+            field="hold"
+            label="Stock"
+            value={if @hold_filter == "all", do: "", else: @hold_filter}
+            options={[{"", "All stock"}, {"quarantine", "Quarantine"}]}
+          />
+          <.td_filter_menu
+            :if={@view == "batches"}
+            id="distributor-batches"
+            field="expiry"
+            label="Expiry"
+            value={if @expiry_filter == "all", do: "", else: @expiry_filter}
+            options={[
+              {"", "Any date"},
+              {"critical", "Within 30 days"},
+              {"near", "Within 90 days"},
+              {"expired", "Expired"}
+            ]}
+          />
         </:filters>
 
       <.modal

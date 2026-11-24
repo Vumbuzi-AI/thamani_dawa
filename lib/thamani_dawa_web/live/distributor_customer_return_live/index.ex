@@ -1213,8 +1213,6 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
           </.td_page_header>
         </div>
 
-        <.returns_tabs active={:customer} />
-
         <.modal
           :if={@live_action == :new}
           id="customer-return-modal"
@@ -1223,42 +1221,22 @@ defmodule ThamaniDawaWeb.DistributorCustomerReturnLive.Index do
           title="New customer return"
           subtitle="Pick the customer and, if you can, the shipment it came from."
         >
-          <div
-            role="radiogroup"
-            aria-label="Where this return comes from"
-            class="mt-4 mb-5 grid grid-cols-2 gap-0.5 rounded-full bg-thamani-stone p-0.5"
-          >
-            <button
-              type="button"
+          <.td_segmented>
+            <.td_segment
               id="return-source-shipment"
-              role="radio"
-              aria-checked={to_string(@return_source == "shipment")}
+              label="From a shipment"
+              active={@return_source == "shipment"}
               phx-click="switch_return_source"
               phx-value-source="shipment"
-              class={[
-                "inline-flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent",
-                @return_source == "shipment" && "bg-thamani-forest text-td-on-accent",
-                @return_source != "shipment" && "text-thamani-pewter hover:text-thamani-forest"
-              ]}
-            >
-              From a shipment
-            </button>
-            <button
-              type="button"
+            />
+            <.td_segment
               id="return-source-customer"
-              role="radio"
-              aria-checked={to_string(@return_source == "customer")}
+              label="No shipment on record"
+              active={@return_source == "customer"}
               phx-click="switch_return_source"
               phx-value-source="customer"
-              class={[
-                "inline-flex h-8 items-center justify-center rounded-full px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-thamani-accent",
-                @return_source == "customer" && "bg-thamani-forest text-td-on-accent",
-                @return_source != "customer" && "text-thamani-pewter hover:text-thamani-forest"
-              ]}
-            >
-              No shipment on record
-            </button>
-          </div>
+            />
+          </.td_segmented>
           <form
             :if={@return_source == "shipment" and is_nil(@selected_shipment)}
             id="shipment-search-form"

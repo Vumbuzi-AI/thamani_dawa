@@ -59,20 +59,20 @@ defmodule ThamaniDawaWeb.DistributorStockLiveTest do
 
     {:ok, view, html} = follow_redirect(live(conn, ~p"/distributor/stock?expiry=critical"), conn)
 
-    assert has_element?(view, "#expiry-filter-critical[aria-checked='true']")
-    assert has_element?(view, "#expiry-filter-expired")
+    assert has_element?(view, "#distributor-batches-expiry-critical[aria-checked='true']")
+    assert has_element?(view, "#distributor-batches-expiry-expired")
     assert html =~ "Inventory"
     assert html =~ short.batch_no
     refute html =~ "LOT-MID"
     refute html =~ "LOT-EXPIRED"
     refute html =~ "LOT-LONG"
 
-    html = view |> element("#expiry-filter-expired") |> render_click()
+    html = view |> element("#distributor-batches-expiry-expired") |> render_click()
     assert html =~ "LOT-EXPIRED"
     refute html =~ short.batch_no
     refute html =~ "LOT-MID"
 
-    html = view |> element("#expiry-filter-near") |> render_click()
+    html = view |> element("#distributor-batches-expiry-near") |> render_click()
     assert html =~ short.batch_no
     assert html =~ "LOT-MID"
     refute html =~ "LOT-EXPIRED"
@@ -81,7 +81,7 @@ defmodule ThamaniDawaWeb.DistributorStockLiveTest do
     {:ok, redirected, redirected_html} =
       follow_redirect(live(conn, ~p"/distributor/expiring"), conn)
 
-    assert has_element?(redirected, "#expiry-filter-near")
+    assert has_element?(redirected, "#distributor-batches-expiry-near")
     assert redirected_html =~ "LOT-SHORT"
     refute redirected_html =~ "LOT-LONG"
   end

@@ -434,30 +434,32 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
         on_close={JS.push("close_datamatrix")}
       />
 
-      <.tab_group
-        :if={@show_warehouse_section?}
-        variant="compact"
-        class="mb-5 w-full max-w-none lg:max-w-md [&>button]:flex-1"
-      >
-        <:tab
+      <nav :if={@show_warehouse_section?} class="td-tabs" aria-label="Where the stock sits">
+        <button
           id="warehouse-stock-tab"
-          active={@stock_tab == "warehouse"}
-          phx_click="switch_stock_tab"
-          phx_value_tab="warehouse"
-          controls="warehouse-stock-panel"
+          type="button"
+          role="tab"
+          class={["td-tab", @stock_tab == "warehouse" && "is-active"]}
+          phx-click="switch_stock_tab"
+          phx-value-tab="warehouse"
+          aria-selected={to_string(@stock_tab == "warehouse")}
+          aria-controls="warehouse-stock-panel"
         >
           Warehouse stock
-        </:tab>
-        <:tab
+        </button>
+        <button
           id="sites-stock-tab"
-          active={@stock_tab == "sites"}
-          phx_click="switch_stock_tab"
-          phx_value_tab="sites"
-          controls="sites-stock-panel"
+          type="button"
+          role="tab"
+          class={["td-tab", @stock_tab == "sites" && "is-active"]}
+          phx-click="switch_stock_tab"
+          phx-value-tab="sites"
+          aria-selected={to_string(@stock_tab == "sites")}
+          aria-controls="sites-stock-panel"
         >
           Stock at sites
-        </:tab>
-      </.tab_group>
+        </button>
+      </nav>
 
       <div
         :if={@show_warehouse_section?}

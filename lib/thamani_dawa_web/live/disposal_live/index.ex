@@ -218,25 +218,30 @@ defmodule ThamaniDawaWeb.DisposalLive.Index do
             patch={new_path(@portal, @list_kind)}
           />
         </:actions>
-
-      <.tab_group class="mb-5">
-        <:tab
-          id="disposal-tab-expiry"
-          active={@list_kind == "expiry"}
-          phx_click="switch_kind"
-          phx_value_tab="expiry"
-        >
-          Expiry write-off
-        </:tab>
-        <:tab
-          id="disposal-tab-returned"
-          active={@list_kind == "returned"}
-          phx_click="switch_kind"
-          phx_value_tab="returned"
-        >
-          Supplier return
-        </:tab>
-      </.tab_group>
+        <:tabs>
+          <button
+            id="disposal-tab-expiry"
+            type="button"
+            role="tab"
+            class={["td-tab", @list_kind == "expiry" && "is-active"]}
+            phx-click="switch_kind"
+            phx-value-tab="expiry"
+            aria-selected={to_string(@list_kind == "expiry")}
+          >
+            Expiry write-off
+          </button>
+          <button
+            id="disposal-tab-returned"
+            type="button"
+            role="tab"
+            class={["td-tab", @list_kind == "returned" && "is-active"]}
+            phx-click="switch_kind"
+            phx-value-tab="returned"
+            aria-selected={to_string(@list_kind == "returned")}
+          >
+            Supplier return
+          </button>
+        </:tabs>
 
       <.modal
         :if={@live_action == :new}
