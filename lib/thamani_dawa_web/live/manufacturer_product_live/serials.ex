@@ -1,6 +1,8 @@
 defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   use ThamaniDawaWeb, :live_view
 
+  require Logger
+
   alias ThamaniDawa.Manufacturing
   alias ThamaniDawaWeb.DistributorPagination
 
@@ -68,8 +70,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     {:noreply, select_batch(socket)}
   end
 
-  def handle_async(:batches, {:exit, _reason}, socket),
-    do: {:noreply, assign(socket, batches: [], batches_error: :unavailable)}
+  def handle_async(:batches, {:exit, reason}, socket) do
+    Logger.error("Serials page: loading batches crashed: #{inspect(reason)}")
+    {:noreply, assign(socket, batches: [], batches_error: :unavailable)}
+  end
 
   def handle_async(:serials, {:ok, {shippers, by_serial, result}}, socket) do
     batch = socket.assigns.selected_batch
@@ -95,13 +99,19 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           )
 
         {:error, reason} ->
+          Logger.warning(
+            "Serials page: GS1 get_batch_serials failed for #{socket.assigns.product.gtin} batch #{inspect(batch && batch.batch_no)}: #{inspect(reason)}"
+          )
+
           assign(socket, serial_page: nil, serials_error: reason, label_serial: nil)
       end
 
     {:noreply, socket}
   end
 
-  def handle_async(:serials, {:exit, _reason}, socket) do
+  def handle_async(:serials, {:exit, reason}, socket) do
+    Logger.error("Serials page: loading serials crashed: #{inspect(reason)}")
+
     {:noreply,
      assign(socket,
        serials_loading: false,
@@ -380,6 +390,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     do: "GS1 rejected your API key."
 
   defp error_message({:invalid, message}), do: message
+
+  defp error_message({:unavailable, "HTTP " <> detail}) do
+    status = detail |> String.split(":", parts: 2) |> hd()
+    "GS1 couldn't load serials (error #{status}). Try again shortly."
+  end
+
   defp error_message(_reason), do: "Couldn't reach GS1 to load serials. Try again shortly."
 
   def render(assigns) do

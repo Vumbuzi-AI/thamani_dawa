@@ -429,10 +429,22 @@ defmodule ThamaniDawa.GS1.MemberApi do
 
   def decode_batch_serial_page_response(other) do
     case decode_batch_serials_response(other) do
-      {:ok, _results} -> {:error, :unavailable}
-      error -> error
+      {:ok, _results} ->
+        {:error, {:unavailable, describe_response(other)}}
+
+      {:error, :unavailable} ->
+        {:error, {:unavailable, describe_response(other)}}
+
+      error ->
+        error
     end
   end
+
+  # Enough of an unexpected answer to tell a GS1 error from a network one.
+  defp describe_response({:ok, status, body}),
+    do: "HTTP #{status}: #{body |> inspect() |> String.slice(0, 300)}"
+
+  defp describe_response({:error, reason}), do: inspect(reason)
 
   @doc false
   def decode_batch_serials_response({:ok, status, %{"results" => results}})
