@@ -705,10 +705,12 @@ defmodule ThamaniDawaWeb.Layouts do
         </div>
       </:side>
       <:content>
-        <%!-- Page-level back affordance. Lives outside the page's header card
-               on purpose: separation comes from whitespace, not another box. --%>
+        <%!-- Page-level back. Pass `back` on the shell and do not also render
+               td_back_link / .td-back in the page — that stacks two identical
+               links. Lives outside the header card on purpose. --%>
         <.link
           :if={is_binary(@back)}
+          id="page-back"
           navigate={@back}
           class="group inline-flex items-center gap-2 text-[13px] font-medium transition-colors hover:text-thamani-forest"
           style="color: var(--thamani-pewter);"

@@ -8,6 +8,10 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
   import ThamaniDawa.BatchesFixtures
   import ThamaniDawa.SuppliersFixtures
 
+  alias ThamaniDawa.GS1.MemberApiStub
+  alias ThamaniDawa.Organizations
+  alias ThamaniDawa.Products
+
   setup do
     admin = user_fixture()
     site = site_fixture(%{organization_id: admin.organization_id})
@@ -45,6 +49,49 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert has_element?(lv, "#sidebar-toggle")
       assert has_element?(lv, "#sidebar-aside")
       assert html =~ "Sidebar"
+    end
+
+    test "hides Sync from GS1 until the organization has a GS1 API key", %{
+      conn: conn,
+      admin: admin
+    } do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      refute has_element?(lv, "#sync-org-products")
+      refute has_element?(lv, "#products-empty-sync")
+      assert has_element?(lv, "#products-empty-new", "Add product")
+    end
+
+    test "syncs GTINs from GS1 into the empty catalogue", %{conn: conn, admin: admin} do
+      save_gs1_key(admin)
+      gtin = unique_gtin()
+
+      MemberApiStub.put_products([
+        %{
+          "gtin" => gtin,
+          "name" => "GS1 Panadol",
+          "description" => "Paracetamol 500mg",
+          "status" => "active"
+        }
+      ])
+
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
+
+      assert has_element?(lv, "#sync-org-products")
+      assert has_element?(lv, "#products-empty-sync", "Sync from GS1")
+      assert has_element?(lv, ~s(#products-empty-sync[phx-disable-with="Syncing"]))
+      assert has_element?(lv, ~s(#sync-org-products[phx-disable-with="Syncing"]))
+      assert has_element?(lv, "#products-empty", "Products come from your GS1 member account")
+
+      lv |> element("#products-empty-sync") |> render_click()
+      html = render_async(lv)
+      assert html =~ "Synced 1 product from GS1."
+      assert html =~ "Paracetamol 500mg"
+      assert html =~ gtin
+      refute has_element?(lv, "#products-empty")
+
+      product = Products.get_product_by_gtin(admin.organization_id, gtin)
+      assert product.brand_name == "GS1 Panadol"
     end
 
     test "opens the add-product modal and closes it again on cancel", %{
@@ -169,41 +216,42 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv
-      |> form("#products-filters-form", filters: %{category: "Painkiller"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "category", "value" => "Painkiller"})
 
       html = render(lv)
       assert html =~ "Panadol"
       refute html =~ "Amoxil"
-      assert html =~ "Category: Painkiller"
+      assert has_element?(lv, "#products-chip-category", "Painkiller")
     end
 
-    test "filters by the over-the-counter flag", %{conn: conn, admin: admin} do
+    test "filters by status", %{conn: conn, admin: admin} do
       product_fixture(%{
         organization_id: admin.organization_id,
         generic_name: "Panadol",
-        is_otc: true
+        is_active: true
       })
 
       product_fixture(%{
         organization_id: admin.organization_id,
         generic_name: "Amoxil",
-        is_otc: false
+        is_active: false
       })
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv
-      |> form("#products-filters-form", filters: %{is_otc: "true", is_dangerous_drug: "false"})
-      |> render_submit()
+      refute has_element?(lv, "#products-filters-form")
+      refute render(lv) =~ "Over-the-counter"
+      refute render(lv) =~ "Dangerous drug"
+
+      render_click(lv, "set_filter", %{"field" => "status", "value" => "inactive"})
 
       html = render(lv)
-      assert html =~ "Panadol"
-      refute html =~ "Amoxil"
+      assert html =~ "Amoxil"
+      refute html =~ "Panadol"
+      assert has_element?(lv, "#products-chip-status", "Inactive")
     end
 
-    test "clear_filters resets category and flag filters", %{conn: conn, admin: admin} do
+    test "clearing a category filter shows every product again", %{conn: conn, admin: admin} do
       product_fixture(%{
         organization_id: admin.organization_id,
         generic_name: "Panadol",
@@ -218,13 +266,11 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv
-      |> form("#products-filters-form", filters: %{category: "Painkiller"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "category", "value" => "Painkiller"})
 
       refute render(lv) =~ "Amoxil"
 
-      lv |> element("button", "Clear filters") |> render_click()
+      render_click(lv, "set_filter", %{"field" => "category", "value" => ""})
 
       html = render(lv)
       assert html =~ "Panadol"
@@ -252,9 +298,7 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
 
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/products")
 
-      lv
-      |> form("#products-filters-form", filters: %{category: "Painkiller"})
-      |> render_submit()
+      render_click(lv, "set_filter", %{"field" => "category", "value" => "Painkiller"})
 
       lv |> form("form[phx-change='search']", search: "extra") |> render_change()
 
@@ -606,6 +650,9 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "Show Me Product"
       assert html =~ "99"
       assert html =~ "GlaxoSmithKline"
+      assert Enum.count(Regex.scan(~r/Back to Products/, html)) == 1
+      assert has_element?(lv, "#page-back", "Back to Products")
+      refute has_element?(lv, ".td-back")
       assert has_element?(lv, "#product-details")
       assert has_element?(lv, "#btn-add-product-stock")
       assert has_element?(lv, "#btn-edit-product")
@@ -992,5 +1039,15 @@ defmodule ThamaniDawaWeb.ProductLiveTest do
       assert html =~ "LOT-PRINT-ME"
       assert html =~ "Print Label"
     end
+  end
+
+  defp save_gs1_key(admin) do
+    {:ok, _} =
+      Organizations.set_gs1_api_key(
+        Organizations.get_organization!(admin.organization_id),
+        "gs1-secret-key-9876"
+      )
+
+    :ok
   end
 end

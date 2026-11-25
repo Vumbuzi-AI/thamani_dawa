@@ -1,6 +1,8 @@
 defmodule ThamaniDawa.ProductsTest do
   use ThamaniDawa.DataCase, async: true
 
+  alias ThamaniDawa.GS1.MemberApiStub
+  alias ThamaniDawa.Organizations
   alias ThamaniDawa.Products
   alias ThamaniDawa.Products.Product
 
@@ -290,5 +292,79 @@ defmodule ThamaniDawa.ProductsTest do
 
       assert Enum.map(page.entries, & &1.id) == [dispatched_product.id]
     end
+  end
+
+  describe "sync_from_gs1/1" do
+    test "refuses when the organization has no GS1 API key" do
+      organization = organization_fixture()
+      assert {:error, :unconfigured} = Products.sync_from_gs1(organization.id)
+    end
+
+    test "creates catalogue products from the member account GTINs" do
+      organization = organization_with_gs1_key()
+      gtin = unique_gtin()
+
+      MemberApiStub.put_products([
+        %{
+          "gtin" => gtin,
+          "name" => "GS1 Panadol",
+          "description" => "Paracetamol 500mg",
+          "brand_owner" => "GSK",
+          "status" => "active"
+        }
+      ])
+
+      assert {:ok, 1} = Products.sync_from_gs1(organization.id)
+
+      product = Products.get_product_by_gtin(organization.id, gtin)
+      assert product.generic_name == "Paracetamol 500mg"
+      assert product.brand_name == "GS1 Panadol"
+      assert product.manufacturer == "GSK"
+      assert product.uom == "H87"
+      assert product.price == 0
+      assert product.is_active
+    end
+
+    test "refreshes name and status without overwriting price or unit" do
+      organization = organization_with_gs1_key()
+      gtin = unique_gtin()
+
+      {:ok, existing} =
+        Products.create_product(organization.id, %{
+          gtin: gtin,
+          generic_name: "Old name",
+          brand_name: "Old brand",
+          manufacturer: "Old Co",
+          uom: "U2",
+          price: 250,
+          is_active: true
+        })
+
+      MemberApiStub.put_products([
+        %{
+          "gtin" => gtin,
+          "name" => "New brand",
+          "description" => "New generic",
+          "brand_owner" => "New Co",
+          "status" => "inactive"
+        }
+      ])
+
+      assert {:ok, 1} = Products.sync_from_gs1(organization.id)
+
+      product = Products.get_product!(organization.id, existing.id)
+      assert product.generic_name == "New generic"
+      assert product.brand_name == "New brand"
+      assert product.manufacturer == "New Co"
+      refute product.is_active
+      assert product.uom == "U2"
+      assert product.price == 250
+    end
+  end
+
+  defp organization_with_gs1_key do
+    organization = organization_fixture()
+    {:ok, organization} = Organizations.set_gs1_api_key(organization, "gs1-secret-key-9876")
+    organization
   end
 end

@@ -620,22 +620,14 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           </button>
         </div>
       <% else %>
-        <div class="relative">
-          <.icon
-            name="hero-magnifying-glass"
-            class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-thamani-pewter"
-          />
-          <input
-            type="search"
-            id="gln-picker-search"
-            name="gln_query"
-            value={@query}
-            placeholder="Search by name, town, address or GLN"
-            autocomplete="off"
-            phx-debounce="150"
-            class="thamani-input pl-9"
-          />
-        </div>
+        <.td_search
+          id="gln-picker-search"
+          name="gln_query"
+          value={@query}
+          placeholder="Search by name, town, address or GLN"
+          autocomplete="off"
+          phx-debounce="150"
+        />
 
         <ul
           id="gln-picker-list"
@@ -655,12 +647,13 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               class={[
                 "group flex w-full items-center gap-3 px-3 py-2.5 text-left transition",
                 if(pickable,
-                  do: "hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none",
+                  do:
+                    "hover:bg-[var(--color-td-hover)] focus-visible:bg-[var(--color-td-hover)] focus-visible:outline-none",
                   else: "cursor-not-allowed opacity-55"
                 )
               ]}
             >
-              <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-thamani-pewter transition group-hover:bg-thamani-forest group-hover:text-white group-disabled:group-hover:bg-slate-100 group-disabled:group-hover:text-thamani-pewter">
+              <span class="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[var(--color-td-control)] text-[var(--color-td-ink-2)] transition group-hover:bg-[var(--color-td-accent)] group-hover:text-[var(--color-td-on-accent)] group-disabled:group-hover:bg-[var(--color-td-control)] group-disabled:group-hover:text-[var(--color-td-ink-2)]">
                 <.icon name="hero-building-office-2" class="size-4" />
               </span>
               <span class="min-w-0 flex-1">
@@ -674,7 +667,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               </span>
               <%= cond do %>
                 <% MapSet.member?(@taken, row["gln"]) -> %>
-                  <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-thamani-pewter">
+                  <span class="shrink-0 rounded-full bg-[var(--color-td-control)] px-2 py-0.5 text-[11px] font-semibold text-[var(--color-td-ink-2)]">
                     Already added
                   </span>
                 <% not gln_active?(row) -> %>
@@ -704,7 +697,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
 
   defp site_form(assigns) do
     ~H"""
-    <form id="site-form" phx-submit="save" phx-change="validate">
+    <form id="site-form" phx-submit="save" phx-change="validate" class="td-modal-form">
       <%= if @gln_check do %>
         <%= if @gs1_glns != [] do %>
           <.gln_picker
@@ -715,7 +708,7 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             query={@gln_query}
           />
         <% else %>
-          <.input
+          <.td_input
             id="site-gln"
             field={@form[:gln]}
             label="GS1 Global Location Number (GLN)"
@@ -780,28 +773,30 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
             </p>
         <% end %>
 
-        <input type="hidden" name="site[address]" value={@form[:address].value} />
+        <input
+          :if={not match?({:matched, _, _}, @gln_check)}
+          type="hidden"
+          name="site[address]"
+          value={@form[:address].value}
+        />
 
         <%= if match?({:matched, _, _}, @gln_check) do %>
-          <%= case @gln_check do %>
-            <% {:matched, nil, _address} -> %>
-              <.input
-                id="site-name"
-                field={@form[:name]}
-                label="Site name"
-                placeholder="e.g. Afya CBD"
-                phx-debounce="blur"
-                required
-              />
-            <% {:matched, _name, _address} when @gs1_glns != [] -> %>
-              <input type="hidden" name="site[name]" value={@form[:name].value} />
-            <% {:matched, name, address} -> %>
-              <input type="hidden" name="site[name]" value={@form[:name].value} />
-              <div class="mb-4 rounded-xl border border-thamani-stone bg-td-wash/60 p-3">
-                <p class="text-sm font-medium text-thamani-forest">{name}</p>
-                <p :if={address} class="text-xs text-thamani-pewter">{address}</p>
-              </div>
-          <% end %>
+          <div class="td-fgrid is-2">
+            <.td_input
+              id="site-name"
+              field={@form[:name]}
+              label="Site name"
+              placeholder="e.g. Afya CBD"
+              phx-debounce="blur"
+              required
+            />
+            <.td_input
+              id="site-address"
+              field={@form[:address]}
+              label="Address"
+              required
+            />
+          </div>
 
           <%= case site_activity_choices(@operating_models) do %>
             <% [] -> %>
@@ -844,15 +839,11 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
                 </p>
               </fieldset>
           <% end %>
-
-          <div class="mt-5 flex justify-end border-t border-thamani-stone pt-4">
-            <.button variant="primary" class="sm:w-auto sm:min-w-32">Save site</.button>
-          </div>
         <% end %>
       <% else %>
-        <div class="grid gap-x-4 sm:grid-cols-2">
-          <.input id="site-name" field={@form[:name]} label="Name" required />
-          <.input
+        <div class="td-fgrid is-2">
+          <.td_input id="site-name" field={@form[:name]} label="Name" required />
+          <.td_input
             id="site-gln"
             field={@form[:gln]}
             label="GS1 Global Location Number (GLN)"
@@ -902,22 +893,24 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               </p>
             </fieldset>
         <% end %>
-        <div class="mt-4">
-          <.input
-            id="site-address"
-            field={@form[:address]}
-            type="textarea"
-            label="Address"
-            rows="2"
-            required
-          />
-        </div>
-        <div class="mt-5 flex justify-end border-t border-thamani-stone pt-4">
-          <.button variant="primary" class="sm:w-auto sm:min-w-32">Save site</.button>
-        </div>
+        <.td_textarea
+          id="site-address"
+          field={@form[:address]}
+          label="Address"
+          rows="2"
+          required
+        />
       <% end %>
     </form>
     """
+  end
+
+  defp site_modal_cancel(back_path) do
+    if back_path in [~p"/org/dashboard", ~p"/onboarding"] do
+      JS.navigate(back_path)
+    else
+      JS.patch(back_path)
+    end
   end
 
   def render(assigns) do
@@ -1030,15 +1023,16 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
       </:footer>
     </.onboarding_task_shell>
 
-    <.modal
+    <.td_modal
       :if={@show_onboarding_site_form?}
       id="onboarding-site-modal"
-      class="max-w-3xl"
       show
+      width={600}
+      title="Add a branch"
+      subtitle="Register another location once you're ready to operate from more than one."
       on_cancel={JS.push("close_onboarding_site")}
     >
-      <h2 class="pr-10 text-2xl font-medium tracking-tight text-thamani-forest">Add a branch</h2>
-      <div class="mt-6">
+      <:body>
         <.site_form
           form={@form}
           gln_check={@gln_check}
@@ -1047,8 +1041,23 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           taken_glns={@taken_glns}
           gln_query={@gln_query}
         />
-      </div>
-    </.modal>
+      </:body>
+      <:footer>
+        <.td_button
+          type="button"
+          variant="secondary"
+          label="Cancel"
+          phx-click={JS.push("close_onboarding_site")}
+        />
+        <.td_button
+          type="submit"
+          variant="primary"
+          label="Save site"
+          glyph="check"
+          form="site-form"
+        />
+      </:footer>
+    </.td_modal>
     """
   end
 
@@ -1090,24 +1099,16 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
           />
         </:filters>
 
-        <.modal
+        <.td_modal
           :if={@live_action in [:new, :edit]}
           id="site-modal"
-          class="max-w-3xl"
           show
-          on_cancel={
-            if @back_path in [~p"/org/dashboard", ~p"/onboarding"],
-              do: JS.navigate(@back_path),
-              else: JS.patch(@back_path)
-          }
+          width={600}
+          title={if @live_action == :new, do: "Add a site", else: "Edit site"}
+          subtitle="Configure the location identity and activities."
+          on_cancel={site_modal_cancel(@back_path)}
         >
-          <h2 class="pr-10 text-2xl font-medium tracking-tight text-thamani-forest">
-            {if @live_action == :new, do: "Add a site", else: "Edit site"}
-          </h2>
-          <p class="mt-1 text-sm text-thamani-pewter">
-            Configure the location identity, activities, and map position.
-          </p>
-          <div class="mt-6">
+          <:body>
             <.site_form
               form={@form}
               gln_check={@gln_check}
@@ -1116,8 +1117,23 @@ defmodule ThamaniDawaWeb.SiteLive.Index do
               taken_glns={@taken_glns}
               gln_query={@gln_query}
             />
-          </div>
-        </.modal>
+          </:body>
+          <:footer>
+            <.td_button
+              type="button"
+              variant="secondary"
+              label="Cancel"
+              phx-click={site_modal_cancel(@back_path)}
+            />
+            <.td_button
+              type="submit"
+              variant="primary"
+              label="Save site"
+              glyph="check"
+              form="site-form"
+            />
+          </:footer>
+        </.td_modal>
 
         <section id="sites" aria-label="Sites" class="space-y-3 sm:hidden">
           <article

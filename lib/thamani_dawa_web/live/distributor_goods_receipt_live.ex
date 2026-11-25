@@ -480,11 +480,6 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLive do
     >
       <%= if @receiving_portal == :organization do %>
         <div class="td-recipe">
-          <div class="td-back">
-            <.link navigate={@receiving_index_path} class="td-back-link">
-              <.td_icon name="arrow-left" class="size-3.5" /> Back to Receiving
-            </.link>
-          </div>
           <.td_page_header title="Goods receipt" subtitle={receipt_received_at(@receipt.received_at)}>
             <:actions>
               <.td_badge tone="success" label="Received" />

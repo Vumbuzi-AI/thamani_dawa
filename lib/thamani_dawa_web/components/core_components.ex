@@ -2046,59 +2046,31 @@ defmodule ThamaniDawaWeb.CoreComponents do
   def onboarding_task_shell(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope} navigation={false}>
-      <div class="flex min-h-svh flex-col bg-[var(--thamani-surface)]">
-        <header class="border-b border-[color-mix(in_srgb,var(--thamani-stone)_70%,transparent)]">
-          <div class="mx-auto flex h-20 w-full max-w-7xl items-center justify-between gap-6 px-5 sm:px-8 lg:px-12">
-            <.link
-              navigate={~p"/onboarding"}
-              aria-label="Back to onboarding"
-              class="w-36 sm:w-[148px]"
-            >
-              <img src="/images/logo-transparent.png" alt="" class="h-auto w-full" />
-            </.link>
-
-            <div class="flex min-w-0 items-center gap-3">
-              <span
-                class="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--thamani-forest)] text-sm font-semibold uppercase text-[var(--thamani-on-accent)] shadow-sm"
-                aria-hidden="true"
-              >
-                {String.first(@current_scope.user.name || "U")}
-              </span>
-              <span class="max-w-44 truncate text-sm font-medium text-[var(--thamani-forest)]">
-                {@current_scope.user.name}
-              </span>
-            </div>
-          </div>
+      <div class="td-onb">
+        <header class="td-onb-bar">
+          <.link navigate={~p"/onboarding"} aria-label="Back to onboarding">
+            <img src="/images/logo-transparent.png" alt="" />
+          </.link>
+          <span class="td-onb-who">{@current_scope.user.name}</span>
         </header>
 
-        <div class="h-1 w-full overflow-hidden bg-[var(--thamani-stone)]" aria-label="Setup progress">
-          <div
-            class="h-full bg-[var(--thamani-forest)] transition-[width] duration-300 ease-out"
-            style={"width: #{progress_pct(@progress_current, @progress_total)}%"}
-          />
-        </div>
-
-        <main class="mx-auto grid w-full max-w-6xl flex-1 items-start gap-10 px-5 pb-16 pt-10 sm:px-8 sm:pt-12 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] md:gap-10 md:pt-16 lg:gap-16 lg:pt-20">
-          <section class="thamani-step-enter flex flex-col items-center text-center md:block md:text-left">
-            <div class="mb-7 flex size-12 items-center justify-center rounded-2xl bg-[color-mix(in_srgb,var(--color-td-accent-tint)_18%,white)] text-[var(--thamani-forest)]">
-              <.icon name={@icon} class="size-6" />
-            </div>
-            <h1 class="w-full max-w-md text-[30px] font-light leading-[1.08] tracking-[-0.7px] text-[var(--thamani-forest)] sm:text-[38px]">
-              {@title}
-            </h1>
-            <p class="mt-6 w-full max-w-md text-base leading-7 text-[var(--thamani-pewter)] sm:text-[17px]">
-              {@description}
+        <div class="td-onb-bd is-task">
+          <main class="td-onb-ct">
+            <p class="td-onb-sec" style="padding: 0">
+              Setup progress · {@progress_current} of {@progress_total}
             </p>
-          </section>
-
-          <section class="thamani-step-enter min-w-0 rounded-3xl border border-[var(--thamani-stone)] bg-transparent p-6 sm:p-8">
-            {render_slot(@right)}
-          </section>
-
-          <div class="flex items-center justify-between gap-4 md:col-span-2">
-            {render_slot(@footer)}
-          </div>
-        </main>
+            <section class="td-onb-hero thamani-step-enter">
+              <h1>{@title}</h1>
+              <p class="td-onb-lead">{@description}</p>
+            </section>
+            <section class="td-card thamani-step-enter">
+              {render_slot(@right)}
+            </section>
+            <div class="td-onb-actions">
+              {render_slot(@footer)}
+            </div>
+          </main>
+        </div>
       </div>
     </Layouts.app>
     """

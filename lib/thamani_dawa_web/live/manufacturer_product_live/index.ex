@@ -14,6 +14,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
      |> assign(:page_number, 1)
      |> assign(:serials_filter, "")
      |> assign(:sync_error, nil)
+     |> assign(:syncing?, false)
      |> assign(:product, nil)}
   end
 
@@ -73,23 +74,39 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
      )}
   end
 
+  def handle_event("sync_products", _params, %{assigns: %{syncing?: true}} = socket) do
+    {:noreply, socket}
+  end
+
   def handle_event("sync_products", _params, socket) do
     organization_id = socket.assigns.current_scope.organization_id
 
-    case Manufacturing.sync_products(organization_id) do
-      {:ok, count} ->
-        {:noreply,
-         socket
-         |> put_flash(
-           :info,
-           "Synced #{count} product#{if count == 1, do: "", else: "s"} from GS1."
-         )
-         |> assign(:sync_error, nil)
-         |> load_products()}
+    {:noreply,
+     socket
+     |> assign(:syncing?, true)
+     |> start_async(:gs1_sync, fn -> Manufacturing.sync_products(organization_id) end)}
+  end
 
-      {:error, reason} ->
-        {:noreply, assign(socket, :sync_error, sync_error_message(reason))}
-    end
+  def handle_async(:gs1_sync, {:ok, {:ok, count}}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(
+       :info,
+       "Synced #{count} product#{if count == 1, do: "", else: "s"} from GS1."
+     )
+     |> assign(:sync_error, nil)
+     |> assign(:syncing?, false)
+     |> load_products()}
+  end
+
+  def handle_async(:gs1_sync, {:ok, {:error, reason}}, socket) do
+    {:noreply,
+     socket |> assign(:syncing?, false) |> assign(:sync_error, sync_error_message(reason))}
+  end
+
+  def handle_async(:gs1_sync, {:exit, _reason}, socket) do
+    {:noreply,
+     socket |> assign(:syncing?, false) |> assign(:sync_error, sync_error_message(:unavailable))}
   end
 
   def handle_info({:serials_issued, :inventory, count}, socket) do
@@ -239,8 +256,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
           <.td_button
             id="sync-manufacturer-products"
             variant="secondary"
-            label="Sync from GS1"
+            label={if @syncing?, do: "Syncing", else: "Sync from GS1"}
+            glyph="arrows-clockwise"
             phx-click="sync_products"
+            phx-disable-with="Syncing"
+            disabled={@syncing?}
+            aria-busy={to_string(@syncing?)}
             tip="Pull GTINs registered to this GS1 member account into the catalogue."
             tip_align="end"
           />
@@ -264,7 +285,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
         <div :if={@sync_error} id="products-sync-error" class="td-ban is-danger mb-3">
           <.td_icon name="warning-circle" class="size-4" />
           <span><b>Sync failed.</b> {@sync_error}</span>
-          <.td_button id="retry-sync-products" label="Retry sync" phx-click="sync_products" />
+          <.td_button
+            id="retry-sync-products"
+            label={if @syncing?, do: "Syncing", else: "Retry sync"}
+            glyph="arrows-clockwise"
+            phx-click="sync_products"
+            phx-disable-with="Syncing"
+            disabled={@syncing?}
+            aria-busy={to_string(@syncing?)}
+          />
         </div>
 
         <div :if={@rows == []} id="manufacturer-products-empty" class="td-pad td-empty-wrap">
@@ -276,14 +305,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
             <% else %>
               <p class="td-empty-title">No products yet</p>
               <p class="td-note">
-                Products come from your GS1 member account. Sync to bring in your GTINs, then generate serials for a batch.
+                <%= if @syncing? do %>
+                  Syncing products from GS1.
+                <% else %>
+                  Products come from your GS1 member account. Sync to bring in your GTINs, then generate serials for a batch.
+                <% end %>
               </p>
               <.td_button
                 id="products-empty-sync"
                 variant="primary"
                 glyph="arrows-clockwise"
-                label="Sync from GS1"
+                label={if @syncing?, do: "Syncing", else: "Sync from GS1"}
                 phx-click="sync_products"
+                phx-disable-with="Syncing"
+                disabled={@syncing?}
+                aria-busy={to_string(@syncing?)}
               />
             <% end %>
           </div>

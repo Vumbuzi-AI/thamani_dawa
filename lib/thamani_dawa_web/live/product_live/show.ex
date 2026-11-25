@@ -262,11 +262,6 @@ defmodule ThamaniDawaWeb.ProductLive.Show do
       back={~p"/org/products"}
       back_label="Back to Products"
     >
-      <div class="td-back">
-        <.link navigate={~p"/org/products"} class="td-back-link">
-          <.td_icon name="arrow-left" class="size-3.5" /> Back to Products
-        </.link>
-      </div>
       <.td_detail_page title={product_name(@product)}>
         <:actions>
           <div class="grid w-full grid-cols-3 gap-2 xl:w-auto">

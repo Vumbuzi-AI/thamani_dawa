@@ -9,7 +9,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Sites
 
-  @default_filters %{category: "", is_otc: false, is_dangerous_drug: false}
+  @default_filters %{category: "", status: ""}
   @max_import_file_size 5_000_000
   @import_preview_limit 10
   @onboarding_catalog_page_size 7
@@ -45,6 +45,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
 
   def mount(_params, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
+    organization = Organizations.get_organization!(organization_id)
 
     {:ok,
      socket
@@ -52,6 +53,9 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
      |> assign(:filters, @default_filters)
      |> assign(:units, @units)
      |> assign(:lab_enabled, Sites.lab_enabled?(organization_id))
+     |> assign(:gs1_configured?, gs1_configured?(organization))
+     |> assign(:syncing?, false)
+     |> assign(:sync_error, nil)
      |> assign(:page, 1)
      |> assign(:page_info, %{page_number: 1, total_pages: 1, total_entries: 0})
      |> assign(:show_onboarding_product_form?, false)
@@ -134,22 +138,16 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     {:noreply, socket |> assign(:search, search) |> assign(:page, 1) |> reload_products()}
   end
 
-  def handle_event("set_filter", %{"field" => "category", "value" => value}, socket) do
+  def handle_event("set_filter", %{"field" => field, "value" => value}, socket)
+      when field in ["category", "status"] do
     {:noreply,
      socket
-     |> assign(:filters, %{socket.assigns.filters | category: value || ""})
+     |> assign(
+       :filters,
+       Map.put(socket.assigns.filters, String.to_existing_atom(field), value || "")
+     )
      |> assign(:page, 1)
      |> reload_products()}
-  end
-
-  def handle_event("apply_filters", %{"filters" => filter_params}, socket) do
-    filters = %{
-      category: Map.get(filter_params, "category", ""),
-      is_otc: Map.get(filter_params, "is_otc") == "true",
-      is_dangerous_drug: Map.get(filter_params, "is_dangerous_drug") == "true"
-    }
-
-    {:noreply, socket |> assign(:filters, filters) |> assign(:page, 1) |> reload_products()}
   end
 
   def handle_event("clear_filters", _params, socket) do
@@ -157,28 +155,17 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
      socket |> assign(:filters, @default_filters) |> assign(:page, 1) |> reload_products()}
   end
 
-  def handle_event("clear_chip", %{"field" => "category"}, socket) do
-    {:noreply,
-     socket
-     |> assign(:filters, %{socket.assigns.filters | category: ""})
-     |> assign(:page, 1)
-     |> reload_products()}
+  def handle_event("sync_products", _params, %{assigns: %{syncing?: true}} = socket) do
+    {:noreply, socket}
   end
 
-  def handle_event("clear_chip", %{"field" => "is_otc"}, socket) do
-    {:noreply,
-     socket
-     |> assign(:filters, %{socket.assigns.filters | is_otc: false})
-     |> assign(:page, 1)
-     |> reload_products()}
-  end
+  def handle_event("sync_products", _params, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
 
-  def handle_event("clear_chip", %{"field" => "is_dangerous_drug"}, socket) do
     {:noreply,
      socket
-     |> assign(:filters, %{socket.assigns.filters | is_dangerous_drug: false})
-     |> assign(:page, 1)
-     |> reload_products()}
+     |> assign(:syncing?, true)
+     |> start_async(:gs1_sync, fn -> Products.sync_from_gs1(organization_id) end)}
   end
 
   def handle_event("validate", %{"product" => attrs}, socket) do
@@ -449,6 +436,28 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     {:noreply, assign(socket, :import_upload_error, "Couldn't read that file as CSV.")}
   end
 
+  def handle_async(:gs1_sync, {:ok, {:ok, count}}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(
+       :info,
+       "Synced #{count} product#{if count == 1, do: "", else: "s"} from GS1."
+     )
+     |> assign(:sync_error, nil)
+     |> assign(:syncing?, false)
+     |> reload_products()}
+  end
+
+  def handle_async(:gs1_sync, {:ok, {:error, reason}}, socket) do
+    {:noreply,
+     socket |> assign(:syncing?, false) |> assign(:sync_error, sync_error_message(reason))}
+  end
+
+  def handle_async(:gs1_sync, {:exit, _reason}, socket) do
+    {:noreply,
+     socket |> assign(:syncing?, false) |> assign(:sync_error, sync_error_message(:unavailable))}
+  end
+
   def handle_async(:gtin_lookup, {:ok, {:ok, prefill}}, socket) do
     {:noreply,
      socket
@@ -553,8 +562,7 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     opts = [
       search: search,
       category: filters.category,
-      is_otc: filters.is_otc,
-      is_dangerous_drug: filters.is_dangerous_drug
+      status: filters.status
     ]
 
     page_result = Products.list_products_paginated(organization_id, page, opts)
@@ -634,17 +642,22 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
   end
 
   defp active_filter_count(filters) do
-    Enum.count([filters.category != "", filters.is_otc, filters.is_dangerous_drug], & &1)
+    Enum.count([filters.category != "", filters.status != ""], & &1)
   end
 
-  defp filter_chips(filters) do
-    [
-      filters.category != "" && %{label: "Category: #{filters.category}", field: "category"},
-      filters.is_otc && %{label: "OTC", field: "is_otc"},
-      filters.is_dangerous_drug && %{label: "Dangerous drug", field: "is_dangerous_drug"}
-    ]
-    |> Enum.filter(& &1)
+  defp gs1_configured?(organization) do
+    last4 = organization.gs1_api_key_last4
+    is_binary(last4) and last4 != ""
   end
+
+  defp sync_error_message(:unconfigured),
+    do: "Add your GS1 API key in organization settings, then sync again."
+
+  defp sync_error_message(reason) when reason in [:unauthorized, :forbidden],
+    do: "GS1 rejected your API key. Check it in organization settings."
+
+  defp sync_error_message(_reason),
+    do: "Thamani couldn't reach GS1. Your products are unchanged. Try again in a moment."
 
   defp product_name(product), do: product.generic_name || product.brand_name || "(unnamed)"
 
@@ -1032,6 +1045,19 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
     >
       <:tools>
         <.td_button
+          :if={@gs1_configured?}
+          id="sync-org-products"
+          variant="secondary"
+          label={if @syncing?, do: "Syncing", else: "Sync from GS1"}
+          glyph="arrows-clockwise"
+          phx-click="sync_products"
+          phx-disable-with="Syncing"
+          disabled={@syncing?}
+          aria-busy={to_string(@syncing?)}
+          tip="Pull GTINs registered to this GS1 member account into the catalogue."
+          tip_align="end"
+        />
+        <.td_button
           id="product-import-button"
           variant="secondary"
           label="Import products"
@@ -1070,44 +1096,13 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
             value={@filters.category}
             options={[{"", "Any"} | Enum.map(@categories, &{&1, &1})]}
           />
-          <%!-- Kept for product_live_test, which submits #products-filters-form. --%>
-          <form
-            id="products-filters-form"
-            phx-change="apply_filters"
-            phx-submit="apply_filters"
-            class="sr-only"
-          >
-            <select name="filters[category]">
-              <option value="" selected={@filters.category == ""}>Any</option>
-              <option
-                :for={category <- @categories}
-                value={category}
-                selected={@filters.category == category}
-              >
-                {category}
-              </option>
-            </select>
-            <.input
-              type="checkbox"
-              name="filters[is_otc]"
-              value={@filters.is_otc}
-              label="Over-the-counter"
-            />
-            <.input
-              type="checkbox"
-              name="filters[is_dangerous_drug]"
-              value={@filters.is_dangerous_drug}
-              label="Dangerous drug"
-            />
-          </form>
-          <div :if={filter_chips(@filters) != []} class="td-filter-chips">
-            <span :for={chip <- filter_chips(@filters)} class="td-chip is-tag">
-              {chip.label}
-            </span>
-            <button type="button" class="td-btn is-secondary" phx-click="clear_filters">
-              Clear filters
-            </button>
-          </div>
+          <.td_filter_menu
+            id="products"
+            field="status"
+            label="Status"
+            value={@filters.status}
+            options={[{"", "Any"}, {"active", "Active"}, {"inactive", "Inactive"}]}
+          />
         </div>
 
         <.modal
@@ -1140,6 +1135,20 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
           </div>
         </.modal>
 
+        <div :if={@sync_error} id="products-sync-error" class="td-ban is-danger mb-3">
+          <.td_icon name="warning-circle" class="size-4" />
+          <span><b>Sync failed.</b> {@sync_error}</span>
+          <.td_button
+            id="retry-sync-products"
+            label={if @syncing?, do: "Syncing", else: "Retry sync"}
+            glyph="arrows-clockwise"
+            phx-click="sync_products"
+            phx-disable-with="Syncing"
+            disabled={@syncing?}
+            aria-busy={to_string(@syncing?)}
+          />
+        </div>
+
         <div
           :if={@page_info.total_entries == 0}
           id="products-empty"
@@ -1159,13 +1168,39 @@ defmodule ThamaniDawaWeb.ProductLive.Index do
               </button>
             <% else %>
               <p class="td-empty-title">No products yet</p>
-              <p class="td-note">Products you add will appear here.</p>
-              <.td_button
-                id="products-empty-new"
-                variant="secondary"
-                label="Add product"
-                patch={~p"/org/products/new"}
-              />
+              <%= if @gs1_configured? do %>
+                <p class="td-note">
+                  <%= if @syncing? do %>
+                    Syncing products from GS1.
+                  <% else %>
+                    Products come from your GS1 member account. Sync to bring in your GTINs, or add one by hand.
+                  <% end %>
+                </p>
+                <.td_button
+                  id="products-empty-sync"
+                  variant="primary"
+                  glyph="arrows-clockwise"
+                  label={if @syncing?, do: "Syncing", else: "Sync from GS1"}
+                  phx-click="sync_products"
+                  phx-disable-with="Syncing"
+                  disabled={@syncing?}
+                  aria-busy={to_string(@syncing?)}
+                />
+                <.td_button
+                  id="products-empty-new"
+                  variant="secondary"
+                  label="Add product"
+                  patch={~p"/org/products/new"}
+                />
+              <% else %>
+                <p class="td-note">Products you add will appear here.</p>
+                <.td_button
+                  id="products-empty-new"
+                  variant="secondary"
+                  label="Add product"
+                  patch={~p"/org/products/new"}
+                />
+              <% end %>
             <% end %>
           </div>
         </div>

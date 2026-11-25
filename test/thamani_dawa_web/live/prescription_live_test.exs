@@ -692,6 +692,9 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, show_live, html} = live(conn, ~p"/pharmacy/prescriptions/#{prescription.id}")
 
       assert html =~ "Prescription for"
+      assert Enum.count(Regex.scan(~r/Back to Prescriptions/, html)) == 1
+      assert has_element?(show_live, "#page-back", "Back to Prescriptions")
+      refute has_element?(show_live, ".td-back")
       name = product.generic_name || product.brand_name || "(unnamed)"
       assert html =~ name
       assert has_element?(show_live, "button[phx-disable-with='Checking batch...']")

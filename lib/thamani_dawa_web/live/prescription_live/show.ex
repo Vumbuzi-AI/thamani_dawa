@@ -300,11 +300,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
       back={~p"/pharmacy/prescriptions"}
       back_label="Back to Prescriptions"
     >
-      <div class="td-back">
-        <.link navigate={~p"/pharmacy/prescriptions"} class="td-back-link">
-          <.td_icon name="arrow-left" class="size-3.5" /> Back to Prescriptions
-        </.link>
-      </div>
       <div id="prescription-receipt" class="mx-auto max-w-lg space-y-4">
         <div
           id="prescription-receipt-card"
@@ -450,11 +445,6 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Show do
       back={~p"/pharmacy/prescriptions"}
       back_label="Back to Prescriptions"
     >
-      <div class="td-back">
-        <.link navigate={~p"/pharmacy/prescriptions"} class="td-back-link">
-          <.td_icon name="arrow-left" class="size-3.5" /> Back to Prescriptions
-        </.link>
-      </div>
       <.modal
         :if={@live_action == :new_payment}
         id="payment-modal"

@@ -6,6 +6,9 @@ defmodule ThamaniDawa.Products do
   """
 
   import Ecto.Query, warn: false
+  alias ThamaniDawa.GS1.MemberApi
+  alias ThamaniDawa.Gtin
+  alias ThamaniDawa.Organizations
   alias ThamaniDawa.Products.Product
   alias ThamaniDawa.Repo
 
@@ -63,8 +66,7 @@ defmodule ThamaniDawa.Products do
     from(p in Product, where: p.organization_id == ^organization_id, order_by: [asc: p.id])
     |> filter_search(Keyword.get(opts, :search))
     |> filter_category(Keyword.get(opts, :category))
-    |> filter_flag(:is_otc, Keyword.get(opts, :is_otc))
-    |> filter_flag(:is_dangerous_drug, Keyword.get(opts, :is_dangerous_drug))
+    |> filter_status(Keyword.get(opts, :status))
     |> Repo.paginate(page: page, page_size: page_size(opts))
   end
 
@@ -95,12 +97,9 @@ defmodule ThamaniDawa.Products do
 
   defp filter_category(query, _category), do: query
 
-  defp filter_flag(query, :is_otc, true), do: from(p in query, where: p.is_otc == true)
-
-  defp filter_flag(query, :is_dangerous_drug, true),
-    do: from(p in query, where: p.is_dangerous_drug == true)
-
-  defp filter_flag(query, _field, _val), do: query
+  defp filter_status(query, "active"), do: from(p in query, where: p.is_active == true)
+  defp filter_status(query, "inactive"), do: from(p in query, where: p.is_active == false)
+  defp filter_status(query, _status), do: query
 
   defp page_size(opts) do
     case Keyword.get(opts, :page_size, 8) do
@@ -294,6 +293,81 @@ defmodule ThamaniDawa.Products do
     |> Product.changeset(attrs)
     |> Repo.audited_update()
   end
+
+  @doc """
+  Pulls GTINs registered to this organization's GS1 member account into
+  the org catalogue (`GET /HBS/products`), upserting by GTIN.
+
+  Existing products keep their price, unit, and packaging; name,
+  manufacturer, and status refresh from GS1. New products land as pieces
+  (`H87`) at price 0 so they can be stocked and priced later.
+  """
+  def sync_from_gs1(organization_id, opts \\ []) do
+    opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
+
+    if Keyword.get(opts, :api_token) in [nil, ""] do
+      {:error, :unconfigured}
+    else
+      case MemberApi.list_products(%{}, opts) do
+        {:ok, products} when is_list(products) ->
+          Enum.each(products, &upsert_synced_product(organization_id, &1))
+          {:ok, length(products)}
+
+        {:error, _reason} = error ->
+          error
+      end
+    end
+  end
+
+  defp upsert_synced_product(organization_id, raw) when is_map(raw) do
+    gtin = raw["gtin"] || raw[:gtin]
+
+    with {:ok, normalized} <- Gtin.normalize(to_string(gtin || "")),
+         attrs when is_map(attrs) <- catalog_attrs_from_gs1(raw, normalized) do
+      case get_product_by_gtin(organization_id, normalized) do
+        nil ->
+          create_product(organization_id, attrs)
+
+        product ->
+          update_product(product, Map.drop(attrs, [:gtin, :price, :uom, :inventory_type]))
+      end
+    else
+      _ -> :ok
+    end
+  end
+
+  defp upsert_synced_product(_organization_id, _raw), do: :ok
+
+  defp catalog_attrs_from_gs1(raw, gtin) do
+    name = present_gs1_string(raw["name"] || raw[:name])
+    description = present_gs1_string(raw["description"] || raw[:description])
+    manufacturer = present_gs1_string(raw["brand_owner"] || raw[:brand_owner])
+    status = raw["status"] || raw[:status]
+
+    if is_nil(name) and is_nil(description) do
+      nil
+    else
+      %{
+        gtin: gtin,
+        generic_name: description || name,
+        brand_name: name,
+        manufacturer: manufacturer,
+        uom: "H87",
+        price: 0,
+        inventory_type: :medicine,
+        is_active: status != "inactive"
+      }
+    end
+  end
+
+  defp present_gs1_string(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp present_gs1_string(_value), do: nil
 
   @doc "Friendly label for a product's UN/CEFACT unit-of-measure code."
   def unit_label(nil), do: "unit(s)"

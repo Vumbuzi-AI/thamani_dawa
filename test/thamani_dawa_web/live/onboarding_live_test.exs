@@ -111,7 +111,7 @@ defmodule ThamaniDawaWeb.OnboardingLiveTest do
       assert has_element?(view, "#onboarding-shell")
       assert has_element?(view, "#onboarding-user", admin.name)
       assert has_element?(view, "#onboarding-progress[aria-label='Setup progress']")
-      assert has_element?(view, "#onboarding-progress [style='width: 0.0%']")
+      assert html =~ "0 of"
       assert has_element?(view, "#onboarding-preview-invite_team")
       assert has_element?(view, "#onboarding-preview-add_branch")
       refute has_element?(view, "#onboarding-preview-first_supplier")

@@ -135,6 +135,9 @@ defmodule ThamaniDawaWeb.DistributorGoodsReceiptLiveTest do
       {:ok, view, html} = live(log_in_user(conn, admin), ~p"/org/receiving/#{receipt.id}")
 
       assert html =~ "Goods receipt"
+      assert Enum.count(Regex.scan(~r/Back to Receiving/, html)) == 1
+      assert has_element?(view, "#page-back", "Back to Receiving")
+      refute has_element?(view, ".td-back")
       assert has_element?(view, "#goods-receipt-print")
       assert has_element?(view, "#goods-receipt-document-#{attachment.id}-print")
       assert has_element?(view, "#goods-receipt-document-#{attachment.id}-download")
