@@ -132,15 +132,19 @@ defmodule ThamaniDawa.Distributor.GlnLookup do
     end
   end
 
-  defp directory_result(gln) do
+  defp directory_result(row) do
     %{
-      gln: gln["gln"],
-      company: gln["company"] || gln["description"] || "",
-      address: gln["address"] || gln["location"],
-      po_box: nil,
+      gln: gln_code(row["gln"]),
+      company: row["company_name"] || row["company"] || row["description"] || "",
+      address: row["address"] || row["location"],
+      po_box: row["po_box"],
       site_id: nil
     }
   end
+
+  defp gln_code(gln) when is_binary(gln), do: gln
+  defp gln_code(gln) when is_integer(gln), do: Integer.to_string(gln)
+  defp gln_code(_gln), do: nil
 
   defp like_pattern(term) do
     escaped = Regex.replace(~r/[\\%_]/, String.trim(term || ""), fn char -> "\\" <> char end)

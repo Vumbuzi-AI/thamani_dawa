@@ -423,6 +423,11 @@ defmodule ThamaniDawa.GS1.MemberApi do
     {:ok, glns}
   end
 
+  def decode_glns_response({:ok, status, %{"data" => glns}})
+      when status in 200..299 and is_list(glns) do
+    {:ok, glns}
+  end
+
   def decode_glns_response({:ok, status, _body}) when status in 200..299, do: {:ok, []}
 
   def decode_glns_response({:ok, status, _body}) when status in [401, 403],

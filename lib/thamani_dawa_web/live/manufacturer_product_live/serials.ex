@@ -104,6 +104,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
         case result do
           {:ok, serials} ->
+            persist_fetched_serials(socket, batch, serials)
             all_serials = serials
 
             serials =
@@ -140,6 +141,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     do: Enum.all?(serials, &Map.has_key?(by_serial, &1.serial))
 
   defp fully_packed?(_result, _by_serial), do: false
+
+  defp persist_fetched_serials(socket, %{local_id: id}, serials) when is_integer(id) do
+    local = Manufacturing.get_batch!(org_id(socket), id)
+
+    Manufacturing.persist_issued_serials(
+      org_id(socket),
+      socket.assigns.product,
+      local,
+      serials
+    )
+
+    :ok
+  end
+
+  defp persist_fetched_serials(_socket, _batch, _serials), do: :ok
 
   defp batch_serials(socket, batch_no) do
     case socket.assigns.serials_cache do
@@ -487,7 +503,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                     />
                   </:actions>
                 </.td_card_header>
-                <table class="td-rows is-static" id="manufacturer-serials">
+                <table class="td-rows is-static is-clip" id="manufacturer-serials">
                   <thead>
                     <tr>
                       <th>Code</th><th>Serial (SGTIN)</th><th>State</th><th>Shipper SSCC</th>
@@ -505,7 +521,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                     />
                   </tbody>
                 </table>
-                <p class="td-note td-pad">
+                <p class="td-note td-serials-foot">
                   Showing <b>{length(@serial_page.entries)}</b>
                   of <b>{@batch_serial_total}</b>
                   serials
@@ -628,7 +644,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           class="td-serial-dm"
         ></canvas>
       </td>
-      <td class="font-mono">{sgtin(@product, @serial)}</td>
+      <td class="font-mono td-serial-sgtin" title={sgtin(@product, @serial)}>{sgtin(@product, @serial)}</td>
       <td :if={@full} class="font-mono">{@batch.batch_no}</td>
       <td :if={@full}>{long_date(@batch.expiry_date)}</td>
       <td>

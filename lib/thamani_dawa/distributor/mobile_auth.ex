@@ -14,7 +14,8 @@ defmodule ThamaniDawa.Distributor.MobileAuth do
       stops working immediately.
     * Every sign-in, refresh and authenticated request re-checks
       `account_active?/1`: the mobile user must be active, and its
-      organization must be active and still operate as a distributor.
+      organization must be active and still operate as a distributor
+      or a manufacturer. Each API scope then checks the model it serves.
   """
 
   import Ecto.Query, warn: false
@@ -72,7 +73,7 @@ defmodule ThamaniDawa.Distributor.MobileAuth do
       from s in MobileSession,
         where: s.refresh_token_hash == ^hash(refresh_token),
         where: s.refresh_expires_at > ^now(),
-        preload: [:mobile_user]
+        preload: [mobile_user: [:organization, :site]]
 
     case Repo.one(query) do
       nil ->
@@ -104,7 +105,7 @@ defmodule ThamaniDawa.Distributor.MobileAuth do
       from s in MobileSession,
         where: s.access_token_hash == ^hash(access_token),
         where: s.access_expires_at > ^now(),
-        preload: [mobile_user: :organization]
+        preload: [mobile_user: [:organization, :site]]
 
     with %MobileSession{mobile_user: mobile_user} <- Repo.one(query),
          true <- account_active?(mobile_user) do
@@ -123,14 +124,16 @@ defmodule ThamaniDawa.Distributor.MobileAuth do
   end
 
   @doc """
-  Whether a mobile user may use the app: the account is active and its
-  organization is active and still operates as a distributor. Demoting an
-  organization out of the distributor model immediately locks its mobile
-  users out.
+  Whether a mobile user may use a packing app: the account is active and
+  its organization is active and still operates as a distributor or a
+  manufacturer. Demoting an organization out of both models immediately
+  locks its mobile users out. Each API then checks the model it serves.
   """
   def account_active?(%MobileUser{active: true} = mobile_user) do
     %MobileUser{organization: organization} = Repo.preload(mobile_user, :organization)
-    organization.is_active and Organization.distributor?(organization)
+
+    organization.is_active and
+      (Organization.distributor?(organization) or Organization.manufacturer?(organization))
   end
 
   def account_active?(_mobile_user), do: false

@@ -648,11 +648,11 @@ defmodule ThamaniDawaWeb.TDComponents do
   def td_card_header(assigns) do
     ~H"""
     <header class="td-card-header">
-      <div>
+      <div class="td-card-header-row">
         <h2>{@title}</h2>
-        <p :if={@subtitle}>{@subtitle}</p>
+        <div :if={@actions != []} class="td-header-actions">{render_slot(@actions)}</div>
       </div>
-      <div :if={@actions != []} class="td-header-actions">{render_slot(@actions)}</div>
+      <p :if={@subtitle}>{@subtitle}</p>
     </header>
     """
   end
@@ -1594,6 +1594,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :title, :string, default: nil
   attr :subtitle, :string, default: nil
   attr :width, :integer, default: nil
+  attr :class, :any, default: nil
   attr :on_cancel, JS, default: %JS{}
   slot :body, required: true
   slot :footer
@@ -1611,7 +1612,7 @@ defmodule ThamaniDawaWeb.TDComponents do
       <div class="td-modal-stage" role="dialog" aria-modal="true" aria-labelledby={"#{@id}-title"}>
         <.focus_wrap
           id={"#{@id}-container"}
-          class="td-modal"
+          class={["td-modal", @class]}
           style={@width && "width: min(#{@width}px, 100%)"}
           phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
           phx-key="escape"
@@ -2254,6 +2255,11 @@ defmodule ThamaniDawaWeb.TDComponents do
   slot :empty
 
   def td_data_table(assigns) do
+    assigns =
+      with %{rows: %Phoenix.LiveView.LiveStream{}} <- assigns do
+        assign(assigns, row_id: assigns.row_id || fn {id, _item} -> id end)
+      end
+
     ~H"""
     <div class="td-data">
       <table>

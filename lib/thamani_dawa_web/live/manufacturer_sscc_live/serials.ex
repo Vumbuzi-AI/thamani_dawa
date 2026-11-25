@@ -24,20 +24,11 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
     product =
       if sscc.gtin, do: Repo.get_by(Product, organization_id: organization_id, gtin: sscc.gtin)
 
-    batch_count =
-      if sscc.gtin && sscc.batch do
-        {shippers, _} = Manufacturing.list_batch_shippers(organization_id, sscc.gtin, sscc.batch)
-        max(length(shippers), 1)
-      else
-        1
-      end
-
     {:ok,
      socket
      |> assign(:page_title, "Shipper SSCC")
      |> assign(:sscc, sscc)
      |> assign(:product, product)
-     |> assign(:batch_count, batch_count)
      |> assign(:serials, [])
      |> assign(:page, 1)
      |> assign(:per_page, @per_page)
@@ -186,7 +177,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
             glyph="printer"
             label="Print label"
             navigate={~p"/manufacturer/sscc/#{@sscc.id}/label?#{%{return_to: @back_path}}"}
-            tip="Print the 100 × 150 mm shipper label with the GS1 DataMatrix for this SSCC."
+            tip="Print the 4 × 6 in shipper label with the GS1 Data Matrix for this SSCC."
             tip_align="end"
           />
         </div>
@@ -310,21 +301,16 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
           <div class="td-card">
             <.td_card_header
               title="Shipper label"
-              subtitle="100 × 150 mm GS1 DataMatrix. Print it from the top right."
+              subtitle="4 × 6 in GS1 Data Matrix. Print from the top right."
             />
-            <div class="td-label-preview">
-              <canvas
-                id={"sscc-aside-dm-#{@sscc.id}"}
-                phx-hook="DataMatrix"
-                phx-update="ignore"
-                data-gs1-text={ThamaniDawaWeb.ManufacturerSsccLive.Label.gs1_text(@sscc)}
-              ></canvas>
-              <div class="td-label-preview-body">
-                <span class="td-label-preview-title font-mono">{@sscc.code}</span>
-                <span>{@sscc.to_company_name}</span>
-                <span class="font-mono">{@sscc.gtin}</span>
-                <span>{@sscc.batch} · {@sscc.count_of_trade_items} units</span>
-              </div>
+            <div class="td-shipper-thumb">
+              <ThamaniDawaWeb.ManufacturerSsccLive.Label.sheet
+                sscc={@sscc}
+                product_name={@product_name}
+                id={"sscc-aside-label-#{@sscc.id}"}
+                barcode_id={"sscc-aside-dm-#{@sscc.id}"}
+                named={false}
+              />
             </div>
           </div>
           <div :if={@sscc.pallet} class="td-card td-pad" id="sscc-on-pallet">
@@ -365,7 +351,6 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
         :if={@live_action == :label}
         sscc={@sscc}
         product_name={@product_name}
-        batch_count={@batch_count}
         on_cancel={JS.navigate(@close_to)}
       />
     </Layouts.manufacturer_shell>

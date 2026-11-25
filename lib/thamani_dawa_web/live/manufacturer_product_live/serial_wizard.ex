@@ -549,7 +549,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                   >*</span>
                 </label>
                 <input type="hidden" name="serial_generation[to_gln]" value={@form[:to_gln].value} />
-                <div id="serial-generation-to-gln-combobox" class="relative">
+                <div id="serial-generation-to-gln-combobox" class="td-gln-field">
                   <input
                     id="serial_generation_to_gln_search"
                     type="search"
@@ -565,7 +565,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                     :if={@to_gln_results != []}
                     id="serial-generation-to-gln-results"
                     role="listbox"
-                    class="td-select-pop max-h-56 overflow-y-auto py-1"
+                    class="td-gln-res is-tall"
                   >
                     <button
                       :for={party <- @to_gln_results}
@@ -575,11 +575,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
                       phx-click="select_to_gln"
                       phx-value-gln={party.gln}
                       phx-target={@myself}
-                      class="block w-full px-3 py-2 text-left text-sm transition hover:bg-[var(--color-td-hover)]"
+                      class="td-gln-result"
                     >
-                      <span class="block font-mono font-medium text-[var(--color-td-ink)]">{party.gln}</span>
-                      <span class="block text-xs text-[var(--color-td-ink-3)]">{party.company} · {party.address ||
-                        "—"}</span>
+                      <span class="td-gln-result-g">
+                        <b>{party.company}</b>
+                        <span>{party.address || "—"}</span>
+                      </span>
+                      <span class="td-gln-result-r">
+                        <span class="td-mono">{party.gln}</span>
+                      </span>
                     </button>
                   </div>
                 </div>
