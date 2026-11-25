@@ -608,7 +608,7 @@
   min-width: 0;
   border: 1px solid var(--color-td-border);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--color-td-surface);
 }
 

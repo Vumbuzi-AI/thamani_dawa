@@ -33,10 +33,19 @@ defmodule ThamaniDawaWeb.TimeFormat do
   def month_day(%Date{} = date), do: Calendar.strftime(date, "%-d %b")
   def month_day(value), do: value |> to_eat() |> Calendar.strftime("%-d %b")
 
+  @doc "`Tue 18 Nov`, for a chart tooltip."
+  def weekday_day(nil), do: "—"
+  def weekday_day(%Date{} = date), do: Calendar.strftime(date, "%a %-d %b")
+  def weekday_day(value), do: value |> to_eat() |> Calendar.strftime("%a %-d %b")
+
   @doc "`Nov 2026`, for a chart axis. Timestamps are converted to EAT first."
   def month_year(nil), do: "—"
   def month_year(%Date{} = date), do: Calendar.strftime(date, "%b %Y")
   def month_year(value), do: value |> to_eat() |> Calendar.strftime("%b %Y")
+
+  def month_short(nil), do: "—"
+  def month_short(%Date{} = date), do: Calendar.strftime(date, "%b")
+  def month_short(value), do: value |> to_eat() |> Calendar.strftime("%b")
 
   @doc "Shifts a UTC timestamp to EAT wall-clock time."
   def to_eat(%DateTime{} = dt),

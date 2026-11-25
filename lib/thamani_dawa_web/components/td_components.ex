@@ -46,10 +46,13 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :size, :string, values: ~w(md lg), default: "md"
   attr :label, :string, default: nil
   attr :glyph, :string, default: nil, doc: "Phosphor icon name shown before the label"
+  attr :tip, :string, default: nil, doc: "TD Tooltip copy on hover and focus"
+  attr :tip_align, :string, values: ~w(center start end), default: "center"
+  attr :tip_side, :string, values: ~w(auto top right bottom left), default: "auto"
 
   attr :rest, :global,
     include:
-      ~w(href navigate patch method download name value disabled type id form title onclick target rel phx-click phx-value-id phx-value-tier phx-value-from phx-value-to phx-value-mode phx-value-step phx-value-status phx-disable-with phx-submit phx-target phx-hook data-print-target data-print-container data-label-size data-download-container data-role data-sscc data-gs1-text data-quantity data-gtin data-batch data-production data-expiry data-material-description data-order-number data-from-company data-from-address data-to-company data-to-address data-to-po-box)
+      ~w(href navigate patch method download name value disabled type id form title onclick target rel phx-click phx-value-id phx-value-index phx-value-product_id phx-value-amount phx-value-tier phx-value-from phx-value-to phx-value-mode phx-value-step phx-value-status phx-disable-with phx-submit phx-target phx-hook aria-pressed data-print-target data-print-container data-label-size data-download-container data-role data-sscc data-gs1-text data-quantity data-gtin data-batch data-production data-expiry data-material-description data-order-number data-from-company data-from-address data-to-company data-to-address data-to-po-box)
 
   slot :icon
   slot :inner_block
@@ -57,37 +60,233 @@ defmodule ThamaniDawaWeb.TDComponents do
   def td_button(%{rest: rest} = assigns) do
     assigns = assign(assigns, :class, ["td-btn", "is-#{assigns.variant}", "is-#{assigns.size}"])
 
+    inner =
+      if rest[:href] || rest[:navigate] || rest[:patch] do
+        ~H"""
+        <.link class={@class} {@rest}>
+          <.td_icon :if={@glyph} name={@glyph} />
+          {render_slot(@icon)}
+          <span :if={@label}>{@label}</span>
+          {render_slot(@inner_block)}
+        </.link>
+        """
+      else
+        ~H"""
+        <button class={@class} {@rest}>
+          <.td_icon :if={@glyph} name={@glyph} />
+          {render_slot(@icon)}
+          <span :if={@label}>{@label}</span>
+          {render_slot(@inner_block)}
+        </button>
+        """
+      end
+
+    if assigns.tip in [nil, ""] do
+      inner
+    else
+      assigns = assign(assigns, :inner, inner)
+
+      ~H"""
+      <.td_tooltip label={@tip} align={@tip_align} side={@tip_side}>{@inner}</.td_tooltip>
+      """
+    end
+  end
+
+  @doc """
+  Doop `TD Tooltip`. Prefers above the control, then flips to bottom, left, or
+  right so the bubble stays inside the viewport. `side` forces one edge.
+  `align` is the first try on the cross axis (`end` for a right-edge control).
+  """
+  attr :label, :string, required: true
+  attr :align, :string, values: ~w(center start end), default: "center"
+  attr :side, :string, values: ~w(auto top right bottom left), default: "auto"
+  slot :inner_block, required: true
+
+  def td_tooltip(assigns) do
+    ~H"""
+    <span class="td-tip" data-tooltip={@label} data-align={@align} data-side={@side}>
+      <span class="td-tip-trigger">{render_slot(@inner_block)}</span>
+    </span>
+    """
+  end
+
+  attr :label, :string, required: true
+
+  attr :rest, :global,
+    include: ~w(id type disabled phx-click phx-value-product_id phx-value-to navigate patch href)
+
+  slot :icon, required: true
+
+  def td_icon_button(%{rest: rest} = assigns) do
     if rest[:href] || rest[:navigate] || rest[:patch] do
       ~H"""
-      <.link class={@class} {@rest}>
-        <.td_icon :if={@glyph} name={@glyph} />
+      <.link class="td-icon-btn" aria-label={@label} {@rest}>
         {render_slot(@icon)}
-        <span :if={@label}>{@label}</span>
-        {render_slot(@inner_block)}
       </.link>
       """
     else
       ~H"""
-      <button class={@class} {@rest}>
-        <.td_icon :if={@glyph} name={@glyph} />
+      <button type="button" class="td-icon-btn" aria-label={@label} {@rest}>
         {render_slot(@icon)}
-        <span :if={@label}>{@label}</span>
-        {render_slot(@inner_block)}
       </button>
       """
     end
   end
 
-  attr :label, :string, required: true
-  attr :rest, :global, include: ~w(id type disabled phx-click)
-  slot :icon, required: true
+  @doc """
+  Doop `TD Pagination`. 48px wash table footer: range copy and prev/next
+  IconButtons. Hidden when `total` is 0. Always shows both buttons; disables
+  them at the ends. No numbered pills.
 
-  def td_icon_button(assigns) do
+  Path mode (Scrivener lists): pass `page` and `path`. Event mode (stock,
+  earnings, lab orders): pass `from`/`to`/`total`/`current`/`pages` and
+  `event="page"` — the live view receives `phx-value-to`.
+  """
+  attr :id, :string, default: nil
+  attr :from, :integer, default: nil
+  attr :to, :integer, default: nil
+  attr :total, :integer, default: nil
+  attr :noun, :string, default: "results"
+  attr :current, :integer, default: 1
+  attr :pages, :integer, default: 1
+  attr :page, :any, default: nil
+  attr :path, :string, default: nil
+  attr :patch, :boolean, default: false
+  attr :query_param, :string, default: "page"
+  attr :event, :string, default: nil
+
+  def td_pagination(assigns) do
+    assigns = normalize_td_pagination(assigns)
+    current = assigns.current
+    pages = assigns.pages
+    path = assigns.path
+    param = assigns.query_param
+    event? = assigns.event not in [nil, ""]
+
+    assigns =
+      assigns
+      |> assign(
+        :prev_url,
+        unless(event? || current <= 1, do: td_page_url(path, current - 1, param))
+      )
+      |> assign(
+        :next_url,
+        unless(event? || current >= pages, do: td_page_url(path, current + 1, param))
+      )
+
     ~H"""
-    <button type="button" class="td-icon-btn" aria-label={@label} {@rest}>
-      {render_slot(@icon)}
-    </button>
+    <div :if={@total > 0} id={@id} class="td-tfoot">
+      <span>
+        <b>{@from} to {@to}</b> of {@total} {@noun}
+      </span>
+      <nav class="td-tfoot-pager" aria-label="Pagination">
+        <.td_page_btn
+          label="Previous page"
+          icon="caret-left"
+          disabled={@current <= 1}
+          url={@prev_url}
+          patch={@patch}
+          event={@event}
+          to={@current - 1}
+        />
+        <.td_page_btn
+          label="Next page"
+          icon="caret-right"
+          disabled={@current >= @pages}
+          url={@next_url}
+          patch={@patch}
+          event={@event}
+          to={@current + 1}
+        />
+      </nav>
+    </div>
     """
+  end
+
+  attr :label, :string, required: true
+  attr :icon, :string, required: true
+  attr :disabled, :boolean, default: false
+  attr :url, :string, default: nil
+  attr :patch, :boolean, default: false
+  attr :event, :string, default: nil
+  attr :to, :integer, default: nil
+
+  defp td_page_btn(assigns) do
+    cond do
+      assigns.disabled ->
+        ~H"""
+        <button type="button" class="td-icon-btn" disabled aria-label={@label}>
+          <.td_icon name={@icon} />
+        </button>
+        """
+
+      assigns.event not in [nil, ""] ->
+        ~H"""
+        <.td_icon_button label={@label} phx-click={@event} phx-value-to={@to}>
+          <:icon><.td_icon name={@icon} /></:icon>
+        </.td_icon_button>
+        """
+
+      assigns.url && assigns.patch ->
+        ~H"""
+        <.td_icon_button label={@label} patch={@url}>
+          <:icon><.td_icon name={@icon} /></:icon>
+        </.td_icon_button>
+        """
+
+      assigns.url ->
+        ~H"""
+        <.td_icon_button label={@label} navigate={@url}>
+          <:icon><.td_icon name={@icon} /></:icon>
+        </.td_icon_button>
+        """
+
+      true ->
+        ~H"""
+        <button type="button" class="td-icon-btn" aria-label={@label}>
+          <.td_icon name={@icon} />
+        </button>
+        """
+    end
+  end
+
+  defp normalize_td_pagination(%{page: page} = assigns) when is_map(page) do
+    current = Map.get(page, :page_number) || Map.get(page, :page) || assigns.current || 1
+    size = Map.get(page, :page_size) || 10
+    total = Map.get(page, :total_entries) || Map.get(page, :total) || assigns.total || 0
+    pages = Map.get(page, :total_pages) || Map.get(page, :pages) || assigns.pages || 1
+
+    from =
+      assigns.from || Map.get(page, :from) ||
+        if(total == 0, do: 0, else: (current - 1) * size + 1)
+
+    to = assigns.to || Map.get(page, :to) || min(current * size, total)
+
+    assigns
+    |> assign(:from, from)
+    |> assign(:to, to)
+    |> assign(:total, total)
+    |> assign(:current, current)
+    |> assign(:pages, max(pages, 1))
+  end
+
+  defp normalize_td_pagination(assigns) do
+    total = assigns.total || 0
+    current = assigns.current || 1
+
+    assigns
+    |> assign(:from, assigns.from || 0)
+    |> assign(:to, assigns.to || 0)
+    |> assign(:total, total)
+    |> assign(:current, current)
+    |> assign(:pages, max(assigns.pages || 1, 1))
+  end
+
+  defp td_page_url(nil, _page, _param), do: nil
+
+  defp td_page_url(path, page, query_param) do
+    separator = if String.contains?(path, "?"), do: "&", else: "?"
+    "#{path}#{separator}#{query_param}=#{page}"
   end
 
   attr :tone, :string,
@@ -122,7 +321,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :rest, :global,
     include:
-      ~w(autocomplete required placeholder disabled autocapitalize phx-debounce min max inputmode readonly maxlength)
+      ~w(autocomplete required placeholder disabled autocapitalize phx-debounce min max step inputmode readonly maxlength)
 
   def td_input(%{field: %Phoenix.HTML.FormField{} = field} = assigns) do
     errors =
@@ -214,27 +413,81 @@ defmodule ThamaniDawaWeb.TDComponents do
   end
 
   def td_select(assigns) do
+    opts =
+      Enum.map(assigns.options || [], fn
+        {label, value} -> [to_string(label), to_string(value)]
+        label -> [to_string(label), to_string(label)]
+      end)
+
+    current = to_string(assigns.value || "")
+
+    display =
+      case Enum.find(opts, fn [_label, val] -> val == current end) do
+        [label, _] -> label
+        _ -> assigns.prompt || "Select…"
+      end
+
+    assigns =
+      assigns
+      |> assign(:opts, opts)
+      |> assign(:opts_json, Jason.encode!(opts))
+      |> assign(:display, display)
+      |> assign(:placeholder?, current == "")
+
     ~H"""
-    <label class="td-field" for={@id}>
-      <span :if={@label} class="td-field-label">{@label}</span>
-      <select
+    <div class="td-field">
+      <label :if={@label} class="td-field-label" id={"#{@id}-label"} for={"#{@id}-trigger"}>
+        {@label}
+      </label>
+      <div
         id={@id}
-        name={@name}
-        class={["td-field-control", @state == "error" && "is-error"]}
-        {@rest}
+        class="td-select"
+        phx-hook="TdSelect"
+        data-options={@opts_json}
+        data-prompt={@prompt || ""}
+        data-state={if(@placeholder?, do: "placeholder", else: "default")}
       >
-        <option :if={@prompt} value="">{@prompt}</option>
-        <option
-          :for={{label, value} <- @options}
-          value={value}
-          selected={to_string(value) == to_string(@value)}
+        <select
+          id={"#{@id}-input"}
+          name={@name}
+          data-cs-input
+          class="hidden"
+          {@rest}
         >
-          {label}
-        </option>
-      </select>
+          <option :if={@prompt} value="">{@prompt}</option>
+          <option
+            :for={[label, val] <- @opts}
+            value={val}
+            selected={val == to_string(@value || "")}
+          >
+            {label}
+          </option>
+        </select>
+        <button
+          type="button"
+          id={"#{@id}-trigger"}
+          class={["td-select-trigger", @state == "error" && "is-error"]}
+          data-cs-trigger
+          aria-haspopup="listbox"
+          aria-expanded="false"
+          aria-labelledby={"#{@id}-label #{@id}-trigger"}
+          disabled={@rest[:disabled]}
+        >
+          <span data-cs-display class="truncate">{@display}</span>
+          <span data-cs-chevron class="td-select-caret">
+            <.td_icon name="caret-down" />
+          </span>
+        </button>
+        <div data-cs-dropdown role="listbox" class="td-select-pop hidden">
+          <div class="td-select-pop-search">
+            <input data-cs-search type="text" placeholder="Search…" autocomplete="off" />
+          </div>
+          <div data-cs-list class="td-select-pop-list"></div>
+        </div>
+      </div>
       <span :if={@hint} class="td-field-hint">{@hint}</span>
       <span :for={error <- @errors} class="td-field-error">{error}</span>
-    </label>
+    </div>
     """
   end
 
@@ -281,6 +534,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   def td_checkbox(assigns) do
     ~H"""
     <label class="td-check" for={@id}>
+      <input :if={@name} type="hidden" name={@name} value="false" />
       <input id={@id} type="checkbox" name={@name} value="true" checked={@on} />
       <span>{@label}</span>
     </label>
@@ -522,7 +776,8 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :active, :boolean, default: false
 
   attr :rest, :global,
-    include: ~w(id type phx-click phx-value-mode phx-value-tab phx-value-source aria-pressed)
+    include:
+      ~w(id type phx-click phx-value-mode phx-value-tab phx-value-source phx-value-category aria-pressed)
 
   def td_segment(assigns) do
     ~H"""
@@ -683,6 +938,202 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
+  @doc """
+  Daily or monthly bar plot: y-axis, one column per point, tooltip on hover.
+  `bars` come from `chart_bars/2`.
+  """
+  attr :id, :string, default: nil
+  attr :label, :string, default: nil
+  attr :y_labels, :list, default: []
+  attr :bars, :list, required: true
+
+  def td_bars(assigns) do
+    ~H"""
+    <div :if={@bars != []} id={@id} class="td-plot" aria-label={@label} phx-hook="TdChartTip">
+      <div :if={@y_labels != []} class="td-y" aria-hidden="true">
+        <span :for={y <- @y_labels}>{y}</span>
+      </div>
+      <div class="td-grid" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="td-cols">
+        <div
+          :for={bar <- @bars}
+          class={["td-col", bar.recent && "is-now", bar.zero? && "is-zero"]}
+          tabindex="0"
+          data-tip-title={bar.tip_title}
+          data-tip-delta={bar.tip_delta}
+          data-tip-align={bar.align}
+          aria-label={bar.aria}
+        >
+          <span class="td-fill"><i style={"height: #{bar.height}"}></i></span>
+          <span class="td-x">{if bar.show_label, do: bar.label}</span>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  `{date, amount}` points → bars for `td_bars`.
+
+  `:tick_every` — label every Nth bar counting back from the latest.
+  `:grain` — `:day`, `:week`, or `:month` for the comparison line.
+  `:format` — `:money` (KSh) or `:count`.
+  `:unit` — count noun, e.g. `"orders"`.
+  `:label_fun` — x-axis tick.
+  """
+  def chart_bars(series, opts \\ []) when is_list(series) do
+    amounts = Enum.map(series, &elem(&1, 1))
+    max = amounts |> Enum.max(fn -> 0 end) |> nice_max()
+    total = length(series)
+    tick_every = Keyword.get(opts, :tick_every)
+    grain = Keyword.get(opts, :grain, :day)
+    format = Keyword.get(opts, :format, :money)
+    unit = Keyword.get(opts, :unit, "")
+    label_fun = Keyword.fetch!(opts, :label_fun)
+    recent = Keyword.get(opts, :recent, 7)
+
+    series
+    |> Enum.with_index()
+    |> Enum.map(fn {{date, amount}, index} ->
+      prev = if index > 0, do: elem(Enum.at(series, index - 1), 1)
+      last? = index == total - 1
+      zero? = to_number(amount) <= 0
+      {title, delta, aria} = bar_tip(date, amount, prev, grain, format, unit)
+
+      show_label =
+        case tick_every do
+          1 -> true
+          n when is_integer(n) and n > 0 -> rem(total - 1 - index, n) == 0
+          _ -> last?
+        end
+
+      %{
+        height: bar_height(amount, max),
+        zero?: zero?,
+        recent: index >= max(0, total - recent),
+        label: label_fun.(date),
+        show_label: show_label,
+        tip_title: title,
+        tip_delta: delta,
+        align: if(index >= max(0, total - 4), do: "end", else: "center"),
+        aria: aria
+      }
+    end)
+  end
+
+  def month_axis_label(date, first) do
+    if date == first or date.month == 1 do
+      ThamaniDawaWeb.TimeFormat.month_year(date)
+    else
+      ThamaniDawaWeb.TimeFormat.month_short(date)
+    end
+  end
+
+  def chart_y_labels(series, format \\ :money) do
+    max = series |> Enum.map(&elem(&1, 1)) |> Enum.max(fn -> 0 end) |> nice_max()
+
+    case format do
+      :money ->
+        [ThamaniDawaWeb.Money.compact(max), ThamaniDawaWeb.Money.compact(max / 2), "KSh 0"]
+
+      :count ->
+        [count_label(max, ""), count_label(max / 2, ""), "0"]
+    end
+  end
+
+  defp nice_max(n) when n <= 0, do: 0
+
+  defp nice_max(n) do
+    n = to_number(n)
+    mag = :math.pow(10, :math.log10(n) |> Float.floor())
+    Enum.find([1.0, 2.0, 2.5, 5.0, 10.0], fn u -> u * mag >= n end) * mag
+  end
+
+  defp bar_height(amount, max) do
+    n = to_number(amount)
+
+    cond do
+      n <= 0 -> "2px"
+      max <= 0 -> "2px"
+      true -> "#{max(2, round(n / max * 100))}%"
+    end
+  end
+
+  defp bar_tip(date, amount, prev, grain, format, unit) do
+    period = tip_period(date, grain)
+    value = format_tip_value(amount, format, unit)
+    title = "#{period} · #{value}"
+    delta = tip_delta(amount, prev, date, grain, format, unit)
+    aria = if delta == "", do: "#{period}, #{value}", else: "#{period}, #{value}, #{delta}"
+    {title, delta, aria}
+  end
+
+  defp tip_period(date, :month), do: ThamaniDawaWeb.TimeFormat.month_year(date)
+
+  defp tip_period(date, :week),
+    do: "W/c " <> ThamaniDawaWeb.TimeFormat.month_day(Date.beginning_of_week(date))
+
+  defp tip_period(date, _grain), do: ThamaniDawaWeb.TimeFormat.weekday_day(date)
+
+  defp format_tip_value(amount, :money, _unit), do: ThamaniDawaWeb.Money.ksh(amount)
+  defp format_tip_value(amount, :count, unit), do: count_label(amount, unit)
+
+  defp tip_delta(_amount, nil, _date, grain, _format, _unit), do: no_earlier(grain)
+
+  defp tip_delta(amount, prev, date, grain, format, unit) do
+    prev_n = to_number(prev)
+    delta = to_number(amount) - prev_n
+    prior = prior_period(date, grain)
+    prior_value = format_tip_value(prev, format, unit)
+
+    cond do
+      prev_n == 0 -> no_before(format, grain)
+      delta == 0 -> "Same as #{prior} (#{prior_value})"
+      true -> "#{pct_glyph(delta)} #{pct_label(delta, prev_n)} vs #{prior} (#{prior_value})"
+    end
+  end
+
+  defp no_earlier(:month), do: "No earlier month to compare"
+  defp no_earlier(:week), do: "No earlier week to compare"
+  defp no_earlier(_), do: "No earlier day to compare"
+
+  defp no_before(:count, :month), do: "No orders the month before"
+  defp no_before(:count, :week), do: "No orders the week before"
+  defp no_before(:count, _), do: "No orders the day before"
+  defp no_before(_, :month), do: "No revenue the month before"
+  defp no_before(_, :week), do: "No revenue the week before"
+  defp no_before(_, _), do: "No revenue the day before"
+
+  defp pct_glyph(delta) when delta > 0, do: "▲"
+  defp pct_glyph(_delta), do: "▼"
+
+  defp pct_label(delta, prev) do
+    pct = Float.round(abs(delta) / prev * 100, 1)
+    label = :erlang.float_to_binary(pct, decimals: 1) |> String.replace_suffix(".0", "")
+    "#{label}%"
+  end
+
+  defp prior_period(date, :month),
+    do:
+      date |> Date.beginning_of_month() |> Date.add(-1) |> ThamaniDawaWeb.TimeFormat.month_year()
+
+  defp prior_period(date, :week),
+    do:
+      date
+      |> Date.beginning_of_week()
+      |> Date.add(-7)
+      |> then(&("W/c " <> ThamaniDawaWeb.TimeFormat.month_day(&1)))
+
+  defp prior_period(date, _grain),
+    do: date |> Date.add(-1) |> ThamaniDawaWeb.TimeFormat.weekday_day()
+
+  defp count_label(n, ""), do: n |> to_number() |> round() |> Integer.to_string()
+  defp count_label(n, unit), do: "#{count_label(n, "")} #{unit}"
+
+  defp to_number(%Decimal{} = d), do: Decimal.to_float(d)
+  defp to_number(n) when is_number(n), do: n * 1.0
+  defp to_number(_), do: 0.0
+
   attr :count, :integer, required: true
   attr :max, :integer, required: true
   attr :tone, :string, values: ~w(neutral info success warning danger expiry), default: "neutral"
@@ -818,7 +1269,8 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :body, :string, default: nil
 
   attr :rest, :global,
-    include: ~w(type phx-click id phx-target phx-value-mode phx-value-index phx-value-type)
+    include:
+      ~w(type phx-click id phx-target phx-value-mode phx-value-index phx-value-type phx-value-payment_type)
 
   def td_option_card(assigns) do
     ~H"""
@@ -833,7 +1285,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :shortcut, :string, default: nil
   attr :name, :string, default: "search"
   attr :value, :string, default: ""
-  attr :rest, :global, include: ~w(id phx-change phx-debounce)
+  attr :rest, :global, include: ~w(id autofocus autocomplete phx-change phx-debounce)
 
   def td_search(assigns) do
     ~H"""
@@ -1170,7 +1622,7 @@ defmodule ThamaniDawaWeb.TDComponents do
             <button
               type="button"
               class="td-icon-btn"
-              phx-click={JS.exec("data-cancel", to: "##{@id}")}
+              phx-click={@on_cancel}
               aria-label="Close"
             >
               <.td_icon name="x" />

@@ -651,34 +651,15 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
           </table>
         </div>
 
-        <div :if={@lab_orders != []} class="td-tfoot">
-          <span>
-            <b>{(@page - 1) * 25 + 1} to {(@page - 1) * 25 + length(@lab_orders)}</b>
-            of {@total_orders} orders
-          </span>
-          <span class="td-tfoot-pager">
-            <button
-              type="button"
-              class="td-icon-btn"
-              aria-label="Previous page"
-              disabled={@page == 1}
-              phx-click="page"
-              phx-value-to={@page - 1}
-            >
-              <.td_icon name="caret-left" />
-            </button>
-            <button
-              type="button"
-              class="td-icon-btn"
-              aria-label="Next page"
-              disabled={@page >= @last_page}
-              phx-click="page"
-              phx-value-to={@page + 1}
-            >
-              <.td_icon name="caret-right" />
-            </button>
-          </span>
-        </div>
+        <.td_pagination
+          from={(@page - 1) * 25 + 1}
+          to={(@page - 1) * 25 + length(@lab_orders)}
+          total={@total_orders}
+          noun="orders"
+          current={@page}
+          pages={@last_page}
+          event="page"
+        />
       </section>
 
       <.modal

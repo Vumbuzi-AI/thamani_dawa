@@ -836,31 +836,16 @@ defmodule ThamaniDawaWeb.EarningsLive do
           </:empty_state>
         </.table>
 
-        <div :if={@page_info.total > 0} id="transactions-pager" class="td-tfoot">
-          <span><b>{@page_info.from} to {@page_info.to}</b> of {@page_info.total} payments</span>
-          <span class="td-tfoot-pager">
-            <button
-              type="button"
-              class="td-icon-btn"
-              aria-label="Previous page"
-              disabled={@page == 1}
-              phx-click="page"
-              phx-value-to={@page - 1}
-            >
-              <.td_icon name="caret-left" />
-            </button>
-            <button
-              type="button"
-              class="td-icon-btn"
-              aria-label="Next page"
-              disabled={@page >= @page_info.pages}
-              phx-click="page"
-              phx-value-to={@page + 1}
-            >
-              <.td_icon name="caret-right" />
-            </button>
-          </span>
-        </div>
+        <.td_pagination
+          id="transactions-pager"
+          from={@page_info.from}
+          to={@page_info.to}
+          total={@page_info.total}
+          noun="payments"
+          current={@page}
+          pages={@page_info.pages}
+          event="page"
+        />
 
         <.transaction_modal :if={@live_action == :lab_show && @selected} selected={@selected} />
         <.refund_modal

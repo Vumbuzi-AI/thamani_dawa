@@ -211,30 +211,12 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
   end
 
   defp day_axis(date), do: ThamaniDawaWeb.TimeFormat.month_day(date)
-  defp month_axis(date), do: ThamaniDawaWeb.TimeFormat.month_year(date)
 
-  defp revenue_bars(series, label_fun) do
-    amounts = Enum.map(series, &elem(&1, 1))
-    max = Enum.max(amounts, fn -> 0 end)
-    total = length(series)
-
-    series
-    |> Enum.with_index()
-    |> Enum.map(fn {{date, amount}, index} ->
-      height =
-        cond do
-          max <= 0 -> 8
-          true -> max(8, round(amount / max * 100))
-        end
-
-      %{height: height, recent: index >= max(0, total - 7), label: label_fun.(date)}
-    end)
-  end
-
-  defp axis_labels(marks) do
-    last = length(marks) - 1
-    mid = div(last, 2)
-    [Enum.at(marks, 0).label, Enum.at(marks, mid).label, Enum.at(marks, last).label]
+  defp first_month(series) do
+    case series do
+      [{date, _} | _] -> date
+      _ -> nil
+    end
   end
 
   defp site_tick_max(rows) do
@@ -299,8 +281,27 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
   def render(assigns) do
     assigns =
       assigns
-      |> assign(:daily_bars, revenue_bars(assigns[:daily_revenue] || [], &day_axis/1))
-      |> assign(:monthly_bars, revenue_bars(assigns[:monthly_revenue] || [], &month_axis/1))
+      |> assign(
+        :daily_bars,
+        chart_bars(assigns[:daily_revenue] || [],
+          label_fun: &day_axis/1,
+          tick_every: 7,
+          grain: :day,
+          format: :money
+        )
+      )
+      |> assign(
+        :monthly_bars,
+        chart_bars(assigns[:monthly_revenue] || [],
+          label_fun: &month_axis_label(&1, first_month(assigns[:monthly_revenue])),
+          tick_every: 1,
+          grain: :month,
+          format: :money,
+          recent: 1
+        )
+      )
+      |> assign(:daily_y, chart_y_labels(assigns[:daily_revenue] || []))
+      |> assign(:monthly_y, chart_y_labels(assigns[:monthly_revenue] || []))
       |> assign(:range_label, range_chip_label(assigns[:range], assigns[:dates]))
       |> assign(:site_tick_max, site_tick_max(assigns[:site_profitability] || []))
 
@@ -312,7 +313,13 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
       crumb="Dashboard"
     >
       <:tools>
-        <.td_button variant="primary" navigate={~p"/org/sites/new"} label="Add site">
+        <.td_button
+          variant="primary"
+          navigate={~p"/org/sites/new"}
+          label="Add site"
+          tip="Add a pharmacy, lab, warehouse, or plant to this organisation."
+          tip_align="end"
+        >
           <:icon><.td_icon name="plus" /></:icon>
         </.td_button>
       </:tools>
@@ -587,16 +594,12 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               title="Daily revenue"
               subtitle="Wallet credits collected per day in the selected window"
             >
-              <div class="td-bars" aria-label="Daily revenue in the selected window">
-                <i
-                  :for={bar <- @daily_bars}
-                  class={bar.recent && "is-now"}
-                  style={"height: #{bar.height}%"}
-                ></i>
-              </div>
-              <div :if={@daily_bars != []} class="td-axis">
-                <span :for={label <- axis_labels(@daily_bars)}>{label}</span>
-              </div>
+              <.td_bars
+                id="daily-revenue-bars"
+                label="Daily revenue in the selected window"
+                y_labels={@daily_y}
+                bars={@daily_bars}
+              />
             </.td_dash_card>
             <.td_dash_card
               id="monthly-revenue-chart"
@@ -604,16 +607,12 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               subtitle="Total wallet credits collected in the last 12 months"
               width={380}
             >
-              <div class="td-bars" aria-label="Monthly revenue over the last 12 months">
-                <i
-                  :for={bar <- @monthly_bars}
-                  class={bar.recent && "is-now"}
-                  style={"height: #{bar.height}%"}
-                ></i>
-              </div>
-              <div :if={@monthly_bars != []} class="td-axis">
-                <span :for={label <- axis_labels(@monthly_bars)}>{label}</span>
-              </div>
+              <.td_bars
+                id="monthly-revenue-bars"
+                label="Monthly revenue over the last 12 months"
+                y_labels={@monthly_y}
+                bars={@monthly_bars}
+              />
             </.td_dash_card>
           </.td_dash_row>
         </div>

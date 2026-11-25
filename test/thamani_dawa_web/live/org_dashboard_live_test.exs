@@ -42,6 +42,12 @@ defmodule ThamaniDawaWeb.OrgDashboardLiveTest do
 
     refute has_element?(view, "#organization-onboarding-welcome")
     assert has_element?(view, "#admin-dashboard-stats")
+
+    assert has_element?(
+             view,
+             ".td-tip[data-side=auto][data-align=end][data-tooltip='Add a pharmacy, lab, warehouse, or plant to this organisation.']"
+           )
+
     assert has_element?(view, "#admin-dashboard-charts")
     assert has_element?(view, "input[name='search']")
 

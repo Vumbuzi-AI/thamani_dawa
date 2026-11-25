@@ -62,7 +62,7 @@ defmodule ThamaniDawaWeb.PharmacyWorkflowIntegrationTest do
     {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
     assert index_live |> element("#prescription-new-button") |> render_click()
-    assert index_live |> element("button", "+ Add Item") |> render_click()
+    assert index_live |> element("#add-prescription-item") |> render_click()
 
     assert {:error, {:live_redirect, %{to: prescription_path}}} =
              index_live

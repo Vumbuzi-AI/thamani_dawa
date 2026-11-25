@@ -124,34 +124,41 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
   defp phrase(1, singular, _plural), do: "1 #{singular}"
   defp phrase(n, _singular, plural), do: "#{n} #{plural}"
 
-  defp bar_marks(orders_by_day, view) do
-    {points, label_fun, recent_from} =
+  defp orders_chart(orders_by_day, view) do
+    {points, label_fun, grain, tick_every, recent} =
       case view do
         "day" ->
-          {Enum.take(orders_by_day, -14), &day_label/1, 7}
+          {Enum.take(orders_by_day, -14), &day_label/1, :day, 2, 7}
 
         "month" ->
-          {grouped_counts(orders_by_day, fn date -> Date.new!(date.year, date.month, 1) end, 12),
-           &month_label/1, 1}
+          points =
+            grouped_counts(orders_by_day, fn date -> Date.new!(date.year, date.month, 1) end, 12)
+
+          first =
+            case points do
+              [{date, _} | _] -> date
+              _ -> nil
+            end
+
+          {points, &month_axis_label(&1, first), :month, 1, 1}
 
         _ ->
-          {grouped_counts(orders_by_day, &Date.beginning_of_week/1, 12), &week_label/1, 2}
+          {grouped_counts(orders_by_day, &Date.beginning_of_week/1, 12), &week_label/1, :week, 1,
+           2}
       end
 
-    max = points |> Enum.map(fn {_date, n} -> n end) |> Enum.max(fn -> 0 end)
-    total = length(points)
-
-    points
-    |> Enum.with_index()
-    |> Enum.map(fn {{date, count}, index} ->
-      height = if max == 0, do: 8, else: max(8, round(count / max * 100))
-
-      %{
-        height: height,
-        recent: index >= total - recent_from,
-        label: label_fun.(date)
-      }
-    end)
+    %{
+      bars:
+        chart_bars(points,
+          label_fun: label_fun,
+          tick_every: tick_every,
+          grain: grain,
+          format: :count,
+          unit: "orders",
+          recent: recent
+        ),
+      y_labels: chart_y_labels(points, :count)
+    }
   end
 
   defp grouped_counts(orders_by_day, key_fun, take) do
@@ -164,19 +171,6 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
 
   defp day_label(date), do: ThamaniDawaWeb.TimeFormat.month_day(date)
   defp week_label(date), do: "W/c " <> day_label(date)
-  defp month_label(date), do: ThamaniDawaWeb.TimeFormat.month_year(date)
-
-  defp axis_labels(marks) do
-    case marks do
-      [] ->
-        []
-
-      marks ->
-        last = length(marks) - 1
-        mid = div(last, 2)
-        [Enum.at(marks, 0).label, Enum.at(marks, mid).label, Enum.at(marks, last).label]
-    end
-  end
 
   defp status_rows(orders_by_status) do
     counts = Map.new(orders_by_status)
@@ -211,7 +205,7 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
   def render(assigns) do
     assigns =
       assigns
-      |> assign(:bars, bar_marks(assigns.orders_by_day, assigns.calendar_view))
+      |> assign(:chart, orders_chart(assigns.orders_by_day, assigns.calendar_view))
       |> assign(:statuses, status_rows(assigns.orders_by_status))
       |> assign(:pending_rows, assigns.pending |> newest() |> Enum.take(4))
       |> assign(:incomplete_rows, assigns.incomplete |> newest() |> Enum.take(4))
@@ -224,7 +218,13 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
       crumb="Dashboard"
     >
       <:tools>
-        <.td_button variant="primary" navigate={~p"/lab/orders/new"} label="New lab order">
+        <.td_button
+          variant="primary"
+          navigate={~p"/lab/orders/new"}
+          label="New lab order"
+          tip="Create an order, attach a patient, and send it to collection."
+          tip_align="end"
+        >
           <:icon><.td_icon name="plus" /></:icon>
         </.td_button>
       </:tools>
@@ -311,12 +311,12 @@ defmodule ThamaniDawaWeb.LabDashboardLive do
 
         <.td_dash_row>
           <.td_dash_card title="Lab orders" subtitle="Orders created per day, last 30 days">
-            <div class="td-bars" aria-label="Lab orders over the last 30 days">
-              <i :for={bar <- @bars} class={bar.recent && "is-now"} style={"height: #{bar.height}%"}></i>
-            </div>
-            <div :if={@bars != []} class="td-axis">
-              <span :for={label <- axis_labels(@bars)}>{label}</span>
-            </div>
+            <.td_bars
+              id="lab-orders-bars"
+              label="Lab orders over the selected window"
+              y_labels={@chart.y_labels}
+              bars={@chart.bars}
+            />
           </.td_dash_card>
           <.td_dash_card title="Orders by status" subtitle="All lab orders at your site" width={380}>
             <.td_tick_row

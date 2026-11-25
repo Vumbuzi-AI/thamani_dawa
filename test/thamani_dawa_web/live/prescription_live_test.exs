@@ -58,7 +58,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
       assert index_live |> element("#prescription-new-button") |> render_click()
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       assert {:error, {:live_redirect, %{to: to}}} =
                index_live
@@ -91,7 +91,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       assert index_live |> element("#prescription-new-button") |> render_click()
       refute has_element?(index_live, "#walk-in-patient-mode")
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       assert {:error, {:live_redirect, %{to: to}}} =
                index_live
@@ -144,7 +144,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert html =~ "Referring doctor"
       assert has_element?(index_live, "input[name='prescription[referring_doctor]']")
 
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       html =
         index_live
@@ -201,7 +201,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       assert index_live |> element("#prescription-new-button") |> render_click()
       assert index_live |> element("#new-patient-mode") |> render_click()
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       assert {:error, {:live_redirect, %{to: to}}} =
                index_live
@@ -242,7 +242,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       |> form("#prescription-form", patient: %{full_name: "Jane Doe", phone: "0712345678"})
       |> render_change()
 
-      assert index_live |> element("button", "+ Add Item") |> render_click() =~ "Item 1"
+      assert index_live |> element("#add-prescription-item") |> render_click() =~ "Product"
     end
 
     test "creates a prescription with multiple items", %{conn: conn} do
@@ -269,7 +269,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
       assert index_live |> element("#prescription-new-button") |> render_click()
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       index_live
       |> form("#prescription-form",
@@ -288,7 +288,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       )
       |> render_change()
 
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       assert {:error, {:live_redirect, %{to: to}}} =
                index_live
@@ -337,7 +337,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
       assert index_live |> element("#prescription-new-button") |> render_click()
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       html =
         index_live
@@ -357,7 +357,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       assert html =~ "must be greater than 0"
       assert html =~ "can&#39;t be blank"
 
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       assert index_live
              |> has_element?("input[name=\"prescription[items][1][quantity_prescribed]\"]")
@@ -416,7 +416,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
 
       assert index_live |> element("#prescription-new-button") |> render_click()
       assert index_live |> element("#new-patient-mode") |> render_click()
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       html =
         index_live
@@ -456,7 +456,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       |> form("#prescription-form", prescription: %{site_id: site.id})
       |> render_change()
 
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       assert {:error, {:live_redirect, %{to: to}}} =
                index_live
@@ -514,7 +514,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       |> form("#prescription-form", prescription: %{site_id: site.id})
       |> render_change()
 
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       index_live
       |> form("#prescription-form",
@@ -556,7 +556,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
       assert index_live |> element("#prescription-new-button") |> render_click()
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       index_live
       |> form("#prescription-form",
@@ -575,9 +575,8 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       |> render_change()
 
       html = index_live |> element("button[phx-value-index='0']", "Done") |> render_click()
-      assert html =~ "Qty: 3"
+      assert html =~ "3 · 5 days"
       assert html =~ "Panadol"
-      assert html =~ "5 days"
 
       refute has_element?(
                index_live,
@@ -604,7 +603,7 @@ defmodule ThamaniDawaWeb.PrescriptionLiveTest do
       {:ok, index_live, _html} = live(conn, ~p"/pharmacy/prescriptions")
 
       assert index_live |> element("#prescription-new-button") |> render_click()
-      assert index_live |> element("button", "+ Add Item") |> render_click()
+      assert index_live |> element("#add-prescription-item") |> render_click()
 
       index_live
       |> form("#prescription-form",

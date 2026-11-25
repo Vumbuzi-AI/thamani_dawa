@@ -201,11 +201,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
             variant="secondary"
             label="Generate serials"
             patch={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
+            tip="Issue a GS1 batch and DataMatrix serials. You will set quantity, dates, and facility."
           />
           <.td_button
             variant="primary"
             label="Create SSCC"
             patch={~p"/manufacturer/products/#{@product.id}/sscc"}
+            tip="Pack serials into a shipper SSCC for this product."
+            tip_align="end"
           />
         </:actions>
         <.td_key_value label="GTIN" value={@product.gtin} mono />

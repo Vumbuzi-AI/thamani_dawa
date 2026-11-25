@@ -173,6 +173,25 @@ defmodule ThamaniDawaWeb.LabTestLiveTest do
 
       assert render(lv) =~ test.name
     end
+
+    test "catalog footer is TD Pagination with prev and next only", %{conn: conn, admin: admin} do
+      for n <- 1..9 do
+        lab_test_fixture(%{organization_id: admin.organization_id, name: "Pager #{n}"})
+      end
+
+      {:ok, view, html} = live(log_in_user(conn, admin), ~p"/lab/tests")
+
+      assert html =~ "1 to 8"
+      assert html =~ "of 9 results"
+
+      assert has_element?(
+               view,
+               "nav[aria-label='Pagination'] button[aria-label='Previous page'][disabled]"
+             )
+
+      assert has_element?(view, "nav[aria-label='Pagination'] a[aria-label='Next page']")
+      refute html =~ ~s(aria-current="page")
+    end
   end
 
   describe "create test" do

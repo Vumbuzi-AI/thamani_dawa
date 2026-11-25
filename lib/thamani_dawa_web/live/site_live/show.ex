@@ -210,32 +210,6 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp day_axis(date), do: ThamaniDawaWeb.TimeFormat.month_day(date)
 
-  defp revenue_bars(series) do
-    amounts = Enum.map(series, &elem(&1, 1))
-    max = Enum.max(amounts, fn -> 0 end)
-    total = length(series)
-
-    series
-    |> Enum.with_index()
-    |> Enum.map(fn {{date, amount}, index} ->
-      height =
-        cond do
-          max <= 0 -> 8
-          true -> max(8, round(amount / max * 100))
-        end
-
-      %{height: height, recent: index >= max(0, total - 7), label: day_axis(date)}
-    end)
-  end
-
-  defp axis_labels([mark]), do: [mark.label]
-
-  defp axis_labels(marks) do
-    last = length(marks) - 1
-    mid = div(last, 2)
-    [Enum.at(marks, 0).label, Enum.at(marks, mid).label, Enum.at(marks, last).label]
-  end
-
   defp amount_to_decimal(%Decimal{} = d), do: d
   defp amount_to_decimal(n) when is_number(n), do: Decimal.new(n)
   defp amount_to_decimal(_), do: Decimal.new(0)
@@ -372,7 +346,16 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
     assigns =
       assigns
       |> assign(:range_label, range_chip_label(assigns.range, assigns.dates))
-      |> assign(:daily_bars, revenue_bars(Map.get(assigns, :daily_revenue, [])))
+      |> assign(
+        :daily_bars,
+        chart_bars(Map.get(assigns, :daily_revenue, []),
+          label_fun: &day_axis/1,
+          tick_every: 7,
+          grain: :day,
+          format: :money
+        )
+      )
+      |> assign(:daily_y, chart_y_labels(Map.get(assigns, :daily_revenue, [])))
       |> assign(:method_rows, method_rows(Map.get(assigns, :sales_by_method, [])))
       |> assign(:clinical?, clinical?(assigns.site))
 
@@ -550,16 +533,12 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
               title="Daily revenue"
               subtitle={"Wallet credits collected per day at #{@site.name}"}
             >
-              <div class="td-bars" aria-label={"Daily revenue at #{@site.name}"}>
-                <i
-                  :for={bar <- @daily_bars}
-                  class={bar.recent && "is-now"}
-                  style={"height: #{bar.height}%"}
-                ></i>
-              </div>
-              <div :if={@daily_bars != []} class="td-axis">
-                <span :for={label <- axis_labels(@daily_bars)}>{label}</span>
-              </div>
+              <.td_bars
+                id="site-daily-revenue-bars"
+                label={"Daily revenue at #{@site.name}"}
+                y_labels={@daily_y}
+                bars={@daily_bars}
+              />
             </.td_dash_card>
             <.td_dash_card
               id={

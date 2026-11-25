@@ -126,6 +126,7 @@
   --color-thamani-surface: var(--color-td-surface);
   --color-thamani-on-accent: var(--color-td-on-accent);
   --color-thamani-snow: var(--color-td-on-accent);
+  --color-thamani-stone: var(--color-td-hairline);
 
 
   --font-thamani-sans: var(--font-sans);

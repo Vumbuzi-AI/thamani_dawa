@@ -353,12 +353,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
               id="batches-generate-serials"
               label="Generate serials"
               navigate={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
+              tip="Issue another GS1 batch and DataMatrix serials for this product."
             />
             <.td_button
               :if={@selected_batch}
               id="export-batch-serials"
               glyph="download-simple"
               label="Export CSV"
+              tip="Download this batch's serials as a spreadsheet."
               href={
                 ~p"/manufacturer/products/#{@product.gtin}/batches/#{@selected_batch.batch_no}/serials/export"
               }
@@ -369,6 +371,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
               variant="primary"
               label="Create shipper SSCC"
               navigate={pack_path(assigns)}
+              tip="Pack unpacked serials into a shipper SSCC for dispatch."
+              tip_align="end"
             />
             <span :if={@batch_fully_packed} id="batch-fully-packed">
               <.td_badge tone="success" label="All serials packed" />
@@ -486,7 +490,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                 <table class="td-rows is-static" id="manufacturer-serials">
                   <thead>
                     <tr>
-                      <th>Serial (SGTIN)</th><th>State</th><th>Shipper SSCC</th>
+                      <th>Code</th><th>Serial (SGTIN)</th><th>State</th><th>Shipper SSCC</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -517,6 +521,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                       glyph="printer"
                       label="Print labels"
                       phx-click="open_print"
+                      tip="Print a 50 × 25 mm DataMatrix label for every serial in this batch."
+                      tip_align="end"
                     />
                   </:actions>
                 </.td_card_header>
@@ -613,6 +619,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
     ~H"""
     <tr id={"manufacturer-serial-#{dom_key(@serial.serial)}"}>
+      <td>
+        <canvas
+          id={"serial-dm-#{dom_key(@serial.serial)}"}
+          phx-hook="DataMatrix"
+          phx-update="ignore"
+          data-gs1-text={gs1_text(@product, @batch, @serial)}
+          class="td-serial-dm"
+        ></canvas>
+      </td>
       <td class="font-mono">{sgtin(@product, @serial)}</td>
       <td :if={@full} class="font-mono">{@batch.batch_no}</td>
       <td :if={@full}>{long_date(@batch.expiry_date)}</td>
@@ -739,6 +754,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           id="export-batch-serials"
           glyph="download-simple"
           label="Export CSV"
+          tip="Download this batch's serials as a spreadsheet."
           href={
             ~p"/manufacturer/products/#{@product.gtin}/batches/#{@selected_batch.batch_no}/serials/export"
           }
@@ -749,12 +765,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           variant="primary"
           label="Create shipper SSCC"
           navigate={pack_path(assigns)}
+          tip="Pack unpacked serials into a shipper SSCC for dispatch."
+          tip_align="end"
         />
         <.td_button
           id="open-print-labels"
           glyph="printer"
           label="Print labels"
           phx-click="open_print"
+          tip="Print a 50 × 25 mm DataMatrix label for every serial in this batch."
+          tip_align="end"
         />
       </div>
     </div>
@@ -793,7 +813,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       <table class="td-rows" id="manufacturer-serials">
         <thead>
           <tr>
-            <th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>State</th><th>Shipper SSCC</th>
+            <th>Code</th><th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>State</th><th>
+              Shipper SSCC
+            </th>
           </tr>
         </thead>
         <tbody>

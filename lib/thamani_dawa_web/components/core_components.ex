@@ -3376,7 +3376,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
   end
 
   @doc """
-  Renders pagination controls for Scrivener pagination.
+  Scrivener adapter for Doop `TD Pagination` / `td_pagination`.
+
+  Prefer `<.td_pagination>` on new screens. This wrapper keeps existing
+  list callers on the same footer: 48px wash, prev/next only.
 
   ## Examples
 
@@ -3385,118 +3388,9 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :page, :map, required: true, doc: "Scrivener page object"
   attr :path, :string, required: true, doc: "Base path for pagination links"
   attr :query_param, :string, default: "page", doc: "Query parameter name for page number"
+  attr :noun, :string, default: "results"
 
   def pagination(assigns) do
-    page = assigns.page
-    total_pages = page.total_pages || 1
-    current_page = page.page_number || 1
-    total_entries = page.total_entries || 0
-    page_size = page.page_size || 10
-
-    from_item = (current_page - 1) * page_size + 1
-    to_item = min(current_page * page_size, total_entries)
-
-    has_prev = current_page > 1
-    has_next = current_page < total_pages
-
-    page_numbers = get_page_numbers(current_page, total_pages)
-
-    assigns =
-      assigns
-      |> assign(:current_page, current_page)
-      |> assign(:total_pages, total_pages)
-      |> assign(:total_entries, total_entries)
-      |> assign(:from_item, from_item)
-      |> assign(:to_item, to_item)
-      |> assign(:has_prev, has_prev)
-      |> assign(:has_next, has_next)
-      |> assign(:page_numbers, page_numbers)
-
-    ~H"""
-    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-thamani-stone pt-6">
-      <p class="pagination-summary order-2 sm:order-1 text-sm">
-        Showing <span class="pagination-summary-value font-medium">{@from_item}</span>–<span class="pagination-summary-value font-medium">{@to_item}</span>
-        of <span class="pagination-summary-value font-medium">{@total_entries}</span>
-        results
-      </p>
-
-      <nav
-        :if={@total_pages > 1}
-        class="order-1 sm:order-2 flex items-center gap-1"
-        aria-label="Pagination"
-      >
-        <.link
-          navigate={build_pagination_url(@path, @current_page - 1, @query_param)}
-          class={[
-            "pagination-link inline-flex items-center justify-center size-10 rounded-lg transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
-            if(@has_prev,
-              do: "",
-              else: "pointer-events-none"
-            )
-          ]}
-          aria-disabled={!@has_prev}
-          title="Previous page"
-        >
-          <.icon name="hero-chevron-left" class="size-4" />
-        </.link>
-
-        <div class="flex items-center gap-1">
-          <.link
-            :for={page_num <- @page_numbers}
-            navigate={
-              if page_num != :ellipsis, do: build_pagination_url(@path, page_num, @query_param)
-            }
-            class={[
-              "inline-flex items-center justify-center size-10 rounded-lg text-sm transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
-              if(page_num == :ellipsis,
-                do: "pagination-ellipsis cursor-default",
-                else: "pagination-link"
-              )
-            ]}
-            aria-current={page_num == @current_page && "page"}
-          >
-            {if page_num == :ellipsis, do: "…", else: page_num}
-          </.link>
-        </div>
-
-        <.link
-          navigate={build_pagination_url(@path, @current_page + 1, @query_param)}
-          class={[
-            "pagination-link inline-flex items-center justify-center size-10 rounded-lg transition-[background-color,color,scale] duration-150 active:scale-[0.96]",
-            if(@has_next,
-              do: "",
-              else: "pointer-events-none"
-            )
-          ]}
-          aria-disabled={!@has_next}
-          title="Next page"
-        >
-          <.icon name="hero-chevron-right" class="size-4" />
-        </.link>
-      </nav>
-    </div>
-    """
-  end
-
-  defp get_page_numbers(current_page, total_pages) do
-    cond do
-      total_pages <= 7 ->
-        Enum.to_list(1..total_pages)
-
-      current_page <= 4 ->
-        Enum.to_list(1..5) ++ [:ellipsis, total_pages]
-
-      current_page >= total_pages - 3 ->
-        [1, :ellipsis] ++ Enum.to_list((total_pages - 4)..total_pages)
-
-      true ->
-        [1, :ellipsis] ++
-          Enum.to_list((current_page - 1)..(current_page + 1)) ++ [:ellipsis, total_pages]
-    end
-  end
-
-  defp build_pagination_url(path, page, query_param) do
-    separator = if String.contains?(path, "?"), do: "&", else: "?"
-    "#{path}#{separator}#{query_param}=#{page}"
+    ThamaniDawaWeb.TDComponents.td_pagination(assigns)
   end
 end

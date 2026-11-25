@@ -851,34 +851,15 @@ defmodule ThamaniDawaWeb.SiteStock do
         </table>
       </div>
 
-      <div :if={@entries != []} class="td-tfoot">
-        <span>
-          <b>{(@page - 1) * page_size() + 1} to {(@page - 1) * page_size() + length(@entries)}</b>
-          of {@total} {if @view == "products", do: "products", else: "batches"}
-        </span>
-        <span class="td-tfoot-pager">
-          <button
-            type="button"
-            class="td-icon-btn"
-            aria-label="Previous page"
-            disabled={@page == 1}
-            phx-click="page"
-            phx-value-to={@page - 1}
-          >
-            <.td_icon name="caret-left" />
-          </button>
-          <button
-            type="button"
-            class="td-icon-btn"
-            aria-label="Next page"
-            disabled={@page >= @last_page}
-            phx-click="page"
-            phx-value-to={@page + 1}
-          >
-            <.td_icon name="caret-right" />
-          </button>
-        </span>
-      </div>
+      <.td_pagination
+        from={(@page - 1) * page_size() + 1}
+        to={(@page - 1) * page_size() + length(@entries)}
+        total={@total}
+        noun={if @view == "products", do: "products", else: "batches"}
+        current={@page}
+        pages={@last_page}
+        event="page"
+      />
 
       <.td_csv_download id={"#{@id}-csv"} />
 

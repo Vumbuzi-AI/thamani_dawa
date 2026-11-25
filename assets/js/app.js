@@ -35,13 +35,18 @@ import {QuickSaleReceiptPrint} from "./hooks/quick_sale_receipt_print"
 import {ConditionalBatchField} from "./hooks/conditional_batch_field"
 import {LabelPrint, PrintAllLabels} from "./hooks/label_print"
 import {TdPeek} from "./hooks/td_peek"
+import {TdChartTip} from "./hooks/td_chart_tip"
+import {bindTdTips} from "./hooks/td_tip"
+import {TdSelect} from "./hooks/td_select"
 import {LabelSvgDownload, DownloadAllLabelsSvg} from "./hooks/label_svg_download"
+
+bindTdTips()
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, ScanCapture, ScanField, ProductTour, FlashAutoDismiss, QuickSaleReceiptPrint, ConditionalBatchField, LabelPrint, PrintAllLabels, LabelSvgDownload, DownloadAllLabelsSvg, TdPeek},
+  hooks: {...colocatedHooks, GoogleMaps, Chart, DataMatrix, ScanCapture, ScanField, ProductTour, FlashAutoDismiss, QuickSaleReceiptPrint, ConditionalBatchField, LabelPrint, PrintAllLabels, LabelSvgDownload, DownloadAllLabelsSvg, TdPeek, TdChartTip, TdSelect},
 })
 
 // Show progress bar on live navigation and form submits

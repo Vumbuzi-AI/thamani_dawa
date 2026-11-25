@@ -103,6 +103,20 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
 
   defp sgtin(serial), do: "(01)#{gtin14(serial)}(21)#{serial.serial}"
 
+  defp unit_gs1_text(serial) do
+    expiry = serial.expiry_date && Calendar.strftime(serial.expiry_date, "%y%m%d")
+    batch = serial.batch
+
+    [
+      "(01)#{gtin14(serial)}",
+      batch && "(10)#{batch}",
+      expiry && "(17)#{expiry}",
+      "(21)#{serial.serial}"
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join()
+  end
+
   def render(assigns) do
     serials = if assigns.remote_serials.ok?, do: assigns.remote_serials.result, else: []
     pages = max(ceil(length(serials) / @per_page), 1)
@@ -172,6 +186,8 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
             glyph="printer"
             label="Print label"
             navigate={~p"/manufacturer/sscc/#{@sscc.id}/label?#{%{return_to: @back_path}}"}
+            tip="Print the 100 × 150 mm shipper label with the GS1 DataMatrix for this SSCC."
+            tip_align="end"
           />
         </div>
       </div>
@@ -239,7 +255,9 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
             >
               <thead>
                 <tr>
-                  <th>#</th><th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>State</th>
+                  <th>#</th><th>Code</th><th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>
+                    State
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -248,6 +266,15 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
                   id={"sscc-primary-#{dom_key(serial)}"}
                 >
                   <td>{index}</td>
+                  <td>
+                    <canvas
+                      id={"sscc-dm-#{dom_key(serial)}"}
+                      phx-hook="DataMatrix"
+                      phx-update="ignore"
+                      data-gs1-text={unit_gs1_text(serial)}
+                      class="td-serial-dm"
+                    ></canvas>
+                  </td>
                   <td class="font-mono">{sgtin(serial)}</td>
                   <td class="font-mono">{serial.batch}</td>
                   <td>{long_date(serial.expiry_date)}</td>
@@ -280,13 +307,25 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
         </div>
 
         <aside class="td-pack-side">
-          <div class="td-card td-pad">
-            <h2 class="td-idh-title">Shipper label</h2>
-            <p class="td-note">100 × 150 mm. Print it from the top right.</p>
-            <p><strong>{@sscc.to_company_name}</strong></p>
-            <p class="font-mono">{@sscc.code}</p>
-            <p class="font-mono">{@sscc.gtin}</p>
-            <p>{@sscc.batch} · {@sscc.count_of_trade_items} units</p>
+          <div class="td-card">
+            <.td_card_header
+              title="Shipper label"
+              subtitle="100 × 150 mm GS1 DataMatrix. Print it from the top right."
+            />
+            <div class="td-label-preview">
+              <canvas
+                id={"sscc-aside-dm-#{@sscc.id}"}
+                phx-hook="DataMatrix"
+                phx-update="ignore"
+                data-gs1-text={ThamaniDawaWeb.ManufacturerSsccLive.Label.gs1_text(@sscc)}
+              ></canvas>
+              <div class="td-label-preview-body">
+                <span class="td-label-preview-title font-mono">{@sscc.code}</span>
+                <span>{@sscc.to_company_name}</span>
+                <span class="font-mono">{@sscc.gtin}</span>
+                <span>{@sscc.batch} · {@sscc.count_of_trade_items} units</span>
+              </div>
+            </div>
           </div>
           <div :if={@sscc.pallet} class="td-card td-pad" id="sscc-on-pallet">
             <h2 class="td-idh-title">On pallet {@sscc.pallet.code}</h2>

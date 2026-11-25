@@ -101,8 +101,8 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
       html = lv |> element("#quick-add-#{product.id}") |> render_click()
 
       assert has_element?(lv, "#cart-line-#{product.id}")
-      assert has_element?(lv, "#quick-sale-item-count", "1 item")
-      assert html =~ "KES 50"
+      assert has_element?(lv, "#quick-sale-item-count", "1 unit · 1 line")
+      assert html =~ "KSh 50"
     end
 
     test "scanning a matching barcode adds the product to the cart", %{conn: conn} do
@@ -258,7 +258,7 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
 
       lv |> element("#quick-add-#{product.id}") |> render_click()
 
-      assert has_element?(lv, "#cart-line-#{product.id}", product.gtin)
+      assert has_element?(lv, "#quick-add-#{product.id}", product.gtin)
       assert has_element?(lv, "#cart-line-#{product.id}", "LOT-FEFO-1")
     end
 
@@ -324,7 +324,7 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
 
       lv |> element("#cash-tender-50") |> render_click()
 
-      assert has_element?(lv, "#cash-tender-50[aria-pressed='true'].ring-thamani-forest")
+      assert has_element?(lv, "#cash-tender-50[aria-pressed='true']")
       refute has_element?(lv, "#cash-tender-exact[aria-pressed='true']")
     end
 
@@ -366,7 +366,6 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
 
       assert has_element?(lv, "#quick-sale-receipt-modal", "Sale complete")
       assert has_element?(lv, "#quick-sale-receipt", "Medpoint CBD")
-      assert has_element?(lv, "#quick-sale-receipt", "Sale Receipt")
       assert has_element?(lv, "#quick-sale-receipt", "Receipt no.")
       assert has_element?(lv, "#receipt-date-time", "Date")
       assert has_element?(lv, "#quick-sale-receipt", pharmacist.name)
@@ -375,10 +374,9 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
       assert has_element?(lv, "#quick-sale-receipt", "Unit price")
       assert has_element?(lv, "#quick-sale-receipt", "Line total")
       assert has_element?(lv, "#quick-sale-receipt", "Amoxicillin 500mg Cap")
-      assert has_element?(lv, "#receipt-total", "KES 100")
-      assert has_element?(lv, "#receipt-cash-tendered", "KES 150")
-      assert has_element?(lv, "#receipt-change", "KES 50")
-      assert has_element?(lv, "#quick-sale-receipt", "Thank you for choosing Medpoint CBD.")
+      assert has_element?(lv, "#receipt-total", "KSh 100")
+      assert has_element?(lv, "#receipt-cash-tendered", "KSh 150")
+      assert has_element?(lv, "#receipt-change", "KSh 50")
       assert has_element?(lv, "#quick-sale-receipt", "Powered by Thamani Dawa")
 
       assert has_element?(
@@ -424,7 +422,7 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
 
       assert has_element?(lv, "#quick-sale-receipt-modal", "Sale complete")
 
-      lv |> element("#quick-sale-receipt-modal button[aria-label='Cancel']") |> render_click()
+      lv |> element("#quick-sale-receipt-modal button[aria-label='Close']") |> render_click()
 
       refute has_element?(lv, "#quick-sale-receipt-modal")
       assert has_element?(lv, "#quick-sale-item-count", "0 items")
@@ -460,7 +458,7 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
       assert has_element?(lv, "#receipt-mpesa-reference", "SFA7B2XQ9K")
     end
 
-    test "completing a sale without a payment method shows an inline error and changes nothing",
+    test "completing a sale without a payment method opens confirm payment on Cash",
          %{conn: conn} do
       organization = organization_fixture()
       site = site_fixture(%{organization_id: organization.id})
@@ -480,7 +478,8 @@ defmodule ThamaniDawaWeb.QuickSaleLiveTest do
       render_submit(lv, "scan_submit", %{"query" => product.gtin})
       html = render_click(lv, "complete_sale", %{})
 
-      assert html =~ "Select a payment method."
+      assert has_element?(lv, "#quick-sale-payment-modal")
+      assert html =~ "Confirm payment"
       assert ThamaniDawa.Prescriptions.list_prescriptions(organization.id) == []
       assert ThamaniDawa.Batches.total_available_stock(organization.id, site.id, product.id) == 20
     end

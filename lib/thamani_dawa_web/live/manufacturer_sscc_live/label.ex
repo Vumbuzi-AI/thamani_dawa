@@ -145,7 +145,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
     |> Enum.reject(fn {_ai, value} -> value in [nil, ""] end)
   end
 
-  defp gs1_text(sscc), do: Enum.map_join(ai_elements(sscc), fn {ai, v} -> "(#{ai})#{v}" end)
+  def gs1_text(sscc), do: Enum.map_join(ai_elements(sscc), fn {ai, v} -> "(#{ai})#{v}" end)
   defp date_ai(nil), do: nil
   defp date_ai(date), do: Calendar.strftime(date, "%y%m%d")
   defp long_date(nil), do: "—"

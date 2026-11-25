@@ -167,6 +167,17 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
     {:noreply, assign(socket, :cart, cart)}
   end
 
+  def handle_event("clear_cart", _params, socket) do
+    {:noreply, assign(socket, cart: [], errors: %{})}
+  end
+
+  def handle_event("filter_category", %{"category" => category}, socket) do
+    {:noreply,
+     socket
+     |> assign(:catalog_category, category)
+     |> refresh_catalog()}
+  end
+
   def handle_event("complete_sale", _params, socket) do
     complete_sale(socket)
   end
@@ -387,10 +398,14 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
       cart == [] ->
         {:noreply, put_flash(socket, :error, "Add at least one item.")}
 
-      not PaymentMethods.valid?(payment_type) ->
-        {:noreply, assign(socket, :errors, %{payment_type: "Select a payment method."})}
-
       true ->
+        socket =
+          assign(
+            socket,
+            :payment_type,
+            if(PaymentMethods.valid?(payment_type), do: payment_type, else: "Cash")
+          )
+
         case reconcile_cart_with_stock(socket) do
           {:ok, socket} ->
             total = cart_total(socket.assigns.cart)
@@ -622,14 +637,44 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
     do: "No active stock is available at this site."
 
   defp stock_label(stock) when stock <= 0, do: "Out of stock"
-  defp stock_label(stock), do: "#{stock} in stock"
+  defp stock_label(stock), do: "#{stock} left"
 
-  defp product_initials(product) do
-    (product.generic_name || "?")
-    |> String.trim()
-    |> String.first()
-    |> to_string()
-    |> String.upcase()
+  defp cart_lines_label(cart) do
+    units = cart_item_count(cart)
+    lines = length(cart)
+    unit_word = if units == 1, do: "unit", else: "units"
+    line_word = if lines == 1, do: "line", else: "lines"
+    "#{units} #{unit_word} · #{lines} #{line_word}"
+  end
+
+  defp payment_option_title("Mobile Money"), do: "M-Pesa"
+  defp payment_option_title(method), do: method
+
+  defp payment_option_body("Cash"),
+    do: "Enter the cash received. Change is calculated when you confirm."
+
+  defp payment_option_body("Mobile Money"),
+    do: "Add the M-Pesa transaction code from the customer's message."
+
+  defp payment_option_body("Insurance"),
+    do: "Confirm the insurer after you take this sale."
+
+  defp payment_option_body(_), do: nil
+
+  defp cash_change(tendered, total) do
+    case Decimal.cast(tendered) do
+      {:ok, amount} -> Decimal.sub(amount, total)
+      :error -> nil
+    end
+  end
+
+  defp same_amount?(left, right) do
+    with {:ok, a} <- Decimal.cast(left),
+         {:ok, b} <- Decimal.cast(right) do
+      Decimal.equal?(a, b)
+    else
+      _ -> false
+    end
   end
 
   def render(assigns) do
@@ -641,600 +686,430 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
     >
       <.td_list_page
         title="Quick sale"
-        subtitle="Pick products and take payment. Stock is dispensed and the sale is marked paid immediately."
+        subtitle="Sell over-the-counter items without a prescription."
       >
-        <.modal
+        <:actions>
+          <.td_button
+            type="button"
+            variant="secondary"
+            glyph="scan"
+            label="Scan"
+            onclick="document.getElementById('quick-sale-query')?.focus()"
+          />
+        </:actions>
+
+        <.td_modal
           :if={@payment_modal}
           id="quick-sale-payment-modal"
           show
+          width={560}
+          title="Confirm payment"
+          subtitle="Confirm payment before completing this sale."
           on_cancel={JS.push("cancel_payment")}
         >
-          <div class="space-y-5">
-            <div class="flex items-center gap-3">
-              <span class="flex size-10 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
-                <.icon
-                  name={
-                    if(@payment_type == "Cash",
-                      do: "hero-banknotes",
-                      else: "hero-device-phone-mobile"
-                    )
-                  }
-                  class="size-5"
-                />
-              </span>
-              <div>
-                <h2 class="text-xl font-semibold text-thamani-forest">{@payment_type} payment</h2>
-                <p class="text-sm text-thamani-pewter">
-                  Confirm payment before completing this sale.
-                </p>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between rounded-xl bg-thamani-canvas px-4 py-3">
-              <span class="text-sm text-thamani-pewter">Order total</span>
-              <span class="text-2xl font-semibold tabular-nums text-thamani-forest">KES {cart_total(
-                @cart
-              )}</span>
-            </div>
-
+          <:body>
             <.form
               for={@payment_form}
               id="quick-sale-payment-form"
               phx-submit="confirm_payment"
-              class="space-y-4"
+              class="td-modal-form"
             >
-              <%= if @payment_type == "Cash" do %>
-                <.input
+              <div class="td-tot is-big">
+                <span>Order total</span>
+                <b>{ThamaniDawaWeb.Money.ksh(cart_total(@cart))}</b>
+              </div>
+              <div class={["td-pay-grid", length(PaymentMethods.all()) > 2 && "is-3"]}>
+                <.td_option_card
+                  :for={method <- PaymentMethods.all()}
+                  id={"pay-option-#{method}"}
+                  title={payment_option_title(method)}
+                  body={payment_option_body(method)}
+                  selected={@payment_type == method}
+                  phx-click="select_payment_type"
+                  phx-value-payment_type={method}
+                />
+              </div>
+              <div :if={@payment_type == "Cash"} class="td-tender">
+                <.td_input
                   field={@payment_form[:tendered]}
                   type="number"
                   label="Amount tendered (KES)"
                   min="0"
                   step="0.01"
                   required
-                  autofocus
                 />
-                <div class="grid grid-cols-4 gap-2">
-                  <button
-                    id="cash-tender-exact"
-                    type="button"
-                    phx-click="set_cash_tendered"
-                    phx-value-amount={cart_total(@cart)}
-                    aria-pressed={
-                      if(
-                        to_string(@payment_form[:tendered].value) == to_string(cart_total(@cart)),
-                        do: "true",
-                        else: "false"
-                      )
-                    }
-                    class={[
-                      "rounded-lg border px-2 py-2 text-xs font-semibold transition-colors",
-                      if(
-                        to_string(@payment_form[:tendered].value) == to_string(cart_total(@cart)),
-                        do:
-                          "border-thamani-forest bg-td-accent-tint text-thamani-forest ring-1 ring-thamani-forest",
-                        else: "border-thamani-stone text-thamani-forest hover:bg-td-accent-tint"
-                      )
-                    ]}
-                  >Exact</button>
-                  <button
-                    :for={amount <- [50, 100, 200, 500, 1_000, 2_000, 5_000]}
-                    id={"cash-tender-#{amount}"}
-                    type="button"
-                    phx-click="set_cash_tendered"
-                    phx-value-amount={amount}
-                    aria-pressed={
-                      if(
-                        to_string(@payment_form[:tendered].value) == to_string(amount),
-                        do: "true",
-                        else: "false"
-                      )
-                    }
-                    class={[
-                      "rounded-lg border px-2 py-2 text-xs font-semibold transition-colors",
-                      if(
-                        to_string(@payment_form[:tendered].value) == to_string(amount),
-                        do:
-                          "border-thamani-forest bg-td-accent-tint text-thamani-forest ring-1 ring-thamani-forest",
-                        else: "border-thamani-stone text-thamani-forest hover:bg-td-accent-tint"
-                      )
-                    ]}
-                  >KES {amount}</button>
-                </div>
-                <p class="text-xs text-thamani-pewter">
-                  Enter the cash received. Change is calculated when you confirm.
-                </p>
-              <% else %>
-                <div
-                  :if={@payment_type == "Mobile Money"}
-                  class="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"
+                <button
+                  id="cash-tender-exact"
+                  type="button"
+                  phx-click="set_cash_tendered"
+                  phx-value-amount={cart_total(@cart)}
+                  aria-pressed={
+                    if(same_amount?(@payment_form[:tendered].value, cart_total(@cart)),
+                      do: "true",
+                      else: "false"
+                    )
+                  }
+                  class={[
+                    "td-btn is-secondary",
+                    same_amount?(@payment_form[:tendered].value, cart_total(@cart)) && "is-active"
+                  ]}
                 >
-                  Confirm only after you have seen the customer’s M-Pesa payment. The transaction code is optional.
-                </div>
-                <.input
-                  :if={@payment_type == "Mobile Money"}
-                  field={@payment_form[:provider_reference]}
-                  label="M-Pesa transaction code (optional)"
-                  placeholder="e.g. SFA7B2XQ9K"
-                />
-              <% end %>
-              <p :if={@errors[:payment]} class="text-sm font-medium text-thamani-error">
-                {@errors[:payment]}
-              </p>
-              <.button
-                type="submit"
-                variant="primary"
-                phx-disable-with="Completing sale…"
-                class="w-full"
-              >Confirm payment</.button>
-              <button
-                type="button"
-                phx-click="cancel_payment"
-                class="w-full text-sm font-medium text-thamani-pewter hover:text-thamani-forest"
-              >Cancel</button>
+                  Exact
+                </button>
+              </div>
+              <div :if={@payment_type == "Cash"} class="td-tender-row">
+                <button
+                  :for={amount <- [50, 100, 200, 500, 1_000, 2_000, 5_000]}
+                  id={"cash-tender-#{amount}"}
+                  type="button"
+                  phx-click="set_cash_tendered"
+                  phx-value-amount={amount}
+                  aria-pressed={
+                    if(same_amount?(@payment_form[:tendered].value, amount),
+                      do: "true",
+                      else: "false"
+                    )
+                  }
+                  class={[
+                    "td-btn is-secondary",
+                    same_amount?(@payment_form[:tendered].value, amount) && "is-active"
+                  ]}
+                >
+                  {ThamaniDawaWeb.Money.ksh(amount)}
+                </button>
+              </div>
+              <div :if={@payment_type == "Cash"} class="td-tot">
+                <span>Change</span>
+                <b>
+                  {ThamaniDawaWeb.Money.ksh(
+                    cash_change(@payment_form[:tendered].value, cart_total(@cart))
+                  )}
+                </b>
+              </div>
+              <.td_input
+                field={@payment_form[:provider_reference]}
+                label="M-Pesa transaction code (optional)"
+                placeholder="e.g. SFA7B2XQ9K"
+              />
+              <p :if={@errors[:payment]} class="td-field-error">{@errors[:payment]}</p>
             </.form>
-          </div>
-        </.modal>
+          </:body>
+          <:footer>
+            <.td_button
+              type="button"
+              variant="secondary"
+              label="Cancel"
+              phx-click="cancel_payment"
+            />
+            <.td_button
+              type="submit"
+              variant="primary"
+              glyph="check"
+              label="Confirm payment"
+              form="quick-sale-payment-form"
+              phx-disable-with="Completing sale…"
+            />
+          </:footer>
+        </.td_modal>
 
-        <.modal
+        <.td_modal
           :if={@completed_sale}
           id="quick-sale-receipt-modal"
           show
+          width={560}
+          title="Sale complete"
+          subtitle="Payment received."
           on_cancel={JS.push("new_sale")}
         >
-          <div class="space-y-5 text-center">
-            <span class="mx-auto flex size-12 items-center justify-center rounded-full bg-td-accent-tint text-thamani-forest">
-              <.icon name="hero-check" class="size-7" />
-            </span>
-            <div>
-              <h2 class="text-xl font-semibold text-thamani-forest">Sale complete</h2><p class="text-sm text-thamani-pewter">
-                Payment received
-              </p>
-            </div>
-            <div
-              id="quick-sale-receipt"
-              class="quick-sale-receipt-card rounded-xl border border-thamani-stone bg-td-surface p-5 text-left text-sm text-td-ink"
-            >
-              <header class="receipt-header text-center">
-                <img
-                  src="/images/logo.png"
-                  alt="Thamani Dawa"
-                  class="receipt-logo mx-auto mb-2 size-14 object-contain"
-                />
-                <p class="receipt-site font-semibold text-thamani-forest">
-                  {@completed_sale.site_name}
+          <:body>
+            <div id="quick-sale-receipt" class="td-receipt">
+              <div class="td-receipt-brand">
+                <img src="/images/logo.png" alt="Thamani Dawa" />
+                <span class="td-s12">{@completed_sale.site_name}</span>
+              </div>
+              <div class="td-receipt-meta">
+                <p>
+                  <span>Receipt no.</span>
+                  <b>{@completed_sale.receipt_number}</b>
                 </p>
-                <h3 class="receipt-title mb-3 text-base font-bold uppercase">Sale Receipt</h3>
-                <div class="receipt-meta space-y-1 border-y border-dashed border-thamani-stone py-3 text-left">
-                  <div class="flex justify-between gap-2">
-                    <span>Receipt no.</span><strong>{@completed_sale.receipt_number}</strong>
-                  </div>
-                  <div id="receipt-date-time" class="flex justify-between gap-2">
-                    <span>Date</span><strong>{ThamaniDawaWeb.TimeFormat.datetime(
-                      @completed_sale.completed_at
-                    )}</strong>
-                  </div>
-                  <div class="flex justify-between gap-2">
-                    <span>Cashier</span><strong>{@completed_sale.cashier}</strong>
-                  </div>
-                </div>
-              </header>
-
-              <table
-                id="quick-sale-receipt-items"
-                class="receipt-table my-3 w-full table-fixed border-collapse text-[10px]"
-              >
+                <p id="receipt-date-time">
+                  <span>Date</span>
+                  <b>{ThamaniDawaWeb.TimeFormat.datetime(@completed_sale.completed_at)}</b>
+                </p>
+                <p>
+                  <span>Cashier</span>
+                  <b>{@completed_sale.cashier}</b>
+                </p>
+              </div>
+              <table id="quick-sale-receipt-items">
                 <thead>
                   <tr>
-                    <th
-                      scope="col"
-                      class="border-b border-dashed border-thamani-stone py-2 text-left uppercase"
-                    >
-                      Qty
-                    </th>
-                    <th
-                      scope="col"
-                      class="border-b border-dashed border-thamani-stone py-2 text-left uppercase"
-                    >
-                      Medicine
-                    </th>
-                    <th
-                      scope="col"
-                      class="border-b border-dashed border-thamani-stone py-2 text-right uppercase"
-                    >
-                      Unit price
-                    </th>
-                    <th
-                      scope="col"
-                      class="border-b border-dashed border-thamani-stone py-2 text-right uppercase"
-                    >
-                      Line total
-                    </th>
+                    <th>Qty</th>
+                    <th>Medicine</th>
+                    <th class="is-num">Unit price</th>
+                    <th class="is-num">Line total</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr :for={line <- @completed_sale.cart}>
-                    <td class="py-2 align-top">{line.quantity}</td>
-                    <td class="receipt-medicine py-2 align-top">
-                      <strong class="block">{line.product.generic_name}</strong>
-                      <small :if={line.product.brand_name} class="mt-0.5 block text-thamani-pewter">
-                        {line.product.brand_name}
-                      </small>
+                    <td>{line.quantity}</td>
+                    <td>
+                      <b>{line.product.generic_name}</b>
                     </td>
-                    <td class="py-2 text-right align-top">KES {line.product.price}</td>
-                    <td class="py-2 text-right align-top">
-                      KES {Decimal.mult(line.product.price, line.quantity)}
+                    <td class="is-num">{ThamaniDawaWeb.Money.ksh(line.product.price)}</td>
+                    <td class="is-num">
+                      {ThamaniDawaWeb.Money.ksh(Decimal.mult(line.product.price, line.quantity))}
                     </td>
                   </tr>
                 </tbody>
               </table>
-
-              <section class="receipt-payment space-y-1 border-t border-dashed border-thamani-stone pt-3">
-                <div
-                  id="receipt-total"
-                  class="receipt-total flex justify-between border-b border-dashed border-thamani-stone pb-2 text-base font-semibold text-thamani-forest"
-                >
-                  <span>Total</span><strong>KES {@completed_sale.total}</strong>
-                </div>
-                <div id="receipt-payment-method" class="flex justify-between gap-2">
-                  <span>Payment method</span><strong>{@completed_sale.payment_type}</strong>
-                </div>
-                <div
-                  :if={@completed_sale.tendered}
-                  id="receipt-cash-tendered"
-                  class="flex justify-between gap-2"
-                >
-                  <span>Cash tendered</span><strong>KES {@completed_sale.tendered}</strong>
-                </div>
-                <div
-                  :if={@completed_sale.change}
-                  id="receipt-change"
-                  class="flex justify-between gap-2"
-                >
-                  <span>Change</span><strong>KES {@completed_sale.change}</strong>
-                </div>
-                <div
-                  :if={@completed_sale.provider_reference}
-                  id="receipt-mpesa-reference"
-                  class="flex justify-between gap-2"
-                >
-                  <span>M-Pesa reference</span><strong>{@completed_sale.provider_reference}</strong>
-                </div>
-              </section>
-
-              <p class="receipt-thanks mt-4 text-center font-semibold">
-                Thank you for choosing {@completed_sale.site_name}.
-              </p>
-              <footer class="receipt-powered mt-2 border-t border-dashed border-thamani-stone pt-2 text-center text-xs text-thamani-pewter">
-                Powered by Thamani Dawa
-              </footer>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <.button
-                id="quick-sale-print"
-                type="button"
-                variant="ghost"
-                phx-hook="QuickSaleReceiptPrint"
-                data-receipt-target="#quick-sale-receipt"
-                class="w-full"
-              >
-                <.icon name="hero-printer" class="size-4" /> Print
-              </.button>
-              <.button
-                type="button"
-                variant="primary"
-                phx-click="new_sale"
-                class="w-full"
-              >New sale <.icon name="hero-arrow-right" class="size-4" /></.button>
-            </div>
-          </div>
-        </.modal>
-
-        <div class="grid grid-cols-1 gap-5 lg:h-[calc(100dvh-10rem)] lg:min-h-[30rem] lg:grid-cols-[minmax(28rem,1fr)_minmax(34rem,1.15fr)] lg:items-stretch">
-          <section
-            id="quick-sale-cart"
-            class="order-2 flex min-h-[30rem] flex-col overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface lg:order-1 lg:min-h-0"
-          >
-            <div
-              id="quick-sale-cart-header"
-              class="border-b border-thamani-forest bg-thamani-forest px-5 py-4"
-            >
-              <div class="flex items-center justify-between gap-3">
-                <div class="flex items-center gap-3">
-                  <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
-                    <.icon name="hero-shopping-cart" class="size-5" />
-                  </span>
-                  <div>
-                    <h2 class="text-base font-semibold text-thamani-on-accent">Current sale</h2>
-                    <p class="mt-0.5 text-xs text-thamani-on-accent/70">
-                      Review quantities before taking payment.
-                    </p>
-                  </div>
-                </div>
-                <span
-                  id="quick-sale-item-count"
-                  class="rounded-full bg-td-accent-tint px-2.5 py-1 text-xs font-semibold tabular-nums text-thamani-forest"
-                >
-                  {cart_item_count(@cart)} {if(cart_item_count(@cart) == 1, do: "item", else: "items")}
-                </span>
+              <div id="receipt-total" class="td-tot is-big">
+                <span>Total</span>
+                <b>{ThamaniDawaWeb.Money.ksh(@completed_sale.total)}</b>
               </div>
+              <div id="receipt-payment-method" class="td-tot">
+                <span>Payment method</span>
+                <b>{@completed_sale.payment_type}</b>
+              </div>
+              <div
+                :if={@completed_sale.tendered}
+                id="receipt-cash-tendered"
+                class="td-tot"
+              >
+                <span>Cash tendered</span>
+                <b>{ThamaniDawaWeb.Money.ksh(@completed_sale.tendered)}</b>
+              </div>
+              <div :if={@completed_sale.change} id="receipt-change" class="td-tot">
+                <span>Change</span>
+                <b>{ThamaniDawaWeb.Money.ksh(@completed_sale.change)}</b>
+              </div>
+              <div
+                :if={@completed_sale.provider_reference}
+                id="receipt-mpesa-reference"
+                class="td-tot"
+              >
+                <span>M-Pesa reference</span>
+                <b>{@completed_sale.provider_reference}</b>
+              </div>
+              <p class="td-note" style="text-align:center">Powered by Thamani Dawa</p>
+            </div>
+          </:body>
+          <:footer>
+            <.td_button
+              id="quick-sale-print"
+              type="button"
+              variant="secondary"
+              glyph="printer"
+              label="Print"
+              phx-hook="QuickSaleReceiptPrint"
+              data-receipt-target="#quick-sale-receipt"
+            />
+            <.td_button
+              type="button"
+              variant="primary"
+              glyph="plus"
+              label="New sale"
+              phx-click="new_sale"
+            />
+          </:footer>
+        </.td_modal>
 
+        <div class="td-qs-page">
+          <div class="td-qs">
+            <section class="td-card td-qs-catalog">
+              <div id="quick-sale-catalog-header">
+                <.td_card_header
+                  title="Product catalog"
+                  subtitle="Search, scan, or choose an item to add to this sale."
+                />
+              </div>
+              <form
+                id="quick-sale-scan-form"
+                phx-change="search_catalog"
+                phx-submit="scan_submit"
+                class="td-qs-toolbar"
+              >
+                <.td_search
+                  id="quick-sale-query"
+                  name="query"
+                  value={@catalog_query}
+                  placeholder="Scan barcode or search by product name…"
+                  shortcut="/"
+                  autocomplete="off"
+                  autofocus
+                  phx-debounce="150"
+                />
+                <.td_segmented>
+                  <.td_segment
+                    label="All"
+                    active={@catalog_category == ""}
+                    phx-click="filter_category"
+                    phx-value-category=""
+                  />
+                  <.td_segment
+                    :for={category <- @catalog_categories}
+                    label={category}
+                    active={@catalog_category == category}
+                    phx-click="filter_category"
+                    phx-value-category={category}
+                  />
+                </.td_segmented>
+              </form>
+              <div class="td-qs-list td-list">
+                <button
+                  :for={product <- @catalog_products}
+                  type="button"
+                  phx-click="quick_add"
+                  phx-value-product_id={product.id}
+                  id={"quick-add-#{product.id}"}
+                  disabled={product.stock <= 0}
+                  class="td-li"
+                >
+                  <div class="td-li-g">
+                    <b>{product.generic_name}</b>
+                    <span class="td-mono">{product.gtin}</span>
+                  </div>
+                  <span class="td-s12">{stock_label(product.stock)}</span>
+                  <span class="td-num" style="width:72px;text-align:right">
+                    {ThamaniDawaWeb.Money.ksh(product.price)}
+                  </span>
+                  <span class="td-icon-btn" aria-hidden="true">
+                    <.td_icon name="plus" />
+                  </span>
+                </button>
+                <div :if={@catalog_products == []}>
+                  <.td_empty
+                    title={catalog_empty_title(@site_id, @catalog_query, @catalog_category)}
+                    hint={catalog_empty_message(@site_id, @catalog_query, @catalog_category)}
+                  />
+                </div>
+                <p :if={@catalog_more?} class="td-note" style="padding:12px 16px;text-align:center">
+                  Showing the first {@catalog_limit} products. Search by name or GTIN to narrow results.
+                </p>
+              </div>
+            </section>
+
+            <section id="quick-sale-cart" class="td-card td-qs-sale">
+              <div id="quick-sale-cart-header">
+                <.td_card_header
+                  title="Current sale"
+                  subtitle="Review quantities before taking payment."
+                >
+                  <:actions>
+                    <.td_button
+                      :if={@cart != []}
+                      type="button"
+                      variant="danger"
+                      label="Clear"
+                      phx-click="clear_cart"
+                    />
+                  </:actions>
+                </.td_card_header>
+              </div>
               <form
                 :if={not @site_locked}
                 id="quick-sale-header-form"
                 phx-change="update_header"
-                class="mt-4"
+                class="td-qs-toolbar"
               >
-                <.input
-                  type="select"
+                <.td_select
                   name="site_id"
+                  id="quick-sale-site"
                   label="Site"
                   value={@site_id}
                   options={Enum.map(@sites, &{&1.name, &1.id})}
                   prompt="Choose a site"
                 />
               </form>
-            </div>
-
-            <div
-              id="quick-sale-items"
-              class="min-h-0 flex-1 divide-y divide-thamani-stone overflow-y-auto"
-            >
-              <div :if={@cart == []} class="p-8 text-center text-sm text-thamani-pewter">
-                Scan a barcode or tap a product to start the sale.
-              </div>
-              <div
-                :for={
-                  %{line: line, product: product, subtotal: subtotal, batch_label: batch_label} <-
-                    cart_lines(@cart, @current_scope.organization_id, @site_id)
-                }
-                id={"cart-line-#{line.product_id}"}
-                class="flex items-center gap-4 px-5 py-4"
-              >
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-base font-semibold text-thamani-forest">
-                    {product.generic_name}
-                  </p>
-                  <p class="mt-1 text-sm text-thamani-pewter">KES {product.price} each</p>
-                  <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span class="inline-flex items-center gap-1 rounded-md bg-thamani-stone px-1.5 py-0.5 text-[11px] font-medium text-thamani-pewter">
-                      <span class="text-thamani-subtle">GTIN</span>
-                      <span class="text-thamani-forest">{product.gtin}</span>
-                    </span>
-                    <span
-                      :if={batch_label}
-                      class="inline-flex items-center gap-1 rounded-md bg-thamani-stone px-1.5 py-0.5 text-[11px] font-medium text-thamani-pewter"
-                    >
-                      <span class="text-thamani-subtle">Batch</span>
-                      <span class="text-thamani-forest">{batch_label}</span>
-                    </span>
-                  </div>
-                </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    phx-click="decrement_item"
-                    phx-value-product_id={line.product_id}
-                    aria-label={"Decrease quantity for #{product.generic_name}"}
-                    class="flex size-9 items-center justify-center rounded-xl border border-thamani-stone text-thamani-forest transition-colors hover:bg-thamani-stone"
-                  >
-                    <.icon name="hero-minus" class="size-4" />
-                  </button>
-                  <form
-                    id={"cart-quantity-form-#{line.product_id}"}
-                    phx-change="set_item_quantity"
-                  >
-                    <input type="hidden" name="product_id" value={line.product_id} />
-                    <input
-                      id={"cart-quantity-#{line.product_id}"}
-                      type="number"
-                      name="quantity"
-                      value={line.quantity}
-                      min="0"
-                      max={product.stock}
-                      inputmode="numeric"
-                      phx-debounce="250"
-                      aria-label={"Quantity for #{product.generic_name}"}
-                      class="h-9 !w-12 !p-0 text-center text-base font-semibold tabular-nums text-thamani-forest"
-                    />
-                  </form>
-                  <button
-                    type="button"
-                    phx-click="increment_item"
-                    phx-value-product_id={line.product_id}
-                    aria-label={"Increase quantity for #{product.generic_name}"}
-                    class="flex size-9 items-center justify-center rounded-xl border border-thamani-stone text-thamani-forest transition-colors hover:bg-thamani-stone"
-                  >
-                    <.icon name="hero-plus" class="size-4" />
-                  </button>
-                </div>
-                <p class="w-20 shrink-0 text-right text-base font-semibold tabular-nums text-thamani-forest">
-                  KES {subtotal}
-                </p>
-                <button
-                  type="button"
-                  phx-click="remove_item"
-                  phx-value-product_id={line.product_id}
-                  aria-label={"Remove #{product.generic_name}"}
-                  class="flex size-9 shrink-0 items-center justify-center rounded-xl text-thamani-error transition-colors hover:bg-thamani-error/10"
-                >
-                  <.icon name="hero-trash" class="size-4.5" />
-                </button>
-              </div>
-            </div>
-
-            <div class="space-y-4 border-t border-thamani-stone px-5 py-4">
-              <div class="flex items-center justify-between">
-                <span class="text-base font-medium text-thamani-forest">Total</span>
-                <span class="text-2xl font-semibold tabular-nums text-thamani-forest">
-                  KES {cart_total(@cart)}
-                </span>
-              </div>
-
-              <div>
-                <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-thamani-pewter">
-                  Payment method
-                </p>
-                <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <button
-                    :for={method <- PaymentMethods.all()}
-                    type="button"
-                    phx-click="select_payment_type"
-                    phx-value-payment_type={method}
-                    class={[
-                      "flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-semibold transition-all",
-                      if(@payment_type == method,
-                        do:
-                          "border-thamani-forest bg-thamani-forest text-thamani-on-accent shadow-sm ring-2 ring-thamani-forest/20",
-                        else:
-                          "border-thamani-stone bg-thamani-canvas text-thamani-forest hover:border-thamani-forest/50 hover:bg-td-accent-tint"
-                      )
-                    ]}
-                  >
-                    <.icon
-                      name={
-                        case method do
-                          "Cash" -> "hero-banknotes"
-                          "Mobile Money" -> "hero-device-phone-mobile"
-                          _ -> "hero-shield-check"
-                        end
-                      }
-                      class="size-4"
-                    />
-                    {method}
-                  </button>
-                </div>
-                <p :if={@errors[:payment_type]} class="mt-1.5 text-xs font-medium text-thamani-error">
-                  {@errors[:payment_type]}
-                </p>
-              </div>
-
-              <.button
-                type="button"
-                variant="primary"
-                phx-click="complete_sale"
-                phx-disable-with="Completing sale…"
-                class="w-full"
-              >
-                Complete sale
-              </.button>
-            </div>
-          </section>
-
-          <section class="order-1 flex min-h-[30rem] flex-col overflow-hidden rounded-2xl border border-thamani-stone bg-thamani-surface lg:order-2 lg:min-h-0">
-            <div
-              id="quick-sale-catalog-header"
-              class="border-b border-thamani-forest bg-thamani-forest px-5 py-4"
-            >
-              <div class="flex items-center gap-3">
-                <span class="flex size-9 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-thamani-forest">
-                  <.icon name="hero-squares-2x2" class="size-5" />
-                </span>
-                <div>
-                  <h2 class="text-base font-semibold text-thamani-on-accent">Product catalog</h2>
-                  <p class="mt-0.5 text-xs text-thamani-on-accent/70">
-                    Search, scan, or choose an item to add to this sale.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <form
-              id="quick-sale-scan-form"
-              phx-change="search_catalog"
-              phx-submit="scan_submit"
-              class="border-b border-thamani-stone p-4"
-            >
-              <div class="relative">
-                <.icon
-                  name="hero-magnifying-glass"
-                  class="pointer-events-none absolute left-3.5 top-1/2 size-4! -translate-y-1/2 text-thamani-pewter"
-                />
-                <input
-                  type="text"
-                  name="query"
-                  value={@catalog_query}
-                  placeholder="Scan barcode or search by product name…"
-                  autocomplete="off"
-                  autofocus
-                  phx-debounce="150"
-                  class="thamani-input quick-sale-search-input h-12 w-full rounded-xl pl-11 pr-4 text-sm focus:border-thamani-forest focus:outline-none focus:ring-0 transition-colors"
-                />
-              </div>
-              <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div class="w-full sm:max-w-56">
-                  <.input
-                    type="select"
-                    name="category"
-                    label="Category"
-                    value={@catalog_category}
-                    options={Enum.map(@catalog_categories, &{&1, &1})}
-                    prompt="All categories"
+              <div id="quick-sale-items" class="td-qs-list">
+                <div :if={@cart == []} class="td-qs-empty">
+                  <.td_empty
+                    title="No items yet"
+                    hint="Scan a barcode or tap a product to start the sale."
                   />
                 </div>
-                <p class="flex items-center gap-2 pb-2 text-xs text-thamani-pewter">
-                  <.icon name="hero-qr-code" class="size-4 shrink-0" />
-                  Scan a barcode or search by name.
-                </p>
+                <div :if={@cart != []} class="td-list">
+                  <div
+                    :for={
+                      %{line: line, product: product, subtotal: subtotal, batch_label: batch_label} <-
+                        cart_lines(@cart, @current_scope.organization_id, @site_id)
+                    }
+                    id={"cart-line-#{line.product_id}"}
+                    class="td-li"
+                  >
+                    <div class="td-li-g">
+                      <b>{product.generic_name}</b>
+                      <span :if={batch_label}>Batch {batch_label}</span>
+                    </div>
+                    <div class="td-qty">
+                      <.td_icon_button
+                        label={"Decrease quantity for #{product.generic_name}"}
+                        phx-click="decrement_item"
+                        phx-value-product_id={line.product_id}
+                      >
+                        <:icon><.td_icon name="minus" /></:icon>
+                      </.td_icon_button>
+                      <form id={"cart-quantity-form-#{line.product_id}"} phx-change="set_item_quantity">
+                        <input type="hidden" name="product_id" value={line.product_id} />
+                        <input
+                          id={"cart-quantity-#{line.product_id}"}
+                          type="number"
+                          name="quantity"
+                          value={line.quantity}
+                          min="0"
+                          max={product.stock}
+                          inputmode="numeric"
+                          phx-debounce="250"
+                          aria-label={"Quantity for #{product.generic_name}"}
+                        />
+                      </form>
+                      <.td_icon_button
+                        label={"Increase quantity for #{product.generic_name}"}
+                        phx-click="increment_item"
+                        phx-value-product_id={line.product_id}
+                      >
+                        <:icon><.td_icon name="plus" /></:icon>
+                      </.td_icon_button>
+                    </div>
+                    <span class="td-s12">{ThamaniDawaWeb.Money.ksh(product.price)}</span>
+                    <span class="td-num" style="width:72px;text-align:right">
+                      {ThamaniDawaWeb.Money.ksh(subtotal)}
+                    </span>
+                    <.td_icon_button
+                      label={"Remove #{product.generic_name}"}
+                      phx-click="remove_item"
+                      phx-value-product_id={line.product_id}
+                    >
+                      <:icon><.td_icon name="trash" /></:icon>
+                    </.td_icon_button>
+                  </div>
+                </div>
               </div>
-            </form>
-
-            <div class="min-h-0 flex-1 divide-y divide-thamani-stone overflow-y-auto px-4">
-              <button
-                :for={product <- @catalog_products}
-                type="button"
-                phx-click="quick_add"
-                phx-value-product_id={product.id}
-                id={"quick-add-#{product.id}"}
-                disabled={product.stock <= 0}
-                class={[
-                  "flex w-full items-center gap-3 py-3 text-left transition-colors",
-                  product.stock > 0 && "hover:bg-td-accent-tint",
-                  product.stock <= 0 && "cursor-not-allowed bg-thamani-canvas/60 opacity-70"
-                ]}
-              >
-                <span class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-td-accent-tint text-sm font-semibold text-thamani-forest">
-                  {product_initials(product)}
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm font-semibold text-thamani-forest">
-                    {product.generic_name}
-                  </span>
-                  <span class="mt-0.5 block truncate text-xs text-thamani-pewter">
-                    {product.brand_name || "Medicine"} · {stock_label(product.stock)}
-                  </span>
-                </span>
-                <span class="shrink-0 text-right">
-                  <span class="block whitespace-nowrap text-sm font-semibold text-thamani-forest">
-                    KES {product.price}
-                  </span>
-                  <span class="mt-0.5 block text-xs font-medium text-thamani-forest/70">
-                    {if(product.stock > 0, do: "Add item", else: "Unavailable")}
-                  </span>
-                </span>
-                <span class={[
-                  "flex size-8 shrink-0 items-center justify-center rounded-lg",
-                  if(product.stock > 0,
-                    do: "bg-td-accent-tint text-thamani-forest",
-                    else: "bg-thamani-stone text-thamani-pewter"
-                  )
-                ]}>
-                  <.icon name="hero-plus" class="size-4" />
-                </span>
-              </button>
-
-              <div :if={@catalog_products == []}>
-                <.blank_state
-                  icon="hero-cube"
-                  title={catalog_empty_title(@site_id, @catalog_query, @catalog_category)}
-                >
-                  {catalog_empty_message(@site_id, @catalog_query, @catalog_category)}
-                </.blank_state>
+              <div class="td-qs-foot">
+                <div :if={@cart != []} class="td-tot">
+                  <span>Items</span>
+                  <b id="quick-sale-item-count">{cart_lines_label(@cart)}</b>
+                </div>
+                <div :if={@cart == []} class="hidden">
+                  <span id="quick-sale-item-count">0 items</span>
+                </div>
+                <div class="td-tot is-big">
+                  <span>Total</span>
+                  <b>{ThamaniDawaWeb.Money.ksh(cart_total(@cart))}</b>
+                </div>
+                <.td_button
+                  type="button"
+                  variant="primary"
+                  size="lg"
+                  glyph="check"
+                  label="Complete sale"
+                  phx-click="complete_sale"
+                  phx-disable-with="Completing sale…"
+                  disabled={@cart == []}
+                />
               </div>
-
-              <p :if={@catalog_more?} class="px-3 py-3 text-center text-xs text-thamani-pewter">
-                Showing the first {@catalog_limit} products. Search by name or GTIN to narrow results.
-              </p>
-            </div>
-          </section>
+            </section>
+          </div>
         </div>
       </.td_list_page>
     </Layouts.pharmacy_shell>

@@ -241,6 +241,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
             variant="secondary"
             label="Sync from GS1"
             phx-click="sync_products"
+            tip="Pull GTINs registered to this GS1 member account into the catalogue."
+            tip_align="end"
           />
         </:actions>
         <:filters>
@@ -362,11 +364,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
                     id={"product-#{product.id}-serials"}
                     label="View serials"
                     navigate={~p"/manufacturer/products/#{product.gtin}/serials"}
+                    tip="Open the batches and DataMatrix codes already issued for this GTIN."
+                    tip_align="end"
                   />
                   <.td_button
                     id={"product-#{product.id}-add-serial"}
                     label="Generate serials"
                     patch={~p"/manufacturer/products/#{product.gtin}/serials/new"}
+                    tip="Issue a GS1 batch and DataMatrix serials. You will set quantity, dates, and facility."
+                    tip_align="end"
                   />
                 </td>
               </tr>

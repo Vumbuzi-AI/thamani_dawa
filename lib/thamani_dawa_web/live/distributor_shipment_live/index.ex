@@ -581,33 +581,12 @@ defmodule ThamaniDawaWeb.DistributorShipmentLive.Index do
               </tr>
             </tbody>
           </table>
-          <div class="td-tfoot">
-            <span>
-              <b>{(@page_info.page_number - 1) * @page_info.page_size + 1} to {min(
-                @page_info.page_number * @page_info.page_size,
-                @page_info.total_entries
-              )}</b>
-              of {@page_info.total_entries} {if @mode == :orders, do: "orders", else: "shipments"}
-            </span>
-            <span :if={@page_info.total_pages > 1} class="td-tfoot-pager">
-              <.link
-                :if={@page_info.page_number > 1}
-                class="td-icon-btn"
-                patch={
-                  pagination_path(@base_path, Map.put(@filters, "page", @page_info.page_number - 1))
-                }
-                aria-label="Previous page"
-              ><.td_icon name="caret-left" /></.link>
-              <.link
-                :if={@page_info.page_number < @page_info.total_pages}
-                class="td-icon-btn"
-                patch={
-                  pagination_path(@base_path, Map.put(@filters, "page", @page_info.page_number + 1))
-                }
-                aria-label="Next page"
-              ><.td_icon name="caret-right" /></.link>
-            </span>
-          </div>
+          <.td_pagination
+            page={@page_info}
+            path={pagination_path(@base_path, Map.delete(@filters, "page"))}
+            patch
+            noun={if @mode == :orders, do: "orders", else: "shipments"}
+          />
         </div>
       </section>
 

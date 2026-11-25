@@ -441,8 +441,9 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
           :if={@live_action == :new}
           id="prescription-modal"
           show
-          width={800}
+          width={760}
           title="New prescription"
+          subtitle="Record what was prescribed, then dispense from the exact lot."
           on_cancel={JS.patch(~p"/pharmacy/prescriptions")}
         >
           <:body>
@@ -451,361 +452,251 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
               id="prescription-form"
               phx-change="validate"
               phx-submit="save"
-              class="space-y-5"
+              class="td-modal-form"
             >
-              <%!-- Step 1: Patient information --%>
-              <section class="rounded-xl ff-surface-card">
-                <div class="flex flex-col gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <h3 class="text-base font-semibold text-thamani-forest">1. Patient</h3>
-                  <.td_segmented>
-                    <.td_segment
-                      id="existing-patient-mode"
-                      label="Existing patient"
-                      active={@patient_mode == :existing}
-                      phx-click="toggle_patient_mode"
-                      phx-value-tab="existing"
-                    />
-                    <.td_segment
-                      id="new-patient-mode"
-                      label="New patient"
-                      active={@patient_mode == :new}
-                      phx-click="toggle_patient_mode"
-                      phx-value-tab="new"
-                    />
-                  </.td_segmented>
-                </div>
-                <div class="p-4 sm:p-5">
-                  <div :if={@patient_mode == :existing}>
-                    <.input
-                      field={@header_form[:patient_id]}
-                      type="select"
-                      label="Search and select patient (optional)"
-                      options={Enum.map(@patients, &{patient_label(&1), &1.id})}
-                      prompt="No patient selected"
-                    />
-                  </div>
+              <div class="td-row-between">
+                <p class="td-sec">Patient</p>
+                <.td_segmented>
+                  <.td_segment
+                    id="existing-patient-mode"
+                    label="Existing patient"
+                    active={@patient_mode == :existing}
+                    phx-click="toggle_patient_mode"
+                    phx-value-tab="existing"
+                  />
+                  <.td_segment
+                    id="new-patient-mode"
+                    label="New patient"
+                    active={@patient_mode == :new}
+                    phx-click="toggle_patient_mode"
+                    phx-value-tab="new"
+                  />
+                </.td_segmented>
+              </div>
 
-                  <div :if={@patient_mode == :new} class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <.input field={@patient_form[:full_name]} label="Full Name" required />
-                    <.input
-                      field={@patient_form[:gsrn]}
-                      type="text"
-                      label="GSRN (Identifier)"
-                      required
-                    />
-                    <.date_picker
-                      field={@patient_form[:date_of_birth]}
-                      label="Date of birth"
-                      placeholder="Choose date of birth"
-                      max="today"
-                      required
-                    />
-                    <.input
-                      field={@patient_form[:gender]}
-                      type="select"
-                      label="Gender"
-                      options={["Male", "Female", "Other"]}
-                      prompt="Select gender"
-                      required
-                    />
-                    <.input field={@patient_form[:phone]} label="Phone" required />
-                    <.input field={@patient_form[:national_id]} label="National ID" />
-                  </div>
-                </div>
-              </section>
+              <.td_select
+                :if={@patient_mode == :existing}
+                field={@header_form[:patient_id]}
+                label="Search and select patient (optional)"
+                options={Enum.map(@patients, &{patient_label(&1), &1.id})}
+                prompt="No patient selected"
+              />
 
-              <%!-- Step 2: Prescription items --%>
-              <section class="rounded-xl ff-surface-card">
-                <div class="flex items-center justify-between gap-3 rounded-t-xl border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
-                  <h3 class="text-base font-semibold text-thamani-forest">2. Medication</h3>
-                  <.button
-                    id="add-prescription-item"
-                    type="button"
-                    phx-click="add-item"
-                    variant="ghost"
-                  >
-                    + Add Item
-                  </.button>
-                </div>
-                <div class="space-y-4 p-4 sm:p-5">
-                  <.inputs_for :let={item_form} field={@header_form[:items]}>
-                    <% is_editing = MapSet.member?(@editing_items, item_form.index) %>
-                    <div class={[
-                      "rounded-xl border p-4 transition-colors",
-                      if(is_editing,
-                        do: "border-thamani-accent/50 bg-thamani-canvas shadow-sm",
-                        else: "border-thamani-stone bg-thamani-surface"
-                      )
-                    ]}>
-                      <div class={"flex justify-between items-center #{if is_editing, do: "mb-4"}"}>
-                        <div class="flex items-center gap-2">
-                          <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-td-accent-tint text-xs font-semibold text-thamani-forest">
-                            {item_form.index + 1}
-                          </span>
-                          <h4 class="font-medium text-sm text-thamani-forest">
-                            Item {item_form.index + 1}
-                          </h4>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <%= if is_editing do %>
-                            <% can_collapse =
-                              not is_nil(Ecto.Changeset.get_field(item_form.source, :product_id)) and
-                                not is_nil(
-                                  Ecto.Changeset.get_field(item_form.source, :quantity_prescribed)
-                                ) %>
-                            <.button
-                              type="button"
-                              phx-click="collapse-item"
-                              phx-value-index={item_form.index}
-                              variant="primary"
-                              disabled={not can_collapse}
-                            >
-                              <.icon name="hero-check" class="w-4 h-4" /> Done
-                            </.button>
-                          <% else %>
-                            <.button
-                              type="button"
-                              phx-click="edit-item"
-                              phx-value-index={item_form.index}
-                              variant="ghost-edit"
-                            >
-                              <.icon name="hero-pencil" class="w-4 h-4" /> Edit
-                            </.button>
-                          <% end %>
-                          <.button
-                            :if={
-                              is_list(@header_form[:items].value) and
-                                length(@header_form[:items].value) > 1
-                            }
-                            type="button"
-                            phx-click="remove-item"
-                            phx-value-index={item_form.index}
-                            variant="ghost-delete"
-                          >
-                            <.icon name="hero-trash" class="w-4 h-4" /> Remove
-                          </.button>
-                        </div>
+              <div :if={@patient_mode == :new} class="td-fgrid is-2">
+                <.td_input field={@patient_form[:full_name]} label="Full name" required />
+                <.td_input field={@patient_form[:gsrn]} label="GSRN" required />
+                <.td_input
+                  field={@patient_form[:date_of_birth]}
+                  type="date"
+                  label="Date of birth"
+                  placeholder="Choose date of birth"
+                  max="today"
+                  required
+                />
+                <.td_select
+                  field={@patient_form[:gender]}
+                  label="Gender"
+                  options={Enum.map(["Male", "Female", "Other"], &{&1, &1})}
+                  prompt="Select gender"
+                  required
+                />
+                <.td_input field={@patient_form[:phone]} label="Phone" required />
+                <.td_input field={@patient_form[:national_id]} label="National ID" />
+              </div>
+
+              <div class="td-row-between">
+                <p class="td-sec">Medicines</p>
+                <.td_button
+                  id="add-prescription-item"
+                  type="button"
+                  variant="secondary"
+                  glyph="plus"
+                  label="Add item"
+                  phx-click="add-item"
+                />
+              </div>
+
+              <div class="td-stack">
+                <.inputs_for :let={item_form} field={@header_form[:items]}>
+                  <% is_editing = MapSet.member?(@editing_items, item_form.index) %>
+                  <% can_remove =
+                    is_list(@header_form[:items].value) and
+                      length(@header_form[:items].value) > 1 %>
+                  <%= if is_editing do %>
+                    <% selected_product_id =
+                      Ecto.Changeset.get_field(item_form.source, :product_id) %>
+                    <% selected_product = Enum.find(@products, &(&1.id == selected_product_id)) %>
+                    <% qty_value =
+                      Ecto.Changeset.get_field(item_form.source, :quantity_prescribed) %>
+                    <% over_stock? =
+                      selected_product && qty_value && qty_value > selected_product.stock %>
+                    <% can_collapse =
+                      not is_nil(selected_product_id) and not is_nil(qty_value) %>
+                    <div class="td-rx-item is-edit">
+                      <div class="td-fgrid is-rx">
+                        <.td_select
+                          field={item_form[:product_id]}
+                          label="Product"
+                          options={
+                            Enum.map(
+                              @products,
+                              &{"#{&1.generic_name}#{if &1.brand_name, do: " (" <> &1.brand_name <> ")"} · KES #{&1.price} · #{&1.stock} in stock",
+                               &1.id}
+                            )
+                          }
+                          prompt="Select product"
+                          hint={product_stock_hint(selected_product)}
+                          required
+                        />
+                        <.td_input
+                          field={item_form[:quantity_prescribed]}
+                          type="number"
+                          label="Qty"
+                          min="1"
+                          required
+                        />
+                        <.td_input
+                          field={item_form[:frequency]}
+                          label="Frequency"
+                          placeholder="1×3"
+                        />
+                        <.td_input
+                          field={item_form[:duration_in_days]}
+                          type="number"
+                          label="Days"
+                          min="1"
+                        />
+                        <.td_input
+                          field={item_form[:route_of_administration]}
+                          label="Route"
+                          placeholder="Oral"
+                        />
                       </div>
-
-                      <%= if is_editing do %>
-                        <% selected_product_id =
-                          Ecto.Changeset.get_field(item_form.source, :product_id) %>
-                        <% selected_product = Enum.find(@products, &(&1.id == selected_product_id)) %>
-                        <% qty_value =
-                          Ecto.Changeset.get_field(item_form.source, :quantity_prescribed) %>
-                        <% over_stock? =
-                          selected_product && qty_value && qty_value > selected_product.stock %>
-                        <div class="grid grid-cols-1 gap-4 md:grid-cols-6">
-                          <div class="md:col-span-3">
-                            <.input
-                              field={item_form[:product_id]}
-                              type="select"
-                              label="Product"
-                              options={
-                                Enum.map(
-                                  @products,
-                                  &{"#{&1.generic_name}#{if &1.brand_name, do: " (" <> &1.brand_name <> ")"} · KES #{&1.price} · #{&1.stock} in stock",
-                                   &1.id}
-                                )
-                              }
-                              prompt="Select product..."
-                              required
-                            />
-                            <p
-                              :if={selected_product}
-                              class="mt-1.5 flex items-center gap-3 text-xs font-medium text-thamani-pewter"
-                            >
-                              <span class="flex items-center gap-1">
-                                <.icon name="hero-cube" class="size-3.5" />
-                                {selected_product.stock} unit{if selected_product.stock != 1, do: "s"} in stock
-                              </span>
-                              <span class="flex items-center gap-1">
-                                <.icon name="hero-banknotes" class="size-3.5" />
-                                KES {selected_product.price} per unit
-                              </span>
-                            </p>
-                          </div>
-                          <div class="md:col-span-1">
-                            <.input
-                              field={item_form[:quantity_prescribed]}
-                              type="number"
-                              label="Qty"
-                              required
-                              min="1"
-                            />
-                            <p
-                              :if={over_stock?}
-                              class="mt-1.5 flex items-center gap-1 text-xs font-medium text-thamani-error"
-                            >
-                              <.icon name="hero-exclamation-triangle" class="size-3.5" />
-                              Exceeds stock ({selected_product.stock})
-                            </p>
-                          </div>
-                          <div class="md:col-span-1">
-                            <.input
-                              field={item_form[:frequency]}
-                              type="text"
-                              label="Frequency"
-                              placeholder="e.g. 1x3"
-                            />
-                          </div>
-                          <div class="md:col-span-1">
-                            <.input
-                              field={item_form[:duration_in_days]}
-                              type="number"
-                              label="Days"
-                              min="1"
-                            />
-                          </div>
-                          <div class="md:col-span-6 md:grid md:grid-cols-6 md:gap-4">
-                            <div class="md:col-span-1">
-                              <.input
-                                field={item_form[:route_of_administration]}
-                                type="text"
-                                label="Route"
-                                placeholder="e.g. Oral"
-                              />
-                            </div>
-                            <div class="md:col-span-5">
-                              <.input
-                                field={item_form[:dosage_instructions]}
-                                type="text"
-                                label="Instructions"
-                                placeholder="e.g. Take after meals"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      <% else %>
-                        <% product_id = Ecto.Changeset.get_field(item_form.source, :product_id) %>
-                        <% product = Enum.find(@products, &(&1.id == product_id)) %>
-                        <% qty = Ecto.Changeset.get_field(item_form.source, :quantity_prescribed) %>
-                        <% freq = Ecto.Changeset.get_field(item_form.source, :frequency) %>
-                        <% days = Ecto.Changeset.get_field(item_form.source, :duration_in_days) %>
-
-                        <div class="hidden">
-                          <.input field={item_form[:product_id]} type="hidden" />
-                          <.input field={item_form[:quantity_prescribed]} type="hidden" />
-                          <.input field={item_form[:frequency]} type="hidden" />
-                          <.input field={item_form[:duration_in_days]} type="hidden" />
-                          <.input field={item_form[:route_of_administration]} type="hidden" />
-                          <.input field={item_form[:dosage_instructions]} type="hidden" />
-                        </div>
-
-                        <div class="mt-2 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                          <div class="flex-1">
-                            <div class="font-semibold text-base-content">
-                              <%= if product do %>
-                                {product.generic_name} {if product.brand_name,
-                                  do: "(#{product.brand_name})"}
-                              <% else %>
-                                <span class="italic text-base-content/50">No product selected</span>
-                              <% end %>
-                            </div>
-                            <div class="text-sm text-base-content/70 mt-1">
-                              Qty: {qty || "-"} {if freq && freq != "", do: " | #{freq}"} {if days,
-                                do: " | #{days} days"}
-                            </div>
-                          </div>
-                          <div
-                            :if={product}
-                            class="flex items-center gap-3 text-xs font-medium text-thamani-pewter"
-                          >
-                            <span class="flex items-center gap-1">
-                              <.icon name="hero-cube" class="size-3.5" />
-                              {product.stock} in stock
-                            </span>
-                            <span class="flex items-center gap-1">
-                              <.icon name="hero-banknotes" class="size-3.5" /> KES {product.price}
-                            </span>
-                          </div>
-                        </div>
-                      <% end %>
+                      <.td_input
+                        field={item_form[:dosage_instructions]}
+                        label="Instructions"
+                        placeholder="Take after meals"
+                      />
+                      <p :if={over_stock?} class="td-field-error">
+                        Exceeds stock ({selected_product.stock})
+                      </p>
+                      <div class="td-rx-item-actions">
+                        <.td_button
+                          :if={can_remove}
+                          type="button"
+                          variant="danger"
+                          label="Remove"
+                          phx-click="remove-item"
+                          phx-value-index={item_form.index}
+                        />
+                        <.td_button
+                          type="button"
+                          variant="secondary"
+                          label="Done"
+                          phx-click="collapse-item"
+                          phx-value-index={item_form.index}
+                          disabled={not can_collapse}
+                        />
+                      </div>
                     </div>
-                  </.inputs_for>
-                  <div
-                    :if={
-                      not is_list(@header_form[:items].value) or
-                        Enum.empty?(@header_form[:items].value)
-                    }
-                    class="text-center text-base-content/50 py-4"
-                  >
-                    No items added. Click "+ Add Item" to prescribe medicine.
-                  </div>
-                  <p
-                    :for={msg <- Enum.map(@header_form[:items].errors, &translate_error/1)}
-                    class="mt-1.5 flex gap-2 items-center text-sm text-error"
-                  >
-                    <.icon name="hero-exclamation-circle" class="size-5" />{msg}
-                  </p>
-                </div>
-              </section>
-
-              <%!-- Step 3: Prescription details --%>
-              <section class="overflow-hidden rounded-xl ff-surface-card">
-                <div class="border-b border-thamani-stone bg-thamani-canvas px-4 py-3">
-                  <h3 class="text-base font-semibold text-thamani-forest">3. Details and payment</h3>
-                </div>
-                <div class="space-y-4 p-4 sm:p-5">
-                  <.input
-                    :if={@site_locked}
-                    field={@header_form[:site_id]}
-                    type="hidden"
-                  />
-                  <.input
-                    :if={not @site_locked}
-                    field={@header_form[:site_id]}
-                    type="select"
-                    label="Site"
-                    options={Enum.map(@sites, &{&1.name, &1.id})}
-                    prompt="Choose a site"
-                    required
-                  />
-
-                  <div class="flex items-center justify-between rounded-xl border border-thamani-stone bg-thamani-canvas px-4 py-3 mb-3">
-                    <p class="text-sm font-medium text-thamani-forest">
-                      Referral from another facility
-                    </p>
-                    <.input
-                      field={@header_form[:is_external]}
-                      type="checkbox"
-                      label=""
-                      class="size-5 rounded accent-thamani-forest cursor-pointer"
-                    />
-                  </div>
-
-                  <.input
-                    :if={
-                      Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_external].value)
-                    }
-                    field={@header_form[:referring_doctor]}
-                    label="Referring doctor"
-                    required
-                  />
-
-                  <.input
-                    field={@header_form[:payment_type]}
-                    type="select"
-                    label="Payment Method"
-                    options={ThamaniDawa.PaymentMethods.all()}
-                    prompt="Select payment method"
-                    required
-                  />
-
-                  <.input field={@header_form[:notes]} type="textarea" label="Additional Notes" />
-                </div>
-              </section>
-
-              <.button
-                type="submit"
-                variant="primary"
-                phx-disable-with="Creating prescription…"
-                class="w-full"
+                  <% else %>
+                    <% product_id = Ecto.Changeset.get_field(item_form.source, :product_id) %>
+                    <% product = Enum.find(@products, &(&1.id == product_id)) %>
+                    <div class="hidden">
+                      <.input field={item_form[:product_id]} type="hidden" />
+                      <.input field={item_form[:quantity_prescribed]} type="hidden" />
+                      <.input field={item_form[:frequency]} type="hidden" />
+                      <.input field={item_form[:duration_in_days]} type="hidden" />
+                      <.input field={item_form[:route_of_administration]} type="hidden" />
+                      <.input field={item_form[:dosage_instructions]} type="hidden" />
+                    </div>
+                    <div class="td-rx-item">
+                      <div class="td-li-g">
+                        <b>{product_title(product)}</b>
+                        <span>{item_summary(item_form)}</span>
+                      </div>
+                      <div class="td-rx-item-actions">
+                        <.td_button
+                          type="button"
+                          variant="secondary"
+                          label="Edit"
+                          phx-click="edit-item"
+                          phx-value-index={item_form.index}
+                        />
+                        <.td_button
+                          :if={can_remove}
+                          type="button"
+                          variant="danger"
+                          label="Remove"
+                          phx-click="remove-item"
+                          phx-value-index={item_form.index}
+                        />
+                      </div>
+                    </div>
+                  <% end %>
+                </.inputs_for>
+              </div>
+              <p
+                :for={msg <- Enum.map(@header_form[:items].errors, &translate_error/1)}
+                class="td-field-error"
               >
-                Create Prescription
-              </.button>
+                {msg}
+              </p>
+
+              <input
+                :if={@site_locked}
+                type="hidden"
+                name={@header_form[:site_id].name}
+                value={@header_form[:site_id].value}
+              />
+              <div class={if(@site_locked, do: nil, else: "td-fgrid is-2")}>
+                <.td_select
+                  :if={not @site_locked}
+                  field={@header_form[:site_id]}
+                  label="Site"
+                  options={Enum.map(@sites, &{&1.name, &1.id})}
+                  prompt="Choose a site"
+                  required
+                />
+                <.td_select
+                  field={@header_form[:payment_type]}
+                  label="Payment method"
+                  options={Enum.map(ThamaniDawa.PaymentMethods.all(), &{&1, &1})}
+                  prompt="Select payment method"
+                  required
+                />
+              </div>
+
+              <.td_checkbox
+                field={@header_form[:is_external]}
+                label="Referral from another facility"
+              />
+              <.td_input
+                :if={
+                  Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_external].value)
+                }
+                field={@header_form[:referring_doctor]}
+                label="Referring doctor"
+                required
+              />
+              <.td_textarea field={@header_form[:notes]} label="Additional notes" rows="3" />
             </.form>
           </:body>
+          <:footer>
+            <.td_button
+              type="button"
+              variant="secondary"
+              label="Cancel"
+              phx-click={JS.patch(~p"/pharmacy/prescriptions")}
+            />
+            <.td_button
+              type="submit"
+              variant="primary"
+              label="Create prescription"
+              form="prescription-form"
+              phx-disable-with="Creating prescription…"
+            />
+          </:footer>
         </.td_modal>
 
         <div :if={@prescriptions == []} class="td-pad td-empty-wrap">
@@ -883,6 +774,34 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
   defp patient_label(patient) do
     id = patient.national_id || patient.phone || "Unknown ID"
     "#{patient.full_name} (#{id})"
+  end
+
+  defp product_title(nil), do: "No product selected"
+
+  defp product_title(product) do
+    case product.brand_name do
+      name when is_binary(name) and name != "" -> "#{product.generic_name} (#{name})"
+      _ -> product.generic_name
+    end
+  end
+
+  defp product_stock_hint(nil), do: nil
+
+  defp product_stock_hint(product) do
+    unit = if product.stock == 1, do: "unit", else: "units"
+    "#{product.stock} #{unit} in stock · KES #{product.price} per unit"
+  end
+
+  defp item_summary(item_form) do
+    qty = Ecto.Changeset.get_field(item_form.source, :quantity_prescribed)
+    freq = Ecto.Changeset.get_field(item_form.source, :frequency)
+    days = Ecto.Changeset.get_field(item_form.source, :duration_in_days)
+    route = Ecto.Changeset.get_field(item_form.source, :route_of_administration)
+    instr = Ecto.Changeset.get_field(item_form.source, :dosage_instructions)
+
+    [qty, freq, days && "#{days} days", route, instr]
+    |> Enum.reject(&(is_nil(&1) or &1 == ""))
+    |> Enum.join(" · ")
   end
 
   defp items_value(form) do
