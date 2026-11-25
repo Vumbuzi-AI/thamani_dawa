@@ -1,0 +1,19 @@
+meta {
+  name: List
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/pharmacy/stock-takes
+  body: none
+  auth: bearer
+}
+
+params:query {
+  status: draft
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

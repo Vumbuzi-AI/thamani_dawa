@@ -54,6 +54,35 @@ defmodule ThamaniDawaWeb.Router do
     post "/invites/:token", SessionController, :accept_invite
   end
 
+  # Distributor packing app: username + PIN sign-in for mobile users, with
+  # its own bearer tokens (see `ThamaniDawa.Distributor.MobileAuth`).
+  scope "/api/v1/distributor/mobile", ThamaniDawaWeb.Api.V1, as: :api_v1_mobile do
+    pipe_through :api
+
+    post "/login", DistributorMobileController, :login
+    post "/token/refresh", DistributorMobileController, :refresh
+  end
+
+  scope "/api/v1/distributor/mobile", ThamaniDawaWeb.Api.V1, as: :api_v1_mobile do
+    pipe_through [:api, ThamaniDawaWeb.Plugs.DistributorMobileAuth]
+
+    post "/logout", DistributorMobileController, :logout
+    get "/me", DistributorMobileController, :me
+    get "/shipments", DistributorMobileController, :shipments
+    get "/shipments/search", DistributorMobileController, :search
+    get "/shipments/:id", DistributorMobileController, :show
+    post "/shipments/:id/select", DistributorMobileController, :select
+    post "/shipments/:id/release", DistributorMobileController, :release
+    post "/shipments/:id/shippers", DistributorMobileController, :create_shipper
+    post "/shipments/:id/submit", DistributorMobileController, :submit
+    post "/shipments/:id/reopen", DistributorMobileController, :reopen
+    patch "/shippers/:shipper_id", DistributorMobileController, :update_shipper
+    delete "/shippers/:shipper_id", DistributorMobileController, :delete_shipper
+    post "/shippers/:shipper_id/items", DistributorMobileController, :scan
+    delete "/items/:item_id", DistributorMobileController, :delete_item
+    patch "/items/:item_id", DistributorMobileController, :move_item
+  end
+
   scope "/api/v1", ThamaniDawaWeb.Api.V1, as: :api_v1 do
     pipe_through [:api, ThamaniDawaWeb.Plugs.ApiAuth]
 
@@ -88,6 +117,48 @@ defmodule ThamaniDawaWeb.Router do
     post "/pharmacy/requisitions", RequisitionController, :create
     get "/pharmacy/requisitions/:id", RequisitionController, :show
 
+    # Distributor staff: receiving, customers and customer returns. Packing
+    # is done by mobile users under /distributor/mobile.
+    scope "/distributor" do
+      get "/receipts", DistributorController, :receipts
+      get "/receipts/:id", DistributorController, :receipt
+      get "/discrepancies", DistributorController, :discrepancies
+      post "/discrepancies/:id/resolve", DistributorController, :resolve_discrepancy
+
+      get "/customers", DistributorController, :customers
+      post "/customers", DistributorController, :create_customer
+      patch "/customers/:id", DistributorController, :update_customer
+
+      get "/customer-returns", DistributorController, :returns
+      post "/customer-returns", DistributorController, :create_return
+      get "/customer-returns/:id", DistributorController, :show_return
+      post "/customer-returns/:id/items", DistributorController, :add_return_item
+      delete "/customer-returns/:id/items/:item_id", DistributorController, :remove_return_item
+      put "/customer-returns/:id/items/:item_id", DistributorController, :set_item_condition
+      post "/customer-returns/:id/receive", DistributorController, :receive_return
+      post "/customer-returns/:id/inspect", DistributorController, :inspect_return
+      post "/customer-returns/:id/complete", DistributorController, :complete_return
+    end
+
+    # Stock takes and disposals; the stock type comes from the portal.
+    scope "/pharmacy", assigns: %{inventory_type: :medicine} do
+      get "/stock-takes", StockTakeController, :index
+      post "/stock-takes", StockTakeController, :create
+      get "/stock-takes/:id", StockTakeController, :show
+      post "/stock-takes/:id/items", StockTakeController, :add_item
+      put "/stock-takes/:id/items/:item_id", StockTakeController, :count
+      post "/stock-takes/:id/submit", StockTakeController, :submit
+      post "/stock-takes/:id/reopen", StockTakeController, :reopen
+
+      get "/disposals", DisposalController, :index
+      post "/disposals", DisposalController, :create
+      get "/disposals/:id", DisposalController, :show
+      post "/disposals/:id/items", DisposalController, :add_item
+      delete "/disposals/:id/items/:item_id", DisposalController, :remove_item
+      post "/disposals/:id/submit", DisposalController, :submit
+      post "/disposals/:id/reopen", DisposalController, :reopen
+    end
+
     get "/lab/dashboard", LabController, :dashboard
     post "/lab/scans", LabController, :scan
     get "/lab/orders", LabController, :orders
@@ -105,6 +176,25 @@ defmodule ThamaniDawaWeb.Router do
     post "/lab/tests", LabController, :create_test
     patch "/lab/tests/:id", LabController, :update_test
 
+    # Stock takes and disposals; the stock type comes from the portal.
+    scope "/lab", assigns: %{inventory_type: :lab_consumable} do
+      get "/stock-takes", StockTakeController, :index
+      post "/stock-takes", StockTakeController, :create
+      get "/stock-takes/:id", StockTakeController, :show
+      post "/stock-takes/:id/items", StockTakeController, :add_item
+      put "/stock-takes/:id/items/:item_id", StockTakeController, :count
+      post "/stock-takes/:id/submit", StockTakeController, :submit
+      post "/stock-takes/:id/reopen", StockTakeController, :reopen
+
+      get "/disposals", DisposalController, :index
+      post "/disposals", DisposalController, :create
+      get "/disposals/:id", DisposalController, :show
+      post "/disposals/:id/items", DisposalController, :add_item
+      delete "/disposals/:id/items/:item_id", DisposalController, :remove_item
+      post "/disposals/:id/submit", DisposalController, :submit
+      post "/disposals/:id/reopen", DisposalController, :reopen
+    end
+
     get "/org/dashboard", OrgController, :dashboard
     get "/org/earnings", OrgController, :earnings
     get "/org/team", TeamController, :index
@@ -116,6 +206,19 @@ defmodule ThamaniDawaWeb.Router do
     post "/org/requisitions/:id/review", RequisitionController, :review
     post "/org/requisitions/:id/reject", RequisitionController, :reject
     post "/org/requisitions/:id/fulfill", RequisitionController, :fulfill
+
+    get "/org/stock-takes", StockTakeController, :queue
+    get "/org/stock-takes/:id", StockTakeController, :queue_show
+    post "/org/stock-takes/:id/approve", StockTakeController, :approve
+    post "/org/stock-takes/:id/reject", StockTakeController, :reject
+
+    get "/org/disposals", DisposalController, :queue
+    get "/org/disposals/:id", DisposalController, :queue_show
+    post "/org/disposals/:id/approve", DisposalController, :approve
+    post "/org/disposals/:id/reject", DisposalController, :reject
+
+    get "/org/recalls", RecallController, :index
+    post "/org/recalls/holders/:id/acknowledge", RecallController, :acknowledge
 
     get "/products", CatalogController, :products
     post "/products", CatalogController, :create_product

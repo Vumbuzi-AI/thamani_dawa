@@ -1,0 +1,23 @@
+meta {
+  name: Acknowledge
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/v1/org/recalls/holders/{{holder_id}}/acknowledge
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {}
+}

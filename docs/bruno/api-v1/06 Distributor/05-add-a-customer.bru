@@ -1,0 +1,27 @@
+meta {
+  name: Add a customer
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/api/v1/distributor/customers
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "name": "Mji Pharmacy",
+    "customer_type": "pharmacy",
+    "gln": null
+  }
+}

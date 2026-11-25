@@ -1,0 +1,19 @@
+meta {
+  name: Product with undispatched stock
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/products/{{product_id}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  `undispatched` lists warehouse batches not yet sent to a site; `pending_receipt` lists dispatched batches a site has not confirmed.
+}

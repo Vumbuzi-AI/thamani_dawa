@@ -39,11 +39,18 @@ defmodule ThamaniDawaWeb.Api.Response do
   end
 
   def field_errors(changeset) do
+    # Only interpolate placeholders the message actually uses: options such
+    # as an Ecto.Enum cast error's `:type` are tuples with no string form.
     Ecto.Changeset.traverse_errors(changeset, fn {message, opts} ->
-      Enum.reduce(opts, message, fn {key, value}, acc ->
-        String.replace(acc, "%{#{key}}", to_string(value))
-      end)
+      Regex.replace(~r"%{(\w+)}", message, &interpolate(&1, &2, opts))
     end)
+  end
+
+  defp interpolate(placeholder, key, opts) do
+    case Enum.find(opts, fn {opt, _value} -> Atom.to_string(opt) == key end) do
+      {_opt, value} -> to_string(value)
+      nil -> placeholder
+    end
   end
 
   defp reason_details(:bad_request),
@@ -90,6 +97,78 @@ defmodule ThamaniDawaWeb.Api.Response do
 
   defp reason_details(:reason_required),
     do: {422, "validation_failed", "A reason is required to change a completed result."}
+
+  defp reason_details(:site_id_required),
+    do: {422, "site_id_required", "Send the site_id of the site this stock is for."}
+
+  defp reason_details(:invalid_site_id),
+    do: {422, "invalid_site_id", "site_id must be a whole number."}
+
+  defp reason_details(:quantity_required),
+    do: {422, "quantity_required", "Enter how many units to move (quantity)."}
+
+  defp reason_details(:invalid_quantity),
+    do: {422, "invalid_quantity", "quantity must be a whole number."}
+
+  defp reason_details(:invalid_dispatch_quantity),
+    do: {422, "invalid_quantity", "quantity must be more than zero."}
+
+  defp reason_details(:already_dispatched),
+    do:
+      {422, "already_dispatched",
+       "This batch is already at a site. Only warehouse stock can be dispatched."}
+
+  defp reason_details(:nothing_to_dispatch),
+    do: {422, "insufficient_stock", "This batch has no stock left to move."}
+
+  defp reason_details(:not_draft),
+    do: {422, "not_draft", "This can only be changed while it is a draft."}
+
+  defp reason_details(:not_pending),
+    do: {422, "not_pending", "Only a pending request can do that."}
+
+  defp reason_details(:not_approvable),
+    do: {422, "not_approvable", "Only a draft or pending request can be approved."}
+
+  defp reason_details(:not_requester),
+    do: {403, "not_requester", "Only the person who started this can do that."}
+
+  defp reason_details(:no_counted_items),
+    do: {422, "no_counted_items", "Count at least one batch before submitting."}
+
+  defp reason_details(:no_items),
+    do: {422, "no_items", "Add at least one item first."}
+
+  defp reason_details(:items_not_inspected),
+    do: {422, "items_not_inspected", "Every item needs a condition first."}
+
+  defp reason_details(:not_received),
+    do: {409, "not_received", "Mark this return received first."}
+
+  defp reason_details(:not_inspected),
+    do: {409, "not_inspected", "Finish inspecting this return first."}
+
+  defp reason_details(:shipment_return),
+    do:
+      {422, "shipment_return",
+       "This return is linked to a shipment; only packs from that shipment can be added."}
+
+  defp reason_details(:already_resolved),
+    do: {409, "already_resolved", "This discrepancy is already resolved."}
+
+  defp reason_details(:not_expired),
+    do: {422, "not_expired", "Only a batch past its expiry date can be written off."}
+
+  defp reason_details(:partial_expiry),
+    do: {422, "partial_expiry", "An expiry write-off must take the whole remaining quantity."}
+
+  defp reason_details(:no_supplier),
+    do: {422, "no_supplier", "This batch has no supplier recorded, so it cannot be returned."}
+
+  defp reason_details({:stock_changed, _item_id}),
+    do: {409, "stock_changed", "Stock moved since this was added. Review the quantities."}
+
+  defp reason_details(:not_authorized), do: {403, "forbidden", "You cannot do that."}
 
   defp reason_details(reason) when is_atom(reason) do
     {422, Atom.to_string(reason), "The request could not be completed."}

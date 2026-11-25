@@ -1,0 +1,15 @@
+meta {
+  name: Open discrepancies
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{base_url}}/api/v1/distributor/discrepancies
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

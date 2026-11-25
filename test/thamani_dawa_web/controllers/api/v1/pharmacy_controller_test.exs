@@ -62,6 +62,61 @@ defmodule ThamaniDawaWeb.Api.V1.PharmacyControllerTest do
     assert json_response(conn, 422)["error"]["code"] == "site_required"
   end
 
+  describe "stock lists show usable stock only" do
+    setup %{pharmacy: pharmacy, pharmacist: pharmacist} do
+      org_id = pharmacist.organization_id
+      product = ThamaniDawa.ProductsFixtures.product_fixture(%{organization_id: org_id})
+
+      usable =
+        batch_fixture(%{organization_id: org_id, site_id: pharmacy.id, product_id: product.id})
+
+      hidden =
+        for status <- [:disaggregated, :returned, :expired] do
+          %{organization_id: org_id, site_id: pharmacy.id, product_id: product.id}
+          |> batch_fixture()
+          |> Ecto.Changeset.change(status: status)
+          |> ThamaniDawa.Repo.update!()
+        end
+
+      past_date =
+        %{organization_id: org_id, site_id: pharmacy.id, product_id: product.id}
+        |> batch_fixture()
+        |> Ecto.Changeset.change(expiry_date: Date.add(Date.utc_today(), -5))
+        |> ThamaniDawa.Repo.update!()
+
+      only_unusable = ThamaniDawa.ProductsFixtures.product_fixture(%{organization_id: org_id})
+
+      %{organization_id: org_id, site_id: pharmacy.id, product_id: only_unusable.id}
+      |> batch_fixture()
+      |> Ecto.Changeset.change(status: :disaggregated)
+      |> ThamaniDawa.Repo.update!()
+
+      {:ok,
+       product: product,
+       usable: usable,
+       hidden: [past_date | hidden],
+       only_unusable: only_unusable}
+    end
+
+    test "a product's batches leave out split, returned and expired lots", ctx do
+      body =
+        ctx.pharmacist
+        |> auth()
+        |> get(~p"/api/v1/pharmacy/stock/products/#{ctx.product.id}")
+        |> json_response(200)
+
+      assert Enum.map(body["data"]["batches"], & &1["id"]) == [ctx.usable.id]
+    end
+
+    test "the stock list leaves out products with no usable batch", ctx do
+      body = ctx.pharmacist |> auth() |> get(~p"/api/v1/pharmacy/stock") |> json_response(200)
+      ids = Enum.map(body["data"], & &1["id"])
+
+      assert ctx.product.id in ids
+      refute ctx.only_unusable.id in ids
+    end
+  end
+
   defp auth(user) do
     conn =
       post(build_conn(), ~p"/api/v1/login", %{email: user.email, password: valid_user_password()})

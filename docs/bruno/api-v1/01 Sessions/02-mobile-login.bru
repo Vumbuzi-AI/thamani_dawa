@@ -1,0 +1,27 @@
+meta {
+  name: Mobile login
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/v1/distributor/mobile/login
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "username": "{{mobile_username}}",
+    "pin": "{{pin}}",
+    "device_id": "bruno"
+  }
+}
+
+script:post-response {
+  bru.setEnvVar("mobile_access_token", res.body.access_token);
+}
+
+docs {
+  Signs in a distributor mobile user (username + PIN). Separate tokens from staff.
+}

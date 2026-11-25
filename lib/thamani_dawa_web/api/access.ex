@@ -6,6 +6,7 @@ defmodule ThamaniDawaWeb.Api.Access do
   alias ThamaniDawa.Accounts.Scope
   alias ThamaniDawa.Sites
   alias ThamaniDawa.Sites.Site
+  alias ThamaniDawaWeb.Portals
 
   def portal?(%Scope{} = scope, :org), do: Scope.admin?(scope)
 
@@ -17,10 +18,14 @@ defmodule ThamaniDawaWeb.Api.Access do
     Scope.lab_access?(scope) and (Scope.admin?(scope) or site_offers?(scope, :lab))
   end
 
+  # The distributor portal also depends on the organization's operating
+  # model, so it uses the web's check as-is.
+  def portal?(%Scope{} = scope, :distributor), do: Portals.portal_access?(scope, :distributor)
+
   def portal?(_scope, _portal), do: false
 
   def portals(%Scope{} = scope) do
-    Enum.filter([:org, :pharmacy, :lab], &portal?(scope, &1))
+    Enum.filter([:org, :pharmacy, :lab, :distributor], &portal?(scope, &1))
   end
 
   def same_site?(%Scope{} = scope, site_id) do

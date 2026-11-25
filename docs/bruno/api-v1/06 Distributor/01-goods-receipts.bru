@@ -1,0 +1,15 @@
+meta {
+  name: Goods receipts
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/api/v1/distributor/receipts
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}

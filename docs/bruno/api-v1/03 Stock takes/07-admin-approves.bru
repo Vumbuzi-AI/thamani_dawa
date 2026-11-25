@@ -1,0 +1,23 @@
+meta {
+  name: Admin approves
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/api/v1/org/stock-takes/{{stock_take_id}}/approve
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {}
+}

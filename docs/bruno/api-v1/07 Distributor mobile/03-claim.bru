@@ -1,0 +1,19 @@
+meta {
+  name: Claim
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/api/v1/distributor/mobile/shipments/{{shipment_id}}/select
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{mobile_access_token}}
+}
+
+body:json {
+  {}
+}

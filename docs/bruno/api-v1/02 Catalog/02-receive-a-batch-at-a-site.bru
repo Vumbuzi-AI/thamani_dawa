@@ -1,0 +1,35 @@
+meta {
+  name: Receive a batch at a site
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/v1/products/{{product_id}}/batches
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "site_id": "{{site_id}}",
+    "batch_no": "LOT-001",
+    "expiry_date": "2027-12-31",
+    "quantity": 100,
+    "cost_per_unit": "12.50",
+    "serials": [],
+    "sscc": null
+  }
+}
+
+docs {
+  With `site_id` the batch is received straight at that site (auto-approved, EPCIS receipt fires). Without it, a single-site org receives at its site and a multi-site org receives into warehouse stock. `site_id` must be a number or numeric string.
+}

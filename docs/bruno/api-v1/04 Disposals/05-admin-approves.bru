@@ -1,0 +1,23 @@
+meta {
+  name: Admin approves
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{base_url}}/api/v1/org/disposals/{{disposal_id}}/approve
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {}
+}

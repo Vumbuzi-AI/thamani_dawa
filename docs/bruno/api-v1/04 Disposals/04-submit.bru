@@ -1,0 +1,23 @@
+meta {
+  name: Submit
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/api/v1/pharmacy/disposals/{{disposal_id}}/submit
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {}
+}

@@ -1,0 +1,26 @@
+meta {
+  name: Add a batch
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/api/v1/pharmacy/disposals/{{disposal_id}}/items
+  body: json
+  auth: bearer
+}
+
+headers {
+  Idempotency-Key: {{$guid}}
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "batch_id": "{{batch_id}}",
+    "quantity": 5
+  }
+}
