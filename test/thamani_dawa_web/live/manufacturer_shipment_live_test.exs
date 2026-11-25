@@ -8,6 +8,42 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLiveTest do
   alias ThamaniDawa.Distributor
   alias ThamaniDawa.Epcis.Outbox
 
+  test "the shipments list filters by the shared status and date chips", %{conn: conn} do
+    organization = manufacturer_organization_fixture()
+    origin = manufacturing_site_fixture(organization.id)
+    user = manufacturer_user_fixture(%{organization_id: organization.id, site_id: origin.id})
+
+    {:ok, view, _html} = live(log_in_user(conn, user), ~p"/manufacturer/shipments")
+
+    assert has_element?(view, "#manufacturer-shipments-chip-status")
+    assert has_element?(view, "#manufacturer-shipments-date-chip")
+    refute has_element?(view, "#filter-dates")
+    assert has_element?(view, "#manufacturer-shipments-date-chip .td-chip-value", "Any time")
+
+    view |> element("#manufacturer-shipments-date-preset-7d") |> render_click()
+    assert_patch(view, ~p"/manufacturer/shipments?date=7d")
+    assert has_element?(view, "#manufacturer-shipments-date-chip .td-chip-value", "Last 7 days")
+
+    view
+    |> form("#manufacturer-shipments-date-form", %{
+      "date_from" => "2026-11-01",
+      "date_to" => "2026-11-20"
+    })
+    |> render_submit()
+
+    assert_patch(
+      view,
+      ~p"/manufacturer/shipments?date=custom&date_from=2026-11-01&date_to=2026-11-20"
+    )
+
+    view |> element("#manufacturer-shipments-status-draft") |> render_click()
+
+    assert_patch(
+      view,
+      ~p"/manufacturer/shipments?date=custom&date_from=2026-11-01&date_to=2026-11-20&status=draft"
+    )
+  end
+
   test "creates and dispatches a manufacturer shipment with a manufacturer EPCIS event", %{
     conn: conn
   } do

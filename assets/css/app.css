@@ -112,6 +112,11 @@
   display: contents;
 }
 
+/* Squircle corners wherever border-radius is set; browsers without support keep plain rounded corners. */
+@supports (corner-shape: squircle) {
+  *, *::before, *::after { corner-shape: squircle; }
+}
+
 /* This file is for your main application CSS */
 
 /* ============================================================
@@ -1812,26 +1817,33 @@ label {
 .td-list-page > .td-empty,
 .td-empty-wrap { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 280px; }
 .td-empty:not(:has(.td-empty-tile)),
-.td-empty-card:not(:has(.td-empty-tile)) { position: relative; }
+.td-empty-card:not(:has(.td-empty-tile)) {
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  align-content: center;
+}
 .td-empty:not(:has(.td-empty-tile))::before,
 .td-empty-card:not(:has(.td-empty-tile))::before {
   content: "";
+  grid-area: 1 / 1;
   width: 36px;
   height: 36px;
   margin-bottom: 4px;
   border-radius: 10px;
   background: var(--color-td-canvas);
-  flex: none;
+  justify-self: center;
+  align-self: center;
 }
 .td-empty:not(:has(.td-empty-tile))::after,
 .td-empty-card:not(:has(.td-empty-tile))::after {
   content: "";
-  position: absolute;
-  top: 42px;
-  left: 50%;
+  grid-area: 1 / 1;
   width: 16px;
   height: 16px;
-  margin-left: -8px;
+  margin-bottom: 4px;
+  justify-self: center;
+  align-self: center;
   background: var(--color-td-ink-2);
   pointer-events: none;
   -webkit-mask: var(--td-empty-glyph) center / contain no-repeat;
@@ -2269,7 +2281,8 @@ a.td-status-row:hover { background: var(--color-td-hover); }
 .td-rows.is-tight td:first-child { padding-left: 16px; }
 .td-rows.is-tight th:last-child,
 .td-rows.is-tight td:last-child { padding-right: 16px; }
-.td-rows .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.td-rows .is-num,
+.td-rows th.is-num { font-variant-numeric: tabular-nums; }
 .td-rows tr.is-link { cursor: pointer; }
 .td-rows tr.is-link:hover td { background: var(--color-td-hover); }
 .td-rows td a { color: inherit; text-decoration: none; }
@@ -3000,7 +3013,7 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-data tbody tr { transition: background-color .15s ease-out; }
 .td-data tbody tr:hover { background: var(--color-td-hover); }
 .td-data tbody tr[data-href], .td-data tbody tr[phx-click] { cursor: pointer; }
-.td-data .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.td-data .is-num { font-variant-numeric: tabular-nums; }
 .td-data .is-mono, .td-mono { font-family: var(--font-mono); font-size: 12px; color: var(--color-td-ink-2); }
 .td-data-empty { display: none; }
 .td-data-empty:only-child { display: table-row; }
@@ -3136,9 +3149,10 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-ss-option.is-active { background: var(--color-td-selected); }
 .td-ss-check { flex: none; color: var(--color-td-accent); }
 #sidebar-aside .td-nav { gap: 4px; }
-#sidebar-aside .td-nav-group-label { height: auto; padding: 16px 8px 8px; line-height: 1; }
+/* .nav-label clips overflow for the collapse animation, so line-height 1 sliced descenders (g, y, p). */
+#sidebar-aside .td-nav-group-label { height: auto; padding: 14px 8px 6px; line-height: 16px; }
 .td-nav-item { width: 100%; line-height: 1; transition: background-color .12s ease-out, color .12s ease-out; }
-.td-nav-item .nav-label { flex: 1; }
+.td-nav-item .nav-label { flex: 1; line-height: 20px; }
 .td-nav-item:not(.is-active):hover svg { color: var(--color-td-ink-2); }
 .td-nav-item .td-count { font-weight: 400; }
 .td-sd-foot { display: flex; flex: none; flex-direction: column; gap: 4px; overflow: visible; position: relative; z-index: 5; }
@@ -3389,7 +3403,7 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-mini-table th { height: 40px; padding: 0 16px; text-align: left; font-weight: var(--weight-td-medium); color: var(--color-td-ink-2); background: var(--color-td-wash); border-bottom: 1px solid var(--color-td-hairline); }
 .td-mini-table td { height: 44px; padding: 0 16px; color: var(--color-td-ink); border-bottom: 1px solid var(--color-td-hairline); }
 .td-mini-table tr:last-child td { border-bottom: 0; }
-.td-mini-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.td-mini-table .is-num { font-variant-numeric: tabular-nums; }
 .td-txn-more { position: relative; }
 .td-txn-menu { position: absolute; left: 0; bottom: calc(100% + 4px); min-width: 200px; padding: 4px; z-index: 90; display: flex; flex-direction: column; gap: 4px; }
 .td-txn-menu[hidden] { display: none; }
@@ -3554,7 +3568,6 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-card-header { padding: 14px 20px; }
 .td-kv-grid.is-pad { padding: 20px; }
 .td-li { padding: 10px 20px; }
-.td-empty-card { padding: 48px 20px; }
 
 /* Full shipper-label workspace, matching the healthcare label browser. */
 .td-modal-slot.shipper-labels-modal { width: min(1150px, calc(100vw - 32px)); }
@@ -3853,7 +3866,22 @@ label.td-option > input { position: absolute; opacity: 0; pointer-events: none; 
 .td-pid { cursor: default; border-bottom: 1px dashed var(--color-td-ink-3); padding-bottom: 1px; font-variant-numeric: tabular-nums; color: inherit; text-decoration: none; outline: none; }
 a.td-pid { cursor: pointer; }
 .td-pid-wrap:hover .td-pid, .td-pid:focus-visible { border-bottom-color: var(--color-td-accent); color: var(--color-td-accent); }
-.td-peek-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; visibility: hidden; opacity: 0; pointer-events: none; transition: opacity 120ms ease, visibility 0s linear 120ms; cursor: default; }
+.td-peek-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; visibility: hidden; opacity: 0; pointer-events: none; transition: opacity 120ms ease 120ms, visibility 0s linear 240ms; cursor: default; }
+/* The card floats 8px under the ID. This bridge keeps the pointer inside the
+   hover area while it crosses that gap, so the card does not close before the
+   action button can be reached. */
+.td-peek-pop::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
+/* A container that holds a hover card (.td-pid-wrap) never clips it: the pop is
+   absolutely positioned below its trigger, so any overflow:hidden ancestor cuts it off. */
+.td-recipe:has(.td-pid-wrap),
+.td-card:has(.td-pid-wrap),
+.td-data:has(.td-pid-wrap),
+.td-table:has(.td-pid-wrap),
+.td-list-table:has(.td-pid-wrap),
+.td-report-table:has(.td-pid-wrap),
+.td-modal-bd:has(.td-pid-wrap),
+.td-modal-slot:has(.td-pid-wrap),
+.td-modal:has(.td-pid-wrap) { overflow: visible; }
 .td-pid-wrap.is-right .td-peek-pop { left: auto; right: 0; }
 .td-pid-wrap:hover .td-peek-pop, .td-pid-wrap:focus-within .td-peek-pop { visibility: visible; opacity: 1; pointer-events: auto; transition: opacity 120ms ease 300ms, visibility 0s linear 300ms; }
 .td-pid-wrap.is-dismissed .td-peek-pop { visibility: hidden !important; opacity: 0 !important; }
@@ -3937,6 +3965,11 @@ a.td-pid { cursor: pointer; }
 .td-scan-confirm { border-radius: 8px; }
 .td-rows.is-static tbody + tbody tr:first-child td { border-top: 1px solid var(--color-td-hairline); }
 .td-row-actions { white-space: nowrap; text-align: right; }
+/* On a <td>, display:flex pulls the cell out of the table row (it shrinks and drifts off the
+   row's baseline), so a cell stays a table-cell and spaces its buttons itself. */
+td.td-row-actions { display: table-cell; vertical-align: middle; text-align: right; max-width: none; overflow: visible; }
+td.td-row-actions > * { vertical-align: middle; }
+td.td-row-actions > * + * { margin-left: 8px; }
 .td-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--color-td-wash); }
 .td-seg-item { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--color-td-ink-2); transition: background-color .15s ease, color .15s ease; }
 .td-seg-item:hover { color: var(--color-td-ink); }

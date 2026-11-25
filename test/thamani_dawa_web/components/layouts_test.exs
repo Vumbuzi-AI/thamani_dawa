@@ -4,7 +4,13 @@ defmodule ThamaniDawaWeb.LayoutsTest do
   import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
   import ThamaniDawa.AccountsFixtures
+  import ThamaniDawa.DistributorFixtures
+  import ThamaniDawa.ManufacturerFixtures
   import ThamaniDawa.SitesFixtures
+
+  alias ThamaniDawa.Accounts
+  alias ThamaniDawa.Accounts.Scope
+  alias ThamaniDawaWeb.Layouts
 
   setup do
     admin = user_fixture()
@@ -160,6 +166,103 @@ defmodule ThamaniDawaWeb.LayoutsTest do
     end
   end
 
+  describe "role-gated sidebar links (manufacturer portal)" do
+    @admin_only_paths ~w(/manufacturer/mobile-users /manufacturer/api-keys /manufacturer/settings)
+
+    setup %{conn: conn} do
+      organization = manufacturer_organization_fixture()
+      site = manufacturing_site_fixture(organization.id)
+
+      staff =
+        manufacturer_user_fixture(%{organization_id: organization.id, site_id: site.id})
+
+      manager = user_fixture(%{organization_id: organization.id})
+      manager = switch_site(manager, site.id)
+
+      {:ok, staff_conn: log_in_user(conn, staff), manager_conn: log_in_user(conn, manager)}
+    end
+
+    test "an admin sees the admin-only links, the account menu item and palette rows", %{
+      manager_conn: conn
+    } do
+      {:ok, lv, _html} = live(conn, ~p"/manufacturer")
+
+      for path <- @admin_only_paths do
+        assert has_element?(lv, "a.td-nav-item[href='#{path}']")
+      end
+
+      assert has_element?(lv, "a.td-nav-item[href='/manufacturer/epcis']")
+      assert has_element?(lv, ".td-nav-group-label", "Account")
+      assert has_element?(lv, "#account-org-settings[href='/manufacturer/settings']")
+      assert has_element?(lv, "#td-command-palette a[href='/manufacturer/mobile-users']")
+      assert has_element?(lv, "#td-command-palette a[href='/manufacturer/api-keys']")
+    end
+
+    test "a manufacturer-role user who is not an admin does not", %{staff_conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/manufacturer")
+
+      for path <- @admin_only_paths do
+        refute has_element?(lv, "a.td-nav-item[href='#{path}']")
+      end
+
+      refute has_element?(lv, "#account-org-settings")
+      refute has_element?(lv, "#td-command-palette a[href='/manufacturer/mobile-users']")
+      refute has_element?(lv, "#td-command-palette a[href='/manufacturer/api-keys']")
+
+      # Pages the router lets any manufacturer open stay in the nav.
+      assert has_element?(lv, "a.td-nav-item[href='/manufacturer/products']")
+      assert has_element?(lv, "a.td-nav-item[href='/manufacturer/epcis']")
+      assert has_element?(lv, ".td-nav-group-label", "Account")
+    end
+
+    test "a group whose links are all hidden loses its label" do
+      staff = Scope.for_user(manufacturer_user_fixture())
+      admin = Scope.for_user(user_fixture())
+
+      groups = [
+        {"Manufacturer", [{"Products", "package", "/manufacturer/products"}]},
+        {"Account",
+         [
+           {"API keys", "key", "/manufacturer/api-keys"},
+           {"Org settings", "gear", "/manufacturer/settings"}
+         ]}
+      ]
+
+      assert [{"Manufacturer", [_]}] = Layouts.accessible_nav_groups(staff, groups)
+
+      assert [{"Manufacturer", [_]}, {"Account", [_, _]}] =
+               Layouts.accessible_nav_groups(admin, groups)
+    end
+  end
+
+  describe "role-gated sidebar links (distributor portal)" do
+    test "a distributor-role user who is not an admin sees no admin-only links", %{conn: conn} do
+      staff = distributor_user_fixture()
+
+      {:ok, lv, _html} = live(log_in_user(conn, staff), ~p"/distributor")
+
+      for path <- ~w(/distributor/billing /distributor/mobile-users /distributor/api-keys
+                     /distributor/settings /distributor/epcis /org/sites) do
+        refute has_element?(lv, "a.td-nav-item[href='#{path}']")
+      end
+
+      refute has_element?(lv, "#account-org-settings")
+      assert has_element?(lv, "a.td-nav-item[href='/distributor/shipments']")
+    end
+  end
+
+  describe "org portal" do
+    test "an admin keeps every management link and Org settings", %{conn: conn, admin: admin} do
+      {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/dashboard")
+
+      for path <- ~w(/org/team /org/mobile-users /org/api-keys /org/epcis /org/settings) do
+        assert has_element?(lv, "a.td-nav-item[href='#{path}']")
+      end
+
+      assert has_element?(lv, "#account-org-settings[href='/org/settings']")
+    end
+  end
+
   describe "account settings" do
     test "the account menu opens a modal that saves the name and emails a reset link", %{
       conn: conn,
@@ -194,6 +297,11 @@ defmodule ThamaniDawaWeb.LayoutsTest do
           (email.text_body || email.html_body || "") =~ "reset-password"
       end)
     end
+  end
+
+  defp switch_site(user, site_id) do
+    {:ok, user} = Accounts.switch_current_site(Scope.for_user(user), site_id)
+    user
   end
 
   defp nav_order_index(html, id) do

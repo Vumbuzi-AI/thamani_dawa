@@ -204,160 +204,67 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
   defp parse_date(%Date{} = d), do: {:ok, d}
   defp parse_date(_), do: {:error, :invalid}
 
-  defp money(amount) do
-    grouped =
-      amount
-      |> round()
-      |> Integer.to_string()
-      |> String.reverse()
-      |> String.replace(~r/(\d{3})(?=\d)/, "\\1,")
-      |> String.reverse()
+  defp clinical?(site), do: Site.pharmacy?(site) or Site.lab?(site)
 
-    "KSh " <> grouped
+  defp money(amount), do: ThamaniDawaWeb.Money.ksh(amount)
+
+  defp day_axis(date), do: ThamaniDawaWeb.TimeFormat.month_day(date)
+
+  defp revenue_bars(series) do
+    amounts = Enum.map(series, &elem(&1, 1))
+    max = Enum.max(amounts, fn -> 0 end)
+    total = length(series)
+
+    series
+    |> Enum.with_index()
+    |> Enum.map(fn {{date, amount}, index} ->
+      height =
+        cond do
+          max <= 0 -> 8
+          true -> max(8, round(amount / max * 100))
+        end
+
+      %{height: height, recent: index >= max(0, total - 7), label: day_axis(date)}
+    end)
   end
 
-  defp combined_search_items(results) do
-    patients =
-      Enum.map(Map.get(results, :patients, []), fn p ->
-        %{
-          type: :patient,
-          title: p.full_name,
-          subtitle: "Phone: #{p.phone} • DOB: #{p.date_of_birth}",
-          badge: "GSRN: #{p.gsrn}",
-          icon: "hero-user"
-        }
-      end)
+  defp axis_labels([mark]), do: [mark.label]
 
-    staff =
-      Enum.map(Map.get(results, :staff, []), fn u ->
-        %{
-          type: :staff,
-          title: u.name,
-          subtitle: u.email,
-          badge: Accounts.User.humanize_roles(u),
-          icon: "hero-users"
-        }
-      end)
-
-    visits =
-      Enum.map(Map.get(results, :visits, []), fn v ->
-        %{
-          type: :visit,
-          title: v.patient_name,
-          subtitle: "Date: #{ThamaniDawaWeb.TimeFormat.date(v.inserted_at)}",
-          badge: String.capitalize(to_string(v.visit_type)),
-          icon: "hero-document-text"
-        }
-      end)
-
-    patients ++ staff ++ visits
+  defp axis_labels(marks) do
+    last = length(marks) - 1
+    mid = div(last, 2)
+    [Enum.at(marks, 0).label, Enum.at(marks, mid).label, Enum.at(marks, last).label]
   end
 
-  defp daily_revenue_chart_data(daily_revenue) do
-    %{
-      labels:
-        Enum.map(daily_revenue, fn {date, _amount} ->
-          ThamaniDawaWeb.TimeFormat.month_day(date)
-        end),
-      datasets: [
-        %{
-          label: "KSh Collected",
-          data: Enum.map(daily_revenue, fn {_date, amount} -> amount end),
-          borderColor: "#17302a",
-          backgroundColor: "rgba(28, 58, 19, 0.14)",
-          fill: true,
-          tension: 0.3,
-          pointRadius: 3
-        }
-      ]
-    }
-  end
+  defp amount_to_decimal(%Decimal{} = d), do: d
+  defp amount_to_decimal(n) when is_number(n), do: Decimal.new(n)
+  defp amount_to_decimal(_), do: Decimal.new(0)
 
-  defp monthly_revenue_chart_data(monthly_revenue) do
-    %{
-      labels:
-        Enum.map(monthly_revenue, fn {date, _n} -> ThamaniDawaWeb.TimeFormat.month_year(date) end),
-      datasets: [
-        %{
-          label: "Revenue",
-          data: Enum.map(monthly_revenue, fn {_date, n} -> n end),
-          backgroundColor: "#707371",
-          borderRadius: 4
-        }
-      ]
-    }
-  end
+  defp humanize_method(value) when is_atom(value), do: Phoenix.Naming.humanize(value)
+  defp humanize_method(value), do: to_string(value)
 
-  defp chart_options do
-    %{
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: %{legend: %{display: false}},
-      scales: %{y: %{beginAtZero: true}}
-    }
-  end
+  defp method_rows(rows) do
+    total =
+      rows
+      |> Enum.map(&(&1 |> elem(1) |> amount_to_decimal()))
+      |> Enum.reduce(Decimal.new(0), &Decimal.add/2)
 
-  defp legend_chart_options do
-    %{
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: %{legend: %{display: true, position: "bottom"}}
-    }
-  end
+    Enum.map(rows, fn {label, amount} ->
+      amount = amount_to_decimal(amount)
 
-  defp horizontal_bar_options do
-    %{
-      indexAxis: "y",
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: %{legend: %{display: false}},
-      scales: %{x: %{beginAtZero: true, ticks: %{precision: 0}}}
-    }
-  end
+      pct =
+        if Decimal.compare(total, 0) == :eq do
+          0
+        else
+          amount
+          |> Decimal.div(total)
+          |> Decimal.mult(Decimal.new(100))
+          |> Decimal.round(0)
+          |> Decimal.to_integer()
+        end
 
-  defp method_chart_data(rows) do
-    %{
-      labels: Enum.map(rows, &elem(&1, 0)),
-      datasets: [
-        %{
-          data: Enum.map(rows, &Decimal.to_float(elem(&1, 1))),
-          backgroundColor: ["#31572c", "#84cc16", "#f59e0b", "#0ea5e9", "#8b5cf6"]
-        }
-      ]
-    }
-  end
-
-  defp top_products_chart_data(rows) do
-    %{
-      labels: Enum.map(rows, &elem(&1, 0)),
-      datasets: [
-        %{
-          label: "Quantity dispensed",
-          data: Enum.map(rows, &elem(&1, 1)),
-          backgroundColor: "rgba(132, 204, 22, 0.72)",
-          borderColor: "#4d7c0f",
-          borderWidth: 1,
-          borderRadius: 6
-        }
-      ]
-    }
-  end
-
-  defp lab_volume_chart_data(rows) do
-    %{
-      labels: Enum.map(rows, fn {date, _} -> ThamaniDawaWeb.TimeFormat.month_day(date) end),
-      datasets: [
-        %{
-          label: "Lab orders",
-          data: Enum.map(rows, fn {_, count} -> count end),
-          borderColor: "#6667ab",
-          backgroundColor: "rgba(102, 103, 171, 0.14)",
-          fill: true,
-          tension: 0.3,
-          pointRadius: 2
-        }
-      ]
-    }
+      %{label: humanize_method(label), amount: amount, pct: pct}
+    end)
   end
 
   defp load_pharmacy(socket, organization_id, site) do
@@ -447,7 +354,10 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
 
   defp site_subtitle(site) do
     gln = if is_binary(site.gln) and site.gln != "", do: site.gln, else: "—"
-    "#{activity_labels(site)} · GLN #{gln}"
+    address = site.address |> to_string() |> String.trim()
+    parts = [activity_labels(site), "GLN #{gln}"]
+    parts = if address != "", do: parts ++ [address], else: parts
+    Enum.join(parts, " · ")
   end
 
   defp range_chip_label("custom", {from, to}) do
@@ -459,7 +369,12 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
   end
 
   def render(assigns) do
-    assigns = assign(assigns, :range_label, range_chip_label(assigns.range, assigns.dates))
+    assigns =
+      assigns
+      |> assign(:range_label, range_chip_label(assigns.range, assigns.dates))
+      |> assign(:daily_bars, revenue_bars(Map.get(assigns, :daily_revenue, [])))
+      |> assign(:method_rows, method_rows(Map.get(assigns, :sales_by_method, [])))
+      |> assign(:clinical?, clinical?(assigns.site))
 
     ~H"""
     <Layouts.org_shell
@@ -468,24 +383,71 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       current_path={~p"/org/sites"}
       back={@return_to}
       back_label={@back_label}
+      crumb={@site.name}
+      crumb_parent="Sites"
     >
-      <div class="td-back">
-        <.link navigate={@return_to} class="td-back-link">
-          <.td_icon name="arrow-left" class="size-3.5" /> {@back_label}
-        </.link>
-      </div>
-      <.td_page_header title={@site.name} subtitle={site_subtitle(@site)}>
+      <.td_dashboard id="site-dashboard" title={@site.name} subtitle={site_subtitle(@site)}>
+        <:status>
+          <.td_badge :if={@site.is_active} tone="success" label="Active" />
+          <.td_badge :if={!@site.is_active} tone="neutral" label="Inactive" />
+        </:status>
         <:actions>
-          <.td_badge
-            :if={@site.is_active}
-            tone="success"
-            label="Active"
-          />
-          <.td_badge
-            :if={!@site.is_active}
-            tone="neutral"
-            label="Inactive"
-          />
+          <div id="site-dashboard-range-filter" class="td-view-menu">
+            <button
+              type="button"
+              id="site-dashboard-range-filter-trigger"
+              class="td-chip td-view-menu-trigger"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              phx-click={
+                JS.toggle(to: "#site-dashboard-range-filter-menu")
+                |> JS.toggle_attribute({"aria-expanded", "true", "false"},
+                  to: "#site-dashboard-range-filter-trigger"
+                )
+              }
+            >
+              <.td_icon name="calendar-blank" class="size-3.5" />
+              <span>Date range</span>
+              <span class="td-chip-value">{@range_label}</span>
+              <.td_icon name="caret-down" class="size-3.5" />
+            </button>
+            <div
+              id="site-dashboard-range-filter-menu"
+              class="td-popover td-view-menu-pop hidden"
+              role="menu"
+              phx-click-away={JS.hide(to: "#site-dashboard-range-filter-menu")}
+            >
+              <p class="td-popover-label">Date range</p>
+              <button
+                :for={{key, label} <- Dashboards.ranges()}
+                type="button"
+                role="menuitem"
+                class={["td-menu-item", key == @range && "is-selected"]}
+                phx-click={
+                  JS.hide(to: "#site-dashboard-range-filter-menu")
+                  |> JS.push("set_range", value: %{range: key})
+                }
+              >
+                <span class="flex-1">{label}</span>
+                <.td_icon :if={key == @range} name="check" class="size-3.5" />
+              </button>
+              <form phx-submit="apply_custom_range" class="td-date-filter-custom">
+                <p class="td-popover-label">Custom</p>
+                <.date_range_picker
+                  id="site-filter-dates"
+                  from_name="from"
+                  from_value={elem(@dates, 0)}
+                  to_name="to"
+                  to_value={elem(@dates, 1)}
+                  max="today"
+                />
+                <div class="td-date-filter-ft">
+                  <span class="flex-1"></span>
+                  <button type="submit" class="td-btn is-primary">Apply</button>
+                </div>
+              </form>
+            </div>
+          </div>
           <.td_button
             id="btn-edit-site"
             variant="secondary"
@@ -495,259 +457,227 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
             <:icon><.td_icon name="note-pencil" /></:icon>
           </.td_button>
         </:actions>
-      </.td_page_header>
 
-      <div class="td-filter-row mb-4">
-        <div class="td-org-dash-search">
-          <input
-            type="search"
-            name="search"
-            value={@search_query}
-            placeholder={"Search patients, visits, revenue or reports at #{@site.name}..."}
-            phx-keyup="search"
-            phx-focus="activate_search"
-            phx-click="activate_search"
-            phx-debounce="250"
-            autocomplete="off"
-            class="td-input td-org-dash-search-input"
-          />
-          <div
-            :if={
-              @search_query != "" and String.trim(@search_query) != "" and
-                Map.get(assigns, :search_active, true)
-            }
-            class="td-popover td-org-dash-search-pop"
+        <:strip :if={@clinical?} id="site-dashboard-stats">
+          <.td_glance_cell
+            id="total-patients-stat"
+            value={@stats.total_patients}
+            caption="total patients"
+            tone="success"
           >
-            <% items = combined_search_items(@search_results) %>
-            <div class="td-org-dash-search-hd">
-              <p class="td-popover-label">Search hits at {@site.name} for "{@search_query}"</p>
-              <button type="button" phx-click="clear_search" class="td-text-btn">
-                Clear search
-              </button>
-            </div>
-            <p class="td-org-dash-search-hint">
-              Site metrics below filtered for "{@search_query}"
-              <span>
-                {@stats.total_patients} patients • {@stats.patient_visits} visits • {money(
-                  @stats.revenue_collected
-                )}
-              </span>
-            </p>
-            <div :if={items == []} class="td-empty-inline">
-              No matching records found at {@site.name} for "{@search_query}"
-            </div>
-            <div :for={item <- items} class="td-org-dash-search-item">
-              <div>
-                <p class="td-org-dash-search-title">{item.title}</p>
-                <p class="td-muted">{item.subtitle}</p>
-              </div>
-              <span class="td-chip is-quiet">{item.badge}</span>
-            </div>
-          </div>
-        </div>
+            <:icon><.td_icon name="users" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="patient-visits-stat"
+            value={@stats.patient_visits}
+            caption="patient visits"
+            tone="info"
+          >
+            <:icon><.td_icon name="calendar-check" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="revenue-collected-stat"
+            value={money(@stats.revenue_collected)}
+            caption="revenue collected"
+            tone="warning"
+          >
+            <:icon><.td_icon name="wallet" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            id="staff-assigned-stat"
+            value={@stats.active_staff}
+            caption="staff assigned"
+            tone="neutral"
+          >
+            <:icon><.td_icon name="identification-badge" /></:icon>
+          </.td_glance_cell>
+        </:strip>
 
-        <div id="site-dashboard-range-filter" class="td-view-menu">
-          <button
-            type="button"
-            id="site-dashboard-range-filter-trigger"
-            class="td-chip td-view-menu-trigger"
-            aria-haspopup="menu"
-            aria-expanded="false"
-            phx-click={
-              JS.toggle(to: "#site-dashboard-range-filter-menu")
-              |> JS.toggle_attribute({"aria-expanded", "true", "false"},
-                to: "#site-dashboard-range-filter-trigger"
-              )
-            }
+        <:strip :if={@clinical? and (Site.pharmacy?(@site) or Site.lab?(@site))} id="site-ops-stats">
+          <.td_glance_cell
+            :if={Site.pharmacy?(@site)}
+            id="prescriptions-stat"
+            value={@stats.prescriptions}
+            caption="prescriptions"
+            tone="info"
           >
-            <.td_icon name="calendar-blank" class="size-3.5" />
-            <span>Date range</span>
-            <span class="td-chip-value">{@range_label}</span>
-            <.td_icon name="caret-down" class="size-3.5" />
-          </button>
-          <div
-            id="site-dashboard-range-filter-menu"
-            class="td-popover td-view-menu-pop hidden"
-            role="menu"
-            phx-click-away={JS.hide(to: "#site-dashboard-range-filter-menu")}
+            <:icon><.td_icon name="clipboard-text" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            :if={Site.pharmacy?(@site)}
+            id="pending-prescriptions-stat"
+            value={@stats.pending_prescriptions}
+            caption="pending prescriptions"
+            tone="warning"
           >
-            <p class="td-popover-label">Date range</p>
-            <button
-              :for={{key, label} <- Dashboards.ranges()}
-              type="button"
-              role="menuitem"
-              class={["td-menu-item", key == @range && "is-selected"]}
-              phx-click={
-                JS.hide(to: "#site-dashboard-range-filter-menu")
-                |> JS.push("set_range", value: %{range: key})
-              }
+            <:icon><.td_icon name="clock" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            :if={Site.lab?(@site)}
+            id="lab-orders-stat"
+            value={@stats.lab_tests_done}
+            caption="lab orders completed"
+            tone="success"
+          >
+            <:icon><.td_icon name="flask" /></:icon>
+          </.td_glance_cell>
+          <.td_glance_cell
+            :if={Site.lab?(@site)}
+            id="pending-lab-orders-stat"
+            value={@stats.pending_lab_orders}
+            caption="pending lab orders"
+            tone="warning"
+          >
+            <:icon><.td_icon name="clipboard-text" /></:icon>
+          </.td_glance_cell>
+        </:strip>
+
+        <:strip :if={!@clinical?} id="site-dashboard-stats">
+          <.td_glance_cell
+            id="staff-assigned-stat"
+            value={@stats.active_staff}
+            caption="staff assigned"
+            tone="neutral"
+          >
+            <:icon><.td_icon name="identification-badge" /></:icon>
+          </.td_glance_cell>
+        </:strip>
+
+        <div :if={@clinical?} id="site-analytics-charts">
+          <.td_dash_row>
+            <.td_dash_card
+              id="site-daily-revenue-chart"
+              title="Daily revenue"
+              subtitle={"Wallet credits collected per day at #{@site.name}"}
             >
-              <span class="flex-1">{label}</span>
-              <.td_icon :if={key == @range} name="check" class="size-3.5" />
-            </button>
-            <form phx-submit="apply_custom_range" class="td-date-filter-custom">
-              <p class="td-popover-label">Custom</p>
-              <.date_range_picker
-                id="site-filter-dates"
-                from_name="from"
-                from_value={elem(@dates, 0)}
-                to_name="to"
-                to_value={elem(@dates, 1)}
-                max="today"
-              />
-              <div class="td-date-filter-ft">
-                <span class="flex-1"></span>
-                <button type="submit" class="td-btn is-primary">Apply</button>
+              <div class="td-bars" aria-label={"Daily revenue at #{@site.name}"}>
+                <i
+                  :for={bar <- @daily_bars}
+                  class={bar.recent && "is-now"}
+                  style={"height: #{bar.height}%"}
+                ></i>
               </div>
-            </form>
-          </div>
+              <div :if={@daily_bars != []} class="td-axis">
+                <span :for={label <- axis_labels(@daily_bars)}>{label}</span>
+              </div>
+            </.td_dash_card>
+            <.td_dash_card
+              id={
+                if @method_rows == [],
+                  do: "site-payment-methods-empty",
+                  else: "site-payment-methods-chart"
+              }
+              title="Payment methods"
+              subtitle={"Completed payments at #{@site.name}"}
+              width={380}
+            >
+              <div :if={@method_rows == []} class="td-dash-empty">
+                No completed sales yet.
+              </div>
+              <div :for={row <- @method_rows} class="td-status-row">
+                <span class="td-status-copy">
+                  <b>{row.label}</b>
+                  <span>{money(row.amount)} · {row.pct}%</span>
+                </span>
+                <.td_ticks count={row.pct} max={100} tone="success" />
+              </div>
+            </.td_dash_card>
+          </.td_dash_row>
         </div>
-      </div>
 
-      <div
-        :if={
-          @search_query != "" and String.trim(@search_query) != "" and
-            Map.get(assigns, :search_active, true)
-        }
-        class="fixed inset-0 z-30"
-        style="background: var(--color-td-scrim);"
-        phx-click="dismiss_search"
-      />
+        <.td_dash_row>
+          <.td_dash_card
+            :if={Site.pharmacy?(@site)}
+            id="pharmacy-stock-overview"
+            title="Stock attention"
+            subtitle="Inventory that may need action soon"
+          >
+            <div class="td-card-header">
+              <div>
+                <h2>Low stock</h2>
+                <p>At or below reorder level</p>
+              </div>
+            </div>
+            <table id="site-low-stock" class="td-rows">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th class="is-num">Reorder level</th>
+                  <th class="is-num">Remaining</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :if={@low_stock == []}>
+                  <td colspan="3" class="td-muted">No products are at their reorder level.</td>
+                </tr>
+                <tr :for={{product, total} <- @low_stock}>
+                  <td>{product_display_name(product)}</td>
+                  <td class="is-num">{product && product.reorder_level}</td>
+                  <td class="is-num">{total}</td>
+                </tr>
+              </tbody>
+            </table>
+            <div :if={@near_expiry != []} class="td-card-header">
+              <div>
+                <h2>Near-expiry batches</h2>
+                <p>Expiring within {@near_expiry_days} days</p>
+              </div>
+            </div>
+            <table :if={@near_expiry != []} id="site-near-expiry" class="td-rows">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Batch no.</th>
+                  <th>Expiry</th>
+                  <th class="is-num">Remaining</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  :for={batch <- @near_expiry}
+                  class="is-link"
+                  phx-click={JS.navigate(~p"/org/batches/#{batch.id}")}
+                >
+                  <td>{product_name(@products_by_id, batch.product_id)}</td>
+                  <td>{batch.batch_no}</td>
+                  <td>{batch.expiry_date}</td>
+                  <td class="is-num">{batch.remaining_quantity}</td>
+                </tr>
+              </tbody>
+            </table>
+          </.td_dash_card>
 
-      <%!-- Site Stat Cards Grid --%>
-      <div class="dashboard-stat-grid mt-6">
-        <.stat_tile
-          icon="hero-user-group"
-          label="Total patients"
-          value={@stats.total_patients}
-          sublabel="Registered patients"
-        />
-        <.stat_tile
-          icon="hero-building-office-2"
-          label="Patient visits"
-          value={@stats.patient_visits}
-          sublabel="Visits in selected window"
-        />
-        <.stat_tile
-          icon="hero-banknotes"
-          label="Revenue collected"
-          value={money(@stats.revenue_collected)}
-          sublabel="Wallet credits at this site"
-        />
-        <.stat_tile
-          icon="hero-users"
-          label="Staff assigned"
-          value={@stats.active_staff}
-          sublabel="Assigned to this site"
-        />
-        <.stat_tile
-          icon="hero-document-text"
-          label="Prescriptions"
-          value={@stats.prescriptions}
-          sublabel="Prescriptions in selected window"
-        />
-        <.stat_tile
-          icon="hero-beaker"
-          label="Lab orders completed"
-          value={@stats.lab_tests_done}
-          sublabel="Completed lab orders at this site"
-        />
-        <.stat_tile
-          icon="hero-clock"
-          label="Pending prescriptions"
-          value={@stats.pending_prescriptions}
-          sublabel="Awaiting dispensing"
-        />
-        <.stat_tile
-          icon="hero-clipboard-document-list"
-          label="Pending lab orders"
-          value={@stats.pending_lab_orders}
-          sublabel="Awaiting results"
-        />
-      </div>
-
-      <%!-- Revenue Charts Grid --%>
-      <div class="dashboard-chart-grid mt-6">
-        <.chart_card
-          id="site-daily-revenue-chart"
-          title="Daily revenue"
-          subtitle={"Wallet credits collected per day at #{@site.name} in the selected window"}
-          type="line"
-          data={daily_revenue_chart_data(@daily_revenue)}
-          options={chart_options()}
-        />
-        <.chart_card
-          id="site-monthly-revenue-chart"
-          title="Monthly revenue"
-          subtitle={"Total wallet credits collected at #{@site.name} in the last 12 months"}
-          type="bar"
-          data={monthly_revenue_chart_data(@monthly_revenue)}
-          options={chart_options()}
-        />
-        <.chart_card
-          :if={@sales_by_method != []}
-          id="site-payment-methods-chart"
-          title="Payment methods"
-          subtitle={"Completed payments at #{@site.name}"}
-          type="doughnut"
-          data={method_chart_data(@sales_by_method)}
-          options={legend_chart_options()}
-        />
-        <div
-          :if={@sales_by_method == []}
-          id="site-payment-methods-empty"
-          class="dashboard-chart-card"
-        >
-          <.blank_state icon="hero-credit-card" title="No completed sales yet">
-            Once payments complete at this site, their mix will appear here.
-          </.blank_state>
-        </div>
-        <.chart_card
-          :if={Site.pharmacy?(@site) and @top_products != []}
-          id="site-top-products-chart"
-          title="Most dispensed medicines"
-          subtitle={"Dispensed at #{@site.name}"}
-          type="bar"
-          data={top_products_chart_data(@top_products)}
-          options={horizontal_bar_options()}
-        />
-        <div
-          :if={Site.pharmacy?(@site) and @top_products == []}
-          id="site-top-products-empty"
-          class="dashboard-chart-card"
-        >
-          <.blank_state icon="hero-cube" title="No dispensing activity yet">
-            Dispensed products will show up here once prescriptions start being filled.
-          </.blank_state>
-        </div>
-        <.chart_card
-          :if={Site.lab?(@site)}
-          id="site-lab-volume-chart"
-          title="Lab order volume"
-          subtitle={"Orders created per day at #{@site.name}, last 30 days"}
-          type="line"
-          data={lab_volume_chart_data(@lab_orders_by_day)}
-          options={chart_options()}
-        />
-      </div>
-
-      <section id="site-team" class="mt-8">
-        <.td_card_header title="Site team" subtitle="People currently assigned to this location" />
-        <.table id="site-staff" rows={@staff}>
-          <:col :let={user} label="Name">
-            <span class="td-person">
-              <.td_orb seed={to_string(user.id)} size={24} />
-              {user.name}
-            </span>
-          </:col>
-          <:col :let={user} label="Role">{Accounts.User.humanize_roles(user.roles)}</:col>
-          <:empty_state>
-            <.blank_state icon="hero-users" title="No staff assigned">
-              Staff assigned to this site will appear here.
-            </.blank_state>
-          </:empty_state>
-        </.table>
-      </section>
+          <.td_dash_card
+            id="site-team"
+            title="Site team"
+            subtitle="People currently assigned to this location"
+            width={if Site.pharmacy?(@site), do: 380, else: nil}
+          >
+            <table id="site-staff" class="td-rows">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr :if={@staff == []}>
+                  <td colspan="2" class="td-muted">Staff assigned to this site will appear here.</td>
+                </tr>
+                <tr :for={user <- @staff}>
+                  <td>
+                    <span class="td-person">
+                      <.td_orb seed={to_string(user.id)} size={24} />
+                      {user.name}
+                    </span>
+                  </td>
+                  <td>{Accounts.User.humanize_roles(user.roles)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </.td_dash_card>
+        </.td_dash_row>
+      </.td_dashboard>
 
       <div
         :if={Site.pharmacy?(@site) and Site.lab?(@site)}
@@ -768,75 +698,7 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
       </div>
 
       <div :if={@tab == :pharmacy}>
-        <section id="pharmacy-stock-overview" class="mt-6">
-          <.td_card_header title="Stock attention" subtitle="Inventory that may need action soon" />
-
-          <div class="grid gap-6 xl:grid-cols-2">
-            <div class="flex min-w-0 flex-col [&>.responsive-table]:flex-1">
-              <div class="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h3 class="font-medium text-thamani-forest">Low stock</h3>
-                  <p class="mt-0.5 text-sm text-thamani-pewter">At or below reorder level</p>
-                </div>
-                <span class="rounded-full bg-td-warning-tint px-2.5 py-1 text-xs font-medium text-td-warning">
-                  {length(@low_stock)} items
-                </span>
-              </div>
-              <.table id="site-low-stock" rows={@low_stock}>
-                <:col :let={{product, _total}} label="Product">
-                  {product_display_name(product)}
-                </:col>
-                <:col :let={{product, _total}} label="Reorder level">
-                  {product && product.reorder_level}
-                </:col>
-                <:col :let={{_product, total}} label="Remaining">{total}</:col>
-                <:empty_state>
-                  <.blank_state icon="hero-check-circle" title="Stock levels look healthy">
-                    No products are currently at their reorder level.
-                  </.blank_state>
-                </:empty_state>
-              </.table>
-            </div>
-
-            <div class="flex min-w-0 flex-col [&>.responsive-table]:flex-1">
-              <div class="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <h3 class="font-medium text-thamani-forest">Near-expiry batches</h3>
-                  <p class="mt-0.5 text-sm text-thamani-pewter">
-                    Expiring within {@near_expiry_days} days
-                  </p>
-                </div>
-                <span class="rounded-full bg-td-warning-tint px-2.5 py-1 text-xs font-medium text-td-warning">
-                  {length(@near_expiry)} batches
-                </span>
-              </div>
-              <.table
-                id="site-near-expiry"
-                rows={@near_expiry}
-                empty_class="!px-3 !py-3"
-                row_click={fn batch -> JS.navigate(~p"/org/batches/#{batch.id}") end}
-              >
-                <:col :let={batch} label="Product">
-                  {product_name(@products_by_id, batch.product_id)}
-                </:col>
-                <:col :let={batch} label="Batch no.">{batch.batch_no}</:col>
-                <:col :let={batch} label="Expiry">{batch.expiry_date}</:col>
-                <:col :let={batch} label="Remaining">{batch.remaining_quantity}</:col>
-                <:empty_state>
-                  <.blank_state
-                    icon="hero-calendar-days"
-                    title="No batches expiring soon"
-                    class="!border-0 !bg-transparent !py-2 [&>span]:!size-8"
-                  >
-                    Nothing expires within the next {@near_expiry_days} days.
-                  </.blank_state>
-                </:empty_state>
-              </.table>
-            </div>
-          </div>
-        </section>
-
-        <div class="mt-8">
+        <div class="mt-6">
           <.td_card_header
             title="Pending prescriptions"
             subtitle="Prescriptions waiting for pharmacy action"
@@ -906,12 +768,6 @@ defmodule ThamaniDawaWeb.SiteLive.Show do
             </.blank_state>
           </:empty_state>
         </.table>
-      </div>
-
-      <div :if={is_nil(@tab)}>
-        <.blank_state icon="hero-building-office-2" title="No operations configured" class="mt-6">
-          This site has no pharmacy or lab operations to show.
-        </.blank_state>
       </div>
     </Layouts.org_shell>
     """

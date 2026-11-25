@@ -418,7 +418,9 @@ defmodule ThamaniDawaWeb.Layouts do
     scope = assigns.current_scope
     multi_site? = multi_site?(scope)
 
-    nav_groups = assigns.nav_groups || unified_nav_groups(scope, multi_site?)
+    nav_groups =
+      scope
+      |> accessible_nav_groups(assigns.nav_groups || unified_nav_groups(scope, multi_site?))
 
     site_picker_options = site_picker_options(scope)
 
@@ -443,6 +445,7 @@ defmodule ThamaniDawaWeb.Layouts do
       nav_label={"#{@section_label} navigation"}
       help_path={if(@show_product_tour, do: product_tour_path(@base_path))}
       base_path={@base_path}
+      current_scope={@current_scope}
     >
       <:search :if={@search != []}>{render_slot(@search)}</:search>
       <:tools :if={@tools != []}>
@@ -790,6 +793,19 @@ defmodule ThamaniDawaWeb.Layouts do
   # org management on top. No portal or role picker — the site picker
   # above is the only context switch.
   # ------------------------------------------------------------------
+
+  # Drops every link the router's guards would refuse this user (admin-only
+  # pages for staff roles), then any group left with no links, so a bare
+  # section label never hangs over nothing.
+  @doc false
+  def accessible_nav_groups(scope, nav_groups) do
+    nav_groups
+    |> Enum.map(fn {label, items} ->
+      {label,
+       Enum.filter(items, fn {_label, _icon, path} -> Portals.path_accessible?(scope, path) end)}
+    end)
+    |> Enum.reject(fn {_label, items} -> items == [] end)
+  end
 
   defp multi_site?(%Scope{organization_id: nil}), do: false
 
@@ -1228,12 +1244,14 @@ defmodule ThamaniDawaWeb.Layouts do
   defp org_settings_path(%Scope{organization_id: nil}, _base_path), do: nil
 
   defp org_settings_path(%Scope{} = scope, base_path) do
-    cond do
-      not Scope.admin?(scope) -> nil
-      base_path in ["/distributor", "/manufacturer"] -> base_path <> "/settings"
-      base_path == "/org" -> "/org/settings"
-      true -> nil
-    end
+    path =
+      cond do
+        base_path in ["/distributor", "/manufacturer"] -> base_path <> "/settings"
+        base_path == "/org" -> "/org/settings"
+        true -> nil
+      end
+
+    if path && Portals.path_accessible?(scope, path), do: path
   end
 
   defp active_nav_label(nav_groups, current_path, base_path) do

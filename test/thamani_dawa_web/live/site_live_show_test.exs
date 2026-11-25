@@ -16,8 +16,19 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
   alias ThamaniDawa.Repo
 
   defp stat_value(html, label) do
-    [_, value] = Regex.run(~r/#{Regex.escape(label)}.*?td-stat-value">(\d+)</s, html)
-    value
+    down = String.downcase(label)
+
+    cond do
+      match =
+          Regex.run(
+            ~r/td-glance-value">([^<]*)<\/span>\s*<span class="td-glance-caption">#{Regex.escape(down)}/s,
+            html
+          ) ->
+        match |> Enum.at(1) |> String.replace(~r/[^\d]/, "")
+
+      match = Regex.run(~r/#{Regex.escape(label)}.*?td-stat-value">([^<]+)/s, html) ->
+        match |> Enum.at(1) |> String.replace(~r/[^\d]/, "")
+    end
   end
 
   describe "pharmacy-only site" do
@@ -139,9 +150,25 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
 
       {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
 
-      assert html =~ "no pharmacy or lab operations"
+      assert html =~ "Site team"
+      assert html =~ "staff assigned"
+      refute html =~ "total patients"
+      refute html =~ "revenue collected"
+      refute html =~ "Daily revenue"
       refute html =~ "Low stock"
       refute html =~ "Pending orders"
+    end
+
+    test "a manufacturing site also skips patient and revenue sections", %{conn: conn} do
+      organization = organization_fixture()
+      admin = user_fixture(%{organization_id: organization.id})
+      site = site_fixture(%{organization_id: organization.id, activities: [:manufacturing]})
+
+      {:ok, _lv, html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
+
+      assert html =~ "Site team"
+      refute html =~ "total patients"
+      refute html =~ "Daily revenue"
     end
   end
 
@@ -236,7 +263,7 @@ defmodule ThamaniDawaWeb.SiteLive.ShowTest do
       {:ok, lv, _html} = live(log_in_user(conn, admin), ~p"/org/sites/#{site.id}")
 
       html = lv |> element("button", "This Week") |> render_click()
-      assert html =~ "Patient visits"
+      assert html =~ "patient visits"
     end
 
     test "clicking Custom reveals a date-range form, and submitting it recomputes stats", %{

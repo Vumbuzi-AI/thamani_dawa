@@ -3,6 +3,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
 
   alias ThamaniDawa.Distributor
   alias ThamaniDawa.Manufacturing
+  alias ThamaniDawaWeb.DateRangeFilter
 
   @tabs [
     {"", "All"},
@@ -21,6 +22,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
     filters = %{
       "status" => valid_status(params["status"]),
       "search" => params["search"] || "",
+      "date" => DateRangeFilter.valid_preset(params["date"]),
       "date_from" => params["date_from"] || "",
       "date_to" => params["date_to"] || ""
     }
@@ -32,27 +34,33 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
   def handle_event("search", %{"search" => search}, socket),
     do: {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
 
-  def handle_event("apply_filters", %{"filters" => filters}, socket),
-    do:
-      {:noreply,
-       push_patch(socket,
-         to: filter_path(socket, Map.take(filters, ["status", "date_from", "date_to"]))
-       )}
+  def handle_event("set_filter", %{"field" => "status", "value" => value}, socket),
+    do: {:noreply, push_patch(socket, to: filter_path(socket, %{"status" => value}))}
 
-  def handle_event("clear_filter", %{"filter" => filter}, socket)
-      when filter in ["status", "date_from", "date_to"],
-      do: {:noreply, push_patch(socket, to: filter_path(socket, %{filter => ""}))}
+  def handle_event("set_date_preset", %{"value" => value}, socket) do
+    changes = %{"date" => value, "date_from" => "", "date_to" => ""}
+    {:noreply, push_patch(socket, to: filter_path(socket, changes))}
+  end
+
+  def handle_event("apply_date_range", params, socket) do
+    from = params["date_from"] || ""
+    to = params["date_to"] || ""
+    preset = if from == "" and to == "", do: "", else: "custom"
+    changes = %{"date" => preset, "date_from" => from, "date_to" => to}
+    {:noreply, push_patch(socket, to: filter_path(socket, changes))}
+  end
 
   defp load_shipments(socket) do
     f = socket.assigns.filters
     organization_id = socket.assigns.current_scope.organization_id
+    {date_from, date_to} = DateRangeFilter.resolve(f["date"], f["date_from"], f["date_to"])
 
     filters = %{
       participant_tier: "manufacturer",
       status: f["status"],
       search: f["search"],
-      date_from: parse_date(f["date_from"]),
-      date_to: parse_date(f["date_to"]),
+      date_from: date_from,
+      date_to: date_to,
       page: socket.assigns.page
     }
 
@@ -62,8 +70,8 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
       Manufacturing.list_shipments_page(organization_id, %{
         status: f["status"],
         search: f["search"],
-        date_from: parse_date(f["date_from"]),
-        date_to: parse_date(f["date_to"]),
+        date_from: date_from,
+        date_to: date_to,
         page: socket.assigns.page
       })
 
@@ -126,13 +134,6 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
     end
   end
 
-  defp parse_date(value) do
-    case Date.from_iso8601(value || "") do
-      {:ok, date} -> date
-      _ -> nil
-    end
-  end
-
   def render(assigns) do
     ~H"""
     <Layouts.manufacturer_shell
@@ -165,23 +166,21 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
           />
         </:actions>
         <:filters>
-          <form id="manufacturer-shipment-filters" phx-change="apply_filters" class="td-filter-row">
-            <.td_select
-              id="filter-status"
-              name="filters[status]"
-              label="Status"
-              value={@filters["status"]}
-              options={Enum.map(@tabs, fn {value, label} -> {label, value} end)}
-            />
-            <.date_range_picker
-              id="filter-dates"
-              label="Dates"
-              from_name="filters[date_from]"
-              from_value={@filters["date_from"]}
-              to_name="filters[date_to]"
-              to_value={@filters["date_to"]}
-            />
-          </form>
+          <.td_filter_menu
+            id="manufacturer-shipments"
+            field="status"
+            label="Status"
+            value={@filters["status"]}
+            options={@tabs}
+          />
+          <.td_date_filter
+            id="manufacturer-shipments-date"
+            label="Date"
+            preset={@filters["date"]}
+            date_from={@filters["date_from"]}
+            date_to={@filters["date_to"]}
+          />
+          <span class="flex-1"></span>
         </:filters>
 
         <.td_data_table

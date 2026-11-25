@@ -66,6 +66,8 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
       for path <- [~p"/distributor", ~p"/distributor/shipments", ~p"/distributor/products"] do
         assert {:ok, view, _html} = live(conn, path)
         refute has_element?(view, ~s(a[href="/distributor/api-keys"]))
+        refute has_element?(view, ~s(#sidebar-shell a[href="/distributor/mobile-users"]))
+        refute has_element?(view, ~s(#sidebar-shell a[href="/distributor/settings"]))
       end
     end
 

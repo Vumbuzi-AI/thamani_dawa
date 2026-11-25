@@ -144,6 +144,47 @@ defmodule ThamaniDawaWeb.Portals do
   def portal_role?(scope, :distributor), do: Scope.distributor_access?(scope)
   def portal_role?(scope, :manufacturer), do: Scope.manufacturer_access?(scope)
 
+  @doc """
+  Whether the scope's *roles* may open the page at `path` (no site or
+  organization-model checks), judged by the very `on_mount` guards the router
+  declares on the `live_session` that serves it. Navigation uses this to hide
+  links the guard would only bounce ("You must be an admin to access this
+  page."), so the sidebar, account menu and command palette cannot drift from
+  `ThamaniDawaWeb.Router`.
+
+  A path the router does not know, or one with no role guard, is allowed.
+  """
+  def path_accessible?(scope, path) when is_binary(path) do
+    path
+    |> required_guards()
+    |> Enum.all?(&guard_allows?(scope, &1))
+  end
+
+  defp required_guards(path) do
+    case Phoenix.Router.route_info(ThamaniDawaWeb.Router, "GET", path, "") do
+      %{phoenix_live_view: {_view, _action, _opts, %{extra: %{on_mount: hooks}}}} ->
+        for %{id: {ThamaniDawaWeb.UserAuth, guard}} <- hooks, do: guard
+
+      _other ->
+        []
+    end
+  end
+
+  defp guard_allows?(scope, guard)
+       when guard in [
+              :require_admin,
+              :require_distributor_admin_access,
+              :require_manufacturer_admin_access
+            ],
+       do: Scope.admin?(scope)
+
+  defp guard_allows?(scope, :require_superadmin), do: Scope.superadmin?(scope)
+  defp guard_allows?(scope, :require_pharmacy_access), do: portal_role?(scope, :pharmacy)
+  defp guard_allows?(scope, :require_lab_access), do: portal_role?(scope, :lab)
+  defp guard_allows?(scope, :require_distributor_access), do: portal_role?(scope, :distributor)
+  defp guard_allows?(scope, :require_manufacturer_access), do: portal_role?(scope, :manufacturer)
+  defp guard_allows?(_scope, _guard), do: true
+
   @doc "Which of a site's activity panels the given portal maps to."
   def site_offers_portal?(%Site{} = site, :pharmacy), do: Site.pharmacy?(site)
   def site_offers_portal?(%Site{} = site, :lab), do: Site.lab?(site)

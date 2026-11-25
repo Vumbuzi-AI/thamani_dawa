@@ -1073,6 +1073,7 @@ defmodule ThamaniDawaWeb.SignupLive do
                 <.form
                   for={@org_form}
                   id="organization-setup-form"
+                  class="td-stack"
                   phx-change="validate_operating_model"
                   phx-submit="continue_operating_model"
                 >

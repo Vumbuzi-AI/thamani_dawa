@@ -406,6 +406,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil
   attr :back, :any, default: nil
+  slot :status, doc: "badge or meta beside the title"
   slot :actions
 
   def td_page_header(assigns) do
@@ -425,7 +426,10 @@ defmodule ThamaniDawaWeb.TDComponents do
           <.td_icon name="arrow-left" />
         </button>
         <div class="td-page-title">
-          <h1>{@title}</h1>
+          <div class="td-page-title-row">
+            <h1>{@title}</h1>
+            {render_slot(@status)}
+          </div>
           <p :if={@subtitle}>{@subtitle}</p>
         </div>
       </div>
@@ -623,6 +627,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :title, :string, required: true
   attr :subtitle, :string, default: nil
   slot :actions
+  slot :status, doc: "badge or meta beside the title"
   slot :notice, doc: "optional banner above the strips"
 
   slot :strip, doc: "one TD Stat strip; its children are td_glance_cell" do
@@ -635,6 +640,7 @@ defmodule ThamaniDawaWeb.TDComponents do
     ~H"""
     <section id={@id} class="td-dashboard">
       <.td_page_header title={@title} subtitle={@subtitle}>
+        <:status :if={@status != []}>{render_slot(@status)}</:status>
         <:actions :if={@actions != []}>{render_slot(@actions)}</:actions>
       </.td_page_header>
       <div class="td-dashboard-pad">
@@ -1185,6 +1191,11 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :help_path, :string, default: nil
   attr :nav_label, :string, default: "Navigation"
   attr :base_path, :string, default: "/"
+
+  attr :current_scope, :any,
+    default: nil,
+    doc: "gates the command palette rows by the user's role, like the sidebar links"
+
   slot :search
   slot :tools
   slot :side
@@ -1333,12 +1344,24 @@ defmodule ThamaniDawaWeb.TDComponents do
           <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/inventory"><span class="td-cmd-ti"><.td_icon name="cube" /></span><span class="td-cmd-t"><b>Inventory</b></span></.link>
           <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/shipments"><span class="td-cmd-ti"><.td_icon name="truck" /></span><span class="td-cmd-t"><b>Shipments</b></span></.link>
           <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/aggregations"><span class="td-cmd-ti"><.td_icon name="squares-plus" /></span><span class="td-cmd-t"><b>Aggregation</b></span></.link>
-          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/mobile-users"><span class="td-cmd-ti"><.td_icon name="device-mobile-camera" /></span><span class="td-cmd-t"><b>Mobile users</b></span></.link>
+          <.link
+            :if={
+              ThamaniDawaWeb.Portals.path_accessible?(@current_scope, "/manufacturer/mobile-users")
+            }
+            class="td-cmd-row"
+            data-td-cmd-row
+            navigate="/manufacturer/mobile-users"
+          ><span class="td-cmd-ti"><.td_icon name="device-mobile-camera" /></span><span class="td-cmd-t"><b>Mobile users</b></span></.link>
           <p class="td-cmd-gh">Actions</p>
           <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/products"><span class="td-cmd-ti"><.td_icon name="plus" /></span><span class="td-cmd-t"><b>Add product</b></span></.link>
           <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/aggregations"><span class="td-cmd-ti"><.td_icon name="package" /></span><span class="td-cmd-t"><b>Add SSCC</b></span></.link>
           <p class="td-cmd-gh">Account</p>
-          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/api-keys"><span class="td-cmd-ti"><.td_icon name="key" /></span><span class="td-cmd-t"><b>API keys</b></span></.link>
+          <.link
+            :if={ThamaniDawaWeb.Portals.path_accessible?(@current_scope, "/manufacturer/api-keys")}
+            class="td-cmd-row"
+            data-td-cmd-row
+            navigate="/manufacturer/api-keys"
+          ><span class="td-cmd-ti"><.td_icon name="key" /></span><span class="td-cmd-t"><b>API keys</b></span></.link>
           <button
             type="button"
             class="td-cmd-row td-cmd-danger"
@@ -1952,8 +1975,10 @@ defmodule ThamaniDawaWeb.TDComponents do
   end
 
   @doc """
-  The one shared date-range filter chip (Doop "Orders · Created date filter"
-  `QtYrmaQO7u`): presets plus a custom range on the TD date picker, in EAT.
+  The one shared date-range filter chip (Doop `TD DateFilter`, open state in
+  "Orders · Created date filter" `QtYrmaQO7u`): presets plus a custom range on
+  the TD date picker, in EAT. Use it for every list date filter; never a bare
+  `date_range_picker` in a filter row.
   Pushes `set_date_preset` with `%{"field" => field, "value" => preset}` and
   submits `apply_date_range` with `date_from` / `date_to`.
   """

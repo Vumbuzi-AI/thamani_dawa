@@ -367,10 +367,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
 
   def render(assigns) do
     ~H"""
-    <div id="manufacturer-serial-wizard">
+    <div id="manufacturer-serial-wizard" class="td-stack">
       <p id="serial-wizard-subtitle" class="td-wizard-sub">{wizard_subtitle(@step, @mode)}</p>
       <%= if @issued do %>
-        <div id="serials-issued">
+        <div id="serials-issued" class="td-stack">
           <p :if={@issued.kind == "stock"} class="td-note">
             {@issued.batch} now holds {@issued.count} DataMatrix codes for {@product.name}. They sit in inventory until you pack them into shippers.
           </p>

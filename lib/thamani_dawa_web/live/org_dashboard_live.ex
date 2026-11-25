@@ -625,13 +625,13 @@ defmodule ThamaniDawaWeb.OrgDashboardLive do
               title="Revenue and cost by site"
               subtitle="All-time site comparison. Profit is revenue less stock cost."
             >
-              <table class="td-rows td-ticks">
+              <table class="td-rows">
                 <thead>
                   <tr>
                     <th>Site</th>
-                    <th>Revenue</th>
-                    <th>Stock cost</th>
-                    <th>Profit</th>
+                    <th class="is-num">Revenue</th>
+                    <th class="is-num">Stock cost</th>
+                    <th class="is-num">Profit</th>
                     <th class="td-ticks-col"></th>
                   </tr>
                 </thead>
