@@ -150,7 +150,7 @@ config :phoenix_live_view,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
 
-# Disable swoosh api client as it is only required for production adapters.
+# Disabled unless runtime.exs enables Postal via POSTAL_API_KEY.
 config :swoosh, :api_client, false
 
 config :thamani_dawa, ThamaniDawa.GtinLookup, api_key: System.get_env("GS1_GRP_API_KEY")
