@@ -22,6 +22,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      |> assign(:serials_cache, %{})
      |> assign(:serials_error, nil)
      |> assign(:serial_page, nil)
+     |> assign(:serials_loading, false)
      |> assign(:batch_shippers, [])
      |> assign(:serial_shippers, %{})
      |> assign(:batch_fully_packed, false)
@@ -32,15 +33,17 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
   # Nested GS1 flow, kept light on the API: the batch list is fetched once
   # per visit (`getbarcode_batches`), and only the page of serials on screen
-  # is fetched (`get_batch_serials` with paging), so batches of tens of
-  # thousands of serials stay quick. Printing fetches the whole batch when
-  # its dialog opens. Nothing is fetched on the static (disconnected) render.
+  # is fetched (`get_batch_serials` with paging). Both run as async tasks so
+  # the page joins straight away; waiting on GS1 inside the join made large
+  # products time out and reconnect in a loop. Printing fetches the whole
+  # batch when its dialog opens. Nothing is fetched on the static render.
   def handle_params(params, _url, socket) do
     search = Map.get(params, "search", "")
 
     socket =
       socket
       |> assign(:search, search)
+      |> assign(:params, params)
       |> assign(:view, if(params["view"] == "serials", do: "serials", else: "batch"))
       |> assign(
         :state_filter,
@@ -49,17 +52,75 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       |> assign(:return_to, ThamaniDawaWeb.ReturnTo.safe(params["return_to"] || "", ""))
       |> assign(:back_path, ThamaniDawaWeb.ReturnTo.path(params, ~p"/manufacturer/products"))
       |> assign_new(:print_open, fn -> false end)
+      |> assign_new(:serials_loading, fn -> false end)
       |> ensure_batches()
 
-    {:noreply, select_batch(socket, Map.get(params, "batch"), search, params)}
+    {:noreply, select_batch(socket)}
+  end
+
+  def handle_async(:batches, {:ok, result}, socket) do
+    socket =
+      case result do
+        {:ok, batches} -> assign(socket, batches: batches, batches_error: nil)
+        {:error, reason} -> assign(socket, batches: [], batches_error: reason)
+      end
+
+    {:noreply, select_batch(socket)}
+  end
+
+  def handle_async(:batches, {:exit, _reason}, socket),
+    do: {:noreply, assign(socket, batches: [], batches_error: :unavailable)}
+
+  def handle_async(:serials, {:ok, {shippers, by_serial, result}}, socket) do
+    batch = socket.assigns.selected_batch
+    total = (batch && batch.serial_count) || 0
+    packed = map_size(by_serial)
+
+    socket =
+      assign(socket,
+        serials_loading: false,
+        batch_shippers: shippers,
+        serial_shippers: by_serial,
+        batch_packed: packed,
+        batch_fully_packed: total > 0 and packed >= total
+      )
+
+    socket =
+      case result do
+        {:ok, page} ->
+          assign(socket,
+            serial_page: page,
+            serials_error: nil,
+            label_serial: List.first(page.entries)
+          )
+
+        {:error, reason} ->
+          assign(socket, serial_page: nil, serials_error: reason, label_serial: nil)
+      end
+
+    {:noreply, socket}
+  end
+
+  def handle_async(:serials, {:exit, _reason}, socket) do
+    {:noreply,
+     assign(socket,
+       serials_loading: false,
+       serial_page: nil,
+       serials_error: :unavailable,
+       label_serial: nil
+     )}
   end
 
   defp ensure_batches(%{assigns: %{batches: nil}} = socket) do
     if connected?(socket) do
-      case Manufacturing.fetch_product_batches(org_id(socket), socket.assigns.product.gtin) do
-        {:ok, batches} -> assign(socket, batches: batches, batches_error: nil)
-        {:error, reason} -> assign(socket, batches: [], batches_error: reason)
-      end
+      organization_id = org_id(socket)
+      gtin = socket.assigns.product.gtin
+
+      socket
+      |> cancel_async(:batches)
+      |> start_async(:batches, fn ->
+        Manufacturing.fetch_product_batches(organization_id, gtin)
+      end)
     else
       socket
     end
@@ -67,73 +128,67 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
   defp ensure_batches(socket), do: socket
 
-  defp select_batch(%{assigns: %{batches: nil}} = socket, _batch_no, _search, _params),
-    do: socket
+  defp select_batch(%{assigns: %{batches: nil}} = socket), do: socket
 
-  defp select_batch(socket, batch_no, search, params) do
+  defp select_batch(socket) do
+    params = socket.assigns.params
+    search = socket.assigns.search
     visible = filter_batches(socket.assigns.batches, search)
-    selected = Enum.find(visible, &(&1.batch_no == batch_no)) || List.first(visible)
+    selected = Enum.find(visible, &(&1.batch_no == params["batch"])) || List.first(visible)
 
     case selected do
       nil ->
-        assign(socket,
+        socket
+        |> cancel_async(:serials)
+        |> assign(
           selected_batch: nil,
           serial_page: nil,
           serials_error: nil,
+          serials_loading: false,
           batch_shippers: [],
           serial_shippers: %{},
           batch_fully_packed: false
         )
 
       batch ->
-        {shippers, by_serial} =
-          Manufacturing.list_batch_shippers(
-            org_id(socket),
-            socket.assigns.product.gtin,
-            batch.batch_no
-          )
-
+        organization_id = org_id(socket)
+        gtin = socket.assigns.product.gtin
+        state = socket.assigns.state_filter
         page_size = if socket.assigns.view == "serials", do: @page_size, else: @preview_size
         page_number = DistributorPagination.page_number(params)
-        total = batch.serial_count || 0
-        packed = map_size(by_serial)
+        serial_search = serial_search(search, batch)
 
-        socket =
-          assign(socket,
-            selected_batch: batch,
-            batch_shippers: shippers,
-            serial_shippers: by_serial,
-            batch_serial_total: total,
-            batch_packed: packed,
-            batch_fully_packed: total > 0 and packed >= total
-          )
+        socket
+        |> assign(
+          selected_batch: batch,
+          batch_serial_total: batch.serial_count || 0,
+          serials_loading: true,
+          serials_error: nil
+        )
+        |> cancel_async(:serials)
+        |> start_async(:serials, fn ->
+          {shippers, by_serial} =
+            Manufacturing.list_batch_shippers(organization_id, gtin, batch.batch_no)
 
-        case serial_page(
-               socket,
-               batch,
-               by_serial,
-               serial_search(search, batch),
-               page_number,
-               page_size
-             ) do
-          {:ok, page} ->
-            assign(socket,
-              serial_page: page,
-              serials_error: nil,
-              label_serial: List.first(page.entries)
+          result =
+            serial_page(
+              {organization_id, gtin, state},
+              batch,
+              by_serial,
+              serial_search,
+              page_number,
+              page_size
             )
 
-          {:error, reason} ->
-            assign(socket, serial_page: nil, serials_error: reason, label_serial: nil)
-        end
+          {shippers, by_serial, result}
+        end)
     end
   end
 
   # Only the page on screen is fetched from GS1. Packed serials are known
   # locally from this batch's shippers, so that filter needs no GS1 call;
   # unpacked asks GS1 to leave them out.
-  defp serial_page(socket, _batch, by_serial, search, page_number, page_size)
-       when socket.assigns.state_filter == "packed" do
+  defp serial_page({_org, _gtin, "packed"}, _batch, by_serial, search, page_number, page_size) do
     entries =
       by_serial
       |> Map.keys()
@@ -144,12 +199,19 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     {:ok, DistributorPagination.page(entries, page_number, page_size)}
   end
 
-  defp serial_page(socket, batch, by_serial, search, page_number, page_size) do
-    exclude = if socket.assigns.state_filter == "unpacked", do: Map.keys(by_serial), else: []
+  defp serial_page(
+         {organization_id, gtin, state},
+         batch,
+         by_serial,
+         search,
+         page_number,
+         page_size
+       ) do
+    exclude = if state == "unpacked", do: Map.keys(by_serial), else: []
 
     Manufacturing.fetch_batch_serial_page(
-      org_id(socket),
-      socket.assigns.product.gtin,
+      organization_id,
+      gtin,
       batch.batch_no,
       page: page_number,
       per_page: page_size,
@@ -476,6 +538,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
               </div>
             </div>
 
+            <p :if={@serials_loading} id="manufacturer-serials-loading" class="td-note td-pad">
+              Loading serials from GS1...
+            </p>
             <div :if={@serials_error} id="manufacturer-serials-error" class="td-ban is-danger">
               <span>{error_message(@serials_error)}</span>
               <.td_button id="retry-manufacturer-serials" label="Retry" phx-click="retry" />
@@ -800,6 +865,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       </span>
     </div>
 
+    <p :if={@serials_loading} id="manufacturer-serials-loading" class="td-note td-pad">
+      Loading serials from GS1...
+    </p>
     <div :if={@serials_error} id="manufacturer-serials-error" class="td-ban is-danger m-4">
       <span>{error_message(@serials_error)}</span>
       <.td_button id="retry-manufacturer-serials" label="Retry" phx-click="retry" />
