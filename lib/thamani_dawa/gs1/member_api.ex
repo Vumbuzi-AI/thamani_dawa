@@ -103,8 +103,9 @@ defmodule ThamaniDawa.GS1.MemberApi do
 
   @doc """
   Every batch row GS1 has recorded for a GTIN, via
-  `POST /getbarcode_batches`. Rows can repeat per serial; each carries
-  `batch`, `production`, `expiry`, and (when serialised) `serial`.
+  `POST /getbarcode_batches`. One row per batch carrying `batch`,
+  `production`, `expiry` and `serial_count`; use `batch_serials/3` for the
+  serials themselves.
   """
   def barcode_batches(gtin, opts \\ []) when is_binary(gtin) and is_list(opts) do
     dispatch(:post_barcode_batches, [gtin], opts)
@@ -216,6 +217,10 @@ defmodule ThamaniDawa.GS1.MemberApi do
 
   def post_batch_serials(gtin, batch, opts \\ [])
       when is_binary(gtin) and is_binary(batch) and is_list(opts) do
+    # A whole batch can hold tens of thousands of serials, so allow longer
+    # than the default.
+    opts = Keyword.put_new(opts, :receive_timeout, 120_000)
+
     %{"barcode" => gtin, "batch" => batch}
     |> post("/get_batch_serials", opts)
     |> decode_batch_serials_response()
@@ -459,7 +464,7 @@ defmodule ThamaniDawa.GS1.MemberApi do
         url: path,
         headers: [{"authorization", "Bearer " <> token}],
         json: params,
-        receive_timeout: 15_000,
+        receive_timeout: Keyword.get(opts, :receive_timeout, 15_000),
         retry: false
       ]
 
