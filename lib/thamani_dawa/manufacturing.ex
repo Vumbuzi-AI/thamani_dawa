@@ -129,6 +129,83 @@ defmodule ThamaniDawa.Manufacturing do
     }
   end
 
+  @doc """
+  Fetches the Products page catalogue from the GS1 member JSON API.
+
+  GS1 is the source of truth for which products are visible. Returned products
+  are upserted locally so the existing serialisation and detail routes can keep
+  using organization-scoped product records, but local-only products are never
+  included in the result.
+  """
+  def paginate_gs1_products(organization_id, opts \\ []) do
+    page = max(Keyword.get(opts, :page, 1), 1)
+    page_size = Keyword.get(opts, :page_size, @product_page_size)
+    search = opts |> Keyword.get(:search, "") |> to_string() |> String.trim() |> String.downcase()
+    api_opts = [api_token: Organizations.gs1_api_key(organization_id)]
+
+    with {:ok, products} <- MemberApi.list_products(%{}, api_opts) do
+      products =
+        products
+        |> Enum.filter(&(is_binary(&1["gtin"]) and &1["gtin"] != ""))
+        |> Enum.uniq_by(& &1["gtin"])
+
+      Enum.each(products, &upsert_synced_product(organization_id, &1))
+
+      products = Enum.filter(products, &api_product_matches?(&1, search))
+      total_entries = length(products)
+      total_pages = max(ceil(total_entries / page_size), 1)
+      page = min(page, total_pages)
+
+      page_products = Enum.slice(products, (page - 1) * page_size, page_size)
+      gtins = Enum.map(page_products, & &1["gtin"])
+
+      local_by_gtin =
+        Repo.all(
+          from p in Product, where: p.organization_id == ^organization_id and p.gtin in ^gtins
+        )
+        |> Map.new(&{&1.gtin, &1})
+
+      entries =
+        Enum.flat_map(page_products, fn api_product ->
+          case local_by_gtin[api_product["gtin"]] do
+            nil ->
+              []
+
+            product ->
+              [
+                %{
+                  product: product,
+                  serial_count: api_count(api_product["serial_count"]),
+                  sscc_count: api_count(api_product["sscc_count"])
+                }
+              ]
+          end
+        end)
+
+      {:ok,
+       %{
+         entries: entries,
+         page_number: page,
+         page_size: page_size,
+         total_entries: total_entries,
+         total_pages: total_pages
+       }}
+    end
+  end
+
+  defp api_product_matches?(_product, ""), do: true
+
+  defp api_product_matches?(product, search) do
+    ["gtin", "name", "brand_owner", "description"]
+    |> Enum.any?(fn field ->
+      product
+      |> Map.get(field, "")
+      |> to_string()
+      |> String.downcase()
+      |> String.contains?(search)
+    end)
+  end
+
   @doc "Fetches a product scoped to the organization."
   def get_product!(organization_id, id) do
     Repo.get_by!(Product, id: id, organization_id: organization_id)

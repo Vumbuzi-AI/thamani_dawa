@@ -166,35 +166,28 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
   defp load_products(socket) do
     organization_id = socket.assigns.current_scope.organization_id
 
-    page_info =
-      Manufacturing.paginate_products_with_counts(organization_id,
-        page: socket.assigns.page_number,
-        search: socket.assigns.search
-      )
+    case Manufacturing.paginate_gs1_products(organization_id,
+           page: socket.assigns.page_number,
+           search: socket.assigns.search
+         ) do
+      {:ok, page_info} ->
+        socket
+        |> assign(:sync_error, nil)
+        |> assign(:page_info, page_info)
+        |> assign(:rows, filter_rows(page_info.entries, socket.assigns[:serials_filter]))
 
-    remote_counts = remote_counts(organization_id)
+      {:error, reason} ->
+        page_info = empty_page(socket.assigns.page_number)
 
-    page_info = %{page_info | entries: merge_remote_counts(page_info.entries, remote_counts)}
-
-    socket
-    |> assign(:page_info, page_info)
-    |> assign(:rows, filter_rows(page_info.entries, socket.assigns[:serials_filter]))
-  end
-
-  defp remote_counts(organization_id) do
-    case Manufacturing.remote_product_counts(organization_id) do
-      {:ok, counts} -> counts
-      {:error, _reason} -> %{}
+        socket
+        |> assign(:sync_error, sync_error_message(reason))
+        |> assign(:page_info, page_info)
+        |> assign(:rows, [])
     end
   end
 
-  defp merge_remote_counts(entries, remote_counts) do
-    Enum.map(entries, fn %{product: product} = entry ->
-      case remote_counts[product.gtin] do
-        nil -> entry
-        counts -> Map.merge(entry, counts)
-      end
-    end)
+  defp empty_page(page_number) do
+    %{entries: [], page_number: page_number, page_size: 10, total_entries: 0, total_pages: 1}
   end
 
   defp view_mode(params, fallback) do
@@ -256,7 +249,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
           <.td_button
             id="sync-manufacturer-products"
             variant="secondary"
-            label={if @syncing?, do: "Syncing", else: "Sync from GS1"}
+            label={if @syncing?, do: "Refreshing", else: "Refresh from GS1"}
             glyph="arrows-clockwise"
             phx-click="sync_products"
             phx-disable-with="Syncing"
@@ -306,16 +299,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
               <p class="td-empty-title">No products yet</p>
               <p class="td-note">
                 <%= if @syncing? do %>
-                  Syncing products from GS1.
+                  Refreshing products from GS1.
                 <% else %>
-                  Products come from your GS1 member account. Sync to bring in your GTINs, then generate serials for a batch.
+                  Products are loaded directly from your GS1 member account. Refresh to check for newly registered GTINs.
                 <% end %>
               </p>
               <.td_button
                 id="products-empty-sync"
                 variant="primary"
                 glyph="arrows-clockwise"
-                label={if @syncing?, do: "Syncing", else: "Sync from GS1"}
+                label={if @syncing?, do: "Refreshing", else: "Refresh from GS1"}
                 phx-click="sync_products"
                 phx-disable-with="Syncing"
                 disabled={@syncing?}
