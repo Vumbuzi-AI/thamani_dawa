@@ -1487,6 +1487,7 @@ defmodule ThamaniDawaWeb.Layouts do
     ~H"""
     <div id={@id} class="td-toast-region" aria-live="polite">
       <.flash kind={:info} flash={@flash} />
+      <.flash kind={:warning} flash={@flash} />
       <.flash kind={:error} flash={@flash} />
 
       <.flash
