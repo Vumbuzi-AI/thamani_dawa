@@ -31,10 +31,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   end
 
   # Nested GS1 flow, kept light on the API: the batch list is fetched once
-  # per visit (`getbarcode_batches`), and a batch's serials only when that
-  # batch is opened (`get_batch_serials`), then cached for this visit so
-  # paging and searching don't call GS1 again. Nothing is fetched on the
-  # static (disconnected) render.
+  # per visit (`getbarcode_batches`), and only the page of serials on screen
+  # is fetched (`get_batch_serials` with paging), so batches of tens of
+  # thousands of serials stay quick. Printing fetches the whole batch when
+  # its dialog opens. Nothing is fetched on the static (disconnected) render.
   def handle_params(params, _url, socket) do
     search = Map.get(params, "search", "")
 
@@ -86,8 +86,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         )
 
       batch ->
-        {socket, result} = batch_serials(socket, batch.batch_no)
-
         {shippers, by_serial} =
           Manufacturing.list_batch_shippers(
             org_id(socket),
@@ -95,56 +93,87 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             batch.batch_no
           )
 
+        page_size = if socket.assigns.view == "serials", do: @page_size, else: @preview_size
+        page_number = DistributorPagination.page_number(params)
+        total = batch.serial_count || 0
+        packed = map_size(by_serial)
+
         socket =
           assign(socket,
+            selected_batch: batch,
             batch_shippers: shippers,
             serial_shippers: by_serial,
-            batch_fully_packed: fully_packed?(result, by_serial)
+            batch_serial_total: total,
+            batch_packed: packed,
+            batch_fully_packed: total > 0 and packed >= total
           )
 
-        case result do
-          {:ok, serials} ->
-            all_serials = serials
-
-            serials =
-              serials
-              |> filter_serials(search, batch)
-              |> filter_state(socket.assigns.state_filter, by_serial)
-
-            page_size = if socket.assigns.view == "serials", do: @page_size, else: @preview_size
-
-            page =
-              DistributorPagination.page(
-                serials,
-                DistributorPagination.page_number(params),
-                page_size
-              )
-
+        case serial_page(
+               socket,
+               batch,
+               by_serial,
+               serial_search(search, batch),
+               page_number,
+               page_size
+             ) do
+          {:ok, page} ->
             assign(socket,
-              selected_batch: batch,
               serial_page: page,
               serials_error: nil,
-              batch_serial_total: length(all_serials),
-              batch_packed: Enum.count(all_serials, &Map.has_key?(by_serial, &1.serial)),
-              label_serial: List.first(all_serials)
+              label_serial: List.first(page.entries)
             )
 
           {:error, reason} ->
-            assign(socket, selected_batch: batch, serial_page: nil, serials_error: reason)
+            assign(socket, serial_page: nil, serials_error: reason, label_serial: nil)
         end
     end
   end
 
-  # Every issued serial in the batch already sits in a shipper SSCC.
-  defp fully_packed?({:ok, [_ | _] = serials}, by_serial),
-    do: Enum.all?(serials, &Map.has_key?(by_serial, &1.serial))
+  # Only the page on screen is fetched from GS1. Packed serials are known
+  # locally from this batch's shippers, so that filter needs no GS1 call;
+  # unpacked asks GS1 to leave them out.
+  defp serial_page(socket, _batch, by_serial, search, page_number, page_size)
+       when socket.assigns.state_filter == "packed" do
+    entries =
+      by_serial
+      |> Map.keys()
+      |> Enum.filter(&(search == "" or String.contains?(String.downcase(&1), search)))
+      |> Enum.sort()
+      |> Enum.map(&%{serial: &1, payload: nil, human_readable: nil})
 
-  defp fully_packed?(_result, _by_serial), do: false
+    {:ok, DistributorPagination.page(entries, page_number, page_size)}
+  end
 
-  defp batch_serials(socket, batch_no) do
+  defp serial_page(socket, batch, by_serial, search, page_number, page_size) do
+    exclude = if socket.assigns.state_filter == "unpacked", do: Map.keys(by_serial), else: []
+
+    Manufacturing.fetch_batch_serial_page(
+      org_id(socket),
+      socket.assigns.product.gtin,
+      batch.batch_no,
+      page: page_number,
+      per_page: page_size,
+      search: search,
+      exclude: exclude
+    )
+  end
+
+  # A search matching the batch number shows the whole batch; otherwise it
+  # narrows the batch's serials.
+  defp serial_search(search, batch) do
+    term = search |> String.trim() |> String.downcase()
+
+    if term == "" or String.contains?(String.downcase(batch.batch_no), term),
+      do: "",
+      else: term
+  end
+
+  # Printing needs every serial in the batch, so it is fetched only when the
+  # print dialog opens, then kept for this visit.
+  defp ensure_all_serials(socket, batch_no) do
     case socket.assigns.serials_cache do
-      %{^batch_no => serials} ->
-        {socket, {:ok, serials}}
+      %{^batch_no => _serials} ->
+        socket
 
       cache ->
         case Manufacturing.fetch_batch_serials(
@@ -152,17 +181,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                socket.assigns.product.gtin,
                batch_no
              ) do
-          {:ok, serials} ->
-            {assign(socket, :serials_cache, Map.put(cache, batch_no, serials)), {:ok, serials}}
-
-          error ->
-            {socket, error}
+          {:ok, serials} -> assign(socket, :serials_cache, Map.put(cache, batch_no, serials))
+          {:error, reason} -> assign(socket, :serials_error, reason)
         end
     end
   end
 
-  # A search matching the batch number shows the whole batch; otherwise it
-  # narrows the batch's serials.
   # Narrow to batches whose number matches; when none do, the term is
   # treated as a serial and searched within the selected batch.
   defp filter_batches(batches, search) do
@@ -174,24 +198,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         else: Enum.filter(batches, &String.contains?(String.downcase(&1.batch_no), term))
 
     if matching == [], do: batches, else: matching
-  end
-
-  defp filter_state(serials, "packed", by_serial),
-    do: Enum.filter(serials, &Map.has_key?(by_serial, &1.serial))
-
-  defp filter_state(serials, "unpacked", by_serial),
-    do: Enum.reject(serials, &Map.has_key?(by_serial, &1.serial))
-
-  defp filter_state(serials, _state, _by_serial), do: serials
-
-  defp filter_serials(serials, "", _batch), do: serials
-
-  defp filter_serials(serials, search, batch) do
-    term = String.downcase(String.trim(search))
-
-    if term == "" or String.contains?(String.downcase(batch.batch_no), term),
-      do: serials,
-      else: Enum.filter(serials, &String.contains?(String.downcase(&1.serial), term))
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -211,8 +217,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      )}
   end
 
-  def handle_event("open_print", _params, socket),
-    do: {:noreply, assign(socket, :print_open, true)}
+  def handle_event("open_print", _params, socket) do
+    socket = ensure_all_serials(socket, socket.assigns.selected_batch.batch_no)
+    {:noreply, assign(socket, :print_open, true)}
+  end
 
   def handle_event("close_print", _params, socket),
     do: {:noreply, assign(socket, :print_open, false)}

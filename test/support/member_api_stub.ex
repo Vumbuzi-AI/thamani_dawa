@@ -207,6 +207,34 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
     {:ok, results}
   end
 
+  # Same paging rules as GS1: search and exclude_serials narrow the batch,
+  # ordered by serial.
+  @impl true
+  def post_batch_serial_page(gtin, batch, query) do
+    {:ok, all} = post_batch_serials(gtin, batch)
+    excluded = MapSet.new(query["exclude_serials"] || [])
+    term = String.downcase(query["search"] || "")
+    page = query["page"] || 1
+    per_page = query["per_page"] || 50
+
+    matching =
+      all
+      |> Enum.reject(&MapSet.member?(excluded, &1["serial"]))
+      |> Enum.filter(&String.contains?(String.downcase(&1["serial"]), term))
+      |> Enum.sort_by(& &1["serial"])
+
+    total = length(matching)
+
+    {:ok,
+     %{
+       results: Enum.slice(matching, (page - 1) * per_page, per_page),
+       page: page,
+       per_page: per_page,
+       total: total,
+       total_pages: max(ceil(total / per_page), 1)
+     }}
+  end
+
   # Unpacked = generated without shippers and not yet in a later
   # `create_shipper_sscc` call.
   @impl true

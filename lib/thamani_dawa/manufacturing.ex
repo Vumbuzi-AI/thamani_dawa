@@ -565,6 +565,45 @@ defmodule ThamaniDawa.Manufacturing do
   end
 
   @doc """
+  One page of `gtin` + `batch_no` serials from GS1, ordered by serial, shaped
+  like `ThamaniDawaWeb.DistributorPagination.page/3`. Options: `:page`,
+  `:per_page`, `:search` (serials containing it) and `:exclude` (serials to
+  leave out before paging).
+  """
+  def fetch_batch_serial_page(organization_id, gtin, batch_no, paging, opts \\ [])
+      when is_binary(gtin) and is_binary(batch_no) and is_list(paging) do
+    opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
+    page = Keyword.get(paging, :page, 1)
+    per_page = Keyword.get(paging, :per_page, 50)
+
+    query =
+      %{
+        "page" => page,
+        "per_page" => per_page,
+        "search" => Keyword.get(paging, :search),
+        "exclude_serials" => Keyword.get(paging, :exclude)
+      }
+      |> Enum.reject(fn {_key, value} -> value in [nil, "", []] end)
+      |> Map.new()
+
+    with {:ok, result} <- MemberApi.batch_serial_page(gtin, batch_no, query, opts) do
+      entries =
+        for %{"serial" => serial} = row <- result.results, is_binary(serial) and serial != "" do
+          %{serial: serial, payload: row["payload"], human_readable: row["human_readable"]}
+        end
+
+      {:ok,
+       %{
+         entries: entries,
+         page_number: result.page,
+         page_size: per_page,
+         total_entries: result.total,
+         total_pages: result.total_pages
+       }}
+    end
+  end
+
+  @doc """
   A batch's primary serials that GS1 reports as not yet packed into a
   shipper (`POST /list_unpacked_serials`) — the candidates for
   `pack_serials_into_shipper/5`. Sorted by serial.

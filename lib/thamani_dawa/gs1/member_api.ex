@@ -38,6 +38,8 @@ defmodule ThamaniDawa.GS1.MemberApi do
   @callback post_search_glns(map()) :: {:ok, [map()]} | {:error, term()}
   @callback post_barcode_batches(String.t()) :: {:ok, [map()]} | {:error, term()}
   @callback post_batch_serials(String.t(), String.t()) :: {:ok, [map()]} | {:error, term()}
+  @callback post_batch_serial_page(String.t(), String.t(), map()) ::
+              {:ok, map()} | {:error, term()}
   @callback post_unpacked_serials(String.t(), String.t() | nil) ::
               {:ok, [map()]} | {:error, term()}
   @callback post_mobile_users(String.t(), map()) :: {:ok, map()} | {:error, term()}
@@ -119,6 +121,17 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def batch_serials(gtin, batch, opts \\ [])
       when is_binary(gtin) and is_binary(batch) and is_list(opts) do
     dispatch(:post_batch_serials, [gtin, batch], opts)
+  end
+
+  @doc """
+  One page of a batch's serials via `POST /get_batch_serials` with paging.
+  `query` takes `"page"`, `"per_page"`, `"search"` and `"exclude_serials"`.
+  Returns `%{results:, page:, per_page:, total:, total_pages:}`, serials
+  ordered by serial.
+  """
+  def batch_serial_page(gtin, batch, query, opts \\ [])
+      when is_binary(gtin) and is_binary(batch) and is_map(query) and is_list(opts) do
+    dispatch(:post_batch_serial_page, [gtin, batch, query], opts)
   end
 
   @doc """
@@ -224,6 +237,17 @@ defmodule ThamaniDawa.GS1.MemberApi do
     %{"barcode" => gtin, "batch" => batch}
     |> post("/get_batch_serials", opts)
     |> decode_batch_serials_response()
+  end
+
+  def post_batch_serial_page(gtin, batch, query, opts \\ [])
+      when is_binary(gtin) and is_binary(batch) and is_map(query) and is_list(opts) do
+    # Sending the batch's packed serials to exclude can be a large body.
+    opts = Keyword.put_new(opts, :receive_timeout, 60_000)
+
+    query
+    |> Map.merge(%{"barcode" => gtin, "batch" => batch})
+    |> post("/get_batch_serials", opts)
+    |> decode_batch_serial_page_response()
   end
 
   def post_create_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
@@ -385,6 +409,30 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def decode_barcode_batches_response({:ok, _status, _body}), do: {:error, :unavailable}
   def decode_barcode_batches_response({:error, :unconfigured}), do: {:error, :unconfigured}
   def decode_barcode_batches_response({:error, _reason}), do: {:error, :unavailable}
+
+  @doc false
+  def decode_batch_serial_page_response({:ok, status, %{"results" => results} = body})
+      when status in 200..299 and is_list(results) do
+    {:ok,
+     %{
+       results: Enum.filter(results, &is_map/1),
+       page: body["page"] || 1,
+       per_page: body["per_page"] || length(results),
+       total: body["total"] || length(results),
+       total_pages: body["total_pages"] || 1
+     }}
+  end
+
+  # GS1 answers 404 when the batch carries no serials yet.
+  def decode_batch_serial_page_response({:ok, 404, _body}),
+    do: {:ok, %{results: [], page: 1, per_page: 0, total: 0, total_pages: 1}}
+
+  def decode_batch_serial_page_response(other) do
+    case decode_batch_serials_response(other) do
+      {:ok, _results} -> {:error, :unavailable}
+      error -> error
+    end
+  end
 
   @doc false
   def decode_batch_serials_response({:ok, status, %{"results" => results}})
