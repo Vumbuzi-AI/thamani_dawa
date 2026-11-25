@@ -131,6 +131,83 @@ defmodule ThamaniDawa.Manufacturing do
     }
   end
 
+  @doc """
+  Fetches the Products page catalogue from the GS1 member JSON API.
+
+  GS1 is the source of truth for which products are visible. Returned products
+  are upserted locally so the existing serialisation and detail routes can keep
+  using organization-scoped product records, but local-only products are never
+  included in the result.
+  """
+  def paginate_gs1_products(organization_id, opts \\ []) do
+    page = max(Keyword.get(opts, :page, 1), 1)
+    page_size = Keyword.get(opts, :page_size, @product_page_size)
+    search = opts |> Keyword.get(:search, "") |> to_string() |> String.trim() |> String.downcase()
+    api_opts = [api_token: Organizations.gs1_api_key(organization_id)]
+
+    with {:ok, products} <- MemberApi.list_products(%{}, api_opts) do
+      products =
+        products
+        |> Enum.filter(&(is_binary(&1["gtin"]) and &1["gtin"] != ""))
+        |> Enum.uniq_by(& &1["gtin"])
+
+      Enum.each(products, &upsert_synced_product(organization_id, &1))
+
+      products = Enum.filter(products, &api_product_matches?(&1, search))
+      total_entries = length(products)
+      total_pages = max(ceil(total_entries / page_size), 1)
+      page = min(page, total_pages)
+
+      page_products = Enum.slice(products, (page - 1) * page_size, page_size)
+      gtins = Enum.map(page_products, & &1["gtin"])
+
+      local_by_gtin =
+        Repo.all(
+          from p in Product, where: p.organization_id == ^organization_id and p.gtin in ^gtins
+        )
+        |> Map.new(&{&1.gtin, &1})
+
+      entries =
+        Enum.flat_map(page_products, fn api_product ->
+          case local_by_gtin[api_product["gtin"]] do
+            nil ->
+              []
+
+            product ->
+              [
+                %{
+                  product: product,
+                  serial_count: api_count(api_product["serial_count"]),
+                  sscc_count: api_count(api_product["sscc_count"])
+                }
+              ]
+          end
+        end)
+
+      {:ok,
+       %{
+         entries: entries,
+         page_number: page,
+         page_size: page_size,
+         total_entries: total_entries,
+         total_pages: total_pages
+       }}
+    end
+  end
+
+  defp api_product_matches?(_product, ""), do: true
+
+  defp api_product_matches?(product, search) do
+    ["gtin", "name", "brand_owner", "description"]
+    |> Enum.any?(fn field ->
+      product
+      |> Map.get(field, "")
+      |> to_string()
+      |> String.downcase()
+      |> String.contains?(search)
+    end)
+  end
+
   @doc "Fetches a product scoped to the organization."
   def get_product!(organization_id, id) do
     Repo.get_by!(Product, id: id, organization_id: organization_id)
@@ -521,6 +598,45 @@ defmodule ThamaniDawa.Manufacturing do
         persist_serials(organization_id, product, batch, serials)
         {:ok, serials}
       end
+    end
+  end
+
+  @doc """
+  One page of `gtin` + `batch_no` serials from GS1, ordered by serial, shaped
+  like `ThamaniDawaWeb.DistributorPagination.page/3`. Options: `:page`,
+  `:per_page`, `:search` (serials containing it) and `:exclude` (serials to
+  leave out before paging).
+  """
+  def fetch_batch_serial_page(organization_id, gtin, batch_no, paging, opts \\ [])
+      when is_binary(gtin) and is_binary(batch_no) and is_list(paging) do
+    opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
+    page = Keyword.get(paging, :page, 1)
+    per_page = Keyword.get(paging, :per_page, 50)
+
+    query =
+      %{
+        "page" => page,
+        "per_page" => per_page,
+        "search" => Keyword.get(paging, :search),
+        "exclude_serials" => Keyword.get(paging, :exclude)
+      }
+      |> Enum.reject(fn {_key, value} -> value in [nil, "", []] end)
+      |> Map.new()
+
+    with {:ok, result} <- MemberApi.batch_serial_page(gtin, batch_no, query, opts) do
+      entries =
+        for %{"serial" => serial} = row <- result.results, is_binary(serial) and serial != "" do
+          %{serial: serial, payload: row["payload"], human_readable: row["human_readable"]}
+        end
+
+      {:ok,
+       %{
+         entries: entries,
+         page_number: result.page,
+         page_size: per_page,
+         total_entries: result.total,
+         total_pages: result.total_pages
+       }}
     end
   end
 

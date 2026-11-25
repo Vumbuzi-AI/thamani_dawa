@@ -26,6 +26,17 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
   test "lists products with their serial and SSCC counts", %{conn: conn} do
     %{user: user, product: product} = manufacturer_session(conn)
+
+    ThamaniDawa.GS1.MemberApiStub.put_products([
+      %{
+        "gtin" => product.gtin,
+        "name" => product.name,
+        "description" => product.description,
+        "serial_count" => 0,
+        "sscc_count" => 0
+      }
+    ])
+
     conn = log_in_user(conn, user)
 
     {:ok, lv, html} = live(conn, ~p"/manufacturer/products")
@@ -67,6 +78,17 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
   test "filters by serials and shows the empty and no-match states", %{conn: conn} do
     %{user: user, product: product} = manufacturer_session(conn)
+
+    ThamaniDawa.GS1.MemberApiStub.put_products([
+      %{
+        "gtin" => product.gtin,
+        "name" => product.name,
+        "description" => product.description,
+        "serial_count" => 0,
+        "sscc_count" => 0
+      }
+    ])
+
     {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/manufacturer/products?serials=with")
 
     refute has_element?(lv, "#manufacturer-product-#{product.id}")
@@ -75,6 +97,29 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/manufacturer/products?serials=none")
     assert has_element?(lv, "#manufacturer-product-#{product.id}")
     assert has_element?(lv, "#product-#{product.id}-open[href*='return_to']")
+  end
+
+  test "uses the GS1 catalogue and excludes products that only exist locally", %{conn: conn} do
+    %{organization: organization, user: user, product: local_only} = manufacturer_session(conn)
+    remote_gtin = "6164005056692"
+
+    ThamaniDawa.GS1.MemberApiStub.put_products([
+      %{
+        "gtin" => remote_gtin,
+        "name" => "Western",
+        "description" => "Loaded from GS1",
+        "serial_count" => 4,
+        "sscc_count" => 1
+      }
+    ])
+
+    {:ok, lv, _html} = live(log_in_user(conn, user), ~p"/manufacturer/products")
+
+    remote = Manufacturing.get_product_by_gtin!(organization.id, remote_gtin)
+
+    assert has_element?(lv, "#manufacturer-product-#{remote.id}", "Western")
+    assert has_element?(lv, "#product-#{remote.id}-serial-count", "4")
+    refute has_element?(lv, "#manufacturer-product-#{local_only.id}")
   end
 
   test "has no add-product flow; products come from GS1", %{conn: conn} do

@@ -38,6 +38,8 @@ defmodule ThamaniDawa.GS1.MemberApi do
   @callback post_search_glns(map()) :: {:ok, [map()]} | {:error, term()}
   @callback post_barcode_batches(String.t()) :: {:ok, [map()]} | {:error, term()}
   @callback post_batch_serials(String.t(), String.t()) :: {:ok, [map()]} | {:error, term()}
+  @callback post_batch_serial_page(String.t(), String.t(), map()) ::
+              {:ok, map()} | {:error, term()}
   @callback post_unpacked_serials(String.t(), String.t() | nil) ::
               {:ok, [map()]} | {:error, term()}
   @callback post_mobile_users(String.t(), map()) :: {:ok, map()} | {:error, term()}
@@ -103,8 +105,9 @@ defmodule ThamaniDawa.GS1.MemberApi do
 
   @doc """
   Every batch row GS1 has recorded for a GTIN, via
-  `POST /getbarcode_batches`. Rows can repeat per serial; each carries
-  `batch`, `production`, `expiry`, and (when serialised) `serial`.
+  `POST /getbarcode_batches`. One row per batch carrying `batch`,
+  `production`, `expiry` and `serial_count`; use `batch_serials/3` for the
+  serials themselves.
   """
   def barcode_batches(gtin, opts \\ []) when is_binary(gtin) and is_list(opts) do
     dispatch(:post_barcode_batches, [gtin], opts)
@@ -118,6 +121,17 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def batch_serials(gtin, batch, opts \\ [])
       when is_binary(gtin) and is_binary(batch) and is_list(opts) do
     dispatch(:post_batch_serials, [gtin, batch], opts)
+  end
+
+  @doc """
+  One page of a batch's serials via `POST /get_batch_serials` with paging.
+  `query` takes `"page"`, `"per_page"`, `"search"` and `"exclude_serials"`.
+  Returns `%{results:, page:, per_page:, total:, total_pages:}`, serials
+  ordered by serial.
+  """
+  def batch_serial_page(gtin, batch, query, opts \\ [])
+      when is_binary(gtin) and is_binary(batch) and is_map(query) and is_list(opts) do
+    dispatch(:post_batch_serial_page, [gtin, batch, query], opts)
   end
 
   @doc """
@@ -216,9 +230,24 @@ defmodule ThamaniDawa.GS1.MemberApi do
 
   def post_batch_serials(gtin, batch, opts \\ [])
       when is_binary(gtin) and is_binary(batch) and is_list(opts) do
+    # A whole batch can hold tens of thousands of serials, so allow longer
+    # than the default.
+    opts = Keyword.put_new(opts, :receive_timeout, 120_000)
+
     %{"barcode" => gtin, "batch" => batch}
     |> post("/get_batch_serials", opts)
     |> decode_batch_serials_response()
+  end
+
+  def post_batch_serial_page(gtin, batch, query, opts \\ [])
+      when is_binary(gtin) and is_binary(batch) and is_map(query) and is_list(opts) do
+    # Sending the batch's packed serials to exclude can be a large body.
+    opts = Keyword.put_new(opts, :receive_timeout, 60_000)
+
+    query
+    |> Map.merge(%{"barcode" => gtin, "batch" => batch})
+    |> post("/get_batch_serials", opts)
+    |> decode_batch_serial_page_response()
   end
 
   def post_create_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
@@ -382,6 +411,42 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def decode_barcode_batches_response({:error, _reason}), do: {:error, :unavailable}
 
   @doc false
+  def decode_batch_serial_page_response({:ok, status, %{"results" => results} = body})
+      when status in 200..299 and is_list(results) do
+    {:ok,
+     %{
+       results: Enum.filter(results, &is_map/1),
+       page: body["page"] || 1,
+       per_page: body["per_page"] || length(results),
+       total: body["total"] || length(results),
+       total_pages: body["total_pages"] || 1
+     }}
+  end
+
+  # GS1 answers 404 when the batch carries no serials yet.
+  def decode_batch_serial_page_response({:ok, 404, _body}),
+    do: {:ok, %{results: [], page: 1, per_page: 0, total: 0, total_pages: 1}}
+
+  def decode_batch_serial_page_response(other) do
+    case decode_batch_serials_response(other) do
+      {:ok, _results} ->
+        {:error, {:unavailable, describe_response(other)}}
+
+      {:error, :unavailable} ->
+        {:error, {:unavailable, describe_response(other)}}
+
+      error ->
+        error
+    end
+  end
+
+  # Enough of an unexpected answer to tell a GS1 error from a network one.
+  defp describe_response({:ok, status, body}),
+    do: "HTTP #{status}: #{body |> inspect() |> String.slice(0, 300)}"
+
+  defp describe_response({:error, reason}), do: inspect(reason)
+
+  @doc false
   def decode_batch_serials_response({:ok, status, %{"results" => results}})
       when status in 200..299 and is_list(results),
       do: {:ok, Enum.filter(results, &is_map/1)}
@@ -464,7 +529,7 @@ defmodule ThamaniDawa.GS1.MemberApi do
         url: path,
         headers: [{"authorization", "Bearer " <> token}],
         json: params,
-        receive_timeout: 15_000,
+        receive_timeout: Keyword.get(opts, :receive_timeout, 15_000),
         retry: false
       ]
 
