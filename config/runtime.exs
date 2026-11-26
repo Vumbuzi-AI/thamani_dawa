@@ -26,6 +26,14 @@ if config_env() in [:dev, :test] do
   end
 end
 
+email_asset_base_url =
+  case System.get_env("EMAIL_ASSET_BASE_URL") do
+    url when is_binary(url) and url != "" -> String.trim_trailing(url, "/")
+    _ -> "https://thamanidawa.com"
+  end
+
+config :thamani_dawa, :email_asset_base_url, email_asset_base_url
+
 # Mail provider: MailSafi Postal, the same provider used by the medic app.
 # Swoosh's Postal adapter appends /api/v1/send/message itself, so accept either
 # medic's full send endpoint or the bare server base URL in POSTAL_API_URL.

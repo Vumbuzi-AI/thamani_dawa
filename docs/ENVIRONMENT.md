@@ -18,6 +18,7 @@ Configuration source: `config/dev.exs`.
 | `POSTAL_API_URL` | No | `https://postalmail.mailsafi.com/api/v1/send/message` | Full send endpoint or bare Postal base URL |
 | `POSTAL_FROM_ADDRESS` | No | `noreply@thamanidawa.example` | From address on outgoing mail |
 | `POSTAL_FROM_NAME` | No | `Thamani Dawa` | From name on outgoing mail |
+| `EMAIL_ASSET_BASE_URL` | No | `https://thamanidawa.com` | Public base URL for images embedded in emails |
 
 Dev uses file watchers for Mix-managed esbuild and Tailwind.
 

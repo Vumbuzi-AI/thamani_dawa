@@ -94,7 +94,7 @@ defmodule ThamaniDawa.Accounts.UserNotifier do
         Template.rich(["PIN: ", {:bold, pin}]),
         "Keep this PIN private. Any earlier PIN for this account no longer works."
       ],
-      footer_note: "If you weren't expecting this, contact your distributor administrator."
+      footer_note: "If you weren't expecting this, contact your organization administrator."
     })
   end
 

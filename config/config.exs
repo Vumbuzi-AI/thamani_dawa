@@ -42,6 +42,10 @@ config :thamani_dawa, ThamaniDawa.Accounts.UserNotifier,
   sender_name: "Thamani Dawa",
   sender_email: "noreply@thamanidawa.example"
 
+# Public base URL for assets embedded in outgoing emails. `localhost` is not
+# reachable from mail clients, so emails use the platform domain by default.
+config :thamani_dawa, :email_asset_base_url, "https://thamanidawa.com"
+
 # Configure how long each kind of auth token stays valid. Centralized here
 # so the windows can be tuned per environment without touching code.
 config :thamani_dawa, ThamaniDawa.Accounts.UserToken,
