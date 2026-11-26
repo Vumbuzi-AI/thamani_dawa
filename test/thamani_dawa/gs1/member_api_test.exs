@@ -27,4 +27,19 @@ defmodule ThamaniDawa.GS1.MemberApiTest do
                {:ok, 200, %{"sscc" => "061600000000000019", "products" => []}}
              )
   end
+
+  test "search_glns reads the directory list from data, list_glns from glns" do
+    rows = [
+      %{
+        "gln" => "6162006101014",
+        "company_name" => "KEMSA (KENYA MEDICAL SUPPLIES AUTHORITY)",
+        "address" => "Kisumu, Kenya"
+      }
+    ]
+
+    assert {:ok, ^rows} = MemberApi.decode_glns_response({:ok, 200, %{"data" => rows}})
+
+    assert {:ok, ^rows} =
+             MemberApi.decode_glns_response({:ok, 200, %{"glns" => rows, "total" => 1}})
+  end
 end

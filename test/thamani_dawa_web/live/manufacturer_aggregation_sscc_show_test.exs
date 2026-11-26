@@ -33,11 +33,11 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationSsccShowTest do
 
     assert has_element?(view, "#sscc-contents")
     assert has_element?(view, "#sscc-batch-#{batch.id}", "1 serials")
-
-    refute has_element?(view, "#add-sscc-gtin")
-    refute has_element?(view, "#upload-sscc-gtins")
-    refute has_element?(view, "#add-sscc-batch")
-    refute has_element?(view, "#add-sscc-serials")
+    assert has_element?(view, "h1", "Shipper #{shipper.code}")
+    assert has_element?(view, "#add-sscc-gtin", "Add GTIN")
+    assert has_element?(view, "#upload-sscc-gtins", "Upload GTINs")
+    assert has_element?(view, "#add-sscc-batch", "Add batch")
+    assert has_element?(view, "#add-sscc-serials", "Add serials")
   end
 
   test "empty shipper shows an empty state instead of manual entry forms", %{
@@ -48,8 +48,9 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationSsccShowTest do
 
     {:ok, view, _html} = live(conn, ~p"/manufacturer/aggregations/ssccs/#{shipper.id}")
 
-    assert has_element?(view, "#sscc-contents", "No contents on this SSCC yet")
-    refute has_element?(view, "#sscc-batch-modal")
+    assert has_element?(view, "#sscc-contents", "No GTINs or batches on this SSCC yet")
+    assert has_element?(view, "#add-sscc-gtin", "Add GTIN")
+    refute has_element?(view, "#sscc-gtin-modal")
     refute has_element?(view, "#sscc-serials-modal")
   end
 end

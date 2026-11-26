@@ -5,10 +5,13 @@ defmodule ThamaniDawa.ManufacturerFixtures do
   """
 
   alias ThamaniDawa.AccountsFixtures
+  alias ThamaniDawa.Distributor.MobileUser
+  alias ThamaniDawa.DistributorFixtures
   alias ThamaniDawa.Gln
   alias ThamaniDawa.Manufacturing
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.OrganizationsFixtures
+  alias ThamaniDawa.Repo
   alias ThamaniDawa.Sites
 
   @destination_gln "6164003000024"
@@ -75,6 +78,27 @@ defmodule ThamaniDawa.ManufacturerFixtures do
       |> then(&Manufacturing.create_product(organization_id, &1))
 
     product
+  end
+
+  @doc """
+  A PIN packer on a manufacturing site. Returns `{mobile_user, pin}`.
+  """
+  def manufacturer_packer_fixture(organization_id, attrs \\ %{}) do
+    attrs = Enum.into(attrs, %{})
+    pin = Map.get(attrs, :pin, "2411")
+    site_id = Map.get(attrs, :site_id) || manufacturing_site_fixture(organization_id).id
+
+    mobile_user =
+      organization_id
+      |> DistributorFixtures.mobile_user_fixture(
+        attrs
+        |> Map.drop([:pin, :site_id])
+        |> Map.put("site_id", site_id)
+      )
+      |> MobileUser.pin_changeset(pin)
+      |> Repo.update!()
+
+    {Repo.preload(mobile_user, [:organization, :site]), pin}
   end
 
   def manufacturer_batch_fixture(organization_id, product_id, attrs \\ %{}) do

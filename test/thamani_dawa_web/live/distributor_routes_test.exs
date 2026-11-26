@@ -493,6 +493,18 @@ defmodule ThamaniDawaWeb.DistributorRoutesTest do
   end
 
   describe "receiving" do
+    test "opening receiving with no warehouse warns instead of failing" do
+      org = distributor_organization_fixture()
+      user = staff_fixture(%{organization_id: org.id, roles: [:admin, :distributor]})
+      conn = log_in(build_conn(), user)
+
+      assert {:error, {:live_redirect, %{to: "/distributor", flash: flash}}} =
+               live(conn, ~p"/distributor/receiving")
+
+      assert flash["warning"] == "Select a warehouse before receiving stock."
+      refute Map.has_key?(flash, "error")
+    end
+
     test "rejects the current warehouse GLN as a delivery origin", %{
       conn: conn,
       distributor: distributor
