@@ -88,6 +88,29 @@ defmodule ThamaniDawa.Epcis.Event do
     end
   end
 
+  @doc "Manufacturer pallet packing: a pallet SSCC is parent of completed shipper SSCCs."
+  def sscc_packing(args) do
+    with {:ok, biz_location} <- sgln(args, :biz_location_gln),
+         {:ok, parent} <- Urn.sscc(args.parent_sscc, String.length(args.org_prefix)),
+         {:ok, children} <- sscc_urns(Map.put(args, :ssccs, Map.get(args, :sscc_children, []))),
+         :ok <- require_content(children, []) do
+      {:ok,
+       %{
+         "type" => "AggregationEvent",
+         "eventID" => event_id(args),
+         "eventTime" => event_time(args),
+         "eventTimeZoneOffset" => @time_zone_offset,
+         "parentID" => parent,
+         "childEPCs" => children,
+         "action" => "ADD",
+         "bizStep" => "packing",
+         "disposition" => "active",
+         "readPoint" => %{"id" => biz_location},
+         "bizLocation" => %{"id" => biz_location}
+       }}
+    end
+  end
+
   @doc """
   Distributor unpacking (D4) — AggregationEvent DELETE for units physically
   removed from a received SSCC. Partial unpack is allowed: `children` /
@@ -220,6 +243,7 @@ defmodule ThamaniDawa.Epcis.Event do
   def commission(args) do
     with {:ok, biz_location} <- sgln(args, :biz_location_gln),
          {:ok, epcs} <- sgtin_urns(args, :epcs, :epc),
+         {:ok, ilmd} <- commissioning_ilmd(args),
          :ok <- require_content(epcs, []) do
       {:ok,
        %{
@@ -231,11 +255,26 @@ defmodule ThamaniDawa.Epcis.Event do
          "action" => "ADD",
          "bizStep" => "commissioning",
          "disposition" => "active",
+         "ilmd" => ilmd,
          "readPoint" => %{"id" => biz_location},
          "bizLocation" => %{"id" => biz_location}
        }}
     end
   end
+
+  defp commissioning_ilmd(args) do
+    lot = Map.get(args, :lot_number)
+    expiry = Map.get(args, :item_expiration_date)
+
+    cond do
+      not is_binary(lot) or lot == "" -> {:error, {:lot_number, "is required for commissioning"}}
+      is_nil(expiry) -> {:error, {:item_expiration_date, "is required for commissioning"}}
+      true -> {:ok, %{"lotNumber" => lot, "itemExpirationDate" => format_date(expiry)}}
+    end
+  end
+
+  defp format_date(%Date{} = date), do: Date.to_iso8601(date)
+  defp format_date(date) when is_binary(date), do: date
 
   @doc """
   Batch status-transition events (docs/PPB_TNT_INTEGRATION.md §4.3/§4.4):

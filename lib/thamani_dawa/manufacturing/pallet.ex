@@ -10,6 +10,13 @@ defmodule ThamaniDawa.Manufacturing.Pallet do
     field :to_gln, :string
     field :to_company_name, :string
     field :to_address, :string
+    field :status, :string, default: "draft"
+    field :allocated_at, :utc_datetime
+    field :label_prepared_at, :utc_datetime
+    field :label_print_requested_at, :utc_datetime
+    field :verified_at, :utc_datetime
+    field :completed_at, :utc_datetime
+    field :trackiq_status, :string, default: "not_started"
 
     belongs_to :organization, ThamaniDawa.Organizations.Organization
 
@@ -26,7 +33,14 @@ defmodule ThamaniDawa.Manufacturing.Pallet do
     :from_address,
     :to_gln,
     :to_company_name,
-    :to_address
+    :to_address,
+    :status,
+    :allocated_at,
+    :label_prepared_at,
+    :label_print_requested_at,
+    :verified_at,
+    :completed_at,
+    :trackiq_status
   ]
 
   @doc false
@@ -38,6 +52,11 @@ defmodule ThamaniDawa.Manufacturing.Pallet do
       value -> value
     end)
     |> validate_required([:code])
+    |> validate_inclusion(:status, ~w(draft loading awaiting_verification completed in_transit))
+    |> validate_inclusion(
+      :trackiq_status,
+      ~w(not_started pending submitted acknowledged accepted rejected blocked)
+    )
     |> unique_constraint(:code)
   end
 end

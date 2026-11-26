@@ -33,14 +33,18 @@ config :phoenix_live_view,
 # By default it uses the "Local" adapter which stores the emails
 # locally. You can see the emails in your browser, at "/dev/mailbox".
 #
-# For production it's recommended to configure a different adapter
-# at the `config/runtime.exs`.
+# For production, config/runtime.exs switches this to the MailSafi Postal
+# adapter used by the medic app. Dev also uses Postal when POSTAL_API_KEY is set.
 config :thamani_dawa, ThamaniDawa.Mailer, adapter: Swoosh.Adapters.Local
 
 # Configure the "from" address used on outgoing account emails.
 config :thamani_dawa, ThamaniDawa.Accounts.UserNotifier,
   sender_name: "Thamani Dawa",
   sender_email: "noreply@thamanidawa.example"
+
+# Public base URL for assets embedded in outgoing emails. `localhost` is not
+# reachable from mail clients, so emails use the platform domain by default.
+config :thamani_dawa, :email_asset_base_url, "https://thamanidawa.com"
 
 # Configure how long each kind of auth token stays valid. Centralized here
 # so the windows can be tuned per environment without touching code.

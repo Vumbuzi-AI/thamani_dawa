@@ -117,7 +117,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :class, :any, default: nil
 
   attr :variant, :string,
-    values: ~w(primary ghost ghost-edit ghost-delete destructive danger-confirm),
+    values: ~w(primary secondary ghost ghost-edit ghost-delete destructive danger-confirm),
     default: "ghost"
 
   slot :inner_block, required: true

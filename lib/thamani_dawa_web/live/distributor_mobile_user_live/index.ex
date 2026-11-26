@@ -88,6 +88,13 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
     end
   end
 
+  def handle_event("refresh", _params, socket) do
+    {:noreply,
+     socket
+     |> load_users()
+     |> put_flash(:info, "Mobile users refreshed.")}
+  end
+
   def handle_event("resend_pin", %{"id" => id}, socket) do
     mobile_user = Distributor.get_mobile_user!(socket.assigns.current_scope.organization_id, id)
     {:ok, mobile_user} = Distributor.resend_mobile_user_pin(mobile_user)
@@ -158,6 +165,14 @@ defmodule ThamaniDawaWeb.DistributorMobileUserLive.Index do
         subtitle="People who pack shipments with the Thamani Dawa mobile app. PINs are emailed, never shown here."
       >
         <:actions>
+          <.button
+            id="refresh-distributor-mobile-users"
+            variant="secondary"
+            phx-click="refresh"
+            phx-disable-with="Refreshing…"
+          >
+            <.icon name="hero-arrow-path" class="size-4" /> Refresh
+          </.button>
           <.button
             :if={@app_download_url}
             id="download-distributor-app"

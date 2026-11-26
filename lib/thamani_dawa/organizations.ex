@@ -21,6 +21,10 @@ defmodule ThamaniDawa.Organizations do
   @doc "Gets a single organization. Raises if not found."
   def get_organization!(id), do: Repo.get!(Organization, id)
 
+  @doc "Whether this organization may generate serials without a customer order."
+  def stock_serialization_enabled?(%Organization{} = organization),
+    do: organization.stock_serialization_enabled == true
+
   @doc """
   Whether `name` collides with an existing organization's name (ignoring
   case/accents/punctuation, the same normalization the DB-level `name_key`

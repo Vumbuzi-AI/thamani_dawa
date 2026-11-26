@@ -19,7 +19,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
      |> assign(:product, product)
      |> assign(:rows, rows)
      |> assign(:batch, "")
-     |> assign(:pallet, "")}
+     |> assign(:pallet, "")
+     |> assign(:label_sscc, nil)}
   end
 
   def handle_params(params, _url, socket) do
@@ -36,6 +37,22 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
      |> assign(:pallet, params["pallet"] || "")
      |> assign(:back_path, ThamaniDawaWeb.ReturnTo.path(params, fallback))}
   end
+
+  def handle_event("open_label", %{"id" => id}, socket) do
+    case Integer.parse(id) do
+      {sscc_id, ""} ->
+        case Enum.find(socket.assigns.rows, &(&1.sscc.id == sscc_id)) do
+          %{sscc: sscc} -> {:noreply, assign(socket, :label_sscc, sscc)}
+          nil -> {:noreply, socket}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_label", _params, socket),
+    do: {:noreply, assign(socket, :label_sscc, nil)}
 
   def handle_event("filter", params, socket) do
     query =
@@ -230,7 +247,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
                   id={"print-label-#{sscc.id}"}
                   glyph="printer"
                   label="Print label"
-                  navigate={~p"/manufacturer/sscc/#{sscc.id}/label"}
+                  phx-click="open_label"
+                  phx-value-id={sscc.id}
                 />
               </td>
             </tr>
@@ -240,6 +258,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Ssccs do
           Showing 1 to {length(@visible)} of {length(@visible)} shipper SSCCs
         </p>
       </div>
+
+      <ThamaniDawaWeb.ManufacturerSsccLive.Label.modal
+        :if={@label_sscc}
+        sscc={@label_sscc}
+        product_name={@product.name}
+        on_cancel={JS.push("close_label")}
+      />
     </Layouts.manufacturer_shell>
     """
   end

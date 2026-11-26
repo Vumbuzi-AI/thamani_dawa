@@ -3,10 +3,10 @@ defmodule ThamaniDawa.Repo.Migrations.CreateManufacturerPackBoxes do
 
   def change do
     alter table(:manufacturer_batches) do
-      add :from_gln, :string
-      add :from_name, :string
-      add :to_gln, :string
-      add :to_name, :string
+      add_if_not_exists :from_gln, :string
+      add_if_not_exists :from_name, :string
+      add_if_not_exists :to_gln, :string
+      add_if_not_exists :to_name, :string
     end
 
     create table(:manufacturer_pack_boxes, primary_key: false) do

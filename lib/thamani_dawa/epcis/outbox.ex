@@ -70,6 +70,66 @@ defmodule ThamaniDawa.Epcis.Outbox do
     )
   end
 
+  @doc "Whether a manufacturer aggregation event may be submitted to TrackIQ."
+  def dependencies_satisfied?(
+        %OutboxEvent{event_type: "packing", source_type: "manufacturer_shipper_sscc"} = event
+      ) do
+    batch_ids =
+      Repo.all(
+        from s in ThamaniDawa.Manufacturing.Serial,
+          where: s.manufacturer_shipper_sscc_id == ^event.source_id,
+          select: s.manufacturer_batch_id,
+          distinct: true
+      )
+
+    commissioning_query =
+      from e in OutboxEvent,
+        where:
+          e.organization_id == ^event.organization_id and e.event_type == "commissioning" and
+            e.source_type == "manufacturer_batch" and e.source_id in ^batch_ids and
+            e.status in ["accepted", "warning"]
+
+    batch_ids != [] and Repo.aggregate(commissioning_query, :count) >= length(batch_ids)
+  end
+
+  def dependencies_satisfied?(
+        %OutboxEvent{event_type: "pallet_packing", source_type: "manufacturer_pallet"} = event
+      ) do
+    shipper_ids =
+      Repo.all(
+        from s in ThamaniDawa.Manufacturing.ShipperSscc,
+          where: s.manufacturer_pallet_id == ^event.source_id,
+          select: s.id
+      )
+
+    packing_events =
+      Repo.all(
+        from e in OutboxEvent,
+          where:
+            e.organization_id == ^event.organization_id and e.event_type == "packing" and
+              e.source_type == "manufacturer_shipper_sscc" and e.source_id in ^shipper_ids,
+          select: {e.source_id, e.status}
+      )
+
+    statuses_by_shipper =
+      Enum.group_by(packing_events, fn {shipper_id, _status} -> shipper_id end, fn {_shipper_id,
+                                                                                    status} ->
+        status
+      end)
+
+    # A manually supplied shipper can already exist in GS1 without a local
+    # packing event. Only shippers with a local event need to wait for it.
+    shipper_ids != [] and
+      Enum.all?(shipper_ids, fn shipper_id ->
+        case Map.get(statuses_by_shipper, shipper_id) do
+          nil -> true
+          statuses -> Enum.any?(statuses, &(&1 in ["accepted", "warning"]))
+        end
+      end)
+  end
+
+  def dependencies_satisfied?(_event), do: true
+
   def mark_accepted(%OutboxEvent{} = event, http_status, response) do
     status = if warnings?(response), do: "warning", else: "accepted"
     update!(event, status: status, http_status: http_status, response: response)
@@ -124,6 +184,33 @@ defmodule ThamaniDawa.Epcis.Outbox do
     SubmissionWorker.enqueue_now(event.organization_id)
     event
   end
+
+  @doc """
+  Removes an event the Hub never stored, so later events can be sent.
+
+  A hard rejection (400) and a locally blocked event both happen before PPB
+  records anything, so no error declaration is needed — discarding is the
+  honest resolution when the payload is wrong and cannot be edited here.
+  `dead` is deliberately excluded: those events exhausted retries after a
+  transient failure and may have reached the Hub.
+
+  The worker's job completed when it hit the halt, so a forced drain is
+  enqueued to pick up anything still pending after the delete.
+  """
+  def discard(%OutboxEvent{status: status} = event) when status in ["rejected", "blocked"] do
+    organization_id = event.organization_id
+
+    case Repo.delete(event) do
+      {:ok, deleted} ->
+        SubmissionWorker.enqueue_now(organization_id)
+        {:ok, deleted}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  def discard(%OutboxEvent{}), do: {:error, :not_discardable}
 
   @doc "Fetches one outbox event scoped to the organization. Raises if not found."
   def get_event!(organization_id, id) do

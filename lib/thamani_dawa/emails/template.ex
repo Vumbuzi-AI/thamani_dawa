@@ -118,7 +118,10 @@ defmodule ThamaniDawa.Emails.Template do
   end
 
   defp logo do
-    url = ThamaniDawaWeb.Endpoint.url() <> "/images/logo.png"
+    base_url =
+      Application.get_env(:thamani_dawa, :email_asset_base_url) || "https://thamanidawa.com"
+
+    url = String.trim_trailing(base_url, "/") <> "/images/logo.png"
 
     """
     <div style="display:block;margin-bottom:12px;">

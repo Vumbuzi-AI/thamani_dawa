@@ -4,7 +4,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
 
   Three steps, matching the flagship frames: select serials, parties, review.
   Creating the shipper still goes through `Manufacturing.pack_serials_into_shipper/6`,
-  which keeps the shipment side effect in that one function.
+  which only creates the shipper and its Pack event. Shipments are created
+  from packed SSCCs on the shipments page.
   """
 
   use ThamaniDawaWeb, :live_view
@@ -14,7 +15,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Sites
 
-  @shipper_size 50
+  @default_shipper_size 50
   @page_size 10
 
   def mount(%{"gtin" => gtin}, _session, socket) do
@@ -26,9 +27,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
      |> assign(:page_title, "Pack a shipper")
      |> assign(:product, product)
      |> assign(:batch, nil)
+     |> assign(:shipper_size, @default_shipper_size)
      |> assign(:pack_serials, nil)
      |> assign(:pack_selected, MapSet.new())
      |> assign(:pack_error, nil)
+     |> assign(:packed_result, nil)
      |> assign(:load_error, nil)
      |> assign(:scan_query, "")
      |> assign(:scan_error, nil)
@@ -50,11 +53,15 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
       socket
       |> assign(:step, step)
       |> assign(:batch_no, params["batch"])
+      |> assign(
+        :shipper_size,
+        shipper_size(org_id(socket), socket.assigns.product, params["batch"])
+      )
       |> assign(:page, page_number(params["page"]))
       |> assign(:return_to, ThamaniDawaWeb.ReturnTo.safe(params["return_to"] || "", ""))
       |> assign(:back_path, ThamaniDawaWeb.ReturnTo.path(params, fallback))
 
-    {:noreply, load_pack(socket)}
+    {:noreply, socket |> load_pack() |> enforce_step()}
   end
 
   def handle_event("to_parties", _params, socket) do
@@ -62,6 +69,27 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
       {:noreply, socket}
     else
       {:noreply, patch_step(socket, "parties")}
+    end
+  end
+
+  def handle_event("goto_step", %{"step" => step}, socket)
+      when step in ~w(serials parties review) do
+    cond do
+      step == "serials" ->
+        {:noreply, patch_step(socket, "serials")}
+
+      step_locked?(step, socket.assigns) and step == "review" and
+          MapSet.size(socket.assigns.pack_selected) > 0 ->
+        {:noreply,
+         socket
+         |> assign(:pack_error, {:invalid, "Enter the 13-digit GLN the shipper is going to."})
+         |> patch_step("parties")}
+
+      step_locked?(step, socket.assigns) ->
+        {:noreply, socket}
+
+      true ->
+        {:noreply, patch_step(socket, step)}
     end
   end
 
@@ -87,8 +115,20 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
     {:noreply, assign(socket, :pack_selected, selected)}
   end
 
+  def handle_event("select_set", %{"index" => index}, socket) do
+    sets = Enum.chunk_every(socket.assigns.pack_serials || [], socket.assigns.shipper_size)
+
+    case Integer.parse(index) do
+      {n, ""} when n >= 1 and n <= length(sets) ->
+        {:noreply, assign(socket, :pack_selected, MapSet.new(Enum.at(sets, n - 1)))}
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("select_first", _params, socket) do
-    first = first_shipper(socket.assigns.pack_serials || [])
+    first = first_shipper(socket.assigns.pack_serials || [], socket.assigns.shipper_size)
 
     selected =
       if MapSet.equal?(socket.assigns.pack_selected, MapSet.new(first)),
@@ -123,6 +163,20 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
 
         {:noreply, assign(socket, pack_selected: selected, scan_query: "", scan_error: nil)}
     end
+  end
+
+  def handle_event("pack_next", _params, socket) do
+    %{packed_result: %{serials: packed}, pack_serials: all, shipper_size: size} = socket.assigns
+    remaining = all -- packed
+
+    {:noreply,
+     socket
+     |> assign(:pack_serials, remaining)
+     |> assign(:pack_selected, MapSet.new(first_shipper(remaining, size)))
+     |> assign(:packed_result, nil)
+     |> assign(:pack_error, nil)
+     |> assign(:page, 1)
+     |> patch_step("serials")}
   end
 
   def handle_event("page_prev", _params, socket),
@@ -162,6 +216,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
     end
   end
 
+  def handle_event("close_pack_to_gln", _params, socket) do
+    {:noreply, socket |> assign(:to_gln_results, []) |> assign(:to_gln_search_status, :idle)}
+  end
+
   def handle_event("select_pack_to_gln", %{"gln" => gln}, socket) do
     case Enum.find(socket.assigns.to_gln_results, &(&1.gln == gln)) do
       nil ->
@@ -172,7 +230,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
          socket
          |> assign(:pack_form, pack_form(Map.put(socket.assigns.pack_form.params, "to_gln", gln)))
          |> assign(:pack_to_party, party)
-         |> assign(:to_gln_query, party.gln)
+         |> assign(:to_gln_query, "#{party.company} · #{party.gln}")
          |> assign(:to_gln_results, [])
          |> assign(:to_gln_search_status, :selected)
          |> assign(:pack_error, nil)}
@@ -194,15 +252,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
            site_gln: current_site_gln(socket)
          ) do
       {:ok, shipper} ->
-        back = socket.assigns.back_path
-
         {:noreply,
-         socket
-         |> put_flash(
-           :info,
-           "Shipper SSCC #{shipper.code} created with #{length(serials)} serials."
-         )
-         |> push_navigate(to: ~p"/manufacturer/sscc/#{shipper.id}/serials?#{%{return_to: back}}")}
+         assign(socket, :packed_result, %{
+           shipper: shipper,
+           serials: serials,
+           remaining: length(all) - length(serials)
+         })}
 
       {:error, reason} ->
         {:noreply,
@@ -244,11 +299,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
            {:ok, serials} <- Manufacturing.fetch_unpacked_serials(org, gtin, batch_no) do
         facilities = org |> Sites.list_sites() |> Enum.filter(&(&1.gln not in [nil, ""]))
         from_gln = current_site_gln(socket) || Enum.find_value(facilities, & &1.gln)
+        shipper_size = shipper_size(org, socket.assigns.product, batch_no)
 
         socket
         |> assign(:batch, batch)
+        |> assign(:shipper_size, shipper_size)
         |> assign(:pack_serials, serials)
-        |> assign(:pack_selected, MapSet.new(first_shipper(serials)))
+        |> assign(:pack_selected, MapSet.new(first_shipper(serials, shipper_size)))
         |> assign(:pack_facilities, facilities)
         |> assign(:pack_form, pack_form(%{"from_gln" => from_gln || ""}))
         |> assign(:load_error, nil)
@@ -303,7 +360,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
     |> to_form(as: :pack)
   end
 
-  defp first_shipper(serials), do: Enum.take(serials, @shipper_size)
+  defp first_shipper(serials, size), do: Enum.take(serials, size)
+
+  defp shipper_size(_org, _product, nil), do: @default_shipper_size
+
+  defp shipper_size(org, product, batch_no) do
+    case Manufacturing.get_batch_by_product_and_no(org, product.id, batch_no) do
+      %{packs_per_shipper: size} when is_integer(size) and size > 0 -> size
+      _ -> @default_shipper_size
+    end
+  end
 
   defp match_serial("", _serials), do: nil
 
@@ -347,10 +413,32 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
   defp error_message(reason) when reason in [:unauthorized, :forbidden],
     do: "GS1 rejected your API key."
 
-  defp error_message({:invalid, message}), do: message
+  defp error_message({:invalid, _message}),
+    do: "Check the selected serials and shipper details, then try again."
 
   defp error_message(_reason),
-    do: "GS1 didn't issue an SSCC, so nothing was packed. Try again in a moment."
+    do:
+      "GS1 didn't create the shipper label, so nothing was packed. Your serials are still unpacked. Try again in a moment."
+
+  defp step_locked?("serials", _assigns), do: false
+  defp step_locked?("parties", assigns), do: MapSet.size(assigns.pack_selected) == 0
+
+  defp step_locked?("review", assigns),
+    do:
+      MapSet.size(assigns.pack_selected) == 0 or
+        not valid_destination?(assigns.pack_form.params["to_gln"])
+
+  defp enforce_step(%{assigns: %{pack_serials: serials, step: step}} = socket)
+       when is_list(serials) and step in ~w(parties review) do
+    if step_locked?(step, socket.assigns) do
+      fallback = if step_locked?("parties", socket.assigns), do: "serials", else: "parties"
+      patch_step(socket, fallback)
+    else
+      socket
+    end
+  end
+
+  defp enforce_step(socket), do: socket
 
   defp step_state(current, name, order) do
     current_at = Enum.find_index(order, &(&1 == current)) || 0
@@ -373,12 +461,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
     to_index = min(page * @page_size, length(serials))
     chosen = Enum.filter(serials, &MapSet.member?(assigns.pack_selected, &1))
     preview = Enum.take(chosen, 8)
-    first = first_shipper(serials)
+    first = first_shipper(serials, assigns.shipper_size)
 
     assigns =
       assigns
-      |> assign(:shipper_size, @shipper_size)
       |> assign(:serials, serials)
+      |> assign(:sets, Enum.chunk_every(serials, assigns.shipper_size))
       |> assign(:selected_count, selected)
       |> assign(:window, window)
       |> assign(:from_index, from_index)
@@ -391,7 +479,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
         :first_on,
         serials != [] and MapSet.equal?(assigns.pack_selected, MapSet.new(first))
       )
-      |> assign(:meter, min(round(selected / @shipper_size * 100), 100))
+      |> assign(:meter, min(round(selected / assigns.shipper_size * 100), 100))
       |> assign(
         :from_party,
         Enum.find(assigns.pack_facilities, &(&1.gln == assigns.pack_form[:from_gln].value))
@@ -411,7 +499,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
         label={ThamaniDawaWeb.ReturnTo.label(@back_path, "Back to serials")}
       />
       <div class="td-idh">
-        <div>
+        <div class="td-idh-text">
           <h1 class="td-idh-title">Pack a shipper</h1>
           <p class="td-idh-sub">
             {@product.name} · batch <span class="font-mono">{@batch_no}</span>
@@ -429,9 +517,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
               {"review", "Review", 3}
             ]
           }
+          id={"pack-step-#{name}"}
           state={step_state(@step, name, ~w(serials parties review))}
           number={number}
           label={label}
+          event="goto_step"
+          value={name}
+          disabled={step_locked?(name, assigns)}
         />
       </div>
 
@@ -447,7 +539,40 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
         <p class="td-note">There is nothing left to put in a shipper.</p>
       </div>
 
-      <div :if={is_list(@pack_serials) and @pack_serials != []} id="pack-serials-panel">
+      <div :if={@packed_result} id="pack-result" class="td-card td-pad">
+        <h2 class="td-idh-title">Shipper SSCC created</h2>
+        <p class="td-note">
+          SSCC <span class="font-mono">{@packed_result.shipper.code}</span>
+          now holds {length(@packed_result.serials)} serials.
+        </p>
+        <p :if={@packed_result.remaining > 0} id="pack-result-remaining" class="td-note">
+          {@packed_result.remaining} serials in this batch are still unpacked.
+        </p>
+        <div class="td-pack-foot">
+          <.td_button id="pack-result-done" label="Back to batches" navigate={@back_path} />
+          <div style="display:flex;gap:8px;">
+            <.td_button
+              id="pack-result-view"
+              label="View shipper"
+              navigate={
+                ~p"/manufacturer/sscc/#{@packed_result.shipper.id}/serials?#{%{return_to: @back_path}}"
+              }
+            />
+            <.td_button
+              :if={@packed_result.remaining > 0}
+              id="pack-next-shipper"
+              variant="primary"
+              label={"Pack next shipper (#{min(@packed_result.remaining, @shipper_size)} units)"}
+              phx-click="pack_next"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div
+        :if={is_nil(@packed_result) and is_list(@pack_serials) and @pack_serials != []}
+        id="pack-serials-panel"
+      >
         <div :if={@step == "serials"} class="td-pack">
           <div class="td-card">
             <form id="pack-scan-form" phx-change="scan_serial" class="td-pad">
@@ -474,9 +599,27 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
                 <input type="checkbox" checked={@first_on} tabindex="-1" style="pointer-events:none" />
                 <span>Select first {@shipper_size} unpacked</span>
               </button>
-              <span class="td-note">
+              <span id="pack-selected-count" class="td-note">
                 {@selected_count} selected · {length(@serials) - @selected_count} unpacked left
               </span>
+            </div>
+            <div
+              :if={length(@sets) > 1}
+              id="pack-sets"
+              class="td-pad"
+              style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;"
+            >
+              <span class="td-note">Shippers in this batch</span>
+              <.td_button
+                :for={{set, index} <- Enum.with_index(@sets, 1)}
+                id={"pack-set-#{index}"}
+                label={"Shipper #{index} · #{length(set)} units"}
+                variant={
+                  if MapSet.equal?(@pack_selected, MapSet.new(set)), do: "primary", else: "secondary"
+                }
+                phx-click="select_set"
+                phx-value-index={index}
+              />
             </div>
             <table class="td-rows is-static">
               <thead>
@@ -533,7 +676,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
             </div>
             <div class="td-kv">
               <span class="td-kv-label">Selected</span>
-              <span id="pack-selected-count" class="td-kv-value">{@selected_count} of {@shipper_size}</span>
+              <span id="pack-selected-summary" class="td-kv-value">{@selected_count} of {@shipper_size}</span>
             </div>
             <div class="td-kv">
               <span class="td-kv-label">Unpacked in batch</span><span class="td-kv-value">{length(
@@ -544,7 +687,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
           </aside>
         </div>
 
-        <div :if={@step == "parties"} class="td-pack">
+        <div :if={@step == "parties"} class="td-pack is-single">
           <div class="td-card td-pad">
             <.form for={@pack_form} id="pack-parties-form" phx-change="validate_pack">
               <h2 class="td-idh-title">From</h2>
@@ -563,41 +706,42 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
                 </div>
               </div>
               <h2 class="td-idh-title">To</h2>
-              <label class="td-field" for="pack_to_gln_search">
-                <span class="td-field-label">Destination GLN</span>
+              <div class="td-field w-full">
+                <label class="td-field-label" for="pack_to_gln_search">Destination GLN</label>
                 <input type="hidden" name="pack[to_gln]" value={@pack_form[:to_gln].value} />
-                <input
-                  id="pack_to_gln_search"
-                  type="search"
-                  value={@to_gln_query}
-                  phx-keyup="search_pack_to_gln"
-                  phx-debounce="300"
-                  autocomplete="off"
-                  placeholder="6164003000024"
-                  class="td-field-control font-mono"
-                />
-              </label>
-              <div :if={@to_gln_results != []} id="pack-to-gln-results" role="listbox">
-                <button
-                  :for={party <- @to_gln_results}
-                  id={"pack-to-gln-#{party.gln}"}
-                  type="button"
-                  phx-click="select_pack_to_gln"
-                  phx-value-gln={party.gln}
-                  class="td-batch-item"
-                >
-                  <span class="font-mono">{party.gln}</span>
-                  <span class="td-note">{party.company} · {party.address}</span>
-                </button>
+                <div id="pack-to-gln-combobox" class="relative w-full">
+                  <input
+                    id="pack_to_gln_search"
+                    type="search"
+                    value={@to_gln_query}
+                    phx-keyup="search_pack_to_gln"
+                    phx-debounce="300"
+                    autocomplete="off"
+                    placeholder="Search by GLN, company, or address"
+                    class="td-field-control w-full"
+                  />
+                  <.td_gln_results
+                    id="pack-to-gln-results"
+                    results={@to_gln_results}
+                    status={@to_gln_search_status}
+                    query={@to_gln_query}
+                    select_event="select_pack_to_gln"
+                    close_event="close_pack_to_gln"
+                    option_prefix="pack-to-gln"
+                  />
+                </div>
               </div>
-              <div :if={@pack_to_party} id="pack-to-party" class="td-choice is-on">
-                <strong>{@pack_to_party.company}</strong>
-                <span class="td-note font-mono">{@pack_to_party.gln} · {@pack_to_party.address}</span>
+              <div :if={@pack_to_party} id="pack-to-party" class="td-kv-grid is-pad">
+                <div class="td-kv">
+                  <span class="td-kv-label">Company</span><span class="td-kv-value">{@pack_to_party.company}</span>
+                </div>
+                <div class="td-kv">
+                  <span class="td-kv-label">Address</span><span class="td-kv-value">{@pack_to_party.address}</span>
+                </div>
               </div>
-              <p :if={@to_gln_search_status == :unavailable} class="td-note">
-                The GS1 GLN directory is unavailable. Try again in a moment.
-              </p>
-              <.td_input field={@pack_form[:order_number]} label="Order number (optional)" />
+              <div class="mt-4">
+                <.td_input field={@pack_form[:order_number]} label="Order number (optional)" />
+              </div>
               <p class="td-note">
                 Printed on the shipper label. You can ship to a different order later.
               </p>
@@ -606,14 +750,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
               {error_message(@pack_error)}
             </p>
           </div>
-          <aside class="td-card td-pad">
-            <h2 class="td-idh-title">What packing does</h2>
-            <p class="td-note">GS1 issues one shipper SSCC for the {@selected_count} serials.</p>
-            <p class="td-note">Thamani records an EPCIS Pack event.</p>
-            <p class="td-note">
-              Nothing ships yet. You put shippers on a pallet and ship the pallet.
-            </p>
-          </aside>
         </div>
 
         <div :if={@step == "review"} class="td-pack">
@@ -641,7 +777,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Pack do
               id="pack-gs1-error"
               class="td-ban is-danger"
             >
-              GS1 didn't issue an SSCC, so nothing was packed. Your {@selected_count} serials are still unpacked. Try again in a moment.
+              GS1 didn't create the shipper label, so nothing was packed. Your {@selected_count} serials are still unpacked. Try again in a moment.
             </p>
             <h2 class="td-idh-title">Shipper</h2>
             <div class="td-kv-grid">

@@ -313,6 +313,9 @@ body {
 
 @media (min-width: 1024px) {
   #sidebar-shell {
+    position: fixed;
+    inset: 0;
+    width: 100%;
     min-height: 0;
     height: 100vh !important;
     overflow: hidden;
@@ -1279,7 +1282,9 @@ label {
 .td-list-page > .td-table.responsive-table {
   border: 0;
   border-radius: 0;
-  overflow: visible;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   background: transparent;
 }
 
@@ -1326,12 +1331,36 @@ label {
   #mobile-app-bar,
   #sidebar-backdrop,
   .no-print,
-  [role="alert"] {
+  [role="alert"],
+  #shipper-label-modal .td-modal-scrim,
+  #shipper-label-modal .td-modal-hd,
+  #shipper-label-modal .td-modal-ft {
     display: none !important;
+  }
+
+  #shipper-label-modal,
+  #shipper-label-modal .td-modal-stage,
+  #shipper-label-modal .td-modal,
+  #shipper-label-modal .td-modal-bd {
+    position: static !important;
+    display: block !important;
+    width: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: visible !important;
+    background: var(--print-page) !important;
+    box-shadow: none !important;
   }
 
   body * {
     visibility: hidden !important;
+  }
+
+  #shipper-label-modal .printable-sscc-label,
+  #shipper-label-modal .printable-sscc-label * {
+    visibility: visible !important;
   }
 
   .printable-batch-label,
@@ -1468,6 +1497,19 @@ label {
   .printable-sscc-label canvas {
     width: 1.3in !important;
     height: 1.3in !important;
+  }
+  #shipper-label-modal .printable-sscc-label {
+    page: auto !important;
+    width: 400px !important;
+    min-width: 400px !important;
+    max-width: 400px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+  #shipper-label-modal .printable-sscc-label canvas {
+    width: 120px !important;
+    height: 120px !important;
   }
   @page sscc-label {
     size: 4in 6in;
@@ -1662,6 +1704,7 @@ label {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 .td-tl form { display: contents; }
 
@@ -1893,8 +1936,15 @@ label {
 
 #mobile-sidebar-toggle { display: none; }
 @media (max-width: 1023px) {
-  #mobile-sidebar-toggle { display: inline-flex; }
+  #mobile-sidebar-toggle { display: inline-flex; flex: none; }
+  .td-tl .td-search { width: clamp(120px, 30vw, 240px); min-width: 0; }
   .td-kv-grid, .td-mode-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 639px) {
+  .td-tb { padding: 0 12px; gap: 6px; }
+  .td-tl { gap: 6px; }
+  .td-tl .td-search { width: clamp(104px, 32vw, 180px); }
+  .td-tl .td-search kbd { display: none; }
 }
 
 .td-header {
@@ -2250,6 +2300,111 @@ a.td-status-row:hover { background: var(--color-td-hover); }
 .td-rows td a { color: inherit; text-decoration: none; }
 .td-rows .td-sub { display: block; margin-top: 4px; }
 .td-dash-empty { padding: 24px 16px; font-size: 14px; color: var(--color-td-ink-2); }
+
+/* Shipment packing: separate pallet membership from shipper contents. */
+.td-packing-sections { display: grid; }
+.td-packing-section + .td-packing-section { border-top: 1px solid var(--color-td-hairline); }
+.td-packing-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px 10px;
+}
+.td-packing-section-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-td-ink);
+}
+.td-packing-section-header p { margin: 3px 0 0; font-size: 12px; color: var(--color-td-ink-2); }
+.td-packing-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.td-packing-table { width: 100%; border-collapse: collapse; text-align: left; }
+.td-packing-table th,
+.td-packing-table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-td-hairline);
+  font-size: 13px;
+  vertical-align: middle;
+}
+.td-packing-table th {
+  height: 34px;
+  background: var(--color-td-wash);
+  color: var(--color-td-ink-2);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.td-packing-table tbody tr:last-child td { border-bottom: 0; }
+.td-packing-table tbody tr:hover > td { background: var(--color-td-hover); }
+.td-packing-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.td-packing-table td:has(.td-pid-wrap) { overflow: visible; }
+.td-packing-table a { color: inherit; text-decoration: none; }
+.td-included-shippers { display: flex; flex-wrap: wrap; gap: 6px; }
+.td-code-chip {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid var(--color-td-hairline);
+  border-radius: 6px;
+  background: var(--color-td-surface);
+  font-size: 11px;
+  line-height: 1;
+}
+.td-code-chip:hover { border-color: var(--color-td-border); background: var(--color-td-control); }
+.td-table-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.td-shippers-table { min-width: 860px; }
+.td-shippers-table.is-without-pallets { min-width: 740px; }
+.td-shipper-row td { height: auto; }
+.td-shipper-cell { display: flex; align-items: center; min-width: 0; }
+.td-shipper-identity .td-sub {
+  display: block;
+  margin-top: 5px;
+  color: var(--color-td-ink-3);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.td-product-cell { line-height: 1.45; }
+.td-date-cell { display: flex; gap: 16px; white-space: nowrap; }
+.td-date-cell > span { display: grid; gap: 2px; }
+.td-date-cell .td-k { font-size: 10px; }
+.td-row-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-td-ink-2);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .12s ease-out, color .12s ease-out;
+}
+.td-row-toggle:hover { background: var(--color-td-control); color: var(--color-td-ink); }
+.td-row-chevron { display: inline-block; font-size: 17px; line-height: 1; transition: transform .12s ease-out; }
+.td-row-toggle[aria-expanded="true"] .td-row-chevron { transform: rotate(90deg); }
+.td-serials-row > td { padding: 0 14px 10px; background: var(--color-td-wash); }
+.td-serials-panel { padding: 10px 12px; border-radius: 10px; background: var(--color-td-surface); }
+.td-serials-panel .td-k { display: block; margin-bottom: 8px; }
+.td-serials-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.td-serial-chip {
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: var(--color-td-control);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .td-packing-table { min-width: 820px; }
+  .td-shippers-table { min-width: 860px; }
+  .td-shippers-table.is-without-pallets { min-width: 740px; }
+}
 
 .td-plot {
   display: grid;
@@ -3260,6 +3415,83 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-card-header p { margin: 0; font-size: 12px; line-height: 1.3; color: var(--color-td-ink-2); }
 .td-header-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 
+/* Compact shipment parties summary in the create-shippers page header. */
+.create-shippers-page .td-page-header {
+  height: auto; min-height: 68px; padding: 12px 16px; align-items: flex-start;
+}
+.create-shippers-page .td-page-title-wrap { padding-top: 3px; }
+
+.td-anchor-target { scroll-margin-top: 88px; }
+.td-anchor-target:target,
+.td-anchor-target.is-scroll-target { animation: td-anchor-highlight 2.4s ease-out; }
+
+@keyframes td-anchor-highlight {
+  0%, 24% {
+    border-color: var(--color-td-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-td-accent) 24%, transparent);
+  }
+  100% {
+    border-color: var(--color-td-border);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .td-anchor-target:target,
+  .td-anchor-target.is-scroll-target {
+    animation: none;
+    border-color: var(--color-td-accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-td-accent) 24%, transparent);
+  }
+}
+
+.td-shipment-brief {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  width: min(520px, 100%);
+  padding: 10px 12px;
+  border: 1px solid var(--color-td-border);
+  border-radius: 12px;
+  background: var(--color-td-raised);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.04);
+}
+.td-shipment-brief-party { min-width: 0; }
+.td-shipment-brief-label {
+  display: block; margin-bottom: 4px;
+  font-size: 10px; font-weight: var(--weight-td-medium);
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-td-ink-3); line-height: 1;
+}
+.td-shipment-brief-name {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; font-weight: var(--weight-td-medium);
+  color: var(--color-td-ink); line-height: 1.25;
+}
+.td-shipment-brief-gln {
+  display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: 10px; line-height: 1;
+  color: var(--color-td-ink-2);
+}
+.td-shipment-brief-arrow { color: var(--color-td-ink-3); }
+.td-shipment-brief-destination {
+  position: relative; grid-column: 1 / -1; padding-top: 10px;
+  border-top: 1px solid var(--color-td-hairline);
+}
+.td-shipment-brief-destination .thamani-input {
+  height: 34px; padding: 0 10px; font-size: 12px;
+}
+.td-shipment-brief-hint {
+  margin: 5px 0 0; font-size: 11px; line-height: 1.3; color: var(--color-td-ink-2);
+}
+
+@media (max-width: 900px) {
+  .create-shippers-page .td-page-header { flex-wrap: wrap; }
+  .create-shippers-page .td-header-actions { width: 100%; }
+  .td-shipment-brief { width: 100%; }
+}
+
 /* Filter chip, search, segmented */
 .td-chip {
   display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
@@ -3405,19 +3637,20 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-modal-scrim { position: fixed; inset: 0; background: var(--color-td-scrim); animation: td-fade .2s ease-out; }
 .td-modal-stage {
   position: fixed; inset: 0; z-index: 51; display: flex; align-items: flex-start; justify-content: center;
-  padding: 12vh 16px 32px; overflow-y: auto;
+  padding: 24px 16px; overflow-y: auto;
 }
-.td-modal-slot { width: min(560px, 100%); }
+.td-modal-slot { width: min(560px, 100%); margin: auto 0; }
 .td-modal-slot.is-confirm, .td-modal.is-confirm { width: min(480px, 100%); }
 .td-modal {
   position: relative; display: flex; flex-direction: column; width: 100%;
-  max-height: min(840px, calc(100dvh - 48px));
+  margin: auto 0; max-height: min(840px, calc(100dvh - 48px));
   border: 1px solid var(--color-td-border); border-radius: 12px; background: var(--color-td-surface);
   box-shadow: none; overflow: hidden; animation: td-modal-in .2s ease-out;
 }
+.td-modal[style*="display: block"] { display: flex !important; }
 .td-modal-root > .td-modal-stage > .td-modal { width: min(560px, 100%); }
 .td-modal-hd {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 16px;
   padding: 24px 20px 16px; border-bottom: 1px solid var(--color-td-hairline);
 }
 .td-modal-tt { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; min-width: 0; }
@@ -3427,7 +3660,7 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-modal-close.is-floating { position: absolute; top: 16px; right: 16px; z-index: 1; }
 .td-modal-bd { display: flex; flex-direction: column; gap: 16px; padding: 20px; color: var(--color-td-ink); overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .td-modal-ft {
-  display: flex; align-items: center; justify-content: flex-end; gap: 8px; height: 56px; padding: 0 20px;
+  display: flex; flex: none; align-items: center; justify-content: flex-end; gap: 8px; height: 56px; padding: 0 20px;
   border-top: 1px solid var(--color-td-hairline); background: var(--color-td-wash);
 }
 @keyframes td-fade { from { opacity: 0; } to { opacity: 1; } }
@@ -3519,8 +3752,16 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-popover { position: absolute; left: 0; top: calc(100% + 4px); z-index: 50; width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 4px; border: 1px solid var(--color-td-border); border-radius: 10px; background: var(--color-td-surface); }
 .td-popover.hidden { display: none; }
 .td-popover-label { margin: 0; padding: 8px 8px 4px; font-size: 12px; font-weight: var(--weight-td-medium); color: var(--color-td-ink-3); }
+/* Right-anchored action menu: two-line options need auto-height rows. */
+.td-start-menu { left: auto; right: 0; width: 320px; max-width: calc(100vw - 32px); padding: 6px; gap: 4px; }
+.td-menu-item-rich { height: auto; min-height: 48px; align-items: flex-start; padding: 8px; gap: 10px; line-height: 1.3; }
+.td-menu-item-rich > span:first-child { flex: none; margin-top: 1px; }
+.td-menu-item-rich > span:last-child { min-width: 0; }
+.td-menu-item-rich strong { display: block; font-size: 14px; font-weight: var(--weight-td-medium); line-height: 1.3; color: var(--color-td-ink); }
+.td-menu-item-rich .td-note { display: block; margin-top: 2px; white-space: normal; }
 .td-switch-menu { width: 300px; max-height: min(520px, calc(100vh - 96px)); overflow-x: hidden; overflow-y: auto; }
-.td-ss-option { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 44px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
+.td-switch-menu .td-ss-n { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }
+.td-ss-option { display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; min-height: 44px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; }
 .td-ss-option:hover { background: var(--color-td-hover); }
 .td-ss-option.is-active { background: var(--color-td-selected); }
 .td-ss-check { flex: none; color: var(--color-td-accent); }
@@ -3627,7 +3868,17 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-tab { padding: 0 16px; }
 .td-tabs { gap: 20px; }
 .td-page:has(> .td-list-page) { display: flex; flex-direction: column; height: auto; min-height: 100%; }
-.td-list-page .td-list-table { flex: none; min-height: min-content; overflow: visible; }
+.td-list-page .td-list-table {
+  flex: none;
+  min-height: min-content;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.td-list-page .td-list-table table {
+  min-width: 100%;
+}
 .td-page > .td-list-page + * { margin-top: 0; padding: 12px 16px 16px; border-top: 0; }
 .td-account-name, .td-account-role { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .td-st:focus { outline: none; }
@@ -3684,7 +3935,27 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .ff-surface-popover { border: 1px solid var(--color-td-border) !important; border-radius: 10px !important; background: var(--color-td-surface) !important; }
 
 .td-select-opt { flex: none; }
+.td-combo-pop { max-height: 320px; }
+.td-card:has(.td-combo-pop) { overflow: visible; }
+.td-combo-list { min-height: 0; }
+.td-combo-list { display: flex; flex-direction: column; gap: 2px; padding: 4px; overflow-y: auto; }
+.td-combo-opt { display: flex; flex-direction: column; gap: 2px; width: 100%; min-width: 0; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; text-align: left; cursor: pointer; transition: background-color .12s ease-out; }
+.td-combo-opt:hover, .td-combo-opt:focus-visible { background: var(--color-td-hover); outline: none; }
+.td-combo-top { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.td-combo-co { flex: 1; min-width: 0; overflow: hidden; font-size: 14px; font-weight: 500; line-height: 1.3; color: var(--color-td-ink); white-space: nowrap; text-overflow: ellipsis; }
+.td-combo-gln { flex: none; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; color: var(--color-td-ink-3); }
+.td-combo-addr { overflow: hidden; font-size: 12px; line-height: 1.3; color: var(--color-td-ink-2); white-space: nowrap; text-overflow: ellipsis; }
+.td-combo-note { margin: 0; padding: 12px; font-size: 13px; color: var(--color-td-ink-2); }
+.td-combo-note.is-error { color: var(--color-td-danger); }
 .td-cb span { color: var(--color-td-ink); }
+
+/* Registry-only shipper setup keeps directory results inside the scrollable
+   dialog body instead of anchoring the popover beneath the modal footer. */
+#registry-shipper-setup-modal .td-combo-pop {
+  position: static;
+  margin-top: 4px;
+  max-height: 220px;
+}
 
 /* ---- core <.table>: Doop TD table anatomy for every caller (desktop) ---- */
 @media (min-width: 640px) {
@@ -3787,6 +4058,9 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-modal-form { display: flex; flex-direction: column; gap: 16px; }
 .td-modal-form > div, .td-modal-form .td-fgrid > div { margin: 0; }
 .td-modal-form .td-fgrid { gap: 12px; }
+.td-modal-form.is-spacious { gap: 20px; }
+.td-modal-form.is-spacious .td-field { gap: 8px; }
+.td-modal-form.is-spacious .td-field-hint { line-height: 1.4; }
 .td-fgrid.is-rx { grid-template-columns: minmax(0, 1.4fr) 72px 88px 72px 88px; }
 .td-rx-item {
   display: flex; align-items: center; gap: 8px;
@@ -4010,8 +4284,9 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-dp-text { height: 26px; padding: 0 8px; border-radius: 6px; font-size: 14px !important; font-weight: var(--weight-td-medium) !important; color: var(--color-td-accent-ink, var(--color-td-accent)) !important; }
 .td-dp-text:hover:not(:disabled) { background: var(--td-dp-hover) !important; }
 .td-dp-text:disabled { color: var(--color-td-ink-3) !important; }
-/* the popover sits above modal content; modal bodies never clip it */
+/* popovers sit above modal content; modal bodies never clip them */
 .td-modal-bd:has(.td-dp.is-open), .td-modal:has(.td-dp.is-open) { overflow: visible; }
+.td-modal-bd:has(.td-select[data-state="focus"]), .td-modal:has(.td-select[data-state="focus"]) { overflow: visible; }
 
 /* filter drawer panel: right-aligned to its trigger by default, left-aligned when that would run under the sidebar */
 .td-fd .td-fd-panel { right: 0; transform-origin: top right; }
@@ -4055,7 +4330,7 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 @media (max-width: 640px) { .td-page { padding: 16px; gap: 16px; } }
 
 .td-recipe {
-  min-height: 0; border: 1px solid var(--color-td-hairline); border-radius: 12px; overflow: hidden;
+  min-width: 0; max-width: 100%; min-height: 0; border: 1px solid var(--color-td-hairline); border-radius: 12px; overflow: hidden;
 }
 .td-recipe + .td-recipe { margin-top: 4px; }
 .td-recipe > .td-page-header { height: auto; min-height: 76px; padding: 16px 20px; gap: 16px; flex-wrap: wrap; }
@@ -4072,6 +4347,29 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-data th:last-child, .td-data td:last-child { padding-right: 20px; }
 .td-data td { height: 56px; padding-top: 10px; padding-bottom: 10px; }
 .td-data tbody tr:last-child td { border-bottom: 0; }
+
+/* Mobile users: fixed proportions keep identity, contact details, and row
+   actions from starving each other when contact values or action labels grow. */
+.td-mobile-users-table { overflow-x: auto; }
+.td-mobile-users-table table { table-layout: fixed; min-width: 760px; }
+.td-mobile-users-table th:first-child,
+.td-mobile-users-table th:last-child { padding-left: 12px; padding-right: 12px; }
+.td-mobile-users-table th:nth-child(1) { width: 20%; }
+.td-mobile-users-table th:nth-child(2) { width: 11%; }
+.td-mobile-users-table th:nth-child(3) { width: 27%; }
+.td-mobile-users-table th:nth-child(4) { width: 13%; }
+.td-mobile-users-table th:nth-child(5) { width: 29%; }
+.td-mobile-users-table td { overflow-wrap: anywhere; }
+.td-mobile-users-table .td-kv { gap: 3px; }
+.td-mobile-users-table .td-kv-label,
+.td-mobile-users-table .td-kv-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-mobile-users-table tbody tr:not(.td-data-empty) td:last-child { text-align: right; }
+.td-mobile-users-table .td-mobile-user-actions {
+  display: inline-grid; grid-template-columns: 56px 104px 112px; gap: 8px; align-items: center;
+}
+.td-mobile-users-table tbody tr:not(.td-data-empty) td:last-child .td-btn {
+  width: 100%; height: 28px; margin: 2px 0; padding: 0 9px; font-size: 13px;
+}
 
 .td-card-header { padding: 14px 20px; }
 .td-kv-grid.is-pad { padding: 20px; }
@@ -4144,18 +4442,29 @@ textarea.td-field-control, .td-textarea, .internal-app textarea { height: auto; 
 .td-auth .td-auth-card-foot { margin: 0; }
 .td-auth .td-auth-card form .td-btn.is-lg { width: 100%; height: 40px; }
 .td-auth .td-mode-grid { gap: 8px; }
-.td-auth label.td-option {
+.td-auth label.td-option,
+label.td-option:has(> .td-oc-rd) {
   flex-direction: row; align-items: flex-start; gap: 12px; padding: 14px;
-  border-radius: 12px; border: 1px solid var(--color-td-border); background: var(--color-td-surface); cursor: pointer;
+  border-radius: 12px; border: 1px solid var(--color-td-hairline); background: var(--color-td-surface); cursor: pointer;
+  transition: border-color .12s ease-out, background-color .12s ease-out;
 }
-.td-auth label.td-option .td-oc-tx { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.td-auth label.td-option .td-oc-rd {
-  width: 16px; height: 16px; margin-top: -1px; border-radius: 99px; border: 1px solid var(--color-td-ink-3);
+label.td-option:has(> .td-oc-rd):hover:not(.is-selected) { background: var(--color-td-hover); }
+label.td-option:has(> input:focus-visible) { outline: none; box-shadow: 0 0 0 3px var(--color-td-focus); }
+.td-auth label.td-option .td-oc-tx,
+label.td-option .td-oc-tx { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.td-auth label.td-option .td-oc-rd,
+label.td-option .td-oc-rd {
+  width: 16px; height: 16px; margin-top: 0; border-radius: 99px; border: 1px solid var(--color-td-ink-3);
   box-sizing: border-box; flex: none;
 }
-.td-auth label.td-option.is-selected { border-color: var(--color-td-accent); background: var(--color-td-accent-tint); }
-.td-auth label.td-option.is-selected .td-oc-rd { border: 5px solid var(--color-td-accent); }
-.td-auth label.td-option .td-note { font-size: 12px; line-height: 1.35; }
+.td-auth label.td-option.is-selected,
+label.td-option.is-selected,
+label.td-option:has(> input:checked) { border-color: var(--color-td-accent); background: var(--color-td-accent-tint); }
+.td-auth label.td-option.is-selected .td-oc-rd,
+label.td-option.is-selected .td-oc-rd,
+label.td-option:has(> input:checked) .td-oc-rd { border: 5px solid var(--color-td-accent); }
+.td-auth label.td-option .td-note,
+label.td-option .td-note { font-size: 12px; line-height: 1.35; }
 .td-oc-set { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; border: 0; }
 .td-oc-hrow { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--color-td-ink-2); }
 .td-oc-cnt { font-weight: 500; color: var(--color-td-ink); }
@@ -4374,19 +4683,18 @@ label.td-option > input { position: absolute; opacity: 0; pointer-events: none; 
 .td-pid { cursor: default; border-bottom: 1px dashed var(--color-td-ink-3); padding-bottom: 1px; font-variant-numeric: tabular-nums; color: inherit; text-decoration: none; outline: none; }
 a.td-pid { cursor: pointer; }
 .td-pid-wrap:hover .td-pid, .td-pid:focus-visible { border-bottom-color: var(--color-td-accent); color: var(--color-td-accent); }
-.td-peek-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; visibility: hidden; opacity: 0; pointer-events: none; transition: opacity 120ms ease 120ms, visibility 0s linear 240ms; cursor: default; }
+/* Fixed from the start: the TdPeek hook positions it against the viewport on
+   hover. Keeping it absolute while hidden makes every card in a row extend the
+   scrollable overflow of an overflow-x table wrapper, creating a phantom
+   vertical scrollbar and empty space under the last row. */
+.td-peek-pop { position: fixed; top: calc(100% + 8px); left: 0; z-index: 40; visibility: hidden; opacity: 0; pointer-events: none; transition: opacity 120ms ease 120ms, visibility 0s linear 240ms; cursor: default; }
 /* The card floats 8px under the ID. This bridge keeps the pointer inside the
    hover area while it crosses that gap, so the card does not close before the
    action button can be reached. */
 .td-peek-pop::before { content: ""; position: absolute; left: 0; right: 0; top: -8px; height: 8px; }
-/* A container that holds a hover card (.td-pid-wrap) never clips it: the pop is
-   absolutely positioned below its trigger, so any overflow:hidden ancestor cuts it off. */
-.td-recipe:has(.td-pid-wrap),
-.td-card:has(.td-pid-wrap),
-.td-data:has(.td-pid-wrap),
-.td-table:has(.td-pid-wrap),
-.td-list-table:has(.td-pid-wrap),
-.td-report-table:has(.td-pid-wrap),
+.td-peek-pop[data-side="top"]::before { top: auto; bottom: -8px; }
+/* Modals stay overflow:visible for hover cards when needed; tables/cards keep
+   their horizontal scroll/clip bounds because TdPeek positions fixed. */
 .td-modal-bd:has(.td-pid-wrap),
 .td-modal-slot:has(.td-pid-wrap),
 .td-modal:has(.td-pid-wrap) { overflow: visible; }
@@ -4509,13 +4817,21 @@ td.td-row-actions > * + * { margin-left: 8px; }
 .td-rows.is-clip th:nth-child(4),
 .td-rows.is-clip td:nth-child(4) { width: 140px; }
 .td-serial-sgtin { white-space: normal; overflow-wrap: anywhere; word-break: break-all; max-width: none; font-size: 12px; line-height: 1.3; }
-.td-serial-label { display: flex; align-items: center; gap: 12px; width: 50mm; height: 25mm; padding: 2mm; box-sizing: border-box; border: 1px solid var(--color-td-hairline); border-radius: 4px; background: #fff; color: #171917; }
-.td-serial-label-dm { width: 19mm; height: 19mm; flex: none; }
-.td-serial-label-tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; font-size: 12px; line-height: 1.15; }
-.td-serial-label-tx b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.td-serial-label-tx span { font-family: var(--font-mono, ui-monospace, monospace); white-space: nowrap; }
+.td-serial-label { display: flex; align-items: center; gap: 2mm; width: 50mm; height: 25mm; padding: 2mm; box-sizing: border-box; overflow: hidden; border: 1px solid var(--color-td-hairline); border-radius: 4px; background: #fff; color: #171917; }
+.td-serial-label-dm { width: 18mm; height: 18mm; flex: none; }
+.td-serial-label-tx { display: flex; flex: 1; flex-direction: column; gap: 0.5mm; min-width: 0; font-size: 7px; line-height: 1.2; }
+.td-serial-label-tx b { font-size: 8px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-serial-label-tx span { font-family: var(--font-mono, ui-monospace, monospace); overflow-wrap: anywhere; }
 /* Rendered off screen so html2canvas can rasterise every label for the print job. */
 .td-print-sheet { position: fixed; left: -10000px; top: 0; display: flex; flex-direction: column; gap: 4px; pointer-events: none; }
+
+/* The shipper label uses gs1_admin's unmodified `font-sans` stack rather than
+   the TD Inter theme, so the artwork matches the benchmark in both preview and print. */
+.td-shipper-label,
+.td-shipper-label * {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
 .td-toolbar-count { margin-left: auto; font-size: 14px; color: var(--color-td-ink-2); font-variant-numeric: tabular-nums; }
 .td-toolbar-count b { font-weight: var(--weight-td-medium); color: var(--color-td-ink); }
 

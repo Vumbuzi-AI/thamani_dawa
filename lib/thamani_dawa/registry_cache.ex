@@ -1,20 +1,23 @@
 defmodule ThamaniDawa.RegistryCache do
   @moduledoc """
-  Short-lived cache for external registry lookups (GS1 GRP, PPB facilities
-  register) — mirrors `ThamaniDawa.LoginRateLimiter`'s shape (a plain map in
-  GenServer state, no ETS or external dependency).
+  Short-lived cache for external lookups (GS1 GRP/GLN, PPB facilities
+  register, and manufacturer GS1 reads) — mirrors
+  `ThamaniDawa.LoginRateLimiter`'s shape (a plain map in GenServer state, no
+  ETS or external dependency).
 
   This exists to absorb near-duplicate lookups for the same identifier in
   quick succession: a user correcting a typo and re-triggering the debounced
-  check, and the background verification workers (`Grp.PrefixVerificationWorker`,
-  `Grp.GlnVerificationWorker`, `Ppb.VerificationWorker`) re-checking the same
-  identifier moments after the live signup check already resolved it.
-  Licences are typically renewed annually, so a short TTL here carries
-  negligible risk of ever serving a stale answer.
+  check, a page refreshed while GS1 is slow, and the background verification
+  workers (`Grp.PrefixVerificationWorker`, `Grp.GlnVerificationWorker`,
+  `Ppb.VerificationWorker`) re-checking the same identifier moments after
+  the live signup check already resolved it. Licences are typically renewed
+  annually, so a short TTL here carries negligible risk of ever serving a
+  stale answer.
 
   Only definitive answers are cached — transient failures (`:provider_error`,
   `:timeout`, `:unauthorized`) are never cached, so an outage doesn't get
-  "remembered" past its actual duration. Disable entirely via
+  "remembered" past its actual duration. Callers can invalidate one key with
+  `delete/1` when they know the upstream data changed. Disable entirely via
   `config :thamani_dawa, #{inspect(__MODULE__)}, enabled: false` (set in
   `config/test.exs`, so the test suite's per-test registry stubs are never
   shadowed by a result cached from a different test).
@@ -29,10 +32,11 @@ defmodule ThamaniDawa.RegistryCache do
   @doc """
   Returns the cached value for `key` if present and still fresh; otherwise
   calls `fun.()`, caches the result if `cacheable?.(result)` is true, and
-  returns it. Caching is skipped entirely when disabled via config.
+  returns it. Pass `ttl_ms: ms` to override the default lifetime for the
+  entry. Caching is skipped entirely when disabled via config.
   """
-  def fetch(key, fun, cacheable? \\ &default_cacheable?/1)
-      when is_function(fun, 0) and is_function(cacheable?, 1) do
+  def fetch(key, fun, cacheable? \\ &default_cacheable?/1, opts \\ [])
+      when is_function(fun, 0) and is_function(cacheable?, 1) and is_list(opts) do
     if enabled?() do
       case get(key) do
         {:ok, value} ->
@@ -40,12 +44,23 @@ defmodule ThamaniDawa.RegistryCache do
 
         :miss ->
           value = fun.()
-          if cacheable?.(value), do: put(key, value)
+
+          if cacheable?.(value) do
+            put(key, value, Keyword.get(opts, :ttl_ms, @ttl_ms))
+          end
+
           value
       end
     else
       fun.()
     end
+  end
+
+  @doc "Drops `key` from the cache, so the next `fetch/4` calls `fun` again."
+  def delete(key) do
+    GenServer.cast(__MODULE__, {:delete, key})
+  catch
+    :exit, _reason -> :ok
   end
 
   # The cache is a convenience, not a dependency a registry lookup should
@@ -58,8 +73,8 @@ defmodule ThamaniDawa.RegistryCache do
     :exit, _reason -> :miss
   end
 
-  defp put(key, value) do
-    GenServer.cast(__MODULE__, {:put, key, value})
+  defp put(key, value, ttl_ms) do
+    GenServer.cast(__MODULE__, {:put, key, value, ttl_ms})
   catch
     :exit, _reason -> :ok
   end
@@ -77,22 +92,25 @@ defmodule ThamaniDawa.RegistryCache do
     state = prune(state)
 
     case Map.fetch(state, key) do
-      {:ok, {value, _inserted_at}} -> {:reply, {:ok, value}, state}
+      {:ok, {value, _expires_at}} -> {:reply, {:ok, value}, state}
       :error -> {:reply, :miss, state}
     end
   end
 
   @impl true
-  def handle_cast({:put, key, value}, state) do
-    {:noreply, Map.put(state, key, {value, System.monotonic_time(:millisecond)})}
+  def handle_cast({:put, key, value, ttl_ms}, state) do
+    expires_at = System.monotonic_time(:millisecond) + ttl_ms
+    {:noreply, Map.put(state, key, {value, expires_at})}
+  end
+
+  @impl true
+  def handle_cast({:delete, key}, state) do
+    {:noreply, Map.delete(state, key)}
   end
 
   defp prune(state) do
     now = System.monotonic_time(:millisecond)
-
-    state
-    |> Enum.filter(fn {_key, {_value, inserted_at}} -> now - inserted_at < @ttl_ms end)
-    |> Map.new()
+    state |> Enum.filter(fn {_key, {_value, expires_at}} -> expires_at > now end) |> Map.new()
   end
 
   defp enabled?, do: Application.get_env(:thamani_dawa, __MODULE__, [])[:enabled] != false

@@ -23,6 +23,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
      |> assign(:page_title, "Mobile users")
      |> assign(:api_key, api_key)
      |> assign(:users, [])
+     |> assign(:pending_users, [])
      |> assign(:load_error, nil)
      |> assign(:deactivate_user, nil)
      |> assign(:resend_user, nil)
@@ -78,6 +79,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
         {:noreply,
          socket
          |> put_flash(:info, save_flash(socket.assigns.editing, response))
+         |> remember_created_user(socket.assigns.editing, response)
          |> load_users()
          |> push_patch(to: ~p"/org/mobile-users")}
 
@@ -90,6 +92,16 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, error_message(reason))}
     end
+  end
+
+  def handle_event("refresh", _params, socket) do
+    socket = load_users(socket)
+
+    {:noreply,
+     if(socket.assigns.load_error,
+       do: socket,
+       else: put_flash(socket, :info, "Mobile users refreshed.")
+     )}
   end
 
   def handle_event("ask_resend", %{"id" => id}, socket) do
@@ -165,10 +177,47 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
 
   defp load_users(socket) do
     case MemberApi.list_mobile_users(api_token: socket.assigns.api_key) do
-      {:ok, users} -> socket |> assign(:users, users) |> assign(:load_error, nil)
-      {:error, reason} -> assign(socket, :load_error, error_message(reason))
+      {:ok, users} ->
+        socket
+        |> assign(:users, merge_users(users, socket.assigns.pending_users))
+        |> assign(:load_error, nil)
+
+      {:error, reason} ->
+        socket
+        |> assign(:users, socket.assigns.pending_users)
+        |> assign(:load_error, error_message(reason))
     end
   end
+
+  @doc false
+  def merge_users(users, pending_users) do
+    listed_ids = MapSet.new(users, & &1["id"])
+    users ++ Enum.reject(pending_users, &MapSet.member?(listed_ids, &1["id"]))
+  end
+
+  # GS1's list endpoint can lag behind a just-created user. Keep the user from
+  # the create response so the row is visible immediately and can be resent.
+  defp remember_created_user(socket, nil, %{"mobile_user" => %{"id" => id} = user})
+       when is_binary(id) do
+    users =
+      socket.assigns.pending_users
+      |> Enum.reject(&(&1["id"] == id))
+      |> Kernel.++([user])
+
+    assign(socket, :pending_users, users)
+  end
+
+  defp remember_created_user(socket, _editing, _response), do: socket
+
+  defp pending_invite?(user), do: is_nil(user["last_login_at"]) or user["last_login_at"] == ""
+
+  defp status_tone(%{"active" => false}), do: "neutral"
+  defp status_tone(user), do: if(pending_invite?(user), do: "warning", else: "success")
+
+  defp status_label(%{"active" => false}), do: "Inactive"
+  defp status_label(user), do: if(pending_invite?(user), do: "Invite pending", else: "Active")
+
+  defp resend_label(user), do: if(pending_invite?(user), do: "Resend invite", else: "Resend PIN")
 
   # The GS1 API takes a role and an `aggregation_only` boolean; the form
   # shows the boolean as a scope choice that only applies to manufacturing.
@@ -258,6 +307,15 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
         <:actions>
           <.td_button
             :if={@api_key}
+            id="refresh-mobile-users"
+            variant="secondary"
+            glyph="arrows-clockwise"
+            label="Refresh"
+            phx-click="refresh"
+            phx-disable-with="Refreshing…"
+          />
+          <.td_button
+            :if={@api_key}
             id="new-mobile-user"
             variant="primary"
             label="Add mobile user"
@@ -278,7 +336,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
                 </:action>
               </.td_empty>
             </div>
-          <% @load_error -> %>
+          <% @users == [] and @load_error -> %>
             <p id="mobile-users-error" class="td-note" style="color: var(--color-td-danger);">
               {@load_error}
             </p>
@@ -300,6 +358,11 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
               </.td_empty>
             </div>
           <% true -> %>
+            <%= if @load_error do %>
+              <p id="mobile-users-error" class="td-note mb-4" style="color: var(--color-td-danger);">
+                {@load_error} Showing users added in this session.
+              </p>
+            <% end %>
             <.table id="mobile-users" rows={@users} row_id={&"mobile-user-#{&1["id"]}"}>
               <:col :let={user} label="Name">
                 <div class="font-medium">{user["name"]}</div>
@@ -311,10 +374,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
               </:col>
               <:col :let={user} label="Access">{scope_label(user)}</:col>
               <:col :let={user} label="Status">
-                <.td_badge
-                  tone={if user["active"], do: "success", else: "neutral"}
-                  label={if user["active"], do: "Active", else: "Inactive"}
-                />
+                <.td_badge tone={status_tone(user)} label={status_label(user)} />
               </:col>
               <:action :let={user}>
                 <.link
@@ -330,7 +390,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
                   phx-click="ask_resend"
                   phx-value-id={user["id"]}
                 >
-                  Resend PIN
+                  {resend_label(user)}
                 </.link>
               </:action>
               <:action :let={user}>
@@ -371,6 +431,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
         <.form
           for={@form}
           id="mobile-user-modal-form"
+          class="td-modal-form is-spacious"
           phx-change="validate"
           phx-submit="save"
           autocomplete="off"
@@ -394,9 +455,13 @@ defmodule ThamaniDawaWeb.OrgMobileUserLive.Index do
       <.td_confirm
         :if={@resend_user}
         id="resend-pin-modal"
-        title={"Send #{@resend_user["name"]} a new PIN?"}
+        title={
+          if pending_invite?(@resend_user),
+            do: "Resend the invite to #{@resend_user["name"]}?",
+            else: "Send #{@resend_user["name"]} a new PIN?"
+        }
         body="Their current PIN stops working. GS1 emails the new one."
-        confirm="Send new PIN"
+        confirm={if pending_invite?(@resend_user), do: "Resend invite", else: "Send new PIN"}
         confirm_click="confirm_resend"
         on_cancel={JS.push("cancel_resend")}
       />

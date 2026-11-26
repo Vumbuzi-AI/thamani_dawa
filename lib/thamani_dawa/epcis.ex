@@ -593,7 +593,7 @@ defmodule ThamaniDawa.Epcis do
   def record_facility_receipt(%ThamaniDawa.Batches.Batch{} = batch) do
     site = batch.site_id && Repo.get(Site, batch.site_id)
 
-    if (is_nil(batch.goods_receipt_id) and site) && Site.pharmacy?(site) do
+    if is_nil(batch.goods_receipt_id) and site && Site.pharmacy?(site) do
       received = Repo.preload(batch, :supplier)
 
       record_facility_event(
@@ -747,6 +747,8 @@ defmodule ThamaniDawa.Epcis do
           event_time: now(),
           org_prefix: prefix,
           biz_location_gln: biz_location_gln || org_gln(organization_id),
+          lot_number: batch.batch_no,
+          item_expiration_date: batch.expiry_date,
           epcs: Enum.map(serials, &%{gtin: product.gtin, serial: &1.serial})
         }
 
@@ -779,6 +781,55 @@ defmodule ThamaniDawa.Epcis do
           "commissioning",
           "manufacturer_batch",
           batch.id,
+          reason,
+          @manufacturer
+        )
+    end
+  end
+
+  @doc "Records the verified SSCC-to-SSCC manufacturer packing event for a pallet."
+  def record_manufacturer_pallet_pack(organization_id, pallet, shippers, biz_location_gln \\ nil)
+      when is_list(shippers) do
+    case org_prefix(organization_id) do
+      {:ok, prefix} ->
+        args = %{
+          event_id: Ecto.UUID.generate(),
+          event_time: now(),
+          org_prefix: prefix,
+          biz_location_gln: biz_location_gln || org_gln(organization_id),
+          parent_sscc: pallet.code,
+          sscc_children: Enum.map(shippers, & &1.code)
+        }
+
+        case Event.sscc_packing(args) do
+          {:ok, payload} ->
+            Outbox.enqueue(%{
+              organization_id: organization_id,
+              event_type: "pallet_packing",
+              participant_tier: @manufacturer,
+              payload: payload,
+              occurred_at: args.event_time,
+              source_type: "manufacturer_pallet",
+              source_id: pallet.id
+            })
+
+          {:error, reason} ->
+            block_event(
+              organization_id,
+              "pallet_packing",
+              "manufacturer_pallet",
+              pallet.id,
+              reason,
+              @manufacturer
+            )
+        end
+
+      {:error, reason} ->
+        block_event(
+          organization_id,
+          "pallet_packing",
+          "manufacturer_pallet",
+          pallet.id,
           reason,
           @manufacturer
         )
@@ -905,9 +956,10 @@ defmodule ThamaniDawa.Epcis do
   end
 
   @doc """
-  Records a manufacturer Ship ObjectEvent for one or more shipper/pallet
-  SSCCs dispatched to `destination_gln`. Pass every shipper SSCC under a
-  pallet to report an SSCC-to-SSCC shipment.
+  Records a manufacturer Ship ObjectEvent for the outermost SSCCs dispatched
+  to `destination_gln`. When shippers are on a pallet, pass the pallet SSCC —
+  the shipper-to-pallet containment was already reported by the aggregation
+  event, so listing both would double-count the same physical goods.
   """
   def record_manufacturer_ship(
         organization_id,

@@ -142,6 +142,118 @@ defmodule ThamaniDawaWeb.Api.Response do
   defp reason_details(:reason_required),
     do: {422, "validation_failed", "A reason is required to change a completed result."}
 
+  defp reason_details(:unsupported_preparation_method),
+    do:
+      {422, "unsupported_preparation_method",
+       "This batch can only be prepared during packing. Choose that option and try again."}
+
+  defp reason_details(:serialization_not_completed),
+    do:
+      {422, "serialization_not_completed",
+       "Generate product serials before creating shippers for this batch."}
+
+  defp reason_details(:preparation_method_locked),
+    do:
+      {422, "preparation_method_locked",
+       "This batch has already started packing. Refresh it and continue from the current step."}
+
+  defp reason_details(:sscc_prerequisites_missing),
+    do:
+      {422, "sscc_prerequisites_missing",
+       "A valid ship-from and ship-to GLN is needed before a shipper can be created."}
+
+  defp reason_details(:sscc_unavailable),
+    do: {503, "unavailable", "GS1 couldn't create the shipper label right now. Try again."}
+
+  defp reason_details(:reconciliation_required),
+    do:
+      {422, "reconciliation_required",
+       "We couldn't confirm whether GS1 created the label. Check your GS1 account before trying again."}
+
+  defp reason_details(:not_actionable),
+    do:
+      {422, "not_actionable",
+       "That step is no longer available. Refresh the batch and continue from the current step."}
+
+  defp reason_details(:unconfigured),
+    do:
+      {422, "unconfigured",
+       "GS1 isn't set up for your organization. Add your GS1 key in organization settings."}
+
+  defp reason_details(:unavailable),
+    do: {503, "unavailable", "We couldn't reach GS1. Try again in a moment."}
+
+  defp reason_details(:unknown_serial),
+    do: {422, "unknown_serial", "That serial is not in this batch."}
+
+  defp reason_details(:already_aggregated),
+    do: {422, "already_aggregated", "That item is already packed."}
+
+  defp reason_details(:unknown_shipper),
+    do: {422, "unknown_shipper", "No shipper with that label was found."}
+
+  defp reason_details(:no_shippers_captured),
+    do: {422, "no_shippers_captured", "Scan at least one shipper before continuing."}
+
+  defp reason_details(:capacity_not_reached),
+    do: {422, "capacity_not_reached", "Scan more items before finishing this shipper."}
+
+  defp reason_details(:capacity_reached),
+    do: {422, "capacity_reached", "This shipper is full. Request its label first."}
+
+  defp reason_details(:parent_mismatch),
+    do: {422, "parent_mismatch", "That label does not match the one on this batch."}
+
+  defp reason_details(:invalid_scan),
+    do: {422, "invalid_scan", "That code could not be used here. Scan it again."}
+
+  defp reason_details(:duplicate_scan),
+    do: {422, "duplicate_scan", "That item has already been scanned."}
+
+  defp reason_details(:invalid_product_identifier),
+    do: {422, "invalid_product_identifier", "That product code is not valid for this batch."}
+
+  defp reason_details(:wrong_product_or_batch),
+    do: {422, "wrong_product_or_batch", "That item belongs to a different product or batch."}
+
+  defp reason_details(:invalid_sscc),
+    do: {422, "invalid_sscc", "That shipper label is not valid."}
+
+  defp reason_details(:shipper_in_transit),
+    do: {422, "shipper_in_transit", "That shipper is already on a shipment."}
+
+  defp reason_details(:shipper_not_completed),
+    do: {422, "shipper_not_completed", "That shipper has not been packed yet."}
+
+  defp reason_details(:different_destination),
+    do: {422, "different_destination", "That shipper is going to a different destination."}
+
+  defp reason_details(:no_available_sscc),
+    do: {422, "no_available_sscc", "There is no shipper label available right now."}
+
+  defp reason_details(:batch_not_ready),
+    do: {422, "batch_not_ready", "This batch is not ready for that step yet."}
+
+  defp reason_details(:shipper_preparation_required),
+    do: {422, "shipper_preparation_required", "Prepare this batch for shipper packing first."}
+
+  defp reason_details(:invalid_session_stage),
+    do:
+      {422, "invalid_session_stage",
+       "This step is no longer available. Refresh the batch and continue from the current step."}
+
+  defp reason_details(:active_session_exists),
+    do: {422, "active_session_exists", "This batch already has an active packing session."}
+
+  defp reason_details(:batch_not_found),
+    do: {404, "not_found", "That batch is no longer available."}
+
+  defp reason_details(:missing_serials),
+    do: {422, "missing_serials", "GS1 returned no serials for this batch. Try again."}
+
+  defp reason_details(:not_reconcilable),
+    do: {422, "not_reconcilable", "This batch does not need that check. Refresh it and continue."}
+
   defp reason_details(reason) when is_atom(reason) do
     {422, Atom.to_string(reason), "The request could not be completed."}
   end

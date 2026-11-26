@@ -18,6 +18,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
      socket
      |> assign(:page_title, product.name)
      |> assign(:product, product)
+     |> assign(:label_sscc, nil)
      |> load_batches()
      |> load_groups()}
   end
@@ -41,17 +42,17 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
 
   defp apply_action(socket, :create_sscc, _params) do
     socket
-    |> assign(:sscc_form, to_form(sscc_default_params(), as: :sscc))
+    |> put_flash(
+      :info,
+      "Prepare shipper SSCCs from the batch aggregation workflow so allocation, label verification, and actual contents stay connected."
+    )
+    |> push_navigate(to: ~p"/manufacturer/aggregations")
   end
 
   defp apply_action(socket, :show, _params), do: socket
 
   defp serials_default_params do
     %{trade_item_qty: 10, shipper_qty: nil, create_shippers: false, from_gln: nil, to_gln: nil}
-  end
-
-  defp sscc_default_params do
-    %{count_of_trade_items: nil, from_address: nil, to_address: nil}
   end
 
   def handle_event("validate_batch", %{"batch" => params}, socket) do
@@ -95,7 +96,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
         {:noreply, put_flash(socket, :error, "Choose a batch first.")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Couldn't generate serials: #{inspect(reason)}")}
+        {:noreply, put_flash(socket, :error, generation_error(reason))}
     end
   end
 
@@ -109,7 +110,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
            Manufacturing.create_sscc(organization_id, product, [batch], member_params) do
       {:noreply,
        socket
-       |> put_flash(:info, "SSCC #{shipper_sscc.code} created.")
+       |> put_flash(:info, "Shipper label #{shipper_sscc.code} created.")
        |> load_groups()
        |> push_patch(to: ~p"/manufacturer/products/#{product.id}")}
     else
@@ -117,9 +118,64 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
         {:noreply, put_flash(socket, :error, "Choose a batch first.")}
 
       {:error, reason} ->
-        {:noreply, put_flash(socket, :error, "Couldn't create the SSCC: #{inspect(reason)}")}
+        {:noreply, put_flash(socket, :error, sscc_error(reason))}
     end
   end
+
+  def handle_event("open_label", %{"id" => id}, socket) do
+    case Integer.parse(id) do
+      {sscc_id, ""} ->
+        sscc =
+          socket.assigns.pallet_groups
+          |> Enum.flat_map(fn {_pallet, rows} -> rows end)
+          |> Enum.find(&(&1.sscc.id == sscc_id))
+
+        case sscc do
+          nil -> {:noreply, socket}
+          %{sscc: sscc} -> {:noreply, assign(socket, :label_sscc, sscc)}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_label", _params, socket),
+    do: {:noreply, assign(socket, :label_sscc, nil)}
+
+  defp generation_error(:unconfigured),
+    do:
+      "GS1 isn't set up for your organization. Add your GS1 key in organization settings, then try again."
+
+  defp generation_error(reason) when reason in [:unauthorized, :forbidden],
+    do: "GS1 rejected your API key. Check it in organization settings, then try again."
+
+  defp generation_error(:not_found),
+    do: "This product isn't in your GS1 account. Sync it from GS1 first, then try again."
+
+  defp generation_error(:unavailable), do: "We couldn't reach GS1. Try again in a moment."
+
+  defp generation_error({:invalid, _message}),
+    do: "GS1 couldn't accept the batch details. Check them and try again."
+
+  defp generation_error(_reason),
+    do: "We couldn't complete that request. Try again in a moment."
+
+  defp sscc_error(:unconfigured),
+    do:
+      "GS1 isn't set up for your organization. Add your GS1 key in organization settings, then try again."
+
+  defp sscc_error(reason) when reason in [:unauthorized, :forbidden],
+    do: "GS1 rejected your API key. Check it in organization settings, then try again."
+
+  defp sscc_error(:unavailable),
+    do: "We couldn't reach GS1 to create the shipper label. Try again in a moment."
+
+  defp sscc_error({:invalid, _message}),
+    do: "GS1 couldn't accept the shipper details. Check them and try again."
+
+  defp sscc_error(_reason),
+    do: "We couldn't create the shipper label. Try again in a moment."
 
   defp fetch_batch(_organization_id, batch_id) when batch_id in [nil, ""],
     do: {:error, :batch_not_found}
@@ -173,7 +229,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
     pallet_groups =
       Enum.group_by(groups, fn %{sscc: sscc} -> sscc.pallet && sscc.pallet.code end)
 
-    assign(socket, :pallet_groups, pallet_groups)
+    label_sscc =
+      case socket.assigns[:label_sscc] do
+        %{id: sscc_id} ->
+          case Enum.find(groups, &(&1.sscc.id == sscc_id)) do
+            %{sscc: sscc} -> sscc
+            nil -> nil
+          end
+
+        _ ->
+          nil
+      end
+
+    socket
+    |> assign(:pallet_groups, pallet_groups)
+    |> assign(:label_sscc, label_sscc)
   end
 
   defp pallet_label(nil), do: "Loose shippers (no pallet)"
@@ -308,9 +378,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
                         navigate={~p"/manufacturer/sscc/#{sscc.id}/serials"}
                       />
                       <.td_button
+                        id={"product-sscc-label-#{sscc.id}"}
                         variant="secondary"
-                        label="Case label"
-                        navigate={~p"/manufacturer/sscc/#{sscc.id}/label"}
+                        label="Shipper label"
+                        phx-click="open_label"
+                        phx-value-id={sscc.id}
                       />
                       <.td_button
                         variant="secondary"
@@ -326,14 +398,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
                 :if={@pallet_groups == %{}}
                 icon="package"
                 title="No SSCCs yet"
-                hint="Create an SSCC to pack serialised units for shipping."
+                hint="Prepare shipper labels from the batch aggregation workflow."
               >
                 <:action>
                   <.td_button
                     variant="secondary"
                     glyph="arrow-right"
-                    label="Create SSCC"
-                    patch={~p"/manufacturer/products/#{@product.id}/sscc"}
+                    label="Open aggregation"
+                    navigate={~p"/manufacturer/aggregations"}
                   />
                 </:action>
               </.td_empty>
@@ -366,6 +438,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
           <.td_input field={@sscc_form[:to_address]} label="To address" />
         </.form>
       </.td_overlay_form>
+
+      <ThamaniDawaWeb.ManufacturerSsccLive.Label.modal
+        :if={@label_sscc}
+        sscc={@label_sscc}
+        product_name={@product.name}
+        on_cancel={JS.push("close_label")}
+      />
     </Layouts.manufacturer_shell>
     """
   end

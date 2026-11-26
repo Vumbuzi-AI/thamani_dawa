@@ -132,7 +132,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
             <div :if={@shipment.shippers == []} class="td-pad">
               <.td_empty
                 title="Nothing packed yet"
-                hint="A mobile user scans units into shippers before this list has lines."
+                hint="This shipment has no shippers. New shipments are created from packed SSCCs."
               />
             </div>
             <table :if={@shipment.shippers != []} class="td-rows" id="manufacturer-packing-list">
@@ -211,7 +211,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
           <div :if={@shipment.status == "draft"} id="manufacturer-draft-note" class="td-ban is-info">
             <.td_icon name="info" />
             <span>
-              Nothing is packed yet. A mobile user finds this shipment by order {@shipment.order_number} and scans units into shippers.
+              This shipment has not been dispatched. Packing is completed before a shipment is created; no mobile packing step is needed here.
             </span>
           </div>
 
@@ -259,7 +259,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Review do
               <div :if={@shipment.shippers == []} class="td-pad">
                 <.td_empty
                   title="Nothing packed yet"
-                  hint={"A mobile user finds this shipment by order #{@shipment.order_number} and scans units into shippers."}
+                  hint="Create new shipments from packed SSCCs; packing is not done from a shipment."
                 />
               </div>
               <table :if={@shipment.shippers != []} class="td-rows" id="manufacturer-contents">

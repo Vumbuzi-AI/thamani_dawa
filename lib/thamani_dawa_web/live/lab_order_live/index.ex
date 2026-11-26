@@ -389,7 +389,8 @@ defmodule ThamaniDawaWeb.LabOrderLive.Index do
   defp filter_by_paid(lab_orders, "unpaid"), do: Enum.reject(lab_orders, & &1.has_paid)
 
   defp filter_by_created(lab_orders, %{date_from: from, date_to: to})
-       when from != "" or to != "", do: lab_orders
+       when from != "" or to != "",
+       do: lab_orders
 
   defp filter_by_created(lab_orders, %{created: created}),
     do: filter_by_created(lab_orders, created)

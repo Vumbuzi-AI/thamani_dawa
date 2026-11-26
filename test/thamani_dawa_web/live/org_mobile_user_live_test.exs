@@ -22,9 +22,8 @@ defmodule ThamaniDawaWeb.OrgMobileUserLiveTest do
   defp unique_username(prefix), do: "#{prefix}#{System.unique_integer([:positive])}"
 
   defp stub_user_by_username(username) do
-    {:ok, users} =
-      MemberApiStub.post_mobile_users("list", %{})
-      |> then(fn {:ok, b} -> {:ok, b["mobile_users"]} end)
+    {:ok, body} = MemberApiStub.post_mobile_users("list", %{})
+    users = body["mobile_users"]
 
     Enum.find(users, &(&1["username"] == username))
   end
@@ -117,7 +116,7 @@ defmodule ThamaniDawaWeb.OrgMobileUserLiveTest do
 
     view |> element("#resend-pin-#{id}") |> render_click()
 
-    assert view |> element("#resend-pin-modal button", "Send new PIN") |> render_click() =~
+    assert view |> element("#resend-pin-modal button", "Resend invite") |> render_click() =~
              "new PIN was emailed"
 
     view |> element("#deactivate-mobile-user-#{id}") |> render_click()
@@ -127,5 +126,60 @@ defmodule ThamaniDawaWeb.OrgMobileUserLiveTest do
 
     view |> element("#activate-mobile-user-#{id}") |> render_click()
     assert has_element?(view, "#deactivate-mobile-user-#{id}")
+  end
+
+  test "shows a user who has not used their PIN as invite pending", %{conn: conn} do
+    admin = user_fixture() |> with_gs1_key()
+    username = unique_username("pending")
+
+    {:ok, %{"mobile_user" => %{"id" => id}}} =
+      MemberApiStub.post_mobile_users("create", %{
+        "name" => "Pending User",
+        "username" => username,
+        "email" => "#{username}@example.com",
+        "role" => "manufacturing"
+      })
+
+    {:ok, view, html} = live(log_in(conn, admin), ~p"/org/mobile-users")
+
+    assert html =~ "Invite pending"
+    assert has_element?(view, "#mobile-user-#{id}", "Resend invite")
+    refute has_element?(view, "#mobile-user-#{id}", "Resend PIN")
+  end
+
+  test "refresh reloads users created on GS1 after the page was loaded", %{conn: conn} do
+    admin = user_fixture() |> with_gs1_key()
+    username = unique_username("late")
+
+    {:ok, view, _html} = live(log_in(conn, admin), ~p"/org/mobile-users")
+
+    {:ok, %{"mobile_user" => %{"id" => id}}} =
+      MemberApiStub.post_mobile_users("create", %{
+        "name" => "Late User",
+        "username" => username,
+        "email" => "#{username}@example.com",
+        "role" => "manufacturing"
+      })
+
+    refute has_element?(view, "#mobile-user-#{id}")
+
+    html = view |> element("#refresh-mobile-users") |> render_click()
+
+    assert has_element?(view, "#mobile-user-#{id}")
+    assert html =~ "Mobile users refreshed."
+  end
+
+  test "merge_users keeps users added this session when GS1's list has not returned them" do
+    listed = [%{"id" => "listed", "name" => "Listed"}]
+
+    pending = [
+      %{"id" => "listed", "name" => "Stale copy"},
+      %{"id" => "new", "name" => "Just added"}
+    ]
+
+    merged = ThamaniDawaWeb.OrgMobileUserLive.Index.merge_users(listed, pending)
+
+    assert Enum.map(merged, & &1["id"]) == ["listed", "new"]
+    assert hd(merged)["name"] == "Listed"
   end
 end

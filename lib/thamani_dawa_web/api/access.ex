@@ -9,6 +9,8 @@ defmodule ThamaniDawaWeb.Api.Access do
 
   def portal?(%Scope{} = scope, :org), do: Scope.admin?(scope)
 
+  def portal?(%Scope{} = scope, :manufacturer), do: Scope.manufacturer_access?(scope)
+
   def portal?(%Scope{} = scope, :pharmacy) do
     Scope.pharmacy_access?(scope) and (Scope.admin?(scope) or site_offers?(scope, :pharmacy))
   end
@@ -20,7 +22,7 @@ defmodule ThamaniDawaWeb.Api.Access do
   def portal?(_scope, _portal), do: false
 
   def portals(%Scope{} = scope) do
-    Enum.filter([:org, :pharmacy, :lab], &portal?(scope, &1))
+    Enum.filter([:org, :manufacturer, :pharmacy, :lab], &portal?(scope, &1))
   end
 
   def same_site?(%Scope{} = scope, site_id) do

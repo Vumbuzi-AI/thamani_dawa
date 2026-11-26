@@ -43,7 +43,12 @@ defmodule ThamaniDawa.Epcis.SubmissionWorker do
   """
   def submit_now(%OutboxEvent{status: "pending"} = event) do
     organization = Organizations.get_organization!(event.organization_id)
-    submit_event(event, organization)
+
+    if Outbox.dependencies_satisfied?(event) do
+      submit_event(event, organization)
+    else
+      {:blocked, event}
+    end
   end
 
   @impl Oban.Worker
@@ -69,24 +74,31 @@ defmodule ThamaniDawa.Epcis.SubmissionWorker do
   end
 
   defp submit(event, rest, organization) do
+    case Outbox.dependencies_satisfied?(event) do
+      false ->
+        # Keep the event pending: local aggregation has completed, but TrackIQ
+        # must see its prerequisite first. The queue remains chronological.
+        {:snooze, 60}
+
+      true ->
+        submit_satisfied_event(event, rest, organization)
+    end
+  end
+
+  defp submit_satisfied_event(event, rest, organization) do
     case submit_event(event, organization) do
-      {:accepted, _updated} ->
-        drain(rest, organization)
+      {:accepted, _updated} -> drain(rest, organization)
+      {:duplicate, _updated} -> drain(rest, organization)
+      {:rejected, _updated} -> :ok
+      {:blocked, _updated} -> :ok
+      {:retry, updated} -> retry_or_stop(updated)
+    end
+  end
 
-      {:duplicate, _updated} ->
-        drain(rest, organization)
-
-      {:rejected, _updated} ->
-        :ok
-
-      {:blocked, _updated} ->
-        drain(rest, organization)
-
-      {:retry, updated} ->
-        case updated.status do
-          "pending" -> {:snooze, max(wait_seconds(updated), 1)}
-          _dead -> :ok
-        end
+  defp retry_or_stop(updated) do
+    case updated.status do
+      "pending" -> {:snooze, max(wait_seconds(updated), 1)}
+      _dead -> :ok
     end
   end
 

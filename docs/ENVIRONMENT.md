@@ -14,6 +14,11 @@ Configuration source: `config/dev.exs`.
 | Endpoint port | `4000` | No | Set in `runtime.exs` through `PORT`, defaults to `4000` |
 | `secret_key_base` | committed dev secret | Yes | Dev only |
 | `dev_routes` | `true` | No | Enables LiveDashboard and mailbox |
+| `POSTAL_API_KEY` | No | unset | Enables real MailSafi Postal delivery; otherwise emails stay in `/dev/mailbox` |
+| `POSTAL_API_URL` | No | `https://postalmail.mailsafi.com/api/v1/send/message` | Full send endpoint or bare Postal base URL |
+| `POSTAL_FROM_ADDRESS` | No | `noreply@thamanidawa.example` | From address on outgoing mail |
+| `POSTAL_FROM_NAME` | No | `Thamani Dawa` | From name on outgoing mail |
+| `EMAIL_ASSET_BASE_URL` | No | `https://thamanidawa.com` | Public base URL for images embedded in emails |
 
 Dev uses file watchers for Mix-managed esbuild and Tailwind.
 
@@ -42,8 +47,12 @@ Configuration source: `config/runtime.exs` when `config_env() == :prod`.
 | `ECTO_IPV6` | No | false | Enables IPv6 socket options when `true` or `1` |
 | `DNS_CLUSTER_QUERY` | No | nil | DNS clustering query |
 | `PHX_SERVER` | No | false | Starts endpoint server in releases |
+| `POSTAL_API_KEY` | Yes | none | MailSafi Postal server API key (same provider as medic) |
+| `POSTAL_API_URL` | No | `https://postalmail.mailsafi.com/api/v1/send/message` | Full send endpoint or bare Postal base URL |
+| `POSTAL_FROM_ADDRESS` | No | `noreply@thamanidawa.example` | From address on outgoing mail |
+| `POSTAL_FROM_NAME` | No | `Thamani Dawa` | From name on outgoing mail |
 
-Production also enables SSL forcing in `config/prod.exs`, configures Swoosh to use `Swoosh.ApiClient.Req`, and expects static assets to be digested with `mix assets.deploy`.
+Production also enables SSL forcing in `config/prod.exs`, sends mail through MailSafi Postal via `Swoosh.Adapters.Postal` with `Swoosh.ApiClient.Req`, and expects static assets to be digested with `mix assets.deploy`.
 
 ## Mix Aliases
 

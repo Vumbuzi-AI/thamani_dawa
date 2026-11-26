@@ -502,21 +502,10 @@ defmodule ThamaniDawaWeb.Layouts do
                 :if={@organization_picker_option}
                 option={@organization_picker_option}
               />
-              <p
-                :if={@organization_picker_option && @site_picker_options != []}
-                id="site-switch-sites-heading"
-                class="td-popover-label"
-              >
-                Sites
-              </p>
-              <p
-                :if={!@organization_picker_option && @site_picker_options != []}
-                id="site-switch-sites-heading"
-                class="td-popover-label"
-              >
-                Your sites
-              </p>
-              <.site_picker_option :for={option <- @site_picker_options} option={option} />
+              <.site_picker_sites
+                options={@site_picker_options}
+                has_organization?={not is_nil(@organization_picker_option)}
+              />
             </div>
           </div>
         </form>
@@ -1010,8 +999,8 @@ defmodule ThamaniDawaWeb.Layouts do
          {"Dashboard", "squares-four", ~p"/manufacturer"},
          {"Products", "package", ~p"/manufacturer/products"},
          {"Inventory", "cube", ~p"/manufacturer/inventory"},
-         {"Shipments", "truck", ~p"/manufacturer/shipments"},
          {"Aggregation", "squares-plus", ~p"/manufacturer/aggregations"},
+         {"Shipments", "truck", ~p"/manufacturer/shipments"},
          {"Mobile users", "device-mobile-camera", ~p"/manufacturer/mobile-users"}
        ]},
       {"Account",
@@ -1167,8 +1156,10 @@ defmodule ThamaniDawaWeb.Layouts do
 
     sites
     |> Enum.filter(&Portals.site_usable?(scope, &1))
+    |> Enum.sort_by(&{site_group_rank(&1), String.downcase(&1.name)})
     |> Enum.map(fn site ->
       %{
+        group: site_group(site),
         id: "site-switch-option-#{site.id}",
         name: site.name,
         subtitle: site_activity_summary(site),
@@ -1177,6 +1168,54 @@ defmodule ThamaniDawaWeb.Layouts do
         value: to_string(site.id)
       }
     end)
+  end
+
+  defp site_group_rank(site) do
+    cond do
+      Site.manufacturer?(site) -> 0
+      Site.distribution?(site) -> 1
+      Site.pharmacy?(site) -> 2
+      Site.lab?(site) -> 3
+      true -> 4
+    end
+  end
+
+  defp site_group(site) do
+    case site_group_rank(site) do
+      0 -> "Manufacturing"
+      1 -> "Distribution"
+      2 -> "Pharmacies"
+      3 -> "Laboratories"
+      _ -> "Other sites"
+    end
+  end
+
+  attr :options, :list, required: true
+  attr :has_organization?, :boolean, required: true
+
+  defp site_picker_sites(assigns) do
+    assigns = assign(assigns, :groups, Enum.chunk_by(assigns.options, & &1.group))
+
+    ~H"""
+    <%= cond do %>
+      <% @options == [] -> %>
+      <% match?([_, _ | _], @groups) -> %>
+        <%= for [first | _] = group <- @groups do %>
+          <p
+            id={"site-switch-group-#{first.group |> String.downcase() |> String.replace(" ", "-")}"}
+            class="td-popover-label"
+          >
+            {first.group}
+          </p>
+          <.site_picker_option :for={option <- group} option={option} />
+        <% end %>
+      <% true -> %>
+        <p id="site-switch-sites-heading" class="td-popover-label">
+          {if(@has_organization?, do: "Sites", else: "Your sites")}
+        </p>
+        <.site_picker_option :for={option <- @options} option={option} />
+    <% end %>
+    """
   end
 
   defp site_context_icon(site) do

@@ -295,11 +295,30 @@ defmodule ThamaniDawa.Epcis.EventTest do
       event_time: @event_time,
       org_prefix: "6164005",
       biz_location_gln: @gln,
+      lot_number: "LOT-1001",
+      item_expiration_date: ~D[2028-11-30],
       epcs: [%{gtin: "6164005056517", serial: "1001"}]
     }
 
     assert {:ok, event} = Event.commission(args)
     assert event["epcList"] == ["urn:epc:id:sgtin:6164005.005651.1001"]
+    assert event["ilmd"] == %{"lotNumber" => "LOT-1001", "itemExpirationDate" => "2028-11-30"}
+  end
+
+  test "manufacturer pallet packing uses SSCC children and an active disposition" do
+    args = %{
+      event_id: @event_id,
+      event_time: @event_time,
+      org_prefix: @org_prefix,
+      biz_location_gln: @gln,
+      parent_sscc: "006141411234567890",
+      sscc_children: ["006141411234567883"]
+    }
+
+    assert {:ok, event} = Event.sscc_packing(args)
+    assert event["parentID"] == "urn:epc:id:sscc:0614141.0123456789"
+    assert event["childEPCs"] == ["urn:epc:id:sscc:0614141.0123456788"]
+    assert event["disposition"] == "active"
   end
 
   test "mixed dispensing carries both epcList and quantityList" do

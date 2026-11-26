@@ -83,6 +83,13 @@ defmodule ThamaniDawaWeb.ManufacturerMobileUserLive.Index do
     end
   end
 
+  def handle_event("refresh", _params, socket) do
+    {:noreply,
+     socket
+     |> load_users()
+     |> put_flash(:info, "Mobile users refreshed.")}
+  end
+
   def handle_event("resend_pin", %{"id" => id}, socket) do
     mobile_user = Distributor.get_mobile_user!(socket.assigns.current_scope.organization_id, id)
     {:ok, mobile_user} = Distributor.resend_mobile_user_pin(mobile_user)
@@ -147,13 +154,26 @@ defmodule ThamaniDawaWeb.ManufacturerMobileUserLive.Index do
       >
         <:actions>
           <.td_button
+            id="refresh-manufacturer-mobile-users"
+            variant="secondary"
+            glyph="arrows-clockwise"
+            label="Refresh"
+            phx-click="refresh"
+            phx-disable-with="Refreshing…"
+          />
+          <.td_button
             id="add-manufacturer-mobile-user"
             variant="primary"
             label="Add mobile user"
             patch={~p"/manufacturer/mobile-users/new"}
           />
         </:actions>
-        <.td_data_table id="manufacturer-mobile-users" rows={@streams.mobile_users}>
+        <.td_data_table
+          id="manufacturer-mobile-users"
+          class="td-mobile-users-table"
+          rows={@streams.mobile_users}
+          row_id={fn {id, _mobile_user} -> id end}
+        >
           <:col :let={{_id, mobile_user}} label="Name">
             <.td_key_value label={mobile_user.name} value={"@#{mobile_user.username}"} mono />
           </:col>
@@ -170,32 +190,34 @@ defmodule ThamaniDawaWeb.ManufacturerMobileUserLive.Index do
             {date_time(mobile_user.last_login_at)}
           </:col>
           <:action :let={{_id, mobile_user}}>
-            <.td_button
-              variant="secondary"
-              label="Edit"
-              patch={~p"/manufacturer/mobile-users/#{mobile_user.id}/edit"}
-            />
-            <.td_button
-              variant="secondary"
-              label="Resend PIN"
-              phx-click="resend_pin"
-              phx-value-id={mobile_user.id}
-            />
-            <.td_button
-              :if={mobile_user.active}
-              id={"deactivate-mobile-user-#{mobile_user.id}"}
-              variant="danger"
-              label="Deactivate"
-              phx-click="ask_deactivate"
-              phx-value-id={mobile_user.id}
-            />
-            <.td_button
-              :if={!mobile_user.active}
-              variant="secondary"
-              label="Activate"
-              phx-click="activate"
-              phx-value-id={mobile_user.id}
-            />
+            <div class="td-mobile-user-actions">
+              <.td_button
+                variant="secondary"
+                label="Edit"
+                patch={~p"/manufacturer/mobile-users/#{mobile_user.id}/edit"}
+              />
+              <.td_button
+                variant="secondary"
+                label="Resend PIN"
+                phx-click="resend_pin"
+                phx-value-id={mobile_user.id}
+              />
+              <.td_button
+                :if={mobile_user.active}
+                id={"deactivate-mobile-user-#{mobile_user.id}"}
+                variant="danger"
+                label="Deactivate"
+                phx-click="ask_deactivate"
+                phx-value-id={mobile_user.id}
+              />
+              <.td_button
+                :if={!mobile_user.active}
+                variant="secondary"
+                label="Activate"
+                phx-click="activate"
+                phx-value-id={mobile_user.id}
+              />
+            </div>
           </:action>
           <:empty>
             <.td_empty
@@ -227,6 +249,7 @@ defmodule ThamaniDawaWeb.ManufacturerMobileUserLive.Index do
         <.form
           for={@form}
           id="manufacturer-mobile-user-modal-form"
+          class="td-modal-form is-spacious"
           phx-change="validate"
           phx-submit="save"
         >

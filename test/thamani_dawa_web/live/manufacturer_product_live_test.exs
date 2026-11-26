@@ -1,11 +1,31 @@
 defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
-  use ThamaniDawaWeb.ConnCase, async: true
+  # The GS1 stub is a shared named Agent; keep these tests sequential so one
+  # test's directory fixtures cannot overwrite another's search results.
+  use ThamaniDawaWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+
+  setup do
+    ThamaniDawa.GS1.MemberApiStub.reset()
+    :ok
+  end
+
   import ThamaniDawa.AccountsFixtures
   import ThamaniDawa.ManufacturerFixtures
 
   alias ThamaniDawa.Manufacturing
+  alias ThamaniDawa.Manufacturing.ShipperSscc
+  alias ThamaniDawa.Organizations
+  alias ThamaniDawa.Repo
+
+  defp allow_stock_serialization(organization) do
+    {:ok, updated} =
+      Organizations.update_organization_settings(organization, %{
+        stock_serialization_enabled: true
+      })
+
+    updated
+  end
 
   defp manufacturer_session(_conn) do
     organization = manufacturer_organization_fixture()
@@ -68,6 +88,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     conn = log_in_user(conn, user)
     {:ok, lv, _html} = live(conn, ~p"/manufacturer/products")
+    render_async(lv)
 
     assert has_element?(lv, "#product-#{product.id}-serial-count", "17")
     assert has_element?(lv, "#product-#{product.id}-serials", "View serials")
@@ -130,62 +151,177 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(lv, "#sync-manufacturer-products")
   end
 
-  test "make-to-stock path creates a batch and primary serials without an SSCC", %{
-    conn: conn
-  } do
+  test "organization settings enable stock serialization explicitly", %{conn: conn} do
+    organization = manufacturer_organization_fixture()
+    site = manufacturing_site_fixture(organization.id)
+
+    user =
+      staff_fixture(%{
+        organization_id: organization.id,
+        site_id: site.id,
+        role: :admin
+      })
+
+    refute Organizations.stock_serialization_enabled?(organization)
+    conn = log_in_user(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/manufacturer/settings")
+
+    assert has_element?(view, "#organization-stock-serialization-enabled")
+    refute has_element?(view, "#organization-stock-serialization-enabled[checked]")
+
+    view
+    |> form("#distributor-gs1-settings-form", %{
+      "organization" => %{"stock_serialization_enabled" => "true"}
+    })
+    |> render_submit()
+
+    assert Organizations.stock_serialization_enabled?(
+             Organizations.get_organization!(organization.id)
+           )
+
+    assert has_element?(view, "#organization-stock-serialization-enabled[checked]")
+  end
+
+  test "serial wizard defaults to order-only when stock serialization is disabled", %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+
+    refute Organizations.stock_serialization_enabled?(organization)
+    conn = log_in_user(conn, user)
+
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials/new")
+
+    lv
+    |> form("#manufacturer-serial-generation-form", %{
+      "serial_generation" => %{
+        "batch_no" => "LOT-2026-ORDER-ONLY",
+        "production_date" => "2026-11-20",
+        "expiry_date" => "2027-11-20",
+        "primary_quantity" => "4",
+        "shipper_quantity" => "2"
+      }
+    })
+    |> render_submit()
+
+    assert has_element?(lv, "#serial-generation-order-only-note")
+    assert has_element?(lv, ~s(input[name="serial_generation[order_intent]"][value="order"]))
+    refute has_element?(lv, "#serial-generation-order-intent")
+    refute has_element?(lv, "#serial-generation-order-intent-stock")
+    assert has_element?(lv, "#serial-generation-order-number")
+    assert has_element?(lv, "#serial-generation-to-gln-combobox")
+    refute has_element?(lv, "#serial-wizard-mode-stock")
+
+    # A crafted stock submission bypasses the hidden radio and is forced back
+    # to order mode, so it cannot skip the genuine PO/destination requirement.
+    render_submit(
+      element(lv, "#manufacturer-serial-generation-form"),
+      %{"serial_generation" => %{"order_intent" => "stock"}}
+    )
+
+    assert has_element?(lv, "#serial-generation-order-number")
+    assert has_element?(lv, "#serial-generation-to-gln-combobox")
+    assert Manufacturing.list_batches(organization.id, product.id) == []
+  end
+
+  test "two-step wizard serializes stock without allocating an SSCC", %{conn: conn} do
     %{organization: organization, site: site, user: user, product: product} =
       manufacturer_session(conn)
 
+    organization = allow_stock_serialization(organization)
     conn = log_in_user(conn, user)
 
     {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials/new")
 
     assert has_element?(lv, "#serial-wizard-product", product.gtin)
     assert has_element?(lv, "#manufacturer-serial-modal", "Generate serials")
-    assert has_element?(lv, "#serial-wizard-subtitle", "Choose how this batch leaves the plant.")
-    refute has_element?(lv, "#manufacturer-serial-generation-form")
-
-    lv |> element("#serial-wizard-mode-stock") |> render_click()
-
-    assert has_element?(lv, "#manufacturer-serial-generation-form")
-    assert has_element?(lv, "#serial-wizard-subtitle", "Make to stock")
-    assert has_element?(lv, "#serial-wizard-prev", "Back")
+    assert has_element?(lv, "#serial-wizard-subtitle", "Batch details")
+    assert has_element?(lv, "#serial-wizard-step-batch.is-current")
     assert has_element?(lv, "#manufacturer-serial-generation-form", "Batch number")
-    # Step 2 dates are the TD date picker, never the browser's native calendar.
+    assert has_element?(lv, "#serial-generation-facility-summary", site.name)
+    assert has_element?(lv, "#serial-generation-facility-summary", site.gln)
+    assert has_element?(lv, "#serial-generation-facility-summary", site.address)
+    refute has_element?(lv, ~s(input[name="serial_generation[from_gln]"]))
+    refute has_element?(lv, ~s(input[name="serial_generation[from_company_name]"]))
+    refute has_element?(lv, ~s(input[name="serial_generation[from_address]"]))
+    refute has_element?(lv, "#serial-wizard-mode-stock")
+    refute has_element?(lv, "#serial-wizard-mode-order")
+    # Dates use the TD date picker, never the browser's native calendar.
     assert has_element?(lv, ~s(.td-dp [data-dp-input][name="serial_generation[production_date]"]))
     assert has_element?(lv, ~s(.td-dp [data-dp-input][name="serial_generation[expiry_date]"]))
     refute has_element?(lv, ~s(input[type="date"]))
-    refute has_element?(lv, ~s([name="serial_generation[shipper_quantity]"]))
-    refute has_element?(lv, ~s([name="serial_generation[from_gln]"]))
+
+    lv
+    |> form("#manufacturer-serial-generation-form", %{
+      "serial_generation" => %{
+        "batch_no" => "LOT-2026-11",
+        "production_date" => "2026-11-20",
+        "expiry_date" => "2027-11-20",
+        "primary_quantity" => "20",
+        "shipper_quantity" => "5"
+      }
+    })
+    |> render_submit()
+
+    assert has_element?(lv, "#serial-wizard-subtitle", "Order details")
+    assert has_element?(lv, "#serial-wizard-step-order.is-current")
+    assert has_element?(lv, "#serial-wizard-prev", "Back")
+    assert has_element?(lv, "#serial-generation-order-intent-stock")
+    assert has_element?(lv, "#serial-generation-summary", "4")
+    assert has_element?(lv, "#serial-wizard-submit", "Generate serials")
+
+    lv
+    |> form("#manufacturer-serial-generation-form", %{
+      "serial_generation" => %{"order_intent" => "stock"}
+    })
+    |> render_change()
+
+    refute has_element?(lv, "#serial-generation-order-number")
+    refute has_element?(lv, "#serial-generation-to-gln-combobox")
+    refute has_element?(lv, ~s(input[name="serial_generation[from_gln]"]))
 
     expected_path = "/manufacturer/products/#{product.gtin}/serials?batch=LOT-2026-11"
 
     assert {:error, {:live_redirect, %{to: ^expected_path}}} =
              lv
              |> form("#manufacturer-serial-generation-form", %{
-               "serial_generation" => %{
-                 "batch_no" => "LOT-2026-11",
-                 "production_date" => "2026-11-20",
-                 "expiry_date" => "2027-11-20",
-                 "primary_quantity" => "5"
-               }
+               "serial_generation" => %{"order_intent" => "stock"}
              })
              |> render_submit()
 
-    [{batch, 5}] = Manufacturing.list_batches(organization.id, product.id)
+    operation =
+      ThamaniDawa.Manufacturing.Operations.generation_status_for_product(
+        organization.id,
+        product.id,
+        "LOT-2026-11"
+      )
+
+    assert {:ok, _allocated} =
+             ThamaniDawa.Manufacturing.Operations.allocate_identifiers(operation.id)
+
+    [{batch, 20}] = Manufacturing.list_batches(organization.id, product.id)
     assert [serial | _] = Manufacturing.list_serials(organization.id, batch.id)
     assert serial.serial != nil
     assert Manufacturing.list_sscc_groups(organization.id, product.id) == []
-    assert batch.production_date == ~D[2026-11-20]
-    assert batch.expiry_date == ~D[2027-11-20]
+    assert batch.pack_quantity == 20
+    assert batch.packs_per_shipper == 5
+    assert batch.expected_shipper_count == 4
+    assert batch.from_gln == site.gln
+    assert batch.from_company_name == site.name
+    assert batch.from_address == site.address
+    assert batch.order_number in [nil, ""]
+    assert batch.to_gln in [nil, ""]
+    assert batch.shipper_preparation_method == nil
 
     request =
       Enum.find(ThamaniDawa.GS1.MemberApiStub.serial_requests(), &(&1["barcode"] == product.gtin))
 
     assert request["create_shippers"] == false
+    assert request["trade_item_qty"] == "20"
     refute Map.has_key?(request, "shipper_qty")
     refute Map.has_key?(request, "from")
     refute Map.has_key?(request, "to")
+    refute Map.has_key?(request, "order_number")
+    assert ThamaniDawa.GS1.MemberApiStub.shipper_sscc_requests() == []
 
     events = ThamaniDawa.Epcis.Outbox.list_events(organization.id)
 
@@ -196,9 +332,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
       )
 
     assert event
-
     assert event.payload["bizStep"] == "commissioning"
-
     assert get_in(event.payload, ["readPoint", "id"]) =~ String.slice(site.gln, 0, 6)
   end
 
@@ -250,19 +384,36 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
            )
   end
 
-  test "make-to-order path generates primary serials then mints shipper SSCCs", %{
+  test "serials page shows one full-width empty state when a product has no batches", %{
+    conn: conn
+  } do
+    %{user: user, product: product} = manufacturer_session(conn)
+    conn = log_in_user(conn, user)
+
+    {:ok, view, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials")
+
+    assert has_element?(view, "#manufacturer-serial-batches-empty #serial-batches-empty")
+    refute has_element?(view, "#empty-generate-serials")
+    refute has_element?(view, "#batches-generate-serials")
+    refute has_element?(view, "#manufacturer-serial-batches")
+  end
+
+  test "two-step wizard records order details without minting shipper SSCCs", %{
     conn: conn
   } do
     %{organization: organization, site: site, user: user, product: product} =
       manufacturer_session(conn)
 
-    other_facility =
-      manufacturing_site_fixture(organization.id, %{
-        name: "Secondary Plant",
-        address: "2 Manufacturing Way"
-      })
+    destination_gln = "0614141000784"
 
     ThamaniDawa.GS1.MemberApiStub.put_glns([
+      %{
+        "gln" => destination_gln,
+        "description" => "Afya Test Warehouse",
+        "address" => "Nairobi, Kenya",
+        "location" => "Nairobi",
+        "company" => "Afya Test Org"
+      },
       %{
         "gln" => site.gln,
         "description" => site.name,
@@ -276,50 +427,33 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials/new")
 
-    lv |> element("#serial-wizard-mode-order") |> render_click()
-
-    assert has_element?(lv, ~s([name="serial_generation[shipper_quantity]"]))
-    refute has_element?(lv, ~s([name="serial_generation[from_gln]"]))
-
     lv
     |> form("#manufacturer-serial-generation-form", %{
       "serial_generation" => %{
         "batch_no" => "LOT-2026-ORDER",
         "production_date" => "2026-11-20",
         "expiry_date" => "2027-11-20",
-        "primary_quantity" => "4",
+        "primary_quantity" => "8",
         "shipper_quantity" => "2"
       }
     })
-    |> render_change()
+    |> render_submit()
 
-    lv |> element("#serial-wizard-next") |> render_click()
-
-    assert has_element?(lv, "#serial-wizard-subtitle", "Make to order")
-    assert has_element?(lv, "#manufacturer-serial-wizard", "From and To")
-    assert has_element?(lv, "#serial-wizard-submit", "Generate serials & SSCCs")
-    assert has_element?(lv, ~s([name="serial_generation[from_gln]"]))
-    assert has_element?(lv, "#serial_generation_from_gln-cb")
-    assert has_element?(lv, "#serial_generation_from_gln-cb[data-options*='Secondary Plant']")
+    assert has_element?(lv, "#serial-wizard-subtitle", "Order details")
+    assert has_element?(lv, "#serial-generation-summary", "4")
+    refute has_element?(lv, ~s(input[name="serial_generation[from_gln]"]))
 
     lv
     |> form("#manufacturer-serial-generation-form", %{
-      "serial_generation" => %{"from_gln" => other_facility.gln}
+      "serial_generation" => %{"order_intent" => "order"}
     })
     |> render_change()
 
-    assert has_element?(
-             lv,
-             ~s(input[name="serial_generation[from_company_name]"][value="Secondary Plant"])
-           )
-
-    assert has_element?(
-             lv,
-             ~s(input[name="serial_generation[from_address]"][value="2 Manufacturing Way"])
-           )
-
-    assert has_element?(lv, "#serial-generation-to-gln-combobox")
     assert has_element?(lv, "#serial-generation-order-number")
+    assert has_element?(lv, "#serial-generation-to-gln-combobox")
+
+    assert has_element?(lv, ~s(input[name="serial_generation[order_intent]"][value="order"]))
+    refute has_element?(lv, "#serial-generation-order-intent-stock")
     refute has_element?(lv, "#serial-generation-to-gln-results")
 
     lv
@@ -330,25 +464,25 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     lv
     |> element("#serial_generation_to_gln_search")
-    |> render_keyup(%{"value" => site.gln})
+    |> render_keyup(%{"value" => destination_gln})
 
     render_async(lv)
 
     assert has_element?(lv, "#serial-generation-to-gln-results")
-    assert has_element?(lv, "#serial-generation-to-gln-#{site.gln}", site.name)
+    assert has_element?(lv, "#serial-generation-to-gln-#{destination_gln}", "Afya Test Org")
 
     lv
-    |> element("#serial-generation-to-gln-#{site.gln}")
+    |> element("#serial-generation-to-gln-#{destination_gln}")
     |> render_click()
 
     assert has_element?(
              lv,
-             ~s(input[name="serial_generation[to_company_name]"][value="#{site.name}"][readonly])
+             ~s(input[name="serial_generation[to_company_name]"][value="Afya Test Org"][readonly])
            )
 
     assert has_element?(
              lv,
-             ~s(input[name="serial_generation[to_address]"][value="#{site.address}"][readonly])
+             ~s(input[name="serial_generation[to_address]"][value="Nairobi, Kenya"][readonly])
            )
 
     expected_path = "/manufacturer/products/#{product.gtin}/serials?batch=LOT-2026-ORDER"
@@ -357,8 +491,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
              lv
              |> form("#manufacturer-serial-generation-form", %{
                "serial_generation" => %{
-                 "from_gln" => other_facility.gln,
-                 "to_gln" => site.gln,
+                 "to_gln" => destination_gln,
                  "to_company_name" => "Untrusted submitted name",
                  "to_address" => "Untrusted submitted address",
                  "order_number" => "PO-2026-0142"
@@ -366,144 +499,49 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
              })
              |> render_submit()
 
-    [{batch, 4}] = Manufacturing.list_batches(organization.id, product.id)
-    groups = Manufacturing.list_sscc_groups(organization.id, product.id)
-    assert length(groups) == 2
-    assert Enum.all?(groups, &(&1.serial_count == 2))
-
-    [%{sscc: sscc} | _] = groups
-    assert sscc.from_gln == other_facility.gln
-    assert sscc.to_gln == site.gln
-    assert sscc.to_company_name == site.name
-    assert sscc.to_address == site.address
-    assert sscc.order_number == "PO-2026-0142"
-
-    {:ok, ssccs, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/ssccs")
-    assert has_element?(ssccs, "#sscc-#{sscc.id}-shippers")
-
-    ssccs
-    |> element("#sscc-#{sscc.id}-shippers")
-    |> render_click()
-
-    assert has_element?(ssccs, "#pallet-shippers-modal")
-    assert has_element?(ssccs, "#pallet-shippers-list")
-
-    groups
-    |> Enum.with_index(1)
-    |> Enum.each(fn {%{sscc: group_shipper}, index} ->
-      assert has_element?(ssccs, "#pallet-shipper-#{group_shipper.id}", group_shipper.code)
-
-      assert has_element?(
-               ssccs,
-               "#shipper-label-position-#{group_shipper.id}",
-               "#{index}/#{length(groups)}"
-             )
-
-      assert has_element?(ssccs, "#sscc-label-content-#{group_shipper.id}")
-      assert has_element?(ssccs, "#sscc-modal-barcode-#{group_shipper.id}[phx-hook=DataMatrix]")
-      assert has_element?(ssccs, "#print-shipper-#{group_shipper.id}[phx-hook=LabelPrint]")
-
-      assert has_element?(
-               ssccs,
-               "#download-shipper-#{group_shipper.id}[phx-hook=LabelSvgDownload]"
-             )
-
-      assert has_element?(ssccs, "#shipper-#{group_shipper.id}-serials")
-    end)
-
-    assert has_element?(ssccs, "#print-all-shippers[phx-hook=PrintAllLabels]")
-
-    assert has_element?(
-             ssccs,
-             "#download-all-shippers-svg[phx-hook=DownloadAllLabelsSvg][data-download-container='#pallet-shippers-list']"
-           )
-
-    ssccs
-    |> element("#sscc-#{sscc.id}-serials")
-    |> render_click()
-
-    assert has_element?(ssccs, "#pallet-shippers-modal")
-    assert has_element?(ssccs, "#pallet-primary-serials-list")
-    refute has_element?(ssccs, "#pallet-shippers-list")
-
-    ssccs
-    |> element("#sscc-#{sscc.id}-label")
-    |> render_click()
-
-    assert has_element?(ssccs, "#pallet-shippers-modal")
-    assert has_element?(ssccs, "#pallet-label-preview")
-    assert has_element?(ssccs, "#pallet-label-preview", sscc.pallet.code)
-
-    assert has_element?(
-             ssccs,
-             "#pallet-label-preview [data-gs1-text*='(00)#{sscc.pallet.code}']"
-           )
-
-    refute has_element?(ssccs, "#pallet-primary-serials-list")
-
-    ssccs
-    |> element("#pallet-modal-shippers-tab")
-    |> render_click()
-
-    assert has_element?(ssccs, "#pallet-shippers-list")
-
-    # Each shipper is packed through /create_shipper_sscc with its serials.
-    pack_requests =
-      Enum.filter(
-        ThamaniDawa.GS1.MemberApiStub.shipper_sscc_requests(),
-        &(&1["barcode"] == product.gtin)
+    operation =
+      ThamaniDawa.Manufacturing.Operations.generation_status_for_product(
+        organization.id,
+        product.id,
+        "LOT-2026-ORDER"
       )
 
-    assert length(pack_requests) == 2
-    assert Enum.all?(pack_requests, &(length(&1["serials"]) == 2))
-    assert Enum.all?(pack_requests, &(&1["order_number"] == "PO-2026-0142"))
-    assert Enum.all?(pack_requests, &is_binary(&1["material_description"]))
-    assert Enum.all?(pack_requests, &(&1["to"] == %{"gln" => site.gln}))
-    assert Enum.all?(pack_requests, &(&1["from"] == %{"gln" => other_facility.gln}))
-    assert sscc.manufacturer_pallet_id
+    assert {:ok, _allocated} =
+             ThamaniDawa.Manufacturing.Operations.allocate_identifiers(operation.id)
 
-    pack_events =
-      organization.id
-      |> ThamaniDawa.Epcis.Outbox.list_events()
-      |> Enum.filter(&(&1.participant_tier == "manufacturer" and &1.event_type == "packing"))
+    [{batch, 8}] = Manufacturing.list_batches(organization.id, product.id)
 
-    assert length(pack_events) == 2
-    assert Enum.all?(pack_events, &(length(&1.payload["childEPCs"]) == 2))
+    assert batch.from_gln == site.gln
+    assert batch.from_company_name == site.name
+    assert batch.from_address == site.address
+    assert batch.order_number == "PO-2026-0142"
+    assert batch.to_gln == destination_gln
+    assert batch.to_company_name == "Afya Test Org"
+    assert batch.to_address == "Nairobi, Kenya"
+    assert batch.pack_quantity == 8
+    assert batch.packs_per_shipper == 2
+    assert batch.expected_shipper_count == 4
 
-    commission_event =
-      organization.id
-      |> ThamaniDawa.Epcis.Outbox.list_events()
-      |> Enum.find(&(&1.participant_tier == "manufacturer" and &1.event_type == "commissioning"))
+    # Order metadata is recorded for later SSCC allocation, but this step still
+    # creates only product serials.
+    assert Manufacturing.list_sscc_groups(organization.id, product.id) == []
+    assert length(Manufacturing.list_serials(organization.id, batch.id)) == 8
+    assert ThamaniDawa.GS1.MemberApiStub.shipper_sscc_requests() == []
 
-    assert commission_event
-    assert length(commission_event.payload["epcList"]) == 4
-
-    # Minting shippers for an order is the shipment: one approved shipment
-    # covering every shipper, with a single EPCIS Ship event.
-    assert [ship_event] =
-             Enum.filter(
-               ThamaniDawa.Epcis.Outbox.list_events(organization.id),
-               &(&1.event_type == "shipping")
-             )
-
-    assert ship_event.source_type == "manufacturer_shipment"
-
-    shipment = Manufacturing.get_shipment!(organization.id, ship_event.source_id)
-    assert shipment.status == "approved"
-    assert length(shipment.shipper_ssccs) == 2
-
-    assert Enum.count(Manufacturing.list_serials(organization.id, batch.id)) == 4
-
-    serial_request =
+    request =
       Enum.find(ThamaniDawa.GS1.MemberApiStub.serial_requests(), &(&1["barcode"] == product.gtin))
 
-    assert serial_request["shipper_qty"] == 5
-    assert serial_request["from"] == %{"gln" => other_facility.gln}
-    assert serial_request["to"] == %{"gln" => site.gln}
+    assert request["create_shippers"] == false
+    refute Map.has_key?(request, "shipper_qty")
+    refute Map.has_key?(request, "from")
+    refute Map.has_key?(request, "to")
+    refute Map.has_key?(request, "order_number")
   end
 
   test "serial and SSCC eye links open org-scoped drill-downs", %{conn: conn} do
-    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+    %{organization: organization, site: site, user: user, product: product} =
+      manufacturer_session(conn)
+
     batch = manufacturer_batch_fixture(organization.id, product.id)
 
     assert {:ok, %{serials: [_ | _]}} =
@@ -519,6 +557,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
                manufacturer_session_gln(user)
              )
 
+    ThamaniDawa.GS1.MemberApiStub.put_glns([
+      %{
+        "gln" => "0614141000784",
+        "description" => "Afya Test Org",
+        "address" => "Nairobi, Kenya",
+        "location" => "Nairobi",
+        "company" => "Afya Test Org"
+      }
+    ])
+
     conn = log_in_user(conn, user)
 
     {:ok, serials, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials")
@@ -527,6 +575,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(serials, "#primary-serial-batch-details")
     assert has_element?(serials, "#primary-serial-gtin", product.gtin)
     assert has_element?(serials, "#primary-serial-batch-number", batch.batch_no)
+
+    assert has_element?(
+             serials,
+             "#primary-serial-batch-created-at",
+             ThamaniDawaWeb.TimeFormat.datetime(batch.inserted_at)
+           )
+
     assert has_element?(serials, "#primary-serial-production-date")
     assert has_element?(serials, "#primary-serial-expiry-date")
 
@@ -541,9 +596,99 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(serials, "#serial-label-preview [phx-hook=DataMatrix]")
     assert has_element?(serials, "#serial-label-sample-datamatrix[data-gs1-text*='(17)']")
     assert has_element?(serials, "#export-batch-serials")
-    assert has_element?(serials, "#manufacturer-serial-0001", "(21)0001")
+
+    assert has_element?(
+             serials,
+             "#prepare-batch-shippers[href^='/manufacturer/aggregations/batches/#{batch.id}/prepare?']",
+             "Create shippers"
+           )
+
+    return_path = ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch.batch_no}"
+
+    {:ok, prepare, _html} =
+      live(
+        conn,
+        ~p"/manufacturer/aggregations/batches/#{batch.id}/prepare?#{%{return_to: return_path}}"
+      )
+
+    assert has_element?(
+             prepare,
+             "#prepare-shippers-back[href='#{return_path}']",
+             "Back to Batches"
+           )
+
+    assert has_element?(prepare, "h1", "Create shippers")
+    assert has_element?(prepare, "#prepare-batch-number", batch.batch_no)
+    assert has_element?(prepare, "#prepare-batch-gtin", product.gtin)
+    assert has_element?(prepare, "#prepare-batch-serials", "3")
+    assert has_element?(prepare, "#prepare-batch-packed", "0 of 3")
+    assert has_element?(prepare, "#prepare-ship-from-name", organization.name)
+    assert has_element?(prepare, "#prepare-shipment-parties", site.gln)
+    assert has_element?(prepare, "#prepare-ship-to-name", "Destination not selected")
+    assert has_element?(prepare, "#registry-shipper-setup-modal", "Set up shipper packing")
+    assert has_element?(prepare, "#gs1-create-sscc-warning", "no destination GLN")
+    refute has_element?(prepare, "#shipper-quantity-form")
+    assert has_element?(prepare, "#prepare-shipper-quantity", "Not set")
+    assert has_element?(prepare, "#prepare-batch-shippers-count", "0 created")
+    refute has_element?(prepare, "#view-created-shippers")
+    assert has_element?(prepare, "#shipper-quantity-warning", "Set the units per shipper")
+    assert has_element?(prepare, "#select-all-unpacked[disabled]", "Set quantity")
+    assert has_element?(prepare, "#serial-shipper-selection")
+    assert has_element?(prepare, "#create-shipper-from-serials", "Create shipper")
+    assert has_element?(prepare, "#prepare-shipper-labels")
+    assert has_element?(prepare, "#prepare-shippers-empty")
+    refute has_element?(prepare, "#print-all-shipper-labels")
+
+    prepare
+    |> element("#registry-setup-to-gln-search")
+    |> render_keyup(%{"value" => "0614141000784"})
+
+    render_async(prepare)
+
+    prepare
+    |> element("#registry-setup-to-gln-0614141000784")
+    |> render_click()
+
+    prepare
+    |> form("#registry-shipper-setup-form", %{
+      "shipper_quantity" => %{"packs_per_shipper" => "3"}
+    })
+    |> render_submit()
+
+    refute has_element?(prepare, "#registry-shipper-setup-modal")
+    assert has_element?(prepare, "#prepare-ship-to-name", "Afya Test Org")
+    assert has_element?(prepare, "#prepare-shipper-quantity", "3")
+    assert has_element?(prepare, "#prepare-batch-shippers-count", "0 of 1 created")
+    assert has_element?(prepare, "#change-registry-shipper-setup", "Change setup")
+    assert has_element?(prepare, "#select-all-unpacked", "Select 3")
+    assert Manufacturing.get_batch!(organization.id, batch.id).packs_per_shipper == 3
+    assert Manufacturing.get_batch!(organization.id, batch.id).to_gln == "0614141000784"
+
+    {:ok, refreshed, _html} =
+      live(conn, ~p"/manufacturer/aggregations/batches/#{batch.id}/prepare")
+
+    refute has_element?(refreshed, "#registry-shipper-setup-modal")
+    assert has_element?(refreshed, "#prepare-ship-to-name", "Afya Test Org")
+    assert has_element?(refreshed, "#prepare-shipper-quantity", "3")
+    assert has_element?(refreshed, "#select-all-unpacked", "Select 3")
+
+    refreshed |> element("#change-registry-shipper-setup") |> render_click()
+    assert has_element?(refreshed, "#registry-shipper-setup-modal")
+
+    refreshed
+    |> element("#registry-shipper-setup-modal button[aria-label='Close']")
+    |> render_click()
+
+    refute has_element?(refreshed, "#registry-shipper-setup-modal")
+
+    assert has_element?(serials, "#manufacturer-serials th", "Serial")
+    assert has_element?(serials, "#manufacturer-serial-0001", "0001")
+    refute has_element?(serials, "#manufacturer-serial-0001", "(01)")
     assert has_element?(serials, "#manufacturer-serial-0003")
     assert has_element?(serials, "#primary-serial-packed", "0 of 3")
+
+    assert has_element?(serials, "#open-print-labels", "Print serial labels")
+    refute has_element?(serials, "#print-batch-shipper-labels")
 
     serials |> element("#open-print-labels") |> render_click()
     assert has_element?(serials, "#print-labels-modal")
@@ -560,6 +705,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     assert has_element?(view, "#view-serials-back[href*='batch=#{batch.batch_no}']")
     assert has_element?(view, "#view-serials-count", "3")
+    assert has_element?(view, "#manufacturer-serial-0002", "0002")
+    refute has_element?(view, "#manufacturer-serial-0002", "(01)")
     assert has_element?(view, "#manufacturer-serial-0002", batch.batch_no)
 
     view |> form("#manufacturer-serial-search", search: "nope") |> render_change()
@@ -577,9 +724,215 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(ssccs, "#manufacturer-sscc-empty-state")
   end
 
+  test "create shippers works for a batch that only exists in GS1", %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+    batch_no = "GS1-ONLY-1"
+
+    ThamaniDawa.GS1.MemberApiStub.post_create_serials(%{
+      "barcode" => product.gtin,
+      "batch" => batch_no,
+      "production" => "260101",
+      "expiry" => "280101",
+      "trade_item_qty" => 3,
+      "create_shippers" => false
+    })
+
+    assert is_nil(
+             Manufacturing.get_batch_by_product_and_no(organization.id, product.id, batch_no)
+           )
+
+    conn = log_in_user(conn, user)
+
+    {:ok, serials, _html} =
+      live(conn, ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch_no}")
+
+    refute has_element?(serials, "#export-batch-serials")
+    assert has_element?(serials, "#prepare-batch-shippers", "Create shippers")
+    assert has_element?(serials, "#open-print-labels", "Print serial labels")
+
+    assert has_element?(
+             serials,
+             "#primary-serial-batch-created-at",
+             "External"
+           )
+
+    assert has_element?(
+             serials,
+             "#prepare-batch-shippers[href^='/manufacturer/aggregations/prepare']"
+           )
+
+    {:ok, full_serials, _html} =
+      live(
+        conn,
+        ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch_no}&view=serials"
+      )
+
+    refute has_element?(full_serials, "#export-batch-serials")
+
+    {:ok, prepare, _html} =
+      live(
+        conn,
+        ~p"/manufacturer/aggregations/prepare?#{%{gtin: product.gtin, batch: batch_no}}"
+      )
+
+    assert has_element?(prepare, "h1", "Create shippers")
+    assert has_element?(prepare, "#prepare-batch-number", batch_no)
+    assert has_element?(prepare, "#prepare-ship-from-name", organization.name)
+    assert has_element?(prepare, "#serial-row-gs1-1", "0001")
+    assert has_element?(prepare, "#registry-shipper-setup-modal", "Set up shipper packing")
+    refute has_element?(prepare, "#gs1-create-sscc-warning")
+
+    prepare
+    |> element("#registry-setup-to-gln-search")
+    |> render_keyup(%{"value" => "0614141000784"})
+
+    render_async(prepare)
+
+    assert has_element?(
+             prepare,
+             "#registry-shipper-setup-modal #registry-setup-to-gln-0614141000784"
+           )
+
+    prepare
+    |> element("#registry-setup-to-gln-0614141000784")
+    |> render_click()
+
+    assert has_element?(prepare, "#registry-setup-destination", "Afya Test Org")
+
+    prepare
+    |> form("#registry-shipper-setup-form", %{
+      "shipper_quantity" => %{"packs_per_shipper" => "3"}
+    })
+    |> render_submit()
+
+    refute has_element?(prepare, "#registry-shipper-setup-modal")
+    assert has_element?(prepare, "#prepare-ship-to-name", "Afya Test Org")
+    assert has_element?(prepare, "#change-registry-shipper-setup", "Change setup")
+    assert has_element?(prepare, "#select-all-unpacked", "Select 3")
+
+    prepare |> element("#select-all-unpacked") |> render_click()
+    prepare |> element("#create-shipper-from-serials") |> render_click()
+
+    {shippers, _by_serial} =
+      Manufacturing.list_batch_shippers(organization.id, product.gtin, batch_no)
+
+    assert [shipper] = shippers
+    assert has_element?(prepare, "#prepared-shipper-#{shipper.id}")
+    assert has_element?(prepare, "#prepare-batch-shippers-count", "1 of 1 created")
+
+    assert has_element?(
+             prepare,
+             "button#view-created-shippers[phx-click]",
+             "View shippers"
+           )
+
+    assert has_element?(
+             prepare,
+             "#print-all-shipper-labels[phx-hook=PrintAllLabels]",
+             "Print all"
+           )
+
+    assert has_element?(
+             prepare,
+             "#prepare-printable-shipper-labels #batch-shipper-label-content-#{shipper.id}.printable-sscc-label"
+           )
+
+    assert has_element?(prepare, "#prepare-batch-packed", "3 of 3")
+    refute has_element?(prepare, "#serial-shipper-selection")
+    refute has_element?(prepare, "#no-unpacked-serials")
+
+    assert has_element?(
+             prepare,
+             "#print-shipper-#{shipper.id}[phx-click='open_label']"
+           )
+
+    refute has_element?(prepare, "#shipper-label-modal")
+
+    prepare |> element("#print-shipper-#{shipper.id}") |> render_click()
+
+    assert has_element?(prepare, "#shipper-label-modal")
+    assert has_element?(prepare, "#print-manufacturer-label")
+    assert has_element?(prepare, "#prepared-shippers-table")
+
+    prepare |> element("#shipper-label-modal button[aria-label='Close']") |> render_click()
+
+    refute has_element?(prepare, "#shipper-label-modal")
+    assert has_element?(prepare, "#prepared-shippers-table")
+  end
+
+  test "select button advances to the next shipper-sized group of unpacked serials", %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+
+    batch =
+      manufacturer_batch_fixture(organization.id, product.id, %{
+        pack_quantity: 4,
+        packs_per_shipper: 2,
+        to_gln: "0614141000785"
+      })
+
+    assert {:ok, %{serials: [first, second, third, fourth]}} =
+             Manufacturing.generate_primary_serials(
+               organization.id,
+               product,
+               %{
+                 "batch_no" => batch.batch_no,
+                 "production_date" => Date.to_iso8601(batch.production_date),
+                 "expiry_date" => Date.to_iso8601(batch.expiry_date)
+               },
+               4,
+               manufacturer_session_gln(user)
+             )
+
+    conn = log_in_user(conn, user)
+
+    {:ok, lv, _html} =
+      live(conn, ~p"/manufacturer/aggregations/batches/#{batch.id}/prepare")
+
+    assert has_element?(lv, "#select-all-unpacked", "Select 2")
+
+    lv |> element("#select-all-unpacked") |> render_click()
+    assert has_element?(lv, "#select-serial-#{first.id}[checked]")
+    assert has_element?(lv, "#select-serial-#{second.id}[checked]")
+    refute has_element?(lv, "#select-serial-#{third.id}[checked]")
+    refute has_element?(lv, "#select-serial-#{fourth.id}[checked]")
+
+    lv |> element("#select-all-unpacked") |> render_click()
+    refute has_element?(lv, "#select-serial-#{first.id}[checked]")
+    refute has_element?(lv, "#select-serial-#{second.id}[checked]")
+    assert has_element?(lv, "#select-serial-#{third.id}[checked]")
+    assert has_element?(lv, "#select-serial-#{fourth.id}[checked]")
+
+    lv |> element("#create-shipper-from-serials") |> render_click()
+
+    {shippers, _by_serial} =
+      Manufacturing.list_batch_shippers(organization.id, product.gtin, batch.batch_no)
+
+    shipper = hd(shippers)
+
+    assert has_element?(lv, "#serial-row-#{first.id}")
+    assert has_element?(lv, "#serial-row-#{second.id}")
+    refute has_element?(lv, "#serial-row-#{third.id}")
+    refute has_element?(lv, "#serial-row-#{fourth.id}")
+
+    lv |> element("#contents-shipper-#{shipper.id}") |> render_click()
+    assert has_element?(lv, "#prepare-shipper-contents-modal")
+    assert has_element?(lv, "#prepare-shipper-content-#{shipper.id}-#{third.serial}")
+    assert has_element?(lv, "#prepare-shipper-content-#{shipper.id}-#{fourth.serial}")
+  end
+
   test "packs selected unpacked serials into a new shipper SSCC", %{conn: conn} do
     %{organization: organization, user: user, product: product} = manufacturer_session(conn)
     batch = manufacturer_batch_fixture(organization.id, product.id)
+
+    ThamaniDawa.GS1.MemberApiStub.put_glns([
+      %{
+        "gln" => "0614141000784",
+        "description" => "Test Licensee",
+        "address" => "Nairobi, Kenya",
+        "location" => "Nairobi",
+        "company" => "Afya Test Org"
+      }
+    ])
 
     assert {:ok, %{serials: [_, _, _]}} =
              Manufacturing.generate_primary_serials(
@@ -595,9 +948,12 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
              )
 
     conn = log_in_user(conn, user)
-    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials")
 
-    lv |> element("#open-pack-serials") |> render_click()
+    {:ok, lv, _html} =
+      live(
+        conn,
+        ~p"/manufacturer/products/#{product.gtin}/serials/pack?batch=#{batch.batch_no}"
+      )
 
     assert has_element?(lv, "#pack-serials-panel")
     assert has_element?(lv, "#pack-serial-0001")
@@ -606,19 +962,26 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     lv |> element("#pack-serial-0002") |> render_click()
     assert has_element?(lv, "#pack-selected-count", "2")
 
+    lv |> element("#pack-next") |> render_click()
+    assert has_element?(lv, "#pack-parties-form")
+
     lv |> element("#pack_to_gln_search") |> render_keyup(%{"value" => "Afya Test"})
     render_async(lv)
     lv |> element("#pack-to-gln-0614141000784") |> render_click()
 
-    assert {:error, {:live_redirect, %{to: "/manufacturer/sscc/" <> _}}} =
-             lv
-             |> form("#pack-serials-form", %{
-               "pack" => %{
-                 "from_gln" => manufacturer_session_gln(user),
-                 "order_number" => "PO-77"
-               }
-             })
-             |> render_submit()
+    lv
+    |> form("#pack-parties-form", %{"pack" => %{"order_number" => "PO-77"}})
+    |> render_change()
+
+    lv |> element("#pack-next") |> render_click()
+    assert has_element?(lv, "#pack-serials-form")
+
+    lv
+    |> form("#pack-serials-form", %{"pack" => %{}})
+    |> render_submit()
+
+    assert has_element?(lv, "#pack-result")
+    assert has_element?(lv, "#pack-result-view[href^='/manufacturer/sscc/']")
 
     request =
       Enum.find(
@@ -630,8 +993,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert request["to"] == %{"gln" => "0614141000784"}
     assert request["order_number"] == "PO-77"
 
-    assert request["material_description"] ==
-             if(product.description not in [nil, ""], do: product.description, else: product.name)
+    expected_description =
+      if product.description in [nil, ""], do: product.name, else: product.description
+
+    assert request["material_description"] == expected_description
 
     assert [%{sscc: shipper, serial_count: 2, serials: ["0001", "0003"]}] =
              Manufacturing.list_sscc_groups(organization.id, product.id)
@@ -662,10 +1027,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert shipper.order_number == "PO-77"
 
     {:ok, label, _html} = live(conn, ~p"/manufacturer/sscc/#{shipper.id}/label")
-    assert has_element?(label, "#sscc-label-from", site.name)
-    assert has_element?(label, "#sscc-label-to", shipper.to_company_name)
-    assert has_element?(label, "#sscc-label-quantity", "2")
-    assert has_element?(label, "#sscc-label-order-number", "PO-77")
+    assert has_element?(label, "#sscc-label-from-#{shipper.id}", site.name)
+    assert has_element?(label, "#sscc-label-to-#{shipper.id}", shipper.to_company_name)
+    assert has_element?(label, "#sscc-label-quantity-#{shipper.id}", "2")
+    assert has_element?(label, "#sscc-label-order-number-#{shipper.id}", "PO-77")
 
     # The batch page lists the new shipper and tags each packed serial.
     {:ok, lv, _html} =
@@ -673,11 +1038,23 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     assert has_element?(lv, "#batch-shipper-#{shipper.id}")
     assert has_element?(lv, "#batch-shipper-serials-#{shipper.id}")
+
+    assert has_element?(
+             lv,
+             "#print-batch-shipper-labels[phx-hook=PrintAllLabels]",
+             "Print shipper labels"
+           )
+
+    assert has_element?(
+             lv,
+             "#batch-printable-shipper-labels #batch-product-shipper-label-content-#{shipper.id}.printable-sscc-label"
+           )
+
     assert has_element?(lv, "#serial-sscc-0001")
     assert has_element?(lv, "#serial-sscc-0003")
     assert has_element?(lv, "#serial-unpacked-0002")
-    # One serial is still unpacked, so packing stays available.
-    assert has_element?(lv, "#open-pack-serials")
+    # One serial is still unpacked, so mobile aggregation preparation stays available.
+    assert has_element?(lv, "#prepare-batch-shippers", "Create shippers")
     refute has_element?(lv, "#batch-fully-packed")
 
     # Once the last serial is packed, the button gives way to a badge.
@@ -696,24 +1073,44 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
                %{"from_gln" => manufacturer_session_gln(user), "to_gln" => "0614141000784"}
              )
 
-    # Packing stock into a shipper dispatches it: a shipment plus a Ship event.
-    assert Enum.any?(
+    # Packing only creates the shipper and its Pack event. The shipment and
+    # Ship event come later, from the shipments page.
+    assert Manufacturing.list_shipments(organization.id) == []
+
+    refute Enum.any?(
              ThamaniDawa.Epcis.Outbox.list_events(organization.id),
-             &(&1.event_type == "shipping" and &1.source_type == "manufacturer_shipment")
+             &(&1.event_type == "shipping")
            )
 
-    refute Enum.any?(Manufacturing.list_available_ssccs(organization.id), &(&1.id == packed.id))
+    assert Enum.any?(Manufacturing.list_available_ssccs(organization.id), &(&1.id == packed.id))
 
     {:ok, lv, _html} =
       live(conn, ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch.batch_no}")
 
     assert has_element?(lv, "#batch-fully-packed")
-    refute has_element?(lv, "#open-pack-serials")
+    refute has_element?(lv, "#prepare-batch-shippers")
   end
 
   test "label resolves From/To names from GLNs for older shippers", %{conn: conn} do
     %{organization: organization, user: user, product: product} = manufacturer_session(conn)
     site = ThamaniDawa.Sites.get_site!(user.organization_id, user.current_site_id)
+
+    ThamaniDawa.GS1.MemberApiStub.put_glns([
+      %{
+        "gln" => "0614141000784",
+        "description" => "Test Licensee",
+        "address" => "Nairobi, Kenya",
+        "location" => "Nairobi",
+        "company" => "Afya Test Org"
+      },
+      %{
+        "gln" => site.gln,
+        "description" => site.name,
+        "address" => site.address,
+        "location" => "Nairobi",
+        "company" => site.name
+      }
+    ])
 
     shipper =
       ThamaniDawa.Repo.insert!(%ThamaniDawa.Manufacturing.ShipperSscc{
@@ -729,19 +1126,171 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     {:ok, label, _html} =
       live(log_in_user(conn, user), ~p"/manufacturer/sscc/#{shipper.id}/label")
 
-    assert has_element?(label, "#sscc-label-from", site.name)
-    assert has_element?(label, "#sscc-barcode-#{shipper.id}[data-gs1-text*='(02)']")
-    refute has_element?(label, "#sscc-barcode-#{shipper.id}[data-gs1-text*='(01)']")
+    assert has_element?(label, "#sscc-label-from-#{shipper.id}", site.name)
+    gs = <<29>>
+    assert has_element?(label, "#sscc-label-barcode-#{shipper.id}[data-barcode^='#{gs}00']")
+    assert has_element?(label, "#sscc-label-barcode-#{shipper.id}[data-barcode*='#{gs}01']")
+    refute has_element?(label, "#sscc-label-barcode-#{shipper.id}[data-barcode*='#{gs}02']")
 
     saved = ThamaniDawa.Repo.get!(ThamaniDawa.Manufacturing.ShipperSscc, shipper.id)
     assert saved.from_company_name == site.name
     assert saved.to_company_name not in [nil, ""]
-    assert has_element?(label, "#sscc-label-to", saved.to_company_name)
+    assert has_element?(label, "#sscc-label-to-#{shipper.id}", saved.to_company_name)
+    assert has_element?(label, "#sscc-label-content-#{shipper.id}")
+    assert has_element?(label, "#sscc-label-quantity-#{shipper.id}", "5")
+  end
+
+  test "serial generation redirects to the product serials page and updates when allocation completes",
+       %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+    organization = allow_stock_serialization(organization)
+    conn = log_in_user(conn, user)
+
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials/new")
+
+    lv
+    |> form("#manufacturer-serial-generation-form", %{
+      "serial_generation" => %{
+        "batch_no" => "LOT-2026-GEN",
+        "production_date" => "2026-11-20",
+        "expiry_date" => "2027-11-20",
+        "primary_quantity" => "4",
+        "shipper_quantity" => "2"
+      }
+    })
+    |> render_submit()
+
+    assert has_element?(lv, "#serial-generation-order-intent label.td-option .td-oc-rd")
+    assert has_element?(lv, "#serial-generation-order-intent label.td-option.is-selected")
+
+    expected_path = "/manufacturer/products/#{product.gtin}/serials?batch=LOT-2026-GEN"
+
+    assert {:error, {:live_redirect, %{to: ^expected_path}}} =
+             lv
+             |> form("#manufacturer-serial-generation-form", %{
+               "serial_generation" => %{"order_intent" => "stock"}
+             })
+             |> render_submit()
+
+    {:ok, serials_lv, _html} = live(conn, expected_path)
+    assert has_element?(serials_lv, "#serial-allocation-pending", "LOT-2026-GEN")
+    refute has_element?(serials_lv, "#serial-batches-empty")
+
+    op =
+      ThamaniDawa.Manufacturing.Operations.generation_status_for_product(
+        organization.id,
+        product.id,
+        "LOT-2026-GEN"
+      )
+
+    assert {:ok, _updated} = ThamaniDawa.Manufacturing.Operations.allocate_identifiers(op.id)
+    render_async(serials_lv)
+
+    assert has_element?(serials_lv, "#selected-serial-batch", "LOT-2026-GEN")
+    refute has_element?(serials_lv, "#serial-allocation-pending")
+
+    # Arming SSCC allocation reuses the operation, but must not resurrect the
+    # serial-generation banner after product serials are already complete.
+    operation =
+      ThamaniDawa.Repo.get!(ThamaniDawa.Manufacturing.GenerationOperation, op.id)
+
+    operation
+    |> Ecto.Changeset.change(status: "allocating", sscc_allocation_status: "pending")
+    |> ThamaniDawa.Repo.update!()
+
+    {:ok, sscc_phase_lv, _html} = live(conn, expected_path)
+    refute has_element?(sscc_phase_lv, "#serial-allocation-pending")
+    refute has_element?(sscc_phase_lv, "#serial-allocation-error")
+  end
+
+  test "reconciles an uncertain serial check from the serials page", %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+    organization = allow_stock_serialization(organization)
+    conn = log_in_user(conn, user)
+
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials/new")
+
+    lv
+    |> form("#manufacturer-serial-generation-form", %{
+      "serial_generation" => %{
+        "batch_no" => "LOT-2026-GS1-CHECK",
+        "production_date" => "2026-11-20",
+        "expiry_date" => "2027-11-20",
+        "primary_quantity" => "4",
+        "shipper_quantity" => "2"
+      }
+    })
+    |> render_submit()
+
+    expected_path = "/manufacturer/products/#{product.gtin}/serials?batch=LOT-2026-GS1-CHECK"
+
+    assert {:error, {:live_redirect, %{to: ^expected_path}}} =
+             lv
+             |> form("#manufacturer-serial-generation-form", %{
+               "serial_generation" => %{"order_intent" => "stock"}
+             })
+             |> render_submit()
+
+    {:ok, serials_lv, _html} = live(conn, expected_path)
+
+    op =
+      ThamaniDawa.Manufacturing.Operations.generation_status_for_product(
+        organization.id,
+        product.id,
+        "LOT-2026-GS1-CHECK"
+      )
+
+    ThamaniDawa.GS1.MemberApiStub.fail_next(:unavailable)
+    assert {:ok, _uncertain} = ThamaniDawa.Manufacturing.Operations.allocate_identifiers(op.id)
+    render_async(serials_lv)
 
     assert has_element?(
-             label,
-             "#download-manufacturer-label-svg[data-quantity='5'][data-from-company][data-to-company]"
+             serials_lv,
+             "#serial-allocation-error",
+             "couldn't confirm whether GS1 created"
            )
+
+    assert has_element?(serials_lv, "#reconcile-serial-allocation", "Check with GS1")
+
+    serials_lv
+    |> element("#reconcile-serial-allocation")
+    |> render_click()
+
+    assert has_element?(serials_lv, "#selected-serial-batch", "LOT-2026-GS1-CHECK")
+    refute has_element?(serials_lv, "#serial-allocation-error")
+    refute has_element?(serials_lv, "#reconcile-serial-allocation")
+  end
+
+  test "print label opens and closes the modal without leaving the SSCC list", %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+
+    sscc =
+      Repo.insert!(%ShipperSscc{
+        organization_id: organization.id,
+        code: "061600000000000018",
+        gtin: product.gtin,
+        batch: "LIST-LABEL",
+        count_of_trade_items: 3
+      })
+
+    conn = log_in_user(conn, user)
+
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/ssccs")
+
+    assert has_element?(lv, "#shipper-row-#{sscc.id}")
+    refute has_element?(lv, "#shipper-label-modal")
+
+    lv |> element("#print-label-#{sscc.id}") |> render_click()
+
+    assert has_element?(lv, "#shipper-label-modal")
+    assert has_element?(lv, "#print-manufacturer-label")
+    assert has_element?(lv, "#manufacturer-product-ssccs")
+    assert has_element?(lv, "#ssccs-back")
+
+    lv |> element("#shipper-label-modal button[aria-label='Close']") |> render_click()
+
+    refute has_element?(lv, "#shipper-label-modal")
+    assert has_element?(lv, "#manufacturer-product-ssccs")
   end
 
   defp manufacturer_session_gln(user) do

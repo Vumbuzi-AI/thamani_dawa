@@ -93,6 +93,12 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
     Agent.get(__MODULE__, fn state -> Enum.reverse(state.serial_creates) end)
   end
 
+  @doc "Simulates GS1 reporting that no serials were issued for any batch."
+  def clear_serial_creates do
+    ensure_started()
+    Agent.update(__MODULE__, &Map.put(&1, :serial_creates, []))
+  end
+
   def put_contents(sscc, products) when is_binary(sscc) and is_list(products) do
     ensure_started()
 
@@ -274,7 +280,7 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
 
   defp created_serials(params) do
     # Mirrors the serials `build_serialisation/1` hands back.
-    for n <- 1..Map.get(params, "trade_item_qty", 1),
+    for n <- 1..parse_qty(Map.get(params, "trade_item_qty", 1)),
         do: n |> Integer.to_string() |> String.pad_leading(4, "0")
   end
 
@@ -409,7 +415,7 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
   end
 
   defp build_serialisation(params) do
-    quantity = Map.get(params, "trade_item_qty", 1)
+    quantity = parse_qty(Map.get(params, "trade_item_qty", 1))
 
     primary_datamatrices =
       for n <- 1..quantity do
@@ -452,6 +458,9 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
       "shippers" => shippers
     }
   end
+
+  defp parse_qty(value) when is_integer(value), do: value
+  defp parse_qty(value) when is_binary(value), do: String.to_integer(value)
 
   defp mint_sscc do
     ensure_started()

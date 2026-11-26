@@ -1049,7 +1049,10 @@ defmodule ThamaniDawaWeb.QuickSaleLive do
                       >
                         <:icon><.td_icon name="minus" /></:icon>
                       </.td_icon_button>
-                      <form id={"cart-quantity-form-#{line.product_id}"} phx-change="set_item_quantity">
+                      <form
+                        id={"cart-quantity-form-#{line.product_id}"}
+                        phx-change="set_item_quantity"
+                      >
                         <input type="hidden" name="product_id" value={line.product_id} />
                         <input
                           id={"cart-quantity-#{line.product_id}"}

@@ -148,8 +148,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
         subtitle={
           if @pallet,
             do: "From pallet #{@pallet.code}. Review opens one shipment for these shippers.",
-            else:
-              "The mobile team finds this shipment by its order number, then scans units into shippers."
+            else: "Record the order and route. Shippers are packed before a shipment is created."
         }
       />
 
@@ -265,7 +264,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Form do
                 id="save-manufacturer-shipment"
                 type="submit"
                 variant="primary"
-                label="Create draft shipment"
+                label="Create shipment"
                 phx-disable-with="Saving…"
               />
             </div>

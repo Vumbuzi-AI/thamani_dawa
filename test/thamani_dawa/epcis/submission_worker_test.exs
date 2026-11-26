@@ -4,6 +4,7 @@ defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
   alias ThamaniDawa.DistributorFixtures
   alias ThamaniDawa.Epcis.Client
   alias ThamaniDawa.Epcis.Outbox
+  alias ThamaniDawa.Epcis.OutboxEvent
   alias ThamaniDawa.Epcis.SubmissionWorker
   alias ThamaniDawa.EpcisClientStub
   alias ThamaniDawa.Organizations
@@ -143,6 +144,37 @@ defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
     final = Repo.reload!(event)
     assert final.status == "accepted"
     assert final.event_id == event.event_id
+  end
+
+  test "discarding a rejected event drains the events behind it", %{
+    organization: organization
+  } do
+    base = DateTime.utc_now() |> DateTime.truncate(:second)
+    first = enqueue(organization, %{occurred_at: base})
+    second = enqueue(organization, %{occurred_at: DateTime.add(base, 10)})
+
+    EpcisClientStub.expect([{:ok, 400, %{"errorCode" => "MISSING_NEEDED_FIELDS"}}])
+    assert :ok = perform(organization)
+    assert Outbox.halted?(organization.id)
+
+    assert {:ok, _discarded} = Outbox.discard(Repo.reload!(first))
+    refute Outbox.halted?(organization.id)
+    assert Repo.get(OutboxEvent, first.id) == nil
+
+    EpcisClientStub.expect([{:ok, 202, %{"status" => "ACCEPTED"}}])
+    assert :ok = perform(organization)
+
+    assert Repo.reload!(second).status == "accepted"
+  end
+
+  test "discard refuses dead events that may have reached the Hub", %{
+    organization: organization
+  } do
+    event = enqueue(organization)
+    dead = Repo.update!(Ecto.Changeset.change(event, status: "dead"))
+
+    assert {:error, :not_discardable} = Outbox.discard(dead)
+    assert Repo.reload!(event).status == "dead"
   end
 
   test "resubmitting a blocked event requeues it and clears the blocked reason", %{

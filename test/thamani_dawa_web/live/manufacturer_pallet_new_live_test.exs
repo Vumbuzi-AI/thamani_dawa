@@ -4,47 +4,42 @@ defmodule ThamaniDawaWeb.ManufacturerPalletNewLiveTest do
   import Phoenix.LiveViewTest
   import ThamaniDawa.ManufacturerFixtures
 
+  alias ThamaniDawa.Epcis.Outbox
   alias ThamaniDawa.Gln
+  alias ThamaniDawa.GS1.MemberApiStub
   alias ThamaniDawa.Manufacturing
   alias ThamaniDawa.Manufacturing.Shipment
   alias ThamaniDawa.Manufacturing.ShipmentItem
   alias ThamaniDawa.Repo
 
-  @destination "6164003000024"
-
   setup %{conn: conn} do
+    MemberApiStub.reset()
+
     organization = manufacturer_organization_fixture()
     site = manufacturing_site_fixture(organization.id)
     user = manufacturer_user_fixture(%{organization_id: organization.id, site_id: site.id})
     %{conn: log_in_user(conn, user), organization: organization}
   end
 
-  defp shipper!(organization_id, code, opts \\ []) do
-    {:ok, sscc} =
-      Manufacturing.create_manual_sscc(organization_id, nil, %{
-        "code" => code,
-        "gtin" => Keyword.get(opts, :gtin, "06141410000011"),
-        "batch" => Keyword.get(opts, :batch, "LOT-A"),
-        "count_of_trade_items" => Keyword.get(opts, :count, 5),
-        "from_gln" => Gln.generate!(),
-        "from_company_name" => "Factory",
-        "to_gln" => Keyword.get(opts, :to_gln, @destination),
-        "to_company_name" => Keyword.get(opts, :to_company, "Warehouse")
-      })
-
-    sscc
+  defp shipper!(organization_id, _code, opts \\ []) do
+    pallet_ready_shipper_fixture(
+      organization_id,
+      Keyword.take(opts, [:batch, :count, :to_gln])
+    )
   end
+
+  defp dom_id(code), do: String.replace(code, ~r/[^A-Za-z0-9]/, "")
 
   defp scan(view, code) do
     view |> form("#pallet-scan-form", %{code: code}) |> render_submit()
   end
 
-  test "scans shippers that share a destination and creates a local pallet", %{
+  test "scans shippers, mints a pallet SSCC, and records aggregation", %{
     conn: conn,
     organization: organization
   } do
     a = shipper!(organization.id, "SHIP-A", batch: "LOT-A")
-    b = shipper!(organization.id, "SHIP-B", batch: "LOT-B", gtin: "06141410000028")
+    b = shipper!(organization.id, "SHIP-B", batch: "LOT-B")
     _other = shipper!(organization.id, "SHIP-C")
 
     {:ok, view, _html} = live(conn, ~p"/manufacturer/aggregations/pallets/new")
@@ -62,9 +57,19 @@ defmodule ThamaniDawaWeb.ManufacturerPalletNewLiveTest do
     view |> element("#create-pallet-sscc") |> render_click()
 
     [pallet] = Manufacturing.list_pallets(organization.id)
-    assert String.starts_with?(pallet.code, "PAL-")
+    assert String.match?(pallet.code, ~r/^\d{18}$/)
+    refute String.starts_with?(pallet.code, "PAL-")
     assert_redirect(view, ~p"/manufacturer/aggregations/pallets/#{pallet.id}")
     assert pallet.shipper_ssccs |> Enum.map(& &1.id) |> Enum.sort() == Enum.sort([a.id, b.id])
+
+    [event] =
+      Enum.filter(Outbox.list_events(organization.id), &(&1.event_type == "pallet_packing"))
+
+    assert event.source_type == "manufacturer_pallet"
+    assert event.source_id == pallet.id
+    assert event.payload["type"] == "AggregationEvent"
+    assert event.payload["action"] == "ADD"
+    assert length(event.payload["childEPCs"]) == 2
 
     {:ok, show, _html} = live(conn, ~p"/manufacturer/aggregations/pallets/#{pallet.id}")
     assert has_element?(show, "#pallet-shipper-#{a.id}")
@@ -102,19 +107,30 @@ defmodule ThamaniDawaWeb.ManufacturerPalletNewLiveTest do
     scan(view, kept.code)
     scan(view, duplicate.code)
     scan(view, duplicate.code)
-    assert has_element?(view, "#pallet-rejection-SHIPDUP", "Already on this pallet")
+    duplicate_id = "pallet-rejection-#{dom_id(duplicate.code)}"
+    assert has_element?(view, "##{duplicate_id}", "Already on this pallet")
 
-    view |> element("#pallet-rejection-SHIPDUP button") |> render_click()
-    refute has_element?(view, "#pallet-rejection-SHIPDUP")
+    view |> element("##{duplicate_id} button") |> render_click()
+    refute has_element?(view, "##{duplicate_id}")
 
     scan(view, empty.code)
-    assert has_element?(view, "#pallet-rejection-SHIPEMPTY", "Empty shipper")
+    assert has_element?(view, "#pallet-rejection-#{dom_id(empty.code)}", "Empty shipper")
 
     scan(view, other_dest.code)
-    assert has_element?(view, "#pallet-rejection-SHIPOTHER", "Different destination")
+
+    assert has_element?(
+             view,
+             "#pallet-rejection-#{dom_id(other_dest.code)}",
+             "Different destination"
+           )
 
     scan(view, shipped.code)
-    assert has_element?(view, "#pallet-rejection-SHIPGONE", "Already on shipment PO-24109")
+
+    assert has_element?(
+             view,
+             "#pallet-rejection-#{dom_id(shipped.code)}",
+             "Already on shipment PO-24109"
+           )
 
     scan(view, "NOT-A-SHIPPER")
     assert has_element?(view, "#pallet-rejection-NOTASHIPPER", "No shipper with that SSCC")
@@ -134,7 +150,7 @@ defmodule ThamaniDawaWeb.ManufacturerPalletNewLiveTest do
         ~p"/manufacturer/aggregations/pallets/new?#{[sscc: shipper.id, return_to: ~p"/manufacturer/sscc/#{shipper.id}/serials"]}"
       )
 
-    assert has_element?(view, "#pallet-back", "Back to shipper SHIP-FROM")
+    assert has_element?(view, "#pallet-back", "Back to shipper #{shipper.code}")
     assert has_element?(view, "#pallet-scanned-#{shipper.id}")
   end
 end

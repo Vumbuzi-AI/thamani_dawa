@@ -26,6 +26,71 @@ if config_env() in [:dev, :test] do
   end
 end
 
+email_asset_base_url =
+  case System.get_env("EMAIL_ASSET_BASE_URL") do
+    url when is_binary(url) and url != "" -> String.trim_trailing(url, "/")
+    _ -> "https://thamanidawa.com"
+  end
+
+config :thamani_dawa, :email_asset_base_url, email_asset_base_url
+
+# Mail provider: MailSafi Postal, the same provider used by the medic app.
+# Swoosh's Postal adapter appends /api/v1/send/message itself, so accept either
+# medic's full send endpoint or the bare server base URL in POSTAL_API_URL.
+if config_env() != :test do
+  postal_api_key =
+    case System.get_env("POSTAL_API_KEY") do
+      key when is_binary(key) and key != "" ->
+        key
+
+      _ ->
+        if config_env() == :prod do
+          raise """
+          environment variable POSTAL_API_KEY is missing.
+          Create a MailSafi Postal server API key and expose it to the release.
+          """
+        end
+    end
+
+  postal_api_url =
+    case System.get_env("POSTAL_API_URL") do
+      url when is_binary(url) and url != "" -> url
+      _ -> "https://postalmail.mailsafi.com/api/v1/send/message"
+    end
+
+  postal_base_url =
+    postal_api_url
+    |> String.trim_trailing("/")
+    |> String.replace_suffix("/api/v1/send/message", "")
+
+  # Dev falls back to the local mailbox until a key is supplied; production
+  # always sends through Postal.
+  if config_env() == :prod or not is_nil(postal_api_key) do
+    config :thamani_dawa, ThamaniDawa.Mailer,
+      adapter: Swoosh.Adapters.Postal,
+      api_key: postal_api_key,
+      base_url: postal_base_url
+
+    config :swoosh, api_client: Swoosh.ApiClient.Req
+  end
+
+  sender_email =
+    case System.get_env("POSTAL_FROM_ADDRESS") do
+      address when is_binary(address) and address != "" -> address
+      _ -> "noreply@thamanidawa.example"
+    end
+
+  sender_name =
+    case System.get_env("POSTAL_FROM_NAME") do
+      name when is_binary(name) and name != "" -> name
+      _ -> "Thamani Dawa"
+    end
+
+  config :thamani_dawa, ThamaniDawa.Accounts.UserNotifier,
+    sender_email: sender_email,
+    sender_name: sender_name
+end
+
 # ## Using releases
 #
 # If you use `mix release`, you need to explicitly enable the server

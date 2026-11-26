@@ -43,7 +43,7 @@ export const TdSelect = {
         if (e.key === "ArrowDown") {
           e.preventDefault()
           const first = this.list.querySelector("[data-cs-val]")
-          if (first) first.focus()
+          this.focusNoScroll(first)
         }
       })
     }
@@ -99,14 +99,13 @@ export const TdSelect = {
       }
       if (e.key === "ArrowDown") {
         e.preventDefault()
-        const n = b.nextElementSibling
-        if (n) n.focus()
+        this.focusNoScroll(b.nextElementSibling)
       }
       if (e.key === "ArrowUp") {
         e.preventDefault()
         const prev = b.previousElementSibling
-        if (prev && prev.dataset.csVal !== undefined) prev.focus()
-        else if (this.search) this.search.focus()
+        if (prev && prev.dataset.csVal !== undefined) this.focusNoScroll(prev)
+        else this.focusNoScroll(this.search)
       }
     })
     return b
@@ -119,17 +118,25 @@ export const TdSelect = {
     this.syncDisplay()
     this.close()
   },
+  focusNoScroll(el) {
+    if (el && typeof el.focus === "function") el.focus({preventScroll: true})
+  },
   syncDisplay() {
     if (!this.input || !this.display) return
     const val = String(this.input.value)
     const match = this.opts().find(([, v]) => String(v) === val)
     if (match) {
       this.display.textContent = match[0]
-      this.el.dataset.state = "default"
     } else {
       this.display.textContent = this.prompt() || "Select…"
-      this.el.dataset.state = "placeholder"
     }
+    // Keep the open state stable across LiveView re-renders while the popup is
+    // visible, so modal scroll containers do not start clipping it mid-open.
+    this.el.dataset.state = this.dropdown.classList.contains("hidden")
+      ? match
+        ? "default"
+        : "placeholder"
+      : "focus"
   },
   toggle() {
     this.dropdown.classList.contains("hidden") ? this.open() : this.close()
@@ -148,7 +155,7 @@ export const TdSelect = {
     this.el.dataset.state = "focus"
     if (this.chevron) this.chevron.style.transform = "rotate(180deg)"
     setTimeout(() => {
-      if (this.search) this.search.focus()
+      this.focusNoScroll(this.search)
     }, 10)
   },
   close() {
