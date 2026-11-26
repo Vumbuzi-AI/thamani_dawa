@@ -311,16 +311,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
 
   defp order_details_errors(errors, _params, :batch), do: errors
 
-  defp order_details_errors(errors, params, :order_details) do
-    if order_intent(params) == "order" do
-      errors
-      |> required_error(params, :order_number, "Customer purchase order")
-      |> required_error(params, :to_gln, "Destination")
-      |> required_error(params, :to_address, "Destination address")
-    else
-      errors
-    end
-  end
+  # GS1's serialisation endpoint needs none of the order/destination fields.
+  # They are captured only for later pallet SSCC labels, so leaving them blank
+  # here defers them to shipper/pallet creation. A supplied GLN is still
+  # verified against the GS1 directory in resolve_order_destination/2.
+  defp order_details_errors(errors, _params, :order_details), do: errors
 
   defp required_error(errors, params, field, label) do
     if Map.get(params, Atom.to_string(field)) in [nil, ""],
@@ -559,7 +554,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
               <span class="td-oc-rd" aria-hidden="true"></span>
               <span class="td-oc-tx">
                 <span class="td-option-title">Yes, for an existing customer order</span>
-                <span class="td-note">Capture the genuine purchase order and GS1 destination.</span>
+                <span class="td-note">Optional now; add a genuine PO and GS1 destination if known.</span>
               </span>
             </label>
           </div>
@@ -567,20 +562,24 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.SerialWizard do
       <% else %>
         <input type="hidden" name="serial_generation[order_intent]" value="order" />
         <div id="serial-generation-order-only-note" class="td-card-body td-note">
-          This batch is being manufactured for an existing customer order. Manufacturing for stock
-          is disabled for this organization.
+          Manufacturing for stock is unavailable. Order and destination are optional and can be
+          added when shippers are created.
         </div>
       <% end %>
 
       <%= if @intent == "order" do %>
         <div id="serial-generation-order-details" class="td-stack">
+          <%= if @stock_serialization_enabled do %>
+            <p id="serial-generation-order-optional-note" class="td-note">
+              Order and destination are optional and can be added when shippers are created.
+            </p>
+          <% end %>
           <.td_input
             field={@form[:order_number]}
             id="serial-generation-order-number"
             label="Customer purchase order"
             placeholder="e.g. PO-2026-0142"
             autocomplete="off"
-            required
           />
 
           <div>

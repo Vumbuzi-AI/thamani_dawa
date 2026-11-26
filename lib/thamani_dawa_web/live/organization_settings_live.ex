@@ -425,8 +425,9 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
                     }
                   /> Allow manufacturing for stock during serial generation
                   <span class="td-hint">
-                    Off by default. When off, the serial wizard requires a genuine customer order
-                    and GS1 destination; the existing stock code path stays available for later.
+                    Off by default. This only controls the explicit “manufacturing for stock”
+                    choice in the serial wizard. Order and destination fields are optional either
+                    way; leaving them blank defers them to shipper and pallet creation.
                   </span>
                 </label>
                 <p id="gs1-verification-status" class="td-hint">

@@ -1151,6 +1151,24 @@ defmodule ThamaniDawa.Manufacturing do
   defp blank_default(value, default) when value in [nil, ""], do: default
   defp blank_default(value, _default), do: value
 
+  defp stringify_keys(attrs) do
+    Map.new(attrs, fn
+      {key, value} when is_binary(key) -> {key, value}
+      {key, value} -> {Atom.to_string(key), value}
+    end)
+  end
+
+  defp override_value(attrs, key, fallback) do
+    case Map.get(attrs, key) do
+      value when is_binary(value) ->
+        trimmed = String.trim(value)
+        if trimmed == "", do: fallback, else: trimmed
+
+      _other ->
+        fallback
+    end
+  end
+
   defp put_order_number(params, order_number) when is_binary(order_number) do
     case String.trim(order_number) do
       "" -> params
@@ -1169,15 +1187,19 @@ defmodule ThamaniDawa.Manufacturing do
   # GS1's /create_sscc mints the pallet SSCC and its label; the parent/child
   # relationship to the shippers is ours to keep and is reported separately
   # as an EPCIS AggregationEvent.
-  defp pallet_sscc_params([first | _] = shippers) do
+  defp pallet_sscc_params([first | _] = shippers, attrs \\ %{}) do
     with {:ok, batch_info, description} <- pallet_batch_info(shippers) do
-      build_pallet_params(first, shippers, batch_info, description)
+      build_pallet_params(first, shippers, batch_info, description, attrs)
     end
   end
 
-  defp build_pallet_params(first, shippers, batch_info, description) do
-    if blank_default(first.order_number, "") == "" or
-         blank_default(first.to_address, "") == "" do
+  defp build_pallet_params(first, shippers, batch_info, description, overrides) do
+    order_number = override_value(overrides, "order_number", first.order_number)
+    to_address = override_value(overrides, "to_address", first.to_address)
+    to_gln = override_value(overrides, "to_gln", first.to_gln)
+    to_company_name = override_value(overrides, "to_company_name", first.to_company_name)
+
+    if blank_default(order_number, "") == "" or blank_default(to_address, "") == "" do
       {:error, {:invalid, "GS1 create_sscc requires a PO and destination address"}}
     else
       units = Enum.sum(Enum.map(shippers, &(&1.count_of_trade_items || 0)))
@@ -1187,20 +1209,20 @@ defmodule ThamaniDawa.Manufacturing do
         "from_gln" => first.from_gln,
         "from_company_name" => first.from_company_name,
         "from_address" => first.from_address,
-        "to_gln" => first.to_gln,
-        "to_company_name" => first.to_company_name,
-        "to_address" => first.to_address
+        "to_gln" => to_gln,
+        "to_company_name" => to_company_name,
+        "to_address" => to_address
       }
 
       params = %{
         "batch_info" => batch_info,
         "address" => %{
           "from_address" => blank_default(first.from_address, first.from_gln),
-          "to_address" => first.to_address
+          "to_address" => to_address
         },
         "count_of_trade_items" => Integer.to_string(units),
         "material_description" => description,
-        "order_number" => first.order_number,
+        "order_number" => order_number,
         "facility_gln" => first.from_gln
       }
 
@@ -1603,10 +1625,16 @@ defmodule ThamaniDawa.Manufacturing do
   @doc """
   Mints a GS1 pallet SSCC grouping the given shipper SSCCs, which may span
   products and batches. Shippers already on a shipment can't be moved. The
-  pallet inherits its parties from the first selected shipper, and the
-  shippers-to-pallet link is reported as an EPCIS aggregation event.
+  pallet inherits its parties from the first selected shipper; `attrs` may
+  override `order_number`, `to_gln`, `to_company_name` and `to_address` when
+  they were not captured during serial generation. GS1 requires the PO and
+  destination address here. The shippers-to-pallet link is reported as an
+  EPCIS aggregation event.
   """
-  def create_pallet_from_shippers(organization_id, shipper_ids) when is_list(shipper_ids) do
+  def create_pallet_from_shippers(organization_id, shipper_ids, attrs \\ %{})
+      when is_list(shipper_ids) and is_map(attrs) do
+    attrs = stringify_keys(attrs)
+
     available =
       organization_id
       |> list_available_ssccs()
@@ -1625,7 +1653,7 @@ defmodule ThamaniDawa.Manufacturing do
         {:error, :no_shippers}
 
       [_first | _] = shippers ->
-        with {:ok, parties, params} <- pallet_sscc_params(shippers),
+        with {:ok, parties, params} <- pallet_sscc_params(shippers, attrs),
              {:ok, code} <-
                MemberApi.create_sscc(params,
                  api_token: Organizations.gs1_api_key(organization_id)

@@ -1,12 +1,17 @@
 defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
   use ThamaniDawa.DataCase, async: false
 
+  import ThamaniDawa.ManufacturerFixtures
+
   alias ThamaniDawa.DistributorFixtures
   alias ThamaniDawa.Epcis.Client
   alias ThamaniDawa.Epcis.Outbox
   alias ThamaniDawa.Epcis.OutboxEvent
   alias ThamaniDawa.Epcis.SubmissionWorker
   alias ThamaniDawa.EpcisClientStub
+  alias ThamaniDawa.Manufacturing.Batch
+  alias ThamaniDawa.Manufacturing.Product
+  alias ThamaniDawa.Manufacturing.Serial
   alias ThamaniDawa.Organizations
   alias ThamaniDawa.Repo
 
@@ -257,6 +262,74 @@ defmodule ThamaniDawa.Epcis.SubmissionWorkerTest do
              })
 
     assert Repo.reload!(event).status == "accepted"
+  end
+
+  test "submit_now distinguishes an unmet dependency from a missing API key", %{
+    organization: organization
+  } do
+    event =
+      enqueue(organization, %{
+        event_type: "packing",
+        participant_tier: "manufacturer",
+        source_type: "manufacturer_shipper_sscc",
+        source_id: -1
+      })
+
+    assert {:blocked, {:dependencies_not_satisfied, [dependency]}, ^event} =
+             SubmissionWorker.submit_now(event)
+
+    assert dependency == %{
+             event_type: "commissioning",
+             event_id: nil,
+             source_label: "batch",
+             source_identifier: "unknown",
+             status: "missing"
+           }
+
+    assert Repo.reload!(event).status == "pending"
+    assert EpcisClientStub.submitted_documents() == []
+  end
+
+  test "submit_now identifies the pending prerequisite event and batch" do
+    organization = manufacturer_organization_fixture()
+    shipper = pallet_ready_shipper_fixture(organization.id, batch: "LOT-DEPENDENCY")
+    batch = Repo.get_by!(Batch, organization_id: organization.id, batch_no: "LOT-DEPENDENCY")
+    product = Repo.get_by!(Product, organization_id: organization.id, gtin: shipper.gtin)
+
+    Repo.insert!(%Serial{
+      organization_id: organization.id,
+      manufacturer_product_id: product.id,
+      manufacturer_batch_id: batch.id,
+      manufacturer_shipper_sscc_id: shipper.id,
+      serial: "DEPENDENCY-SERIAL"
+    })
+
+    commissioning =
+      enqueue(organization, %{
+        event_type: "commissioning",
+        participant_tier: "manufacturer",
+        source_type: "manufacturer_batch",
+        source_id: batch.id
+      })
+
+    packing =
+      enqueue(organization, %{
+        event_type: "packing",
+        participant_tier: "manufacturer",
+        source_type: "manufacturer_shipper_sscc",
+        source_id: shipper.id
+      })
+
+    assert {:blocked, {:dependencies_not_satisfied, [dependency]}, ^packing} =
+             SubmissionWorker.submit_now(packing)
+
+    assert dependency == %{
+             event_type: "commissioning",
+             event_id: commissioning.event_id,
+             source_label: "batch",
+             source_identifier: "LOT-DEPENDENCY",
+             status: "pending"
+           }
   end
 
   test "a new organization defaults to automatic submission mode" do

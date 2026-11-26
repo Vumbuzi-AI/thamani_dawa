@@ -133,8 +133,12 @@ defmodule ThamaniDawaWeb.Api.V1.ManufacturerAggregationController do
     idempotent(conn, fn -> result(Operations.finish_pallet_loading(org_id(conn), id)) end)
   end
 
-  def allocate_pallet_sscc(conn, %{"id" => id}) do
-    idempotent(conn, fn -> result(Operations.allocate_pallet_sscc(org_id(conn), id)) end)
+  def allocate_pallet_sscc(conn, %{"id" => id} = params) do
+    details = Map.take(params, ["order_number", "to_gln", "to_company_name", "to_address"])
+
+    idempotent(conn, fn ->
+      result(Operations.allocate_pallet_sscc(org_id(conn), id, details))
+    end)
   end
 
   def verify_pallet(conn, %{"id" => id, "raw" => raw}) do

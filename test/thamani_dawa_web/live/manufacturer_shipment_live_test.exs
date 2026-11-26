@@ -275,11 +275,13 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLiveTest do
 
     assert has_element?(show, "#shipment-shippers-table")
     assert has_element?(show, "#shipment-sscc-#{shipper.id}", shipper.code)
+
     assert has_element?(
              show,
              "#shipment-sscc-id-#{shipper.id}-peek .printable-sscc-label",
              "From Address"
            )
+
     assert has_element?(show, "#shipment-sscc-#{shipper.id}", pallet.code)
     assert has_element?(show, "#shipment-sscc-#{shipper.id}", "LOT-A")
 

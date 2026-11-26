@@ -148,7 +148,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationDashboardTest do
     refute has_element?(view, "#aggregation-batches-empty")
   end
 
-  test "shows a pallet action when all prepared shippers are packed", %{
+  test "keeps the empty-state action in the shipper workflow when all are packed", %{
     conn: conn,
     organization: organization
   } do
@@ -192,7 +192,13 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationDashboardTest do
     {:ok, view, _html} = live(conn, ~p"/manufacturer/aggregations?tab=shippers")
 
     assert has_element?(view, "#aggregation-batches-empty", "All shippers are packed")
-    assert has_element?(view, "#build-pallet-from-shippers", "Build a pallet")
+    assert has_element?(view, "#build-shipper-from-batches", "Build a shipper")
+
+    assert has_element?(
+             view,
+             "#build-shipper-from-batches[href='/manufacturer/inventory?tab=batches']"
+           )
+
     refute has_element?(view, "#aggregation-active-batches-table")
     refute has_element?(view, "#aggregation-batch-#{batch.id}")
   end

@@ -172,7 +172,9 @@ defmodule ThamaniDawaWeb.Api.V1.ManufacturerApiTest do
     batch: batch,
     organization: organization
   } do
-    Repo.delete_all(from s in ThamaniDawa.Manufacturing.Serial, where: s.manufacturer_batch_id == ^batch.id)
+    Repo.delete_all(
+      from s in ThamaniDawa.Manufacturing.Serial, where: s.manufacturer_batch_id == ^batch.id
+    )
 
     from(b in Batch, where: b.id == ^batch.id)
     |> Repo.update_all(set: [issued_count: 0, packed_count: 0])

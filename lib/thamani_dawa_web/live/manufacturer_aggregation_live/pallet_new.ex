@@ -18,6 +18,8 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
      |> assign(:rejections, [])
      |> assign(:scan_code, "")
      |> assign(:confirming?, false)
+     |> assign(:pallet_form, pallet_form(%{}))
+     |> assign(:pallet_error, nil)
      |> assign(:seeded?, false)
      |> assign(:back_path, ~p"/manufacturer/aggregations")
      |> assign(:back_label, "Back to Aggregation")}
@@ -81,18 +83,36 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
   end
 
   def handle_event("confirm", _params, socket) do
-    {:noreply, assign(socket, :confirming?, socket.assigns.accepted != [])}
+    defaults =
+      case socket.assigns.accepted do
+        [first | _] ->
+          %{
+            "order_number" => first.order_number || "",
+            "to_gln" => first.to_gln || "",
+            "to_company_name" => first.to_company_name || "",
+            "to_address" => first.to_address || ""
+          }
+
+        [] ->
+          %{}
+      end
+
+    {:noreply,
+     socket
+     |> assign(:confirming?, socket.assigns.accepted != [])
+     |> assign(:pallet_form, pallet_form(defaults))
+     |> assign(:pallet_error, nil)}
   end
 
   def handle_event("cancel_confirm", _params, socket) do
     {:noreply, assign(socket, :confirming?, false)}
   end
 
-  def handle_event("create", _params, socket) do
+  def handle_event("create", %{"pallet" => params}, socket) do
     organization_id = socket.assigns.current_scope.organization_id
     ids = Enum.map(socket.assigns.accepted, & &1.id)
 
-    case Manufacturing.create_pallet_from_shippers(organization_id, ids) do
+    case Manufacturing.create_pallet_from_shippers(organization_id, ids, params) do
       {:ok, pallet} ->
         {:noreply,
          socket
@@ -102,9 +122,19 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
       {:error, :no_shippers} ->
         {:noreply, put_flash(socket, :error, "Scan at least one shipper SSCC.")}
 
+      {:error, {:invalid, "GS1 create_sscc requires a PO and destination address"}} ->
+        {:noreply,
+         socket
+         |> assign(:pallet_form, pallet_form(params))
+         |> assign(:pallet_error, "Enter a customer PO and destination address for the pallet.")}
+
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, create_error(reason))}
     end
+  end
+
+  def handle_event("create", _params, socket) do
+    {:noreply, put_flash(socket, :error, "Enter the pallet details and try again.")}
   end
 
   defp maybe_seed(%{assigns: %{seeded?: true}} = socket, _id), do: socket
@@ -134,6 +164,17 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
     else
       _ -> socket
     end
+  end
+
+  defp pallet_form(params) do
+    %{
+      "order_number" => "",
+      "to_gln" => "",
+      "to_company_name" => "",
+      "to_address" => ""
+    }
+    |> Map.merge(params)
+    |> to_form(as: :pallet)
   end
 
   defp create_error(:unconfigured),
@@ -285,20 +326,55 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
         <:body>
           <p class="td-note">
             This mints the pallet SSCC and reports the shippers inside it to EPCIS. It does not create a shipment.
+            GS1 requires a customer PO and destination address for pallet labels.
           </p>
           <ul id="create-pallet-preview">
             <li :for={shipper <- @accepted} class="font-mono">{shipper.code}</li>
           </ul>
+          <.form
+            for={@pallet_form}
+            id="pallet-details-form"
+            phx-submit="create"
+            class="td-stack"
+          >
+            <.td_input
+              field={@pallet_form[:order_number]}
+              id="pallet-order-number"
+              label="Customer purchase order"
+              placeholder="e.g. PO-2026-0142"
+              required
+            />
+            <.td_input
+              field={@pallet_form[:to_gln]}
+              id="pallet-to-gln"
+              label="Destination GLN"
+              placeholder="13 digits"
+            />
+            <.td_input
+              field={@pallet_form[:to_company_name]}
+              id="pallet-to-company-name"
+              label="Destination company"
+            />
+            <.td_input
+              field={@pallet_form[:to_address]}
+              id="pallet-to-address"
+              label="Destination address"
+              required
+            />
+            <p :if={@pallet_error} id="pallet-details-error" class="td-ban is-danger">
+              {@pallet_error}
+            </p>
+            <.td_button
+              id="create-pallet-sscc"
+              type="submit"
+              variant="primary"
+              label="Create pallet SSCC"
+              phx-disable-with="Creating…"
+            />
+          </.form>
         </:body>
         <:footer>
           <.td_button label="Cancel" phx-click="cancel_confirm" />
-          <.td_button
-            id="create-pallet-sscc"
-            variant="primary"
-            label="Create pallet SSCC"
-            phx-click="create"
-            phx-disable-with="Creating…"
-          />
         </:footer>
       </.td_modal>
     </Layouts.manufacturer_shell>

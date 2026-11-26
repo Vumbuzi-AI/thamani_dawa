@@ -123,41 +123,13 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
         {:noreply, put_flash(socket, :error, missing_key_message())}
 
       event.status == "pending" ->
-        case SubmissionWorker.submit_now(event) do
-          {status, _updated} when status in [:accepted, :duplicate] ->
-            {:noreply,
-             socket
-             |> reload()
-             |> assign(:confirm_action, nil)
-             |> put_flash(:info, "Event #{short_id(event.event_id)} sent to PPB.")}
+        {kind, message} = submission_feedback(SubmissionWorker.submit_now(event), event)
 
-          {:rejected, _updated} ->
-            {:noreply,
-             socket
-             |> reload()
-             |> assign(:confirm_action, nil)
-             |> put_flash(:error, "PPB rejected event #{short_id(event.event_id)}.")}
-
-          {:retry, _updated} ->
-            {:noreply,
-             socket
-             |> reload()
-             |> assign(:confirm_action, nil)
-             |> put_flash(
-               :error,
-               "Couldn't reach PPB for event #{short_id(event.event_id)} — it will retry automatically."
-             )}
-
-          {:blocked, _updated} ->
-            {:noreply,
-             socket
-             |> reload()
-             |> assign(:confirm_action, nil)
-             |> put_flash(
-               :error,
-               "The key for this reporting event is missing. Add it on API keys, then send this event again."
-             )}
-        end
+        {:noreply,
+         socket
+         |> reload()
+         |> assign(:confirm_action, nil)
+         |> put_flash(kind, message)}
 
       true ->
         {:noreply, put_flash(socket, :error, "Only pending events can be sent individually.")}
@@ -229,15 +201,45 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
   defp missing_key_message,
     do: "Add your PPB TNT API key before sending EPCIS events."
 
-  defp key_last4(organization, "distributor"), do: organization.epcis_distributor_api_key_last4
-  defp key_last4(organization, "facility"), do: organization.epcis_facility_api_key_last4
-  defp key_last4(organization, "manufacturer"), do: organization.epcis_manufacturer_api_key_last4
+  defp submission_feedback({status, _updated}, event)
+       when status in [:accepted, :duplicate],
+       do: {:info, "Event #{short_id(event.event_id)} sent to PPB."}
 
-  defp tnt_keys_missing?(organization) do
-    organization
-    |> relevant_tiers()
-    |> Enum.any?(&(key_last4(organization, &1) in [nil, ""]))
+  defp submission_feedback({:rejected, _updated}, event),
+    do: {:error, "PPB rejected event #{short_id(event.event_id)}."}
+
+  defp submission_feedback({:retry, _updated}, event),
+    do:
+      {:error,
+       "Couldn't reach PPB for event #{short_id(event.event_id)} — it will retry automatically."}
+
+  defp submission_feedback(
+         {:blocked, {:dependencies_not_satisfied, dependencies}, _updated},
+         _event
+       ),
+       do: {:error, dependency_message(dependencies)}
+
+  defp submission_feedback({:blocked, updated}, _event),
+    do: {:error, updated.blocked_reason || missing_key_message()}
+
+  defp dependency_message(dependencies) do
+    details =
+      Enum.map_join(dependencies, "; ", fn dependency ->
+        event_reference =
+          if dependency.event_id,
+            do: " #{short_id(dependency.event_id)}",
+            else: " event not created"
+
+        status = dependency.status |> String.replace("_", " ") |> String.capitalize()
+
+        "#{String.capitalize(dependency.event_type)}#{event_reference} for #{dependency.source_label} #{dependency.source_identifier} (#{status})"
+      end)
+
+    "Cannot send yet. Waiting for: #{details}."
   end
+
+  defp tnt_keys_missing?(organization),
+    do: not Organizations.epcis_api_key_configured?(organization, "manufacturer")
 
   defp api_keys_path(%{assigns: %{epcis_portal: :organization}}), do: ~p"/org/api-keys"
   defp api_keys_path(_socket), do: ~p"/manufacturer/api-keys"
@@ -358,16 +360,5 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
       />
     </Layouts.manufacturer_shell>
     """
-  end
-
-  defp relevant_tiers(organization) do
-    models = organization.operating_models || []
-
-    [
-      :distributor in models && "distributor",
-      :manufacturer in models && "manufacturer",
-      Enum.any?(models, &(&1 in [:pharmacy, :laboratory])) && "facility"
-    ]
-    |> Enum.filter(& &1)
   end
 end

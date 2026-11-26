@@ -54,11 +54,19 @@ defmodule ThamaniDawaWeb.ManufacturerPalletNewLiveTest do
 
     view |> element("#open-create-pallet") |> render_click()
     assert has_element?(view, "#create-pallet-modal")
-    view |> element("#create-pallet-sscc") |> render_click()
+    assert has_element?(view, ~s(input#pallet-order-number[value="PO-24109"]))
+
+    view
+    |> form("#pallet-details-form", %{
+      "pallet" => %{"order_number" => "PO-PALLET-1", "to_address" => "12 Port Road, Mombasa"}
+    })
+    |> render_submit()
 
     [pallet] = Manufacturing.list_pallets(organization.id)
     assert String.match?(pallet.code, ~r/^\d{18}$/)
     refute String.starts_with?(pallet.code, "PAL-")
+
+    assert pallet.to_address == "12 Port Road, Mombasa"
     assert_redirect(view, ~p"/manufacturer/aggregations/pallets/#{pallet.id}")
     assert pallet.shipper_ssccs |> Enum.map(& &1.id) |> Enum.sort() == Enum.sort([a.id, b.id])
 

@@ -110,13 +110,13 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Dashboard do
             <%= if @packed_batch_count > 0 do %>
               <p class="td-empty-title">All shippers are packed</p>
               <p class="td-note">
-                Packed shippers are ready to be grouped onto a pallet.
+                Start another shipper from a serialized batch, or use the Pallets tab to group packed shippers.
               </p>
               <.td_button
-                id="build-pallet-from-shippers"
+                id="build-shipper-from-batches"
                 variant="primary"
-                label="Build a pallet"
-                navigate={~p"/manufacturer/aggregations/pallets/new"}
+                label="Build a shipper"
+                navigate={~p"/manufacturer/inventory?tab=batches"}
               />
             <% else %>
               <p class="td-empty-title">No shipper batches yet</p>

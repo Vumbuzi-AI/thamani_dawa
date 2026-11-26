@@ -30,11 +30,13 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLiveTest do
     assert html =~ "Amoxicillin"
     assert html =~ "12345678901234"
     assert html =~ "BATCH-1"
+
     assert has_element?(
              view,
              "#inventory-batch-serials-#{batch.id}[href='/manufacturer/products/12345678901234/serials?batch=BATCH-1']",
              "BATCH-1"
            )
+
     refute html =~ "TrackIQ"
     refute html =~ "standalone"
   end

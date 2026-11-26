@@ -3367,6 +3367,8 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :path, :string, required: true, doc: "Base path for pagination links"
   attr :query_param, :string, default: "page", doc: "Query parameter name for page number"
   attr :noun, :string, default: "results"
+  attr :id, :string, default: nil
+  attr :patch, :boolean, default: false
 
   def pagination(assigns) do
     ThamaniDawaWeb.TDComponents.td_pagination(assigns)

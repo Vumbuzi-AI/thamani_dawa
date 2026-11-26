@@ -47,7 +47,10 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
         do_resolve_line(organization_id, raw, mobile_user)
       end
 
-    Logger.info("pack-line resolve org=#{organization_id} raw=#{inspect(String.slice(raw, 0, 48))} result=#{inspect(pack_line_result(result))}")
+    Logger.info(
+      "pack-line resolve org=#{organization_id} raw=#{inspect(String.slice(raw, 0, 48))} result=#{inspect(pack_line_result(result))}"
+    )
+
     result
   end
 
@@ -125,7 +128,10 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
         end
       end
 
-    Logger.info("pack-line open_box org=#{organization_id} batch=#{id} result=#{inspect(pack_line_result(result))}")
+    Logger.info(
+      "pack-line open_box org=#{organization_id} batch=#{id} result=#{inspect(pack_line_result(result))}"
+    )
+
     result
   end
 
@@ -156,7 +162,10 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
         end
       end
 
-    Logger.info("pack-line claim_scan org=#{organization_id} box=#{box_id} result=#{inspect(pack_line_result(result))}")
+    Logger.info(
+      "pack-line claim_scan org=#{organization_id} box=#{box_id} result=#{inspect(pack_line_result(result))}"
+    )
+
     result
   end
 
@@ -336,7 +345,8 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
       many ->
         case Enum.filter(many, &is_nil(&1.manufacturer_shipper_sscc_id)) do
           [%Serial{} = row] ->
-            with {:ok, batch} <- get_batch(organization_id, row.manufacturer_batch_id, mobile_user) do
+            with {:ok, batch} <-
+                   get_batch(organization_id, row.manufacturer_batch_id, mobile_user) do
               {:ok, %{batch: batch, serial: row.serial}}
             end
 
@@ -629,7 +639,8 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
   end
 
   defp same_batch_no?(left, right) do
-    String.downcase(String.trim(to_string(left))) == String.downcase(String.trim(to_string(right)))
+    String.downcase(String.trim(to_string(left))) ==
+      String.downcase(String.trim(to_string(right)))
   end
 
   defp pack_line_result({:error, reason}), do: {:error, reason}

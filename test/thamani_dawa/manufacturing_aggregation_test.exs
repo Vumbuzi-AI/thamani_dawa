@@ -289,6 +289,37 @@ defmodule ThamaniDawa.ManufacturingAggregationTest do
       # Manually supplied shippers have no local packing event to wait for.
       assert Outbox.dependencies_satisfied?(event)
     end
+
+    test "accepts pallet PO and address supplied after serial generation", %{
+      organization: organization
+    } do
+      shipper =
+        pallet_ready_shipper_fixture(
+          organization.id,
+          order_number: nil,
+          to_gln: nil,
+          to_address: nil
+        )
+
+      assert {:error, {:invalid, "GS1 create_sscc requires a PO and destination address"}} =
+               Manufacturing.create_pallet_from_shippers(organization.id, [shipper.id])
+
+      assert {:ok, pallet} =
+               Manufacturing.create_pallet_from_shippers(organization.id, [shipper.id], %{
+                 "order_number" => "PO-DEFERRED",
+                 "to_gln" => "0614141000456",
+                 "to_company_name" => "Deferred Warehouse",
+                 "to_address" => "9 Port Road, Mombasa"
+               })
+
+      [request] = MemberApiStub.create_requests()
+      assert request["order_number"] == "PO-DEFERRED"
+      assert request["address"]["to_address"] == "9 Port Road, Mombasa"
+
+      assert pallet.to_gln == "0614141000456"
+      assert pallet.to_company_name == "Deferred Warehouse"
+      assert pallet.to_address == "9 Port Road, Mombasa"
+    end
   end
 
   defp insert_sscc(organization_id, gtin, from_gln, capacity) do

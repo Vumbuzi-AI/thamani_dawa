@@ -2443,7 +2443,12 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   def td_peek(assigns) do
     ~H"""
-    <div id={@id} class={["td-peek", @body != [] && "is-label"]} data-mono={to_string(@mono)} role="tooltip">
+    <div
+      id={@id}
+      class={["td-peek", @body != [] && "is-label"]}
+      data-mono={to_string(@mono)}
+      role="tooltip"
+    >
       <div class="td-peek-hd">
         <span class="td-peek-tile"><.td_icon name={@icon} /></span>
         <div class="td-peek-tt">

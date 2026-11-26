@@ -992,8 +992,12 @@ defmodule ThamaniDawa.Manufacturing.Operations do
     )
   end
 
-  @doc "Called by the allocation worker after loading is deliberately finished."
-  def allocate_pallet_sscc(organization_id, session_id) do
+  @doc """
+  Called by the allocation worker after loading is deliberately finished.
+  `attrs` may override the PO/destination captured on the shippers, which is
+  needed when serialization deferred those details.
+  """
+  def allocate_pallet_sscc(organization_id, session_id, attrs \\ %{}) do
     session =
       Repo.one!(
         from s in AggregationSession,
@@ -1002,13 +1006,14 @@ defmodule ThamaniDawa.Manufacturing.Operations do
 
     if session.status != "awaiting_sscc",
       do: {:error, :not_actionable},
-      else: do_allocate_pallet_sscc(session)
+      else: do_allocate_pallet_sscc(session, attrs)
   end
 
-  defp do_allocate_pallet_sscc(session) do
+  defp do_allocate_pallet_sscc(session, attrs) do
+    attrs = stringify_keys(attrs)
     shippers = captured_shippers(session.id)
 
-    with {:ok, context} <- pallet_context(shippers),
+    with {:ok, context} <- pallet_context(shippers, attrs),
          {:ok, code} <-
            MemberApi.create_sscc(context.params,
              api_token: Organizations.gs1_api_key(session.organization_id)
@@ -1668,6 +1673,24 @@ defmodule ThamaniDawa.Manufacturing.Operations do
   defp blank(value) when value in [nil, ""], do: nil
   defp blank(value), do: value
 
+  defp stringify_keys(attrs) do
+    Map.new(attrs, fn
+      {key, value} when is_binary(key) -> {key, value}
+      {key, value} -> {Atom.to_string(key), value}
+    end)
+  end
+
+  defp override_value(attrs, key, fallback) do
+    case Map.get(attrs, key) do
+      value when is_binary(value) ->
+        trimmed = String.trim(value)
+        if trimmed == "", do: fallback, else: trimmed
+
+      _other ->
+        fallback
+    end
+  end
+
   defp captured_shippers(session_id),
     do:
       Repo.all(
@@ -1678,7 +1701,12 @@ defmodule ThamaniDawa.Manufacturing.Operations do
           order_by: [asc: i.id]
       )
 
-  defp pallet_context([first | _] = shippers) do
+  defp pallet_context([first | _] = shippers, attrs) do
+    order_number = override_value(attrs, "order_number", first.order_number)
+    to_gln = override_value(attrs, "to_gln", first.to_gln)
+    to_company_name = override_value(attrs, "to_company_name", first.to_company_name)
+    to_address = override_value(attrs, "to_address", first.to_address)
+
     batches =
       shippers
       |> Enum.flat_map(fn shipper ->
@@ -1697,13 +1725,13 @@ defmodule ThamaniDawa.Manufacturing.Operations do
       |> Enum.uniq()
       |> Enum.join(", ")
 
-    attrs = %{
+    pallet_attrs = %{
       from_gln: first.from_gln,
       from_company_name: first.from_company_name,
       from_address: first.from_address,
-      to_gln: first.to_gln,
-      to_company_name: first.to_company_name,
-      to_address: first.to_address
+      to_gln: to_gln,
+      to_company_name: to_company_name,
+      to_address: to_address
     }
 
     params = %{
@@ -1718,16 +1746,16 @@ defmodule ThamaniDawa.Manufacturing.Operations do
         ),
       "address" => %{
         "from_address" => first.from_address || first.from_gln,
-        "to_address" => first.to_address
+        "to_address" => to_address
       },
       "count_of_trade_items" => Integer.to_string(length(shippers)),
       "material_description" => product_names,
-      "order_number" => first.order_number,
+      "order_number" => order_number,
       "facility_gln" => first.from_gln
     }
 
-    if first.order_number in [nil, ""] or first.to_address in [nil, ""],
+    if order_number in [nil, ""] or to_address in [nil, ""],
       do: {:error, {:invalid, "GS1 create_sscc requires a PO and destination address"}},
-      else: {:ok, %{attrs: attrs, params: params}}
+      else: {:ok, %{attrs: pallet_attrs, params: params}}
   end
 end

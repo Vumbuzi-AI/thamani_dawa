@@ -122,7 +122,8 @@ defmodule ThamaniDawaWeb.Api.Response do
     do: {422, "empty_box", "Scan at least one serial before saving."}
 
   defp reason_details(:shipper_full),
-    do: {422, "shipper_full", "This shipper already has its packs. Save it and start the next one."}
+    do:
+      {422, "shipper_full", "This shipper already has its packs. Save it and start the next one."}
 
   defp reason_details(:out_of_stock),
     do: {422, "insufficient_stock", "There is not enough stock."}

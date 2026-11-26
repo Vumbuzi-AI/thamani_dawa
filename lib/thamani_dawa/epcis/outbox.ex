@@ -70,8 +70,8 @@ defmodule ThamaniDawa.Epcis.Outbox do
     )
   end
 
-  @doc "Whether a manufacturer aggregation event may be submitted to TrackIQ."
-  def dependencies_satisfied?(
+  @doc "The prerequisite EPCIS events that must be accepted before this event can be submitted."
+  def unsatisfied_dependencies(
         %OutboxEvent{event_type: "packing", source_type: "manufacturer_shipper_sscc"} = event
       ) do
     batch_ids =
@@ -82,53 +82,92 @@ defmodule ThamaniDawa.Epcis.Outbox do
           distinct: true
       )
 
-    commissioning_query =
-      from e in OutboxEvent,
-        where:
-          e.organization_id == ^event.organization_id and e.event_type == "commissioning" and
-            e.source_type == "manufacturer_batch" and e.source_id in ^batch_ids and
-            e.status in ["accepted", "warning"]
+    batches =
+      Repo.all(
+        from b in ThamaniDawa.Manufacturing.Batch,
+          where: b.id in ^batch_ids,
+          select: %{id: b.id, identifier: b.batch_no}
+      )
 
-    batch_ids != [] and Repo.aggregate(commissioning_query, :count) >= length(batch_ids)
+    dependencies_for_sources(event, "commissioning", "manufacturer_batch", batches, "batch")
   end
 
-  def dependencies_satisfied?(
+  def unsatisfied_dependencies(
         %OutboxEvent{event_type: "pallet_packing", source_type: "manufacturer_pallet"} = event
       ) do
-    shipper_ids =
+    shippers =
       Repo.all(
         from s in ThamaniDawa.Manufacturing.ShipperSscc,
           where: s.manufacturer_pallet_id == ^event.source_id,
-          select: s.id
+          select: %{id: s.id, identifier: s.code}
       )
-
-    packing_events =
-      Repo.all(
-        from e in OutboxEvent,
-          where:
-            e.organization_id == ^event.organization_id and e.event_type == "packing" and
-              e.source_type == "manufacturer_shipper_sscc" and e.source_id in ^shipper_ids,
-          select: {e.source_id, e.status}
-      )
-
-    statuses_by_shipper =
-      Enum.group_by(packing_events, fn {shipper_id, _status} -> shipper_id end, fn {_shipper_id,
-                                                                                    status} ->
-        status
-      end)
 
     # A manually supplied shipper can already exist in GS1 without a local
     # packing event. Only shippers with a local event need to wait for it.
-    shipper_ids != [] and
-      Enum.all?(shipper_ids, fn shipper_id ->
-        case Map.get(statuses_by_shipper, shipper_id) do
-          nil -> true
-          statuses -> Enum.any?(statuses, &(&1 in ["accepted", "warning"]))
-        end
-      end)
+    event
+    |> dependencies_for_sources(
+      "packing",
+      "manufacturer_shipper_sscc",
+      shippers,
+      "shipper SSCC"
+    )
+    |> Enum.reject(&(&1.status == "missing"))
   end
 
-  def dependencies_satisfied?(_event), do: true
+  def unsatisfied_dependencies(_event), do: []
+
+  @doc "Whether a manufacturer aggregation event may be submitted to TrackIQ."
+  def dependencies_satisfied?(event), do: unsatisfied_dependencies(event) == []
+
+  defp dependencies_for_sources(event, event_type, source_type, sources, source_label) do
+    source_ids = Enum.map(sources, & &1.id)
+
+    events =
+      Repo.all(
+        from e in OutboxEvent,
+          where: e.organization_id == ^event.organization_id,
+          where: e.event_type == ^event_type and e.source_type == ^source_type,
+          where: e.source_id in ^source_ids,
+          order_by: [desc: e.occurred_at, desc: e.id]
+      )
+      |> Enum.group_by(& &1.source_id)
+
+    sources
+    |> Enum.flat_map(fn source ->
+      source_events = Map.get(events, source.id, [])
+
+      if Enum.any?(source_events, &(&1.status in ["accepted", "warning"])) do
+        []
+      else
+        latest = List.first(source_events)
+
+        [
+          %{
+            event_type: event_type,
+            event_id: latest && latest.event_id,
+            source_label: source_label,
+            source_identifier: source.identifier,
+            status: if(latest, do: latest.status, else: "missing")
+          }
+        ]
+      end
+    end)
+    |> then(fn
+      [] when sources == [] ->
+        [
+          %{
+            event_type: event_type,
+            event_id: nil,
+            source_label: source_label,
+            source_identifier: "unknown",
+            status: "missing"
+          }
+        ]
+
+      dependencies ->
+        dependencies
+    end)
+  end
 
   def mark_accepted(%OutboxEvent{} = event, http_status, response) do
     status = if warnings?(response), do: "warning", else: "accepted"

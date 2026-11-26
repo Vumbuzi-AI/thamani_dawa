@@ -43,11 +43,12 @@ defmodule ThamaniDawa.Epcis.SubmissionWorker do
   """
   def submit_now(%OutboxEvent{status: "pending"} = event) do
     organization = Organizations.get_organization!(event.organization_id)
+    dependencies = Outbox.unsatisfied_dependencies(event)
 
-    if Outbox.dependencies_satisfied?(event) do
+    if dependencies == [] do
       submit_event(event, organization)
     else
-      {:blocked, event}
+      {:blocked, {:dependencies_not_satisfied, dependencies}, event}
     end
   end
 

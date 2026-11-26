@@ -538,6 +538,66 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     refute Map.has_key?(request, "order_number")
   end
 
+  test "order and destination fields are optional during serial generation", %{conn: conn} do
+    %{organization: organization, site: site, user: user, product: product} =
+      manufacturer_session(conn)
+
+    conn = log_in_user(conn, user)
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials/new")
+
+    lv
+    |> form("#manufacturer-serial-generation-form", %{
+      "serial_generation" => %{
+        "batch_no" => "LOT-DEFERRED",
+        "production_date" => "2026-11-20",
+        "expiry_date" => "2027-11-20",
+        "primary_quantity" => "10",
+        "shipper_quantity" => "5"
+      }
+    })
+    |> render_submit()
+
+    expected_path = "/manufacturer/products/#{product.gtin}/serials?batch=LOT-DEFERRED"
+
+    assert {:error, {:live_redirect, %{to: ^expected_path}}} =
+             lv
+             |> form("#manufacturer-serial-generation-form", %{
+               "serial_generation" => %{
+                 "order_intent" => "order",
+                 "order_number" => "",
+                 "to_gln" => "",
+                 "to_company_name" => "",
+                 "to_address" => ""
+               }
+             })
+             |> render_submit()
+
+    operation =
+      ThamaniDawa.Manufacturing.Operations.generation_status_for_product(
+        organization.id,
+        product.id,
+        "LOT-DEFERRED"
+      )
+
+    assert {:ok, _allocated} =
+             ThamaniDawa.Manufacturing.Operations.allocate_identifiers(operation.id)
+
+    [{batch, 10}] = Manufacturing.list_batches(organization.id, product.id)
+    assert batch.order_number in [nil, ""]
+    assert batch.to_gln in [nil, ""]
+    assert batch.to_company_name in [nil, ""]
+    assert batch.to_address in [nil, ""]
+    assert batch.from_gln == site.gln
+
+    request =
+      Enum.find(ThamaniDawa.GS1.MemberApiStub.serial_requests(), &(&1["barcode"] == product.gtin))
+
+    assert request["create_shippers"] == false
+    refute Map.has_key?(request, "to")
+    refute Map.has_key?(request, "order_number")
+    assert Manufacturing.list_sscc_groups(organization.id, product.id) == []
+  end
+
   test "serial and SSCC eye links open org-scoped drill-downs", %{conn: conn} do
     %{organization: organization, site: site, user: user, product: product} =
       manufacturer_session(conn)

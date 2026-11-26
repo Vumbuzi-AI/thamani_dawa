@@ -77,7 +77,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         socket.assigns.requested_batch
       )
 
-    if (connected?(socket) and op) &&
+    if connected?(socket) and op &&
          op.serial_allocation_status in ["pending", "allocating"] do
       Process.send_after(self(), :refresh_pending_generation, 2_000)
     end
@@ -124,14 +124,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           batch
 
         local ->
-          Map.merge(batch, Map.take(local, [:pack_quantity, :packs_per_shipper, :expected_shipper_count]))
+          Map.merge(
+            batch,
+            Map.take(local, [:pack_quantity, :packs_per_shipper, :expected_shipper_count])
+          )
       end
     end)
   end
 
   defp finish_batches(socket, batches, error) do
     socket
-    |> assign(batches: overlay_packaging(socket, batches), batches_error: error, batches_loading: false)
+    |> assign(
+      batches: overlay_packaging(socket, batches),
+      batches_error: error,
+      batches_loading: false
+    )
     |> select_batch(
       socket.assigns.requested_batch,
       socket.assigns.search,
