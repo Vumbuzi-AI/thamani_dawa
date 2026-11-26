@@ -65,6 +65,32 @@ defmodule ThamaniDawa.Manufacturing.OperationsTest do
       refute context.aggregation_eligible
     end
 
+    test "bulk-allocates 10,000 serials through one GS1 request", ctx do
+      %{organization: organization, site: site, product: product} = ctx
+      quantity = 10_000
+
+      assert %{batch: batch, operation: operation} =
+               prepare(
+                 product,
+                 batch_attrs(site, %{"pack_quantity" => Integer.to_string(quantity)})
+               )
+
+      assert operation.serial_quantity == quantity
+
+      assert {:ok, completed} = Operations.allocate_identifiers(operation.id)
+      assert completed.status == "completed"
+      assert completed.serial_allocation_status == "completed"
+
+      values = serial_values(organization.id, batch.id)
+      assert length(values) == quantity
+      assert Enum.uniq(values) == values
+
+      [request] = MemberApiStub.serial_requests()
+      assert request["trade_item_qty"] == Integer.to_string(quantity)
+      assert request["create_shippers"] == false
+      assert MemberApiStub.create_requests() == []
+    end
+
     test "retains genuine order metadata without allocating shipper identifiers", ctx do
       %{site: site, product: product} = ctx
       order = order_attrs()

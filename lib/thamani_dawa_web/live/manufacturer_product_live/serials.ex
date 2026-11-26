@@ -590,11 +590,29 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                   "We couldn't finish setting up the serials for this batch."}
               </p>
               <p
+                :if={@generation_op.serial_allocation_status == "failed"}
+                class="td-note"
+              >
+                GS1 rejected this request, so no serials were created. Review the batch details and try again.
+              </p>
+              <p
                 :if={@generation_op.serial_allocation_status == "reconciliation_required"}
                 class="td-note"
               >
                 We can check with GS1 now. We'll only create new serials if GS1 confirms none were made.
               </p>
+              <div
+                :if={@generation_op.serial_allocation_status == "failed"}
+                class="mt-3"
+              >
+                <.link
+                  id="retry-failed-generation"
+                  patch={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
+                  class="td-link"
+                >
+                  Set up serials again
+                </.link>
+              </div>
               <div
                 :if={@generation_op.serial_allocation_status == "reconciliation_required"}
                 class="mt-3"
@@ -649,7 +667,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             </p>
             <div :if={@batches_error} id="serial-batches-error" class="td-ban is-danger m-3">
               <span>{error_message(@batches_error)}</span>
-              <.td_button id="retry-serial-batches" label="Retry" phx-click="retry" />
+              <.td_button id="retry-serial-batches" label="Refresh" phx-click="retry" />
             </div>
             <.link
               :for={batch <- @batches || []}
@@ -740,7 +758,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
             <div :if={@serials_error} id="manufacturer-serials-error" class="td-ban is-danger">
               <span>{error_message(@serials_error)}</span>
-              <.td_button id="retry-manufacturer-serials" label="Retry" phx-click="retry" />
+              <.td_button id="retry-manufacturer-serials" label="Refresh" phx-click="retry" />
             </div>
 
             <div :if={@serial_page} class="td-card" id="serial-preview-card">
@@ -1071,7 +1089,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
     <div :if={@serials_error} id="manufacturer-serials-error" class="td-ban is-danger m-4">
       <span>{error_message(@serials_error)}</span>
-      <.td_button id="retry-manufacturer-serials" label="Retry" phx-click="retry" />
+      <.td_button id="retry-manufacturer-serials" label="Refresh" phx-click="retry" />
     </div>
 
     <div

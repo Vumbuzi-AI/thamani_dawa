@@ -1261,6 +1261,60 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     refute has_element?(serials_lv, "#reconcile-serial-allocation")
   end
 
+  test "shows the GS1 rejection reason and a way back to generation when serials fail", %{
+    conn: conn
+  } do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+    organization = allow_stock_serialization(organization)
+    conn = log_in_user(conn, user)
+
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/serials/new")
+
+    lv
+    |> form("#manufacturer-serial-generation-form", %{
+      "serial_generation" => %{
+        "batch_no" => "LOT-2026-GS1-FAILED",
+        "production_date" => "2026-11-20",
+        "expiry_date" => "2027-11-20",
+        "primary_quantity" => "4",
+        "shipper_quantity" => "2"
+      }
+    })
+    |> render_submit()
+
+    expected_path = "/manufacturer/products/#{product.gtin}/serials?batch=LOT-2026-GS1-FAILED"
+
+    assert {:error, {:live_redirect, %{to: ^expected_path}}} =
+             lv
+             |> form("#manufacturer-serial-generation-form", %{
+               "serial_generation" => %{"order_intent" => "stock"}
+             })
+             |> render_submit()
+
+    {:ok, serials_lv, _html} = live(conn, expected_path)
+
+    op =
+      ThamaniDawa.Manufacturing.Operations.generation_status_for_product(
+        organization.id,
+        product.id,
+        "LOT-2026-GS1-FAILED"
+      )
+
+    ThamaniDawa.GS1.MemberApiStub.fail_next({:invalid, "GTIN is not registered"})
+
+    assert {:ok, _failed} = ThamaniDawa.Manufacturing.Operations.allocate_identifiers(op.id)
+    render_async(serials_lv)
+
+    assert has_element?(
+             serials_lv,
+             "#serial-allocation-error",
+             "Serials rejected the request: GTIN is not registered"
+           )
+
+    assert has_element?(serials_lv, "#retry-failed-generation", "Set up serials again")
+    refute has_element?(serials_lv, "#reconcile-serial-allocation")
+  end
+
   test "print label opens and closes the modal without leaving the SSCC list", %{conn: conn} do
     %{organization: organization, user: user, product: product} = manufacturer_session(conn)
 
