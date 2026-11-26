@@ -90,7 +90,42 @@ defmodule ThamaniDawaWeb.DistributorEpcisLiveTest do
 
     assert has_element?(view, "#epcis-queue-halted")
     assert has_element?(view, "#epcis-events-#{rejected.id}", "Failed")
-    assert has_element?(view, "#resubmit-epcis-event-#{rejected.id}")
+    assert has_element?(view, "#discard-epcis-event-#{rejected.id}", "Discard")
+    assert has_element?(view, "#resubmit-epcis-event-#{rejected.id}", "Resubmit anyway")
+  end
+
+  test "opening a rejected event shows the Hub response first", %{
+    conn: conn,
+    distributor: distributor
+  } do
+    rejected = insert_event(distributor.organization_id, "rejected")
+
+    {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
+
+    view |> element("#inspect-epcis-event-#{rejected.id}") |> render_click()
+
+    assert has_element?(view, "#epcis-payload-modal", "MISSING_NEEDED_FIELDS")
+  end
+
+  test "discarding a rejected event removes it and clears the halt", %{
+    conn: conn,
+    distributor: distributor
+  } do
+    rejected = insert_event(distributor.organization_id, "rejected")
+    pending = insert_event(distributor.organization_id, "pending")
+
+    {:ok, view, _html} = live(conn, ~p"/distributor/epcis")
+
+    assert has_element?(view, "#epcis-queue-halted")
+
+    view |> element("#discard-epcis-event-#{rejected.id}") |> render_click()
+    view |> element("#discard-epcis-event-#{rejected.id}-confirm") |> render_click()
+
+    assert ThamaniDawa.Repo.get(OutboxEvent, rejected.id) == nil
+    refute has_element?(view, "#epcis-events-#{rejected.id}")
+    refute has_element?(view, "#epcis-queue-halted")
+    assert has_element?(view, "#epcis-events-#{pending.id}", "Pending")
+    assert has_element?(view, "#flash-group .td-toast.is-success", "discarded")
   end
 
   test "resubmitting a rejected event requeues it with the same eventID", %{

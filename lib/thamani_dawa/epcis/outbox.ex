@@ -185,6 +185,33 @@ defmodule ThamaniDawa.Epcis.Outbox do
     event
   end
 
+  @doc """
+  Removes an event the Hub never stored, so later events can be sent.
+
+  A hard rejection (400) and a locally blocked event both happen before PPB
+  records anything, so no error declaration is needed — discarding is the
+  honest resolution when the payload is wrong and cannot be edited here.
+  `dead` is deliberately excluded: those events exhausted retries after a
+  transient failure and may have reached the Hub.
+
+  The worker's job completed when it hit the halt, so a forced drain is
+  enqueued to pick up anything still pending after the delete.
+  """
+  def discard(%OutboxEvent{status: status} = event) when status in ["rejected", "blocked"] do
+    organization_id = event.organization_id
+
+    case Repo.delete(event) do
+      {:ok, deleted} ->
+        SubmissionWorker.enqueue_now(organization_id)
+        {:ok, deleted}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  def discard(%OutboxEvent{}), do: {:error, :not_discardable}
+
   @doc "Fetches one outbox event scoped to the organization. Raises if not found."
   def get_event!(organization_id, id) do
     Repo.get_by!(OutboxEvent, id: id, organization_id: organization_id)

@@ -66,7 +66,7 @@ defmodule ThamaniDawaWeb.EpcisReporting do
           <.td_icon name="warning" />
           <p>
             <b>Reporting is halted.</b>
-            A failed event is blocking this organization's queue. Resolve it below and resubmit it with its original event ID.
+            A rejected or dead event is blocking this organization's queue. PPB did not store a rejected event, so resending the unchanged payload will fail again. Select “All events”, check why it failed, then discard it or fix the source data and re-report.
           </p>
         </div>
 
@@ -294,10 +294,25 @@ defmodule ThamaniDawaWeb.EpcisReporting do
             phx-value-id={@event.id}
           />
           <.td_button
+            :if={@event.status == "rejected"}
+            id={"discard-epcis-event-#{@event.id}"}
+            variant="danger"
+            label="Discard"
+            tip="PPB did not store this event. Remove it so later events can send."
+            phx-click="prompt_discard"
+            phx-value-id={@event.id}
+          />
+          <.td_button
             :if={@event.status in ["rejected", "dead", "blocked"]}
             id={"resubmit-epcis-event-#{@event.id}"}
-            variant="primary"
-            label="Resubmit"
+            variant={if(@event.status == "rejected", do: "secondary", else: "primary")}
+            label={if(@event.status == "rejected", do: "Resubmit anyway", else: "Resubmit")}
+            tip={
+              if(@event.status == "rejected",
+                do: "Only works if you fixed the cause outside this app.",
+                else: nil
+              )
+            }
             phx-click="prompt_resubmit"
             phx-value-id={@event.id}
           />
@@ -440,9 +455,10 @@ defmodule ThamaniDawaWeb.EpcisReporting do
     assigns =
       assign(assigns,
         title: "Resubmit this event?",
-        body: "It is sent to the PPB Hub again with its original event ID.",
+        body:
+          "It is sent to the PPB Hub again with its original event ID. A rejected event will fail again unless the cause was fixed outside this app.",
         confirm_id: "resubmit-epcis-event-#{id}-confirm",
-        confirm_label: "Resubmit",
+        confirm_label: "Resubmit anyway",
         confirm_event: "resubmit",
         confirm_id_value: id
       )
@@ -450,7 +466,29 @@ defmodule ThamaniDawaWeb.EpcisReporting do
     confirm_markup(assigns)
   end
 
+  defp confirm_modal(%{action: {:discard, id}} = assigns) do
+    assigns =
+      assign(assigns,
+        title: "Discard this failed event?",
+        body:
+          "PPB did not store this event, so nothing needs to be voided. It is removed locally and later events can send. This cannot be undone.",
+        confirm_id: "discard-epcis-event-#{id}-confirm",
+        confirm_label: "Discard event",
+        confirm_event: "discard",
+        confirm_id_value: id
+      )
+
+    confirm_markup(assigns)
+  end
+
   defp confirm_markup(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :confirm_variant,
+        if(assigns.confirm_event == "discard", do: "danger", else: "primary")
+      )
+
     ~H"""
     <.td_modal
       id="epcis-confirm"
@@ -466,7 +504,7 @@ defmodule ThamaniDawaWeb.EpcisReporting do
         <.td_button
           id={@confirm_id}
           type="button"
-          variant="primary"
+          variant={@confirm_variant}
           label={@confirm_label}
           phx-click={@confirm_event}
           phx-value-id={@confirm_id_value}

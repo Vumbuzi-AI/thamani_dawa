@@ -50,7 +50,13 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
   def handle_event("inspect_payload", %{"id" => id} = params, socket) do
     organization_id = socket.assigns.current_scope.organization_id
     event = Outbox.get_event!(organization_id, id)
-    tab = if params["tab"] == "diagnostics", do: :diagnostics, else: :request
+
+    tab =
+      cond do
+        params["tab"] == "diagnostics" -> :diagnostics
+        event.status in ["rejected", "dead"] -> :response
+        true -> :request
+      end
 
     {:noreply, socket |> assign(:inspecting_event, event) |> assign(:inspection_tab, tab)}
   end
@@ -82,6 +88,26 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
       _ ->
         {:noreply,
          put_flash(socket, :error, "Only rejected, dead, or blocked events can be resubmitted.")}
+    end
+  end
+
+  def handle_event("discard", %{"id" => id}, socket) do
+    organization_id = socket.assigns.current_scope.organization_id
+    event = Outbox.get_event!(organization_id, id)
+
+    case Outbox.discard(event) do
+      {:ok, _event} ->
+        {:noreply,
+         socket
+         |> reload()
+         |> assign(:confirm_action, nil)
+         |> put_flash(
+           :info,
+           "Event #{short_id(event.event_id)} discarded. Pending events can send again."
+         )}
+
+      {:error, _reason} ->
+        {:noreply, put_flash(socket, :error, "Only rejected or blocked events can be discarded.")}
     end
   end
 
@@ -193,6 +219,9 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
 
   def handle_event("prompt_resubmit", %{"id" => id}, socket),
     do: {:noreply, assign(socket, :confirm_action, {:resubmit, id})}
+
+  def handle_event("prompt_discard", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, :confirm_action, {:discard, id})}
 
   def handle_event("cancel_confirm", _params, socket),
     do: {:noreply, assign(socket, :confirm_action, nil)}
