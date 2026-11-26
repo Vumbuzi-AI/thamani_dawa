@@ -50,6 +50,10 @@ defmodule ThamaniDawa.Manufacturing.OperationsTest do
       assert completed.sscc_allocation_status == "not_required"
 
       assert serial_values(organization.id, batch.id) == ["0001", "0002", "0003", "0004"]
+
+      batch = Repo.get!(ThamaniDawa.Manufacturing.Batch, batch.id)
+      assert batch.issued_count == 4
+      assert batch.packed_count == 0
       assert batch_shipper_count(organization.id, batch.id) == 0
       assert MemberApiStub.create_requests() == []
 

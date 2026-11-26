@@ -34,9 +34,10 @@ defmodule ThamaniDawaWeb.CoreComponents do
   alias ThamaniDawaWeb.Layouts
 
   @doc """
-  Renders a flash as the canon TD toast: an ink pill with a check, sitting in
-  the toast region. Info flashes are completed actions, so they use the
-  success tone. Error flashes use danger. Click the pill to dismiss it.
+  Renders a flash as the canon TD toast: an ink pill in the toast region.
+  Completed actions (`:info`) use the success tone and a check. Setup-needed
+  notices (`:warning`) use the amber warning tone and an info mark. Failures
+  (`:error`) use danger. Click the pill to dismiss it.
 
   ## Examples
 
@@ -53,7 +54,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
   attr :id, :string, doc: "the optional id of flash container"
   attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
   attr :title, :string, default: nil
-  attr :kind, :atom, values: [:info, :error], doc: "used for styling and flash lookup"
+  attr :kind, :atom, values: [:info, :warning, :error], doc: "used for styling and flash lookup"
   attr :rest, :global, doc: "the arbitrary HTML attributes to add to the flash container"
 
   slot :inner_block, doc: "the optional inner block that renders the flash message"
@@ -78,10 +79,7 @@ defmodule ThamaniDawaWeb.CoreComponents do
       <p class={["td-toast", "is-#{@tone}"]} data-tone={@tone}>
         <span class="td-toast-icon" aria-hidden="true">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256">
-            <path
-              fill="currentColor"
-              d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m45.66 85.66l-56 56a8 8 0 0 1-11.32 0l-24-24a8 8 0 0 1 11.32-11.32L112 148.69l50.34-50.35a8 8 0 0 1 11.32 11.32"
-            />
+            <path fill="currentColor" d={toast_icon_path(@tone)} />
           </svg>
         </span>
         <span class="td-toast-text"><span :if={@title}>{@title}. </span>{msg}</span>
@@ -90,12 +88,20 @@ defmodule ThamaniDawaWeb.CoreComponents do
     """
   end
 
-  # Completed actions are stored as :info. The toast for those is the green check.
+  # Completed actions are stored as :info (green check). Setup-needed
+  # notices are :warning (amber info mark). Failures stay :error / danger.
   defp toast_tone(:error), do: "danger"
+  defp toast_tone(:warning), do: "warning"
   defp toast_tone(_kind), do: "success"
 
+  @toast_check_path "M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m45.66 85.66l-56 56a8 8 0 0 1-11.32 0l-24-24a8 8 0 0 1 11.32-11.32L112 148.69l50.34-50.35a8 8 0 0 1 11.32 11.32"
+  @toast_info_path "M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24Zm-4 48a12 12 0 1 1-12 12A12 12 0 0 1 124 72Zm12 112a16 16 0 0 1-16-16V128a8 8 0 0 1 16 0v40a8 8 0 0 1 0 16Z"
+
+  defp toast_icon_path(tone) when tone in ~w(warning info), do: @toast_info_path
+  defp toast_icon_path(_tone), do: @toast_check_path
+
   defp flash_timeout(%{id: id}) when id in ["client-error", "server-error"], do: 0
-  defp flash_timeout(%{kind: :error}), do: 8_000
+  defp flash_timeout(%{kind: kind}) when kind in [:error, :warning], do: 8_000
   defp flash_timeout(_assigns), do: 5_000
 
   @doc """

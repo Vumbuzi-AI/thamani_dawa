@@ -19,6 +19,8 @@ defmodule ThamaniDawa.Manufacturing do
   alias ThamaniDawa.Manufacturing.Aggregation
   alias ThamaniDawa.Manufacturing.AggregationItem
   alias ThamaniDawa.Manufacturing.Batch
+  alias ThamaniDawa.Manufacturing.PackBox
+  alias ThamaniDawa.Manufacturing.PackBoxScan
   alias ThamaniDawa.Manufacturing.Pallet
   alias ThamaniDawa.Manufacturing.Product
   alias ThamaniDawa.Manufacturing.Serial
@@ -523,7 +525,15 @@ defmodule ThamaniDawa.Manufacturing do
           from b in Batch,
             join: p in assoc(b, :product),
             where: b.organization_id == ^organization_id and p.gtin == ^gtin,
-            select: {b.batch_no, %{created_at: b.inserted_at, local_id: b.id}}
+            select:
+              {b.batch_no,
+               %{
+                 created_at: b.inserted_at,
+                 local_id: b.id,
+                 pack_quantity: b.pack_quantity,
+                 packs_per_shipper: b.packs_per_shipper,
+                 expected_shipper_count: b.expected_shipper_count
+               }}
         )
       )
 
@@ -533,7 +543,14 @@ defmodule ThamaniDawa.Manufacturing do
         |> Enum.filter(&(is_binary(&1["batch"]) and &1["batch"] != ""))
         |> Enum.group_by(& &1["batch"])
         |> Enum.map(fn {batch_no, [first | _] = batch_rows} ->
-          local = Map.get(local_batches, batch_no, %{created_at: nil, local_id: nil})
+          local =
+            Map.get(local_batches, batch_no, %{
+              created_at: nil,
+              local_id: nil,
+              pack_quantity: nil,
+              packs_per_shipper: nil,
+              expected_shipper_count: nil
+            })
 
           %{
             batch_no: batch_no,
@@ -541,6 +558,9 @@ defmodule ThamaniDawa.Manufacturing do
             expiry_date: parse_api_date(first["expiry"]),
             created_at: local.created_at,
             local_id: local.local_id,
+            pack_quantity: local.pack_quantity,
+            packs_per_shipper: local.packs_per_shipper,
+            expected_shipper_count: local.expected_shipper_count,
             serial_count: batch_serial_count(batch_rows)
           }
         end)
@@ -582,7 +602,10 @@ defmodule ThamaniDawa.Manufacturing do
           expiry_date: b.expiry_date,
           created_at: b.inserted_at,
           local_id: b.id,
-          serial_count: c.count
+          serial_count: c.count,
+          pack_quantity: b.pack_quantity,
+          packs_per_shipper: b.packs_per_shipper,
+          expected_shipper_count: b.expected_shipper_count
         }
     )
   end
@@ -636,6 +659,41 @@ defmodule ThamaniDawa.Manufacturing do
   end
 
   @doc """
+  Write-through of GS1-issued serials into `manufacturer_serials`.
+  Skips the insert when this batch already has at least as many local
+  rows as `serials` — packing reads `issued_count` / `packed_count`
+  on the batch, not GS1.
+  """
+  def persist_issued_serials(organization_id, %Product{} = product, %Batch{} = batch, serials)
+      when is_list(serials) do
+    incoming =
+      serials
+      |> Enum.map(&serial_code/1)
+      |> Enum.count(&(is_binary(&1) and &1 != ""))
+
+    if incoming > 0 and batch.issued_count >= incoming do
+      []
+    else
+      persist_serials(organization_id, product, batch, serials)
+    end
+  end
+
+  @doc """
+  Repair path only: copy GS1 serials locally when `issued_count` is
+  still 0. Do not call this on the packer lot list.
+  """
+  def sync_issued_serials(organization_id, %Product{} = product, %Batch{} = batch) do
+    if batch.issued_count > 0 do
+      {:ok, []}
+    else
+      with {:ok, serials} <- fetch_batch_serials(organization_id, product.gtin, batch.batch_no) do
+        persist_serials(organization_id, product, batch, serials)
+        {:ok, serials}
+      end
+    end
+  end
+
+  @doc """
   One page of `gtin` + `batch_no` serials from GS1, ordered by serial, shaped
   like `ThamaniDawaWeb.DistributorPagination.page/3`. Options: `:page`,
   `:per_page`, `:search` (serials containing it) and `:exclude` (serials to
@@ -684,6 +742,13 @@ defmodule ThamaniDawa.Manufacturing do
     opts = Keyword.put_new(opts, :api_token, Organizations.gs1_api_key(organization_id))
 
     with {:ok, rows} <- MemberApi.unpacked_serials(gtin, batch_no, opts) do
+      claimed =
+        if Keyword.get(opts, :exclude_draft_claims, true) do
+          MapSet.new(claimed_pack_serials(organization_id, gtin, batch_no))
+        else
+          MapSet.new()
+        end
+
       serials =
         rows
         |> Enum.filter(
@@ -691,10 +756,26 @@ defmodule ThamaniDawa.Manufacturing do
         )
         |> Enum.map(& &1["serial"])
         |> Enum.uniq()
+        |> Enum.reject(&MapSet.member?(claimed, &1))
         |> Enum.sort()
 
       {:ok, serials}
     end
+  end
+
+  defp claimed_pack_serials(organization_id, gtin, batch_no) do
+    Repo.all(
+      from s in PackBoxScan,
+        join: b in PackBox,
+        on: b.id == s.box_id,
+        join: batch in Batch,
+        on: batch.id == b.manufacturer_batch_id,
+        join: p in Product,
+        on: p.id == batch.manufacturer_product_id,
+        where: s.organization_id == ^organization_id,
+        where: p.gtin == ^gtin and batch.batch_no == ^batch_no,
+        select: s.serial
+    )
   end
 
   @doc """
@@ -822,10 +903,13 @@ defmodule ThamaniDawa.Manufacturing do
           })
           |> Repo.insert!(on_conflict: :nothing)
 
-          from(s in Serial,
-            where: s.manufacturer_batch_id == ^local_batch.id and s.serial in ^serials
-          )
-          |> Repo.update_all(set: [manufacturer_shipper_sscc_id: shipper_sscc.id])
+          {packed, _} =
+            from(s in Serial,
+              where: s.manufacturer_batch_id == ^local_batch.id and s.serial in ^serials
+            )
+            |> Repo.update_all(set: [manufacturer_shipper_sscc_id: shipper_sscc.id])
+
+          bump_packed_count(local_batch.id, packed)
 
         nil ->
           :ok
@@ -1268,8 +1352,11 @@ defmodule ThamaniDawa.Manufacturing do
              manufacturer_batch_id: batch.id
            })
            |> Repo.insert() do
-      from(s in Serial, where: s.id in ^Enum.map(serials, & &1.id))
-      |> Repo.update_all(set: [manufacturer_shipper_sscc_id: shipper_sscc.id])
+      {packed, _} =
+        from(s in Serial, where: s.id in ^Enum.map(serials, & &1.id))
+        |> Repo.update_all(set: [manufacturer_shipper_sscc_id: shipper_sscc.id])
+
+      bump_packed_count(batch.id, packed)
 
       Epcis.record_manufacturer_serial_pack(
         organization_id,
@@ -1289,11 +1376,16 @@ defmodule ThamaniDawa.Manufacturing do
 
   @insert_chunk 1_000
 
-  defp persist_serials(organization_id, product, batch, %{"primary_datamatrices" => codes}) do
+  defp persist_serials(organization_id, product, batch, result) do
     now = DateTime.truncate(DateTime.utc_now(), :second)
 
     entries =
-      Enum.map(codes, fn %{"serial" => serial} ->
+      result
+      |> serial_codes()
+      |> Enum.map(&serial_code/1)
+      |> Enum.filter(&(is_binary(&1) and &1 != ""))
+      |> Enum.uniq()
+      |> Enum.map(fn serial ->
         %{
           organization_id: organization_id,
           manufacturer_product_id: product.id,
@@ -1304,21 +1396,85 @@ defmodule ThamaniDawa.Manufacturing do
         }
       end)
 
-    entries
-    |> Enum.chunk_every(@insert_chunk)
-    |> Enum.flat_map(fn chunk ->
-      {_count, inserted} =
-        Repo.insert_all(Serial, chunk,
-          on_conflict: :nothing,
-          conflict_target: [:manufacturer_product_id, :serial],
-          returning: true
-        )
+    inserted =
+      entries
+      |> Enum.chunk_every(@insert_chunk)
+      |> Enum.flat_map(fn chunk ->
+        {_count, rows} =
+          Repo.insert_all(Serial, chunk,
+            on_conflict: :nothing,
+            conflict_target: [:manufacturer_product_id, :serial],
+            returning: true
+          )
 
-      inserted
-    end)
+        rows
+      end)
+
+    bump_issued_count(batch.id, length(inserted))
+    inserted
   end
 
-  defp persist_serials(_organization_id, _product, _batch, _result), do: []
+  @doc """
+  Batches whose serial rows were saved without touching `issued_count`
+  still look empty to the packer. Copy the real row counts onto those
+  batches. Leaves a non-zero counter alone.
+  """
+  def reconcile_untracked_serials(organization_id) when is_integer(organization_id) do
+    Repo.query!(
+      """
+      UPDATE manufacturer_batches AS b
+      SET
+        issued_count = s.issued,
+        packed_count = s.packed
+      FROM (
+        SELECT
+          manufacturer_batch_id,
+          COUNT(*)::int AS issued,
+          COUNT(*) FILTER (WHERE manufacturer_shipper_sscc_id IS NOT NULL)::int AS packed
+        FROM manufacturer_serials
+        GROUP BY manufacturer_batch_id
+      ) AS s
+      WHERE b.id = s.manufacturer_batch_id
+        AND b.organization_id = $1
+        AND b.issued_count = 0
+        AND s.issued > 0
+      """,
+      [organization_id]
+    )
+
+    :ok
+  end
+
+  defp bump_issued_count(_batch_id, 0), do: :ok
+
+  defp bump_issued_count(batch_id, n) when n > 0 do
+    from(b in Batch, where: b.id == ^batch_id)
+    |> Repo.update_all(inc: [issued_count: n])
+
+    :ok
+  end
+
+  defp bump_packed_count(_batch_id, 0), do: :ok
+
+  defp bump_packed_count(batch_id, n) when n > 0 do
+    from(b in Batch, where: b.id == ^batch_id)
+    |> Repo.update_all(inc: [packed_count: n])
+
+    :ok
+  end
+
+  defp serial_codes(%{"primary_datamatrices" => codes}) when is_list(codes), do: codes
+  defp serial_codes(%{"datamatrices" => codes}) when is_list(codes), do: codes
+  defp serial_codes(%{"serials" => codes}) when is_list(codes), do: codes
+  defp serial_codes(%{"data" => data}), do: serial_codes(data)
+  defp serial_codes(%{"result" => data}) when is_map(data), do: serial_codes(data)
+  defp serial_codes(list) when is_list(list), do: list
+  defp serial_codes(_result), do: []
+
+  defp serial_code(%{"serial" => serial}) when is_binary(serial), do: serial
+  defp serial_code(%{serial: serial}) when is_binary(serial), do: serial
+  defp serial_code(serial) when is_binary(serial), do: serial
+  defp serial_code(_row), do: nil
 
   # Pallets
 
@@ -1574,6 +1730,9 @@ defmodule ThamaniDawa.Manufacturing do
     |> Repo.insert()
     |> case do
       {:ok, serial} ->
+        bump_issued_count(batch.id, 1)
+        if sscc, do: bump_packed_count(batch.id, 1)
+
         if sscc do
           sscc
           |> Ecto.Changeset.change(count_of_trade_items: count_sscc_serials(sscc.id))
@@ -2430,6 +2589,10 @@ defmodule ThamaniDawa.Manufacturing do
         from(s in Serial, where: s.id in ^Enum.map(serial_records, & &1.id)),
         set: [manufacturer_shipper_sscc_id: sscc.id]
       )
+
+      serial_records
+      |> Enum.frequencies_by(& &1.manufacturer_batch_id)
+      |> Enum.each(fn {batch_id, n} -> bump_packed_count(batch_id, n) end)
 
       product = aggregation_product(organization_id, sscc, serial_records)
 

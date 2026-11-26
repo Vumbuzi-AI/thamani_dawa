@@ -33,6 +33,15 @@ defmodule ThamaniDawaWeb.Api.Response do
     })
   end
 
+  def reason(conn, {:account_locked, locked_until}) do
+    extra =
+      if match?(%DateTime{}, locked_until),
+        do: %{locked_until: DateTime.to_iso8601(locked_until)},
+        else: %{}
+
+    error(conn, 423, "account_locked", "This account is locked. Try again later.", extra)
+  end
+
   def reason(conn, reason) do
     {status, code, message} = reason_details(reason)
     error(conn, status, code, message)
@@ -49,6 +58,9 @@ defmodule ThamaniDawaWeb.Api.Response do
   defp reason_details(:bad_request),
     do: {400, "bad_request", "The request is missing a required value."}
 
+  defp reason_details(:device_required),
+    do: {400, "bad_request", "Missing X-Device-Id."}
+
   defp reason_details(:invalid_credentials),
     do: {401, "invalid_credentials", "Invalid email or password."}
 
@@ -58,6 +70,12 @@ defmodule ThamaniDawaWeb.Api.Response do
   defp reason_details(:account_inactive),
     do: {403, "account_inactive", "This account is disabled."}
 
+  defp reason_details(:account_locked),
+    do: {423, "account_locked", "This account is locked. Try again later."}
+
+  defp reason_details(:rate_limited),
+    do: {429, "rate_limited", "Too many attempts. Try again later."}
+
   defp reason_details(:forbidden), do: {403, "forbidden", "You cannot do that."}
 
   defp reason_details(:not_assigned),
@@ -65,10 +83,46 @@ defmodule ThamaniDawaWeb.Api.Response do
 
   defp reason_details(:not_found), do: {404, "not_found", "Not found."}
 
+  defp reason_details(:unknown_lot),
+    do: {404, "not_found", "No batch on this line matches that code."}
+
+  defp reason_details(:parties_required),
+    do: {409, "parties_required", "Set From and To before opening a box."}
+
+  defp reason_details(:no_unpacked),
+    do: {409, "no_unpacked", "No loose serials on this batch."}
+
+  defp reason_details(:already_claimed),
+    do: {409, "already_claimed", "That serial is already in another box."}
+
+  defp reason_details(:not_editable),
+    do: {409, "not_editable", "This box is already saved."}
+
   defp reason_details(:idempotency_conflict),
     do:
       {409, "idempotency_conflict",
        "That idempotency key was already used with a different request."}
+
+  defp reason_details(:invalid_gln),
+    do: {422, "invalid_gln", "Enter a 13-digit GLN."}
+
+  defp reason_details(:same_party),
+    do: {422, "same_party", "From and To must be different."}
+
+  defp reason_details(:wrong_batch),
+    do: {422, "wrong_batch", "That serial is not from this batch."}
+
+  defp reason_details(:not_unpacked),
+    do: {422, "not_unpacked", "That serial is already packed."}
+
+  defp reason_details(:unreadable),
+    do: {422, "unreadable", "Could not read that scan."}
+
+  defp reason_details(:empty_box),
+    do: {422, "empty_box", "Scan at least one serial before saving."}
+
+  defp reason_details(:shipper_full),
+    do: {422, "shipper_full", "This shipper already has its packs. Save it and start the next one."}
 
   defp reason_details(:out_of_stock),
     do: {422, "insufficient_stock", "There is not enough stock."}

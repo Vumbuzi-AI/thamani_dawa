@@ -468,6 +468,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Index do
         :if={@live_action == :new_serial}
         id="manufacturer-serial-modal"
         show
+        class="is-tall"
         title="Generate serials"
         on_cancel={JS.patch(~p"/manufacturer/products")}
       >

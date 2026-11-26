@@ -1387,7 +1387,16 @@ defmodule ThamaniDawa.Manufacturing.Operations do
         }
       )
 
-    Repo.insert_all(Serial, rows, on_conflict: :nothing)
+    {inserted, _} =
+      Repo.insert_all(Serial, rows,
+        on_conflict: :nothing,
+        conflict_target: [:manufacturer_product_id, :serial]
+      )
+
+    if inserted > 0 do
+      from(b in Batch, where: b.id == ^operation.manufacturer_batch_id)
+      |> Repo.update_all(inc: [issued_count: inserted])
+    end
 
     Repo.all(
       from s in Serial,

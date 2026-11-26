@@ -2,6 +2,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
   use ThamaniDawaWeb, :live_view
 
   alias ThamaniDawa.Manufacturing
+  alias ThamaniDawaWeb.ManufacturerSsccLive.Label
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -318,10 +319,13 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
                                     icon="cube"
                                     mono
                                   >
-                                    <:row label="GTIN" mono>{sscc.gtin || "—"}</:row>
-                                    <:row label="Units">
-                                      {sscc.count_of_trade_items || 0}
-                                    </:row>
+                                    <:body>
+                                      <Label.sheet
+                                        sscc={sscc}
+                                        product_name={shipper_product_name(sscc)}
+                                        id_prefix={"shipment-peek-#{sscc.id}"}
+                                      />
+                                    </:body>
                                     <:action>
                                       <.td_button
                                         label="Open SSCC"
@@ -560,6 +564,15 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.Show do
       |> Enum.reject(&(&1 in [nil, ""]))
 
     if from_assoc == [], do: sscc.packed_serials || [], else: from_assoc
+  end
+
+  defp shipper_product_name(sscc) do
+    sscc.batches
+    |> List.wrap()
+    |> Enum.find_value(fn
+      %{product: %{name: name}} when is_binary(name) and name != "" -> name
+      _ -> nil
+    end)
   end
 
   defp product_batch(sscc) do

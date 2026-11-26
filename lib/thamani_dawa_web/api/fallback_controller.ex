@@ -7,6 +7,10 @@ defmodule ThamaniDawaWeb.Api.FallbackController do
     Response.changeset(conn, changeset)
   end
 
+  def call(conn, {:error, {:account_locked, _} = reason}) do
+    Response.reason(conn, reason)
+  end
+
   def call(conn, {:error, {_index, reason}}) do
     Response.reason(conn, reason)
   end

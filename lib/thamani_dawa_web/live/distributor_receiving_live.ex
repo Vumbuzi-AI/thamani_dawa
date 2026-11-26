@@ -98,7 +98,7 @@ defmodule ThamaniDawaWeb.DistributorReceivingLive do
 
         {:ok,
          socket
-         |> put_flash(:error, "Select a warehouse before receiving stock.")
+         |> put_flash(:warning, "Select a warehouse before receiving stock.")
          |> push_navigate(to: home)}
     end
   end

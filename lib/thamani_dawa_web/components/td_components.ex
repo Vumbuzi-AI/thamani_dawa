@@ -706,11 +706,11 @@ defmodule ThamaniDawaWeb.TDComponents do
   def td_card_header(assigns) do
     ~H"""
     <header class="td-card-header">
-      <div>
+      <div class="td-card-header-row">
         <h2>{@title}</h2>
-        <p :if={@subtitle}>{@subtitle}</p>
+        <div :if={@actions != []} class="td-header-actions">{render_slot(@actions)}</div>
       </div>
-      <div :if={@actions != []} class="td-header-actions">{render_slot(@actions)}</div>
+      <p :if={@subtitle}>{@subtitle}</p>
     </header>
     """
   end
@@ -1359,21 +1359,24 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :tone, :string, values: ~w(success danger info warning), default: "success"
   attr :text, :string, required: true
 
+  @toast_check_path "M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m45.66 85.66l-56 56a8 8 0 0 1-11.32 0l-24-24a8 8 0 0 1 11.32-11.32L112 148.69l50.34-50.35a8 8 0 0 1 11.32 11.32"
+  @toast_info_path "M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24Zm-4 48a12 12 0 1 1-12 12A12 12 0 0 1 124 72Zm12 112a16 16 0 0 1-16-16V128a8 8 0 0 1 16 0v40a8 8 0 0 1 0 16Z"
+
   def td_toast(assigns) do
     ~H"""
     <p class={["td-toast", "is-#{@tone}"]} data-tone={@tone} role="status">
       <span class="td-toast-icon" aria-hidden="true">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 256 256">
-          <path
-            fill="currentColor"
-            d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m45.66 85.66l-56 56a8 8 0 0 1-11.32 0l-24-24a8 8 0 0 1 11.32-11.32L112 148.69l50.34-50.35a8 8 0 0 1 11.32 11.32"
-          />
+          <path fill="currentColor" d={toast_icon_path(@tone)} />
         </svg>
       </span>
       <span class="td-toast-text">{@text}</span>
     </p>
     """
   end
+
+  defp toast_icon_path(tone) when tone in ~w(warning info), do: @toast_info_path
+  defp toast_icon_path(_tone), do: @toast_check_path
 
   attr :state, :string, values: ~w(done current upcoming), default: "upcoming"
   attr :number, :integer, required: true
@@ -1670,6 +1673,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :title, :string, default: nil
   attr :subtitle, :string, default: nil
   attr :width, :integer, default: nil
+  attr :class, :any, default: nil
   attr :on_cancel, JS, default: %JS{}
   slot :body, required: true
   slot :footer
@@ -1687,7 +1691,7 @@ defmodule ThamaniDawaWeb.TDComponents do
       <div class="td-modal-stage" role="dialog" aria-modal="true" aria-labelledby={"#{@id}-title"}>
         <.focus_wrap
           id={"#{@id}-container"}
-          class="td-modal"
+          class={["td-modal", @class]}
           style={@width && "width: min(#{@width}px, 100%)"}
           phx-window-keydown={JS.exec("data-cancel", to: "##{@id}")}
           phx-key="escape"
@@ -2332,6 +2336,11 @@ defmodule ThamaniDawaWeb.TDComponents do
   slot :empty
 
   def td_data_table(assigns) do
+    assigns =
+      with %{rows: %Phoenix.LiveView.LiveStream{}} <- assigns do
+        assign(assigns, row_id: assigns.row_id || fn {id, _item} -> id end)
+      end
+
     ~H"""
     <div class={["td-data", @class]}>
       <table>
@@ -2425,6 +2434,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   slot :badge
   slot :action
+  slot :body
 
   slot :row do
     attr :label, :string, required: true
@@ -2433,7 +2443,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   def td_peek(assigns) do
     ~H"""
-    <div id={@id} class="td-peek" data-mono={to_string(@mono)} role="tooltip">
+    <div id={@id} class={["td-peek", @body != [] && "is-label"]} data-mono={to_string(@mono)} role="tooltip">
       <div class="td-peek-hd">
         <span class="td-peek-tile"><.td_icon name={@icon} /></span>
         <div class="td-peek-tt">
@@ -2443,6 +2453,7 @@ defmodule ThamaniDawaWeb.TDComponents do
         <span :if={@badge != []} class="td-peek-bd">{render_slot(@badge)}</span>
       </div>
       <span :if={@subtitle} class="td-peek-sub">{@subtitle}</span>
+      <div :if={@body != []} class="td-peek-label">{render_slot(@body)}</div>
       <div :if={@row != []} class="td-peek-rows">
         <div :for={row <- @row} class="td-peek-row" data-mono={to_string(Map.get(row, :mono, false))}>
           <span class="td-peek-l">{row.label}</span>

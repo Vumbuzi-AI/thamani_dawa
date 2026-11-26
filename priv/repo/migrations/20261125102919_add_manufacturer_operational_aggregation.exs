@@ -8,8 +8,8 @@ defmodule ThamaniDawa.Repo.Migrations.AddManufacturerOperationalAggregation do
       add :packs_per_shipper, :integer
       add :expected_shipper_count, :integer
       add :shipper_preparation_method, :string
-      add :from_gln, :string
-      add :to_gln, :string
+      add_if_not_exists :from_gln, :string
+      add_if_not_exists :to_gln, :string
       add :to_company_name, :string
       add :to_address, :string
       add :order_number, :string

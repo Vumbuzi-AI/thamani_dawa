@@ -20,7 +20,7 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLiveTest do
     product =
       manufacturer_product_fixture(organization.id, %{name: "Amoxicillin", gtin: "12345678901234"})
 
-    _batch = manufacturer_batch_fixture(organization.id, product.id, %{batch_no: "BATCH-1"})
+    batch = manufacturer_batch_fixture(organization.id, product.id, %{batch_no: "BATCH-1"})
 
     {:ok, view, html} = live(conn, ~p"/manufacturer/inventory")
 
@@ -30,6 +30,11 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLiveTest do
     assert html =~ "Amoxicillin"
     assert html =~ "12345678901234"
     assert html =~ "BATCH-1"
+    assert has_element?(
+             view,
+             "#inventory-batch-serials-#{batch.id}[href='/manufacturer/products/12345678901234/serials?batch=BATCH-1']",
+             "BATCH-1"
+           )
     refute html =~ "TrackIQ"
     refute html =~ "standalone"
   end

@@ -183,6 +183,29 @@ defmodule ThamaniDawaWeb.Router do
     patch "/sites/:id", CatalogController, :update_site
   end
 
+  scope "/api/v1/manufacturer", ThamaniDawaWeb.Api.V1, as: :api_v1_manufacturer do
+    pipe_through :api
+
+    post "/login", ManufacturerSessionController, :login
+    post "/token/refresh", ManufacturerSessionController, :refresh
+  end
+
+  scope "/api/v1/manufacturer", ThamaniDawaWeb.Api.V1, as: :api_v1_manufacturer do
+    pipe_through [:api, ThamaniDawaWeb.Plugs.ManufacturerApiAuth]
+
+    post "/logout", ManufacturerSessionController, :logout
+    get "/glns", ManufacturerGlnController, :index
+    get "/batches", ManufacturerBatchController, :index
+    post "/resolve", ManufacturerBatchController, :resolve
+    get "/batches/:id", ManufacturerBatchController, :show
+    put "/batches/:id/parties", ManufacturerBatchController, :parties
+    post "/batches/:id/box", ManufacturerBatchController, :create_box
+    get "/boxes/:id", ManufacturerBoxController, :show
+    post "/boxes/:id/scans", ManufacturerBoxController, :scan
+    delete "/boxes/:id/scans/:serial", ManufacturerBoxController, :delete_scan
+    post "/boxes/:id/save", ManufacturerBoxController, :save
+  end
+
   scope "/", ThamaniDawaWeb do
     pipe_through :browser
 

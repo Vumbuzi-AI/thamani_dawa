@@ -591,8 +591,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
              ThamaniDawaWeb.TimeFormat.datetime(batch.inserted_at)
            )
 
-    # The batch shows a short serial preview and one sample DataMatrix label;
-    # the full list lives behind View all serials.
+    # The batch shows ten serials at a time. View all serials sits in the
+    # card header. The footer is the shared pager.
+    assert has_element?(serials, "#serial-preview-card #view-all-serials", "View all serials")
+    assert has_element?(serials, "#serial-preview-pager", "1 to 3 of 3 serials")
+    refute has_element?(serials, "#serial-preview-more")
     assert has_element?(serials, "#serial-label-preview [phx-hook=DataMatrix]")
     assert has_element?(serials, "#serial-label-sample-datamatrix[data-gs1-text*='(17)']")
     assert has_element?(serials, "#export-batch-serials")
@@ -686,6 +689,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     refute has_element?(serials, "#manufacturer-serial-0001", "(01)")
     assert has_element?(serials, "#manufacturer-serial-0003")
     assert has_element?(serials, "#primary-serial-packed", "0 of 3")
+
+    {:ok, detailed, _html} =
+      live(conn, ~p"/manufacturer/products/#{product.gtin}/serials?batch=#{batch.batch_no}")
+
+    assert has_element?(detailed, "#primary-serial-packs-per-shipper", "3")
 
     assert has_element?(serials, "#open-print-labels", "Print serial labels")
     refute has_element?(serials, "#print-batch-shipper-labels")

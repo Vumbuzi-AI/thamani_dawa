@@ -12,12 +12,16 @@ defmodule ThamaniDawa.Manufacturing.Batch do
     field :expected_shipper_count, :integer
     field :shipper_preparation_method, :string
     field :from_gln, :string
+    field :from_name, :string
     field :from_company_name, :string
     field :from_address, :string
     field :to_gln, :string
+    field :to_name, :string
     field :to_company_name, :string
     field :to_address, :string
     field :order_number, :string
+    field :issued_count, :integer, default: 0
+    field :packed_count, :integer, default: 0
     field :aggregation_started_at, :utc_datetime
     field :completed_at, :utc_datetime
 
@@ -70,6 +74,42 @@ defmodule ThamaniDawa.Manufacturing.Batch do
     |> validate_inclusion(:status, ~w(prepared allocating aggregating completed cancelled))
     |> validate_inclusion(:shipper_preparation_method, ~w(during_packing))
     |> unique_constraint([:manufacturer_product_id, :batch_no])
+  end
+
+  def parties_changeset(batch, attrs) do
+    batch
+    |> cast(attrs, [:from_gln, :from_name, :to_gln, :to_name])
+    |> update_change(:from_gln, &trim_gln/1)
+    |> update_change(:to_gln, &trim_gln/1)
+    |> update_change(:from_name, &trim_name/1)
+    |> update_change(:to_name, &trim_name/1)
+    |> validate_required([:from_gln, :to_gln])
+    |> validate_format(:from_gln, ~r/^\d{13}$/, message: "must be 13 digits")
+    |> validate_format(:to_gln, ~r/^\d{13}$/, message: "must be 13 digits")
+    |> validate_distinct_parties()
+  end
+
+  defp trim_gln(value) when is_binary(value), do: String.trim(value)
+  defp trim_gln(value), do: value
+
+  defp trim_name(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      name -> name
+    end
+  end
+
+  defp trim_name(value), do: value
+
+  defp validate_distinct_parties(changeset) do
+    from_gln = get_field(changeset, :from_gln)
+    to_gln = get_field(changeset, :to_gln)
+
+    if is_binary(from_gln) and from_gln == to_gln do
+      add_error(changeset, :to_gln, "must be different from the origin")
+    else
+      changeset
+    end
   end
 
   defp validate_dates(changeset) do
