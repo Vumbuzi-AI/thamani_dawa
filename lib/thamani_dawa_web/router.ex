@@ -204,6 +204,13 @@ defmodule ThamaniDawaWeb.Router do
     post "/boxes/:id/scans", ManufacturerBoxController, :scan
     delete "/boxes/:id/scans/:serial", ManufacturerBoxController, :delete_scan
     post "/boxes/:id/save", ManufacturerBoxController, :save
+
+    post "/pallets", ManufacturerPalletController, :open
+    get "/pallets/current", ManufacturerPalletController, :current
+    get "/pallets/:id", ManufacturerPalletController, :show
+    post "/pallets/:id/scans", ManufacturerPalletController, :scan
+    post "/pallets/:id/mint", ManufacturerPalletController, :mint
+    post "/pallets/:id/verify", ManufacturerPalletController, :verify
   end
 
   scope "/", ThamaniDawaWeb do

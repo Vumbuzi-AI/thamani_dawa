@@ -172,7 +172,9 @@ defmodule ThamaniDawaWeb.Api.V1.ManufacturerApiTest do
     batch: batch,
     organization: organization
   } do
-    Repo.delete_all(from s in ThamaniDawa.Manufacturing.Serial, where: s.manufacturer_batch_id == ^batch.id)
+    Repo.delete_all(
+      from s in ThamaniDawa.Manufacturing.Serial, where: s.manufacturer_batch_id == ^batch.id
+    )
 
     from(b in Batch, where: b.id == ^batch.id)
     |> Repo.update_all(set: [issued_count: 0, packed_count: 0])
@@ -530,6 +532,73 @@ defmodule ThamaniDawaWeb.Api.V1.ManufacturerApiTest do
       |> post(~p"/api/v1/manufacturer/boxes/#{box_id}/save")
 
     assert json_response(conn, 422)["error"]["code"] == "empty_box"
+  end
+
+  test "a packer builds a pallet from a saved shipper and confirms the label", %{
+    packer: packer,
+    pin: pin,
+    organization: organization
+  } do
+    shipper = pallet_ready_shipper_fixture(organization.id)
+    token = access_token(packer.username, pin)
+
+    empty =
+      build_conn()
+      |> authed(token)
+      |> get(~p"/api/v1/manufacturer/pallets/current")
+      |> json_response(200)
+
+    assert empty["data"] == nil
+
+    opened =
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/v1/manufacturer/pallets")
+      |> json_response(200)
+
+    id = opened["data"]["id"]
+    assert opened["data"]["stage"] == "scanning"
+    assert opened["data"]["shippers"] == []
+
+    current =
+      build_conn()
+      |> authed(token)
+      |> get(~p"/api/v1/manufacturer/pallets/current")
+      |> json_response(200)
+
+    assert current["data"]["id"] == id
+    assert current["data"]["stage"] == "scanning"
+
+    scanned =
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/v1/manufacturer/pallets/#{id}/scans", %{raw: shipper.code})
+      |> json_response(200)
+
+    assert scanned["data"]["shippers"] == [
+             %{"sscc" => shipper.code, "to_name" => "Warehouse", "to_gln" => shipper.to_gln}
+           ]
+    assert scanned["data"]["to_name"] == "Warehouse"
+    assert scanned["data"]["from_name"] == "Factory"
+
+    minted =
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/v1/manufacturer/pallets/#{id}/mint")
+      |> json_response(200)
+
+    sscc = minted["data"]["sscc"]
+    assert minted["data"]["stage"] == "awaiting_label_verification"
+    assert is_binary(sscc) and sscc != ""
+
+    verified =
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/v1/manufacturer/pallets/#{id}/verify", %{raw: sscc})
+      |> json_response(200)
+
+    assert verified["data"]["stage"] == "completed"
+    assert verified["data"]["sscc"] == sscc
   end
 
   defp login(conn, username, pin) do

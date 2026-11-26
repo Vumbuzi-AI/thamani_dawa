@@ -11,6 +11,10 @@ defmodule ThamaniDawaWeb.Api.FallbackController do
     Response.reason(conn, reason)
   end
 
+  def call(conn, {:error, {:invalid, message}}) when is_binary(message) do
+    Response.reason(conn, {:invalid, message})
+  end
+
   def call(conn, {:error, {_index, reason}}) do
     Response.reason(conn, reason)
   end

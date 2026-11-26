@@ -423,6 +423,49 @@ defmodule ThamaniDawa.Manufacturing.OperationsTest do
       assert Repo.get!(Pallet, pallet.id).status == "completed"
     end
 
+    test "accepts a shipper the phone already packed, even while its status says available",
+         ctx do
+      %{organization: organization, user: user, site: site, product: product} = ctx
+      batch = serialized_batch(product, batch_attrs(site, order_attrs()))
+      shipper = completed_shipper(ctx, batch, status: "available")
+
+      assert {:ok, session} = Operations.start_pallet_session(organization.id, user.id)
+
+      assert {:error, :shipper_not_completed} =
+               Operations.capture_shipper_scan(organization.id, session.id, shipper.code)
+
+      serial = Repo.one!(from s in Serial, where: s.manufacturer_batch_id == ^batch.id, limit: 1)
+
+      serial
+      |> Ecto.Changeset.change(manufacturer_shipper_sscc_id: shipper.id)
+      |> Repo.update!()
+
+      assert {:ok, _} = Operations.capture_shipper_scan(organization.id, session.id, shipper.code)
+      assert Repo.get!(ShipperSscc, shipper.id).status == "completed"
+    end
+
+    test "mints a pallet label when the shipper has no order number", ctx do
+      %{organization: organization, user: user, site: site, product: product} = ctx
+      batch = serialized_batch(product, batch_attrs(site, order_attrs()))
+
+      shipper =
+        completed_shipper(ctx, batch,
+          order_number: nil,
+          to_address: nil,
+          to_company_name: "Warehouse"
+        )
+
+      assert {:ok, session} = Operations.start_pallet_session(organization.id, user.id)
+      assert {:ok, _} = Operations.capture_shipper_scan(organization.id, session.id, shipper.code)
+      assert {:ok, _} = Operations.finish_pallet_loading(organization.id, session.id)
+      assert {:ok, %Pallet{}} = Operations.allocate_pallet_sscc(organization.id, session.id)
+
+      [request] = MemberApiStub.create_requests()
+      refute Map.has_key?(request, "order_number")
+      assert request["address"]["to_address"] == "Warehouse"
+      assert hd(request["batch_info"])["gtin"] == product.gtin
+    end
+
     test "holds a pallet for reconciliation when the GS1 outcome is unknown", ctx do
       %{organization: organization, user: user, site: site, product: product} = ctx
       batch = serialized_batch(product, batch_attrs(site, order_attrs()))

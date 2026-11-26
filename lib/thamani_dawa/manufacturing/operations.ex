@@ -9,6 +9,8 @@ defmodule ThamaniDawa.Manufacturing.Operations do
 
   import Ecto.Query, warn: false
 
+  require Logger
+
   alias ThamaniDawa.Epcis
   alias ThamaniDawa.GS1.MemberApi
   alias ThamaniDawa.GS1Decoder
@@ -993,7 +995,7 @@ defmodule ThamaniDawa.Manufacturing.Operations do
   end
 
   @doc "Called by the allocation worker after loading is deliberately finished."
-  def allocate_pallet_sscc(organization_id, session_id) do
+  def allocate_pallet_sscc(organization_id, session_id, order_number \\ nil) do
     session =
       Repo.one!(
         from s in AggregationSession,
@@ -1002,13 +1004,14 @@ defmodule ThamaniDawa.Manufacturing.Operations do
 
     if session.status != "awaiting_sscc",
       do: {:error, :not_actionable},
-      else: do_allocate_pallet_sscc(session)
+      else: do_allocate_pallet_sscc(session, order_number)
   end
 
-  defp do_allocate_pallet_sscc(session) do
+  defp do_allocate_pallet_sscc(session, order_number) do
     shippers = captured_shippers(session.id)
 
-    with {:ok, context} <- pallet_context(shippers),
+    with {:ok, context} <- pallet_context(shippers, order_number),
+         :ok <- log_pallet_request(session, shippers, context),
          {:ok, code} <-
            MemberApi.create_sscc(context.params,
              api_token: Organizations.gs1_api_key(session.organization_id)
@@ -1043,6 +1046,10 @@ defmodule ThamaniDawa.Manufacturing.Operations do
       )
     else
       {:error, :unavailable} ->
+        Logger.warning(
+          "pallet-line create org=#{session.organization_id} session=#{session.id} gs1=unavailable"
+        )
+
         # GS1 may have minted the pallet label even though the response was
         # lost. Keep the session in a recoverable state and block another
         # create until the outcome has been checked.
@@ -1054,8 +1061,22 @@ defmodule ThamaniDawa.Manufacturing.Operations do
         end
 
       {:error, reason} ->
+        Logger.warning(
+          "pallet-line create org=#{session.organization_id} session=#{session.id} failed #{inspect(reason)}"
+        )
+
         {:error, reason}
     end
+  end
+
+  defp log_pallet_request(session, shippers, context) do
+    address = context.params["address"] || %{}
+
+    Logger.info(
+      "pallet-line create org=#{session.organization_id} session=#{session.id} shippers=#{length(shippers)} from=#{inspect(address["from_address"])} to=#{inspect(address["to_address"])} order=#{inspect(context.params["order_number"])} to_gln=#{inspect(context.attrs.to_gln)} to_name=#{inspect(context.attrs.to_company_name)}"
+    )
+
+    :ok
   end
 
   def verify_pallet_parent(organization_id, session_id, raw_identifier) do
@@ -1638,6 +1659,8 @@ defmodule ThamaniDawa.Manufacturing.Operations do
   end
 
   defp ensure_pallet_eligible!(session, shipper) do
+    shipper = mark_packed_if_serials_linked!(shipper)
+
     cond do
       shipper.status == "in_transit" ->
         Repo.rollback({:error, :shipper_in_transit})
@@ -1655,6 +1678,30 @@ defmodule ThamaniDawa.Manufacturing.Operations do
         :ok
     end
   end
+
+  # Phone packing links the serials and leaves the shipper "available".
+  # The serials page already calls that packed. A label that has no serials
+  # linked yet is still only allocated, so it stays ineligible.
+  defp mark_packed_if_serials_linked!(%ShipperSscc{status: status} = shipper)
+       when status in ["available", "assigned", "awaiting_verification"] do
+    linked? =
+      Repo.exists?(
+        from s in Serial,
+          where: s.manufacturer_shipper_sscc_id == ^shipper.id
+      )
+
+    if linked? do
+      now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+      shipper
+      |> Ecto.Changeset.change(%{status: "completed", completed_at: shipper.completed_at || now})
+      |> Repo.update!()
+    else
+      shipper
+    end
+  end
+
+  defp mark_packed_if_serials_linked!(shipper), do: shipper
 
   defp destination_conflict?(session_id, shipper) do
     existing = captured_shippers(session_id)
@@ -1678,7 +1725,7 @@ defmodule ThamaniDawa.Manufacturing.Operations do
           order_by: [asc: i.id]
       )
 
-  defp pallet_context([first | _] = shippers) do
+  defp pallet_context([first | _] = shippers, order_number) do
     batches =
       shippers
       |> Enum.flat_map(fn shipper ->
@@ -1691,9 +1738,12 @@ defmodule ThamaniDawa.Manufacturing.Operations do
       end)
       |> Enum.uniq_by(& &1.id)
 
+    products = Map.new(batches, &{&1.id, Repo.get!(Product, &1.manufacturer_product_id)})
+
     product_names =
-      batches
-      |> Enum.map(&Repo.get!(Product, &1.manufacturer_product_id).name)
+      products
+      |> Map.values()
+      |> Enum.map(& &1.name)
       |> Enum.uniq()
       |> Enum.join(", ")
 
@@ -1706,28 +1756,27 @@ defmodule ThamaniDawa.Manufacturing.Operations do
       to_address: first.to_address
     }
 
-    params = %{
-      "batch_info" =>
-        Enum.map(
-          batches,
-          &%{
-            "batch" => &1.batch_no,
-            "production_date" => Date.to_iso8601(&1.production_date),
-            "expiry_date" => Date.to_iso8601(&1.expiry_date)
-          }
-        ),
-      "address" => %{
-        "from_address" => first.from_address || first.from_gln,
-        "to_address" => first.to_address
-      },
-      "count_of_trade_items" => Integer.to_string(length(shippers)),
-      "material_description" => product_names,
-      "order_number" => first.order_number,
-      "facility_gln" => first.from_gln
-    }
+    params =
+      %{
+        "batch_info" =>
+          Enum.map(batches, fn batch ->
+            %{
+              "gtin" => products[batch.id].gtin,
+              "batch" => batch.batch_no,
+              "production_date" => Date.to_iso8601(batch.production_date),
+              "expiry_date" => Date.to_iso8601(batch.expiry_date)
+            }
+          end),
+        "address" => %{
+          "from_address" => first.from_address || first.from_gln,
+          "to_address" => first.to_address || first.to_company_name || first.to_gln
+        },
+        "count_of_trade_items" => Integer.to_string(length(shippers)),
+        "material_description" => product_names,
+        "facility_gln" => first.from_gln
+      }
+      |> maybe_put_order_number(blank(order_number) || first.order_number)
 
-    if first.order_number in [nil, ""] or first.to_address in [nil, ""],
-      do: {:error, {:invalid, "GS1 create_sscc requires a PO and destination address"}},
-      else: {:ok, %{attrs: attrs, params: params}}
+    {:ok, %{attrs: attrs, params: params}}
   end
 end

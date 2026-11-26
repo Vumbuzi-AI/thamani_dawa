@@ -6,10 +6,16 @@ defmodule ThamaniDawa.GS1Decoder do
 
     * `01`  GTIN (fixed, 14 digits)
     * `00`  SSCC — pallet/case label serial shipping container code (fixed, 18 digits)
+    * `02`  GTIN of the trade items inside a logistics unit (fixed, 14 digits).
+      Accepted so a shipper label still yields its SSCC. Not returned.
     * `10`  Batch/lot number (variable, up to 20 characters)
     * `11`  Production date, `YYMMDD` (fixed, 6 digits)
     * `17`  Expiry date, `YYMMDD` (fixed, 6 digits)
     * `21`  Serial number (variable, up to 20 characters)
+    * `37`  Count of trade items on a logistics unit (variable, up to 8 digits).
+      Accepted so a shipper label still yields its SSCC. Not returned.
+    * `400` Customer purchase order number (variable, up to 30 characters).
+      Accepted so a logistics label still yields its SSCC. Not returned.
     * `414` GLN (fixed, 13 digits) — resolves a site, see `ThamaniDawa.Sites.get_site_by_gln/2`
 
   Per the GS1 General Specifications, a variable-length AI's value runs up
@@ -19,8 +25,8 @@ defmodule ThamaniDawa.GS1Decoder do
 
   @gs <<29>>
 
-  @fixed_length_ais %{"00" => 18, "01" => 14, "11" => 6, "17" => 6, "414" => 13}
-  @variable_length_ais ~w(10 21)
+  @fixed_length_ais %{"00" => 18, "01" => 14, "02" => 14, "11" => 6, "17" => 6, "414" => 13}
+  @variable_length_ais ~w(10 21 37 400)
   @known_ais Map.keys(@fixed_length_ais) ++ @variable_length_ais
 
   @field_by_ai %{
@@ -111,6 +117,7 @@ defmodule ThamaniDawa.GS1Decoder do
     end
   end
 
+  defp take_ai("400" <> rest), do: {:ok, "400", rest}
   defp take_ai("414" <> rest), do: {:ok, "414", rest}
   defp take_ai(<<ai::binary-size(2), rest::binary>>) when ai in @known_ais, do: {:ok, ai, rest}
   defp take_ai(rest), do: {:error, {:unrecognized_ai, rest}}

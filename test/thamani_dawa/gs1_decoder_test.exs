@@ -65,6 +65,44 @@ defmodule ThamaniDawa.GS1DecoderTest do
       assert result.gtin == "00614141000012"
     end
 
+    test "reads the SSCC from a shipper label that also carries the unit count" do
+      data =
+        @gs <>
+          "00" <>
+          "006141411234567890" <>
+          @gs <>
+          "01" <>
+          "00614141000012" <>
+          "10" <>
+          "LOT123A" <>
+          @gs <>
+          "17" <>
+          "260228" <>
+          @gs <>
+          "11" <>
+          "240115" <>
+          @gs <>
+          "37" <>
+          "5" <>
+          @gs
+
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.sscc == "006141411234567890"
+      assert result.gtin == "00614141000012"
+      assert result.batch_no == "LOT123A"
+      assert result.expiry_date == ~D[2026-02-28]
+      assert result.production_date == ~D[2024-01-15]
+    end
+
+    test "reads an SSCC from the parenthesized logistics label" do
+      data = "(00)006141411234567890(02)00614141000012(10)LOT123A(17)260228(37)5(400)PO-1"
+
+      assert {:ok, result} = GS1Decoder.parse(data)
+      assert result.sscc == "006141411234567890"
+      assert result.gtin == nil
+      assert result.batch_no == "LOT123A"
+    end
+
     test "errors when an SSCC (AI 00) is truncated or non-numeric" do
       assert {:error, {:invalid_length, "00"}} = GS1Decoder.parse("00" <> "123")
       assert {:error, {:invalid_digits, _}} = GS1Decoder.parse("00" <> "00614141123456789A")

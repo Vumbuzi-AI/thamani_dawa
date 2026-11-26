@@ -886,7 +886,12 @@ defmodule ThamaniDawa.Manufacturing do
           "count_of_trade_items" => length(serials),
           "packed_serials" => serials
         })
-        |> Ecto.Changeset.change(party_fields)
+        |> Ecto.Changeset.change(
+          Map.merge(party_fields, %{
+            status: "completed",
+            completed_at: DateTime.utc_now() |> DateTime.truncate(:second)
+          })
+        )
         |> Repo.insert!()
 
       # Mirror onto local rows when this app also holds the batch/serials.
@@ -1176,36 +1181,33 @@ defmodule ThamaniDawa.Manufacturing do
   end
 
   defp build_pallet_params(first, shippers, batch_info, description) do
-    if blank_default(first.order_number, "") == "" or
-         blank_default(first.to_address, "") == "" do
-      {:error, {:invalid, "GS1 create_sscc requires a PO and destination address"}}
-    else
-      units = Enum.sum(Enum.map(shippers, &(&1.count_of_trade_items || 0)))
-      units = if units > 0, do: units, else: length(shippers)
+    units = Enum.sum(Enum.map(shippers, &(&1.count_of_trade_items || 0)))
+    units = if units > 0, do: units, else: length(shippers)
 
-      parties = %{
-        "from_gln" => first.from_gln,
-        "from_company_name" => first.from_company_name,
-        "from_address" => first.from_address,
-        "to_gln" => first.to_gln,
-        "to_company_name" => first.to_company_name,
-        "to_address" => first.to_address
-      }
+    parties = %{
+      "from_gln" => first.from_gln,
+      "from_company_name" => first.from_company_name,
+      "from_address" => first.from_address,
+      "to_gln" => first.to_gln,
+      "to_company_name" => first.to_company_name,
+      "to_address" => first.to_address
+    }
 
-      params = %{
+    params =
+      %{
         "batch_info" => batch_info,
         "address" => %{
           "from_address" => blank_default(first.from_address, first.from_gln),
-          "to_address" => first.to_address
+          "to_address" =>
+            blank_default(first.to_address, blank_default(first.to_company_name, first.to_gln))
         },
         "count_of_trade_items" => Integer.to_string(units),
         "material_description" => description,
-        "order_number" => first.order_number,
         "facility_gln" => first.from_gln
       }
+      |> put_order_number(first.order_number)
 
-      {:ok, parties, params}
-    end
+    {:ok, parties, params}
   end
 
   defp pallet_batch_info(shippers) do
@@ -1874,7 +1876,7 @@ defmodule ThamaniDawa.Manufacturing do
   readable label. Shippers inside a pallet print the pallet's parties and
   are returned unchanged, as are GLNs that cannot be resolved.
   """
-  def ensure_shipper_parties(organization_id, %ShipperSscc{pallet: nil} = shipper) do
+  def ensure_shipper_parties(organization_id, %ShipperSscc{manufacturer_pallet_id: nil} = shipper) do
     from_changes =
       with true <- shipper.from_company_name in [nil, ""],
            {:ok, party} <- GlnLookup.resolve_origin(organization_id, shipper.from_gln) do

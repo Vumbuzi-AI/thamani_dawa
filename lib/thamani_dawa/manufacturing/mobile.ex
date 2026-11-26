@@ -253,11 +253,16 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
     batch = box.batch
     site_gln = mobile_user.site && mobile_user.site.gln
 
+    {from_name, from_address} = origin_party(organization_id, box.from_gln)
+    {to_name, to_address} = destination_party(organization_id, box.to_gln)
+
     attrs = %{
       "from_gln" => box.from_gln,
-      "from_company_name" => box.from_name,
+      "from_company_name" => box.from_name || from_name,
+      "from_address" => from_address,
       "to_gln" => box.to_gln,
-      "to_company_name" => box.to_name
+      "to_company_name" => box.to_name || to_name,
+      "to_address" => to_address
     }
 
     case Manufacturing.pack_serials_into_shipper(
@@ -775,6 +780,30 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
         |> Enum.map(&%{serial: &1.serial, claimed_at: DateTime.to_iso8601(&1.claimed_at)})
     }
   end
+
+  defp origin_party(organization_id, gln) when is_binary(gln) do
+    case GlnLookup.resolve_origin(organization_id, gln) do
+      {:ok, party} -> {party.company, party.address}
+      _ -> destination_party(organization_id, gln)
+    end
+  end
+
+  defp origin_party(_organization_id, _gln), do: {nil, nil}
+
+  defp destination_party(organization_id, gln) when is_binary(gln) do
+    case GlnLookup.resolve_destination(Organizations.gs1_api_key(organization_id), gln) do
+      {:ok, party} ->
+        {party.company, party.address}
+
+      _ ->
+        case GlnLookup.resolve_party(gln) do
+          {:ok, party} -> {party.company, party.address}
+          _ -> {nil, nil}
+        end
+    end
+  end
+
+  defp destination_party(_organization_id, _gln), do: {nil, nil}
 
   defp party_name(organization_id, gln, :from) do
     case GlnLookup.resolve_origin(organization_id, gln) do

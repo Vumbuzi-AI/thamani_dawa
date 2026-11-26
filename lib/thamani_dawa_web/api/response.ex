@@ -9,6 +9,8 @@ defmodule ThamaniDawaWeb.Api.Response do
   import Plug.Conn
   import Phoenix.Controller, only: [json: 2]
 
+  require Logger
+
   def data(conn, payload, status \\ 200) do
     conn
     |> put_status(status)
@@ -20,6 +22,7 @@ defmodule ThamaniDawaWeb.Api.Response do
   end
 
   def error(conn, status, code, message, extra \\ %{}) do
+    Logger.warning("#{conn.method} #{conn.request_path} #{status} #{code}: #{message}")
     body = Map.merge(%{code: code, message: message}, extra)
 
     conn
@@ -122,7 +125,8 @@ defmodule ThamaniDawaWeb.Api.Response do
     do: {422, "empty_box", "Scan at least one serial before saving."}
 
   defp reason_details(:shipper_full),
-    do: {422, "shipper_full", "This shipper already has its packs. Save it and start the next one."}
+    do:
+      {422, "shipper_full", "This shipper already has its packs. Save it and start the next one."}
 
   defp reason_details(:out_of_stock),
     do: {422, "insufficient_stock", "There is not enough stock."}
@@ -205,7 +209,18 @@ defmodule ThamaniDawaWeb.Api.Response do
     do: {422, "capacity_reached", "This shipper is full. Request its label first."}
 
   defp reason_details(:parent_mismatch),
-    do: {422, "parent_mismatch", "That label does not match the one on this batch."}
+    do: {422, "parent_mismatch", "That label does not match."}
+
+  defp reason_details(:pallet_not_found),
+    do: {404, "not_found", "That pallet is no longer open."}
+
+  defp reason_details({:invalid, message}) when is_binary(message) and message != "",
+    do: {422, "label_incomplete", message}
+
+  defp reason_details(:label_incomplete),
+    do:
+      {422, "label_incomplete",
+       "This pallet needs a destination address and an order number before a label can be minted."}
 
   defp reason_details(:invalid_scan),
     do: {422, "invalid_scan", "That code could not be used here. Scan it again."}
