@@ -42,6 +42,18 @@ import {LabelSvgDownload, DownloadAllLabelsSvg} from "./hooks/label_svg_download
 
 bindTdTips()
 
+// Older in-page links used this fragment and could make Firefox scroll the
+// fixed application shell itself on reload. The current button scrolls the
+// internal content pane directly, so discard the legacy fragment.
+if (window.location.hash === "#prepare-shipper-labels") {
+  window.history.replaceState(
+    window.history.state,
+    "",
+    `${window.location.pathname}${window.location.search}`
+  )
+  window.scrollTo(0, 0)
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
@@ -63,7 +75,20 @@ window.addEventListener("phx:page-loading-start", _info => {
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
 window.addEventListener("phx:scroll-into-view", ({detail: {id}}) => {
-  document.getElementById(id)?.scrollIntoView({behavior: "smooth", block: "center"})
+  const target = document.getElementById(id)
+  const scrollContainer = target?.closest(".td-ct")
+  if (!target || !scrollContainer) return
+
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  const top = target.getBoundingClientRect().top -
+    scrollContainer.getBoundingClientRect().top +
+    scrollContainer.scrollTop - 16
+
+  scrollContainer.scrollTo({top, behavior: reducedMotion ? "auto" : "smooth"})
+  target.classList.remove("is-scroll-target")
+  void target.offsetWidth
+  target.classList.add("is-scroll-target")
+  window.setTimeout(() => target.classList.remove("is-scroll-target"), 2400)
 })
 
 // connect if there are any LiveViews on the page

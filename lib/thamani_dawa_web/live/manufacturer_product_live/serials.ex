@@ -20,6 +20,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     {:ok,
      socket
      |> assign(:page_title, "Product serials")
+     |> assign(:label_shipper, nil)
      |> assign(:product, product)
      |> assign(:search, "")
      |> assign(:batches, nil)
@@ -271,6 +272,22 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   def handle_event("close_print", _params, socket),
     do: {:noreply, assign(socket, :print_open, false)}
 
+  def handle_event("open_shipper_label", %{"id" => id}, socket) do
+    case Integer.parse(id) do
+      {shipper_id, ""} ->
+        case Enum.find(socket.assigns.batch_shippers, &(&1.id == shipper_id)) do
+          nil -> {:noreply, socket}
+          shipper -> {:noreply, assign(socket, :label_shipper, shipper)}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_shipper_label", _params, socket),
+    do: {:noreply, assign(socket, :label_shipper, nil)}
+
   def handle_event("reset", _params, socket) do
     to =
       if socket.assigns.view == "serials",
@@ -517,9 +534,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
               :if={@label_serial}
               id="open-print-labels"
               glyph="printer"
-              label="Print labels"
+              label="Print serial labels"
               phx-click="open_print"
               tip="Print a 50 × 25 mm DataMatrix label for every serial in this batch."
+              tip_align="end"
+            />
+            <.td_button
+              :if={@batch_shippers != []}
+              id="print-batch-shipper-labels"
+              glyph="printer"
+              label="Print shipper labels"
+              phx-hook="PrintAllLabels"
+              data-print-container="#batch-printable-shipper-labels"
+              data-print-target=".printable-sscc-label"
+              data-label-size="100mm auto"
+              tip="Print one SSCC label for every shipper in this batch."
               tip_align="end"
             />
             <span :if={@batch_fully_packed} id="batch-fully-packed">
@@ -780,7 +809,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                         id={"batch-shipper-label-#{shipper.id}"}
                         glyph="printer"
                         label="Print label"
-                        navigate={~p"/manufacturer/sscc/#{shipper.id}/label"}
+                        phx-click="open_shipper_label"
+                        phx-value-id={shipper.id}
                       />
                     </td>
                   </tr>
@@ -796,6 +826,26 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         product={@product}
         batch={@selected_batch}
         serials={Map.get(@serials_cache, @selected_batch.batch_no, [])}
+      />
+      <div
+        :if={@batch_shippers != []}
+        id="batch-printable-shipper-labels"
+        class="td-print-sheet"
+        aria-hidden="true"
+      >
+        <ThamaniDawaWeb.ManufacturerSsccLive.Label.sheet
+          :for={shipper <- @batch_shippers}
+          sscc={shipper}
+          product_name={@product.name}
+          id_prefix="batch-product-shipper-label"
+        />
+      </div>
+
+      <ThamaniDawaWeb.ManufacturerSsccLive.Label.modal
+        :if={@label_shipper}
+        sscc={@label_shipper}
+        product_name={@product.name}
+        on_cancel={JS.push("close_shipper_label")}
       />
     </Layouts.manufacturer_shell>
     """
@@ -986,9 +1036,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         <.td_button
           id="open-print-labels"
           glyph="printer"
-          label="Print labels"
+          label="Print serial labels"
           phx-click="open_print"
           tip="Print a 50 × 25 mm DataMatrix label for every serial in this batch."
+          tip_align="end"
+        />
+        <.td_button
+          :if={@batch_shippers != []}
+          id="print-batch-shipper-labels"
+          glyph="printer"
+          label="Print shipper labels"
+          phx-hook="PrintAllLabels"
+          data-print-container="#batch-printable-shipper-labels"
+          data-print-target=".printable-sscc-label"
+          data-label-size="100mm auto"
+          tip="Print one SSCC label for every shipper in this batch."
           tip_align="end"
         />
       </div>

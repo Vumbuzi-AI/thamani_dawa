@@ -18,6 +18,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
      socket
      |> assign(:page_title, product.name)
      |> assign(:product, product)
+     |> assign(:label_sscc, nil)
      |> load_batches()
      |> load_groups()}
   end
@@ -121,6 +122,27 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
     end
   end
 
+  def handle_event("open_label", %{"id" => id}, socket) do
+    case Integer.parse(id) do
+      {sscc_id, ""} ->
+        sscc =
+          socket.assigns.pallet_groups
+          |> Enum.flat_map(fn {_pallet, rows} -> rows end)
+          |> Enum.find(&(&1.sscc.id == sscc_id))
+
+        case sscc do
+          nil -> {:noreply, socket}
+          %{sscc: sscc} -> {:noreply, assign(socket, :label_sscc, sscc)}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_label", _params, socket),
+    do: {:noreply, assign(socket, :label_sscc, nil)}
+
   defp generation_error(:unconfigured),
     do:
       "GS1 isn't set up for your organization. Add your GS1 key in organization settings, then try again."
@@ -207,7 +229,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
     pallet_groups =
       Enum.group_by(groups, fn %{sscc: sscc} -> sscc.pallet && sscc.pallet.code end)
 
-    assign(socket, :pallet_groups, pallet_groups)
+    label_sscc =
+      case socket.assigns[:label_sscc] do
+        %{id: sscc_id} ->
+          case Enum.find(groups, &(&1.sscc.id == sscc_id)) do
+            %{sscc: sscc} -> sscc
+            nil -> nil
+          end
+
+        _ ->
+          nil
+      end
+
+    socket
+    |> assign(:pallet_groups, pallet_groups)
+    |> assign(:label_sscc, label_sscc)
   end
 
   defp pallet_label(nil), do: "Loose shippers (no pallet)"
@@ -342,9 +378,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
                         navigate={~p"/manufacturer/sscc/#{sscc.id}/serials"}
                       />
                       <.td_button
+                        id={"product-sscc-label-#{sscc.id}"}
                         variant="secondary"
-                        label="Case label"
-                        navigate={~p"/manufacturer/sscc/#{sscc.id}/label"}
+                        label="Shipper label"
+                        phx-click="open_label"
+                        phx-value-id={sscc.id}
                       />
                       <.td_button
                         variant="secondary"
@@ -400,6 +438,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Show do
           <.td_input field={@sscc_form[:to_address]} label="To address" />
         </.form>
       </.td_overlay_form>
+
+      <ThamaniDawaWeb.ManufacturerSsccLive.Label.modal
+        :if={@label_sscc}
+        sscc={@label_sscc}
+        product_name={@product.name}
+        on_cancel={JS.push("close_label")}
+      />
     </Layouts.manufacturer_shell>
     """
   end

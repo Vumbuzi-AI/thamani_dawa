@@ -245,6 +245,22 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Prepare do
      |> assign(:contents_serials, [])}
   end
 
+  def handle_event("open_label", %{"id" => id}, socket) do
+    case Integer.parse(id) do
+      {shipper_id, ""} ->
+        case Enum.find(socket.assigns.shippers, &(&1.id == shipper_id)) do
+          nil -> {:noreply, socket}
+          shipper -> {:noreply, assign(socket, :label_shipper, shipper)}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_label", _params, socket),
+    do: {:noreply, assign(socket, :label_shipper, nil)}
+
   def handle_async(:destination_gln_search, {:ok, {query, {:ok, results}}}, socket) do
     if socket.assigns.to_gln_query == query do
       {:noreply,
@@ -281,6 +297,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Prepare do
     |> assign(:return_to, ThamaniDawaWeb.ReturnTo.path(params, ~p"/manufacturer/aggregations"))
     |> assign(:contents_shipper, nil)
     |> assign(:contents_serials, [])
+    |> assign(:label_shipper, nil)
     |> assign(:print_serials_shipper, nil)
     |> assign(:print_serials, [])
     |> assign(:selected_serials, MapSet.new())
@@ -417,6 +434,12 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Prepare do
 
     unselected = Enum.reject(unpacked, &MapSet.member?(selected, &1))
 
+    label_shipper =
+      case socket.assigns[:label_shipper] do
+        %{id: shipper_id} -> Enum.find(shippers, &(&1.id == shipper_id))
+        _ -> nil
+      end
+
     socket
     |> assign(:serials, serials)
     |> assign(:serials_error, serials_error)
@@ -424,6 +447,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Prepare do
     |> assign(:unpacked_serials, unpacked)
     |> assign(:unselected_unpacked_serials, unselected)
     |> assign(:shippers, shippers)
+    |> assign(:label_shipper, label_shipper)
     |> assign(:selected_serials, selected)
   end
 
@@ -618,6 +642,12 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Prepare do
   defp long_date(nil), do: "—"
   defp long_date(date), do: ThamaniDawaWeb.TimeFormat.date(date)
 
+  defp expected_shipper_count(serials, packs_per_shipper)
+       when is_integer(packs_per_shipper) and packs_per_shipper > 0,
+       do: div(length(serials) + packs_per_shipper - 1, packs_per_shipper)
+
+  defp expected_shipper_count(_serials, _packs_per_shipper), do: nil
+
   def render(assigns) do
     ~H"""
     <Layouts.manufacturer_shell
@@ -765,6 +795,29 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Prepare do
                 {length(@serials) - length(@unpacked_serials)} of {length(@serials)}
               </span>
             </div>
+            <div id="prepare-batch-shippers-count" class="td-kv">
+              <span class="td-kv-label">Shippers</span>
+              <span class="td-kv-value">
+                {length(@shippers)}
+                <span :if={expected_shipper_count(@serials, @packs_per_shipper)}>
+                  of {expected_shipper_count(@serials, @packs_per_shipper)}
+                </span>
+                created
+              </span>
+              <button
+                :if={@shippers != []}
+                id="view-created-shippers"
+                type="button"
+                phx-click={
+                  JS.dispatch("phx:scroll-into-view",
+                    detail: %{id: "prepare-shipper-labels"}
+                  )
+                }
+                class="td-link mt-1 text-left text-xs"
+              >
+                View shippers ↓
+              </button>
+            </div>
           </div>
         </section>
 
@@ -837,7 +890,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Prepare do
           </div>
         </section>
 
-        <section id="prepare-shipper-labels" class="td-card">
+        <section id="prepare-shipper-labels" class="td-card td-anchor-target">
           <.td_card_header
             title="Shipper labels"
             subtitle="Created as each carton is filled. This list refreshes automatically."
@@ -898,9 +951,8 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Prepare do
                       id={"print-shipper-#{shipper.id}"}
                       glyph="printer"
                       label="Print shipper label"
-                      navigate={
-                        ~p"/manufacturer/sscc/#{shipper.id}/label?#{%{return_to: @return_to}}"
-                      }
+                      phx-click="open_label"
+                      phx-value-id={shipper.id}
                       tip="Print the 100 × 150 mm shipper label with the GS1 DataMatrix for this SSCC."
                     />
                   </td>
@@ -1072,6 +1124,13 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.Prepare do
             />
           </:footer>
         </.td_modal>
+
+        <ThamaniDawaWeb.ManufacturerSsccLive.Label.modal
+          :if={@label_shipper}
+          sscc={@label_shipper}
+          product_name={@product.name}
+          on_cancel={JS.push("close_label")}
+        />
       </div>
     </Layouts.manufacturer_shell>
     """

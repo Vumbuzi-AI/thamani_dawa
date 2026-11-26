@@ -204,4 +204,26 @@ defmodule ThamaniDawaWeb.ManufacturerSsccSerialsLiveTest do
     refute has_element?(lv, "#shipper-label-size")
     refute has_element?(lv, "#shipper-label-copies")
   end
+
+  test "print label opens and closes the modal without leaving the serials page", %{
+    conn: conn,
+    sscc: sscc
+  } do
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/sscc/#{sscc.id}/serials")
+
+    refute has_element?(lv, "#shipper-label-modal")
+    assert has_element?(lv, "#sscc-serials-back")
+
+    lv |> element("#sscc-serials-print-label") |> render_click()
+
+    assert has_element?(lv, "#shipper-label-modal")
+    assert has_element?(lv, "#print-manufacturer-label")
+    assert has_element?(lv, "#sscc-serials-back")
+    assert has_element?(lv, "#sscc-preview-content-#{sscc.id}")
+
+    lv |> element("#shipper-label-modal button[aria-label='Close']") |> render_click()
+
+    refute has_element?(lv, "#shipper-label-modal")
+    assert has_element?(lv, "#sscc-serials-back")
+  end
 end

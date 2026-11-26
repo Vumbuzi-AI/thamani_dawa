@@ -14,7 +14,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
   import ThamaniDawa.ManufacturerFixtures
 
   alias ThamaniDawa.Manufacturing
+  alias ThamaniDawa.Manufacturing.ShipperSscc
   alias ThamaniDawa.Organizations
+  alias ThamaniDawa.Repo
 
   defp allow_stock_serialization(organization) do
     {:ok, updated} =
@@ -627,6 +629,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(prepare, "#gs1-create-sscc-warning", "no destination GLN")
     refute has_element?(prepare, "#shipper-quantity-form")
     assert has_element?(prepare, "#prepare-shipper-quantity", "Not set")
+    assert has_element?(prepare, "#prepare-batch-shippers-count", "0 created")
+    refute has_element?(prepare, "#view-created-shippers")
     assert has_element?(prepare, "#shipper-quantity-warning", "Set the units per shipper")
     assert has_element?(prepare, "#select-all-unpacked[disabled]", "Set quantity")
     assert has_element?(prepare, "#serial-shipper-selection")
@@ -654,6 +658,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     refute has_element?(prepare, "#registry-shipper-setup-modal")
     assert has_element?(prepare, "#prepare-ship-to-name", "Afya Test Org")
     assert has_element?(prepare, "#prepare-shipper-quantity", "3")
+    assert has_element?(prepare, "#prepare-batch-shippers-count", "0 of 1 created")
     assert has_element?(prepare, "#change-registry-shipper-setup", "Change setup")
     assert has_element?(prepare, "#select-all-unpacked", "Select 3")
     assert Manufacturing.get_batch!(organization.id, batch.id).packs_per_shipper == 3
@@ -681,6 +686,9 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     refute has_element?(serials, "#manufacturer-serial-0001", "(01)")
     assert has_element?(serials, "#manufacturer-serial-0003")
     assert has_element?(serials, "#primary-serial-packed", "0 of 3")
+
+    assert has_element?(serials, "#open-print-labels", "Print serial labels")
+    refute has_element?(serials, "#print-batch-shipper-labels")
 
     serials |> element("#open-print-labels") |> render_click()
     assert has_element?(serials, "#print-labels-modal")
@@ -740,7 +748,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     refute has_element?(serials, "#export-batch-serials")
     assert has_element?(serials, "#prepare-batch-shippers", "Create shippers")
-    assert has_element?(serials, "#open-print-labels", "Print labels")
+    assert has_element?(serials, "#open-print-labels", "Print serial labels")
 
     assert has_element?(
              serials,
@@ -810,6 +818,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     assert [shipper] = shippers
     assert has_element?(prepare, "#prepared-shipper-#{shipper.id}")
+    assert has_element?(prepare, "#prepare-batch-shippers-count", "1 of 1 created")
+
+    assert has_element?(
+             prepare,
+             "button#view-created-shippers[phx-click]",
+             "View shippers"
+           )
 
     assert has_element?(
              prepare,
@@ -828,8 +843,21 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     assert has_element?(
              prepare,
-             "#print-shipper-#{shipper.id}[href^='/manufacturer/sscc/#{shipper.id}/label']"
+             "#print-shipper-#{shipper.id}[phx-click='open_label']"
            )
+
+    refute has_element?(prepare, "#shipper-label-modal")
+
+    prepare |> element("#print-shipper-#{shipper.id}") |> render_click()
+
+    assert has_element?(prepare, "#shipper-label-modal")
+    assert has_element?(prepare, "#print-manufacturer-label")
+    assert has_element?(prepare, "#prepared-shippers-table")
+
+    prepare |> element("#shipper-label-modal button[aria-label='Close']") |> render_click()
+
+    refute has_element?(prepare, "#shipper-label-modal")
+    assert has_element?(prepare, "#prepared-shippers-table")
   end
 
   test "select button advances to the next shipper-sized group of unpacked serials", %{conn: conn} do
@@ -1010,6 +1038,18 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
 
     assert has_element?(lv, "#batch-shipper-#{shipper.id}")
     assert has_element?(lv, "#batch-shipper-serials-#{shipper.id}")
+
+    assert has_element?(
+             lv,
+             "#print-batch-shipper-labels[phx-hook=PrintAllLabels]",
+             "Print shipper labels"
+           )
+
+    assert has_element?(
+             lv,
+             "#batch-printable-shipper-labels #batch-product-shipper-label-content-#{shipper.id}.printable-sscc-label"
+           )
+
     assert has_element?(lv, "#serial-sscc-0001")
     assert has_element?(lv, "#serial-sscc-0003")
     assert has_element?(lv, "#serial-unpacked-0002")
@@ -1219,6 +1259,38 @@ defmodule ThamaniDawaWeb.ManufacturerProductLiveTest do
     assert has_element?(serials_lv, "#selected-serial-batch", "LOT-2026-GS1-CHECK")
     refute has_element?(serials_lv, "#serial-allocation-error")
     refute has_element?(serials_lv, "#reconcile-serial-allocation")
+  end
+
+  test "print label opens and closes the modal without leaving the SSCC list", %{conn: conn} do
+    %{organization: organization, user: user, product: product} = manufacturer_session(conn)
+
+    sscc =
+      Repo.insert!(%ShipperSscc{
+        organization_id: organization.id,
+        code: "061600000000000018",
+        gtin: product.gtin,
+        batch: "LIST-LABEL",
+        count_of_trade_items: 3
+      })
+
+    conn = log_in_user(conn, user)
+
+    {:ok, lv, _html} = live(conn, ~p"/manufacturer/products/#{product.gtin}/ssccs")
+
+    assert has_element?(lv, "#shipper-row-#{sscc.id}")
+    refute has_element?(lv, "#shipper-label-modal")
+
+    lv |> element("#print-label-#{sscc.id}") |> render_click()
+
+    assert has_element?(lv, "#shipper-label-modal")
+    assert has_element?(lv, "#print-manufacturer-label")
+    assert has_element?(lv, "#manufacturer-product-ssccs")
+    assert has_element?(lv, "#ssccs-back")
+
+    lv |> element("#shipper-label-modal button[aria-label='Close']") |> render_click()
+
+    refute has_element?(lv, "#shipper-label-modal")
+    assert has_element?(lv, "#manufacturer-product-ssccs")
   end
 
   defp manufacturer_session_gln(user) do

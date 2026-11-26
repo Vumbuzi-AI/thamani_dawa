@@ -55,7 +55,10 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
         do: ~p"/manufacturer/products/#{gtin}/ssccs",
         else: ~p"/manufacturer/products"
 
-    {:noreply, assign(socket, :back_path, ThamaniDawaWeb.ReturnTo.path(params, fallback))}
+    {:noreply,
+     socket
+     |> assign(:back_path, ThamaniDawaWeb.ReturnTo.path(params, fallback))
+     |> assign(:label_open?, socket.assigns.live_action == :label)}
   end
 
   defp load_serials(socket) do
@@ -124,6 +127,12 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
     {:noreply, assign(socket, :page, max(socket.assigns.page - 1, 1))}
   end
 
+  def handle_event("open_label", _params, socket),
+    do: {:noreply, assign(socket, :label_open?, true)}
+
+  def handle_event("close_label", _params, socket),
+    do: {:noreply, assign(socket, :label_open?, false)}
+
   defp page_slice(serials, page) do
     serials |> Enum.drop((page - 1) * @per_page) |> Enum.take(@per_page)
   end
@@ -178,9 +187,6 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
     product_name = (assigns.product && assigns.product.name) || assigns.sscc.gtin
     {status_tone, status_label} = shipper_status(assigns.sscc.status)
 
-    close_to =
-      ~p"/manufacturer/sscc/#{assigns.sscc.id}/serials?#{%{return_to: assigns.back_path}}"
-
     assigns =
       assigns
       |> assign(:serials, serials)
@@ -192,7 +198,6 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
       |> assign(:product_name, product_name)
       |> assign(:status_tone, status_tone)
       |> assign(:status_label, status_label)
-      |> assign(:close_to, close_to)
 
     ~H"""
     <Layouts.manufacturer_shell
@@ -259,7 +264,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
             variant="primary"
             glyph="printer"
             label="Print label"
-            navigate={~p"/manufacturer/sscc/#{@sscc.id}/label?#{%{return_to: @back_path}}"}
+            phx-click="open_label"
             tip="Print the 100 × 150 mm shipper label with the GS1 DataMatrix for this SSCC."
             tip_align="end"
           />
@@ -451,11 +456,11 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
       </div>
 
       <ThamaniDawaWeb.ManufacturerSsccLive.Label.modal
-        :if={@live_action == :label}
+        :if={@label_open?}
         sscc={@sscc}
         product_name={@product_name}
         batch_count={@batch_count}
-        on_cancel={JS.navigate(@close_to)}
+        on_cancel={JS.push("close_label")}
       />
     </Layouts.manufacturer_shell>
     """

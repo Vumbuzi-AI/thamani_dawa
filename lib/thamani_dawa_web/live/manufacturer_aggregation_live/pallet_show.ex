@@ -12,6 +12,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
      |> assign(:page_title, "Pallet #{pallet.code}")
      |> assign(:pallet, pallet)
      |> assign(:label?, false)
+     |> assign(:shipper_label, nil)
      |> assign(:back_path, ~p"/manufacturer/aggregations")
      |> assign(
        :total_serials,
@@ -30,6 +31,22 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
   def handle_event("close_label", _params, socket) do
     {:noreply, assign(socket, :label?, false)}
   end
+
+  def handle_event("open_shipper_label", %{"id" => id}, socket) do
+    case Integer.parse(id) do
+      {shipper_id, ""} ->
+        case Enum.find(socket.assigns.pallet.shipper_ssccs, &(&1.id == shipper_id)) do
+          nil -> {:noreply, socket}
+          shipper -> {:noreply, assign(socket, :shipper_label, shipper)}
+        end
+
+      _ ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("close_shipper_label", _params, socket),
+    do: {:noreply, assign(socket, :shipper_label, nil)}
 
   defp product_label(sscc) do
     case sscc.batches do
@@ -155,7 +172,8 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
                       id={"pallet-shipper-#{sscc.id}-label"}
                       variant="secondary"
                       label="Label"
-                      navigate={~p"/manufacturer/sscc/#{sscc.id}/label"}
+                      phx-click="open_shipper_label"
+                      phx-value-id={sscc.id}
                     />
                     <.td_button
                       id={"pallet-shipper-#{sscc.id}-export"}
@@ -203,6 +221,13 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
           />
         </:footer>
       </.td_modal>
+
+      <ThamaniDawaWeb.ManufacturerSsccLive.Label.modal
+        :if={@shipper_label}
+        sscc={@shipper_label}
+        product_name={product_label(@shipper_label)}
+        on_cancel={JS.push("close_shipper_label")}
+      />
     </Layouts.manufacturer_shell>
     """
   end
