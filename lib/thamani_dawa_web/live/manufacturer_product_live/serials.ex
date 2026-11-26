@@ -77,7 +77,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         socket.assigns.requested_batch
       )
 
-    if connected?(socket) and op &&
+    if (connected?(socket) and op) &&
          op.serial_allocation_status in ["pending", "allocating"] do
       Process.send_after(self(), :refresh_pending_generation, 2_000)
     end

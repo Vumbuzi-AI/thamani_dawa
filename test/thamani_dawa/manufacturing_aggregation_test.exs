@@ -265,11 +265,10 @@ defmodule ThamaniDawa.ManufacturingAggregationTest do
       assert {:ok, pallet} =
                Manufacturing.create_pallet_from_shippers(organization.id, [a.id, b.id])
 
-      [request] = MemberApiStub.create_requests()
-      assert request["order_number"] == "PO-24109"
-      assert request["facility_gln"] == a.from_gln
-      assert request["address"]["to_address"] == "8 Port Road, Mombasa"
-      assert length(request["batch_info"]) == 2
+      # The pallet is minted by GS1's aggregation API from the shipper SSCCs.
+      assert MemberApiStub.create_requests() == []
+      assert [%{"ssccs" => ssccs}] = MemberApiStub.pallet_requests()
+      assert Enum.sort(ssccs) == Enum.sort([a.code, b.code])
 
       assert String.match?(pallet.code, ~r/^\d{18}$/)
 
@@ -312,9 +311,8 @@ defmodule ThamaniDawa.ManufacturingAggregationTest do
                  "to_address" => "9 Port Road, Mombasa"
                })
 
-      [request] = MemberApiStub.create_requests()
-      assert request["order_number"] == "PO-DEFERRED"
-      assert request["address"]["to_address"] == "9 Port Road, Mombasa"
+      assert [%{"ssccs" => [code]}] = MemberApiStub.pallet_requests()
+      assert code == shipper.code
 
       assert pallet.to_gln == "0614141000456"
       assert pallet.to_company_name == "Deferred Warehouse"

@@ -1015,8 +1015,10 @@ defmodule ThamaniDawa.Manufacturing.Operations do
 
     with {:ok, context} <- pallet_context(shippers, attrs),
          {:ok, code} <-
-           MemberApi.create_sscc(context.params,
-             api_token: Organizations.gs1_api_key(session.organization_id)
+           ThamaniDawa.Manufacturing.mint_pallet_sscc(
+             shippers,
+             context.params,
+             Organizations.gs1_api_key(session.organization_id)
            ) do
       unwrap_transaction(
         Repo.transaction(fn ->

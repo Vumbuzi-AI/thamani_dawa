@@ -1110,7 +1110,7 @@ defmodule ThamaniDawa.Manufacturing do
                  api_token
                ),
              {:ok, pallet_parties, pallet_params} <- pallet_sscc_params(shippers),
-             {:ok, pallet_code} <- MemberApi.create_sscc(pallet_params, api_token: api_token),
+             {:ok, pallet_code} <- mint_pallet_sscc(shippers, pallet_params, api_token),
              {:ok, pallet} <-
                create_order_pallet(
                  organization_id,
@@ -1655,12 +1655,22 @@ defmodule ThamaniDawa.Manufacturing do
       [_first | _] = shippers ->
         with {:ok, parties, params} <- pallet_sscc_params(shippers, attrs),
              {:ok, code} <-
-               MemberApi.create_sscc(params,
-                 api_token: Organizations.gs1_api_key(organization_id)
-               ) do
+               mint_pallet_sscc(shippers, params, Organizations.gs1_api_key(organization_id)) do
           persist_pallet_from_shippers(organization_id, shippers, parties, code)
         end
     end
+  end
+
+  @doc """
+  Mints a pallet SSCC through GS1's aggregation API, which links the shippers
+  to the pallet on the GS1 side. `params` (PO, destination) is still built and
+  validated here so the pallet keeps its parties locally; GS1 only needs the
+  shipper SSCCs.
+  """
+  def mint_pallet_sscc(shippers, _params, api_token) do
+    MemberApi.create_pallet_sscc(%{"ssccs" => Enum.map(shippers, & &1.code)},
+      api_token: api_token
+    )
   end
 
   defp persist_pallet_from_shippers(organization_id, shippers, parties, code) do

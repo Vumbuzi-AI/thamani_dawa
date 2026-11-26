@@ -4,7 +4,8 @@ defmodule ThamaniDawa.GS1.MemberApi do
   `/HBS/products` endpoint on the same host).
 
   Standalone SSCC numbers are minted by `POST /create_sscc`; shipper SSCCs
-  around already-issued primary serials are minted by `POST /create_shipper_sscc`.
+  around already-issued primary serials are minted by `POST /create_shipper_sscc`,
+  and pallet SSCCs around those shippers by `POST /create_pallet_sscc`.
   The serials inside a case
   are read with `POST /get_sscc_contents`. Both calls use the sandbox
   contract as-is: the API chooses the SSCC, and contents returns every
@@ -30,6 +31,7 @@ defmodule ThamaniDawa.GS1.MemberApi do
 
   @callback post_create_sscc(map()) :: {:ok, String.t()} | {:error, term()}
   @callback post_create_shipper_sscc(map()) :: {:ok, String.t()} | {:error, term()}
+  @callback post_create_pallet_sscc(map()) :: {:ok, String.t()} | {:error, term()}
   @callback post_sscc_contents(String.t()) :: {:ok, map()} | {:error, term()}
   @callback post_create_serials(map()) :: {:ok, map()} | {:error, term()}
   @callback post_list_products(map()) :: {:ok, [map()]} | {:error, term()}
@@ -57,6 +59,16 @@ defmodule ThamaniDawa.GS1.MemberApi do
   @doc "Mints a shipper SSCC around previously issued primary serials."
   def create_shipper_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
     dispatch(:post_create_shipper_sscc, [params], opts)
+  end
+
+  @doc """
+  Aggregates shipper SSCCs (`%{"ssccs" => [...]}`) onto a new pallet SSCC on
+  the GS1 side, so GS1 Kenya records which shippers are on the pallet. Every
+  SSCC must be a shipper GS1 issued to this member and not yet on a pallet.
+  Not retried, like `create_sscc`.
+  """
+  def create_pallet_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
+    dispatch(:post_create_pallet_sscc, [params], opts)
   end
 
   @doc "Products, batches, and serials packed in `sscc`."
@@ -259,6 +271,12 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def post_create_shipper_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
     params
     |> post("/create_shipper_sscc", opts)
+    |> decode_create_response()
+  end
+
+  def post_create_pallet_sscc(params, opts \\ []) when is_map(params) and is_list(opts) do
+    params
+    |> post("/create_pallet_sscc", opts)
     |> decode_create_response()
   end
 

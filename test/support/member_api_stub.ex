@@ -129,6 +129,26 @@ defmodule ThamaniDawa.GS1.MemberApiStub do
   end
 
   @impl true
+  def post_create_pallet_sscc(params) when is_map(params) do
+    Process.put(
+      {__MODULE__, :pallet_creates},
+      [params | Process.get({__MODULE__, :pallet_creates}, [])]
+    )
+
+    case Process.delete({__MODULE__, :fail}) do
+      nil -> {:ok, mint_sscc()}
+      reason -> {:error, reason}
+    end
+  end
+
+  @doc "Bodies sent to `create_pallet_sscc` by this process, oldest first."
+  def pallet_requests do
+    {__MODULE__, :pallet_creates}
+    |> Process.get([])
+    |> Enum.reverse()
+  end
+
+  @impl true
   def post_create_shipper_sscc(params) when is_map(params) do
     ensure_started()
 
