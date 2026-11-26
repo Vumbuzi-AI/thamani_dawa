@@ -21,6 +21,7 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
   alias ThamaniDawa.Repo
 
   def list_batches(organization_id, %MobileUser{} = mobile_user) do
+    Manufacturing.reconcile_untracked_serials(organization_id)
     drafts = drafts_by_batch_id(organization_id, mobile_user.id)
 
     organization_id
@@ -148,7 +149,8 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
             {:ok, :repeat, scan_payload(box, serial)}
 
           nil ->
-            with :ok <- ensure_unpacked(organization_id, box, serial) do
+            with :ok <- ensure_unpacked(organization_id, box, serial),
+                 :ok <- ensure_shipper_room(box) do
               insert_claim(box, serial)
             end
         end
@@ -225,6 +227,9 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
     cond do
       serials == [] ->
         {:error, :empty_box}
+
+      shipper_over_capacity?(box, serials) ->
+        {:error, :shipper_full}
 
       box.idempotency_key not in [nil, key] ->
         {:error, :idempotency_conflict}
@@ -404,6 +409,7 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
       expiry_date: expiry(batch.expiry_date),
       unpacked_count: unpacked,
       packed_count: packed,
+      packs_per_shipper: batch.packs_per_shipper,
       open_box_id: open_box_id && to_string(open_box_id)
     }
 
@@ -444,7 +450,8 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
   end
 
   defp repair_issued(organization_id, batch) do
-    batch = Repo.preload(batch, :product)
+    Manufacturing.reconcile_untracked_serials(organization_id)
+    batch = Repo.get!(Batch, batch.id) |> Repo.preload(:product)
 
     if batch.issued_count > 0 do
       batch
@@ -684,6 +691,21 @@ defmodule ThamaniDawa.Manufacturing.Mobile do
         {:ok, serials} -> raw in serials
         {:error, _} -> false
       end
+  end
+
+  defp ensure_shipper_room(box) do
+    if over_capacity?(box, length(box.scans) + 1), do: {:error, :shipper_full}, else: :ok
+  end
+
+  defp shipper_over_capacity?(box, serials) do
+    over_capacity?(box, length(serials))
+  end
+
+  defp over_capacity?(box, count) do
+    case box.batch.packs_per_shipper do
+      n when is_integer(n) and n > 0 -> count > n
+      _ -> false
+    end
   end
 
   defp insert_claim(box, serial) do

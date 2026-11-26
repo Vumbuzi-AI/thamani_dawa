@@ -4702,6 +4702,9 @@ a.td-pid { cursor: pointer; }
 .td-pid-wrap:hover .td-peek-pop, .td-pid-wrap:focus-within .td-peek-pop { visibility: visible; opacity: 1; pointer-events: auto; transition: opacity 120ms ease 300ms, visibility 0s linear 300ms; }
 .td-pid-wrap.is-dismissed .td-peek-pop { visibility: hidden !important; opacity: 0 !important; }
 .td-peek { font-family: var(--font-sans); letter-spacing: var(--tracking-td); line-height: 1; box-sizing: border-box; width: 320px; display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 12px; background: var(--color-td-raised); border: 1px solid var(--color-td-selected); color: var(--color-td-ink); text-align: left; white-space: normal; font-weight: 400; }
+.td-peek.is-label { width: 336px; }
+.td-peek-label { width: 312px; overflow: hidden; border-radius: 8px; background: #fff; }
+.td-peek-label .td-shipper-label { width: 400px; zoom: 0.78; }
 .td-peek-hd { display: flex; align-items: center; gap: 10px; }
 .td-peek-tile { width: 32px; height: 32px; flex: none; border-radius: 10px; background: var(--color-td-accent-tint); color: var(--color-td-accent); display: inline-flex; align-items: center; justify-content: center; }
 .td-peek-tt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }

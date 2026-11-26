@@ -7,7 +7,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   alias ThamaniDawaWeb.DistributorPagination
 
   @page_size 50
-  @preview_size 8
+  @preview_size 10
 
   def mount(%{"gtin" => gtin}, _session, socket) do
     organization_id = socket.assigns.current_scope.organization_id
@@ -112,9 +112,26 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   defp local_batches(socket),
     do: Manufacturing.local_product_batches(org_id(socket), socket.assigns.product.gtin)
 
+  defp overlay_packaging(socket, batches) when is_list(batches) do
+    by_no =
+      org_id(socket)
+      |> Manufacturing.local_product_batches(socket.assigns.product.gtin)
+      |> Map.new(&{&1.batch_no, &1})
+
+    Enum.map(batches, fn batch ->
+      case Map.get(by_no, batch.batch_no) do
+        nil ->
+          batch
+
+        local ->
+          Map.merge(batch, Map.take(local, [:pack_quantity, :packs_per_shipper, :expected_shipper_count]))
+      end
+    end)
+  end
+
   defp finish_batches(socket, batches, error) do
     socket
-    |> assign(batches: batches, batches_error: error, batches_loading: false)
+    |> assign(batches: overlay_packaging(socket, batches), batches_error: error, batches_loading: false)
     |> select_batch(
       socket.assigns.requested_batch,
       socket.assigns.search,
@@ -453,6 +470,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     end
   end
 
+  defp preview_list_path(assigns) do
+    ~p"/manufacturer/products/#{assigns.product.gtin}/serials?#{page_query(assigns, [])}"
+  end
+
   defp view_serials_path(assigns, overrides \\ []) do
     query = page_query(%{assigns | view: "serials"}, overrides)
     ~p"/manufacturer/products/#{assigns.product.gtin}/serials?#{query}"
@@ -484,6 +505,30 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
   defp long_date(nil), do: "—"
   defp long_date(date), do: ThamaniDawaWeb.TimeFormat.date(date)
+
+  defp pack_figure(batch, key) do
+    case Map.get(batch, key) do
+      n when is_integer(n) and n > 0 -> n
+      _ -> "—"
+    end
+  end
+
+  defp expected_shippers(batch) do
+    case Map.get(batch, :expected_shipper_count) do
+      n when is_integer(n) and n > 0 ->
+        n
+
+      _ ->
+        quantity = Map.get(batch, :pack_quantity)
+        per = Map.get(batch, :packs_per_shipper)
+
+        if is_integer(quantity) and is_integer(per) and per > 0 and rem(quantity, per) == 0 do
+          div(quantity, per)
+        else
+          "—"
+        end
+    end
+  end
 
   defp error_message(:unconfigured),
     do: "Add your GS1 API key in organization settings to load serials."
@@ -757,6 +802,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                   <span class="td-kv-label">Packed</span>
                   <span class="td-kv-value">{@batch_packed} of {@batch_serial_total}</span>
                 </div>
+                <div id="primary-serial-packs-per-shipper" class="td-kv">
+                  <span class="td-kv-label">Packs per shipper</span>
+                  <span class="td-kv-value">{pack_figure(@selected_batch, :packs_per_shipper)}</span>
+                </div>
+                <div id="primary-serial-expected-shippers" class="td-kv">
+                  <span class="td-kv-label">Expected shippers</span>
+                  <span class="td-kv-value">{expected_shippers(@selected_batch)}</span>
+                </div>
               </div>
             </div>
 
@@ -768,8 +821,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             <div :if={@serial_page} class="td-card" id="serial-preview-card">
               <.td_card_header
                 title={"Serials in #{@selected_batch.batch_no}"}
-                subtitle={"The first #{length(@serial_page.entries)} of #{@batch_serial_total}. Open the full list to search, filter, or print."}
-              />
+                subtitle={"#{@batch_serial_total} serials in this batch."}
+              >
+                <:actions>
+                  <.td_button
+                    id="view-all-serials"
+                    label="View all serials"
+                    patch={view_serials_path(assigns)}
+                  />
+                </:actions>
+              </.td_card_header>
               <table class="td-rows is-static" id="manufacturer-serials">
                 <thead>
                   <tr>
@@ -788,18 +849,13 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                   />
                 </tbody>
               </table>
-              <div class="td-tfoot">
-                <span>
-                  Showing <b>{length(@serial_page.entries)}</b>
-                  of <b>{@batch_serial_total}</b>
-                  serials
-                </span>
-                <.td_button
-                  id="view-all-serials"
-                  label="View all serials"
-                  patch={view_serials_path(assigns)}
-                />
-              </div>
+              <.pagination
+                id="serial-preview-pager"
+                page={@serial_page}
+                path={preview_list_path(assigns)}
+                noun="serials"
+                patch
+              />
             </div>
 
             <div :if={@batch_shippers != []} id="batch-shipper-ssccs" class="td-card">

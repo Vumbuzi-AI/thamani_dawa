@@ -2434,6 +2434,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   slot :badge
   slot :action
+  slot :body
 
   slot :row do
     attr :label, :string, required: true
@@ -2442,7 +2443,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   def td_peek(assigns) do
     ~H"""
-    <div id={@id} class="td-peek" data-mono={to_string(@mono)} role="tooltip">
+    <div id={@id} class={["td-peek", @body != [] && "is-label"]} data-mono={to_string(@mono)} role="tooltip">
       <div class="td-peek-hd">
         <span class="td-peek-tile"><.td_icon name={@icon} /></span>
         <div class="td-peek-tt">
@@ -2452,6 +2453,7 @@ defmodule ThamaniDawaWeb.TDComponents do
         <span :if={@badge != []} class="td-peek-bd">{render_slot(@badge)}</span>
       </div>
       <span :if={@subtitle} class="td-peek-sub">{@subtitle}</span>
+      <div :if={@body != []} class="td-peek-label">{render_slot(@body)}</div>
       <div :if={@row != []} class="td-peek-rows">
         <div :for={row <- @row} class="td-peek-row" data-mono={to_string(Map.get(row, :mono, false))}>
           <span class="td-peek-l">{row.label}</span>

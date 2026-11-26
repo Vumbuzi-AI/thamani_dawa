@@ -140,7 +140,29 @@ defmodule ThamaniDawaWeb.Api.V1.ManufacturerApiTest do
     assert row["batch_no"] == batch.batch_no
     assert row["unpacked_count"] == 3
     assert row["packed_count"] == 0
+    assert row["packs_per_shipper"] == nil
     assert row["open_box_id"] == nil
+  end
+
+  test "serials saved without a count still list as loose", %{
+    conn: conn,
+    packer: packer,
+    pin: pin,
+    batch: batch
+  } do
+    from(b in Batch, where: b.id == ^batch.id)
+    |> Repo.update_all(set: [issued_count: 0, packed_count: 0])
+
+    listed =
+      conn
+      |> authed(access_token(packer.username, pin))
+      |> get(~p"/api/v1/manufacturer/batches")
+      |> json_response(200)
+      |> Map.fetch!("data")
+      |> Enum.find(&(&1["id"] == to_string(batch.id)))
+
+    assert listed["unpacked_count"] == 3
+    assert listed["packed_count"] == 0
   end
 
   test "opening a batch copies GS1 serials into the local loose count", %{
@@ -331,6 +353,45 @@ defmodule ThamaniDawaWeb.Api.V1.ManufacturerApiTest do
       |> Map.fetch!("data")
 
     assert Enum.any?(rows, &(&1["gln"] == site.gln and &1["name"] == site.name))
+  end
+
+  test "a scan past packs per shipper is shipper_full", %{
+    organization: organization,
+    site: site,
+    packer: packer,
+    pin: pin,
+    batch: batch,
+    destination: destination
+  } do
+    from(b in Batch, where: b.id == ^batch.id)
+    |> Repo.update_all(set: [packs_per_shipper: 1, expected_shipper_count: 3])
+
+    token = access_token(packer.username, pin)
+
+    listed =
+      build_conn()
+      |> authed(token)
+      |> get(~p"/api/v1/manufacturer/batches")
+      |> json_response(200)
+      |> Map.fetch!("data")
+      |> Enum.find(&(&1["id"] == to_string(batch.id)))
+
+    assert listed["packs_per_shipper"] == 1
+
+    box_id = open_ready_box(token, batch, site, destination)
+    [first, second | _] = serials_for(organization.id, batch.id)
+
+    build_conn()
+    |> authed(token)
+    |> post(~p"/api/v1/manufacturer/boxes/#{box_id}/scans", %{raw: first})
+    |> json_response(201)
+
+    conn =
+      build_conn()
+      |> authed(token)
+      |> post(~p"/api/v1/manufacturer/boxes/#{box_id}/scans", %{raw: second})
+
+    assert json_response(conn, 422)["error"]["code"] == "shipper_full"
   end
 
   test "claims a serial, repeats on the same box, and rejects a second packer", %{

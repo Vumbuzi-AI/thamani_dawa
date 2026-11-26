@@ -525,7 +525,15 @@ defmodule ThamaniDawa.Manufacturing do
           from b in Batch,
             join: p in assoc(b, :product),
             where: b.organization_id == ^organization_id and p.gtin == ^gtin,
-            select: {b.batch_no, %{created_at: b.inserted_at, local_id: b.id}}
+            select:
+              {b.batch_no,
+               %{
+                 created_at: b.inserted_at,
+                 local_id: b.id,
+                 pack_quantity: b.pack_quantity,
+                 packs_per_shipper: b.packs_per_shipper,
+                 expected_shipper_count: b.expected_shipper_count
+               }}
         )
       )
 
@@ -535,7 +543,14 @@ defmodule ThamaniDawa.Manufacturing do
         |> Enum.filter(&(is_binary(&1["batch"]) and &1["batch"] != ""))
         |> Enum.group_by(& &1["batch"])
         |> Enum.map(fn {batch_no, [first | _] = batch_rows} ->
-          local = Map.get(local_batches, batch_no, %{created_at: nil, local_id: nil})
+          local =
+            Map.get(local_batches, batch_no, %{
+              created_at: nil,
+              local_id: nil,
+              pack_quantity: nil,
+              packs_per_shipper: nil,
+              expected_shipper_count: nil
+            })
 
           %{
             batch_no: batch_no,
@@ -543,6 +558,9 @@ defmodule ThamaniDawa.Manufacturing do
             expiry_date: parse_api_date(first["expiry"]),
             created_at: local.created_at,
             local_id: local.local_id,
+            pack_quantity: local.pack_quantity,
+            packs_per_shipper: local.packs_per_shipper,
+            expected_shipper_count: local.expected_shipper_count,
             serial_count: batch_serial_count(batch_rows)
           }
         end)
@@ -584,7 +602,10 @@ defmodule ThamaniDawa.Manufacturing do
           expiry_date: b.expiry_date,
           created_at: b.inserted_at,
           local_id: b.id,
-          serial_count: c.count
+          serial_count: c.count,
+          pack_quantity: b.pack_quantity,
+          packs_per_shipper: b.packs_per_shipper,
+          expected_shipper_count: b.expected_shipper_count
         }
     )
   end
@@ -1391,6 +1412,37 @@ defmodule ThamaniDawa.Manufacturing do
 
     bump_issued_count(batch.id, length(inserted))
     inserted
+  end
+
+  @doc """
+  Batches whose serial rows were saved without touching `issued_count`
+  still look empty to the packer. Copy the real row counts onto those
+  batches. Leaves a non-zero counter alone.
+  """
+  def reconcile_untracked_serials(organization_id) when is_integer(organization_id) do
+    Repo.query!(
+      """
+      UPDATE manufacturer_batches AS b
+      SET
+        issued_count = s.issued,
+        packed_count = s.packed
+      FROM (
+        SELECT
+          manufacturer_batch_id,
+          COUNT(*)::int AS issued,
+          COUNT(*) FILTER (WHERE manufacturer_shipper_sscc_id IS NOT NULL)::int AS packed
+        FROM manufacturer_serials
+        GROUP BY manufacturer_batch_id
+      ) AS s
+      WHERE b.id = s.manufacturer_batch_id
+        AND b.organization_id = $1
+        AND b.issued_count = 0
+        AND s.issued > 0
+      """,
+      [organization_id]
+    )
+
+    :ok
   end
 
   defp bump_issued_count(_batch_id, 0), do: :ok

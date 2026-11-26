@@ -183,7 +183,17 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLive do
             <div class="td-mono">{row.product.gtin}</div>
           </div>
         </:col>
-        <:col :let={row} label="Batch">{row.batch.batch_no}</:col>
+        <:col :let={row} label="Batch">
+          <.link
+            id={"inventory-batch-serials-#{row.batch.id}"}
+            class="td-mono td-table-link"
+            navigate={
+              ~p"/manufacturer/products/#{row.product.gtin}/serials?#{%{batch: row.batch.batch_no}}"
+            }
+          >
+            {row.batch.batch_no}
+          </.link>
+        </:col>
         <:col :let={row} label="Production">
           {ThamaniDawaWeb.TimeFormat.date(row.batch.production_date)}
         </:col>
@@ -256,7 +266,21 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLive do
             <div :if={row.product_gtin} class="td-mono">{row.product_gtin}</div>
           </div>
         </:col>
-        <:col :let={row} label="Batch">{row.shipper.batch || "—"}</:col>
+        <:col :let={row} label="Batch">
+          <.link
+            :if={present?(row.product_gtin) and present?(row.shipper.batch)}
+            id={"inventory-shipper-batch-#{row.shipper.id}"}
+            class="td-mono td-table-link"
+            navigate={
+              ~p"/manufacturer/products/#{row.product_gtin}/serials?#{%{batch: row.shipper.batch}}"
+            }
+          >
+            {row.shipper.batch}
+          </.link>
+          <span :if={not (present?(row.product_gtin) and present?(row.shipper.batch))} class="td-note">
+            {row.shipper.batch || "—"}
+          </span>
+        </:col>
         <:col :let={row} label="Packs">{row.shipper.count_of_trade_items || 0}</:col>
         <:col :let={row} label="Pallet">{row.pallet_code || "Not on a pallet"}</:col>
         <:col :let={row} label="Status">
@@ -487,6 +511,9 @@ defmodule ThamaniDawaWeb.ManufacturerInventoryLive do
 
     Enum.join(parts, " · ")
   end
+
+  defp present?(value) when is_binary(value), do: String.trim(value) != ""
+  defp present?(_), do: false
 
   defp search_placeholder("batches"), do: "Search product, GTIN, or batch"
   defp search_placeholder("shippers"), do: "Search SSCC, product, batch, or pallet"
