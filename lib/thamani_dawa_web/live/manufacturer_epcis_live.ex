@@ -76,7 +76,7 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
          put_flash(
            socket,
            :info,
-           "Event #{short_id(event.event_id)} requeued. It will be resubmitted with the same eventID."
+           "Event #{short_id(event.event_id)} is ready to send again. It keeps the same reference."
          )}
 
       _ ->
@@ -122,12 +122,15 @@ defmodule ThamaniDawaWeb.ManufacturerEpcisLive do
                "Couldn't reach PPB for event #{short_id(event.event_id)} — it will retry automatically."
              )}
 
-          {:blocked, updated} ->
+          {:blocked, _updated} ->
             {:noreply,
              socket
              |> reload()
              |> assign(:confirm_action, nil)
-             |> put_flash(:error, updated.blocked_reason)}
+             |> put_flash(
+               :error,
+               "The key for this reporting event is missing. Add it on API keys, then send this event again."
+             )}
         end
 
       true ->

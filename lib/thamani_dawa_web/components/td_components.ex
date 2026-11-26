@@ -52,7 +52,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   attr :rest, :global,
     include:
-      ~w(href navigate patch method download name value disabled type id form title onclick target rel phx-click phx-value-id phx-value-index phx-value-product_id phx-value-amount phx-value-tier phx-value-from phx-value-to phx-value-mode phx-value-step phx-value-status phx-disable-with phx-submit phx-target phx-hook aria-pressed data-print-target data-print-container data-label-size data-download-container data-role data-sscc data-gs1-text data-quantity data-gtin data-batch data-production data-expiry data-material-description data-order-number data-from-company data-from-address data-to-company data-to-address data-to-po-box)
+      ~w(href navigate patch method download name value disabled type id form title onclick target rel phx-click phx-value-id phx-value-index phx-value-product_id phx-value-amount phx-value-tier phx-value-from phx-value-to phx-value-mode phx-value-step phx-value-status phx-disable-with phx-submit phx-target phx-hook aria-pressed data-print-target data-print-container data-label-size data-print-mode data-download-container data-role data-sscc data-gs1-text data-quantity data-gtin data-batch data-production data-expiry data-material-description data-order-number data-from-company data-from-address data-to-company data-to-address data-to-po-box)
 
   slot :icon
   slot :inner_block
@@ -491,6 +491,64 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
+  attr :id, :string, required: true
+  attr :results, :list, required: true
+  attr :status, :atom, default: :idle
+  attr :query, :string, default: ""
+  attr :select_event, :string, required: true
+  attr :close_event, :string, default: nil
+  attr :target, :any, default: nil
+  attr :option_prefix, :string, required: true
+
+  def td_gln_results(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :open?,
+        assigns.results != [] or
+          (assigns.status in [:searching, :complete, :unavailable] and
+             String.length(assigns.query) >= 2)
+      )
+
+    ~H"""
+    <div
+      :if={@open?}
+      id={@id}
+      role="listbox"
+      class="td-select-pop td-combo-pop"
+      phx-click-away={@close_event && JS.push(@close_event, target: @target)}
+    >
+      <p :if={@status == :searching and @results == []} class="td-combo-note">
+        Searching the GS1 directory…
+      </p>
+      <p :if={@status == :complete and @results == []} class="td-combo-note">
+        No GS1 GLNs match this search.
+      </p>
+      <p :if={@status == :unavailable} class="td-combo-note is-error">
+        The GS1 GLN directory is unavailable. Try again in a moment.
+      </p>
+      <div :if={@results != []} class="td-combo-list">
+        <button
+          :for={party <- @results}
+          id={"#{@option_prefix}-#{party.gln}"}
+          type="button"
+          role="option"
+          phx-click={@select_event}
+          phx-value-gln={party.gln}
+          phx-target={@target}
+          class="td-combo-opt"
+        >
+          <span class="td-combo-top">
+            <span class="td-combo-co">{party.company}</span>
+            <span class="td-combo-gln">{party.gln}</span>
+          </span>
+          <span :if={party.address not in [nil, ""]} class="td-combo-addr">{party.address}</span>
+        </button>
+      </div>
+    </div>
+    """
+  end
+
   attr :label, :string, default: nil
   attr :name, :string, default: nil
   attr :id, :string, default: nil
@@ -822,11 +880,12 @@ defmodule ThamaniDawaWeb.TDComponents do
     """
   end
 
+  attr :id, :string, default: nil
   slot :inner_block, required: true
 
   def td_glance_strip(assigns) do
     ~H"""
-    <div class="td-glance">{render_slot(@inner_block)}</div>
+    <div id={@id} class="td-glance">{render_slot(@inner_block)}</div>
     """
   end
 
@@ -1319,10 +1378,30 @@ defmodule ThamaniDawaWeb.TDComponents do
   attr :state, :string, values: ~w(done current upcoming), default: "upcoming"
   attr :number, :integer, required: true
   attr :label, :string, required: true
+  attr :event, :string, default: nil
+  attr :value, :string, default: nil
+  attr :disabled, :boolean, default: false
+  attr :id, :string, default: nil
+
+  def td_step(%{event: event} = assigns) when is_binary(event) and assigns.state != "current" do
+    ~H"""
+    <button
+      type="button"
+      id={@id}
+      class={["td-step", "is-#{@state}", "is-link"]}
+      phx-click={@event}
+      phx-value-step={@value}
+      disabled={@disabled}
+    >
+      <span class="td-step-n">{@number}</span>
+      <span>{@label}</span>
+    </button>
+    """
+  end
 
   def td_step(assigns) do
     ~H"""
-    <span class={["td-step", "is-#{@state}"]}>
+    <span id={@id} class={["td-step", "is-#{@state}"]}>
       <span class="td-step-n">{@number}</span>
       <span>{@label}</span>
     </span>
@@ -1679,6 +1758,14 @@ defmodule ThamaniDawaWeb.TDComponents do
         </button>
       </div>
       <div class="td-tb">
+        <.td_icon_button
+          id="mobile-sidebar-toggle"
+          label="Open navigation"
+          aria-controls="sidebar-aside"
+          aria-expanded="false"
+        >
+          <:icon><.td_icon name="list" /></:icon>
+        </.td_icon_button>
         <div class="td-cr">
           <span :if={@crumb_root} class="td-cr-root">{@crumb_root}</span>
           <i :if={@crumb_root && @crumb}>/</i>
@@ -1687,14 +1774,6 @@ defmodule ThamaniDawaWeb.TDComponents do
           <b :if={@crumb}>{@crumb}</b>
         </div>
         <div class="td-tl">
-          <.td_icon_button
-            id="mobile-sidebar-toggle"
-            label="Open navigation"
-            aria-controls="sidebar-aside"
-            aria-expanded="false"
-          >
-            <:icon><.td_icon name="list" /></:icon>
-          </.td_icon_button>
           <%!-- Title bar (brief 4.6): global search with the K shortcut, help,
                notifications, a divider, then the page's primary action. --%>
           <%= if @search != [] do %>
@@ -1806,7 +1885,7 @@ defmodule ThamaniDawaWeb.TDComponents do
           ><span class="td-cmd-ti"><.td_icon name="device-mobile-camera" /></span><span class="td-cmd-t"><b>Mobile users</b></span></.link>
           <p class="td-cmd-gh">Actions</p>
           <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/products"><span class="td-cmd-ti"><.td_icon name="plus" /></span><span class="td-cmd-t"><b>Add product</b></span></.link>
-          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/aggregations"><span class="td-cmd-ti"><.td_icon name="package" /></span><span class="td-cmd-t"><b>Add SSCC</b></span></.link>
+          <.link class="td-cmd-row" data-td-cmd-row navigate="/manufacturer/aggregations"><span class="td-cmd-ti"><.td_icon name="package" /></span><span class="td-cmd-t"><b>Aggregation</b></span></.link>
           <p class="td-cmd-gh">Account</p>
           <.link
             :if={ThamaniDawaWeb.Portals.path_accessible?(@current_scope, "/manufacturer/api-keys")}
@@ -2019,6 +2098,7 @@ defmodule ThamaniDawaWeb.TDComponents do
               return;
             }
             if (event.target.closest("#sidebar-aside a")) {
+              hideTip();
               this.el.classList.remove("sidebar-mobile-open");
               mobile()?.setAttribute("aria-expanded", "false");
             }
@@ -2048,7 +2128,7 @@ defmodule ThamaniDawaWeb.TDComponents do
         updated() {
           const collapsed = localStorage.getItem("sidebar-collapsed") === "true";
           this.el.classList.toggle("is-collapsed", collapsed);
-          if (!collapsed) this.hideTip?.();
+          this.hideTip?.();
         },
         destroyed() {
           document.removeEventListener("click", this.onClick);
@@ -2240,6 +2320,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   end
 
   attr :id, :string, required: true
+  attr :class, :string, default: nil
   attr :rows, :list, required: true
   attr :row_id, :any, default: nil
 
@@ -2252,7 +2333,7 @@ defmodule ThamaniDawaWeb.TDComponents do
 
   def td_data_table(assigns) do
     ~H"""
-    <div class="td-data">
+    <div class={["td-data", @class]}>
       <table>
         <thead>
           <tr>
@@ -2317,7 +2398,7 @@ defmodule ThamaniDawaWeb.TDComponents do
   defp show_modal(id) when is_binary(id) do
     JS.show(to: "##{id}")
     |> JS.show(to: "##{id}-bg")
-    |> JS.show(to: "##{id}-container")
+    |> JS.show(to: "##{id}-container", display: "flex")
     |> JS.focus_first(to: "##{id}-container")
   end
 

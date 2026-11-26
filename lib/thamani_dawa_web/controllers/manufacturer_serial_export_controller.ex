@@ -3,16 +3,13 @@ defmodule ThamaniDawaWeb.ManufacturerSerialExportController do
 
   alias ThamaniDawa.Manufacturing
 
-  # `batch_id` in the route carries the GS1 batch number. Serials are read
-  # from the GS1 member API (one batch lookup, one serial lookup).
   def show(conn, %{"gtin" => gtin, "batch_id" => batch_no}) do
     organization_id = conn.assigns.current_scope.organization_id
     product = Manufacturing.get_product_by_gtin!(organization_id, gtin)
 
-    with {:ok, batches} <- Manufacturing.fetch_product_batches(organization_id, product.gtin),
-         %{} = batch <- Enum.find(batches, &(&1.batch_no == batch_no)),
-         {:ok, serials} <-
-           Manufacturing.fetch_batch_serials(organization_id, product.gtin, batch_no) do
+    with %{} = batch <-
+           Manufacturing.get_batch_by_product_and_no(organization_id, product.id, batch_no),
+         serials when serials != [] <- Manufacturing.list_serials(organization_id, batch.id) do
       rows =
         Enum.map(
           serials,
@@ -33,7 +30,7 @@ defmodule ThamaniDawaWeb.ManufacturerSerialExportController do
     else
       _ ->
         conn
-        |> put_flash(:error, "Couldn't load this batch's serials from GS1. Try again shortly.")
+        |> put_flash(:error, "No locally generated serials are available for this batch.")
         |> redirect(to: ~p"/manufacturer/products/#{product.gtin}/serials")
     end
   end

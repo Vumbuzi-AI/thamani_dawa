@@ -42,6 +42,18 @@ defmodule ThamaniDawaWeb.DistributorMobileUserPhoneTest do
            )
   end
 
+  test "refresh reloads the mobile users table", %{conn: conn, distributor: distributor} do
+    {:ok, view, _html} = live(conn, ~p"/distributor/mobile-users")
+
+    mobile_user = mobile_user_fixture(distributor.organization_id)
+    refute has_element?(view, "#mobile-user-actions-#{mobile_user.id}")
+
+    html = view |> element("#refresh-distributor-mobile-users") |> render_click()
+
+    assert has_element?(view, "#mobile-user-actions-#{mobile_user.id}")
+    assert html =~ "Mobile users refreshed."
+  end
+
   test "edit form rejects an invalid phone", %{conn: conn, distributor: distributor} do
     mobile_user = mobile_user_fixture(distributor.organization_id)
     {:ok, view, _html} = live(conn, ~p"/distributor/mobile-users/#{mobile_user.id}/edit")

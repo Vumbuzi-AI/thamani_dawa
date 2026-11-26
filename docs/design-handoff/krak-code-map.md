@@ -1,5 +1,7 @@
 # Thamani Dawa web: code map (Krak)
 
+> **Current implementation note (25 Nov 2026):** This is a point-in-time code read, not the current manufacturer contract. The two-step serialization wizard and aggregation-stage SSCC timing supersede the flow notes here. Current behavior is documented in `docs/manual-manufacturer-testing.md` and `docs/mobile/manufacturer-aggregation-api.md`.
+
 Input for Bau's Notion doc on the Thamani Dawa interface. Read it next to Bau's Doop frame inventory (canvas LQFIZlhE35) and `/workspace/thamani/lab-compliance/frame-ledger.md`.
 
 Written 23 Nov 2026, finished 17:21 EAT. Read-only: no repo was changed and nothing was committed.

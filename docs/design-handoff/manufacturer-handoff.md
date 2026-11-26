@@ -1,5 +1,7 @@
 # Thamani Dawa · Manufacturer flagship flow · Handoff
 
+> **Current implementation note (25 Nov 2026):** This is the historical design/prototype record. The live wizard is two steps only — **Batch details** then **Order details** — and serialization calls `create_serialised_datamatrix` with `create_shippers: false`. Order mode is the default; manufacturing for stock is hidden unless an admin enables it in **Manufacturer → Settings**. Shipper SSCC preparation is a later aggregation choice (default **During packing**). See `docs/manual-manufacturer-testing.md` and `docs/mobile/manufacturer-aggregation-api.md` for current behavior.
+
 Canvas: https://doop.design/c/LQFIZlhE35 · page "Flagship · Manufacturer" (GCvBvFLYxw). Prototype start: Products (rOKtmxrk0b).
 Built by Bau on 23 Nov 2026 (EAT). Code reference: Krak's code map, box clone at 6c38d46. Repo not touched.
 

@@ -1,9 +1,9 @@
 defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   use ThamaniDawaWeb, :live_view
 
-  require Logger
-
   alias ThamaniDawa.Manufacturing
+  alias ThamaniDawa.Manufacturing.Operations
+  alias ThamaniDawa.RegistryCache
   alias ThamaniDawaWeb.DistributorPagination
 
   @page_size 50
@@ -13,6 +13,10 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     organization_id = socket.assigns.current_scope.organization_id
     product = Manufacturing.get_product_by_gtin!(organization_id, gtin)
 
+    if connected?(socket) do
+      Operations.subscribe_product(product.id)
+    end
+
     {:ok,
      socket
      |> assign(:page_title, "Product serials")
@@ -20,11 +24,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      |> assign(:search, "")
      |> assign(:batches, nil)
      |> assign(:batches_error, nil)
+     |> assign(:batches_loading, false)
+     |> assign(:page_params, %{})
      |> assign(:selected_batch, nil)
+     |> assign(:requested_batch, nil)
+     |> assign(:generation_op, nil)
      |> assign(:serials_cache, %{})
      |> assign(:serials_error, nil)
      |> assign(:serial_page, nil)
-     |> assign(:serials_loading, false)
      |> assign(:batch_shippers, [])
      |> assign(:serial_shippers, %{})
      |> assign(:batch_fully_packed, false)
@@ -34,18 +41,19 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   end
 
   # Nested GS1 flow, kept light on the API: the batch list is fetched once
-  # per visit (`getbarcode_batches`), and only the page of serials on screen
-  # is fetched (`get_batch_serials` with paging). Both run as async tasks so
-  # the page joins straight away; waiting on GS1 inside the join made large
-  # products time out and reconnect in a loop. Printing fetches the whole
-  # batch when its dialog opens. Nothing is fetched on the static render.
+  # per visit (`getbarcode_batches`), and a batch's serials only when that
+  # batch is opened (`get_batch_serials`), then cached for this visit so
+  # paging and searching don't call GS1 again. Nothing is fetched on the
+  # static (disconnected) render.
   def handle_params(params, _url, socket) do
     search = Map.get(params, "search", "")
+    requested_batch = Map.get(params, "batch")
 
     socket =
       socket
       |> assign(:search, search)
-      |> assign(:params, params)
+      |> assign(:page_params, params)
+      |> assign(:requested_batch, requested_batch)
       |> assign(:view, if(params["view"] == "serials", do: "serials", else: "batch"))
       |> assign(
         :state_filter,
@@ -54,83 +62,36 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       |> assign(:return_to, ThamaniDawaWeb.ReturnTo.safe(params["return_to"] || "", ""))
       |> assign(:back_path, ThamaniDawaWeb.ReturnTo.path(params, ~p"/manufacturer/products"))
       |> assign_new(:print_open, fn -> false end)
-      |> assign_new(:serials_loading, fn -> false end)
+      |> load_generation_status()
       |> ensure_batches()
 
-    {:noreply, select_batch(socket)}
+    {:noreply, select_batch(socket, requested_batch, search, params)}
   end
 
-  def handle_async(:batches, {:ok, result}, socket) do
-    socket =
-      case result do
-        {:ok, batches} -> assign(socket, batches: batches, batches_error: nil)
-        {:error, reason} -> assign(socket, batches: [], batches_error: reason)
-      end
-
-    {:noreply, select_batch(socket)}
-  end
-
-  def handle_async(:batches, {:exit, reason}, socket) do
-    Logger.error("Serials page: loading batches crashed: #{inspect(reason)}")
-    {:noreply, assign(socket, batches: [], batches_error: :unavailable)}
-  end
-
-  def handle_async(:serials, {:ok, {shippers, by_serial, result}}, socket) do
-    batch = socket.assigns.selected_batch
-    total = (batch && batch.serial_count) || 0
-    packed = map_size(by_serial)
-
-    socket =
-      assign(socket,
-        serials_loading: false,
-        batch_shippers: shippers,
-        serial_shippers: by_serial,
-        batch_packed: packed,
-        batch_fully_packed: total > 0 and packed >= total
+  defp load_generation_status(socket) do
+    op =
+      Operations.generation_status_for_product(
+        org_id(socket),
+        socket.assigns.product.id,
+        socket.assigns.requested_batch
       )
 
-    socket =
-      case result do
-        {:ok, page} ->
-          assign(socket,
-            serial_page: page,
-            serials_error: nil,
-            label_serial: List.first(page.entries)
-          )
+    if connected?(socket) and op &&
+         op.serial_allocation_status in ["pending", "allocating"] do
+      Process.send_after(self(), :refresh_pending_generation, 2_000)
+    end
 
-        {:error, reason} ->
-          Logger.warning(
-            "Serials page: GS1 get_batch_serials failed for #{socket.assigns.product.gtin} batch #{inspect(batch && batch.batch_no)}: #{inspect(reason)}"
-          )
-
-          assign(socket, serial_page: nil, serials_error: reason, label_serial: nil)
-      end
-
-    {:noreply, socket}
+    assign(socket, :generation_op, op)
   end
 
-  def handle_async(:serials, {:exit, reason}, socket) do
-    Logger.error("Serials page: loading serials crashed: #{inspect(reason)}")
-
-    {:noreply,
-     assign(socket,
-       serials_loading: false,
-       serial_page: nil,
-       serials_error: :unavailable,
-       label_serial: nil
-     )}
-  end
-
-  defp ensure_batches(%{assigns: %{batches: nil}} = socket) do
+  defp ensure_batches(%{assigns: %{batches: nil, batches_loading: false}} = socket) do
     if connected?(socket) do
-      organization_id = org_id(socket)
+      org_id = org_id(socket)
       gtin = socket.assigns.product.gtin
 
       socket
-      |> cancel_async(:batches)
-      |> start_async(:batches, fn ->
-        Manufacturing.fetch_product_batches(organization_id, gtin)
-      end)
+      |> assign(:batches_loading, true)
+      |> start_async(:batches, fn -> Manufacturing.fetch_product_batches(org_id, gtin) end)
     else
       socket
     end
@@ -138,114 +99,106 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
 
   defp ensure_batches(socket), do: socket
 
-  defp select_batch(%{assigns: %{batches: nil}} = socket), do: socket
+  def handle_async(:batches, {:ok, {:ok, batches}}, socket),
+    do: {:noreply, finish_batches(socket, batches, nil)}
 
-  defp select_batch(socket) do
-    params = socket.assigns.params
-    search = socket.assigns.search
+  def handle_async(:batches, {:ok, {:error, reason}}, socket),
+    do: {:noreply, finish_batches(socket, local_batches(socket), reason)}
+
+  def handle_async(:batches, {:exit, _reason}, socket),
+    do: {:noreply, finish_batches(socket, local_batches(socket), :unavailable)}
+
+  defp local_batches(socket),
+    do: Manufacturing.local_product_batches(org_id(socket), socket.assigns.product.gtin)
+
+  defp finish_batches(socket, batches, error) do
+    socket
+    |> assign(batches: batches, batches_error: error, batches_loading: false)
+    |> select_batch(
+      socket.assigns.requested_batch,
+      socket.assigns.search,
+      socket.assigns.page_params
+    )
+  end
+
+  defp select_batch(%{assigns: %{batches: nil}} = socket, _batch_no, _search, _params),
+    do: socket
+
+  defp select_batch(socket, batch_no, search, params) do
     visible = filter_batches(socket.assigns.batches, search)
-    selected = Enum.find(visible, &(&1.batch_no == params["batch"])) || List.first(visible)
+    selected = Enum.find(visible, &(&1.batch_no == batch_no)) || List.first(visible)
 
     case selected do
       nil ->
-        socket
-        |> cancel_async(:serials)
-        |> assign(
+        assign(socket,
           selected_batch: nil,
           serial_page: nil,
           serials_error: nil,
-          serials_loading: false,
           batch_shippers: [],
           serial_shippers: %{},
           batch_fully_packed: false
         )
 
       batch ->
-        organization_id = org_id(socket)
-        gtin = socket.assigns.product.gtin
-        state = socket.assigns.state_filter
-        page_size = if socket.assigns.view == "serials", do: @page_size, else: @preview_size
-        page_number = DistributorPagination.page_number(params)
-        serial_search = serial_search(search, batch)
+        {socket, result} = batch_serials(socket, batch.batch_no)
 
-        socket
-        |> assign(
-          selected_batch: batch,
-          batch_serial_total: batch.serial_count || 0,
-          serials_loading: true,
-          serials_error: nil
-        )
-        |> cancel_async(:serials)
-        |> start_async(:serials, fn ->
-          {shippers, by_serial} =
-            Manufacturing.list_batch_shippers(organization_id, gtin, batch.batch_no)
+        {shippers, by_serial} =
+          Manufacturing.list_batch_shippers(
+            org_id(socket),
+            socket.assigns.product.gtin,
+            batch.batch_no
+          )
 
-          result =
-            serial_page(
-              {organization_id, gtin, state},
-              batch,
-              by_serial,
-              serial_search,
-              page_number,
-              page_size
+        socket =
+          assign(socket,
+            batch_shippers: shippers,
+            serial_shippers: by_serial,
+            batch_fully_packed: fully_packed?(result, by_serial)
+          )
+
+        case result do
+          {:ok, serials} ->
+            all_serials = serials
+
+            serials =
+              serials
+              |> filter_serials(search, batch)
+              |> filter_state(socket.assigns.state_filter, by_serial)
+
+            page_size = if socket.assigns.view == "serials", do: @page_size, else: @preview_size
+
+            page =
+              DistributorPagination.page(
+                serials,
+                DistributorPagination.page_number(params),
+                page_size
+              )
+
+            assign(socket,
+              selected_batch: batch,
+              serial_page: page,
+              serials_error: nil,
+              batch_serial_total: length(all_serials),
+              batch_packed: Enum.count(all_serials, &Map.has_key?(by_serial, &1.serial)),
+              label_serial: List.first(all_serials)
             )
 
-          {shippers, by_serial, result}
-        end)
+          {:error, reason} ->
+            assign(socket, selected_batch: batch, serial_page: nil, serials_error: reason)
+        end
     end
   end
 
-  # Only the page on screen is fetched from GS1. Packed serials are known
-  # locally from this batch's shippers, so that filter needs no GS1 call;
-  # unpacked asks GS1 to leave them out.
-  defp serial_page({_org, _gtin, "packed"}, _batch, by_serial, search, page_number, page_size) do
-    entries =
-      by_serial
-      |> Map.keys()
-      |> Enum.filter(&(search == "" or String.contains?(String.downcase(&1), search)))
-      |> Enum.sort()
-      |> Enum.map(&%{serial: &1, payload: nil, human_readable: nil})
+  # Every issued serial in the batch already sits in a shipper SSCC.
+  defp fully_packed?({:ok, [_ | _] = serials}, by_serial),
+    do: Enum.all?(serials, &Map.has_key?(by_serial, &1.serial))
 
-    {:ok, DistributorPagination.page(entries, page_number, page_size)}
-  end
+  defp fully_packed?(_result, _by_serial), do: false
 
-  defp serial_page(
-         {organization_id, gtin, state},
-         batch,
-         by_serial,
-         search,
-         page_number,
-         page_size
-       ) do
-    exclude = if state == "unpacked", do: Map.keys(by_serial), else: []
-
-    Manufacturing.fetch_batch_serial_page(
-      organization_id,
-      gtin,
-      batch.batch_no,
-      page: page_number,
-      per_page: page_size,
-      search: search,
-      exclude: exclude
-    )
-  end
-
-  # A search matching the batch number shows the whole batch; otherwise it
-  # narrows the batch's serials.
-  defp serial_search(search, batch) do
-    term = search |> String.trim() |> String.downcase()
-
-    if term == "" or String.contains?(String.downcase(batch.batch_no), term),
-      do: "",
-      else: term
-  end
-
-  # Printing needs every serial in the batch, so it is fetched only when the
-  # print dialog opens, then kept for this visit.
-  defp ensure_all_serials(socket, batch_no) do
+  defp batch_serials(socket, batch_no) do
     case socket.assigns.serials_cache do
-      %{^batch_no => _serials} ->
-        socket
+      %{^batch_no => serials} ->
+        {socket, {:ok, serials}}
 
       cache ->
         case Manufacturing.fetch_batch_serials(
@@ -253,12 +206,17 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                socket.assigns.product.gtin,
                batch_no
              ) do
-          {:ok, serials} -> assign(socket, :serials_cache, Map.put(cache, batch_no, serials))
-          {:error, reason} -> assign(socket, :serials_error, reason)
+          {:ok, serials} ->
+            {assign(socket, :serials_cache, Map.put(cache, batch_no, serials)), {:ok, serials}}
+
+          error ->
+            {socket, error}
         end
     end
   end
 
+  # A search matching the batch number shows the whole batch; otherwise it
+  # narrows the batch's serials.
   # Narrow to batches whose number matches; when none do, the term is
   # treated as a serial and searched within the selected batch.
   defp filter_batches(batches, search) do
@@ -270,6 +228,24 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         else: Enum.filter(batches, &String.contains?(String.downcase(&1.batch_no), term))
 
     if matching == [], do: batches, else: matching
+  end
+
+  defp filter_state(serials, "packed", by_serial),
+    do: Enum.filter(serials, &Map.has_key?(by_serial, &1.serial))
+
+  defp filter_state(serials, "unpacked", by_serial),
+    do: Enum.reject(serials, &Map.has_key?(by_serial, &1.serial))
+
+  defp filter_state(serials, _state, _by_serial), do: serials
+
+  defp filter_serials(serials, "", _batch), do: serials
+
+  defp filter_serials(serials, search, batch) do
+    term = String.downcase(String.trim(search))
+
+    if term == "" or String.contains?(String.downcase(batch.batch_no), term),
+      do: serials,
+      else: Enum.filter(serials, &String.contains?(String.downcase(&1.serial), term))
   end
 
   def handle_event("search", %{"search" => search}, socket) do
@@ -289,10 +265,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
      )}
   end
 
-  def handle_event("open_print", _params, socket) do
-    socket = ensure_all_serials(socket, socket.assigns.selected_batch.batch_no)
-    {:noreply, assign(socket, :print_open, true)}
-  end
+  def handle_event("open_print", _params, socket),
+    do: {:noreply, assign(socket, :print_open, true)}
 
   def handle_event("close_print", _params, socket),
     do: {:noreply, assign(socket, :print_open, false)}
@@ -309,8 +283,99 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   def handle_event("retry", _params, socket) do
     {:noreply,
      socket
+     |> invalidate_gs1_cache()
      |> assign(batches: nil, serials_cache: %{})
      |> push_patch(to: ~p"/manufacturer/products/#{socket.assigns.product.gtin}/serials")}
+  end
+
+  def handle_event("reconcile_serials", _params, socket) do
+    operation = socket.assigns.generation_op
+
+    if is_nil(operation) or operation.serial_allocation_status != "reconciliation_required" do
+      {:noreply,
+       put_flash(socket, :error, "This batch no longer needs checking. Refresh the page.")}
+    else
+      case Operations.reconcile_serial_allocation(operation.id) do
+        {:ok, %{result: :recovered}} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "GS1 confirmed the serials. They're now saved for this batch.")
+           |> reload_after_generation()}
+
+        {:ok, %{result: :retry_scheduled}} ->
+          {:noreply,
+           socket
+           |> put_flash(:info, "GS1 confirmed no serials were created. We'll try again now.")
+           |> reload_after_generation()}
+
+        {:error, {:partial_allocation, found, expected}} ->
+          {:noreply,
+           socket
+           |> put_flash(
+             :error,
+             "GS1 shows #{found} of #{expected} serials for this batch. Contact support so they can review them before trying again."
+           )
+           |> reload_after_generation()}
+
+        {:error, _reason} ->
+          {:noreply,
+           put_flash(
+             socket,
+             :error,
+             "We couldn't finish checking with GS1 just now. Try again in a moment."
+           )}
+      end
+    end
+  end
+
+  def handle_info({:generation_updated, _operation_id}, socket) do
+    {:noreply, reload_after_generation(socket)}
+  end
+
+  def handle_info(:refresh_pending_generation, socket) do
+    op =
+      Operations.generation_status_for_product(
+        org_id(socket),
+        socket.assigns.product.id,
+        socket.assigns.requested_batch
+      )
+
+    if op && op.serial_allocation_status in ["pending", "allocating"] do
+      Process.send_after(self(), :refresh_pending_generation, 2_000)
+      {:noreply, assign(socket, :generation_op, op)}
+    else
+      {:noreply, reload_after_generation(socket)}
+    end
+  end
+
+  defp reload_after_generation(socket) do
+    socket
+    |> invalidate_gs1_cache()
+    |> assign(batches: nil, serials_cache: %{})
+    |> load_generation_status()
+    |> ensure_batches()
+    |> select_batch(socket.assigns.requested_batch, socket.assigns.search, %{})
+  end
+
+  # The member API is the source of truth but slow, so reads are cached for a
+  # minute. A completed generation is the one thing that changes those reads
+  # from this app's side, so drop the affected keys before reloading.
+  defp invalidate_gs1_cache(socket) do
+    gtin = socket.assigns.product.gtin
+    organization_id = org_id(socket)
+
+    RegistryCache.delete({:gs1_product_batches, organization_id, gtin})
+
+    batch_numbers = [
+      socket.assigns.requested_batch,
+      socket.assigns.selected_batch && socket.assigns.selected_batch.batch_no
+    ]
+
+    for batch_no <- batch_numbers, is_binary(batch_no) and batch_no != "" do
+      RegistryCache.delete({:gs1_batch_serials, organization_id, gtin, batch_no})
+    end
+
+    socket
   end
 
   defp search_params(socket, search), do: page_query(socket.assigns, search: search)
@@ -339,14 +404,14 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
     ~p"/manufacturer/products/#{assigns.product.gtin}/serials?#{query}"
   end
 
-  defp pack_path(assigns) do
-    query =
-      Enum.reject(
-        [batch: assigns.selected_batch.batch_no, return_to: current_page(assigns)],
-        fn {_k, v} -> v in [nil, ""] end
-      )
+  defp prepare_shippers_path(assigns) do
+    batch = assigns.selected_batch
 
-    ~p"/manufacturer/products/#{assigns.product.gtin}/serials/pack?#{query}"
+    if batch.local_id do
+      ~p"/manufacturer/aggregations/batches/#{batch.local_id}/prepare?#{%{return_to: current_page(assigns)}}"
+    else
+      ~p"/manufacturer/aggregations/prepare?#{%{gtin: assigns.product.gtin, batch: batch.batch_no, return_to: current_page(assigns)}}"
+    end
   end
 
   defp view_serials_path(assigns, overrides \\ []) do
@@ -361,8 +426,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   defp current_page(assigns),
     do:
       ~p"/manufacturer/products/#{assigns.product.gtin}/serials?#{page_query(assigns, search: "")}"
-
-  defp sgtin(product, serial), do: "(01)#{gtin14(product)}(21)#{serial.serial}"
 
   defp label_date(nil), do: ""
   defp label_date(date), do: Calendar.strftime(date, "%d.%m.%Y")
@@ -389,12 +452,8 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
   defp error_message(reason) when reason in [:unauthorized, :forbidden],
     do: "GS1 rejected your API key."
 
-  defp error_message({:invalid, message}), do: message
-
-  defp error_message({:unavailable, "HTTP " <> detail}) do
-    status = detail |> String.split(":", parts: 2) |> hd()
-    "GS1 couldn't load serials (error #{status}). Try again shortly."
-  end
+  defp error_message({:invalid, _message}),
+    do: "GS1 couldn't load these records. Check the batch details and try again."
 
   defp error_message(_reason), do: "Couldn't reach GS1 to load serials. Try again shortly."
 
@@ -425,7 +484,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           label={ThamaniDawaWeb.ReturnTo.label(@back_path, "Back to Products")}
         />
         <div class="td-idh">
-          <div>
+          <div class="td-idh-text">
             <h1 class="td-idh-title">{@product.name}</h1>
             <p class="td-idh-sub">
               GTIN <span class="font-mono">{@product.gtin}</span>
@@ -436,13 +495,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           </div>
           <div class="td-idh-actions">
             <.td_button
-              id="batches-generate-serials"
-              label="Generate serials"
-              navigate={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
-              tip="Issue another GS1 batch and DataMatrix serials for this product."
-            />
-            <.td_button
-              :if={@selected_batch}
+              :if={@selected_batch && @selected_batch.local_id}
               id="export-batch-serials"
               glyph="download-simple"
               label="Export CSV"
@@ -453,11 +506,20 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             />
             <.td_button
               :if={@selected_batch && !@batch_fully_packed}
-              id="open-pack-serials"
+              id="prepare-batch-shippers"
               variant="primary"
-              label="Create shipper SSCC"
-              navigate={pack_path(assigns)}
-              tip="Pack unpacked serials into a shipper SSCC for dispatch."
+              label="Create shippers"
+              navigate={prepare_shippers_path(assigns)}
+              tip="Prepare this batch for physical aggregation in the mobile app."
+              tip_align="end"
+            />
+            <.td_button
+              :if={@label_serial}
+              id="open-print-labels"
+              glyph="printer"
+              label="Print labels"
+              phx-click="open_print"
+              tip="Print a 50 × 25 mm DataMatrix label for every serial in this batch."
               tip_align="end"
             />
             <span :if={@batch_fully_packed} id="batch-fully-packed">
@@ -466,7 +528,83 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           </div>
         </div>
 
-        <div id="manufacturer-serial-batches" class="td-pad td-batch-split">
+        <div
+          :if={
+            @generation_op &&
+              @generation_op.serial_allocation_status in ["pending", "allocating"]
+          }
+          id="serial-allocation-pending"
+          class="td-pad"
+        >
+          <div class="td-bnr is-info">
+            <.td_icon name="arrows-clockwise" class="size-4 animate-spin" />
+            <p>
+              Generating {@generation_op.serial_quantity} serials for batch <b>{@generation_op.batch.batch_no}</b>… This page will update when the check finishes.
+            </p>
+          </div>
+        </div>
+
+        <div
+          :if={
+            @generation_op &&
+              @generation_op.serial_allocation_status in ["failed", "reconciliation_required"]
+          }
+          id="serial-allocation-error"
+          class="td-pad"
+        >
+          <div class="td-bnr is-danger">
+            <.td_icon name="warning-circle" class="size-4" />
+            <div>
+              <p>
+                <b>Batch {@generation_op.batch.batch_no}:</b>
+                {@generation_op.reconciliation_note ||
+                  "We couldn't finish setting up the serials for this batch."}
+              </p>
+              <p
+                :if={@generation_op.serial_allocation_status == "reconciliation_required"}
+                class="td-note"
+              >
+                We can check with GS1 now. We'll only create new serials if GS1 confirms none were made.
+              </p>
+              <div
+                :if={@generation_op.serial_allocation_status == "reconciliation_required"}
+                class="mt-3"
+              >
+                <.td_button
+                  id="reconcile-serial-allocation"
+                  label="Check with GS1"
+                  phx-click="reconcile_serials"
+                  phx-disable-with="Checking…"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          :if={
+            @batches == [] and is_nil(@batches_error) and
+              not (@generation_op != nil and
+                     @generation_op.serial_allocation_status in ["pending", "allocating"])
+          }
+          id="manufacturer-serial-batches-empty"
+          class="td-pad"
+        >
+          <div class="td-card">
+            <.td_empty
+              id="serial-batches-empty"
+              icon="stack"
+              title="No serials yet"
+              hint="Batches appear here after serials are generated for this product."
+            />
+          </div>
+        </div>
+
+        <div
+          :if={@batches != [] or not is_nil(@batches_error)}
+          id="manufacturer-serial-batches"
+          class="td-pad td-batch-split"
+        >
           <aside class="td-card td-batch-rail">
             <.td_card_header
               title="Batches"
@@ -483,21 +621,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
             <div :if={@batches_error} id="serial-batches-error" class="td-ban is-danger m-3">
               <span>{error_message(@batches_error)}</span>
               <.td_button id="retry-serial-batches" label="Retry" phx-click="retry" />
-            </div>
-            <div :if={@batches == [] and is_nil(@batches_error)} id="serial-batches-empty">
-              <.td_empty
-                icon="stack"
-                title="No serials yet"
-                hint="Generate serials to create the first batch for this product."
-              >
-                <:action>
-                  <.td_button
-                    variant="secondary"
-                    label="Generate serials"
-                    patch={~p"/manufacturer/products/#{@product.gtin}/serials/new"}
-                  />
-                </:action>
-              </.td_empty>
             </div>
             <.link
               :for={batch <- @batches || []}
@@ -525,7 +648,29 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           </aside>
 
           <div :if={@selected_batch} id="selected-serial-batch" class="td-batch-col">
+            <div :if={@label_serial} class="td-card" id="serial-label-preview">
+              <.td_card_header title="Label preview" subtitle="One label per serial, 50 × 25 mm" />
+              <div class="td-pad">
+                <div class="flex flex-wrap items-center gap-6">
+                  <.serial_label
+                    id="serial-label-sample"
+                    product={@product}
+                    batch={@selected_batch}
+                    serial={@label_serial}
+                  />
+                  <p class="td-note max-w-sm">
+                    All <b>{@batch_serial_total}</b>
+                    labels in this batch use this layout. Print them from the header, or export the serial list as CSV.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div class="td-card">
+              <.td_card_header
+                title="Batch details"
+                subtitle="GS1 identifiers, dates, and packing progress for this batch."
+              />
               <div id="primary-serial-batch-details" class="td-kv-grid is-pad is-6">
                 <div id="primary-serial-batch-number" class="td-kv">
                   <span class="td-kv-label">Batch</span>
@@ -534,6 +679,16 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
                 <div id="primary-serial-gtin" class="td-kv">
                   <span class="td-kv-label">GTIN</span>
                   <span class="td-kv-value is-mono">{@product.gtin}</span>
+                </div>
+                <div id="primary-serial-batch-created-at" class="td-kv">
+                  <span class="td-kv-label">Created</span>
+                  <span class="td-kv-value">
+                    <%= if @selected_batch.local_id do %>
+                      {ThamaniDawaWeb.TimeFormat.datetime(@selected_batch.created_at)}
+                    <% else %>
+                      External
+                    <% end %>
+                  </span>
                 </div>
                 <div id="primary-serial-production-date" class="td-kv">
                   <span class="td-kv-label">Produced</span>
@@ -554,76 +709,45 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
               </div>
             </div>
 
-            <p :if={@serials_loading} id="manufacturer-serials-loading" class="td-note td-pad">
-              Loading serials from GS1...
-            </p>
             <div :if={@serials_error} id="manufacturer-serials-error" class="td-ban is-danger">
               <span>{error_message(@serials_error)}</span>
               <.td_button id="retry-manufacturer-serials" label="Retry" phx-click="retry" />
             </div>
 
-            <div :if={@serial_page} class="td-batch-pair">
-              <div class="td-card" id="serial-preview-card">
-                <.td_card_header
-                  title={"Serials in #{@selected_batch.batch_no}"}
-                  subtitle={"The first #{length(@serial_page.entries)} of #{@batch_serial_total}. Print or export the whole batch from here."}
-                >
-                  <:actions>
-                    <.td_button
-                      id="view-all-serials"
-                      label="View all serials"
-                      patch={view_serials_path(assigns)}
-                    />
-                  </:actions>
-                </.td_card_header>
-                <table class="td-rows is-static" id="manufacturer-serials">
-                  <thead>
-                    <tr>
-                      <th>Code</th><th>Serial (SGTIN)</th><th>State</th><th>Shipper SSCC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <.serial_row
-                      :for={serial <- @serial_page.entries}
-                      serial={serial}
-                      product={@product}
-                      batch={@selected_batch}
-                      serial_shippers={@serial_shippers}
-                      return_to={current_page(assigns)}
-                      full={false}
-                    />
-                  </tbody>
-                </table>
-                <p class="td-note td-pad">
+            <div :if={@serial_page} class="td-card" id="serial-preview-card">
+              <.td_card_header
+                title={"Serials in #{@selected_batch.batch_no}"}
+                subtitle={"The first #{length(@serial_page.entries)} of #{@batch_serial_total}. Open the full list to search, filter, or print."}
+              />
+              <table class="td-rows is-static" id="manufacturer-serials">
+                <thead>
+                  <tr>
+                    <th>Code</th><th>Serial</th><th>State</th><th>Shipper SSCC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <.serial_row
+                    :for={serial <- @serial_page.entries}
+                    serial={serial}
+                    product={@product}
+                    batch={@selected_batch}
+                    serial_shippers={@serial_shippers}
+                    return_to={current_page(assigns)}
+                    full={false}
+                  />
+                </tbody>
+              </table>
+              <div class="td-tfoot">
+                <span>
                   Showing <b>{length(@serial_page.entries)}</b>
                   of <b>{@batch_serial_total}</b>
                   serials
-                </p>
-              </div>
-
-              <div :if={@label_serial} class="td-card" id="serial-label-preview">
-                <.td_card_header title="Label preview" subtitle="One label per serial, 50 × 25 mm">
-                  <:actions>
-                    <.td_button
-                      id="open-print-labels"
-                      variant="primary"
-                      glyph="printer"
-                      label="Print labels"
-                      phx-click="open_print"
-                      tip="Print a 50 × 25 mm DataMatrix label for every serial in this batch."
-                      tip_align="end"
-                    />
-                  </:actions>
-                </.td_card_header>
-                <div class="td-pad">
-                  <.serial_label
-                    id="serial-label-sample"
-                    product={@product}
-                    batch={@selected_batch}
-                    serial={@label_serial}
-                  />
-                  <p class="td-note mt-3">All {@batch_serial_total} labels use this layout.</p>
-                </div>
+                </span>
+                <.td_button
+                  id="view-all-serials"
+                  label="View all serials"
+                  patch={view_serials_path(assigns)}
+                />
               </div>
             </div>
 
@@ -717,7 +841,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           class="td-serial-dm"
         ></canvas>
       </td>
-      <td class="font-mono">{sgtin(@product, @serial)}</td>
+      <td class="font-mono">{@serial.serial}</td>
       <td :if={@full} class="font-mono">{@batch.batch_no}</td>
       <td :if={@full}>{long_date(@batch.expiry_date)}</td>
       <td>
@@ -817,6 +941,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
           phx-hook="PrintAllLabels"
           data-print-target=".printable-serial-label"
           data-label-size="50mm 25mm"
+          data-print-mode="clone"
           disabled={@serials == []}
         />
       </:footer>
@@ -832,7 +957,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       label={"Back to batch #{@selected_batch.batch_no}"}
     />
     <div class="td-idh">
-      <div>
+      <div class="td-idh-text">
         <h1 class="td-idh-title">Serials in {@selected_batch.batch_no}</h1>
         <p class="td-idh-sub">
           {@product.name} · GTIN <span class="font-mono">{@product.gtin}</span>
@@ -840,6 +965,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       </div>
       <div class="td-idh-actions">
         <.td_button
+          :if={@selected_batch.local_id}
           id="export-batch-serials"
           glyph="download-simple"
           label="Export CSV"
@@ -850,11 +976,11 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
         />
         <.td_button
           :if={!@batch_fully_packed}
-          id="open-pack-serials"
+          id="prepare-batch-shippers"
           variant="primary"
-          label="Create shipper SSCC"
-          navigate={pack_path(assigns)}
-          tip="Pack unpacked serials into a shipper SSCC for dispatch."
+          label="Create shippers"
+          navigate={prepare_shippers_path(assigns)}
+          tip="Prepare this batch for physical aggregation in the mobile app."
           tip_align="end"
         />
         <.td_button
@@ -881,9 +1007,6 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       </span>
     </div>
 
-    <p :if={@serials_loading} id="manufacturer-serials-loading" class="td-note td-pad">
-      Loading serials from GS1...
-    </p>
     <div :if={@serials_error} id="manufacturer-serials-error" class="td-ban is-danger m-4">
       <span>{error_message(@serials_error)}</span>
       <.td_button id="retry-manufacturer-serials" label="Retry" phx-click="retry" />
@@ -905,7 +1028,7 @@ defmodule ThamaniDawaWeb.ManufacturerProductLive.Serials do
       <table class="td-rows" id="manufacturer-serials">
         <thead>
           <tr>
-            <th>Code</th><th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>State</th><th>
+            <th>Code</th><th>Serial</th><th>Batch</th><th>Expires</th><th>State</th><th>
               Shipper SSCC
             </th>
           </tr>

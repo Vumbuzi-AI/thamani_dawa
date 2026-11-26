@@ -70,12 +70,6 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletShow do
               ~p"/manufacturer/shipments/new?#{[pallet_id: @pallet.id, return_to: ~p"/manufacturer/aggregations/pallets/#{@pallet.id}"]}"
             }
           />
-          <.td_button
-            id="add-pallet-shipper"
-            label="Add shipper SSCC"
-            glyph="plus"
-            navigate={~p"/manufacturer/aggregations/pallets/#{@pallet.id}/ssccs/new"}
-          />
         </:actions>
       </.td_page_header>
 

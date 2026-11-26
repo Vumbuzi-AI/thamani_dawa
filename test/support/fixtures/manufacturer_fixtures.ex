@@ -11,6 +11,8 @@ defmodule ThamaniDawa.ManufacturerFixtures do
   alias ThamaniDawa.OrganizationsFixtures
   alias ThamaniDawa.Sites
 
+  @destination_gln "6164003000024"
+
   @doc "Creates an organization operating as a manufacturer, with a GS1 Company Prefix."
   def manufacturer_organization_fixture(attrs \\ %{}) do
     org =
@@ -86,5 +88,72 @@ defmodule ThamaniDawa.ManufacturerFixtures do
       |> then(&Manufacturing.create_batch(organization_id, product_id, &1))
 
     batch
+  end
+
+  @doc """
+  A manually created shipper with a valid SSCC and batch details, suitable
+  for GS1 pallet minting and shipper-to-pallet aggregation tests.
+  """
+  def pallet_ready_shipper_fixture(organization_id, opts \\ []) do
+    product = manufacturer_product_fixture(organization_id)
+
+    batch =
+      manufacturer_batch_fixture(organization_id, product.id, %{
+        batch_no: Keyword.get(opts, :batch, "LOT-A")
+      })
+
+    serial = Integer.to_string(System.unique_integer([:positive]))
+    serial = String.pad_leading(serial, 9, "0")
+    body = "06160000" <> serial
+
+    code =
+      Keyword.get(
+        opts,
+        :code,
+        body <> Integer.to_string(ThamaniDawa.GS1.Sscc.mod10_check_digit(body))
+      )
+
+    status = Keyword.get(opts, :status, "completed")
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+
+    lifecycle =
+      if status == "completed" do
+        %{
+          "assigned_at" => now,
+          "label_prepared_at" => now,
+          "verified_at" => now,
+          "completed_at" => now,
+          "trackiq_status" => "accepted"
+        }
+      else
+        %{}
+      end
+
+    {:ok, shipper} =
+      Manufacturing.create_manual_sscc(
+        organization_id,
+        Keyword.get(opts, :pallet),
+        Map.merge(
+          %{
+            "code" => code,
+            "gtin" => product.gtin,
+            "batch" => batch.batch_no,
+            "production_date" => Date.to_iso8601(batch.production_date),
+            "expiry_date" => Date.to_iso8601(batch.expiry_date),
+            "count_of_trade_items" => Keyword.get(opts, :count, 4),
+            "from_gln" => Keyword.get(opts, :from_gln, Gln.generate!()),
+            "from_company_name" => "Factory",
+            "from_address" => "12 Industrial Road, Nairobi",
+            "to_gln" => Keyword.get(opts, :to_gln, @destination_gln),
+            "to_company_name" => "Warehouse",
+            "to_address" => "8 Port Road, Mombasa",
+            "order_number" => Keyword.get(opts, :order_number, "PO-24109"),
+            "status" => status
+          },
+          lifecycle
+        )
+      )
+
+    shipper
   end
 end

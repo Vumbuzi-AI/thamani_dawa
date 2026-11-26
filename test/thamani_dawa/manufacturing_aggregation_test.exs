@@ -4,6 +4,7 @@ defmodule ThamaniDawa.ManufacturingAggregationTest do
   import ThamaniDawa.ManufacturerFixtures
 
   alias ThamaniDawa.Epcis.Outbox
+  alias ThamaniDawa.GS1.MemberApiStub
   alias ThamaniDawa.Manufacturing
   alias ThamaniDawa.Manufacturing.Aggregation
   alias ThamaniDawa.Manufacturing.AggregationItem
@@ -246,6 +247,47 @@ defmodule ThamaniDawa.ManufacturingAggregationTest do
 
       assert %{total_entries: 0} =
                Manufacturing.list_aggregations(organization.id, %{search: "nothing-matches"})
+    end
+  end
+
+  describe "manual shipper-to-pallet aggregation" do
+    setup do
+      MemberApiStub.reset()
+      :ok
+    end
+
+    test "mints a GS1 pallet SSCC and enqueues the aggregation event", %{
+      organization: organization
+    } do
+      a = pallet_ready_shipper_fixture(organization.id, batch: "LOT-A")
+      b = pallet_ready_shipper_fixture(organization.id, batch: "LOT-B")
+
+      assert {:ok, pallet} =
+               Manufacturing.create_pallet_from_shippers(organization.id, [a.id, b.id])
+
+      [request] = MemberApiStub.create_requests()
+      assert request["order_number"] == "PO-24109"
+      assert request["facility_gln"] == a.from_gln
+      assert request["address"]["to_address"] == "8 Port Road, Mombasa"
+      assert length(request["batch_info"]) == 2
+
+      assert String.match?(pallet.code, ~r/^\d{18}$/)
+
+      persisted = Manufacturing.get_pallet!(organization.id, pallet.id)
+
+      assert persisted.shipper_ssccs |> Enum.map(& &1.id) |> Enum.sort() ==
+               Enum.sort([a.id, b.id])
+
+      [event] =
+        Enum.filter(Outbox.list_events(organization.id), &(&1.event_type == "pallet_packing"))
+
+      assert event.source_type == "manufacturer_pallet"
+      assert event.source_id == pallet.id
+      assert event.payload["parentID"] =~ "urn:epc:id:sscc:"
+      assert length(event.payload["childEPCs"]) == 2
+
+      # Manually supplied shippers have no local packing event to wait for.
+      assert Outbox.dependencies_satisfied?(event)
     end
   end
 

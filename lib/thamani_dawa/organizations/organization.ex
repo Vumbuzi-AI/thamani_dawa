@@ -28,6 +28,7 @@ defmodule ThamaniDawa.Organizations.Organization do
     field :next_goods_receipt_number, :integer, default: 0
     field :serialisation_type, :string
     field :vat_registered, :boolean, default: true
+    field :stock_serialization_enabled, :boolean, default: false
     field :next_serial_invoice_number, :integer, default: 0
 
     field :epcis_submission_mode, Ecto.Enum,
@@ -127,7 +128,7 @@ defmodule ThamaniDawa.Organizations.Organization do
   @doc "Changeset for the organization settings editable from the settings page (licence, VAT status, GLN)."
   def settings_changeset(organization, attrs) do
     organization
-    |> cast(attrs, [:license_number, :vat_registered, :gln])
+    |> cast(attrs, [:license_number, :vat_registered, :gln, :stock_serialization_enabled])
     |> trim_change(:license_number)
     |> trim_change(:gln)
     |> validate_required([:license_number], message: "Please enter your license number")

@@ -68,7 +68,8 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
       {:ok, updated} ->
         message =
           if blank?(key),
-            do: "#{tier_label(tier)} key cleared. Reporting falls back to the platform key.",
+            do:
+              "#{tier_label(tier)} key cleared. Reporting for these events is paused until you add a new key.",
             else: "#{tier_label(tier)} key saved."
 
         {:noreply,
@@ -93,7 +94,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
      |> assign(:clearing_key, nil)
      |> put_flash(
        :info,
-       "#{tier_label(tier)} key cleared. Reporting falls back to the platform key."
+       "#{tier_label(tier)} key cleared. Reporting for these events is paused until you add a new key."
      )}
   end
 
@@ -110,7 +111,8 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
       {:ok, updated} ->
         message =
           if blank?(key),
-            do: "GS1 key cleared. SSCC calls fall back to the platform token.",
+            do:
+              "GS1 key cleared. Generating serials and shippers is paused until you add a new key.",
             else: "GS1 key saved."
 
         {:noreply,
@@ -132,7 +134,10 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
      |> assign(:organization, updated)
      |> assign(:editing_gs1, false)
      |> assign(:clearing_key, nil)
-     |> put_flash(:info, "GS1 key cleared. SSCC calls fall back to the platform token.")}
+     |> put_flash(
+       :info,
+       "GS1 key cleared. Generating serials and shippers is paused until you add a new key."
+     )}
   end
 
   def handle_event("prompt_clear_api_key", %{"tier" => tier}, socket)
@@ -197,10 +202,10 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
     do: "#{tier_label(tier)} key ending #{last4}"
 
   defp clear_key_fallback(%{kind: :gs1}),
-    do: "SSCC calls fall back to the platform token until you add a new one."
+    do: "Generating serials and shippers is paused until you add a new key."
 
   defp clear_key_fallback(_key),
-    do: "Reporting falls back to the platform-wide key until you add a new one."
+    do: "Reporting for these events is paused until you add a new key."
 
   attr :portal, :atom, required: true
   attr :flash, :map, required: true
@@ -484,14 +489,29 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
 
             <section id="gs1-api-key-settings" class="td-card">
               <.td_card_header
-                title="GS1 API key"
-                subtitle="Bearer token for the GS1 member API, used when creating an SSCC and fetching the serials in a case. Leave it empty to use the platform token."
-              />
+                title={
+                  if(@organization.gs1_api_key_last4,
+                    do: "GS1 member API key",
+                    else: "Add your GS1 member API key"
+                  )
+                }
+                subtitle="Your GS1 member API key is used across the platform to sync products, generate SSCCs, load and pack serials, manage mobile users and receive shipments. Your GS1 member portal is where you get the key."
+              >
+                <:actions>
+                  <.td_button
+                    variant="secondary"
+                    label="GS1 Portal"
+                    glyph="arrow-up-right"
+                    href="https://gs1kenya.org/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  />
+                </:actions>
+              </.td_card_header>
 
               <div id="gs1-api-key-row" class={["td-key-row", @editing_gs1 && "is-editing"]}>
                 <div class="td-key-row-meta">
-                  <b>Member API</b>
-                  <span>SSCC creation and case contents</span>
+                  <b>Products, serials, SSCCs and shipments</b>
                 </div>
 
                 <form
@@ -504,7 +524,7 @@ defmodule ThamaniDawaWeb.ApiKeysLive do
                     id="gs1-api-key-input"
                     type="password"
                     name="key"
-                    label="GS1 API key"
+                    label="GS1 member API key"
                     autocomplete="off"
                     placeholder="Paste the GS1 member API key"
                   />

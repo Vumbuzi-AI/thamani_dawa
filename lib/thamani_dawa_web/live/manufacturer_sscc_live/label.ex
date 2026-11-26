@@ -16,35 +16,14 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
     <.td_modal
       id="shipper-label-modal"
       show
-      width={880}
+      width={480}
       title="Shipper label"
       subtitle={"SSCC #{@sscc.code} · #{@sscc.count_of_trade_items} units"}
       on_cancel={@on_cancel}
     >
       <:body>
-        <div class="td-pack">
+        <div class="flex justify-center">
           <.sheet sscc={@sscc} product_name={@product_name} />
-          <div>
-            <.td_select
-              id="shipper-label-size"
-              name="label_size"
-              label="Label size"
-              value="100x150"
-              options={[{"100 × 150 mm (4 × 6 in)", "100x150"}]}
-            />
-            <.td_input id="shipper-label-copies" name="copies" label="Copies" type="number" value="1" />
-            <div class="td-choice is-on">
-              <strong>This shipper</strong>
-              <span class="td-note font-mono">{@sscc.code}</span>
-            </div>
-            <div class="td-choice" id="shipper-label-all">
-              <strong>All {@batch_count} shippers in {@sscc.batch}</strong>
-              <span class="td-note">One label per shipper, in SSCC order. Printing the batch is next.</span>
-            </div>
-            <p class="td-note">
-              Printed at full size. The label carries the SSCC as a GS1-128 barcode with From, To, content, batch and expiry.
-            </p>
-          </div>
         </div>
       </:body>
       <:footer>
@@ -57,7 +36,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
           label="Print label"
           phx-hook="LabelPrint"
           data-print-target={"#sscc-label-content-#{@sscc.id}"}
-          data-label-size="4in 6in"
+          data-label-size="100mm auto"
         />
       </:footer>
     </.td_modal>
@@ -66,67 +45,90 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
 
   attr :sscc, :map, required: true
   attr :product_name, :string, default: nil
+  attr :id_prefix, :string, default: "sscc-label"
 
   def sheet(assigns) do
     ~H"""
     <div
-      id={"sscc-label-content-#{@sscc.id}"}
-      class="td-label-sheet printable-sscc-label"
+      id={"#{@id_prefix}-content-#{@sscc.id}"}
+      class="td-shipper-label mx-auto my-0 w-[400px] border-2 border-solid border-black bg-white p-0 font-sans text-black printable-sscc-label"
     >
-      <div class="td-label-grid">
-        <div id="sscc-label-from" class="td-label-cell">
-          <div>From</div>
-          <strong>{party(@sscc, :from_company_name)}</strong>
-          <div>{party(@sscc, :from_address)}</div>
-          <div :if={party(@sscc, :from_gln)}>GLN {party(@sscc, :from_gln)}</div>
+      <div class="flex font-sans text-black">
+        <div
+          id={"#{@id_prefix}-from-#{@sscc.id}"}
+          class="flex-1 border-r-2 border-r-black border-solid p-2"
+        >
+          <div class="mb-1 font-bold">From Address</div>
+          <div class="whitespace-pre-line">{party_lines(@sscc, :from)}</div>
         </div>
-        <div id="sscc-label-to" class="td-label-cell">
-          <div>To</div>
-          <strong>{party(@sscc, :to_company_name)}</strong>
-          <div>{party(@sscc, :to_address)}</div>
-          <div :if={party(@sscc, :to_gln)}>GLN {party(@sscc, :to_gln)}</div>
-        </div>
-      </div>
-      <div class="td-label-grid">
-        <div class="td-label-cell">
-          <div>Shipper SSCC</div>
-          <strong class="font-mono">{@sscc.code}</strong>
-        </div>
-        <div id="sscc-label-order-number" class="td-label-cell">
-          <div>Order</div>
-          <strong>{@sscc.order_number || "—"}</strong>
+        <div id={"#{@id_prefix}-to-#{@sscc.id}"} class="flex-1 p-2 text-black">
+          <div><strong>To Address</strong></div>
+          <div class="whitespace-pre-line">{party_lines(@sscc, :to)}</div>
         </div>
       </div>
-      <div class="td-label-grid">
-        <div class="td-label-cell">
-          <div>Content GTIN</div>
-          <strong class="font-mono">{@sscc.gtin && String.pad_leading(@sscc.gtin, 14, "0")}</strong>
-          <div>{@product_name}</div>
+
+      <div class="px-2.5 py-0">
+        <div class="mb-3 flex items-start gap-x-3 border-t-2 border-t-black border-solid pt-[8px]">
+          <div class="flex min-w-0 flex-1 flex-col">
+            <span class="mb-0.5 text-[12px] text-black">SSCC</span>
+            <span class="whitespace-nowrap text-[16px] font-bold tracking-tight text-black">{@sscc.code}</span>
+          </div>
+          <div class="grid min-w-0 flex-1 flex-col justify-end">
+            <span class="mb-0.5 text-[12px] text-black">QUANTITY</span>
+            <span id={"#{@id_prefix}-quantity-#{@sscc.id}"} class="text-[18px] font-bold text-black">{@sscc.count_of_trade_items}</span>
+          </div>
         </div>
-        <div id="sscc-label-quantity" class="td-label-cell">
-          <div>Count</div>
-          <strong>{@sscc.count_of_trade_items} units</strong>
+
+        <div class="mb-3 flex items-start gap-x-3">
+          <div class="flex min-w-0 flex-1 flex-col">
+            <span class="mb-0.5 text-[12px] text-black">CONTENT</span>
+            <span class="text-[18px] font-bold text-black">{gtin14(@sscc)}</span>
+          </div>
+          <div class="grid min-w-0 flex-1 flex-col justify-end">
+            <span class="mb-0.5 text-[12px] text-black">EXPIRY</span>
+            <span class="text-[18px] font-bold text-black">{date_ai(@sscc.expiry_date)}</span>
+          </div>
         </div>
-      </div>
-      <div class="td-label-grid">
-        <div class="td-label-cell">
-          <div>Batch</div>
-          <strong class="font-mono">{@sscc.batch}</strong>
+
+        <div class="mb-3 flex items-start gap-x-3">
+          <div class="flex min-w-0 flex-1 flex-col">
+            <span class="mb-0.5 text-[12px] text-black">BATCH/LOT</span>
+            <span class="break-all text-[18px] font-bold text-black">{@sscc.batch}</span>
+          </div>
+          <div class="grid min-w-0 flex-1 flex-col justify-end">
+            <span class="mb-0.5 text-[12px] text-black">PROD DATE</span>
+            <span class="text-[18px] font-bold text-black">{date_ai(@sscc.production_date)}</span>
+          </div>
         </div>
-        <div class="td-label-cell">
-          <div>Expiry</div>
-          <strong>{long_date(@sscc.expiry_date)}</strong>
+
+        <div class="mb-3 flex items-start gap-x-3 border-b-2 border-b-black border-solid pb-[8px]">
+          <div class="flex min-w-0 flex-1 flex-col">
+            <span class="mb-0.5 text-[12px] text-black">MATERIAL DESCRIPTION</span>
+            <span class="break-words text-[14px] font-bold text-black">{@product_name || "—"}</span>
+          </div>
+          <div class="grid min-w-0 flex-1 flex-col justify-end">
+            <span class="mb-0.5 text-[12px] text-black">ORDER NUMBER</span>
+            <span
+              id={"#{@id_prefix}-order-number-#{@sscc.id}"}
+              class="text-[18px] font-bold text-black"
+            >{@sscc.order_number}</span>
+          </div>
         </div>
-      </div>
-      <div class="td-label-cell">
-        <canvas
-          id={"sscc-barcode-#{@sscc.id}"}
-          phx-hook="DataMatrix"
-          phx-update="ignore"
-          data-gs1-text={gs1_text(@sscc)}
-          class="size-[120px]"
-        ></canvas>
-        <div :for={{ai, value} <- ai_elements(@sscc)} class="font-mono">({ai}){value}</div>
+
+        <div class="mt-[10px] flex items-start pb-[10px] pl-[35px]">
+          <div class="mr-[15px] w-[110px]">
+            <canvas
+              id={"#{@id_prefix}-barcode-#{@sscc.id}"}
+              phx-hook="DataMatrix"
+              phx-update="ignore"
+              data-barcode={barcode_payload(@sscc)}
+              class="h-[120px] w-[120px]"
+            ></canvas>
+          </div>
+          <div class="mt-[10px] flex-1 font-sans text-[12px] leading-[1.3] text-black">
+            <div :for={{ai, value} <- ai_elements(@sscc)}>({ai}) {value}</div>
+          </div>
+        </div>
       </div>
     </div>
     """
@@ -135,21 +137,52 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Label do
   defp ai_elements(sscc) do
     [
       {"00", sscc.code},
-      {"02", sscc.gtin && String.pad_leading(sscc.gtin, 14, "0")},
+      {"01", gtin14(sscc)},
       {"10", sscc.batch},
       {"17", date_ai(sscc.expiry_date)},
       {"11", date_ai(sscc.production_date)},
-      {"37", sscc.count_of_trade_items && to_string(sscc.count_of_trade_items)},
-      {"400", sscc.order_number}
+      {"37", sscc.count_of_trade_items && to_string(sscc.count_of_trade_items)}
     ]
     |> Enum.reject(fn {_ai, value} -> value in [nil, ""] end)
   end
 
-  def gs1_text(sscc), do: Enum.map_join(ai_elements(sscc), fn {ai, v} -> "(#{ai})#{v}" end)
+  # gs1_admin feeds a raw, GS-delimited element string to a plain DataMatrix
+  # encoder (no AI parsing). This mirrors that payload exactly, including the
+  # leading and trailing group separators.
+  def barcode_payload(sscc) do
+    gs = <<29>>
+
+    parts =
+      [
+        gs <> "00" <> to_string(sscc.code) <> gs,
+        gtin14(sscc) && "01" <> gtin14(sscc),
+        ai_part(gs, "10", sscc.batch),
+        ai_part(gs, "17", date_ai(sscc.expiry_date)),
+        ai_part(gs, "11", date_ai(sscc.production_date)),
+        ai_part(gs, "37", sscc.count_of_trade_items)
+      ]
+      |> Enum.reject(&is_nil/1)
+
+    Enum.join(parts) <> gs
+  end
+
+  defp ai_part(_gs, _ai, nil), do: nil
+  defp ai_part(gs, ai, value), do: ai <> to_string(value) <> gs
+
+  defp gtin14(sscc), do: sscc.gtin && String.pad_leading(sscc.gtin, 14, "0")
+
   defp date_ai(nil), do: nil
   defp date_ai(date), do: Calendar.strftime(date, "%y%m%d")
-  defp long_date(nil), do: "—"
-  defp long_date(date), do: ThamaniDawaWeb.TimeFormat.date(date)
+
+  defp party_lines(sscc, prefix) do
+    [
+      party(sscc, :"#{prefix}_company_name"),
+      party(sscc, :"#{prefix}_address"),
+      party(sscc, :"#{prefix}_gln") && "GLN #{party(sscc, :"#{prefix}_gln")}"
+    ]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join("\n")
+  end
 
   defp party(sscc, field) do
     (sscc.pallet && Map.get(sscc.pallet, field)) || Map.get(sscc, field)

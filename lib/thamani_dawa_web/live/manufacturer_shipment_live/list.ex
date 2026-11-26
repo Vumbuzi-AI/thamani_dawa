@@ -31,6 +31,13 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
      socket |> assign(:filters, filters) |> assign(:page, page_number(params)) |> load_shipments()}
   end
 
+  def handle_event("refresh", _params, socket) do
+    {:noreply,
+     socket
+     |> load_shipments()
+     |> put_flash(:info, "Shipments refreshed.")}
+  end
+
   def handle_event("search", %{"search" => search}, socket),
     do: {:noreply, push_patch(socket, to: filter_path(socket, %{"search" => search}))}
 
@@ -94,8 +101,6 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
       origin_company: shipment.origin_company,
       destination_company: shipment.destination_company,
       shipper_count: length(shipment.shippers),
-      unit_count: shipment.shippers |> Enum.map(&length(&1.items)) |> Enum.sum(),
-      packed_by: (shipment.assigned_to && shipment.assigned_to.name) || "Unclaimed",
       updated_at: shipment.updated_at,
       path: ~p"/manufacturer/shipments/#{shipment.id}"
     }
@@ -110,8 +115,6 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
       origin_company: shipment.origin_company,
       destination_company: shipment.destination_company,
       shipper_count: length(shipment.shipper_ssccs),
-      unit_count: Enum.sum(Enum.map(shipment.shipper_ssccs, &(&1.count_of_trade_items || 0))),
-      packed_by: (shipment.created_by && shipment.created_by.name) || "Web",
       updated_at: shipment.updated_at,
       path: ~p"/manufacturer/shipments/packed/#{shipment.id}"
     }
@@ -155,14 +158,22 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
       </:search>
       <.td_list_page
         title="Shipments"
-        subtitle="Create shipments, then review packed SSCCs and approve them for dispatch."
+        subtitle="Create a shipment from packed SSCCs, then dispatch it when it leaves the plant."
       >
         <:actions>
           <.td_button
-            id="new-manufacturer-shipment"
+            id="refresh-manufacturer-shipments"
+            variant="secondary"
+            glyph="arrows-clockwise"
+            label="Refresh"
+            phx-click="refresh"
+            phx-disable-with="Refreshing…"
+          />
+          <.td_button
+            id="create-manufacturer-shipment-from-ssccs"
             variant="primary"
             label="New shipment"
-            navigate={~p"/manufacturer/shipments/new"}
+            navigate={~p"/manufacturer/shipments/create"}
           />
         </:actions>
         <:filters>
@@ -205,7 +216,6 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
                   <:row label="From">{shipment.origin_company}</:row>
                   <:row label="To">{shipment.destination_company}</:row>
                   <:row label="Shippers">{shipment.shipper_count}</:row>
-                  <:row label="Packed by">{shipment.packed_by}</:row>
                   <:action>
                     <.td_button label="Review" navigate={shipment.path} />
                   </:action>
@@ -221,13 +231,7 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
           </:col>
           <:col :let={{_id, shipment}} label="From">{shipment.origin_company}</:col>
           <:col :let={{_id, shipment}} label="To">{shipment.destination_company}</:col>
-          <:col :let={{_id, shipment}} label="Shippers / units">
-            {shipment.shipper_count} / {shipment.unit_count}
-          </:col>
-          <:col :let={{_id, shipment}} label="Packed by">
-            {shipment.packed_by}
-          </:col>
-          <:col :let={{_id, shipment}} label="Updated">{date_time(shipment.updated_at)}</:col>
+          <:col :let={{_id, shipment}} label="Last updated">{date_time(shipment.updated_at)}</:col>
           <:action :let={{_id, shipment}}>
             <.td_button
               id={"review-#{shipment.id}"}
@@ -244,10 +248,10 @@ defmodule ThamaniDawaWeb.ManufacturerShipmentLive.List do
             >
               <:action>
                 <.td_button
-                  id="empty-new-manufacturer-shipment"
-                  variant="secondary"
+                  id="empty-create-manufacturer-shipment-from-ssccs"
+                  variant="primary"
                   label="New shipment"
-                  navigate={~p"/manufacturer/shipments/new"}
+                  navigate={~p"/manufacturer/shipments/create"}
                 />
               </:action>
             </.td_empty>

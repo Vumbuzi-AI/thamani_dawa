@@ -1,8 +1,7 @@
 defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
   @moduledoc """
-  Shipper detail. Primary serials come from the GS1 member API
-  (`get_sscc_contents`), not the local database. Print label opens the
-  one shipper-label modal.
+  Shipper detail. Verified local aggregation contents take precedence over
+  GS1 contents until the future aggregation-synchronization API exists.
   """
 
   use ThamaniDawaWeb, :live_view
@@ -24,6 +23,8 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
     product =
       if sscc.gtin, do: Repo.get_by(Product, organization_id: organization_id, gtin: sscc.gtin)
 
+    shipper_navigation = batch_shipper_navigation(organization_id, sscc)
+
     batch_count =
       if sscc.gtin && sscc.batch do
         {shippers, _} = Manufacturing.list_batch_shippers(organization_id, sscc.gtin, sscc.batch)
@@ -37,6 +38,10 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
      |> assign(:page_title, "Shipper SSCC")
      |> assign(:sscc, sscc)
      |> assign(:product, product)
+     |> assign(:previous_shipper, shipper_navigation.previous)
+     |> assign(:next_shipper, shipper_navigation.next)
+     |> assign(:shipper_position, shipper_navigation.position)
+     |> assign(:shipper_count, shipper_navigation.count)
      |> assign(:batch_count, batch_count)
      |> assign(:serials, [])
      |> assign(:page, 1)
@@ -55,14 +60,56 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
 
   defp load_serials(socket) do
     organization_id = socket.assigns.current_scope.organization_id
-    code = socket.assigns.sscc.code
+    sscc = socket.assigns.sscc
+    local = Manufacturing.list_verified_shipper_serials(organization_id, sscc.id)
 
     assign_async(socket, :remote_serials, fn ->
-      case Manufacturing.fetch_sscc_serials(organization_id, code) do
-        {:ok, serials} -> {:ok, %{remote_serials: serials}}
-        {:error, reason} -> {:error, reason}
-      end
+      load_serials_result(organization_id, sscc, local)
     end)
+  end
+
+  defp batch_shipper_navigation(_organization_id, %{gtin: gtin, batch: batch})
+       when gtin in [nil, ""] or batch in [nil, ""],
+       do: %{previous: nil, next: nil, position: 1, count: 1}
+
+  defp batch_shipper_navigation(organization_id, sscc) do
+    {shippers, _by_serial} =
+      Manufacturing.list_batch_shippers(organization_id, sscc.gtin, sscc.batch)
+
+    index = Enum.find_index(shippers, &(&1.id == sscc.id)) || 0
+
+    %{
+      previous: if(index > 0, do: Enum.at(shippers, index - 1)),
+      next: Enum.at(shippers, index + 1),
+      position: index + 1,
+      count: max(length(shippers), 1)
+    }
+  end
+
+  defp load_serials_result(_organization_id, sscc, local) when local != [] do
+    serials =
+      Enum.map(
+        local,
+        &%{
+          gtin: sscc.gtin,
+          batch: sscc.batch,
+          serial: &1.serial,
+          expiry_date: sscc.expiry_date
+        }
+      )
+
+    {:ok, %{remote_serials: serials}}
+  end
+
+  defp load_serials_result(_organization_id, sscc, _local)
+       when sscc.status in ["available", "assigned", "awaiting_verification"],
+       do: {:ok, %{remote_serials: []}}
+
+  defp load_serials_result(organization_id, sscc, _local) do
+    case Manufacturing.fetch_sscc_serials(organization_id, sscc.code) do
+      {:ok, serials} -> {:ok, %{remote_serials: serials}}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   def handle_event("retry", _params, socket) do
@@ -101,8 +148,6 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
   defp long_date(nil), do: "—"
   defp long_date(date), do: ThamaniDawaWeb.TimeFormat.date(date)
 
-  defp sgtin(serial), do: "(01)#{gtin14(serial)}(21)#{serial.serial}"
-
   defp unit_gs1_text(serial) do
     expiry = serial.expiry_date && Calendar.strftime(serial.expiry_date, "%y%m%d")
     batch = serial.batch
@@ -117,6 +162,12 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
     |> Enum.join()
   end
 
+  defp shipper_status("available"), do: {"info", "Label ready"}
+  defp shipper_status("assigned"), do: {"info", "Packing on mobile"}
+  defp shipper_status("awaiting_verification"), do: {"warning", "Awaiting label scan"}
+  defp shipper_status("completed"), do: {"success", "Packed"}
+  defp shipper_status(status), do: {"neutral", Phoenix.Naming.humanize(status || "unknown")}
+
   def render(assigns) do
     serials = if assigns.remote_serials.ok?, do: assigns.remote_serials.result, else: []
     pages = max(ceil(length(serials) / @per_page), 1)
@@ -125,6 +176,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
     from_index = if serials == [], do: 0, else: (page - 1) * @per_page + 1
     to_index = min(page * @per_page, length(serials))
     product_name = (assigns.product && assigns.product.name) || assigns.sscc.gtin
+    {status_tone, status_label} = shipper_status(assigns.sscc.status)
 
     close_to =
       ~p"/manufacturer/sscc/#{assigns.sscc.id}/serials?#{%{return_to: assigns.back_path}}"
@@ -138,6 +190,8 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
       |> assign(:from_index, from_index)
       |> assign(:to_index, to_index)
       |> assign(:product_name, product_name)
+      |> assign(:status_tone, status_tone)
+      |> assign(:status_label, status_label)
       |> assign(:close_to, close_to)
 
     ~H"""
@@ -158,21 +212,41 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
           <h1 class="td-idh-title font-mono">
             {@sscc.code}
             <.td_badge :if={@sscc.pallet} tone="success" label="On pallet" />
-            <.td_badge :if={!@sscc.pallet} tone="success" label="Packed" />
+            <.td_badge :if={!@sscc.pallet} tone={@status_tone} label={@status_label} />
           </h1>
           <p class="td-idh-sub">
             Shipper SSCC · {@product_name}<span :if={@sscc.batch}> · batch <span class="font-mono">{@sscc.batch}</span></span>
           </p>
         </div>
         <div class="td-idh-actions">
-          <.td_button
-            :if={@product && @sscc.batch && !@sscc.pallet}
-            id="pack-another-shipper"
-            label="Pack another shipper"
-            navigate={
-              ~p"/manufacturer/products/#{@sscc.gtin}/serials/pack?#{%{batch: @sscc.batch, return_to: @back_path}}"
-            }
-          />
+          <nav
+            :if={@shipper_count > 1}
+            id="batch-shipper-navigation"
+            class="flex items-center gap-2"
+            aria-label="Shippers in this batch"
+          >
+            <span id="batch-shipper-position" class="td-note whitespace-nowrap">
+              {@shipper_position} of {@shipper_count}
+            </span>
+            <.td_button
+              :if={@previous_shipper}
+              id="previous-batch-shipper"
+              glyph="caret-left"
+              label="Previous"
+              navigate={
+                ~p"/manufacturer/sscc/#{@previous_shipper.id}/serials?#{%{return_to: @back_path}}"
+              }
+            />
+            <.td_button
+              :if={@next_shipper}
+              id="next-batch-shipper"
+              glyph="caret-right"
+              label="Next"
+              navigate={
+                ~p"/manufacturer/sscc/#{@next_shipper.id}/serials?#{%{return_to: @back_path}}"
+              }
+            />
+          </nav>
           <.td_button
             :if={@sscc.pallet}
             id="sscc-export"
@@ -246,7 +320,12 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
               id="sscc-serials-empty"
               class="td-note td-pad"
             >
-              GS1 reports no serials packed under this SSCC.
+              <%= if @sscc.status == "completed" do %>
+                No verified serials are recorded under this SSCC.
+              <% else %>
+                Ready for mobile packing. Serial contents will appear here after the applied SSCC
+                label is scanned and verified.
+              <% end %>
             </p>
             <table
               :if={@remote_serials.ok? and @serials != []}
@@ -255,7 +334,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
             >
               <thead>
                 <tr>
-                  <th>#</th><th>Code</th><th>Serial (SGTIN)</th><th>Batch</th><th>Expires</th><th>
+                  <th>#</th><th>Code</th><th>Serial</th><th>Batch</th><th>Expires</th><th>
                     State
                   </th>
                 </tr>
@@ -275,7 +354,7 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
                       class="td-serial-dm"
                     ></canvas>
                   </td>
-                  <td class="font-mono">{sgtin(serial)}</td>
+                  <td class="font-mono">{serial.serial}</td>
                   <td class="font-mono">{serial.batch}</td>
                   <td>{long_date(serial.expiry_date)}</td>
                   <td><.td_badge tone="success" label="Packed" /></td>
@@ -310,20 +389,15 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
           <div class="td-card">
             <.td_card_header
               title="Shipper label"
-              subtitle="100 × 150 mm GS1 DataMatrix. Print it from the top right."
+              subtitle="The exact label artwork used for printing."
             />
-            <div class="td-label-preview">
-              <canvas
-                id={"sscc-aside-dm-#{@sscc.id}"}
-                phx-hook="DataMatrix"
-                phx-update="ignore"
-                data-gs1-text={ThamaniDawaWeb.ManufacturerSsccLive.Label.gs1_text(@sscc)}
-              ></canvas>
-              <div class="td-label-preview-body">
-                <span class="td-label-preview-title font-mono">{@sscc.code}</span>
-                <span>{@sscc.to_company_name}</span>
-                <span class="font-mono">{@sscc.gtin}</span>
-                <span>{@sscc.batch} · {@sscc.count_of_trade_items} units</span>
+            <div class="overflow-x-auto p-4">
+              <div class="w-fit">
+                <ThamaniDawaWeb.ManufacturerSsccLive.Label.sheet
+                  sscc={@sscc}
+                  product_name={@product_name}
+                  id_prefix="sscc-preview"
+                />
               </div>
             </div>
           </div>
@@ -336,7 +410,11 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
               navigate={~p"/manufacturer/aggregations/pallets/#{@sscc.pallet.id}"}
             />
           </div>
-          <div :if={!@sscc.pallet} class="td-card td-pad" id="sscc-next-pallet">
+          <div
+            :if={!@sscc.pallet and @sscc.status == "completed"}
+            class="td-card td-pad"
+            id="sscc-next-pallet"
+          >
             <h2 class="td-idh-title">Next: build a pallet</h2>
             <p class="td-note">
               Scan this shipper and the others from {@sscc.batch} onto one pallet SSCC, then ship the pallet.
@@ -357,6 +435,17 @@ defmodule ThamaniDawaWeb.ManufacturerSsccLive.Serials do
                 ~p"/manufacturer/products/#{@sscc.gtin}/serials?#{%{batch: @sscc.batch, view: "serials", return_to: @back_path}}"
               }
             />
+          </div>
+          <div
+            :if={!@sscc.pallet and @sscc.status != "completed"}
+            class="td-card td-pad"
+            id="sscc-next-mobile"
+          >
+            <h2 class="td-idh-title">Next: pack with the mobile app</h2>
+            <p class="td-note">
+              Claim this SSCC for batch {@sscc.batch}, scan the product serials, apply this label,
+              then scan the label to verify the parent relationship.
+            </p>
           </div>
         </aside>
       </div>

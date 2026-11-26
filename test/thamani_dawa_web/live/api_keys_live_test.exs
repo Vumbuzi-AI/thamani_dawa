@@ -21,7 +21,7 @@ defmodule ThamaniDawaWeb.ApiKeysLiveTest do
 
     assert has_element?(view, "#epcis-api-key-settings", "Add your TNT API key")
     assert has_element?(view, "#tnt-api-key-distributor", "No key saved")
-    assert has_element?(view, "#gs1-api-key-settings", "GS1 API key")
+    assert has_element?(view, "#gs1-api-key-settings", "GS1 member API key")
     assert has_element?(view, "#gs1-api-key-row", "No key saved")
     assert has_element?(view, "span[id='nav-label-/distributor/api-keys']", "API keys")
     refute has_element?(view, "[data-confirm]")
@@ -76,7 +76,7 @@ defmodule ThamaniDawaWeb.ApiKeysLiveTest do
     {:ok, view, _html} = live(conn, ~p"/org/api-keys")
 
     assert has_element?(view, "#epcis-api-key-settings", "TNT API key")
-    assert has_element?(view, "#gs1-api-key-settings", "GS1 API key")
+    assert has_element?(view, "#gs1-api-key-settings", "GS1 member API key")
     assert has_element?(view, "a[href$='/api-keys']", "API keys")
   end
 
@@ -88,7 +88,7 @@ defmodule ThamaniDawaWeb.ApiKeysLiveTest do
 
     assert has_element?(view, "#epcis-api-key-settings", "Add your TNT API key")
     assert has_element?(view, "#tnt-api-key-manufacturer", "No key saved")
-    assert has_element?(view, "#gs1-api-key-settings", "GS1 API key")
+    assert has_element?(view, "#gs1-api-key-settings", "GS1 member API key")
     assert has_element?(view, "span[id='nav-label-/manufacturer/api-keys']", "API keys")
   end
 

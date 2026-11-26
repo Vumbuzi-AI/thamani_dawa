@@ -672,9 +672,7 @@ defmodule ThamaniDawaWeb.PrescriptionLive.Index do
                 label="Referral from another facility"
               />
               <.td_input
-                :if={
-                  Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_external].value)
-                }
+                :if={Phoenix.HTML.Form.normalize_value("checkbox", @header_form[:is_external].value)}
                 field={@header_form[:referring_doctor]}
                 label="Referring doctor"
                 required

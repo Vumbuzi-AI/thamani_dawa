@@ -5,10 +5,7 @@ defmodule ThamaniDawaWeb.ManufacturerPalletShipLiveTest do
   import ThamaniDawa.ManufacturerFixtures
 
   alias ThamaniDawa.Distributor
-  alias ThamaniDawa.Gln
   alias ThamaniDawa.Manufacturing
-
-  @destination "6164003000024"
 
   setup %{conn: conn} do
     organization = manufacturer_organization_fixture()
@@ -17,22 +14,8 @@ defmodule ThamaniDawaWeb.ManufacturerPalletShipLiveTest do
     %{conn: log_in_user(conn, user), organization: organization, user: user}
   end
 
-  defp shipper!(organization_id, code) do
-    {:ok, sscc} =
-      Manufacturing.create_manual_sscc(organization_id, nil, %{
-        "code" => code,
-        "gtin" => "06141410000011",
-        "batch" => "LOT-A",
-        "count_of_trade_items" => 4,
-        "from_gln" => Gln.generate!(),
-        "from_company_name" => "Factory",
-        "from_address" => "Nairobi",
-        "to_gln" => @destination,
-        "to_company_name" => "Warehouse",
-        "to_address" => "Mombasa"
-      })
-
-    sscc
+  defp shipper!(organization_id, _code) do
+    pallet_ready_shipper_fixture(organization_id)
   end
 
   test "ships a pallet as one shipment and dispatches it", %{
@@ -58,7 +41,7 @@ defmodule ThamaniDawaWeb.ManufacturerPalletShipLiveTest do
     assert shipment.status == "draft"
     assert shipment.order_number == "PO-24109"
     assert shipment.origin_company == "Factory"
-    assert Enum.map(shipment.shipper_ssccs, & &1.id) |> Enum.sort() == Enum.sort([a.id, b.id])
+    assert Enum.sort(Enum.map(shipment.shipper_ssccs, & &1.id)) == Enum.sort([a.id, b.id])
 
     assert Distributor.list_shipments(organization.id, %{participant_tier: "manufacturer"}).entries ==
              []
@@ -66,7 +49,10 @@ defmodule ThamaniDawaWeb.ManufacturerPalletShipLiveTest do
     assert_redirect(form, ~p"/manufacturer/shipments/packed/#{shipment.id}")
 
     {:ok, show, _html} = live(conn, ~p"/manufacturer/shipments/packed/#{shipment.id}")
+    assert has_element?(show, "#shipment-pallets-table")
+    assert has_element?(show, "#shipment-shippers-table")
     assert has_element?(show, "#shipment-sscc-#{a.id}")
+    assert has_element?(show, "#shipment-sscc-#{b.id}")
     show |> element("#dispatch-shipment") |> render_click()
     assert has_element?(show, "#dispatch-shipment-modal")
     show |> element("#confirm-dispatch") |> render_click()

@@ -62,6 +62,54 @@ defmodule ThamaniDawaWeb.Router do
     get "/session/sites", SessionController, :sites
     patch "/session/site", SessionController, :switch_site
 
+    get "/manufacturer/aggregation/batches", ManufacturerAggregationController, :batches
+
+    post "/manufacturer/aggregation/batches/:batch_id/prepare",
+         ManufacturerAggregationController,
+         :prepare_batch
+
+    get "/manufacturer/aggregation/sessions/:id", ManufacturerAggregationController, :show_session
+
+    post "/manufacturer/aggregation/shipper-sessions",
+         ManufacturerAggregationController,
+         :start_shipper
+
+    post "/manufacturer/aggregation/shipper-sessions/:id/scans",
+         ManufacturerAggregationController,
+         :scan_product
+
+    post "/manufacturer/aggregation/shipper-sessions/:id/assign-sscc",
+         ManufacturerAggregationController,
+         :assign_shipper_sscc
+
+    post "/manufacturer/aggregation/shipper-sessions/:id/request-sscc",
+         ManufacturerAggregationController,
+         :request_shipper_sscc
+
+    post "/manufacturer/aggregation/shipper-sessions/:id/verify-parent",
+         ManufacturerAggregationController,
+         :verify_shipper
+
+    post "/manufacturer/aggregation/pallet-sessions",
+         ManufacturerAggregationController,
+         :start_pallet
+
+    post "/manufacturer/aggregation/pallet-sessions/:id/scans",
+         ManufacturerAggregationController,
+         :scan_shipper
+
+    post "/manufacturer/aggregation/pallet-sessions/:id/finish-loading",
+         ManufacturerAggregationController,
+         :finish_pallet
+
+    post "/manufacturer/aggregation/pallet-sessions/:id/allocate-sscc",
+         ManufacturerAggregationController,
+         :allocate_pallet_sscc
+
+    post "/manufacturer/aggregation/pallet-sessions/:id/verify-parent",
+         ManufacturerAggregationController,
+         :verify_pallet
+
     get "/pharmacy/dashboard", PharmacyController, :dashboard
     post "/pharmacy/scans", PharmacyController, :scan
     get "/pharmacy/stock", PharmacyController, :stock
@@ -404,6 +452,7 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer/inventory", ManufacturerInventoryLive, :index
       live "/manufacturer/shipments", ManufacturerShipmentLive.List, :index
       live "/manufacturer/shipments/new", ManufacturerShipmentLive.Form, :new
+      live "/manufacturer/shipments/create", ManufacturerShipmentLive.Index, :new
 
       live "/manufacturer/shipments/packed/:id", ManufacturerShipmentLive.Show, :show
 
@@ -414,15 +463,16 @@ defmodule ThamaniDawaWeb.Router do
       live "/manufacturer/shipments/:id", ManufacturerShipmentLive.Review, :show
 
       live "/manufacturer/aggregations", ManufacturerAggregationLive.Dashboard, :index
-      live "/manufacturer/aggregations/new", ManufacturerAggregationLive.Wizard, :new
+
+      live "/manufacturer/aggregations/prepare", ManufacturerAggregationLive.Prepare, :gs1
+
+      live "/manufacturer/aggregations/batches/:id/prepare",
+           ManufacturerAggregationLive.Prepare,
+           :new
 
       live "/manufacturer/aggregations/pallets/new",
            ManufacturerAggregationLive.PalletNew,
            :new
-
-      live "/manufacturer/aggregations/pallets/:pallet_id/ssccs/new",
-           ManufacturerAggregationLive.Wizard,
-           :new_on_pallet
 
       live "/manufacturer/aggregations/pallets/:id",
            ManufacturerAggregationLive.PalletShow,

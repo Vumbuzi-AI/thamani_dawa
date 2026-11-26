@@ -248,6 +248,11 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
     Enum.map_join(organization.operating_models, ", ", &Phoenix.Naming.humanize/1)
   end
 
+  defp manufacturer_organization?(%{operating_models: models}) when is_list(models),
+    do: :manufacturer in models
+
+  defp manufacturer_organization?(_organization), do: false
+
   defp assign_gs1_prefixes(socket) do
     assign(
       socket,
@@ -293,7 +298,8 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
   defp status_tone(:verified), do: "success"
 
   defp status_tone(status)
-       when status in [:not_found, :unavailable, :invalid_check_digit, :inactive], do: "warning"
+       when status in [:not_found, :unavailable, :invalid_check_digit, :inactive],
+       do: "warning"
 
   defp status_tone(_status), do: "neutral"
 
@@ -399,6 +405,29 @@ defmodule ThamaniDawaWeb.OrganizationSettingsLive do
                       Phoenix.HTML.Form.normalize_value("checkbox", @form[:vat_registered].value)
                     }
                   /> VAT registered
+                </label>
+                <label :if={manufacturer_organization?(@organization)} class="td-cb">
+                  <input
+                    type="hidden"
+                    name={@form[:stock_serialization_enabled].name}
+                    value="false"
+                  />
+                  <input
+                    type="checkbox"
+                    id="organization-stock-serialization-enabled"
+                    name={@form[:stock_serialization_enabled].name}
+                    value="true"
+                    checked={
+                      Phoenix.HTML.Form.normalize_value(
+                        "checkbox",
+                        @form[:stock_serialization_enabled].value
+                      )
+                    }
+                  /> Allow manufacturing for stock during serial generation
+                  <span class="td-hint">
+                    Off by default. When off, the serial wizard requires a genuine customer order
+                    and GS1 destination; the existing stock code path stays available for later.
+                  </span>
                 </label>
                 <p id="gs1-verification-status" class="td-hint">
                   <.td_badge

@@ -2,6 +2,8 @@ import {placeTip} from "../lib/td_tip_place"
 
 const ID = "td-tip-float"
 
+let activeAnchor = null
+
 function floatEl() {
   let el = document.getElementById(ID)
   if (!el) {
@@ -18,6 +20,11 @@ function floatEl() {
 export function hideTip() {
   const el = document.getElementById(ID)
   if (el) el.hidden = true
+  activeAnchor = null
+}
+
+function hideTipIfAnchorGone() {
+  if (activeAnchor && !document.contains(activeAnchor)) hideTip()
 }
 
 function anchorFrom(node) {
@@ -50,6 +57,7 @@ function anchorFrom(node) {
 export function showTip(target) {
   const src = anchorFrom(target)
   if (!src || !src.title) return
+  activeAnchor = src.el
   const el = floatEl()
   el.dataset.variant = src.variant
   el.querySelector("b").textContent = src.title
@@ -95,4 +103,11 @@ export function bindTdTips() {
   window.addEventListener("keydown", onKey)
   window.addEventListener("scroll", hideTip, true)
   window.addEventListener("resize", hideTip)
+
+  // LiveView replaces page bodies without firing mouseout on the old trigger.
+  // Hide a floating tip as soon as its anchor is removed from the DOM.
+  if (typeof MutationObserver !== "undefined") {
+    window.__tdTipObserver = new MutationObserver(hideTipIfAnchorGone)
+    window.__tdTipObserver.observe(document.body, {childList: true, subtree: true})
+  }
 }

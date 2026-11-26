@@ -447,7 +447,7 @@ defmodule ThamaniDawaWeb.DistributorDisposalLive.Show do
                         else: "serials"}
                     </button>
                     <div :if={
-                      (batch && batch.serials != []) and
+                      batch && batch.serials != [] and
                         MapSet.member?(@expanded_batches, to_string(batch.id))
                     }>
                       <span :for={serial <- batch.serials} class="td-chip is-tag td-mono">{serial}</span>

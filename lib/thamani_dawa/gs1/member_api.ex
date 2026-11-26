@@ -483,12 +483,12 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def decode_prefixes_response({:error, _reason}), do: {:error, :unavailable}
 
   @doc false
-  def decode_glns_response({:ok, status, %{"glns" => glns}})
-      when status in 200..299 and is_list(glns) do
-    {:ok, glns}
+  def decode_glns_response({:ok, status, body}) when status in 200..299 do
+    case gln_rows(body) do
+      rows when is_list(rows) -> {:ok, Enum.map(rows, &normalize_gln_row/1)}
+      nil -> {:error, :unavailable}
+    end
   end
-
-  def decode_glns_response({:ok, status, _body}) when status in 200..299, do: {:ok, []}
 
   def decode_glns_response({:ok, status, _body}) when status in [401, 403],
     do: {:error, auth_error(status, nil)}
@@ -496,6 +496,13 @@ defmodule ThamaniDawa.GS1.MemberApi do
   def decode_glns_response({:ok, _status, _body}), do: {:error, :unavailable}
   def decode_glns_response({:error, :unconfigured}), do: {:error, :unavailable}
   def decode_glns_response({:error, _reason}), do: {:error, :unavailable}
+
+  defp gln_rows(%{"glns" => rows}) when is_list(rows), do: rows
+  defp gln_rows(%{"data" => rows}) when is_list(rows), do: rows
+  defp gln_rows(_body), do: nil
+
+  defp normalize_gln_row(%{} = row), do: Map.put_new(row, "company", row["company_name"])
+  defp normalize_gln_row(row), do: row
 
   defp normalize_product(product) do
     %{

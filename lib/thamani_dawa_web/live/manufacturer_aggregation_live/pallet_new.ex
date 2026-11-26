@@ -2,7 +2,8 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
   @moduledoc """
   Scan shipper SSCCs onto one pallet. A scan is kept, or rejected as a
   duplicate, already on a shipment, empty, or a different destination.
-  Creating the pallet uses a local PAL- code and does not open a shipment.
+  Creating the pallet mints a GS1 pallet SSCC, records the shipper-to-pallet
+  EPCIS aggregation event, and does not open a shipment.
   """
   use ThamaniDawaWeb, :live_view
 
@@ -101,8 +102,8 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
       {:error, :no_shippers} ->
         {:noreply, put_flash(socket, :error, "Scan at least one shipper SSCC.")}
 
-      {:error, _} ->
-        {:noreply, put_flash(socket, :error, "Could not create the pallet SSCC. Try again.")}
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, create_error(reason))}
     end
   end
 
@@ -134,6 +135,22 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
       _ -> socket
     end
   end
+
+  defp create_error(:unconfigured),
+    do:
+      "GS1 isn't set up for your organization. Add your GS1 key in organization settings, then try again."
+
+  defp create_error(reason) when reason in [:unauthorized, :forbidden],
+    do: "GS1 rejected your API key. Check it in organization settings, then try again."
+
+  defp create_error(:unavailable),
+    do: "We couldn't reach GS1. Your scanned shippers are still here; try again in a moment."
+
+  defp create_error({:invalid, _message}),
+    do: "GS1 couldn't accept the pallet details. Check the scanned shippers and try again."
+
+  defp create_error(_reason),
+    do: "We couldn't create the pallet label. Try again in a moment."
 
   defp back_label(path, _params) do
     case path |> URI.parse() |> Map.get(:path) do
@@ -173,7 +190,7 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
         <div>
           <h1 class="td-idh-title">Build a pallet</h1>
           <p class="td-idh-sub">
-            Scan shipper SSCCs that share a destination. The pallet keeps a local PAL- code.
+            Scan shipper SSCCs that share a destination. The pallet gets a GS1 SSCC and an EPCIS aggregation event.
           </p>
         </div>
       </div>
@@ -262,12 +279,12 @@ defmodule ThamaniDawaWeb.ManufacturerAggregationLive.PalletNew do
         id="create-pallet-modal"
         show
         title="Create pallet SSCC"
-        subtitle={"#{length(@accepted)} shippers · local PAL- code"}
+        subtitle={"#{length(@accepted)} shippers · GS1 pallet SSCC"}
         on_cancel={JS.push("cancel_confirm")}
       >
         <:body>
           <p class="td-note">
-            This groups the scanned shippers. It does not create a shipment.
+            This mints the pallet SSCC and reports the shippers inside it to EPCIS. It does not create a shipment.
           </p>
           <ul id="create-pallet-preview">
             <li :for={shipper <- @accepted} class="font-mono">{shipper.code}</li>
